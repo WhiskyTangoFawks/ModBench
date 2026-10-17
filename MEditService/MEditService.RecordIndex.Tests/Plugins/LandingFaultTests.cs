@@ -1,4 +1,3 @@
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -62,13 +61,7 @@ public sealed class LandingFaultTests : IDisposable
         {
             get
             {
-                using (var connection = new DuckDBConnection($"DataSource={IndexFiles.In(instanceRoot)}"))
-                {
-                    connection.Open();
-                    using var command = connection.CreateCommand();
-                    command.CommandText = $"UPDATE mirror.records SET editor_id = 'NotANumber' WHERE plugin = '{Kept}'";
-                    command.ExecuteNonQuery();
-                }
+                IndexFiles.Execute(instanceRoot, $"UPDATE mirror.records SET editor_id = 'NotANumber' WHERE plugin = '{Kept}'");
                 throw new InvalidDataException(ItsOwnFault);
             }
         }

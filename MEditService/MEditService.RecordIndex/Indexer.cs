@@ -432,7 +432,7 @@ internal sealed class Indexer : IDisposable
             // Every type, out of memory included: nothing above observes a throw, so one left here
             // would leave the status Reconciling for ever (plugins.md, States, story 6).
             _logger.LogError(ex, "Load order reconcile failed");
-            failure = ex.Message;
+            failure = FailureAfterReopening(ex);
             return true;
         }
         finally
@@ -445,8 +445,58 @@ internal sealed class Indexer : IDisposable
     private bool CancelledBy(Exception ex, CancellationToken token) =>
         ex is OperationCanceledException && (token.IsCancellationRequested || _disposal.IsCancellationRequested);
 
+    // ADR-0003: recovery is not gated. The plugins read before the fatal keep their rows, so the held
+    // plugins and the indexed list stay. Runs with the exclusive right held.
+    private string FailureAfterReopening(Exception cause)
+    {
+        if (!Store.IsInvalidation(cause)) return cause.Message;
+        try
+        {
+            return ReopenStore() is { } reason ? $"{cause.Message} mEdit's record index was not reopened: {reason}" : cause.Message;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Reopening the record index failed");
+            return $"{cause.Message} mEdit's record index was not reopened: {ex.Message}";
+        }
+    }
+
+    private OpenScope ScopeOn(HeldPlugins held, Store store, LoadOrderSnapshot snapshot) =>
+        new(held, store, new Projector(store, held.Find, _source, _logger), new FailedReads(store, _source, _logger), snapshot);
+
+    private string? ReopenStore()
+    {
+        OpenScope? current;
+        lock (_lock)
+        {
+            current = _scope;
+            _scope = null;
+        }
+        if (current is null) return null;
+        if (!current.Store.EndReads())
+        {
+            lock (_lock) _undrained = current;
+            return IndexWriteGate.NotDrained("It was not reopened", "It is retried with the next load order.");
+        }
+        current.Store.Dispose();
+
+        var snapshot = current.LoadOrder;
+        var held = current.Held;
+        var fresh = _storeFactory.Create(
+            snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
+            () => Status.State == LoadOrderState.Ready, out var heldElsewhere);
+        if (fresh is null) return heldElsewhere ?? "another process holds it";
+        lock (_lock)
+        {
+            _scope = ScopeOn(held, fresh, snapshot);
+            _filter.Reapply(fresh);
+        }
+        PublishStatus();
+        return null;
+    }
+
     private bool FailsOnePlugin(Exception ex, CancellationToken token) =>
-        ex is not OutOfMemoryException && !Store.Invalidates(ex) && !CancelledBy(ex, token);
+        ex is not OutOfMemoryException && !Store.IsInvalidation(ex) && !CancelledBy(ex, token);
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
     private CancellationToken BeginReconcile()
@@ -474,7 +524,7 @@ internal sealed class Indexer : IDisposable
         OpenScope? leaving;
         lock (_lock)
         {
-            if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot) && !current.Store.Invalidated())
+            if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot) && !current.Store.IsInvalidated())
             {
                 _scope = current with { LoadOrder = snapshot };
                 return _scope;
@@ -506,7 +556,7 @@ internal sealed class Indexer : IDisposable
                 snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
                 () => Status.State == LoadOrderState.Ready, out heldElsewhere);
             if (fresh is null) return null;
-            scope = new OpenScope(held, fresh, new Projector(fresh, held.Find, _source, _logger), new FailedReads(fresh, _source, _logger), snapshot);
+            scope = ScopeOn(held, fresh, snapshot);
             fresh = null;
         }
         finally
@@ -910,15 +960,8 @@ internal sealed class Indexer : IDisposable
     // handed with it, or why a place could not be read (ADR-0003).
     private string StringsReadBy(LoadOrderSnapshot loadOrder, RegisteredPlugin plugin) =>
         $"{_readLanguage}\n" + (_adapter.StringsPlacesOf(ModPathOf(plugin.Path), loadOrder, plugin.Strings).Holds(out var places, out var failure)
-            ? string.Join('\n', places.Select(place => $"{WithinDataFolder(loadOrder, place)}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
+            ? string.Join('\n', places.Select(place => $"{Store.RelativeWithin(loadOrder.DataFolderPath, place)}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
             : failure.Reason);
-
-    // The game folder is spelled as the user names it, and a symlink gives it several spellings: a place
-    // inside it is recorded relative to it, so only a change of the place respells the stamp.
-    private static string WithinDataFolder(LoadOrderSnapshot loadOrder, string place) =>
-        Path.GetRelativePath(loadOrder.DataFolderPath, place) is var relative && !relative.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relative)
-            ? relative
-            : place;
 
     // ADR-0015.
     private void ValidateIndex(CancellationToken token)
@@ -1064,7 +1107,7 @@ internal sealed class Indexer : IDisposable
             // Every type, out of memory included: the failure becomes status data (plugins.md,
             // States, story 6), and the next snapshot tries again.
             _logger.LogError(ex, "Validating the record index failed unexpectedly");
-            return ex.Message;
+            return FailureAfterReopening(ex);
         }
     }
 

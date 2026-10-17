@@ -1,4 +1,3 @@
-using DuckDB.NET.Data;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -64,6 +63,21 @@ public sealed class PersistentIndexTests : IDisposable
         using var launched = Launched([alpha]);
 
         Assert.Equal(["953.6 MiB"], Assert.Single(IndexFiles.Rows(_instanceRoot, "SELECT current_setting('memory_limit')")));
+    }
+
+    [Fact]
+    public void AnInstanceMovedToANewPath_KeepsItsModPluginsIndexed()
+    {
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
+        using (Launched([alpha])) { }
+        var moved = Path.Combine(_root.Path, "moved");
+        Directory.Move(_instanceRoot, moved);
+        var movedAlpha = alpha with { Path = alpha.Path.Replace(_instanceRoot, moved, StringComparison.Ordinal) };
+
+        using var second = new Launch(_gameDirectory, moved, [movedAlpha], disk: null);
+
+        Assert.Equal(0, second.Opens.OpenedTotal);
+        Assert.NotEmpty(second.Index.ListedIn(movedAlpha.KeyOf()));
     }
 
     [Fact]
@@ -189,11 +203,7 @@ public sealed class PersistentIndexTests : IDisposable
 
     private void AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce(string sql)
     {
-        using var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_instanceRoot)}");
-        connection.Open();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
+        IndexFiles.Execute(_instanceRoot, sql);
     }
 
     [Fact]

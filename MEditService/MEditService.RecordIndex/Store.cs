@@ -27,6 +27,7 @@ internal sealed class Store : IDisposable
 
     private readonly ILogger _logger;
     private readonly string? _databasePath;
+    private readonly string? _instanceRoot;
     private readonly TimeProvider _timeProvider;
     private readonly SchemaReflector _schemaReflector;
     private readonly TableDdlBuilder _ddlBuilder;
@@ -65,7 +66,7 @@ internal sealed class Store : IDisposable
     /// holds no header flag, master list or record count. The gate and the filter outlive the store,
     /// which a rebuild swaps beneath them.</summary>
     public Store(
-        ILogger logger, string? databasePath, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder, IPluginAdapter plugins,
+        ILogger logger, string? databasePath, string? instanceRoot, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder, IPluginAdapter plugins,
         TimeProvider? timeProvider, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed,
         IndexWriteGate gate, FilterInForce filterInForce, INotificationPublisher? notifications)
     {
@@ -75,6 +76,7 @@ internal sealed class Store : IDisposable
         _notifications = notifications;
         _projection = new Projection(this);
         _databasePath = databasePath;
+        _instanceRoot = instanceRoot;
         _schemaReflector = schemaReflector;
         _ddlBuilder = ddlBuilder;
         _plugins = plugins;
@@ -169,9 +171,9 @@ internal sealed class Store : IDisposable
 
     /// <summary>DuckDB invalidates its database at a fatal error, a failed checkpoint among them, and
     /// answers nothing from it until the file is opened again.</summary>
-    internal static bool Invalidates(Exception ex) => ex is DuckDBException { ErrorType: DuckDBErrorType.Fatal };
+    internal static bool IsInvalidation(Exception ex) => ex is DuckDBException { ErrorType: DuckDBErrorType.Fatal };
 
-    public bool Invalidated()
+    internal bool IsInvalidated()
     {
         try
         {
@@ -179,7 +181,7 @@ internal sealed class Store : IDisposable
             DuckDbSql.Scalar<int>(connection, "SELECT 1");
             return false;
         }
-        catch (DuckDBException ex) when (Invalidates(ex))
+        catch (DuckDBException ex) when (IsInvalidation(ex))
         {
             return true;
         }
@@ -337,7 +339,7 @@ internal sealed class Store : IDisposable
     {
         return DuckDbSql.Rows(
             Connection, $"SELECT plugin, origin, file_path, content_hash FROM {FilesRelation}",
-            reader => (DuckDbSql.ReadPluginAddress(reader), reader.GetString(2), reader.GetString(3)));
+            reader => (DuckDbSql.ReadPluginAddress(reader), ResolvedFilePath(reader.GetString(2)), reader.GetString(3)));
     }
 
     // Null when the file cannot be read (mid-write, permissions) counts as a mismatch: an unreadable
@@ -362,7 +364,7 @@ internal sealed class Store : IDisposable
     {
         return DuckDbSql.Rows(
             Connection, $"SELECT file_path, content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2",
-            reader => (reader.GetString(0), reader.GetString(1)), key.Name, key.Origin) is [var claim] ? claim : null;
+            reader => (ResolvedFilePath(reader.GetString(0)), reader.GetString(1)), key.Name, key.Origin) is [var claim] ? claim : null;
     }
 
     /// <summary>Which truth <paramref name="key"/>'s rows were derived from, or null when the store
@@ -427,7 +429,7 @@ internal sealed class Store : IDisposable
         DuckDbSql.Execute(Connection, $"""
             INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, strings_read)
             VALUES ($1, $2, $3, $4, $5)
-            """, plugin, origin, Path.GetFullPath(filePath), claim.Hash, stringsRead);
+            """, plugin, origin, StoredFilePath(filePath), claim.Hash, stringsRead);
         StampDiagnoses(plugin, origin, claim);
     }
 
@@ -452,7 +454,20 @@ internal sealed class Store : IDisposable
 
     public void PointFileClaimAt(PluginAddress plugin, string filePath) =>
         DuckDbSql.Execute(Connection, $"UPDATE {FilesRelation} SET file_path = $3 WHERE plugin = $1 AND origin = $2",
-            plugin.Name, plugin.Origin, Path.GetFullPath(filePath));
+            plugin.Name, plugin.Origin, StoredFilePath(filePath));
+
+    // ADR-0012: an absolute path as identity changes when the instance moves.
+    private string StoredFilePath(string filePath) =>
+        _instanceRoot is null ? Path.GetFullPath(filePath) : RelativeWithin(_instanceRoot, Path.GetFullPath(filePath));
+
+    /// <summary>A place inside <paramref name="folder"/> spelled relative to it, any other place as given.</summary>
+    internal static string RelativeWithin(string folder, string place) =>
+        Path.GetRelativePath(folder, place) is var relative && !relative.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relative)
+            ? relative
+            : place;
+
+    private string ResolvedFilePath(string stored) =>
+        _instanceRoot is null ? stored : Path.GetFullPath(stored, _instanceRoot);
 
     /// <summary>The file claim, the derivation and the diagnoses go together: every one of them is
     /// about the rows this plugin holds, and Unindex is the verb that drops those.</summary>

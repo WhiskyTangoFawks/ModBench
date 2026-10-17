@@ -10,6 +10,17 @@ internal static class IndexFiles
     internal static string In(string instanceRoot) =>
         Directory.GetFiles(instanceRoot, "*.duckdb", SearchOption.AllDirectories).Single();
 
+    /// <summary>Runs <paramref name="sql"/> on the open Index's own database, joining it as
+    /// <see cref="Rows"/> does.</summary>
+    internal static void Execute(string instanceRoot, string sql)
+    {
+        using var connection = new DuckDBConnection($"DataSource={In(instanceRoot)}");
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>Every row <paramref name="sql"/> yields over the public relations, sorted, as text.
     /// DuckDB.NET shares one database per path in a process, so this joins the open Index's own and
     /// leaves its filter alone.</summary>

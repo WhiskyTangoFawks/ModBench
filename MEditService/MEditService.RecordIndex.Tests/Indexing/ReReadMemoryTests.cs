@@ -1,4 +1,3 @@
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -19,7 +18,8 @@ public sealed class ReReadMemoryTests : IDisposable
     private const string Plugin = "Referring.esp";
     private const int RecordCount = 40_000;
     private const int ReferencesPerRecord = 50;
-    private const string MemoryLimit = "96MB";
+    private const string MemoryLimit = "64MB";
+    private const int PinnedThreadsSinceDuckDbsMemoryGrowsWithThem = 4;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("re-read-memory").WithPlugin(Plugin).Build();
     private readonly LoadOrderHolder _holder = new();
@@ -79,11 +79,7 @@ public sealed class ReReadMemoryTests : IDisposable
 
         private void LimitDuckDbsMemory()
         {
-            using var connection = new DuckDBConnection($"DataSource={IndexFiles.In(instanceRoot)}");
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = $"SET GLOBAL memory_limit = '{MemoryLimit}'";
-            command.ExecuteNonQuery();
+            IndexFiles.Execute(instanceRoot, $"SET GLOBAL memory_limit = '{MemoryLimit}'; SET GLOBAL threads = {PinnedThreadsSinceDuckDbsMemoryGrowsWithThem}");
         }
 
         public void Dispose()
