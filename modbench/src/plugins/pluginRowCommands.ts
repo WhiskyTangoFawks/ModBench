@@ -12,7 +12,7 @@ import { decompileAndCommitProgressMessage } from './decompileAndCommitProgress'
 import type { PluginsTreeNode } from './pluginRows';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
-import type { SelectionResult } from '../pluginsCommands/plugins';
+import type { SelectionResult } from '../pluginCommands/plugins';
 import { isClickedRow, selectionArgument } from '../drivingLib/gestureEntry';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { Argument } from '../wire/argument';

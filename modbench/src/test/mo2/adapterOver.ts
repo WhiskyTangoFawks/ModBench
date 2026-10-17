@@ -9,8 +9,8 @@ import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { mo2Watch } from '../../instanceAdapter/mo2Watch';
 import { myGamesResolver } from '../../instanceAdapter/myGames';
 import { readingSource, type ReadingSource } from '../../instanceAdapter/mo2Reads';
-import type { PluginsCommands, pluginsCommands } from '../../pluginsCommands/plugins';
-import { pluginsCommandsWith } from '../pluginsCommandsWith';
+import type { PluginCommands, pluginCommands } from '../../pluginCommands/plugins';
+import { pluginCommandsWith } from '../pluginCommandsWith';
 import { fakeArchiveReader } from '../fakeArchiveReader';
 import { NO_DETECTORS } from '../noDetectors';
 
@@ -72,9 +72,9 @@ export async function modFilesOf(source: ReadingSource, entries: readonly Modlis
   return new Map(await Promise.all(mods.map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name })] as const)));
 }
 
-type PluginsCommandsClient = Parameters<typeof pluginsCommands>[0]['client'];
+type PluginCommandsClient = Parameters<typeof pluginCommands>[0]['client'];
 
-/** `pluginsCommandsWith` over MO2's adapter on `root`. */
-export function pluginsCommandsOver(root: string, client: Partial<PluginsCommandsClient> = {}): PluginsCommands {
-  return pluginsCommandsWith(adapterOver(root), client);
+/** `pluginCommandsWith` over MO2's adapter on `root`. */
+export function pluginCommandsOver(root: string, client: Partial<PluginCommandsClient> = {}): PluginCommands {
+  return pluginCommandsWith(adapterOver(root), client);
 }

@@ -4,7 +4,7 @@ import { lastGoodReadMessage, type Instance, type InstanceValue, type InstanceVi
 import { messageLine } from '../drivingLib/nameFilter';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
-import type { PluginsDrop } from '../pluginsCommands/plugins';
+import type { PluginsDrop } from '../pluginCommands/plugins';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { IndexingNode, type RecordBrowser } from './RecordBrowser';
 import { ImplicitMasterNode, PluginNode, rowIdentity, type PluginListNode, type PluginsTreeNode } from './pluginRows';

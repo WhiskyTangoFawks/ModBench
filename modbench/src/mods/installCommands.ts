@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { DownloadFile, Instance, InstanceValue } from '../instanceLoader/instance';
 import { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, samePath } from '../instanceAdapter/instanceAdapter';
-import type { InstallTarget, ModlistCommands, ModPackage } from '../modOrderCommands/modOrderCommands';
+import type { InstallTarget, ModCommands, ModPackage } from '../modCommands/modCommands';
 import { downloadArgumentOf, downloadedFileNamed } from '../drivingLib/argument';
 import {
   argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure,
@@ -39,7 +39,7 @@ interface InstallOptions {
 }
 
 interface ModInstallDeps {
-  commands: Pick<ModlistCommands, 'installMod' | 'newModNameRefusal'>;
+  commands: Pick<ModCommands, 'installMod' | 'newModNameRefusal'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;
   warnIfFomod: (name: string, isFomod: boolean) => void;

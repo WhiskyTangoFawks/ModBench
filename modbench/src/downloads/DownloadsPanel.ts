@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { DownloadSortColumn } from './downloadRows';
-import type { DeletedDownload, DownloadsCommands } from '../downloadsCommands/downloads';
+import type { DeletedDownload, DownloadedFileCommands } from '../downloadedFileCommands/downloads';
 import type { DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS } from './keyContext';
 import { pluralArgument, registerGesture, singularArgument } from '../drivingLib/gestureEntry';
@@ -48,7 +48,7 @@ const deletedPartials = (managerNames: Pick<InstanceValue['managerNames'], 'down
     }]));
 
 function deleteGesture(
-  commands: DownloadsCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+  commands: DownloadedFileCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
   ask: AskQuestion, trash: MoveToTrash, log: (line: string) => void,
 ): DownloadsGesture<readonly string[], DeletedDownload> {
   return {
@@ -69,7 +69,7 @@ function deleteGesture(
 }
 
 function markGesture(
-  commands: DownloadsCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, excluded: boolean,
+  commands: DownloadedFileCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, excluded: boolean,
 ): DownloadsGesture<readonly string[], string> {
   const verb = excluded ? 'exclude' : 'include';
   return {
@@ -114,7 +114,7 @@ export function registerDownloadsSingleRowCommands(
  *  tool's Hide All). `viewSelection` backs the Delete key and the palette, which get no row
  *  argument. */
 export function registerDownloadsMultiRowCommands(
-  commands: DownloadsCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  commands: DownloadedFileCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
   return [

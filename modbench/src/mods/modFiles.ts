@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import type { FileOrigin, OriginFile, OriginFolder } from '../instanceLoader/instance';
 import { originLabel, type FileOrderConflict } from '../instanceLoader/fileConflictIndex';
 import type { ModlistNode } from './ModListProvider';
-import type { OriginFileMark, OriginFileRef } from '../modOrderCommands/modOrderCommands';
+import type { OriginFileMark, OriginFileRef } from '../modCommands/modCommands';
 import { byLevel, byName } from './fileTree';
 
 // Not `file:`: VS Code badges and tints a row whose resourceUri carries a diagnostic or another

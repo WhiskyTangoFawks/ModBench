@@ -101,10 +101,10 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
 // A view fires the commands the root bound to the Instance adapter; it takes only types from the core box.
 /** @type {Record<string, string[]>} */
 const BOUND_COMMAND_BOXES = {
-    mods: ['modOrderCommands/modOrderCommands', 'modOrderCommands/install'],
-    downloads: ['downloadsCommands/downloads'],
+    mods: ['modCommands/modCommands', 'modCommands/install'],
+    downloads: ['downloadedFileCommands/downloads'],
     toolbox: ['instanceCommands/instanceCommands', 'sourceCommands/modlistRepositoryCommands'],
-    plugins: ['pluginsCommands/plugins', 'pluginsCommands/renamePlugin', 'sourceCommands/sourceCommands'],
+    plugins: ['pluginCommands/plugins', 'pluginCommands/renamePlugin', 'sourceCommands/sourceCommands'],
 };
 /** A view reaches the Instance adapter for a rule over file names and paths alone: Plugins for a plugin file's, Mods and
  *  Downloads for an archive's, and Mods for which downloaded file a picked path is. */
@@ -375,11 +375,11 @@ export default defineConfig(
                     './src/instanceAdapter/tsconfig.json',
                     './src/coreLib/tsconfig.json',
                     './src/instanceLoader/tsconfig.json',
-                    './src/modOrderCommands/tsconfig.json',
-                    './src/pluginsCommands/tsconfig.json',
+                    './src/modCommands/tsconfig.json',
+                    './src/pluginCommands/tsconfig.json',
                     './src/instanceCommands/tsconfig.json',
                     './src/sourceCommands/tsconfig.json',
-                    './src/downloadsCommands/tsconfig.json',
+                    './src/downloadedFileCommands/tsconfig.json',
                     './src/client/tsconfig.json',
                     './src/drivingLib/tsconfig.json',
                     './src/mods/tsconfig.json',

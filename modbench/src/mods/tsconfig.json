@@ -12,7 +12,7 @@
     { "path": "../drivingLib" },
     { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
-    { "path": "../modOrderCommands" },
+    { "path": "../modCommands" },
     { "path": "../ports" },
     { "path": "../wire" }
   ],

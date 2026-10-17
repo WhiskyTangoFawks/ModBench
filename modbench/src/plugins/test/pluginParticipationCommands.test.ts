@@ -29,7 +29,7 @@ import { PluginNode, ImplicitMasterNode } from '../pluginRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
-import { pluginsCommandsWith } from '../../test/pluginsCommandsWith';
+import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { progressSteps } from '../../test/recordedProgress';
 
@@ -56,7 +56,7 @@ const instance = () => ({
 
 function registered(adapter = fake(), viewSelection: () => PluginNode[] = () => []) {
   const reporter = recordingReporter();
-  registerPluginEnableCommands(pluginsCommandsWith(adapter.adapter), instance(), viewSelection, reporter);
+  registerPluginEnableCommands(pluginCommandsWith(adapter.adapter), instance(), viewSelection, reporter);
   return { reporter, adapter };
 }
 

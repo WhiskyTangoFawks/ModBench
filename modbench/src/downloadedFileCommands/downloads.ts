@@ -8,9 +8,9 @@ import { goneFromDisk } from '../coreLib/commandRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult } from '../coreLib/commandResult';
 
-type DownloadsCommandResult = CommandResult<{ wrote: boolean; metadataLeftBehind?: string }>;
+type DownloadedFileCommandResult = CommandResult<{ wrote: boolean; metadataLeftBehind?: string }>;
 
-async function mark(adapter: InstanceAdapter, name: string, excluded: 'Excluded' | 'Included'): Promise<DownloadsCommandResult> {
+async function mark(adapter: InstanceAdapter, name: string, excluded: 'Excluded' | 'Included'): Promise<DownloadedFileCommandResult> {
   try {
     const marked = await adapter.markDownloadedFile(name, excluded);
     if (marked.gone) return { applied: false, refusal: goneFromDisk(name) };
@@ -20,11 +20,11 @@ async function mark(adapter: InstanceAdapter, name: string, excluded: 'Excluded'
   }
 }
 
-function excludeDownload(adapter: InstanceAdapter, name: string): Promise<DownloadsCommandResult> {
+function excludeDownload(adapter: InstanceAdapter, name: string): Promise<DownloadedFileCommandResult> {
   return mark(adapter, name, 'Excluded');
 }
 
-function includeDownload(adapter: InstanceAdapter, name: string): Promise<DownloadsCommandResult> {
+function includeDownload(adapter: InstanceAdapter, name: string): Promise<DownloadedFileCommandResult> {
   return mark(adapter, name, 'Included');
 }
 
@@ -55,7 +55,7 @@ function deleteDownloads(
   return selectionOutcomeOf(names, (name) => deleteDownload(adapter, name, trash), toDeletedDownload);
 }
 
-async function deleteDownload(adapter: InstanceAdapter, name: string, trash: MoveToTrash): Promise<DownloadsCommandResult> {
+async function deleteDownload(adapter: InstanceAdapter, name: string, trash: MoveToTrash): Promise<DownloadedFileCommandResult> {
   try {
     const trashed = await adapter.trashDownloadedFile(name, trash);
     if (trashed.gone) return { applied: false, refusal: goneFromDisk(name) };
@@ -66,7 +66,7 @@ async function deleteDownload(adapter: InstanceAdapter, name: string, trash: Mov
 }
 
 /** The downloads' commands, bound to one instance: each takes the gesture's arguments only. */
-export function downloadsCommands(adapter: InstanceAdapter) {
+export function downloadedFileCommands(adapter: InstanceAdapter) {
   return {
     excludeDownloads: (...args: TailOf<typeof excludeDownloads>) => excludeDownloads(adapter, ...args),
     includeDownloads: (...args: TailOf<typeof includeDownloads>) => includeDownloads(adapter, ...args),
@@ -74,4 +74,4 @@ export function downloadsCommands(adapter: InstanceAdapter) {
   };
 }
 
-export type DownloadsCommands = ReturnType<typeof downloadsCommands>;
+export type DownloadedFileCommands = ReturnType<typeof downloadedFileCommands>;

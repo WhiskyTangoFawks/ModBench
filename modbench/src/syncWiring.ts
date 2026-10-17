@@ -1,7 +1,7 @@
 import { createSync, type Sync, type SyncChannel } from './drivingLib/syncFailureReport';
 import type { Instance, InstanceValue } from './instanceLoader/instance';
-import type { ModSyncRun } from './modOrderCommands/modOrderCommands';
-import type { PluginSyncRun } from './pluginsCommands/plugins';
+import type { ModSyncRun } from './modCommands/modCommands';
+import type { PluginSyncRun } from './pluginCommands/plugins';
 
 export interface InstanceSyncs {
   dispose(): void;
@@ -22,14 +22,14 @@ export function instanceSyncs({ instance, syncMods, syncPlugins, channel }: Inst
   const { modOrderFile } = instance.value.managerNames;
   const modSync = createSync(syncMods, channel, {
     command: 'mod sync',
-    prefix: '[modlist]',
+    prefix: '[modCommands]',
     unsynced: `${modOrderFile} is not synced`,
     added: `${modOrderFile} line(s) for folder(s) in mods/ with no line`,
     dropped: `${modOrderFile} line(s) whose folder is gone from mods/`,
   });
   const pluginSync = createSync(syncPlugins, channel, {
     command: 'plugin sync',
-    prefix: '[pluginsCommands]',
+    prefix: '[pluginCommands]',
     unsynced: 'plugins.txt is not synced',
     added: 'disabled plugins.txt line(s) for plugin(s) on disk with no line',
     dropped: 'plugins.txt line(s) with no plugin on disk',

@@ -4,7 +4,7 @@ import type { PluginNode, PluginsTreeNode } from './pluginRows';
 import { PLUGINS_KEY_ARGS } from './gestureEntry';
 import { reportPluginsParticipation } from './pluginParticipationCommands';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import type { PluginsCommands } from '../pluginsCommands/plugins';
+import type { PluginCommands } from '../pluginCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 
 /** Every toggled box, however many and whichever state each asks for, is one call to
@@ -12,7 +12,7 @@ import type { Reporter } from '../ports/reporter';
  *  says. */
 export async function onPluginCheckboxChanged(
   e: vscode.TreeCheckboxChangeEvent<PluginsTreeNode>,
-  commands: Pick<PluginsCommands, 'setPluginsParticipation'>, profile: () => string, reporter: Reporter, instance: Pick<Instance, 'refresh'>,
+  commands: Pick<PluginCommands, 'setPluginsParticipation'>, profile: () => string, reporter: Reporter, instance: Pick<Instance, 'refresh'>,
 ): Promise<void> {
   const entries = e.items
     .filter((item): item is [PluginNode, vscode.TreeItemCheckboxState] => item[0].kind === 'plugin')

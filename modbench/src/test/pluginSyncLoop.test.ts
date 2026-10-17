@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../test/mo2/fakeVscodeWatcher';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './vscodeMock';
 import { adapterOver } from './mo2/adapterOver';
-import { pluginsCommandsWith } from './pluginsCommandsWith';
+import { pluginCommandsWith } from './pluginCommandsWith';
 import { STEADY_WINDOW } from './steadyWindow';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture } from './fakeInstanceAdapter';
 
@@ -16,12 +16,12 @@ import type { InstanceReading, Mod } from '../instanceAdapter/instanceAdapter';
 import { instanceSyncs } from '../syncWiring';
 import { FakeInstance } from './mo2/fakeInstance';
 import { pastSequence, watcherFor } from './mo2/instanceLoop';
-import { pluginSyncOver, type PluginSyncRun } from '../pluginsCommands/plugins';
+import { pluginSyncOver, type PluginSyncRun } from '../pluginCommands/plugins';
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
 import { ToolboxProvider } from '../toolbox/ToolboxProvider';
-import { modSyncOver, type ModSyncRun } from '../modOrderCommands/modOrderCommands';
+import { modSyncOver, type ModSyncRun } from '../modCommands/modCommands';
 
 const noModSync: ModSyncRun = () => Promise.resolve({ applied: true, added: [], dropped: [] });
 
@@ -235,7 +235,7 @@ describe('a gesture writes the profile the Instance last landed', () => {
     fake.changed();
     expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
 
-    const result = await pluginsCommandsWith(fake.adapter).setPluginsEnabled(instance.value.activeProfile, ['Base.esp'], false);
+    const result = await pluginCommandsWith(fake.adapter).setPluginsEnabled(instance.value.activeProfile, ['Base.esp'], false);
 
     expect(result).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
     expect(fake.calls.at(-1)).toEqual({ verb: 'changePluginOrder', profile: 'Secondary', changes: [{ kind: 'enable', plugin: 'Base.esp', enabled: false }] });

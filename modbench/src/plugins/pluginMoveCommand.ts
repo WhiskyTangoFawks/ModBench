@@ -5,7 +5,7 @@ import type { Instance } from '../instanceLoader/instance';
 import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { pluralArgument } from '../drivingLib/gestureEntry';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import type { PluginsCommands, PluginsDrop } from '../pluginsCommands/plugins';
+import type { PluginCommands, PluginsDrop } from '../pluginCommands/plugins';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
@@ -35,7 +35,7 @@ interface Move {
 /** `modbench.plugin.move`: the plugins and the drop where they land. Left out, the plugins are the
  *  view's selection and the drop is picked. A tree drop is one entry point into it. */
 export function registerPluginMoveCommand(
-  commands: Pick<PluginsCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
+  commands: Pick<PluginCommands, 'reorderPlugins'>, instance: Pick<Instance, 'value' | 'refresh'>,
   view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
   const gesture: AgentGesture<PluginsTreeNode, Move, GestureResult<PluginAddress>, { drop: PluginsDrop }> = {

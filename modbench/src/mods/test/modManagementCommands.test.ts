@@ -35,7 +35,7 @@ const commands = {
   uninstallMods: vi.fn(), deleteSeparators: vi.fn(), renameMod: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
   createEmptyMod: vi.fn(), setModsEnabled: vi.fn(), moveMods: vi.fn(), moveSeparators: vi.fn(), markFiles: vi.fn(),
   newModNameRefusal: vi.fn(), separatorNameRefusal: vi.fn(), renameModNameRefusal: vi.fn(), installMod: vi.fn(),
-} satisfies Record<keyof ModlistCommands, unknown>;
+} satisfies Record<keyof ModCommands, unknown>;
 const {
   uninstallMods, deleteSeparators, renameMod, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators, markFiles,
   newModNameRefusal, separatorNameRefusal, renameModNameRefusal,
@@ -56,7 +56,7 @@ import { FileNode, FolderNode } from '../modFiles';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import type { ModlistCommands } from '../../modOrderCommands/modOrderCommands';
+import type { ModCommands } from '../../modCommands/modCommands';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
