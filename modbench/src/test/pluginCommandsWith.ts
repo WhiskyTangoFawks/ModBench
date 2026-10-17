@@ -3,7 +3,7 @@ import { pluginCommands, type PluginCommands } from '../pluginCommands/plugins';
 
 type PluginCommandsClient = Parameters<typeof pluginCommands>[0]['client'];
 
-/** The Plugins commands bound to `adapter` and a client that answers only what a test fixes. */
+/** Plugin commands bound to `adapter` and a client that answers only what a test fixes. */
 export function pluginCommandsWith(adapter: InstanceAdapter, client: Partial<PluginCommandsClient> = {}): PluginCommands {
   const unanswered = () => Promise.reject(new Error('this test fixed no answer'));
   return pluginCommands({

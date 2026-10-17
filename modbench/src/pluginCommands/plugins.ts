@@ -172,7 +172,7 @@ export function pluginSyncOver(adapter: InstanceAdapter): PluginSyncRun {
   return () => syncPlugins(adapter);
 }
 
-/** The Plugins commands, bound to one instance and one mEdit client: each takes the gesture's arguments only. */
+/** Plugin commands, bound to one instance and one mEdit client: each takes the gesture's arguments only. */
 export function pluginCommands({ adapter, client }: { adapter: InstanceAdapter; client: PluginMasters & PluginRenameClient }) {
   return {
     setPluginsParticipation: (...args: TailOf<typeof setPluginsParticipation>) => setPluginsParticipation(adapter, ...args),

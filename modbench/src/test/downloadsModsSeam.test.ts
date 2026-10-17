@@ -16,7 +16,7 @@ vi.mock('vscode', () => ({
 
 import { registerModInstallCommands } from '../mods/installCommands';
 import { DownloadNode } from '../downloads/DownloadsProvider';
-import { modlistCommands } from '../modCommands/modCommands';
+import { modCommands } from '../modCommands/modCommands';
 import { InMemoryMEditClient } from '../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter } from './fakeInstanceAdapter';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
@@ -31,7 +31,7 @@ describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', 
     const { qp, escape } = fakeQuickPick<{ label: string }>();
     createQuickPick.mockReturnValue(qp);
     registerModInstallCommands({
-      commands: modlistCommands(fakeInstanceAdapter().adapter, new InMemoryMEditClient(), unreadStatus), instance,
+      commands: modCommands(fakeInstanceAdapter().adapter, new InMemoryMEditClient(), unreadStatus), instance,
       reporterFor: () => recordingReporter(), warnIfFomod: vi.fn(),
       downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     });

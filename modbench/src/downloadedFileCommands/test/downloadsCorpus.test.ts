@@ -14,7 +14,7 @@ const NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 const ARCHIVE = `downloads/${NAME}`;
 const META = `${ARCHIVE}.meta`;
 
-describe('downloads commands over the committed corpus fixture: one path each from the command through the real adapter to disk', () => {
+describe('downloaded file commands over the committed corpus fixture: one path each from the command through the real adapter to disk', () => {
   let dir: string;
 
   beforeEach(() => { dir = cloneCorpusFixture(); });

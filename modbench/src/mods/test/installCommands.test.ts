@@ -34,7 +34,7 @@ const { installMod } = vi.hoisted(() => ({ installMod: vi.fn() }));
 import { registerModInstallCommands } from '../installCommands';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
-import { modlistCommands } from '../../modCommands/modCommands';
+import { modCommands } from '../../modCommands/modCommands';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
@@ -50,7 +50,7 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 
 const GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE ='Skyrim Special Edition';
 const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
-const COMMANDS = { ...modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), installMod };
+const COMMANDS = { ...modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), installMod };
 
 type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
 

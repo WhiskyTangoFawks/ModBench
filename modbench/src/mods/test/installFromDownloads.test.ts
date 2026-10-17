@@ -28,11 +28,11 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import type { UpgradeCandidate } from '../../instanceLoader/instance';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
-import { modlistCommands } from '../../modCommands/modCommands';
+import { modCommands } from '../../modCommands/modCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
-const installOver = () => ({ ...modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), installMod });
+const installOver = () => ({ ...modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), installMod });
 
 const ARCHIVE_PATH = downloadRowFixture('foo.7z').path;
 

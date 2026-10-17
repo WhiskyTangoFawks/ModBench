@@ -14,7 +14,7 @@ import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
-import type { EntryRef, ModlistCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modCommands/modCommands';
+import type { EntryRef, ModCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modCommands/modCommands';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import {
   endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem, type MoveTarget,
@@ -27,7 +27,7 @@ import { Refusal } from '../drivingLib/refusal';
 // modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
 // Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
 export function registerModEnableCommands(
-  commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>,
+  commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>,
   viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   const gesture = (enabled: boolean): AgentGesture<ModlistNode, readonly string[], SelectionResult<string>> => {
@@ -60,7 +60,7 @@ export function registerModEnableCommands(
 // modbench.mod.excludeFile / modbench.mod.includeFile: the direction is the command's, so a mixed
 // selection takes the right-clicked row's (mods.md, Menus and keys, story 7).
 export function registerFileExclusionCommands(
-  commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+  commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   const gesture = (mark: OriginFileMark): AgentGesture<ModlistNode, readonly OriginFileRef[], GestureResult<OriginFileRef>> => {
     const { verb } = FILE_MARKS[mark];
@@ -104,7 +104,7 @@ interface Move {
 }
 
 export function registerModMoveCommand(
-  commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, view: MoveView, reporter: Reporter,
+  commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
   const failed = (kind: Move['kind'], detail: string): GestureResult<string> =>
     ({ applied: false, refusal: `Failed to move ${kind}s.`, detail });
@@ -175,7 +175,7 @@ async function confirmUninstall(names: readonly string[], sourceMods: readonly s
 }
 
 interface ModContextDeps {
-  commands: ModlistCommands;
+  commands: ModCommands;
   instance: Pick<Instance, 'value' | 'refresh'>;
   viewSelection: () => readonly ModlistNode[];
   reporter: Reporter;
@@ -189,7 +189,7 @@ interface Rename {
   readonly newName: string;
 }
 
-type Uninstalled = Extract<Awaited<ReturnType<ModlistCommands['uninstallMods']>>, { applied: true }>['outcome']['landed'][number];
+type Uninstalled = Extract<Awaited<ReturnType<ModCommands['uninstallMods']>>, { applied: true }>['outcome']['landed'][number];
 
 interface ModToUninstall {
   readonly name: string;
@@ -282,13 +282,13 @@ export function registerModContextCommands(
   ];
 }
 function separatorNamePrompt(
-  commands: ModlistCommands, instance: Pick<Instance, 'value'>, own?: string,
+  commands: ModCommands, instance: Pick<Instance, 'value'>, own?: string,
 ): (value: string) => string | undefined {
   return (value) => (value === '' ? undefined : commands.separatorNameRefusal(instance.value, value, own));
 }
 
 function modNamePrompt(
-  commands: ModlistCommands, instance: Pick<Instance, 'value'>, own: string,
+  commands: ModCommands, instance: Pick<Instance, 'value'>, own: string,
 ): (value: string) => string | undefined {
   return (value) => (value === '' ? undefined : commands.renameModNameRefusal(instance.value, value, own));
 }
@@ -310,10 +310,10 @@ interface SeparatorRename {
   readonly newName: string;
 }
 
-type DeletedSeparator = Extract<Awaited<ReturnType<ModlistCommands['deleteSeparators']>>, { applied: true }>['outcome']['landed'][number];
+type DeletedSeparator = Extract<Awaited<ReturnType<ModCommands['deleteSeparators']>>, { applied: true }>['outcome']['landed'][number];
 
 function renameGesture(
-  commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+  commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
 ): AgentGesture<ModlistNode, SeparatorRename, GestureResult<string>, { name: string }> {
   return {
     fromView: async (entry) => {
@@ -343,7 +343,7 @@ function renameGesture(
   }
 
   function addGesture(
-    commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+    commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
   ): AgentGesture<ModlistNode, SeparatorAdd, GestureResult<string>, { name: string }> {
     return {
     fromView: async (entry) => {
@@ -376,7 +376,7 @@ function renameGesture(
   }
 
   function deleteGesture(
-    commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+    commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   ): AgentGesture<ModlistNode, readonly string[], GestureResult<DeletedSeparator>> {
     return {
     fromView: async (entry) => {
@@ -410,7 +410,7 @@ function renameGesture(
   }
 
   export function registerSeparatorCommands(
-    commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+    commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
     viewSelection: () => readonly ModlistNode[],
   ): vscode.Disposable[] {
     return [
@@ -423,7 +423,7 @@ function renameGesture(
     (lineRefusal === undefined ? [] : [{ message: `"${name}" was created, but its ${modOrderFile} line could not be written.`, detail: lineRefusal, severity: 'warning' }]);
 
   export function registerCreateEmptyModCommand(
-    commands: ModlistCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+    commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
   ): vscode.Disposable {
     const gesture: AgentGesture<ModlistNode, string, GestureResult<string>, { name: string }> = {
       fromView: async () => {

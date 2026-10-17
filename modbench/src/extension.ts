@@ -40,7 +40,7 @@ import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
 import { modlistRepositoryCommands } from './sourceCommands/modlistRepositoryCommands';
 import { sourceCommands } from './sourceCommands/sourceCommands';
-import { modSyncOver, modlistCommands } from './modCommands/modCommands';
+import { modSyncOver, modCommands } from './modCommands/modCommands';
 import { warnIfFomod } from './mods/fomodWarning';
 import { downloadedFileCommands } from './downloadedFileCommands/downloads';
 import { instanceCommands } from './instanceCommands/instanceCommands';
@@ -145,7 +145,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const modlist = modlistRepositoryCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot), trash });
   const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
   const mods = own(createModsView({
-    instance, commands: modlistCommands(adapter, client, readStatus), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
+    instance, commands: modCommands(adapter, client, readStatus), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
     downloadInstall: {
       reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),

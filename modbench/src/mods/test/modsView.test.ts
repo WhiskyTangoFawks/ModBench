@@ -95,7 +95,7 @@ import { createSync } from '../../drivingLib/syncFailureReport';
 import type { ModSyncRun } from '../../modCommands/modCommands';
 import { rowLabelOf } from '../../drivingLib/argument';
 import { present } from '../../ports/present';
-import { modlistCommands } from '../../modCommands/modCommands';
+import { modCommands } from '../../modCommands/modCommands';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -110,7 +110,7 @@ const shownRows = async () => (await present(h.providers.get('modbench.modList')
 const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row));
 
 const otherDeps = () => ({
-  commands: modlistCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
+  commands: modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
   extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadInstall: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
   modStatus: { push: new InMemoryMEditClient(), readStatus: () => Promise.resolve([]) },
 });
@@ -118,7 +118,7 @@ const otherDeps = () => ({
 const silentChannel = { error: () => undefined, info: () => undefined };
 const modSyncAnswering = (sync: ModSyncRun) => ({
   modSync: createSync(sync, silentChannel, {
-    command: 'mod sync', prefix: '[modlist]', unsynced: 'modlist.txt is not synced', added: 'modlist.txt lines added', dropped: 'modlist.txt lines dropped',
+    command: 'mod sync', prefix: '[modCommands]', unsynced: 'modlist.txt is not synced', added: 'modlist.txt lines added', dropped: 'modlist.txt lines dropped',
   }),
 });
 const noSync = () => modSyncAnswering(() => Promise.resolve({ applied: true as const, added: [], dropped: [] }));

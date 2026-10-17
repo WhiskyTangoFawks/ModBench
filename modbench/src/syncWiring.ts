@@ -22,7 +22,7 @@ export function instanceSyncs({ instance, syncMods, syncPlugins, channel }: Inst
   const { modOrderFile } = instance.value.managerNames;
   const modSync = createSync(syncMods, channel, {
     command: 'mod sync',
-    prefix: '[modlist]',
+    prefix: '[modCommands]',
     unsynced: `${modOrderFile} is not synced`,
     added: `${modOrderFile} line(s) for folder(s) in mods/ with no line`,
     dropped: `${modOrderFile} line(s) whose folder is gone from mods/`,
