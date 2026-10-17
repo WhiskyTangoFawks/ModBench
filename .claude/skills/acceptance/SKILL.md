@@ -10,7 +10,7 @@ An acceptance run meets Modbench as the user's agent does: a real Extension Deve
 ## A run
 
 1. Build this worktree: in `modbench/`, through slot-run, `npm run build`, and `npm run build:backend` when `MEditService/` changed.
-2. `accept.sh up <game>` takes `fallout`, `skyrim` or `starfield`, whichever the case needs, or the path of an instance folder. It copies `DevList<Game>` into a new folder under `/tmp`, seeds its index, starts VS Code on it, and waits until the index is ready. It prints `DIR=<folder> PORT=<port>`. A folder you name gets no seed.
+2. `accept.sh up <game>` takes `fallout`, `skyrim` or `starfield`, whichever the case needs, or the path of an instance folder. It copies `DevList<Game>` into `/tmp/modbench-accept.<game>` (the path its seed was built at, because the index keys a mod plugin by absolute path), seeds its index, starts VS Code on it, and waits until the index is ready. It prints `DIR=<folder> PORT=<port>`. A folder you name gets no seed.
 3. Shape the instance for the case. A change Modbench owns goes through its gestures: install, create empty mod, add separator, create plugin, build. A change it does not own is a plain file in the run's folder: a package in `downloads/`, a file in a mod folder, a profile's mod order. The report lists each shaping step, so another run can repeat the case. A shape that two cases need moves into that game's `DevList<Game>`.
 4. Act and observe. `accept.sh tools <folder>` lists the tools and their inputs. `accept.sh call <folder> <tool> '<json>'` calls one and prints what it returned; a refusal exits non-zero.
 5. `accept.sh down <folder>`, pass or fail. It stops every process with a file open in the folder, the backend included, and deletes the folder.
