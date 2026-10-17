@@ -1857,9 +1857,12 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
           arrive(sourceDir, file);
           mkdirSync(modDir, { recursive: true });
           const modlistWatch = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(root), 'profiles/*/modlist.txt'));
-          const modlistHeard = new Promise((r) => { modlistWatch.onDidChange(r); });
-          writeFileSync(modlistPath, `${modlist}+${origin}\r\n`);
-          await modlistHeard;
+          let modlistHeard = false;
+          modlistWatch.onDidChange(() => { modlistHeard = true; });
+          await waitFor('the modlist watcher to hear the mod enabled, rewritten until it is registered', () => {
+            if (!modlistHeard) writeFileSync(modlistPath, `${modlist}+${origin}\r\n`);
+            return modlistHeard;
+          });
           modlistWatch.dispose();
           await vscode.commands.executeCommand('modbench.instance.refresh');
           writeFileSync(modlistPath, `${modlist}-${origin}\r\n`);
