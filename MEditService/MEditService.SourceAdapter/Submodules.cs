@@ -1,7 +1,7 @@
 namespace MEditService.SourceAdapter;
 
 /// <summary>A source mod's repository as a submodule of the instance repository (ADR-0023): git holds its remote, its pin
-/// and the branch it follows, and git clones it. Modbench moves no commit, file or ref.</summary>
+/// and the branch it follows, and git clones it. Modbench moves no commit and no existing branch (ADR-0023).</summary>
 internal static class Submodules
 {
     private const string Origin = "origin";
@@ -20,19 +20,19 @@ internal static class Submodules
     internal static SubmoduleHead CommitAtHead(Submodule submodule, CancellationToken cancel)
     {
         var cloned = HoldsNothing(submodule.Folder);
-        var leftDetached = cloned ? Clone(submodule, cancel) : null;
+        if (cloned) Clone(submodule, cancel);
         var git = new SourceRepositoryGit(submodule.Folder);
         if (!git.Exists) throw SourceStopException.Unreadable($"'{submodule.Folder}' holds no repository.");
-        if (!cloned && submodule.Branch is { } branch && git.HeadCommit() == submodule.Pin && git.Run("branch", "--show-current").Length == 0)
-            leftDetached = OnTheBranch(git, branch, submodule.Pin);
-        return new SubmoduleHead(git.HeadCommit(), leftDetached);
+        var head = git.HeadCommit();
+        var detachedAtThePin = head == submodule.Pin && git.Run("branch", "--show-current").Length == 0;
+        return new SubmoduleHead(head, detachedAtThePin && submodule.Branch is { } branch ? OnTheBranch(git, branch, submodule.Pin, cloned) : null);
     }
 
     // A clone of the instance repository leaves an empty folder where each submodule goes.
     private static bool HoldsNothing(string folder) => !Directory.Exists(folder) || !Directory.EnumerateFileSystemEntries(folder).Any();
 
     // git checks the submodule out at its pin with HEAD detached, and a source mod's repository has a main (ADR-0007).
-    private static string? Clone(Submodule submodule, CancellationToken cancel)
+    private static void Clone(Submodule submodule, CancellationToken cancel)
     {
         try
         {
@@ -49,7 +49,6 @@ internal static class Submodules
             GitInit.EnsureCommitIdentity(git);
             if (!SourceRepositoryGit.HoldsRepository(submodule.Folder) && !git.TryRun(out _, "branch", "--track", "main", $"{Origin}/main"))
                 throw SourceStopException.Unreadable("its remote has no main, so it is not a source mod's repository");
-            return submodule.Branch is { } branch ? OnTheBranch(git, branch, submodule.Pin) : null;
         }
         catch (SourceStopException) when (Directory.Exists(submodule.Folder))
         {
@@ -65,17 +64,28 @@ internal static class Submodules
     }
 
     // The git directory a deinit keeps holds its local branches, and one can hold commits no remote holds.
-    private static string? OnTheBranch(SourceRepositoryGit git, string branch, string pin)
+    // After a clone, a branch that is just the remote's is behind the pin, not diverged from it.
+    private static string? OnTheBranch(SourceRepositoryGit git, string branch, string pin, bool cloned)
     {
-        if (git.TryRun(out var local, "rev-parse", "--verify", "-q", $"refs/heads/{branch}"))
+        try
         {
-            if (local.Trim() != pin) return $"its branch '{branch}' is at {local.Trim()}, not at the pin, so it is left detached at the pin";
-            git.Run("checkout", "-q", branch);
+            if (git.TryRun(out var local, "rev-parse", "--verify", "-q", $"refs/heads/{branch}"))
+            {
+                if (local.Trim() == pin) git.Run("checkout", "-q", branch);
+                else if (!(cloned && RemoteBranchIsAt(git, branch, local.Trim()))) return $"its branch '{branch}' is at {local.Trim()}, not at the pin, so it is left detached at the pin";
+            }
+            else if (RemoteBranchIsAt(git, branch, pin))
+                git.Run("checkout", "-q", "-b", branch, "--track", $"{Origin}/{branch}");
+            return null;
         }
-        else if (git.TryRun(out var followed, "rev-parse", "--verify", "-q", $"refs/remotes/{Origin}/{branch}") && followed.Trim() == pin)
-            git.Run("checkout", "-q", "-b", branch, "--track", $"{Origin}/{branch}");
-        return null;
+        catch (SourceStopException stop)
+        {
+            return $"its branch '{branch}' could not be checked out ({stop.Message}), so it is left detached at the pin";
+        }
     }
+
+    private static bool RemoteBranchIsAt(SourceRepositoryGit git, string branch, string commit) =>
+        git.TryRun(out var remote, "rev-parse", "--verify", "-q", $"refs/remotes/{Origin}/{branch}") && remote.Trim() == commit;
 
     // Windows refuses to delete the read-only files git writes.
     private static void Empty(string folder)
