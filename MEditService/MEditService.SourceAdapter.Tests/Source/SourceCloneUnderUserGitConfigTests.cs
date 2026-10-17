@@ -13,30 +13,27 @@ public sealed class SourceCloneUnderUserGitConfigTests : IDisposable
     [Fact]
     public void AClone_UnderAUserConfigThatNamesAnotherDefaultRemote_StillTakesTheRemotesMain()
     {
-        var remote = Directory.CreateDirectory(Path.Combine(_root, "remote")).FullName;
-        Git(remote, "init", "-q", "-b", "main");
-        File.WriteAllText(Path.Combine(remote, "build.json"), "release");
-        Git(remote, "add", "-A");
-        Git(remote, "commit", "-q", "-m", "release");
-        var release = Git(remote, "rev-parse", "HEAD").Trim();
-        Git(remote, "checkout", "-q", "-b", "edit");
-        var sourceFolder = Path.Combine(_root, "source", "Mod");
+        var submodule = new PinnedSubmodule(_root);
+        var release = submodule.Commit(("build.json", "release"));
+        PinnedSubmodule.Git(submodule.Remote, "checkout", "-q", "-b", "edit");
+        submodule.Pin(release);
 
         WithUserGitConfig("clone.defaultRemoteName", "upstream", () =>
-            TestAdapters.Source().CommitAtHead(sourceFolder, new SharedSource(remote, release), CancellationToken.None).Value());
+            TestAdapters.Source().CommitAtHead(new Submodule(submodule.Folder, release, null), CancellationToken.None).Value());
 
-        Assert.Equal(release, Git(sourceFolder, "rev-parse", "main").Trim());
+        Assert.Equal(release, PinnedSubmodule.Git(submodule.Folder, "rev-parse", "main").Trim());
     }
 
     private static void WithUserGitConfig(string key, string value, Action body)
     {
-        string[] variables = ["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"];
+        var count = int.TryParse(Environment.GetEnvironmentVariable("GIT_CONFIG_COUNT"), out var held) ? held : 0;
+        string[] variables = ["GIT_CONFIG_COUNT", $"GIT_CONFIG_KEY_{count}", $"GIT_CONFIG_VALUE_{count}"];
         var previous = variables.Select(Environment.GetEnvironmentVariable).ToArray();
         try
         {
-            Environment.SetEnvironmentVariable("GIT_CONFIG_COUNT", "1");
-            Environment.SetEnvironmentVariable("GIT_CONFIG_KEY_0", key);
-            Environment.SetEnvironmentVariable("GIT_CONFIG_VALUE_0", value);
+            Environment.SetEnvironmentVariable(variables[0], $"{count + 1}");
+            Environment.SetEnvironmentVariable(variables[1], key);
+            Environment.SetEnvironmentVariable(variables[2], value);
             body();
         }
         finally
@@ -44,6 +41,4 @@ public sealed class SourceCloneUnderUserGitConfigTests : IDisposable
             foreach (var (variable, was) in variables.Zip(previous)) Environment.SetEnvironmentVariable(variable, was);
         }
     }
-
-    private static string Git(string folder, params string[] args) => GitProbe.Run(Path.Combine(folder, ".git"), folder, args);
 }

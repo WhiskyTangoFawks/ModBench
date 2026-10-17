@@ -284,6 +284,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
             installationFileNotFound: 'B.7z',
           },
           { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: its package does not hold 'c.nif'." },
+          {
+            item: 'ModD', refusal: 'NotFound', message: "'ModD' was skipped: its submodule 'Mod Source' is missing.",
+            submoduleNotFound: 'Mod Source',
+          },
         ],
       },
       reads: {
@@ -291,8 +295,9 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         refused: [
           { item: 'ModB', reason: "'ModB' was skipped: installation file 'B.7z' is missing." },
           { item: 'ModC', reason: "'ModC' was skipped: its package does not hold 'c.nif'." },
+          { item: 'ModD', reason: "'ModD' was skipped: its submodule 'Mod Source' is missing." },
         ],
-        notFound: [{ mod: 'ModB', installationFile: 'B.7z' }],
+        notFound: [{ mod: 'ModB', installationFile: 'B.7z' }, { mod: 'ModD', submodule: 'Mod Source' }],
       },
       path: '/restore-from-manifest', body: { mods: [modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], ...restoreFacts, gesture: expect.any(String) as unknown } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),

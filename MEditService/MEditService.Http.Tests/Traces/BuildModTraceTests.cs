@@ -60,7 +60,7 @@ public sealed class BuildModTraceTests : HostedTests
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
         var built = Assert.Single(answer.GetProperty("applied").EnumerateArray());
         Assert.Equal(Origin, built.GetProperty("mod").GetString());
-        Assert.Null(new MEditService.ModFolderAdapter.ModFolderRepository(TimeProvider.System).ReadManifest(_builtFolder, Origin)?.Version);
+        Assert.Equal("1.2.3", new MEditService.ModFolderAdapter.ModFolderRepository(TimeProvider.System).ReadManifest(_builtFolder, Origin)?.Version);
         Assert.Empty(built.GetProperty("refused").EnumerateArray());
         Assert.Equal(
             [SecondPlugin, Plugin],
@@ -75,7 +75,7 @@ public sealed class BuildModTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task RestoringAModWhoseSourceIsAbsent_ClonesItFromTheRemoteItsManifestNames_AndBuildsItAtThatCommit()
+    public async Task RestoringAModWhoseSubmoduleIsAbsent_HasGitCloneItAtThePin_AndBuildsIt()
     {
         await LoadedWithOneModFolderAndCompiledPlugin();
         var source = Client.SourceFolderSentFor(Origin);
@@ -86,13 +86,11 @@ public sealed class BuildModTraceTests : HostedTests
             Directory.CreateDirectory(Path.GetDirectoryName(copy).Require());
             File.Copy(file, copy);
         }
-        var manifest = JsonSerializer.Serialize(new
-        {
-            package = new { remote, commit = GitProbe.Run(Path.Combine(source, ".git"), source, "rev-parse", "HEAD").Trim() },
-            files = new[] { new { path = Plugin } },
-        });
+        var pin = GitProbe.Run(Path.Combine(source, ".git"), source, "rev-parse", "HEAD").Trim();
+        var submodule = new PinnedSubmodule(_instance.Root, Origin);
+        submodule.Pin(pin);
+        var manifest = JsonSerializer.Serialize(new { package = new { submodule = Origin }, files = new[] { new { path = Plugin } } });
         File.WriteAllText(Path.Combine(_builtFolder, $"{Origin}.manifest"), manifest);
-        var absent = Path.Combine(_instance.Root, "source", Origin);
 
         var answer = await Answer(await Client.PostAsJsonAsync("/restore-from-manifest", new
         {
@@ -101,7 +99,7 @@ public sealed class BuildModTraceTests : HostedTests
                 new
                 {
                     name = Origin, folder = _builtFolder, metadataFiles = new[] { "meta.ini" },
-                    sourceFolder = absent,
+                    submodule = new { folder = submodule.Folder, pin },
                 },
             },
             statCache = StatCache,
@@ -110,8 +108,7 @@ public sealed class BuildModTraceTests : HostedTests
 
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
         Assert.Equal(Origin, Assert.Single(answer.GetProperty("applied").EnumerateArray()).GetProperty("mod").GetString());
-        Assert.Equal(
-            GitProbe.Run(Path.Combine(source, ".git"), source, "rev-parse", "HEAD"), GitProbe.Run(Path.Combine(absent, ".git"), absent, "rev-parse", "HEAD"));
+        Assert.Equal(pin, PinnedSubmodule.Git(submodule.Folder, "rev-parse", "HEAD").Trim());
     }
 
     [Fact]

@@ -1,12 +1,13 @@
 using System.Text.Json.Serialization;
 using MEditService.ModFolderAdapter;
+using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod to restore from its manifest, with the installation file its manifest names if the request found it in the
-/// downloads folder, its metadata files, and the folder its source is in or is cloned into.</summary>
+/// downloads folder, its metadata files, and the submodule its manifest names if the request found it pinned.</summary>
 public sealed record ModToRestore(
-    string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder);
+    string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, Submodule? Submodule = null);
 
 /// <summary>The instance's facts beyond its mods: the stat cache's folder, the game folder with the game files the request
 /// found for the manifests, and what a build needs, as <see cref="InstanceToBuild"/>.</summary>
@@ -24,7 +25,7 @@ public enum RestoreRefusal
     /// <summary>A file its package does not hold, or an installation file that has other bytes.</summary>
     Lacking,
 
-    /// <summary>A lack is an installation file or a game file the request did not hand.</summary>
+    /// <summary>A lack is an installation file, a game file or a submodule the request did not hand.</summary>
     NotFound,
 
     /// <summary>A file the mod is restored from could not be read: one of its own or its installation file.</summary>
@@ -34,21 +35,23 @@ public enum RestoreRefusal
     /// archive as it was.</summary>
     NotFinished,
 
-    /// <summary>Its source is absent and could not be cloned, or its folder holds no repository that reads.</summary>
+    /// <summary>Its submodule is absent and could not be cloned, or its folder holds no repository that reads.</summary>
     SourceUnavailable,
 
-    /// <summary>Its source is at another commit than its manifest names, and Modbench never moves a repository.</summary>
+    /// <summary>Its submodule is at another commit than the instance repository pins, and Modbench never moves a repository.</summary>
     SourceAtAnotherCommit,
 
     /// <summary>Its build refused it before writing.</summary>
     NotBuilt,
 }
 
-/// <summary>Why a mod was skipped. A NotFound mod names the installation file and the game files it lacks, as a request hands
-/// them; a NotBuilt mod, its build's refusal (ADR-0019).</summary>
+/// <summary>Why a mod was skipped. A NotFound mod names the installation file, the game files and the submodule it lacks, as a
+/// request hands them; a NotBuilt mod, its build's refusal (ADR-0019).</summary>
 public sealed record RestoreSkip(RestoreRefusal Kind, BuildRefusal Build = BuildRefusal.None)
 {
     public string? InstallationFileNotFound { get; init; }
+
+    public string? SubmoduleNotFound { get; init; }
 
     public IReadOnlyList<string> GameFilesNotFound { get; init; } = [];
 }

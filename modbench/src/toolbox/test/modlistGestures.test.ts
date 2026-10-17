@@ -510,6 +510,20 @@ describe('Restore from manifest', () => {
     }]]);
   });
 
+  it('warns in its one line when the push refusal could not be written, naming why in the Output', async () => {
+    restoreFromManifest.mockResolvedValueOnce({
+      applied: true, landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [], pushRefusalNotWritten: '/i/.git/hooks/pre-push already exists',
+    });
+    const { reporter, run } = register();
+
+    await run(RESTORE, modRow('ModA'));
+
+    expect([reporter.landings, reporter.reports]).toEqual([[], [{
+      severity: 'warning', message: 'Restored "ModA" from its manifest.',
+      detail: "a push of a pin its source mod's remote lacks is not refused: /i/.git/hooks/pre-push already exists",
+    }]]);
+  });
+
   it('warns in its one line when a mod was built from a source holding changes no commit holds, naming it in the Output', async () => {
     restoreFromManifest.mockResolvedValueOnce({
       applied: true, landed: [{ mod: 'ModA', written: ['a.esp'], namedByNoLine: [], uncommitted: true }], refused: [],
@@ -520,7 +534,7 @@ describe('Restore from manifest', () => {
 
     expect([reporter.landings, reporter.reports]).toEqual([[], [{
       severity: 'warning', message: 'Restored "ModA" from its manifest.',
-      detail: 'ModA: its source holds changes no commit holds, so its manifest\'s commit does not rebuild these bytes',
+      detail: 'ModA: its submodule holds changes no commit holds, so the commit the instance repository pins does not rebuild these bytes',
     }]]);
   });
 

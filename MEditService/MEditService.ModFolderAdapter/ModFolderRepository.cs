@@ -66,7 +66,7 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
             var says = ModMetadata.Of(manifest);
             return new(
                 modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(notInPackage), null, statCacheNotWritten,
-                Held(held, manifest)?.DiffersFrom(says) == true, says);
+                Held(held, manifest)?.DiffersFrom(says) == true, says, NoHost: manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: false });
         }
         catch (InvalidDataException e)
         {

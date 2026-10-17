@@ -58,7 +58,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         File.WriteAllText(Path.Combine(ModFolder, "nonCompiledPlugin.txt"), "mine");
     }
 
-    private JsonObject Request(string gesture, string downloadName, bool handsTheDownload = true)
+    private JsonObject Request(string gesture, string downloadName, bool handsTheDownload = true, JsonObject? submodule = null)
     {
         var installationFile = new JsonObject
         {
@@ -75,6 +75,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
             ["installationFile"] = handsTheDownload ? installationFile : null,
             ["metadataFiles"] = new JsonArray("meta.ini"),
             ["version"] = _versionUpdated,
+            ["submodule"] = submodule,
         };
         var request = new JsonObject
         {
@@ -283,6 +284,43 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         var skipped = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
         Assert.Equal("NotFound", skipped.GetProperty("refusal").GetString());
         Assert.Equal(["a.nif"], skipped.GetProperty("gameFilesNotFound").EnumerateArray().Select(path => path.GetString()));
+    }
+
+    [Fact]
+    public async Task RestoringASourceModWhoseRequestHandsNoSubmodule_NamesItsManifestsSubmodule_SoARequestHandingItsPinRebuildsIt()
+    {
+        var submodule = new PinnedSubmodule(_instance);
+        var pin = submodule.Commit(("build.json", $"{{\"output\": \"{Mod}\"}}"), ("assets/a.nif", "built"));
+        submodule.Pin(pin);
+        Directory.CreateDirectory(ModFolder);
+        File.WriteAllText(Path.Combine(ModFolder, Mod + ".manifest"), "{\n\"package\": {\"submodule\":\"Mod\"},\n\"files\": [\n{\"path\":\"a.nif\"}\n]\n}\n");
+        (await Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(_instance, _instance, []))).EnsureSuccessStatusCode();
+        var handed = new JsonObject { ["folder"] = submodule.Folder, ["pin"] = pin };
+
+        var first = await (await Client.PostAsJsonAsync("/restore-from-manifest", Request("restore-from-manifest", "Mod.zip", handsTheDownload: false)))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var second = await (await Client.PostAsJsonAsync("/restore-from-manifest", Request("restore-from-manifest", "Mod.zip", false, handed)))
+            .Content.ReadFromJsonAsync<JsonElement>();
+
+        var skipped = Assert.Single(first.GetProperty("refused").EnumerateArray());
+        Assert.Equal(("NotFound", "Mod"), (skipped.GetProperty("refusal").GetString(), skipped.GetProperty("submoduleNotFound").GetString()));
+        var restored = Assert.Single(second.GetProperty("applied").EnumerateArray());
+        Assert.Equal(["a.nif"], Paths(restored, "written"));
+        Assert.Equal("built", FileText("a.nif"));
+    }
+
+    [Theory]
+    [InlineData("folder")]
+    [InlineData("pin")]
+    public async Task RestoringWithASubmoduleMissingAField_Is400(string field)
+    {
+        var submodule = new JsonObject { ["folder"] = Path.Combine(_instance, "source", "Mod"), ["pin"] = "0123abc" };
+        submodule.Remove(field);
+        var request = Request("restore-from-manifest", "Mod.zip", submodule: submodule);
+
+        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Theory]

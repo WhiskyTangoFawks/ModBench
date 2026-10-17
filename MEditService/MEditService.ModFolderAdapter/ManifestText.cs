@@ -53,7 +53,8 @@ internal static class ManifestText
                 line.TryGetProperty("page", out var page) ? Text(page) : null), version);
         }
         if (line.TryGetProperty("gameFolder", out var game)) return (new ManifestPackage.GameFolder(Text(game), Text(line.GetProperty("hash"))), version);
-        return (new ManifestPackage.SourceMod(Text(line.GetProperty("remote")), Text(line.GetProperty("commit"))), version);
+        if (line.TryGetProperty("submodule", out var submodule)) return (new ManifestPackage.SourceRepository(Text(submodule), IsSubmodule: true), version);
+        return (new ManifestPackage.SourceRepository(Text(line.GetProperty("repository")), IsSubmodule: false), version);
     }
 
     private static ManifestFile FileOf(int index, JsonElement line)
@@ -92,9 +93,8 @@ internal static class ManifestText
                 writer.WriteString("gameFolder", gameFolder.Name);
                 writer.WriteString("hash", gameFolder.Hash);
                 break;
-            case ManifestPackage.SourceMod sourceMod:
-                writer.WriteString("remote", sourceMod.Remote);
-                writer.WriteString("commit", sourceMod.Commit);
+            case ManifestPackage.SourceRepository repository:
+                writer.WriteString(repository.IsSubmodule ? "submodule" : "repository", repository.Name);
                 break;
         }
         if (version is not null) writer.WriteString("version", version);

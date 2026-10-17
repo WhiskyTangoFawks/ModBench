@@ -272,12 +272,13 @@ interface RestoredMod {
   metadata?: components['schemas']['ModMetadata'];
 }
 
-/** A skipped mod lacking an installation file, by name, or game files, by their path in the mod folder, that the call did
- *  not hand. A call that hands them brings it back, or names every other lack. */
+/** A skipped mod lacking an installation file or a submodule, by name, or game files, by their path in the mod folder, that
+ *  the call did not hand. A call that hands them brings it back. */
 export interface NotFound {
   mod: string;
   installationFile?: string;
   gameFiles: readonly string[];
+  submodule?: string;
 }
 
 /** Restore from manifest's answer: each mod restored or skipped with its reason, and each skipped mod that is `NotFound`. */

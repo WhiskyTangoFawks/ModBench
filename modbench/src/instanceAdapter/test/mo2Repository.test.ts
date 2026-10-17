@@ -477,6 +477,16 @@ describe('the MO2 adapter\'s repository', () => {
         expect(() => execFileSync('git', ['push', '--quiet', 'origin', 'HEAD:refs/heads/other'], { cwd: cloned, stdio: 'pipe' })).toThrow(/no checkout/);
       });
 
+      it('takes a pre-push hook already in a clone as written when it is Modbench\'s own, and checks the submodules\' pushes', async () => {
+        const adapter = await instance();
+        runGit('init', '--quiet');
+        await put('.git/hooks/pre-push', PRE_PUSH_HOOK);
+
+        await adapter.refuseUnpublishedPins();
+
+        expect([await readFile(join(root, '.git', 'hooks', 'pre-push'), 'utf8'), runGit('config', 'push.recurseSubmodules').trim()]).toEqual([PRE_PUSH_HOOK, 'check']);
+      });
+
       it('leaves a pre-push hook already in the repository as it is, naming it', async () => {
         const adapter = await instance();
         runGit('init', '--quiet');
@@ -487,6 +497,44 @@ describe('the MO2 adapter\'s repository', () => {
         expect(await readFile(join(root, '.git', 'hooks', 'pre-push'), 'utf8')).toBe('mine\n');
       });
     });
+  });
+});
+
+describe('the MO2 adapter\'s submodules', () => {
+  const PIN = 'a'.repeat(40);
+
+  async function holding(entry: readonly string[], staged: 'pin' | 'file' | 'nothing' = 'pin') {
+    const adapter = await instance();
+    runGit('init', '--quiet');
+    for (const [key, value] of [['path', 'source/Mod Source'], ...entry.map((line) => line.split('='))]) {
+      runGit('config', '-f', '.gitmodules', `submodule.Mod Source.${key}`, value ?? '');
+    }
+    if (staged !== 'nothing') runGit('update-index', '--add', '--cacheinfo', `${staged === 'pin' ? '160000' : '100644'},${PIN},source/Mod Source`);
+    return adapter;
+  }
+
+  it('reads where git checks a submodule out, the commit the index pins and the branch it follows', async () => {
+    const adapter = await holding(['branch=main']);
+
+    expect(await adapter.submodule('Mod Source')).toEqual({ folder: join(root, 'source', 'Mod Source'), pin: PIN, branch: 'main' });
+  });
+
+  it('reads a submodule that follows no branch as following none', async () => {
+    const adapter = await holding([]);
+
+    expect(await adapter.submodule('Mod Source')).toEqual({ folder: join(root, 'source', 'Mod Source'), pin: PIN });
+  });
+
+  it.each(['nothing', 'file'] as const)('says the instance repository pins no commit for a submodule where its index holds %s', async (staged) => {
+    const adapter = await holding([], staged);
+
+    expect(await adapter.submodule('Mod Source')).toEqual({ lacks: 'the instance repository pins no commit at source/Mod Source' });
+  });
+
+  it('says .gitmodules names no submodule of a name it lacks', async () => {
+    const adapter = await holding([]);
+
+    expect(await adapter.submodule('Other')).toEqual({ lacks: `${join(root, '.gitmodules')} names no submodule 'Other'` });
   });
 });
 

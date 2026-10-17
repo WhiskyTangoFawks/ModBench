@@ -97,6 +97,8 @@ export interface InstanceAnswers {
   repositoryOnDisk?: boolean;
   /** What writing the submodules says. */
   submodules?: Awaited<ReturnType<InstanceAdapter['writeSubmodules']>>;
+  /** What the instance repository holds of each submodule, by name. */
+  pins?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['submodule']>>>;
   /** Downloaded files that are gone: they get no mark. */
   goneDownloads?: ReadonlySet<string>;
   /** A write that rejects with the message this returns for it, after it is recorded. */
@@ -185,6 +187,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, undefined),
     removeIgnoreList: () => record({ verb: 'removeIgnoreList' }, undefined),
     repositoryOnDisk: () => Promise.resolve(answers.repositoryOnDisk ?? false),
+    submodule: (name) => Promise.resolve(answers.pins?.get(name) ?? { lacks: `no answer fixed for ${name}` }),
     removeRepository: () => record({ verb: 'removeRepository' }, undefined),
     checkPushRefusalFree: () => record({ verb: 'checkPushRefusalFree' }, undefined),
     writeSubmodules: () => record({ verb: 'writeSubmodules' }, answers.submodules ?? { notes: [], other: [] }),

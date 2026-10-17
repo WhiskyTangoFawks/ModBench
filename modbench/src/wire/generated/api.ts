@@ -143,7 +143,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), or builds a mod whose manifest names its source at the commit it names, cloning the source when it is absent and skipping it at another commit, and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks and each installation file and game file the request did not hand, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. */
+        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), or builds a mod whose manifest names its submodule at the commit the instance repository pins, which git clones when it is absent, skipping it at another commit, and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks and each installation file, game file and submodule the request did not hand, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. */
         post: operations["RestoreFromManifest"];
         delete?: never;
         options?: never;
@@ -177,7 +177,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Each mod's folder against its manifest (modlist-repository.md, Status), from its manifest, a stat of each file and the stat cache, which keeps what the read found: each file whose bytes differ, each file no line names, each file a line names that is gone and each file its package does not hold, or that it has no manifest or why it cannot be read. */
+        /** @description Each mod's folder against its manifest (modlist-repository.md, Status), from its manifest, a stat of each file and the stat cache, which keeps what the read found: each file whose bytes differ, each file no line names, each file a line names that is gone and each file its package does not hold, whether its package has no host, or that it has no manifest or why it cannot be read. */
         post: operations["ModStatus"];
         delete?: never;
         options?: never;
@@ -1421,6 +1421,7 @@ export interface components {
             installationFileNotFound?: string | null;
             gameFilesNotFound: string[];
             buildRefusal: components["schemas"]["BuildRefusal"];
+            submoduleNotFound?: string | null;
         };
         ModStatus: {
             mod: string;
@@ -1432,6 +1433,7 @@ export interface components {
             unreadable?: components["schemas"]["ModUnreadable"] | null;
             statCacheNotWritten?: string | null;
             metadataDiffers: boolean;
+            noHost: boolean;
         };
         ModStatusResponse: {
             mods: components["schemas"]["ModStatus"][];
@@ -1758,7 +1760,7 @@ export interface components {
             folder: string;
             installationFile?: components["schemas"]["InstallationFileRequest"] | null;
             metadataFiles: string[];
-            sourceFolder?: string | null;
+            submodule?: components["schemas"]["SubmoduleRequest"] | null;
         };
         RestoreFromManifestRequest: {
             mods: components["schemas"]["RestoreFromManifestModRequest"][];
@@ -1813,6 +1815,11 @@ export interface components {
         StampedFile: {
             path: string;
             stamp: string;
+        };
+        SubmoduleRequest: {
+            folder: string;
+            pin: string;
+            branch?: string | null;
         };
         UnreadableSource: {
             reason: string;

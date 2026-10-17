@@ -17,10 +17,10 @@ public sealed class ManifestLineBytesTests
         Assert.Equal(new FileBytes.InInstallationFile("First.7z", "x/a.nif"), BytesOf(Installed, ManifestFile.At("a.nif", new FileBytes.InInstallationFile("First.7z", "x/a.nif"))));
 
     [Fact]
-    public void ALineOfASourceMod_NamesItsPathAtTheCommit() =>
+    public void ALineOfASourceMod_NamesItsPathAsItsBuildWritesIt() =>
         Assert.Equal(
-            new FileBytes.AtCommit("abc", "a.nif"),
-            BytesOf(new Manifest(new ManifestPackage.SourceMod("remote", "abc"), []), Line(new PackageEntry.Held())));
+            new FileBytes.Built("a.nif"),
+            BytesOf(new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), []), Line(new PackageEntry.Held())));
 
     [Fact]
     public void ALineItsPackageDoesNotHold_NamesNoBytes() =>

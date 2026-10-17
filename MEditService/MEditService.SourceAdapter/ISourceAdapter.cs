@@ -65,9 +65,9 @@ public interface ISourceAdapter
     /// <summary>What the build of the source in <paramref name="sourceFolder"/> writes, as its working tree says now.</summary>
     Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder);
 
-    /// <summary>The commit at HEAD of the repository in <paramref name="sourceFolder"/>. A folder that is not there is first
-    /// cloned from <paramref name="cloneFrom"/>'s remote at its commit; a clone that fails or is cancelled leaves none.</summary>
-    Answer<string, SourceFailure> CommitAtHead(string sourceFolder, SharedSource cloneFrom, CancellationToken cancel);
+    /// <summary>The commit at HEAD of <paramref name="submodule"/>. git first checks out an empty folder at the pin, on its
+    /// branch when that branch is at the pin; a failed or cancelled clone leaves the folder empty.</summary>
+    Answer<string, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel);
 
     /// <summary>Writes <paramref name="change"/> into the build configuration in <paramref name="sourceFolder"/>, keeping all
     /// else it says, in the working tree.</summary>

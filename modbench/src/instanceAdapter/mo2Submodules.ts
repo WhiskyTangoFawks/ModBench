@@ -1,28 +1,28 @@
 // A source mod with a remote is a submodule of the instance repository; git decides the config and the staging.
 
 import { execFile } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { exists, get, isRepository, remove, write } from './files';
-import type { InstanceAdapter, SubmoduleNote } from './instanceAdapter';
+import type { InstanceAdapter, Submodule, SubmoduleNote } from './instanceAdapter';
 import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, withSourceModLines } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from './prePushHook';
 import { sourceModsIn } from './sourceMods';
 
-type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'>;
+type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'submodule' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'>;
 
 const execFileAsync = promisify(execFile);
 
 const git = async (folder: string, ...args: string[]): Promise<string> =>
   (await execFileAsync('git', ['-C', folder, ...args], { encoding: 'utf8' })).stdout;
 
-interface Submodule { readonly name: string; readonly url: string; readonly branch: string }
+interface SubmoduleEntry { readonly name: string; readonly url: string; readonly branch: string }
 
-async function submoduleOf(folder: string): Promise<Submodule | undefined | string> {
+async function submoduleOf(folder: string): Promise<SubmoduleEntry | undefined | string> {
   try {
     const remotes = (await git(folder, 'remote')).split('\n').filter((remote) => remote !== '');
     if (remotes.length === 0) return undefined;
@@ -53,7 +53,7 @@ async function entryRemoved(instanceRoot: string, file: string, name: string): P
   }
 }
 
-async function entryWritten(instanceRoot: string, file: string, { name, url, branch }: Submodule): Promise<void> {
+async function entryWritten(instanceRoot: string, file: string, { name, url, branch }: SubmoduleEntry): Promise<void> {
   await git(instanceRoot, 'config', '-f', file, `submodule.${name}.path`, sourceModPath(name));
   await git(instanceRoot, 'config', '-f', file, `submodule.${name}.url`, url);
   await git(instanceRoot, 'config', '-f', file, `submodule.${name}.branch`, branch);
@@ -67,12 +67,32 @@ async function hooksFolder(instanceRoot: string): Promise<string> {
   const hooks = configured !== '' ? resolve(instanceRoot, configured)
     : repository ? resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'hooks')).trim()) : join(gitDir, 'hooks');
   if (relative(gitDir, hooks).startsWith('..') || isAbsolute(relative(gitDir, hooks))) {
-    throw new Error(`core.hooksPath points to ${hooks}, outside ${gitDir}, where a hook would run in every repository that reads it; git init writes no hook there.`);
+    throw new Error(`core.hooksPath points to ${hooks}, outside ${gitDir}, where a hook would run in every repository that reads it; Modbench writes no hook there.`);
   }
   return hooks;
 }
 
-const hookExists = (hook: string): Error => new Error(`${hook} already exists; git init does not write over it.`);
+const hookExists = (hook: string): Error => new Error(`${hook} already exists; Modbench does not write over it.`);
+
+// git config --get exits 1 for a key that is not set.
+const configured = (instanceRoot: string, file: string, key: string): Promise<string> =>
+  git(instanceRoot, 'config', '-f', file, '--get', key).then((value) => value.trim(), (err: unknown) => {
+    if (typeof err === 'object' && err !== null && 'code' in err && err.code === 1) return '';
+    throw err;
+  });
+
+// The index holds a submodule's pin as a gitlink, mode 160000.
+async function submoduleIn(instanceRoot: string, name: string): Promise<Submodule | { readonly lacks: string }> {
+  const file = submodulesFile(instanceRoot);
+  const path = await configured(instanceRoot, file, `submodule.${name}.path`);
+  if (path === '') return { lacks: `${file} names no submodule '${name}'` };
+  const [mode, pin] = (await git(instanceRoot, 'ls-files', '--stage', '--', path)).split(/\s/);
+  if (mode !== '160000' || pin === undefined) return { lacks: `the instance repository pins no commit at ${path}` };
+  const branch = await configured(instanceRoot, file, `submodule.${name}.branch`);
+  return { folder: resolve(instanceRoot, path), pin, ...(branch === '' ? {} : { branch }) };
+}
+
+const isOwnHook = (hook: string): Promise<boolean> => readFile(hook, 'utf8').then((text) => text === PRE_PUSH_HOOK, () => false);
 
 export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
   return {
@@ -131,6 +151,9 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       return { notes, other };
     },
 
+    submodule: (name) => submoduleIn(instanceRoot, name).catch((err: unknown) =>
+      ({ lacks: `the instance repository's submodule '${name}' could not be read: ${errorMessage(err)}` })),
+
     repositoryOnDisk: () => isRepository(instanceRoot),
 
     async removeRepository() {
@@ -150,8 +173,9 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       const hooks = await hooksFolder(instanceRoot);
       await mkdir(hooks, { recursive: true });
       const hook = join(hooks, PRE_PUSH_HOOK_NAME);
-      await writeFile(hook, PRE_PUSH_HOOK, { mode: 0o755, flag: 'wx' }).catch((err: unknown) => {
-        throw errnoCode(err) === 'EEXIST' ? hookExists(hook) : err;
+      await writeFile(hook, PRE_PUSH_HOOK, { mode: 0o755, flag: 'wx' }).catch(async (err: unknown) => {
+        if (errnoCode(err) !== 'EEXIST') throw err;
+        if (!(await isOwnHook(hook))) throw hookExists(hook);
       });
       await git(instanceRoot, 'config', 'push.recurseSubmodules', 'check');
     },
