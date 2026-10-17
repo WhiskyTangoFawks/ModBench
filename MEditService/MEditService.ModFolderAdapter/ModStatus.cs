@@ -7,11 +7,11 @@ namespace MEditService.ModFolderAdapter;
 public sealed record ModStatus(
     string Mod, bool NoManifest, IReadOnlyList<string> Differing, IReadOnlyList<string> NamedByNoLine, IReadOnlyList<string> Gone,
     IReadOnlyList<string> NotInPackage, ModUnreadable? Unreadable = null, string? StatCacheNotWritten = null,
-    bool MetadataDiffers = false, [property: JsonIgnore] ModMetadata? ManifestMetadata = null)
+    bool MetadataDiffers = false, [property: JsonIgnore] ModMetadata? ManifestMetadata = null, bool NoHost = false)
 {
     public bool Equals(ModStatus? other) =>
         other is not null && Mod == other.Mod && NoManifest == other.NoManifest && Unreadable == other.Unreadable
-        && StatCacheNotWritten == other.StatCacheNotWritten && MetadataDiffers == other.MetadataDiffers
+        && StatCacheNotWritten == other.StatCacheNotWritten && MetadataDiffers == other.MetadataDiffers && NoHost == other.NoHost
         && Differing.SequenceEqual(other.Differing) && NamedByNoLine.SequenceEqual(other.NamedByNoLine)
         && Gone.SequenceEqual(other.Gone) && NotInPackage.SequenceEqual(other.NotInPackage);
 

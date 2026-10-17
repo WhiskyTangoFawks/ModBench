@@ -11,7 +11,7 @@ const recording = (file: InstallationFile): FileRead<InstallationFile> => ({ kin
 const FOUND: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'modbench.gameDirectory' };
 const instanceOf = (sourceDirs: ReadonlyMap<string, string> = new Map(), gameFolder: GameFolder = FOUND, modFolders?: readonly ModFolder[]) =>
-  ({ gameFolder, gameRelease: 'Fallout4', modFolders, paths: { sourceDirs } });
+  ({ gameFolder, gameName: 'Fallout 4', gameRelease: 'Fallout4', modFolders, paths: { sourceDirs } });
 const GAME_FOLDER = { name: 'Fallout4', dataFolder: '/game/Data', files: [] };
 const filesIn = (filesByMod: Record<string, readonly OriginFile[]>): ReadonlyMap<string, OriginFiles> =>
   new Map(Object.entries(filesByMod).map(([mod, files]) => [mod, { origin: mod, folder: `/mods/${mod}`, files, folders: [], notes: [] }]));
@@ -225,6 +225,17 @@ describe('modlistRepositoryCommands update manifest', () => {
     expect(client.calls[0]?.args[1]).toEqual({ statCache: '/instance/stat-cache' });
   });
 
+  it('names a mod with no installation file, when the game folder was found for a game the tables hold no release for, with that reason', async () => {
+    const { commands, client } = commandsOver();
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA'], { ...instanceOf(), gameRelease: undefined });
+
+    expect(outcome).toMatchObject({
+      notes: [{ mod: 'ModA', note: "Modbench knows no release of the game 'Fallout 4', so its manifest cannot name the game folder as its package" }],
+    });
+  });
+
   it('refuses a mod whose game files the Instance adapter could not read, naming why, and updates the rest', async () => {
     const { commands, client } = commandsOver({ gameFilesTaken: new Map([['ModA', { kind: 'unreadable', reason: 'EACCES' }]]) });
     client.setCommandResult('updateManifest', UPDATED);
@@ -332,9 +343,10 @@ describe('modlistRepositoryCommands update manifest', () => {
 describe('modlistRepositoryCommands restore from manifest', () => {
   const RESTORED = { landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [], notFound: [] };
   const INSTALLATION_FILE_MISSING = "was skipped: installation file 'ModA-1.0.7z' is missing.";
+  const SUBMODULE_MISSING = "was skipped: its submodule 'Mod Source' is missing.";
   const sentNames = (client: InMemoryMEditClient): string[][] => client.calls.map((call) => sentNamesOf(call.args[0]));
 
-  it('hands mEdit each mod with its folder and no installation file its metadata names, its metadata files and the folder its source is in or is cloned into, the stat cache\'s folder and what a build needs', async () => {
+  it('hands mEdit each mod with its folder and no installation file or submodule, its metadata files, the stat cache\'s folder and what a build needs', async () => {
     const { commands, client } = commandsOver(
       { installations: new Map([['ModA', recording(INSTALLED)]]), metadata: new Map([['ModA', { version: '1.2.3' }]]) }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] });
     client.setCommandResult('restoreFromManifest', RESTORED);
@@ -345,8 +357,8 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       method: 'restoreFromManifest',
       args: [
         [
-          { name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], sourceFolder: '/source/ModA' },
-          { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], sourceFolder: '/source/Old ModB' },
+          { name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'] },
+          { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'] },
         ],
         { statCache: '/instance/stat-cache', excludedSuffix: '.excluded', archives: archiveVariants('Fallout4'), gameFolder: GAME_FOLDER },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
@@ -376,6 +388,71 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const outcome = await commands.restoreFromManifest(['ModA'], instanceOf(new Map(), NOT_FOUND));
 
     expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'was skipped: game file is missing. The game folder was not found.' }] });
+  });
+
+  it('says why beside a mod still skipped for game files when the game folder was found for a game the tables hold no release for', async () => {
+    const { commands, client } = commandsOver();
+    client.setCommandResult('restoreFromManifest', {
+      landed: [], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }], notFound: [{ mod: 'ModA', gameFiles: ['a.nif'] }],
+    });
+
+    const outcome = await commands.restoreFromManifest(['ModA'], { ...instanceOf(), gameRelease: undefined });
+
+    expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: "was skipped: game file is missing. Modbench knows no release of the game 'Fallout 4'." }] });
+  });
+
+  it('sends a mod skipped for a submodule the call did not hand again, with where git checks it out, its pin and its branch, and answers both sends as one', async () => {
+    const pinned = { folder: '/instance/source/Mod Source', pin: 'abc123', branch: 'main' };
+    const { commands, client } = commandsOver({ pins: new Map([['Mod Source', pinned]]) });
+    client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods[0]?.submodule === undefined
+      ? { landed: [], refused: [{ item: 'ModA', reason: SUBMODULE_MISSING }], notFound: [{ mod: 'ModA', submodule: 'Mod Source', gameFiles: [] }] }
+      : RESTORED));
+
+    const outcome = await commands.restoreFromManifest(['ModA'], instanceOf());
+
+    expect(client.calls.map((call) => call.args[0])).toMatchObject([[{ name: 'ModA' }], [{ name: 'ModA', submodule: pinned }]]);
+    expect(outcome).toEqual({ applied: true, landed: RESTORED.landed, refused: [] });
+  });
+
+  it('says why beside a mod still skipped for a submodule the instance repository holds no pin for', async () => {
+    const { commands, client } = commandsOver({ pins: new Map([['Mod Source', { lacks: 'the instance repository pins no commit at source/Mod Source' }]]) });
+    client.setCommandResult('restoreFromManifest', {
+      landed: [], refused: [{ item: 'ModA', reason: SUBMODULE_MISSING }], notFound: [{ mod: 'ModA', submodule: 'Mod Source', gameFiles: [] }],
+    });
+
+    const outcome = await commands.restoreFromManifest(['ModA'], instanceOf());
+
+    expect(outcome).toEqual({
+      applied: true, landed: [], refused: [{ item: 'ModA', reason: `${SUBMODULE_MISSING} The instance repository pins no commit at source/Mod Source.` }],
+    });
+  });
+
+  it('makes the instance repository refuse a push of a pin its source mod\'s remote lacks, as git init does, once the mods landed', async () => {
+    const { commands, client, adapter } = commandsOver({ repositoryOnDisk: true });
+    client.setCommandResult('restoreFromManifest', { landed: [{ mod: 'ModA', written: [], namedByNoLine: ['mine.txt'] }], refused: [], notFound: [] });
+
+    const outcome = await commands.restoreFromManifest(['ModA'], instanceOf());
+
+    expect(adapter.calls.map(({ verb }) => verb)).toEqual(['trashModFile', 'refuseUnpublishedPins']);
+    expect(outcome).not.toHaveProperty('pushRefusalNotWritten');
+  });
+
+  it('names why the push refusal could not be written beside the mods that landed', async () => {
+    const { commands, client } = commandsOver({ repositoryOnDisk: true, refusals: refusing('refuseUnpublishedPins', '/instance/.git/hooks/pre-push is not Modbench\'s') });
+    client.setCommandResult('restoreFromManifest', RESTORED);
+
+    expect(await commands.restoreFromManifest(['ModA'], instanceOf())).toEqual({
+      applied: true, landed: RESTORED.landed, refused: [], pushRefusalNotWritten: "/instance/.git/hooks/pre-push is not Modbench's",
+    });
+  });
+
+  it('writes no push refusal in an instance folder that holds no repository', async () => {
+    const { commands, client, adapter } = commandsOver({ repositoryOnDisk: false });
+    client.setCommandResult('restoreFromManifest', RESTORED);
+
+    await commands.restoreFromManifest(['ModA'], instanceOf());
+
+    expect(adapter.calls).toEqual([]);
   });
 
   it('reports the phase of reading each mod\'s files, then mEdit\'s progress restoring them', async () => {
@@ -648,7 +725,7 @@ describe('modlistRepositoryCommands what restore destroys', () => {
 });
 
 describe('modlistRepositoryCommands mod status', () => {
-  const STATUS = [{ mod: 'ModA', noManifest: true, differing: [], namedByNoLine: [], gone: [], notInPackage: [], metadataDiffers: false }];
+  const STATUS = [{ mod: 'ModA', noManifest: true, differing: [], namedByNoLine: [], gone: [], notInPackage: [], metadataDiffers: false, noHost: false }];
 
   it('asks mEdit for each mod\'s status by its folder, with its metadata files, the metadata the mod manager holds and the stat cache', async () => {
     const { commands, client } = commandsOver({ metadata: new Map([['ModA', { version: '1.2.3', installationFile: { name: 'A.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } }]]) });

@@ -1,5 +1,4 @@
 using MEditService.ModFolderAdapter;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
 
@@ -11,6 +10,10 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         internal sealed record InstallationFileMissing(string Name) : Lack($"installation file '{Name}' is missing");
 
         internal sealed record GameFileMissing(string Path) : Lack($"game file '{Path}' is missing");
+
+        internal sealed record SubmoduleMissing(string Name) : Lack($"its submodule '{Name}' is missing");
+
+        internal sealed record NoHost() : Lack("its package has no host");
     }
 
     /// <summary>A file of the mod folder, by its path, and where its package holds its bytes.</summary>
@@ -23,9 +26,8 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         internal sealed record InGameFolder(string Path, string Hash, string DataFolder, string GamePath) : PackagedFile(Path, Hash);
     }
 
-    /// <summary>Built is the source mod's remote and commit that build its files, none when its package is no source mod.</summary>
-    internal sealed record Resolved(
-        IReadOnlyList<PackagedFile> Files, IReadOnlyList<Lack> Lacks, SharedSource? Built);
+    /// <summary>Built names the submodule whose build writes the files, none when its package is no submodule.</summary>
+    internal sealed record Resolved(IReadOnlyList<PackagedFile> Files, IReadOnlyList<Lack> Lacks, string? Built);
 
     private sealed record Handed(InstallationFile File, Dictionary<string, HashedEntry> Entries);
 
@@ -36,6 +38,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         List<PackagedFile> sourced = [];
         List<Lack> lacks = [];
         if (manifest.Package is ManifestPackage.InstallationFile named && Package(named).Lack is { } missing) lacks.Add(missing);
+        if (manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: false }) lacks.Add(new Lack.NoHost());
         foreach (var file in manifest.Files)
         {
             var (entry, lack) = EntryOf(file);
@@ -43,7 +46,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
             if (lack is not null) lacks.Add(lack);
         }
         if (lacks.Count == 0 && manifest.Package is ManifestPackage.GameFolder pinned && PinnedLack(pinned, sourced) is { } changed) lacks.Add(changed);
-        var built = manifest.Package is ManifestPackage.SourceMod sourceMod ? new SharedSource(sourceMod.Remote, sourceMod.Commit) : null;
+        var built = manifest.Package is ManifestPackage.SourceRepository { IsSubmodule: true } submodule ? submodule.Name : null;
         return new Resolved(sourced, [.. lacks.Distinct()], built);
     }
 
@@ -58,7 +61,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         FileBytes.NoInstallationFile => (null, new Lack($"'{file.Path}' names no installation file")),
         FileBytes.InInstallationFile held when manifest.Package is ManifestPackage.InstallationFile named => EntryOf(file.Path, named, held),
         FileBytes.InGameFolder held => EntryOf(file.Path, held),
-        FileBytes.AtCommit => (null, null),
+        FileBytes.Built => (null, null),
         var other => throw new ArgumentOutOfRangeException(nameof(file), other, null),
     };
 

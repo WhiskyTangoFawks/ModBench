@@ -106,7 +106,8 @@ function stateOf(status: ModStatus): string | undefined {
 export function statusDescription(status: ModStatus): string | undefined {
   const state = stateOf(status);
   const notHeld = status.notInPackage.length > 0 ? `${counted(status.notInPackage.length, 'file', 'files')} its package does not hold` : undefined;
-  return [state, notHeld].filter((part) => part !== undefined).join(' · ') || undefined;
+  const noHost = status.noHost ? 'its package has no host' : undefined;
+  return [state, notHeld, noHost].filter((part) => part !== undefined).join(' · ') || undefined;
 }
 
 /** What a separator row's description says of its status (mods.md, A row, Separator). */
