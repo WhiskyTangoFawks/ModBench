@@ -367,6 +367,18 @@ describe('the MO2 adapter\'s repository', () => {
       }
     });
 
+    it('rejects with git\'s reason when the global config is malformed, rather than reading no hooks path', async () => {
+      const adapter = await instance();
+      await put('global.config', '[core]\n\thooksPath = C:\\Users\\x\\hooks\n');
+      vi.stubEnv('GIT_CONFIG_GLOBAL', join(root, 'global.config'));
+
+      try {
+        await expect(adapter.checkPushRefusalFree()).rejects.toThrow(/bad config/);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
     it('reads a ~ in core.hooksPath as git does, so the refusal names where it points', async () => {
       const adapter = await instance();
       await put('global.config', '[core]\n\thooksPath = ~/.githooks\n');

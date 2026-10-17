@@ -102,8 +102,11 @@ async function entryWritten(instanceRoot: string, file: string, { name, url, bra
 async function hooksFolder(instanceRoot: string): Promise<string> {
   const repository = await isRepository(instanceRoot);
   const gitDir = repository ? resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-common-dir')).trim()) : join(instanceRoot, '.git');
-  const configured = (await git(instanceRoot, 'config', '--type=path', '--get', 'core.hooksPath').catch(() => '')).trim();
-  const hooks = configured !== '' ? resolve(instanceRoot, configured)
+  const configuredHooks = (await git(instanceRoot, 'config', '--type=path', '--get', 'core.hooksPath').catch((err: unknown) => {
+    if (typeof err === 'object' && err !== null && 'code' in err && err.code === 1) return '';
+    throw err;
+  })).trim();
+  const hooks = configuredHooks !== '' ? resolve(instanceRoot, configuredHooks)
     : repository ? resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'hooks')).trim()) : join(gitDir, 'hooks');
   if (relative(gitDir, hooks).startsWith('..') || isAbsolute(relative(gitDir, hooks))) {
     throw new Error(`core.hooksPath points to ${hooks}, outside ${gitDir}, where a hook would run in every repository that reads it; Modbench writes no hook there.`);
