@@ -169,9 +169,9 @@ internal sealed class Store : IDisposable
 
     /// <summary>DuckDB invalidates its database at a fatal error, a failed checkpoint among them, and
     /// answers nothing from it until the file is opened again.</summary>
-    internal static bool Invalidates(Exception ex) => ex is DuckDBException { ErrorType: DuckDBErrorType.Fatal };
+    internal static bool IsInvalidation(Exception ex) => ex is DuckDBException { ErrorType: DuckDBErrorType.Fatal };
 
-    public bool Invalidated()
+    internal bool IsInvalidated()
     {
         try
         {
@@ -179,7 +179,7 @@ internal sealed class Store : IDisposable
             DuckDbSql.Scalar<int>(connection, "SELECT 1");
             return false;
         }
-        catch (DuckDBException ex) when (Invalidates(ex))
+        catch (DuckDBException ex) when (IsInvalidation(ex))
         {
             return true;
         }

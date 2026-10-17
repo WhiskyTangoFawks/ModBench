@@ -451,7 +451,7 @@ internal sealed class Indexer : IDisposable
     // exclusive right held, so no reconcile is in flight; EnsureScope waits out the reads.
     private void ReopenIfInvalidatedBy(Exception ex)
     {
-        if (!Store.Invalidates(ex)) return;
+        if (!Store.IsInvalidation(ex)) return;
         LoadOrderSnapshot snapshot;
         lock (_lock)
         {
@@ -462,7 +462,7 @@ internal sealed class Indexer : IDisposable
     }
 
     private bool FailsOnePlugin(Exception ex, CancellationToken token) =>
-        ex is not OutOfMemoryException && !Store.Invalidates(ex) && !CancelledBy(ex, token);
+        ex is not OutOfMemoryException && !Store.IsInvalidation(ex) && !CancelledBy(ex, token);
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
     private CancellationToken BeginReconcile()
@@ -490,7 +490,7 @@ internal sealed class Indexer : IDisposable
         OpenScope? leaving;
         lock (_lock)
         {
-            if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot) && !current.Store.Invalidated())
+            if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot) && !current.Store.IsInvalidated())
             {
                 _scope = current with { LoadOrder = snapshot };
                 return _scope;
@@ -1096,7 +1096,7 @@ internal sealed class Indexer : IDisposable
         {
             outcome = scope.Store.Commit(_ => scope.Failed.Read(plugin.Registered, state => ReadWhole(scope, plugin, state)));
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException && !Store.Invalidates(ex))
+        catch (Exception ex) when (ex is not OutOfMemoryException && !Store.IsInvalidation(ex))
         {
             FailRead(scope, key, ReadFailure(PluginLoadFailure.ReasonFor(ex), scope.Store.DerivationOf(key)));
             throw;
