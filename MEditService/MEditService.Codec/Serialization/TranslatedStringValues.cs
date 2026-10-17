@@ -28,36 +28,51 @@ public static class TranslatedStringValues
         return ordered;
     }
 
+    /// <summary>The document as a plugin that is not localized holds it, and the paths of the translated
+    /// strings that have no text in the strings language, which stay as they were.</summary>
+    public readonly record struct InLanguageResult(string Text, IReadOnlyList<string> Unresolved);
+
     /// <summary>Each translated string as its <paramref name="language"/> text alone, as xEdit writes it into a
-    /// plugin that is not localized. A string with no text in that language stays as it was.</summary>
-    public static string InLanguage(string text, Language language, GameRelease release, string recordType)
+    /// plugin that is not localized.</summary>
+    public static InLanguageResult InLanguage(string text, Language language, GameRelease release, string recordType)
     {
         var root = JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a record document.");
         var changed = false;
-        foreach (var translated in TranslatedStrings(root).ToList())
+        var unresolved = new List<string>();
+        foreach (var (path, translated) in TranslatedStrings(root, "").ToList())
         {
             var held = translated["Values"]?.AsArray()
                 .FirstOrDefault(entry => entry?["Language"]?.GetValue<string>() == language.ToString());
-            if (held?["String"] is not { } value) continue;
+            if (held?["String"] is not { } value)
+            {
+                unresolved.Add(path);
+                continue;
+            }
             translated.Remove("Values");
             translated["Value"] = value.DeepClone();
             changed = true;
         }
-        return changed ? RecordTextCodec.RoundTrip(root.ToJsonString(), release, recordType) : text;
+        return new InLanguageResult(changed ? RecordTextCodec.RoundTrip(root.ToJsonString(), release, recordType) : text, unresolved);
     }
 
-    private static IEnumerable<JsonObject> TranslatedStrings(JsonNode node)
+    private static IEnumerable<(string Path, JsonObject Translated)> TranslatedStrings(JsonNode node, string path)
     {
         switch (node)
         {
             case JsonObject obj:
-                if (obj.ContainsKey("TargetLanguage") && obj["Values"] is JsonArray) yield return obj;
-                foreach (var child in obj.Select(property => property.Value).OfType<JsonNode>())
-                    foreach (var found in TranslatedStrings(child)) yield return found;
+                if (obj.ContainsKey("TargetLanguage") && obj["Values"] is JsonArray) yield return (path, obj);
+                foreach (var (name, child) in obj)
+                {
+                    if (child is null) continue;
+                    foreach (var found in TranslatedStrings(child, path.Length == 0 ? name : $"{path}.{name}")) yield return found;
+                }
                 break;
             case JsonArray array:
-                foreach (var child in array.OfType<JsonNode>())
-                    foreach (var found in TranslatedStrings(child)) yield return found;
+                for (var i = 0; i < array.Count; i++)
+                {
+                    if (array[i] is not { } child) continue;
+                    foreach (var found in TranslatedStrings(child, $"{path}[{i}]")) yield return found;
+                }
                 break;
         }
     }

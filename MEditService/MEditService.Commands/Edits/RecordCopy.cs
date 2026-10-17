@@ -22,12 +22,31 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
         internal ISourceRepository Repository => Session.Repository;
 
         /// <summary>The document as this destination holds it: a plugin that is not localized holds a translated
-        /// string in the strings language alone.</summary>
-        internal string Landing(string body, GameRelease release, string recordType) =>
-            NotLocalizedIn is { } language ? TranslatedStringValues.InLanguage(body, language, release, recordType) : body;
+        /// string in the strings language alone, so a string with no text there refuses the copy.</summary>
+        internal RecordEditResult? Landing(string body, GameRelease release, string formKey, string recordType, out string landed)
+        {
+            landed = body;
+            if (NotLocalizedIn is not { } language) return null;
 
-        internal SourceDocument Landing(SourceDocument document, GameRelease release) =>
-            document with { Body = Landing(document.Body, release, document.RecordType) };
+            var collapsed = TranslatedStringValues.InLanguage(body, language, release, recordType);
+            if (collapsed.Unresolved.Count > 0)
+            {
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.NoTextInStringsLanguage,
+                    $"{formKey} cannot be copied into {Plugin.Name} ({Plugin.Origin}), which is not localized: " +
+                    $"{string.Join(", ", collapsed.Unresolved)} has no text in {language}. Nothing was written.");
+            }
+            landed = collapsed.Text;
+            return null;
+        }
+
+        internal RecordEditResult? Landing(SourceDocument document, GameRelease release, out SourceDocument landed)
+        {
+            landed = document;
+            if (Landing(document.Body, release, document.FormKey, document.RecordType, out var body) is { } refused) return refused;
+            landed = document with { Body = body };
+            return null;
+        }
     }
 
     /// <summary>A copy of a child the destination lacks, as every Copy as Override: own fields only, so a copied
@@ -250,7 +269,12 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
             refused = WriteTargets.RefuseUnreadableSource(container.FormKey, why);
             return false;
         }
-        copy = destination.Landing(copy, release);
+        if (destination.Landing(copy, release, out var landed) is { } unlandable)
+        {
+            (copy, refused) = (null, unlandable);
+            return false;
+        }
+        copy = landed;
         return true;
     }
 
