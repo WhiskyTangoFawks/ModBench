@@ -15,6 +15,12 @@ As a user who has not installed Modbench, I want:
 5. To learn whether I can use it now: its status, the games and platforms it supports, what works and what is planned. Cites: Windows and Linux alike
 6. To get it running, then to be handed to the walkthrough for the rest.
 7. A pointer to how to contribute, and nothing more of it.
+8. To learn that Modbench is VS Code, so the editor, terminal, extensions and agents I already use work on my modlist. Cites: ADR-0001
+9. To learn that git holds my modlist and my mods' source, so I commit, diff, branch and merge them. Cites: ADR-0007; ADR-0022
+10. To learn that Modbench works on files, because VS Code edits files and git stores them.
+11. To learn that a mod is restored from its manifest, because git does not hold gigabytes of binary files. Cites: ADR-0022
+12. To learn that a plugin is decompiled into a file for each record and built back, so I edit and review its source and never the plugin in place. Cites: ADR-0006; ADR-0007
+13. Each thing I learn about to come with why I would want it.
 
 ## The walkthrough
 
