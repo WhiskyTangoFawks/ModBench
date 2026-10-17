@@ -31,7 +31,7 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
         try
         {
             read = repository.Files(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
-            manifest = new ManifestBuilder(installationFile is null ? null : (repository.InstallationFileName(installationFile.Path), installationFile))
+            manifest = new ManifestBuilder(installationFile is null ? null : (repository.InstallationFileName(installationFile.Path), installationFile), instance.GameFolder)
                 .Manifest(read.Files, mod.Version);
         }
         catch (DirectoryNotFoundException)

@@ -71,13 +71,13 @@ internal static class ManifestEndpoints
         UpdateManifestRequest req, UpdateManifestHandler handler, ModlistGestureCancels cancels, ILoggerFactory loggerFactory, CancellationToken aborted)
     {
         var mods = req.Mods ?? [];
-        if (Malformed(mods, req.StatCache) is { } malformed) return malformed;
+        if (Malformed(mods, req.StatCache, req.GameFolder) is { } malformed) return malformed;
 
         using var running = cancels.Run(req.Gesture, aborted);
         var result = await handler.UpdateManifestAsync(
             [.. mods.Select(mod => new ModToUpdate(
                 mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.IsSourceMod, mod.Version))],
-            new InstanceToUpdate(req.StatCache), req.Gesture, running.Token);
+            new InstanceToUpdate(req.StatCache, req.GameFolder?.ToGameFolder()), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Update manifest", item.Refusal, item.Message, item.Item);
@@ -92,7 +92,7 @@ internal static class ManifestEndpoints
         CancellationToken aborted)
     {
         var mods = req.Mods ?? [];
-        if (Malformed(mods, req.StatCache) is { } malformed) return malformed;
+        if (Malformed(mods, req.StatCache, req.GameFolder) is { } malformed) return malformed;
         if (string.IsNullOrWhiteSpace(req.ExcludedSuffix))
             return Results.Problem("The suffix the mod manager gives an excluded file's name is required.", statusCode: 400);
         var variants = req.Archives?.Variants();
@@ -102,7 +102,7 @@ internal static class ManifestEndpoints
         var result = await handler.RestoreAsync(
             [.. mods.Select(mod => new ModToRestore(
                 mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.SourceFolder))],
-            new InstanceToRestore(req.StatCache, req.ExcludedSuffix, variants), req.Gesture, running.Token);
+            new InstanceToRestore(req.StatCache, req.ExcludedSuffix, variants, req.GameFolder?.ToGameFolder()), req.Gesture, running.Token);
 
         var logger = loggerFactory.CreateLogger(nameof(ManifestEndpoints));
         foreach (var item in result.Refused) EndpointMapping.LogRefusal(logger, "Restore from manifest", item.Refusal.Kind, item.Message, item.Item);
@@ -111,7 +111,7 @@ internal static class ManifestEndpoints
                 landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten, landed.Outcome.Metadata, landed.Outcome.Uncommitted))],
             [.. result.Refused.Select(refused => new ModRestoreRefusal(
                 refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.InstallationFileNotFound,
-                refused.Refusal.Build))]));
+                refused.Refusal.GameFilesNotFound, refused.Refusal.Build))]));
     }
 
     internal static IResult WhatRestoreDestroys(ModFoldersRequest req, IModFolderRepository repository)
@@ -127,7 +127,7 @@ internal static class ManifestEndpoints
             {
                 refused.Add(new ModRestoreRefusal(
                     status.Mod, unreadable.Manifest ? RestoreRefusal.ManifestUnreadable : RestoreRefusal.Unreadable,
-                    $"was skipped: {unreadable.Why}.", null));
+                    $"was skipped: {unreadable.Why}.", null, []));
                 continue;
             }
             var overwritesMetadata = status.ManifestMetadata is { } says && mod.Metadata?.IsOverwrittenBy(says) == true;
@@ -151,7 +151,7 @@ internal static class ManifestEndpoints
     private static List<ModStatus> StatusOf(ModFoldersRequest req, IModFolderRepository repository) =>
         [.. req.Mods.Select(mod => mod.StatusIn(repository, req.StatCache))];
 
-    private static IResult? Malformed(IReadOnlyList<IModRequest> mods, string? statCache)
+    private static IResult? Malformed(IReadOnlyList<IModRequest> mods, string? statCache, GameFolderRequest? gameFolder)
     {
         if (mods.Count == 0) return Results.Problem("At least one mod is required.", statusCode: 400);
         if (string.IsNullOrWhiteSpace(statCache)) return Results.Problem("The folder of the stat cache is required.", statusCode: 400);
@@ -164,7 +164,9 @@ internal static class ManifestEndpoints
         }
         if (installationFiles.Any(file => !FileHash.IsHash(file.Hash) || file.Entries.Any(entry => !FileHash.IsHash(entry.Hash))))
             return Results.Problem("Every hash is xxHash64 as Wabbajack writes it: eight bytes in base64.", statusCode: 400);
-        return null;
+        return gameFolder is null || gameFolder.IsWhole
+            ? null
+            : Results.Problem("The game folder needs its name, its Data folder, and each game file a path and an xxHash64 hash.", statusCode: 400);
     }
 
 }
@@ -172,7 +174,20 @@ internal static class ManifestEndpoints
 /// <summary>The mods to update the manifests of, with the instance's facts (ADR-0013). StatCache is the stat cache's folder,
 /// outside every mod folder. Gesture names it to a cancel and in its progress.</summary>
 internal sealed record UpdateManifestRequest(
-    IReadOnlyList<UpdateManifestModRequest> Mods, string StatCache, string? Gesture);
+    IReadOnlyList<UpdateManifestModRequest> Mods, string StatCache, GameFolderRequest? GameFolder, string? Gesture);
+
+/// <summary>The game folder by the game's name and its Data folder, with the game files at the paths of the mods' files, none
+/// when the Instance adapter did not find it (ADR-0013).</summary>
+internal sealed record GameFolderRequest(string Name, string DataFolder, IReadOnlyList<GameFileRequest> Files)
+{
+    internal bool IsWhole =>
+        !string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(DataFolder) && Files is not null
+        && Files.All(file => !string.IsNullOrWhiteSpace(file.Path) && FileHash.IsHash(file.Hash ?? string.Empty));
+
+    internal GameFolder ToGameFolder() => new(Name, DataFolder, [.. Files.Select(file => new GameFile(file.Path, file.Hash))]);
+}
+
+internal sealed record GameFileRequest(string Path, string Hash);
 
 internal interface IModRequest
 {
@@ -196,10 +211,11 @@ internal sealed record ModUpdateManifestRefusal(string Item, UpdateManifestRefus
 /// <summary>Landed or refused, per mod (ADR-0019), never the status of the call.</summary>
 internal sealed record UpdateManifestResponse(IReadOnlyList<UpdatedModResponse> Applied, IReadOnlyList<ModUpdateManifestRefusal> Refused);
 
-/// <summary>The mods to restore from their manifests, with the instance's facts (ADR-0013): StatCache as update manifest's,
-/// ExcludedSuffix and Archives as build's. Gesture names it to a cancel and in its progress.</summary>
+/// <summary>The mods to restore from their manifests, with the instance's facts (ADR-0013): StatCache and GameFolder as update
+/// manifest's, ExcludedSuffix and Archives as build's. Gesture names it to a cancel and in its progress.</summary>
 internal sealed record RestoreFromManifestRequest(
-    IReadOnlyList<RestoreFromManifestModRequest> Mods, string StatCache, string ExcludedSuffix, ArchiveVariantsRequest? Archives, string? Gesture);
+    IReadOnlyList<RestoreFromManifestModRequest> Mods, string StatCache, string ExcludedSuffix, ArchiveVariantsRequest? Archives,
+    GameFolderRequest? GameFolder, string? Gesture);
 
 /// <summary>A mod, with the folder its source is in or is cloned into, none when its name gives it none.</summary>
 internal sealed record RestoreFromManifestModRequest(
@@ -236,9 +252,10 @@ internal sealed record WhatRestoreDestroysResponse(
 
 internal sealed record ManifestMetadataResponse(string Mod, ModMetadata Metadata);
 
-/// <summary>A skipped mod. A NotFound mod names the installation file it lacks by name, for a request to hand. A NotBuilt mod names its build's refusal.</summary>
+/// <summary>A skipped mod. A NotFound mod names the installation file and the game files it lacks, for a request to hand. A
+/// NotBuilt mod names its build's refusal.</summary>
 internal sealed record ModRestoreRefusal(
-    string Item, RestoreRefusal Refusal, string Message, string? InstallationFileNotFound,
+    string Item, RestoreRefusal Refusal, string Message, string? InstallationFileNotFound, IReadOnlyList<string> GameFilesNotFound,
     BuildRefusal BuildRefusal = BuildRefusal.None);
 
 /// <summary>Landed, skipped or not finished, per mod (ADR-0019), never the status of the call.</summary>

@@ -155,6 +155,8 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
 
     public Stream OpenInstallationFile(string path) => File.OpenRead(path);
 
+    public Stream OpenGameFile(string dataFolder, string path) => File.OpenRead(Path.Combine(dataFolder, path));
+
     public bool WriteManifest(string modFolder, string modName, Manifest manifest)
     {
         var path = Path.Combine(modFolder, ManifestName(modName));

@@ -3,22 +3,37 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod's manifest from the mod as it is: the mod's one package holds each file whose bytes it has, and the
-/// rest it does not hold.</summary>
+/// rest it does not hold. A mod with no installation file is from the game folder when the game folder holds each of its files
+/// with their bytes.</summary>
 internal sealed class ManifestBuilder
 {
     private readonly ManifestPackage.InstallationFile? _package;
+    private readonly GameFolder? _gameFolder;
     private readonly ILookup<string, HashedEntry> _byHash;
     private readonly Dictionary<string, HashedEntry> _byPath = new(StringComparer.OrdinalIgnoreCase);
 
-    public ManifestBuilder((string Name, InstallationFile File)? installationFile)
+    public ManifestBuilder((string Name, InstallationFile File)? installationFile, GameFolder? gameFolder)
     {
+        _gameFolder = gameFolder;
         _package = installationFile is var (name, file) ? new ManifestPackage.InstallationFile(name, file.Size, file.Hash, file.Page) : null;
         var entries = installationFile?.File.Entries ?? [];
         _byHash = entries.ToLookup(entry => entry.Hash, StringComparer.Ordinal);
         foreach (var entry in entries) _byPath.TryAdd(entry.Path, entry);
     }
 
-    public Manifest Manifest(IEnumerable<HashedFile> files, string? version) => new(_package, [.. files.Select(EntryOf)], version);
+    public Manifest Manifest(IReadOnlyList<HashedFile> files, string? version) =>
+        FromGameFolder(files) is { } gameFolder
+            ? new(gameFolder, [.. files.Select(file => new ManifestFile(file.Path, new PackageEntry.Held()))], version)
+            : new(_package, [.. files.Select(EntryOf)], version);
+
+    private ManifestPackage.GameFolder? FromGameFolder(IReadOnlyList<HashedFile> files)
+    {
+        if (_package is not null || _gameFolder is null || files.Count == 0) return null;
+        var hashes = _gameFolder.Files.ToLookup(file => file.Path, file => file.Hash, StringComparer.OrdinalIgnoreCase);
+        return files.All(file => hashes[file.Path].Contains(file.Hash))
+            ? new ManifestPackage.GameFolder(_gameFolder.Name, FileHash.OfFilesTaken(files))
+            : null;
+    }
 
     private ManifestFile EntryOf(HashedFile file)
     {

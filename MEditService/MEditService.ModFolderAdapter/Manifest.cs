@@ -10,6 +10,7 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
         (null, _) => new FileBytes.NoInstallationFile(),
         (ManifestPackage.InstallationFile installationFile, var entry) => new FileBytes.InInstallationFile(installationFile.Name, entry.PathOf(file.Path)),
         (ManifestPackage.SourceMod sourceMod, var entry) => new FileBytes.AtCommit(sourceMod.Commit, entry.PathOf(file.Path)),
+        (ManifestPackage.GameFolder, var entry) => new FileBytes.InGameFolder(entry.PathOf(file.Path)),
         _ => throw new ArgumentOutOfRangeException(nameof(file), file, null),
     };
 
@@ -19,6 +20,7 @@ public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFi
     {
         (FileBytes.InInstallationFile held, ManifestPackage.InstallationFile installationFile) => (installationFile.Hash, held.Path),
         (FileBytes.AtCommit built, _) => (built.Commit, built.Path),
+        (FileBytes.InGameFolder taken, ManifestPackage.GameFolder gameFolder) => (gameFolder.Hash, taken.Path),
         _ => null,
     };
 }
@@ -31,6 +33,10 @@ public abstract record ManifestPackage
     public sealed record InstallationFile(string Name, long Size, string Hash, string? Page = null) : ManifestPackage;
 
     public sealed record SourceMod(string Remote, string Commit) : ManifestPackage;
+
+    /// <summary>The game folder, by the game's name, pinned by <paramref name="Hash"/>, a hash of the files the mod takes from
+    /// it (<see cref="FileHash.OfFilesTaken"/>).</summary>
+    public sealed record GameFolder(string Name, string Hash) : ManifestPackage;
 }
 
 /// <summary>Where a manifest line's bytes are.</summary>
@@ -41,6 +47,8 @@ public abstract record FileBytes
     public sealed record InInstallationFile(string Name, string Path) : FileBytes;
 
     public sealed record AtCommit(string Commit, string Path) : FileBytes;
+
+    public sealed record InGameFolder(string Path) : FileBytes;
 
     public sealed record NotHeld : FileBytes
     {

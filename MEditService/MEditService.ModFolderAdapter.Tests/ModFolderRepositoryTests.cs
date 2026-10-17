@@ -403,11 +403,20 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void WriteManifest_OfAModWithAVersionAndNoPackage_HoldsTheVersionOnThePackageLine()
+    public void WriteManifest_OfAGameFolderMod_NamesTheGameFolderAndItsPinAsItsPackage()
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest(new ManifestPackage.GameFolder("Fallout 4", "AAAA"), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
+
+        Assert.Contains(
+            "\"package\": {\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAA\",\"version\":\"2\"}", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+    }
+
+    [Fact]
+    public void WriteManifest_OfAModWithAVersionAndNoPackage_HoldsTheVersionInALineOfItsOwn_AndNamesNoPackage()
     {
         _repository.WriteManifest(_root, "mod", new Manifest(null, [], "1.2.3"));
 
-        Assert.Equal("{\n\"package\": {\"version\":\"1.2.3\"},\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+        Assert.Equal("{\n\"version\": \"1.2.3\",\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
         Assert.Equal("1.2.3", _repository.ReadManifest(_root, "mod")?.Version);
     }
 
@@ -473,6 +482,8 @@ public sealed class ModFolderRepositoryTests : IDisposable
             "1.2.3"),
         new Manifest(new ManifestPackage.InstallationFile("Mod.7z", 100, "AAAA"), [new ManifestFile("a.nif", new PackageEntry.Held())]),
         new Manifest(new ManifestPackage.SourceMod("https://example.com/mod.git", "0123abc"), [new ManifestFile("d.esp", new PackageEntry.Held())]),
+        new Manifest(new ManifestPackage.GameFolder("Fallout 4", "AAAA"), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"),
+        new Manifest(null, [], "1.2.3"),
         new Manifest(null, []),
     };
 

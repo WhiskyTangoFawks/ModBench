@@ -349,4 +349,52 @@ public sealed class RestoreFromManifestHandlerTests
         Assert.Equal(
             [new ModlistProgress("g", "A", 0, 2), new ModlistProgress("g", "B", 1, 2), new ModlistProgress("g", null, 0, 0)], Progress);
     }
+
+    private void GameFolderModManifested(params (string Path, string Text)[] taken) =>
+        _folders.Manifests[Mod] = new Manifest(
+            new ManifestPackage.GameFolder("Fallout 4", FileHash.OfFilesTaken([.. taken.Select(file => new HashedFile(file.Path, file.Text))])),
+            [.. taken.Select(file => Line(file.Path, new PackageEntry.Held()))]);
+
+    private static InstanceToRestore InstanceWithGameFiles(params (string Path, string Text)[] files) =>
+        Instance() with { GameFolder = new GameFolder("Fallout 4", "data", [.. files.Select(file => new GameFile(file.Path, file.Text))]) };
+
+    [Fact]
+    public async Task AGameFolderModsFileWhoseBytesDiffer_ComesBackFromTheGameFolder_AndAFileWhoseBytesMatchIsLeftAlone()
+    {
+        _folders.WithFile("data", "Meshes/A.nif", "a").WithFile("data", "b.dds", "b");
+        _folders.WithFile(Mod, "meshes/a.nif", "edited").WithFile(Mod, "b.dds", "b");
+        GameFolderModManifested(("meshes/a.nif", "a"), ("b.dds", "b"));
+
+        var restored = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], InstanceWithGameFiles(("Meshes/A.nif", "a"), ("b.dds", "b")))).Landed).Outcome;
+
+        Assert.Equal(["meshes/a.nif"], restored.Written);
+        Assert.Equal("a", WrittenText(Mod, "meshes/a.nif"));
+        Assert.Equal([(Mod, "meshes/a.nif")], WrittenIn(Mod));
+    }
+
+    [Fact]
+    public async Task AGameFolderMod_WhoseGameFilesTheRequestDidNotHand_IsNotFound_NamingEach()
+    {
+        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.dds", "b");
+        GameFolderModManifested(("a.nif", "a"), ("b.dds", "b"));
+
+        var refused = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
+
+        Assert.Equal(RestoreRefusal.NotFound, refused.Refusal.Kind);
+        Assert.Equal(["a.nif", "b.dds"], refused.Refusal.GameFilesNotFound);
+        Assert.Empty(WrittenIn(Mod));
+    }
+
+    [Fact]
+    public async Task AGameFolderMod_WhoseGameFilesHaveOtherBytes_IsSkippedWritingNothing()
+    {
+        _folders.WithFile("data", "a.nif", "newer").WithFile(Mod, "a.nif", "edited");
+        GameFolderModManifested(("a.nif", "a"));
+
+        var refused = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], InstanceWithGameFiles(("a.nif", "newer")))).Refused);
+
+        Assert.Equal(RestoreRefusal.Lacking, refused.Refusal.Kind);
+        Assert.Contains("other bytes", refused.Message);
+        Assert.Empty(WrittenIn(Mod));
+    }
 }

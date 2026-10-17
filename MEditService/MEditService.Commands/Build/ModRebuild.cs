@@ -2,14 +2,22 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>Writes a mod folder's files from its installation file, read once.</summary>
-internal sealed class ModRebuild(IModFolderRepository repository, string modFolder)
+/// <summary>Writes a mod folder's files from its installation file, read once, or from the game folder.</summary>
+internal sealed class ModRebuild(IModFolderRepository repository, string modFolder, string? dataFolder)
 {
     /// <summary>A write that fails leaves the files before it written. Throws <see cref="InvalidDataException"/> for an
     /// installation file that is not an archive it can read.</summary>
     public void Write(IReadOnlyList<PackageContents.PackagedFile> files)
     {
-        foreach (var fromOne in files.GroupBy(file => file.File))
+        foreach (var game in files.OfType<PackageContents.PackagedFile.InGameFolder>())
+        {
+            repository.WriteFile(modFolder, game.Path, target =>
+            {
+                using var taken = repository.OpenGameFile(dataFolder ?? throw new InvalidOperationException("A game file is handed with its folder."), game.GamePath);
+                taken.CopyTo(target);
+            });
+        }
+        foreach (var fromOne in files.OfType<PackageContents.PackagedFile.InInstallationFile>().GroupBy(file => file.File))
         {
             var wanted = fromOne.ToLookup(file => file.EntryPath, file => file.Path, StringComparer.OrdinalIgnoreCase);
             Extract(fromOne.Key, wanted.Select(group => group.Key), (entry, content) =>

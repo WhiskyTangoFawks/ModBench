@@ -101,6 +101,9 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public Stream OpenInstallationFile(string path) => Open(string.Empty, path);
 
+    /// <summary>A game file is a file of the folder named for the game's Data folder.</summary>
+    public Stream OpenGameFile(string dataFolder, string path) => Open(dataFolder, path);
+
     public Dictionary<(string Folder, string Path), byte[]> Written { get; } = [];
 
     public HashSet<(string Folder, string Path)> UnwritableFiles { get; } = [];

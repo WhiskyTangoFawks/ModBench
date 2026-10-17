@@ -8,9 +8,9 @@ namespace MEditService.Commands.Build;
 public sealed record ModToRestore(
     string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, string? SourceFolder);
 
-/// <summary>The instance's facts beyond its mods: the stat cache's folder, and what a build needs, as
-/// <see cref="InstanceToBuild"/>.</summary>
-public sealed record InstanceToRestore(string StatCache, string ExcludedSuffix, ArchiveVariants? Archives);
+/// <summary>The instance's facts beyond its mods: the stat cache's folder, the game folder with the game files the request
+/// found for the manifests, and what a build needs, as <see cref="InstanceToBuild"/>.</summary>
+public sealed record InstanceToRestore(string StatCache, string ExcludedSuffix, ArchiveVariants? Archives, GameFolder? GameFolder = null);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RestoreRefusal
@@ -24,7 +24,7 @@ public enum RestoreRefusal
     /// <summary>A file its package does not hold, or an installation file that has other bytes.</summary>
     Lacking,
 
-    /// <summary>A lack is an installation file the request did not hand.</summary>
+    /// <summary>A lack is an installation file or a game file the request did not hand.</summary>
     NotFound,
 
     /// <summary>A file the mod is restored from could not be read: one of its own or its installation file.</summary>
@@ -44,11 +44,13 @@ public enum RestoreRefusal
     NotBuilt,
 }
 
-/// <summary>Why a mod was skipped. A NotFound mod names the installation file it lacks, as a request hands it; a
-/// NotBuilt mod, its build's refusal (ADR-0019).</summary>
+/// <summary>Why a mod was skipped. A NotFound mod names the installation file and the game files it lacks, as a request hands
+/// them; a NotBuilt mod, its build's refusal (ADR-0019).</summary>
 public sealed record RestoreSkip(RestoreRefusal Kind, BuildRefusal Build = BuildRefusal.None)
 {
     public string? InstallationFileNotFound { get; init; }
+
+    public IReadOnlyList<string> GameFilesNotFound { get; init; } = [];
 }
 
 /// <summary>A mod whose files are as its manifest says: the files written, each file no line names, why the stat cache did
