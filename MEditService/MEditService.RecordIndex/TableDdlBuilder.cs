@@ -197,8 +197,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     // `body` is VARCHAR, never DuckDB's JSON type, which normalizes what it stores: "the same bytes
     // as the source file" is what lets content_hash stamp them.
-    private static void CreateRecordsTable(DuckDBConnection connection)
-    {
+    private static void CreateRecordsTable(DuckDBConnection connection) =>
         DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.records (
                 form_key        VARCHAR {FilenameIdentity} NOT NULL,
@@ -215,16 +214,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-        // form_key drives every single-record read; (plugin, origin) drives the per-plugin delete
-        // every re-index starts with, and the per-plugin listings/counts.
-        DuckDbSql.Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_records_form_key ON {MirrorSchema}.records(form_key)
-            """);
-        DuckDbSql.Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_records_plugin ON {MirrorSchema}.records(plugin, origin)
-            """);
-    }
-
     // Replaced whole by each sweep, never diffed (ADR-0013), and remembered for
     // the re-sweeps a working-tree write triggers.
     private static void CreateActiveTable(DuckDBConnection connection) =>
@@ -237,8 +226,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-    // No PRIMARY KEY on any appended table: re-index is delete-then-append, and the ART index across
-    // the rebuild measured 6x the sweep.
+    // No key or index on any appended table: DuckDB serves no NOCASE lookup from one, and a re-read's
+    // commit pins in memory the entries of the rows it deletes and of the rows it appends.
     private static void CreateWinnersTable(DuckDBConnection connection)
     {
         DuckDbSql.Execute(connection, $"""
@@ -299,8 +288,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-    internal static void CreateFormReferencesTable(DuckDBConnection connection)
-    {
+    internal static void CreateFormReferencesTable(DuckDBConnection connection) =>
         DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.form_references (
                 source_form_key VARCHAR {FilenameIdentity} NOT NULL,
@@ -312,16 +300,10 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 editor_id       VARCHAR
             )
             """);
-        DuckDbSql.Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_form_references_target
-                ON {MirrorSchema}.form_references(target_form_key)
-            """);
-    }
 
     // GRUP nesting lives here, not in the record document. One row per record a record holds in
     // the same plugin: a topic in its quest, a placed reference in its cell, a cell in its worldspace.
-    internal static void CreateHoldingsTable(DuckDBConnection connection)
-    {
+    internal static void CreateHoldingsTable(DuckDBConnection connection) =>
         DuckDbSql.Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.holdings (
                 plugin      VARCHAR {FilenameIdentity} NOT NULL,
@@ -332,11 +314,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 slot_index  INTEGER NOT NULL
             )
             """);
-        DuckDbSql.Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_holdings_parent
-                ON {MirrorSchema}.holdings(parent, plugin, origin)
-            """);
-    }
 
     // A cell's grid and block coordinates. The worldspace holding it is its holdings row; a cell no
     // holding holds is interior.

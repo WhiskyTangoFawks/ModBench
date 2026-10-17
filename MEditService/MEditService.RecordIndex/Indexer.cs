@@ -446,7 +446,7 @@ internal sealed class Indexer : IDisposable
         ex is OperationCanceledException && (token.IsCancellationRequested || _disposal.IsCancellationRequested);
 
     private bool FailsOnePlugin(Exception ex, CancellationToken token) =>
-        ex is not OutOfMemoryException && !CancelledBy(ex, token);
+        ex is not OutOfMemoryException && !Store.Invalidates(ex) && !CancelledBy(ex, token);
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
     private CancellationToken BeginReconcile()
@@ -474,7 +474,7 @@ internal sealed class Indexer : IDisposable
         OpenScope? leaving;
         lock (_lock)
         {
-            if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot))
+            if (_scope is { } current && IndexScope.Of(current.Held).Matches(snapshot) && !current.Store.Invalidated())
             {
                 _scope = current with { LoadOrder = snapshot };
                 return _scope;
@@ -910,8 +910,15 @@ internal sealed class Indexer : IDisposable
     // handed with it, or why a place could not be read (ADR-0003).
     private string StringsReadBy(LoadOrderSnapshot loadOrder, RegisteredPlugin plugin) =>
         $"{_readLanguage}\n" + (_adapter.StringsPlacesOf(ModPathOf(plugin.Path), loadOrder, plugin.Strings).Holds(out var places, out var failure)
-            ? string.Join('\n', places.Select(place => $"{place}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
+            ? string.Join('\n', places.Select(place => $"{WithinDataFolder(loadOrder, place)}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
             : failure.Reason);
+
+    // The game folder is spelled as the user names it, and a symlink gives it several spellings: a place
+    // inside it is recorded relative to it, so only a change of the place respells the stamp.
+    private static string WithinDataFolder(LoadOrderSnapshot loadOrder, string place) =>
+        Path.GetRelativePath(loadOrder.DataFolderPath, place) is var relative && !relative.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relative)
+            ? relative
+            : place;
 
     // ADR-0015.
     private void ValidateIndex(CancellationToken token)

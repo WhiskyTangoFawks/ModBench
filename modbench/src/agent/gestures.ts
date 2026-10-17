@@ -117,7 +117,7 @@ const INSTALL_SOURCE = z.union([
 const INSTALL = gestureInput(
   'argument: the one source, { kind: \'downloadedFile\', name } as list_downloads names it, or { kind: \'archive\' | \'folder\', path } for one outside the downloads; '
     + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, not both; '
-    + 'force?: true to upgrade a mod that differs from its manifest, has no manifest or has a file with no provider, which is otherwise refused',
+    + 'force?: true to upgrade a mod that differs from its manifest, has no manifest or has a file its package does not hold, which is otherwise refused',
   z.object({
     argument: z.array(INSTALL_SOURCE),
     options: z.object({ name: z.string().optional(), target: z.string().optional(), force: z.boolean().optional() }),

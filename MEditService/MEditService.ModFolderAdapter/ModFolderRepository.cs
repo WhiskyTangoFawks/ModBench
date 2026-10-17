@@ -21,15 +21,15 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
         return new([.. paths.Select(path => new HashedFile(path, cache.HashOf(path, () => HashOf(modFolder, path))))]) { StatCache = cache };
     }
 
-    public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided)
+    public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> hashes)
     {
         if (read.StatCache is not { } cache) return null;
-        Dictionary<(string Source, string Path), string> providers = [];
+        Dictionary<(string Package, string Path), string> fixes = [];
         foreach (var line in manifest.Files)
         {
-            if (manifest.ProviderOf(line) is { } provider && provided.TryGetValue(line.Path, out var hash)) providers.TryAdd(provider, hash);
+            if (manifest.FixedBy(line) is { } fixedBy && hashes.TryGetValue(line.Path, out var hash)) fixes.TryAdd(fixedBy, hash);
         }
-        return cache.Write([.. read.Files.Select(file => file.Path)], providers);
+        return cache.Write([.. read.Files.Select(file => file.Path)], fixes);
     }
 
     public IReadOnlyList<string> NamedByNoLine(string modFolder, string modName, Manifest manifest, IReadOnlySet<string> leftOut)
@@ -53,20 +53,20 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
 
             var cache = new StatCache(statCache, modFolder, time);
             var onDisk = FilesOf(modFolder, modName).ToHashSet(StringComparer.Ordinal);
-            List<string> differing = [], gone = [], noProvider = [];
+            List<string> differing = [], gone = [], notInPackage = [];
             foreach (var line in manifest.Files)
             {
-                var provider = manifest.ProviderOf(line);
-                if (provider is null) noProvider.Add(line.Path);
+                var fixedBy = manifest.FixedBy(line);
+                if (fixedBy is null) notInPackage.Add(line.Path);
                 if (!fileExists(Path.Combine(modFolder, line.Path))) gone.Add(line.Path);
-                else if (provider is { } fixes && !HoldsWhatItsProviderFixes(modFolder, line.Path, cache, fixes)) differing.Add(OnDisk(line.Path, onDisk));
+                else if (fixedBy is { } fixes && !HoldsWhatItIsFixedBy(modFolder, line.Path, cache, fixes)) differing.Add(OnDisk(line.Path, onDisk));
             }
             var namedByNoLine = NamedByNoLine(modFolder, modName, manifest, leftOut);
             var statCacheNotWritten = cache.Keep([.. onDisk.Where(path => !leftOut.Contains(path))]);
             var says = ModMetadata.Of(manifest);
             return new(
-                modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(noProvider), null, statCacheNotWritten,
-                held?.DiffersFrom(says) == true, says);
+                modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(notInPackage), null, statCacheNotWritten,
+                Held(held, manifest)?.DiffersFrom(says) == true, says);
         }
         catch (InvalidDataException e)
         {
@@ -78,15 +78,19 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
         }
     }
 
+    // A manifest with no package holds no version, so the version a mod's metadata holds is no difference.
+    private static ModMetadata? Held(ModMetadata? held, Manifest manifest) =>
+        held is not null && manifest.Package is null ? held with { Version = null } : held;
+
     // A line found by the file system names the file on disk in its own case where none has the line's (NamedByNoLine).
     private static string OnDisk(string line, HashSet<string> onDisk) =>
         onDisk.Contains(line) ? line : onDisk.FirstOrDefault(path => string.Equals(path, line, StringComparison.OrdinalIgnoreCase)) ?? line;
 
     private static string[] Ordered(IEnumerable<string> paths) => [.. paths.Order(StringComparer.Ordinal)];
 
-    private static bool HoldsWhatItsProviderFixes(string modFolder, string path, StatCache cache, (string Source, string Path) provider)
+    private static bool HoldsWhatItIsFixedBy(string modFolder, string path, StatCache cache, (string Package, string Path) fixedBy)
     {
-        if (cache.HashFixedBy(provider) is not { } fixedHash) return false;
+        if (cache.HashFixedBy(fixedBy) is not { } fixedHash) return false;
         try
         {
             return cache.HashOf(path, () => HashOf(modFolder, path)) == fixedHash;

@@ -542,7 +542,7 @@ describe('Instance — game folder and the archives the game loads', () => {
 
     await instance.refresh();
 
-    expect(instance.value.loadOrderSnapshot).toMatchObject({ mods: [{ name: 'Real Mod', metadata: { version: '2.0', installationFiles: [] } }] });
+    expect(instance.value.loadOrderSnapshot).toMatchObject({ mods: [{ name: 'Real Mod', metadata: { version: '2.0' } }] });
     expect(reread).toEqual([]);
   });
 
@@ -554,7 +554,7 @@ describe('Instance — game folder and the archives the game loads', () => {
     await instance.refresh();
 
     expect(instance.readFailure).toBeUndefined();
-    expect(instance.value.loadOrderSnapshot).toMatchObject({ mods: [{ name: 'Weapons_separator', metadata: { version: undefined, installationFiles: [] } }] });
+    expect(instance.value.loadOrderSnapshot).toMatchObject({ mods: [{ name: 'Weapons_separator', metadata: { version: undefined } }] });
   });
 
   it('hands the snapshot the archives the INIs list, and tells once, until it changes, the INIs it did not find', async () => {

@@ -33,7 +33,7 @@ public sealed class RestoreFromManifestHandler(
             return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
         }
 
-        var resolved = new ManifestSources(repository, manifest, mod.InstallationFiles, instance.GameFiles).Resolve();
+        var resolved = new PackageContents(repository, manifest, mod.InstallationFile, instance.GameFolder).Resolve();
         if (resolved.Lacks.Count > 0) return Lacked(resolved.Lacks);
         if (resolved.Built is { } built) return await RebuildAsync(mod, instance, built, manifest.Version, cancel);
 
@@ -51,10 +51,10 @@ public sealed class RestoreFromManifestHandler(
         }
 
         var hashes = read.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
-        List<ManifestSources.SourcedFile> differing = [.. resolved.Files.Where(file => hashes.GetValueOrDefault(file.Path) != file.Source.Hash)];
+        List<PackageContents.PackagedFile> differing = [.. resolved.Files.Where(file => hashes.GetValueOrDefault(file.Path) != file.Hash)];
         try
         {
-            new ModRebuild(repository, mod.Folder, instance.DataFolder).Write(differing);
+            new ModRebuild(repository, mod.Folder).Write(differing);
         }
         catch (InvalidDataException e)
         {
@@ -67,7 +67,7 @@ public sealed class RestoreFromManifestHandler(
                 new RestoreSkip(RestoreRefusal.NotFinished), $"was not finished: {e.Message.TrimEnd('.')}. Restoring it again finishes it.");
         }
         var statCacheNotWritten = repository.KeepInStatCache(
-            read, manifest, resolved.Files.ToDictionary(file => file.Path, file => file.Source.Hash, StringComparer.Ordinal));
+            read, manifest, resolved.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal));
         return ItemAnswer<RestoreSkip, RestoredMod>.Landed(new RestoredMod([.. differing.Select(file => file.Path)], namedByNoLine, statCacheNotWritten, ModMetadata.Of(manifest)));
     }
 
@@ -127,15 +127,13 @@ public sealed class RestoreFromManifestHandler(
     private Dictionary<string, string> HashesIn(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance) =>
         repository.Files(mod.Folder, mod.Name, metadataFiles, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
 
-    private static ItemAnswer<RestoreSkip, RestoredMod> Lacked(IReadOnlyList<ManifestSources.Lack> lacks)
+    private static ItemAnswer<RestoreSkip, RestoredMod> Lacked(IReadOnlyList<PackageContents.Lack> lacks)
     {
         var why = string.Join("; ", lacks.Select(lack => lack.Text));
-        if (!lacks.Any(lack => lack is ManifestSources.Lack.NotHanded)) return Skipped(RestoreRefusal.Lacking, why);
-        return Skipped(new RestoreSkip(RestoreRefusal.NotFound)
-        {
-            GameFilesNotFound = [.. lacks.OfType<ManifestSources.Lack.GameFileMissing>().Select(lack => lack.Path)],
-            InstallationFilesNotFound = [.. lacks.OfType<ManifestSources.Lack.InstallationFileMissing>().Select(lack => lack.Name)],
-        }, why);
+        var gameFiles = lacks.OfType<PackageContents.Lack.GameFileMissing>().Select(lack => lack.Path).ToList();
+        var installationFile = lacks.OfType<PackageContents.Lack.InstallationFileMissing>().Select(lack => lack.Name).FirstOrDefault();
+        if (gameFiles.Count == 0 && installationFile is null) return Skipped(RestoreRefusal.Lacking, why);
+        return Skipped(new RestoreSkip(RestoreRefusal.NotFound) { InstallationFileNotFound = installationFile, GameFilesNotFound = gameFiles }, why);
     }
 
     private static ItemAnswer<RestoreSkip, RestoredMod> Skipped(RestoreRefusal refusal, string why) =>

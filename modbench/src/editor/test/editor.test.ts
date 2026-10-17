@@ -202,12 +202,13 @@ function makeEditor(
   };
   const openFile = (fsPath: string, document?: object): Promise<FakePanel> => openDocument({ scheme: 'file', fsPath }, document);
   const tabs = new Map<string, FakePanel>();
-  const vsCodeOpensTabs = () => {
+  const vsCodeOpensTabs = ({ resolvesAfterOpenAnswers = false } = {}) => {
     h.commands.set('vscode.openWith', async (uri: unknown) => {
       if (tabs.has(String(uri))) return;
       const panel = fakePanel();
       tabs.set(String(uri), panel);
-      await provider.resolveCustomTextEditor({ uri }, panel);
+      if (resolvesAfterOpenAnswers) setTimeout(() => { void provider.resolveCustomTextEditor({ uri }, panel); }, 0);
+      else await provider.resolveCustomTextEditor({ uri }, panel);
     });
     return (uri: unknown) => tabs.get(String(uri));
   };
@@ -1446,6 +1447,17 @@ describe('several records opened at once', () => {
     expect(pageGlobal(tab ?? fakePanel(), 'mEditColumns'))
       .toEqual([{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }]);
     expect(tab?.webview.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('give the columns to the tab VS Code resolves after the open has answered', async () => {
+    const { vsCodeOpensTabs } = makeEditor(severalClient());
+    const tabOn = vsCodeOpensTabs({ resolvesAfterOpenAnswers: true });
+
+    await openSeveral();
+    await new Promise((resolve) => { setTimeout(resolve, 10); });
+
+    expect(pageGlobal(tabOn(gunDocument) ?? fakePanel(), 'mEditColumns'))
+      .toEqual([{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }]);
   });
 
   it('show the first record\'s tab already open, which takes the others as its columns, and leave its tab in another group alone', async () => {

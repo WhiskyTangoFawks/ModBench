@@ -16,6 +16,16 @@ public static class FileHash
         return Convert.ToBase64String(bytes);
     }
 
+    /// <summary>The pin of a game folder mod (ADR-0023): a hash of the files it takes, each by path and hash, alphabetically.</summary>
+    public static string OfFilesTaken(IEnumerable<HashedFile> files)
+    {
+        var text = string.Concat(files
+            .OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ThenBy(file => file.Path, StringComparer.Ordinal)
+            .Select(file => $"{file.Path}\n{file.Hash}\n"));
+        using var content = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(text));
+        return Of(content);
+    }
+
     public static bool IsHash(string text)
     {
         Span<byte> bytes = stackalloc byte[sizeof(ulong)];

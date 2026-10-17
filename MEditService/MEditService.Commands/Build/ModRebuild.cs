@@ -2,33 +2,24 @@ using MEditService.ModFolderAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>Writes a mod folder's files from their sources, each installation file read once.</summary>
-internal sealed class ModRebuild(IModFolderRepository repository, string modFolder, string dataFolder)
+/// <summary>Writes a mod folder's files from its installation file, read once, or from the game folder.</summary>
+internal sealed class ModRebuild(IModFolderRepository repository, string modFolder)
 {
     /// <summary>A write that fails leaves the files before it written. Throws <see cref="InvalidDataException"/> for an
     /// installation file that is not an archive it can read.</summary>
-    public void Write(IReadOnlyList<ManifestSources.SourcedFile> files)
+    public void Write(IReadOnlyList<PackageContents.PackagedFile> files)
     {
-        List<(string Path, ManifestSources.EntrySource Entry)> fromEntries = [];
-        foreach (var (path, source) in files)
+        foreach (var game in files.OfType<PackageContents.PackagedFile.InGameFolder>())
         {
-            switch (source)
+            repository.WriteFile(modFolder, game.Path, target =>
             {
-                case ManifestSources.GameSource game:
-                    repository.WriteFile(modFolder, path, target =>
-                    {
-                        using var copy = repository.OpenGameFile(dataFolder, game.Path);
-                        copy.CopyTo(target);
-                    });
-                    break;
-                case ManifestSources.EntrySource entry:
-                    fromEntries.Add((path, entry));
-                    break;
-            }
+                using var taken = repository.OpenGameFile(game.DataFolder, game.GamePath);
+                taken.CopyTo(target);
+            });
         }
-        foreach (var fromOne in fromEntries.GroupBy(file => file.Entry.File))
+        foreach (var fromOne in files.OfType<PackageContents.PackagedFile.InInstallationFile>().GroupBy(file => file.File))
         {
-            var wanted = fromOne.ToLookup(file => file.Entry.Path, file => file.Path, StringComparer.OrdinalIgnoreCase);
+            var wanted = fromOne.ToLookup(file => file.EntryPath, file => file.Path, StringComparer.OrdinalIgnoreCase);
             Extract(fromOne.Key, wanted.Select(group => group.Key), (entry, content) =>
             {
                 var first = wanted[entry].First();

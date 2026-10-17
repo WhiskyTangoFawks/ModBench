@@ -1,38 +1,41 @@
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>What a mod's manifest says: the installation files and game files its files come from, then each
-/// file's provider. A source's hash is the Instance adapter's text, kept as written (ADR-0013).</summary>
-public sealed record Manifest(
-    IReadOnlyList<ManifestSource> InstallationFiles,
-    IReadOnlyList<ManifestSource> GameFiles,
-    IReadOnlyList<ManifestFile> Files,
-    string? Version = null)
+/// <summary>What a mod's manifest says: its one package, if any, and each file's place in it. The package's hash is the
+/// Instance adapter's text, kept as written (ADR-0013).</summary>
+public sealed record Manifest(ManifestPackage? Package, IReadOnlyList<ManifestFile> Files, string? Version = null)
 {
-    /// <summary>The bytes <paramref name="file"/>'s line names: where they are, before any file is looked at.</summary>
-    public FileBytes BytesOf(ManifestFile file) => file.Provider switch
+    public FileBytes BytesOf(ManifestFile file) => (Package, file.Entry) switch
     {
-        FileProvider.FirstInstallationFile => InstallationFiles is [var first, ..]
-            ? new FileBytes.InInstallationFile(first.Name, file.Path)
-            : new FileBytes.NoInstallationFile(),
-        FileProvider.InstallationFileEntry entry => new FileBytes.InInstallationFile(entry.InstallationFile, entry.Path),
-        FileProvider.GameFile game => new FileBytes.InGameFile(game.Path),
-        FileProvider.Source source => new FileBytes.AtCommit(source.Remote, source.Commit, file.Path),
-        FileProvider.NoProvider => new FileBytes.Unnamed(),
-        _ => throw new ArgumentOutOfRangeException(nameof(file), file.Provider, null),
+        (_, PackageEntry.NotHeld) => new FileBytes.NotHeld(),
+        (null, _) => new FileBytes.NoInstallationFile(),
+        (ManifestPackage.InstallationFile installationFile, var entry) => new FileBytes.InInstallationFile(installationFile.Name, entry.PathOf(file.Path)),
+        (ManifestPackage.SourceMod sourceMod, var entry) => new FileBytes.AtCommit(sourceMod.Commit, entry.PathOf(file.Path)),
+        (ManifestPackage.GameFolder, var entry) => new FileBytes.InGameFolder(entry.PathOf(file.Path)),
+        _ => throw new ArgumentOutOfRangeException(nameof(file), file, null),
     };
 
-    /// <summary>The provider of <paramref name="file"/>, by its source's hash, or the commit its source builds at, and the
-    /// path in it: what fixes the file's bytes. Null when the line names none.</summary>
-    internal (string Source, string Path)? ProviderOf(ManifestFile file) => BytesOf(file) switch
+    /// <summary>The hash or commit that fixes <paramref name="file"/>'s bytes, and its path in the package. Null when the
+    /// line names no bytes.</summary>
+    internal (string Package, string Path)? FixedBy(ManifestFile file) => (BytesOf(file), Package) switch
     {
-        FileBytes.InInstallationFile held when InstallationFiles.FirstOrDefault(source => source.Name == held.Name) is { } named =>
-            (named.Hash, held.Path),
-        FileBytes.InGameFile game
-            when GameFiles.FirstOrDefault(source => string.Equals(source.Name, game.Path, StringComparison.OrdinalIgnoreCase)) is { } named =>
-            (named.Hash, game.Path),
-        FileBytes.AtCommit built => (built.Commit, built.Path),
+        (FileBytes.InInstallationFile held, ManifestPackage.InstallationFile installationFile) => (installationFile.Hash, held.Path),
+        (FileBytes.AtCommit built, _) => (built.Commit, built.Path),
+        (FileBytes.InGameFolder taken, ManifestPackage.GameFolder gameFolder) => (gameFolder.Hash, taken.Path),
         _ => null,
     };
+}
+
+public abstract record ManifestPackage
+{
+    private ManifestPackage() { }
+
+    /// <summary>The downloaded file the mod was installed from, with its page on its host.</summary>
+    public sealed record InstallationFile(string Name, long Size, string Hash, string? Page = null) : ManifestPackage;
+
+    public sealed record SourceMod(string Remote, string Commit) : ManifestPackage;
+
+    /// <summary>The game folder by the game's name, pinned by a hash of the files the mod takes from it (ADR-0023).</summary>
+    public sealed record GameFolder(string Name, string Hash) : ManifestPackage;
 }
 
 /// <summary>Where a manifest line's bytes are.</summary>
@@ -40,20 +43,15 @@ public abstract record FileBytes
 {
     private FileBytes() { }
 
-    public sealed record InInstallationFile(string Name, string Path) : FileBytes
+    public sealed record InInstallationFile(string Name, string Path) : FileBytes;
+
+    public sealed record AtCommit(string Commit, string Path) : FileBytes;
+
+    public sealed record InGameFolder(string Path) : FileBytes;
+
+    public sealed record NotHeld : FileBytes
     {
-        /// <summary>Whether the line at <paramref name="linePath"/> names these bytes as <see cref="FileProvider.FirstInstallationFile"/>.</summary>
-        public bool IsWhatFirstInstallationFileNamesAt(string firstInstallationFile, string linePath) =>
-            Name == firstInstallationFile && string.Equals(Path, linePath, StringComparison.OrdinalIgnoreCase);
-    }
-
-    public sealed record InGameFile(string Path) : FileBytes;
-
-    public sealed record AtCommit(string Remote, string Commit, string Path) : FileBytes;
-
-    public sealed record Unnamed : FileBytes
-    {
-        internal Unnamed() { }
+        internal NotHeld() { }
     }
 
     public sealed record NoInstallationFile : FileBytes
@@ -62,27 +60,30 @@ public abstract record FileBytes
     }
 }
 
-/// <summary>An installation file by its name, or a game file by its path under the game folder. Source is
-/// where the mod manager says the installation file comes from.</summary>
-public sealed record ManifestSource(string Name, long Size, string Hash, string? Source = null);
-
-/// <summary>A file of the mod folder, whose bytes its provider fixes.</summary>
-public sealed record ManifestFile(string Path, FileProvider Provider);
-
-public abstract record FileProvider
+/// <summary>A file of the mod folder, and where its package holds it.</summary>
+public sealed record ManifestFile(string Path, PackageEntry Entry)
 {
-    private FileProvider() { }
+    /// <summary>The line for the file at <paramref name="path"/> whose bytes <paramref name="bytes"/> locates in the package.</summary>
+    public static ManifestFile At(string path, FileBytes.InInstallationFile bytes) => new(path, PackageEntry.At(path, bytes.Path));
+}
 
-    /// <summary>The mod's first installation file holds the file at the same path.</summary>
-    public sealed record FirstInstallationFile : FileProvider;
+public abstract record PackageEntry
+{
+    private PackageEntry() { }
 
-    public sealed record InstallationFileEntry(string InstallationFile, string Path) : FileProvider;
+    /// <summary>The package holds the file at the file's own path.</summary>
+    public sealed record Held : PackageEntry;
 
-    public sealed record GameFile(string Path) : FileProvider;
+    /// <summary>The package holds the file at another path, as a FOMOD install moves files.</summary>
+    internal sealed record HeldAt(string Path) : PackageEntry
+    {
+        internal override string PathOf(string filePath) => Path;
+    }
 
-    /// <summary>The mod's source, shared through <paramref name="Remote"/>, builds the file at <paramref name="Commit"/>
-    /// (ADR-0022).</summary>
-    public sealed record Source(string Remote, string Commit) : FileProvider;
+    public sealed record NotHeld : PackageEntry;
 
-    public sealed record NoProvider : FileProvider;
+    internal static PackageEntry At(string filePath, string packagePath) =>
+        string.Equals(filePath, packagePath, StringComparison.OrdinalIgnoreCase) ? new Held() : new HeldAt(packagePath);
+
+    internal virtual string PathOf(string filePath) => filePath;
 }

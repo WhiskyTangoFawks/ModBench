@@ -53,12 +53,12 @@ internal sealed class FakeModFolders : IModFolderRepository
     }
 
     /// <summary>Each mod folder's hashes kept as its providers fix them, by path.</summary>
-    public Dictionary<string, IReadOnlyDictionary<string, string>> KeptProviderHashes { get; } = [];
+    public Dictionary<string, IReadOnlyDictionary<string, string>> KeptPackageHashes { get; } = [];
 
     public string? KeepInStatCache(ModFolderFiles read, Manifest manifest, IReadOnlyDictionary<string, string> provided)
     {
         var modFolder = Manifests.First(held => ReferenceEquals(held.Value, manifest)).Key;
-        KeptProviderHashes[modFolder] = provided;
+        KeptPackageHashes[modFolder] = provided;
         return UnwritableStatCaches.Contains(modFolder) ? "stat-cache is read-only" : null;
     }
 
@@ -68,21 +68,21 @@ internal sealed class FakeModFolders : IModFolderRepository
         return [.. FilePaths(modFolder).Where(path => !named.Contains(path) && !leftOut.Contains(path))];
     }
 
-    /// <summary>The hash a line's provider fixes is the one the last keep held for its path.</summary>
+    /// <summary>The hash a line's package fixes is the one the last keep held for its path.</summary>
     public ModStatus Status(string modFolder, string modName, IReadOnlySet<string> leftOut, string statCache, ModMetadata? held = null)
     {
         if (StatusThrows.Contains(modFolder)) throw new ArgumentException($"'{modFolder}' is not a path", nameof(modFolder));
         if (UnreadableManifests.Contains(modFolder)) return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: true, "line 1 is not a manifest line"));
         if (!Manifests.TryGetValue(modFolder, out var manifest)) return new(modName, NoManifest: true, [], [], [], []);
-        var kept = KeptProviderHashes.GetValueOrDefault(modFolder) ?? new Dictionary<string, string>();
+        var kept = KeptPackageHashes.GetValueOrDefault(modFolder) ?? new Dictionary<string, string>();
         var there = manifest.Files.ToLookup(line => _files.ContainsKey((modFolder, line.Path)));
         return new(
             modName, NoManifest: false,
-            [.. there[true].Where(line => line.Provider is not FileProvider.NoProvider
+            [.. there[true].Where(line => line.Entry is not PackageEntry.NotHeld
                 && kept.GetValueOrDefault(line.Path) != Encoding.ASCII.GetString(_files[(modFolder, line.Path)])).Select(line => line.Path)],
             NamedByNoLine(modFolder, modName, manifest, leftOut),
             [.. there[false].Select(line => line.Path)],
-            [.. manifest.Files.Where(line => line.Provider is FileProvider.NoProvider).Select(line => line.Path)],
+            [.. manifest.Files.Where(line => line.Entry is PackageEntry.NotHeld).Select(line => line.Path)],
             MetadataDiffers: MetadataDiffering.Contains(modFolder), ManifestMetadata: ModMetadata.Of(manifest));
     }
 
@@ -101,6 +101,7 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public Stream OpenInstallationFile(string path) => Open(string.Empty, path);
 
+    /// <summary>A game file is a file of the folder named for the game's Data folder.</summary>
     public Stream OpenGameFile(string dataFolder, string path) => Open(dataFolder, path);
 
     public Dictionary<(string Folder, string Path), byte[]> Written { get; } = [];
@@ -133,9 +134,7 @@ internal sealed class FakeModFolders : IModFolderRepository
     public bool WriteManifest(string modFolder, string modName, Manifest manifest)
     {
         if (UnwritableManifests.Contains(modFolder)) throw new UnauthorizedAccessException($"{modFolder} is read-only");
-        var text = string.Join('\n', manifest.InstallationFiles.Select(s => s.ToString())
-            .Concat(manifest.GameFiles.Select(s => s.ToString()))
-            .Concat(manifest.Files.Select(f => f.ToString())));
+        var text = string.Join('\n', manifest.Files.Select(f => f.ToString()).Prepend(manifest.Package?.ToString()));
         Manifests[modFolder] = manifest;
         if (_manifests.TryGetValue(modFolder, out var there) && there == text) return false;
         _manifests[modFolder] = text;

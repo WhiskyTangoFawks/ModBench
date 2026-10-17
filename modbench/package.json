@@ -116,12 +116,12 @@
           {
             "id": "agent",
             "title": "Connect your agent",
-            "description": "Modbench serves an MCP server, so an agent in VS Code reads your instance, runs its gestures and writes scripts.\n[Set up your agent](https://github.com/WhiskyTangoFawks/ModBench#your-agent)",
+            "description": "Modbench serves an MCP server, so an agent in VS Code reads your instance, runs its gestures and writes scripts.\n[Set up your agent](https://github.com/WhiskyTangoFawks/ModBench/blob/main/docs/wiki/agent.md)",
             "media": {
               "markdown": "walkthrough/getting-started.md"
             },
             "completionEvents": [
-              "onLink:https://github.com/WhiskyTangoFawks/ModBench#your-agent"
+              "onLink:https://github.com/WhiskyTangoFawks/ModBench/blob/main/docs/wiki/agent.md"
             ]
           }
         ]

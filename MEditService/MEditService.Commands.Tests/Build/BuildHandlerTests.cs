@@ -50,7 +50,7 @@ public sealed class BuildHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ASourceWithNoRemote_NamesEachFileItMadeAsHavingNoProvider()
+    public async Task ASourceWithNoRemote_NamesEachFileItMadeAsNotInItsPackage()
     {
         WriteSource("{\"output\": \"Mod\"}", ("meshes/c.nif", "added c"));
         WriteInFolder(MetaIni, "[General]");
@@ -59,21 +59,21 @@ public sealed class BuildHandlerTests : IDisposable
         await Landed();
 
         var manifest = ManifestWritten().Require();
-        Assert.Empty(manifest.InstallationFiles);
-        Assert.Equal([new ManifestFile("meshes/c.nif", new FileProvider.NoProvider())], manifest.Files);
+        Assert.Null(manifest.Package);
+        Assert.Equal([new ManifestFile("meshes/c.nif", new PackageEntry.NotHeld())], manifest.Files);
     }
 
     [Fact]
-    public async Task ASourceWithARemote_NamesTheRemoteAndTheCommitForEachFileItProvides()
+    public async Task ASourceWithARemote_NamesTheRemoteAndTheCommitAsThePackage_AndHoldsEachFileItMade()
     {
         WriteSource("{\"output\": \"Mod\"}", ("meshes/c.nif", "added c"));
         var commit = Shared();
 
         await Landed();
 
-        Assert.Equal(
-            [new ManifestFile("meshes/c.nif", new FileProvider.Source(Remote, commit))],
-            ManifestWritten().Require().Files);
+        var manifest = ManifestWritten().Require();
+        Assert.Equal(new ManifestPackage.SourceMod(Remote, commit), manifest.Package);
+        Assert.Equal([new ManifestFile("meshes/c.nif", new PackageEntry.Held())], manifest.Files);
     }
 
     [Theory]
@@ -254,7 +254,7 @@ public sealed class BuildHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task ACompiledPlugin_AndItsStrings_AreNamedAsWhatItsSourceProvides_AndDoNotDiffer()
+    public async Task ACompiledPlugin_AndItsStrings_AreHeldByItsSource_AndDoNotDiffer()
     {
         await InitializedWithALocalizedPlugin();
         GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "remote", "add", "origin", Remote);
@@ -264,9 +264,11 @@ public sealed class BuildHandlerTests : IDisposable
             .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null)], _noArchives)).Landed);
 
         var stringsFiles = Directory.GetFiles(Path.Combine(ModFolder, "Strings")).Select(file => $"Strings/{Path.GetFileName(file)}");
+        var manifest = ManifestWritten().Require();
+        Assert.Equal(new ManifestPackage.SourceMod(Remote, commit), manifest.Package);
         Assert.Equal(
-            [.. new[] { "Fixture.esp" }.Concat(stringsFiles).Order(StringComparer.Ordinal).Select(path => new ManifestFile(path, new FileProvider.Source(Remote, commit)))],
-            ManifestWritten().Require().Files);
+            [.. new[] { "Fixture.esp" }.Concat(stringsFiles).Order(StringComparer.Ordinal).Select(path => new ManifestFile(path, new PackageEntry.Held()))],
+            manifest.Files);
         Assert.Empty(Status().Differing);
     }
 
@@ -286,7 +288,7 @@ public sealed class BuildHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task TheModsVersionAndInstallationSources_AreInTheManifestTheBuildWrites()
+    public async Task ASourceModWithNoRemote_HasNoPackage_SoTheManifestTheBuildWritesHoldsNoVersion()
     {
         WriteSource("{\"output\": \"Mod\"}");
         WriteInFolder(MetaIni, "[General]");
@@ -298,7 +300,7 @@ public sealed class BuildHandlerTests : IDisposable
         Assert.Empty(built.Refused);
 
         var manifest = new ModFolderRepository(TimeProvider.System).ReadManifest(ModFolder, ModName).Require();
-        Assert.Equal("1.2.3", manifest.Version);
+        Assert.Null(manifest.Version);
     }
 
     private async Task InitializedWithALocalizedPlugin()

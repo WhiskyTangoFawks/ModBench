@@ -1,3 +1,3 @@
 # Modbench
 
-Modbench manages a Mod Organizer 2 instance in place and edits its plugins record by record, with git as the review and history.
+Modbench is a modding IDE for Bethesda games, built on VS Code. It treats a modlist and its mods as source code, with git for history, review and collaboration.

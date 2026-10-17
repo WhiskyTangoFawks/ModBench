@@ -216,14 +216,15 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void AManifestThatNamesNothing_IsWritten_ReadBack_AndAgreesWithAFolderOfItsMetadataAlone()
     {
         Write("meta.ini", "[General]");
-        var nothing = new Manifest([], [], []);
+        var nothing = new Manifest(null, []);
 
         var written = _repository.WriteManifest(_root, "mod", nothing);
         var writtenAgain = _repository.WriteManifest(_root, "mod", nothing);
 
         Assert.Equal([true, false, true], [written, writtenAgain, File.Exists(Path.Combine(_root, "mod.manifest"))]);
         var read = Assert.IsType<Manifest>(_repository.ReadManifest(_root, "mod"));
-        Assert.Empty(read.InstallationFiles.Concat<object>(read.GameFiles).Concat(read.Files));
+        Assert.Empty(read.Files);
+        Assert.Null(read.Package);
         Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], [], []), Status());
     }
 
@@ -251,7 +252,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [InlineData("hello", "Mod.zip", false)]
     [InlineData("edited", "Mod.zip", true)]
     [InlineData("hello", "Upgraded.zip", true)]
-    public void AFileALineNames_WrittenSinceTheLastRestore_Differs_UnlessItHoldsTheBytesItsProviderFixed(
+    public void AFileALineNames_WrittenSinceTheLastRestore_Differs_UnlessItHoldsTheBytesItsPackageFixed(
         string written, string installationFile, bool differs)
     {
         Write("a.nif", "hello");
@@ -265,7 +266,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Theory]
     [InlineData("0123abc", false)]
     [InlineData("4567def", true)]
-    public void AFileItsSourceProvides_Differs_UnlessItHoldsTheBytesTheBuildAtTheLinesCommitKept(string commit, bool differs)
+    public void AFileItsSourceModBuilds_Differs_UnlessItHoldsTheBytesTheBuildAtTheLinesCommitKept(string commit, bool differs)
     {
         Write("a.esp", "hello");
         KeepAsRestored(ManifestedFromSource("0123abc"));
@@ -287,7 +288,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void AStatus_KeepsTheHashEachProviderFixes_AsTheStatCacheHeldIt()
+    public void AStatus_KeepsTheHashItsPackageFixes_AsTheStatCacheHeldIt()
     {
         Write("a.nif", "hello");
         KeepAsRestored(Manifested(Line("a.nif", "Mod.zip")));
@@ -309,14 +310,14 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void AFileWhoseLineNamesNoProvider_HasNoProvider_AndDoesNotDiffer()
+    public void AFileItsPackageDoesNotHold_IsNotInThePackage_AndDoesNotDiffer()
     {
         Write("a.nif", "edited");
-        Manifested(new ManifestFile("a.nif", new FileProvider.NoProvider()));
+        Manifested(new ManifestFile("a.nif", new PackageEntry.NotHeld()));
 
         var status = Status();
 
-        Assert.Equal(["a.nif"], status.NoProvider);
+        Assert.Equal(["a.nif"], status.NotInPackage);
         Assert.Empty(status.Differing);
     }
 
@@ -351,16 +352,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void AGameFile_IsOpenedByItsPathUnderTheDataFolder()
-    {
-        Write(Path.Combine("Data", "meshes", "a.nif"), "hello");
-
-        using var reader = new StreamReader(_repository.OpenGameFile(Path.Combine(_root, "Data"), "meshes/a.nif"));
-
-        Assert.Equal("hello", reader.ReadToEnd());
-    }
-
-    [Fact]
     public void Files_LeavesOutTheModsManifest_AndEachFileItIsToldTo()
     {
         Write("a.txt", "abc");
@@ -370,38 +361,76 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(["a.txt"], _repository.Files(_root, "mod", new HashSet<string> { "meta.ini" }, statCache: null).Files.Select(f => f.Path));
     }
 
+    private static readonly ManifestPackage.InstallationFile Package = new("Mod.7z", 100, "AAAA", "https://www.nexusmods.com/fallout4/mods/1");
+
     [Fact]
-    public void WriteManifest_WritesOneLinePerSourceAndFile_InPathOrder_AFileLineNamingOnlyItsProvider()
+    public void WriteManifest_WritesAJsonFileWithALineForThePackageWithItsVersionAndOneForEachFile_InPathOrder()
     {
         var manifest = new Manifest(
-            [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:fallout4:1;1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
-            [new ManifestSource("Data/Game.esm", 9, "CCCC")],
+            Package,
             [
-                new ManifestFile("z.txt", new FileProvider.NoProvider()),
-                new ManifestFile("b.nif", new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
-                new ManifestFile("a.nif", new FileProvider.FirstInstallationFile()),
-                new ManifestFile("c.esm", new FileProvider.GameFile("Data/Game.esm")),
-                new ManifestFile("d.esp", new FileProvider.Source("https://example.com/mod.git", "0123abc")),
-            ]);
+                new ManifestFile("z.txt", new PackageEntry.NotHeld()),
+                ManifestFile.At("b.nif", new FileBytes.InInstallationFile("Mod.7z", "Data/b.nif")),
+                new ManifestFile("a.nif", new PackageEntry.Held()),
+            ],
+            "1.2.3");
 
         Assert.True(_repository.WriteManifest(_root, "mod", manifest));
 
+        var text = File.ReadAllText(Path.Combine(_root, "mod.manifest"));
         Assert.Equal(
-            "{\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"source\":\"nexus:fallout4:1;1:2\"}\n"
-            + "{\"installationFile\":\"Patch.zip\",\"size\":7,\"hash\":\"BBBB\"}\n"
-            + "{\"gameFile\":\"Data/Game.esm\",\"size\":9,\"hash\":\"CCCC\"}\n"
-            + "{\"path\":\"a.nif\"}\n"
-            + "{\"path\":\"b.nif\",\"from\":{\"installationFile\":\"Patch.zip\",\"path\":\"Data/b.nif\"}}\n"
-            + "{\"path\":\"c.esm\",\"from\":{\"gameFile\":\"Data/Game.esm\"}}\n"
-            + "{\"path\":\"d.esp\",\"from\":{\"remote\":\"https://example.com/mod.git\",\"commit\":\"0123abc\"}}\n"
-            + "{\"path\":\"z.txt\",\"from\":null}\n",
-            File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+            "{\n"
+            + "\"package\": {\"installationFile\":\"Mod.7z\",\"size\":100,\"hash\":\"AAAA\",\"page\":\"https://www.nexusmods.com/fallout4/mods/1\",\"version\":\"1.2.3\"},\n"
+            + "\"files\": [\n"
+            + "{\"path\":\"a.nif\"},\n"
+            + "{\"path\":\"b.nif\",\"packagePath\":\"Data/b.nif\"},\n"
+            + "{\"path\":\"z.txt\",\"inPackage\":false}\n"
+            + "]\n"
+            + "}\n",
+            text);
+        using var parsed = JsonDocument.Parse(text);
+        Assert.Equal(3, parsed.RootElement.GetProperty("files").GetArrayLength());
+    }
+
+    [Fact]
+    public void WriteManifest_OfASourceMod_NamesItsRemoteAndCommitAsItsPackage()
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest(
+            new ManifestPackage.SourceMod("https://example.com/mod.git", "0123abc"), [new ManifestFile("d.esp", new PackageEntry.Held())]));
+
+        Assert.Contains(
+            "\"package\": {\"remote\":\"https://example.com/mod.git\",\"commit\":\"0123abc\"}", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+    }
+
+    [Fact]
+    public void WriteManifest_OfAGameFolderMod_NamesTheGameFolderAndItsPinAsItsPackage()
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest(new ManifestPackage.GameFolder("Fallout 4", "AAAA"), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
+
+        Assert.Contains(
+            "\"package\": {\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAA\",\"version\":\"2\"}", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+    }
+
+    [Fact]
+    public void WriteManifest_OfAModWithAVersionAndNoPackage_WritesNoVersion_BecauseTheVersionBelongsToThePackage()
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest(null, [], "1.2.3"));
+
+        Assert.Equal("{\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
+    }
+
+    [Fact]
+    public void WriteManifest_OfAModWithNoPackageAndNoFiles_WritesAnEmptyFileList()
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest(null, []));
+
+        Assert.Equal("{\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
     }
 
     [Fact]
     public void WriteManifest_OfTheTextAlreadyThere_WritesNothing()
     {
-        var manifest = new Manifest([], [], [new ManifestFile("a.txt", new FileProvider.NoProvider())]);
+        var manifest = new Manifest(null, [new ManifestFile("a.txt", new PackageEntry.NotHeld())]);
         _repository.WriteManifest(_root, "mod", manifest);
         var path = Path.Combine(_root, "mod.manifest");
         File.SetLastWriteTimeUtc(path, LongAgo);
@@ -414,7 +443,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     [Fact]
     public void WriteManifest_WritesNoByteOrderMark_AndKeepsANonAsciiNameReadable()
     {
-        var manifest = new Manifest([], [], [new ManifestFile("meshes/café.nif", new FileProvider.NoProvider())]);
+        var manifest = new Manifest(null, [new ManifestFile("meshes/café.nif", new PackageEntry.NotHeld())]);
 
         _repository.WriteManifest(_root, "mod", manifest);
 
@@ -424,46 +453,58 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void ReadManifest_ReadsWhatWriteManifestWrote()
+    public void WriteManifest_OrdersFilesAlphabetically_NotCapitalsFirst()
     {
-        var manifest = new Manifest(
-            [new ManifestSource("Mod.7z", 100, "AAAA", Source: "nexus:fallout4:1;1:2"), new ManifestSource("Patch.zip", 7, "BBBB")],
-            [new ManifestSource("Data/Game.esm", 9, "CCCC")],
+        var manifest = new Manifest(null, [
+            new ManifestFile("Textures/x.dds", new PackageEntry.Held()),
+            new ManifestFile("meshes/b.nif", new PackageEntry.Held()),
+            new ManifestFile("Meshes/a.nif", new PackageEntry.Held()),
+            new ManifestFile("meshes/a.nif", new PackageEntry.Held()),
+        ]);
+
+        _repository.WriteManifest(_root, "mod", manifest);
+
+        Assert.Equal(
+            ["Meshes/a.nif", "meshes/a.nif", "meshes/b.nif", "Textures/x.dds"],
+            _repository.ReadManifest(_root, "mod")?.Files.Select(file => file.Path));
+    }
+
+    public static TheoryData<Manifest> Manifests => new()
+    {
+        new Manifest(
+            Package,
             [
-                new ManifestFile("a.nif", new FileProvider.FirstInstallationFile()),
-                new ManifestFile("b.nif", new FileProvider.InstallationFileEntry("Patch.zip", "Data/b.nif")),
-                new ManifestFile("c.esm", new FileProvider.GameFile("Data/Game.esm")),
-                new ManifestFile("d.esp", new FileProvider.Source("https://example.com/mod.git", "0123abc")),
-                new ManifestFile("z.txt", new FileProvider.NoProvider()),
-            ]);
+                new ManifestFile("a.nif", new PackageEntry.Held()),
+                ManifestFile.At("b.nif", new FileBytes.InInstallationFile("Mod.7z", "Data/b.nif")),
+                new ManifestFile("z.txt", new PackageEntry.NotHeld()),
+            ],
+            "1.2.3"),
+        new Manifest(new ManifestPackage.InstallationFile("Mod.7z", 100, "AAAA"), [new ManifestFile("a.nif", new PackageEntry.Held())]),
+        new Manifest(new ManifestPackage.SourceMod("https://example.com/mod.git", "0123abc"), [new ManifestFile("d.esp", new PackageEntry.Held())]),
+        new Manifest(new ManifestPackage.GameFolder("Fallout 4", "AAAA"), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"),
+        new Manifest(null, []),
+    };
+
+    [Theory]
+    [MemberData(nameof(Manifests))]
+    public void ReadManifest_ReadsWhatWriteManifestWrote(Manifest manifest)
+    {
         _repository.WriteManifest(_root, "mod", manifest);
 
         var read = _repository.ReadManifest(_root, "mod");
 
         Assert.NotNull(read);
-        Assert.Equal(manifest.InstallationFiles, read.InstallationFiles);
-        Assert.Equal(manifest.GameFiles, read.GameFiles);
+        Assert.Equal(manifest.Package, read.Package);
+        Assert.Equal(manifest.Version, read.Version);
         Assert.Equal(manifest.Files, read.Files);
-    }
-
-    [Fact]
-    public void AManifestsVersion_IsItsFirstLine_AndIsReadBack()
-    {
-        var manifest = new Manifest([new ManifestSource("Mod.7z", 100, "AAAA")], [], [new ManifestFile("a.nif", new FileProvider.FirstInstallationFile())], "1.2.3");
-
-        _repository.WriteManifest(_root, "mod", manifest);
-
-        Assert.StartsWith("{\"version\":\"1.2.3\"}\n{\"installationFile\"", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
-        Assert.Equal("1.2.3", _repository.ReadManifest(_root, "mod")?.Version);
     }
 
     [Fact]
     public void AManifestWithoutAVersion_WritesNoVersionLine()
     {
-        _repository.WriteManifest(_root, "mod", new Manifest([], [], [new ManifestFile("a.nif", new FileProvider.NoProvider())]));
+        _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("a.nif", new PackageEntry.NotHeld())]));
 
         Assert.DoesNotContain("version", File.ReadAllText(Path.Combine(_root, "mod.manifest")));
-        Assert.Null(_repository.ReadManifest(_root, "mod")?.Version);
     }
 
     [Fact]
@@ -476,17 +517,22 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Theory]
-    [InlineData("<<<<<<< HEAD")]
-    [InlineData("{\"path\":7}")]
-    [InlineData("{\"path\":\"a.txt\",\"from\":{\"installationFile\":\"A.zip\"}}")]
-    [InlineData("{\"path\":\"a.txt\",\"from\":{\"remote\":\"https://example.com/mod.git\"}}")]
-    public void ReadManifest_WithALineItCannotRead_RefusesNamingTheLine(string line)
+    [InlineData("<<<<<<< HEAD\n", "line 1")]
+    [InlineData("{\n\"files\": [\n{\"path\":\"a.txt\"}\n{\"path\":\"b.txt\"}\n]\n}\n", "line 4")]
+    [InlineData("{\"files\": [{\"path\":\"a.txt\"},{\"path\":7}]}", "its file 2")]
+    [InlineData("{\"files\": [{\"path\":\"a.txt\"},{\"path\":\"b.txt\",\"packagePath\":7}]}", "its file 2")]
+    [InlineData("{\"files\": []", "line")]
+    [InlineData("{\"package\": {\"installationFile\":\"A.zip\"}, \"files\": []}", "cannot be read")]
+    [InlineData("{\"package\": {\"remote\":\"https://example.com/mod.git\"}, \"files\": []}", "cannot be read")]
+    [InlineData("{\"package\": {\"version\": 7}, \"files\": []}", "cannot be read")]
+    [InlineData("{}", "cannot be read")]
+    public void ReadManifest_WithTextItCannotRead_RefusesNamingWhere(string text, string where)
     {
-        Write("mod.manifest", "{\"path\":\"b.txt\"}\n" + line + "\n");
+        Write("mod.manifest", text);
 
         var refused = Assert.Throws<InvalidDataException>(() => _repository.ReadManifest(_root, "mod"));
 
-        Assert.Contains("line 2", refused.Message, StringComparison.Ordinal);
+        Assert.Contains(where, refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -589,7 +635,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Empty(Directory.GetFileSystemEntries(_root));
     }
 
-    private static readonly Manifest NoLines = new([], [], []);
+    private static readonly Manifest NoLines = new(null, []);
 
     private static readonly Dictionary<string, string> NoHashes = [];
 
@@ -600,20 +646,22 @@ public sealed class ModFolderRepositoryTests : IDisposable
         return read.Files;
     }
 
-    private static ManifestFile Line(string path, string installationFile) =>
-        new(path, new FileProvider.InstallationFileEntry(installationFile, path));
+    private static (string Path, string InstallationFile) Line(string path, string installationFile) => (path, installationFile);
 
-    private Manifest Manifested(ManifestFile line)
+    private Manifest Manifested((string Path, string InstallationFile) line) => Manifested(line.InstallationFile, new ManifestFile(line.Path, new PackageEntry.Held()));
+
+    private Manifest Manifested(ManifestFile line) => Manifested("Mod.zip", line);
+
+    private Manifest Manifested(string installationFile, ManifestFile line)
     {
-        var manifest = new Manifest(
-            [new ManifestSource("Mod.zip", 7, "#Mod.zip"), new ManifestSource("Upgraded.zip", 7, "#Upgraded.zip")], [], [line]);
+        var manifest = new Manifest(new ManifestPackage.InstallationFile(installationFile, 7, "#" + installationFile), [line]);
         _repository.WriteManifest(_root, "mod", manifest);
         return manifest;
     }
 
     private Manifest ManifestedFromSource(string commit)
     {
-        var manifest = new Manifest([], [], [new ManifestFile("a.esp", new FileProvider.Source("https://example.com/mod.git", commit))]);
+        var manifest = new Manifest(new ManifestPackage.SourceMod("https://example.com/mod.git", commit), [new ManifestFile("a.esp", new PackageEntry.Held())]);
         _repository.WriteManifest(_root, "mod", manifest);
         return manifest;
     }

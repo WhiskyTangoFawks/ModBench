@@ -1,4 +1,4 @@
-// What MO2's implementation lets the instance repository hold, and which game files a mod's files override.
+// What MO2's implementation lets the instance repository hold, and which game files a mod's files take.
 
 import type { Dirent } from 'node:fs';
 import { join } from 'node:path';
@@ -9,7 +9,7 @@ import { ignoreListFile, WHITELIST_IGNORE_LIST } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 
-type Mo2Repository = Pick<InstanceAdapter, 'overriddenGameFiles' | 'gameFilesOverriddenBy' | 'writeIgnoreList' | 'removeIgnoreList'>;
+type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'removeIgnoreList'>;
 
 const lowerCased = (names: readonly Dirent[]): Map<string, Dirent> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
@@ -36,7 +36,7 @@ function caseBlindFinder(dataFolder: string) {
 export function mo2Repository(
   { instanceRoot }: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>,
 ): Mo2Repository {
-  const overriddenGameFiles: InstanceAdapter['overriddenGameFiles'] = async (dataFolder, modFilePaths) => {
+  const gameFiles: InstanceAdapter['gameFiles'] = async (dataFolder, modFilePaths) => {
     const find = caseBlindFinder(dataFolder);
     const files = new Map<string, GameFile>();
     for (const modFilePath of modFilePaths) {
@@ -44,13 +44,12 @@ export function mo2Repository(
       if (found === undefined || files.has(found.join('/').toLowerCase())) continue;
       const hashed = await gameFileHash(join(dataFolder, ...found));
       if (hashed.kind === 'unreadable') return hashed;
-      files.set(found.join('/').toLowerCase(), { path: found.join('/'), ...hashed.answer });
+      files.set(found.join('/').toLowerCase(), { path: found.join('/'), hash: hashed.answer.hash });
     }
     return { kind: 'read', answer: [...files.values()] };
   };
 
   return {
-
     async writeIgnoreList() {
       const file = ignoreListFile(instanceRoot);
       if (await exists(file)) throw new Error(`${file} already exists; git init does not write over it.`);
@@ -59,12 +58,12 @@ export function mo2Repository(
 
     removeIgnoreList: () => remove(ignoreListFile(instanceRoot)),
 
-    overriddenGameFiles,
+    gameFiles,
 
-    async gameFilesOverriddenBy(dataFolder, mod) {
+    async gameFilesTakenBy(dataFolder, mod) {
       const { files, notes } = await originFilesIn(instanceRoot, { kind: 'mod', name: mod });
-      const overridden = await overriddenGameFiles(dataFolder, files.map((file) => file.relativePath));
-      return overridden.kind === 'read' ? { kind: 'read', answer: { gameFiles: overridden.answer, notes } } : overridden;
+      const taken = await gameFiles(dataFolder, files.map((file) => file.relativePath));
+      return taken.kind === 'read' ? { kind: 'read', answer: { gameFiles: taken.answer, notes } } : taken;
     },
   };
 }

@@ -167,12 +167,12 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
   return { result, log, fetch, request };
 }
 
-const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, installationFiles: [], metadataFiles: ['meta.ini'] });
-const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, installationFiles: [], metadataFiles: ['meta.ini'] });
-const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], metadataFiles: ['meta.ini'], isSourceMod: false });
-const updateFacts = { gameFiles: [{ path: 'Game.esm', size: 7, hash: 'AAECAwQFBgc=' }], statCache: '/instance/stat-cache' };
-const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, installationFiles: [], metadataFiles: ['meta.ini'], sourceFolder: `/instance/source/${name}` });
-const restoreFacts = { gameFiles: [], dataFolder: '/game/Data', statCache: '/instance/stat-cache', excludedSuffix: '.mohidden', archives: null };
+const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, metadataFiles: ['meta.ini'] });
+const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'] });
+const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], isSourceMod: false });
+const updateFacts = { statCache: '/instance/stat-cache' };
+const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], sourceFolder: `/instance/source/${name}` });
+const restoreFacts = { statCache: '/instance/stat-cache', excludedSuffix: '.mohidden', archives: null };
 const buildFacts = {
   excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } },
   statCache: '/instance/stat-cache',
@@ -267,11 +267,11 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/build', body: { mods: [modToBuild('ModA'), modToBuild('ModC')], ...buildFacts } },
     { name: 'updateManifest', verb: (c) => c.updateManifest([modToUpdate('ModA'), modToUpdate('ModC')], updateFacts),
       answer: {
-        applied: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }],
+        applied: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'] }],
         refused: [{ item: 'ModC', refusal: 'InstallationFileMissing', message: "'ModC' was not updated: 'C.zip' not in the downloads folder." }],
       },
       reads: {
-        landed: [{ mod: 'ModA', manifestWritten: true, noProvider: ['a.nif'] }],
+        landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'] }],
         refused: [{ item: 'ModC', reason: "'ModC' was not updated: 'C.zip' not in the downloads folder." }],
       },
       path: '/update-manifest', body: { mods: [modToUpdate('ModA'), modToUpdate('ModC')], ...updateFacts, gesture: expect.any(String) as unknown } },
@@ -280,19 +280,19 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         applied: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] }],
         refused: [
           {
-            item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: installation file 'B.7z' is missing; game file 'B.esm' is missing.",
-            gameFilesNotFound: ['B.esm'], installationFilesNotFound: ['B.7z'],
+            item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: installation file 'B.7z' is missing.",
+            installationFileNotFound: 'B.7z',
           },
-          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: 'c.nif' has no provider.", gameFilesNotFound: [], installationFilesNotFound: [] },
+          { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: its package does not hold 'c.nif'." },
         ],
       },
       reads: {
         landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] }],
         refused: [
-          { item: 'ModB', reason: "'ModB' was skipped: installation file 'B.7z' is missing; game file 'B.esm' is missing." },
-          { item: 'ModC', reason: "'ModC' was skipped: 'c.nif' has no provider." },
+          { item: 'ModB', reason: "'ModB' was skipped: installation file 'B.7z' is missing." },
+          { item: 'ModC', reason: "'ModC' was skipped: its package does not hold 'c.nif'." },
         ],
-        notFound: [{ mod: 'ModB', gameFiles: ['B.esm'], installationFiles: ['B.7z'] }],
+        notFound: [{ mod: 'ModB', installationFile: 'B.7z' }],
       },
       path: '/restore-from-manifest', body: { mods: [modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], ...restoreFacts, gesture: expect.any(String) as unknown } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),
@@ -378,10 +378,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'] }];
     const destroys = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
     const skipped = "'ModB' was skipped: a file could not be read: denied";
-    const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFiles: [{ name: 'A.7z', source: 'https://www.nexusmods.com/fallout4/mods/1' }] } }];
+    const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFile: { name: 'A.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } } }];
     const { result, request } = await exchange(
       (c) => c.getWhatRestoreDestroys(mods, '/instance/stat-cache'),
-      answers(200, { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped, gameFilesNotFound: [], installationFilesNotFound: [] }], manifests }),
+      answers(200, { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped }], manifests }),
     );
 
     expect(new URL(request.url).pathname).toBe('/what-restore-destroys');
@@ -391,7 +391,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
 
   it('getModStatus posts the mods and the stat cache and reads each mod\'s status', async () => {
     const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'] }];
-    const status = [{ mod: 'ModA', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], noProvider: [] }];
+    const status = [{ mod: 'ModA', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: [] }];
     const { result, request } = await exchange((c) => c.getModStatus(mods, '/instance/stat-cache'), answers(200, { mods: status }));
 
     expect(new URL(request.url).pathname).toBe('/mod-status');
@@ -1051,7 +1051,7 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
         await answered;
         seen.aborted = req.signal.aborted;
         if (req.signal.aborted) throw new DOMException('This operation was aborted', 'AbortError');
-        return jsonResponse(200, { applied: [{ mod: 'ModA', manifestWritten: true, noProvider: [], written: [] }], refused: [] });
+        return jsonResponse(200, { applied: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], written: [] }], refused: [] });
       }],
     ]), { log });
     await client.start();

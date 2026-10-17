@@ -75,12 +75,3 @@ ADR-0019 decides the tier; this table is how each tier looks on a surface.
 | Something Modbench does on its own, such as a sync, fails, and every view stays true | the view's message line, and a line in the Output, once, and again only when the reason changes |
 | Something Modbench does on its own fails, and a view now shows something untrue, such as a record filter it cleared | a notification naming what changed and why, and a line in the Output |
 | A failure inside a dialog I am answering | a line in the Output. The dialog says it; a second notification on top of it does not. |
-
-## Getting started
-
-As a user, I want:
-
-1. One walkthrough on VS Code's Welcome page that takes me from an MO2 instance to my first edit: open the instance folder and trust it, the Mods, Plugins and Downloads views, git init, decompile and commit a mod, edit a field, review it in Source Control, build, and connect my agent. Cites: VS Code's interaction
-2. The walkthrough to open on its own the first time Modbench activates, and never again unless I open it. Cites: VS Code's interaction
-3. Each step to tick when I do what it names. Cites: VS Code's interaction
-4. A folder I have not trusted to say that Modbench needs it trusted, where VS Code lists the extensions Restricted Mode turns off, rather than show views with nothing in them. Cites: VS Code's interaction; Never silently wrong
