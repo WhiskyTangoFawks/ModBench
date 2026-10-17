@@ -32,8 +32,8 @@ async function saveDirtyPluginSource(folder: string): Promise<string[]> {
   return [...new Set(inFolder().map((document) => document.uri.fsPath))];
 }
 
-/** Saves a mod's unsaved plugin source; undefined when the mod has no source folder. */
-export async function saveModPluginSource(sourceFiles: SourceFilesOf, mod: string): Promise<string[] | undefined> {
+/** Saves a mod's unsaved plugin source; a mod with no source folder has none. */
+export async function saveModPluginSource(sourceFiles: SourceFilesOf, mod: string): Promise<string[]> {
   const files = sourceFiles(mod);
-  return files && saveDirtyPluginSource(files.file(''));
+  return files ? saveDirtyPluginSource(files.file('')) : [];
 }
