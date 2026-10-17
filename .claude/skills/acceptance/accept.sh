@@ -111,18 +111,22 @@ down() {
   wait_gone 10 $pids || for p in $pids; do kill -9 "$p" 2>/dev/null || true; done
   wait_gone 10 $pids || { echo "still running after SIGKILL:$pids" >&2; exit 1; }
   [ -f "$dir/xvfb.pid" ] && kill "$(cat "$dir/xvfb.pid")" 2>/dev/null || true
+  local kept=0
   if [ "$keep" = "--keep-seed" ]; then
-    mkdir -p "$seed" && rm -f "$seed"/index.duckdb* && cp "$dir"/instance/modbench/index.duckdb* "$seed/"
+    # A file that vanishes mid-copy means the index was still changing: no seed, but the folder still goes.
+    mkdir -p "$seed" && rm -f "$seed"/index.duckdb* && cp "$dir"/instance/modbench/index.duckdb* "$seed/" || {
+      kept=1; rm -rf "$seed" || true; echo "seed copy failed; no seed kept for ${seed##*/}" >&2; }
   fi
   rm -rf "$dir"
   echo "down: $dir"
+  return "$kept"
 }
 
 port_of() { cat "$1/port"; }
 
 case "${1:-}" in
   up) up "${2:-}" ;;
-  down) down "$2" ;;
+  down) down "${@:2}" ;;
   tools) python3 -I "$here/mcp.py" "$(port_of "$2")" tools ;;
   call) python3 -I "$here/mcp.py" "$(port_of "$2")" call "$3" "${4:-{\}}" ;;
   seed)
