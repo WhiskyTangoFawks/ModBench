@@ -394,6 +394,7 @@ public sealed class RestoreFromManifestHandlerTests
         var refused = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], InstanceWithGameFiles(("a.nif", "newer")))).Refused);
 
         Assert.Equal(RestoreRefusal.Lacking, refused.Refusal.Kind);
+        Assert.Contains("'Fallout 4'", refused.Message);
         Assert.Contains("other bytes", refused.Message);
         Assert.Empty(WrittenIn(Mod));
     }

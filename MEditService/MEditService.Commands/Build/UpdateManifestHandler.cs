@@ -26,6 +26,12 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
                 $"was not updated: '{repository.InstallationFileName(installationFile.Path)}' not in the downloads folder.");
         }
 
+        if (installationFile is null && instance.GameFolder is null && NamesTheGameFolder(mod))
+        {
+            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
+                UpdateManifestRefusal.GameFolderNotFound, "was not updated: its manifest names the game folder, and the game folder was not found.");
+        }
+
         Manifest manifest;
         ModFolderFiles read;
         try
@@ -62,11 +68,15 @@ public sealed class UpdateManifestHandler(IModFolderRepository repository, INoti
             statCacheNotWritten));
     }
 
-    private bool NamesASource(ModToUpdate mod)
+    private bool NamesASource(ModToUpdate mod) => NamesPackage<ManifestPackage.SourceMod>(mod);
+
+    private bool NamesTheGameFolder(ModToUpdate mod) => NamesPackage<ManifestPackage.GameFolder>(mod);
+
+    private bool NamesPackage<TPackage>(ModToUpdate mod) where TPackage : ManifestPackage
     {
         try
         {
-            return repository.ReadManifest(mod.Folder, mod.Name)?.Package is ManifestPackage.SourceMod;
+            return repository.ReadManifest(mod.Folder, mod.Name)?.Package is TPackage;
         }
         catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException)
         {

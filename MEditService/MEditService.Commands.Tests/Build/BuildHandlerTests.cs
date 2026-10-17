@@ -288,7 +288,7 @@ public sealed class BuildHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task TheModsVersionAndInstallationSources_AreInTheManifestTheBuildWrites()
+    public async Task ASourceModWithNoRemote_HasNoPackage_SoTheManifestTheBuildWritesHoldsNoVersion()
     {
         WriteSource("{\"output\": \"Mod\"}");
         WriteInFolder(MetaIni, "[General]");
@@ -300,7 +300,7 @@ public sealed class BuildHandlerTests : IDisposable
         Assert.Empty(built.Refused);
 
         var manifest = new ModFolderRepository(TimeProvider.System).ReadManifest(ModFolder, ModName).Require();
-        Assert.Equal("1.2.3", manifest.Version);
+        Assert.Null(manifest.Version);
     }
 
     private async Task InitializedWithALocalizedPlugin()

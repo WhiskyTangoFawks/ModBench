@@ -3,7 +3,7 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>Writes a mod folder's files from its installation file, read once, or from the game folder.</summary>
-internal sealed class ModRebuild(IModFolderRepository repository, string modFolder, string? dataFolder)
+internal sealed class ModRebuild(IModFolderRepository repository, string modFolder)
 {
     /// <summary>A write that fails leaves the files before it written. Throws <see cref="InvalidDataException"/> for an
     /// installation file that is not an archive it can read.</summary>
@@ -13,7 +13,7 @@ internal sealed class ModRebuild(IModFolderRepository repository, string modFold
         {
             repository.WriteFile(modFolder, game.Path, target =>
             {
-                using var taken = repository.OpenGameFile(dataFolder ?? throw new InvalidOperationException("A game file is handed with its folder."), game.GamePath);
+                using var taken = repository.OpenGameFile(game.DataFolder, game.GamePath);
                 taken.CopyTo(target);
             });
         }

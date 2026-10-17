@@ -66,7 +66,7 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
             var says = ModMetadata.Of(manifest);
             return new(
                 modName, NoManifest: false, Ordered(differing), Ordered(namedByNoLine), Ordered(gone), Ordered(notInPackage), null, statCacheNotWritten,
-                held?.DiffersFrom(says) == true, says);
+                Held(held, manifest)?.DiffersFrom(says) == true, says);
         }
         catch (InvalidDataException e)
         {
@@ -77,6 +77,10 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
             return new(modName, NoManifest: false, [], [], [], [], new ModUnreadable(Manifest: false, $"a file could not be read: {e.Message}"));
         }
     }
+
+    // A manifest with no package holds no version, so the version a mod's metadata holds is no difference.
+    private static ModMetadata? Held(ModMetadata? held, Manifest manifest) =>
+        held is not null && manifest.Package is null ? held with { Version = null } : held;
 
     // A line found by the file system names the file on disk in its own case where none has the line's (NamedByNoLine).
     private static string OnDisk(string line, HashSet<string> onDisk) =>

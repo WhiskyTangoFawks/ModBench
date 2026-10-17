@@ -111,13 +111,39 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public async Task TheModsVersion_IsInItsManifest()
+    public async Task TheVersionOfAModWithAPackage_IsInItsManifest()
+    {
+        _folders.WithFile(Mod, "a.txt", "hello");
+
+        await Landed(ModFrom("Mod", Downloaded("dl/Mod.zip", ("a.txt", "hello"))) with { Version = "1.2.3" });
+
+        Assert.Equal("1.2.3", _folders.Manifests[Mod].Version);
+    }
+
+    [Fact]
+    public async Task TheVersionOfAModWithNoPackage_IsNotInItsManifest()
     {
         _folders.WithFile(Mod, "a.txt", "hello");
 
         await Landed(ModFrom("Mod") with { Version = "1.2.3" });
 
-        Assert.Equal("1.2.3", _folders.Manifests[Mod].Version);
+        Assert.Null(_folders.Manifests[Mod].Version);
+    }
+
+    [Fact]
+    public async Task AModWhoseManifestNamesTheGameFolder_IsRefusedWhenTheGameFolderWasNotFound_ItsManifestLeftAsItWas()
+    {
+        _folders.WithFile(Mod, "a.nif", "a");
+        var named = await UpdatedWith(GameFolderHolding(("a.nif", "a")));
+        _folders.WithFile("mods/Other", "b.nif", "b");
+
+        var result = await Handler.UpdateManifestAsync([ModFrom("Mod"), ModFrom("Other")], new InstanceToUpdate("stat-cache"));
+
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal((UpdateManifestRefusal.GameFolderNotFound, "Mod"), (refused.Refusal, refused.Item));
+        Assert.Contains("the game folder was not found", refused.Message);
+        Assert.Same(named, _folders.Manifests[Mod]);
+        Assert.Equal(["Other"], result.Landed.Select(landed => landed.Item));
     }
 
     [Fact]

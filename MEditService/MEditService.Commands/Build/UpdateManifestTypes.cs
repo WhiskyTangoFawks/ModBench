@@ -28,6 +28,9 @@ public enum UpdateManifestRefusal
 
     ModFolderMissing,
 
+    /// <summary>A mod whose manifest names the game folder, when the request found none.</summary>
+    GameFolderNotFound,
+
     /// <summary>A file of the mod could not be read.</summary>
     ModFilesUnreadable,
 

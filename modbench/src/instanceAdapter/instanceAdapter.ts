@@ -344,7 +344,7 @@ export interface GameFile {
 }
 
 // The game files a mod's files take, and each entry of its folder the listing skipped, one line apiece.
-interface GameFilesTaken {
+export interface GameFilesTaken {
   readonly gameFiles: readonly GameFile[];
   readonly notes: readonly string[];
 }

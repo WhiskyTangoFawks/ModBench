@@ -4,8 +4,8 @@ using System.Text.Json;
 
 namespace MEditService.ModFolderAdapter;
 
-/// <summary>A manifest as a JSON file: a line for its package with its version, or for the version alone, and a line for
-/// each file in alphabetical order, so a diff shows one line per change.</summary>
+/// <summary>A manifest as a JSON file with a line for its package, which holds its version, and a line for each file in
+/// alphabetical order, so a change to one file is one line in a diff.</summary>
 internal static class ManifestText
 {
     private static readonly JsonWriterOptions Compact = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -14,7 +14,6 @@ internal static class ManifestText
     {
         List<string> members = [];
         if (manifest.Package is not null) members.Add("\"package\": " + Value(writer => PackageLine(writer, manifest.Package, manifest.Version)));
-        else if (manifest.Version is { } version) members.Add("\"version\": " + Value(writer => writer.WriteStringValue(version)));
         var files = manifest.Files.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ThenBy(file => file.Path, StringComparer.Ordinal).Select(file => Value(writer => FileLine(writer, file))).ToList();
         members.Add(files.Count == 0 ? "\"files\": []" : "\"files\": [\n" + string.Join(",\n", files) + "\n]");
         return "{\n" + string.Join(",\n", members) + "\n}\n";
@@ -28,12 +27,9 @@ internal static class ManifestText
             using var parsed = JsonDocument.Parse(text);
             var root = parsed.RootElement;
             var files = root.GetProperty("files").EnumerateArray().Index().Select(entry => FileOf(entry.Index, entry.Item)).ToList();
-            if (root.TryGetProperty("package", out var line))
-            {
-                var (package, version) = PackageOf(line);
-                return new Manifest(package, files, version);
-            }
-            return new Manifest(null, files, root.TryGetProperty("version", out var alone) ? Text(alone) : null);
+            if (!root.TryGetProperty("package", out var line)) return new Manifest(null, files);
+            var (package, version) = PackageOf(line);
+            return new Manifest(package, files, version);
         }
         catch (JsonException e)
         {

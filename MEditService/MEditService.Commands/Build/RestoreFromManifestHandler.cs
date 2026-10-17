@@ -54,7 +54,7 @@ public sealed class RestoreFromManifestHandler(
         List<PackageContents.PackagedFile> differing = [.. resolved.Files.Where(file => hashes.GetValueOrDefault(file.Path) != file.Hash)];
         try
         {
-            new ModRebuild(repository, mod.Folder, instance.GameFolder?.DataFolder).Write(differing);
+            new ModRebuild(repository, mod.Folder).Write(differing);
         }
         catch (InvalidDataException e)
         {

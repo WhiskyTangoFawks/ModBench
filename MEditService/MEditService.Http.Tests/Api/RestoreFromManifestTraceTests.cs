@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.ModFolderAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -264,6 +265,40 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         var skipped = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
         Assert.Equal("NotFound", skipped.GetProperty("refusal").GetString());
         Assert.Equal("Mod.zip", skipped.GetProperty("installationFileNotFound").GetString());
+    }
+
+    [Fact]
+    public async Task RestoringAGameFolderModWhoseRequestHandsNoGameFiles_NamesEachItsManifestNames_SoARequestHandingThemBringsItBack()
+    {
+        Directory.CreateDirectory(ModFolder);
+        File.WriteAllText(Path.Combine(ModFolder, "a.nif"), "taken");
+        var hash = new ModFolderRepository(TimeProvider.System).Files(ModFolder, Mod, new HashSet<string>(), null).Files.Single().Hash;
+        File.WriteAllText(
+            Path.Combine(ModFolder, Mod + ".manifest"),
+            $"{{\n\"package\": {{\"gameFolder\":\"Fallout4\",\"hash\":\"{FileHash.OfFilesTaken([new HashedFile("a.nif", hash)])}\"}},\n\"files\": [\n{{\"path\":\"a.nif\"}}\n]\n}}\n");
+        var request = Request("restore-from-manifest", "Mod.zip", handsTheDownload: false);
+
+        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
+
+        var skipped = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
+        Assert.Equal("NotFound", skipped.GetProperty("refusal").GetString());
+        Assert.Equal(["a.nif"], skipped.GetProperty("gameFilesNotFound").EnumerateArray().Select(path => path.GetString()));
+    }
+
+    [Theory]
+    [InlineData("name")]
+    [InlineData("dataFolder")]
+    [InlineData("files")]
+    public async Task RestoringWithAGameFolderMissingAField_Is400(string field)
+    {
+        var request = Request("restore-from-manifest", "Mod.zip");
+        var gameFolder = new JsonObject { ["name"] = "Fallout4", ["dataFolder"] = Path.Combine(_instance, "Data"), ["files"] = new JsonArray() };
+        gameFolder.Remove(field);
+        request["gameFolder"] = gameFolder;
+
+        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

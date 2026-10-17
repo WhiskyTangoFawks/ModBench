@@ -1830,7 +1830,7 @@ export interface components {
             version?: string | null;
         };
         /** @enum {string} */
-        UpdateManifestRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "ModFilesUnreadable" | "NotWritten" | "LeftToItsBuild";
+        UpdateManifestRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "GameFolderNotFound" | "ModFilesUnreadable" | "NotWritten" | "LeftToItsBuild";
         UpdateManifestRequest: {
             mods: components["schemas"]["UpdateManifestModRequest"][];
             statCache: string;

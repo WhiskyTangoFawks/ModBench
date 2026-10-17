@@ -34,8 +34,7 @@ public abstract record ManifestPackage
 
     public sealed record SourceMod(string Remote, string Commit) : ManifestPackage;
 
-    /// <summary>The game folder, by the game's name, pinned by <paramref name="Hash"/>, a hash of the files the mod takes from
-    /// it (<see cref="FileHash.OfFilesTaken"/>).</summary>
+    /// <summary>The game folder by the game's name, pinned by a hash of the files the mod takes from it (ADR-0023).</summary>
     public sealed record GameFolder(string Name, string Hash) : ManifestPackage;
 }
 

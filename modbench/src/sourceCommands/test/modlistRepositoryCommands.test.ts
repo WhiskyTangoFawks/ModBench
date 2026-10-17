@@ -1,17 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import type { FileRead, GameFolder, InstallationFile, InstanceAdapter, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, fileIn, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import type { FileRead, GameFolder, ModFolders, InstallationFile, InstanceAdapter, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
+import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
+import { archiveVariants } from '../sourceCommands';
 
 const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'E' }] };
 
 const recording = (file: InstallationFile): FileRead<InstallationFile> => ({ kind: 'read', answer: file });
 const FOUND: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'modbench.gameDirectory' };
-const instanceOf = (sourceDirs: ReadonlyMap<string, string> = new Map(), gameFolder: GameFolder = FOUND) =>
-  ({ gameName: 'Fallout 4', gameFolder, gameRelease: undefined, paths: { sourceDirs } });
-const GAME_FOLDER = { name: 'Fallout 4', dataFolder: '/game/Data', files: [] };
+const instanceOf = (sourceDirs: ReadonlyMap<string, string> = new Map(), gameFolder: GameFolder = FOUND, modFolders?: ModFolders) =>
+  ({ gameFolder, gameRelease: 'Fallout4', modFolders, paths: { sourceDirs } });
+const GAME_FOLDER = { name: 'Fallout4', dataFolder: '/game/Data', files: [] };
 const filesIn = (filesByMod: Record<string, readonly OriginFile[]>): ReadonlyMap<string, OriginFiles> =>
   new Map(Object.entries(filesByMod).map(([mod, files]) => [mod, { origin: mod, folder: `/mods/${mod}`, files, folders: [], notes: [] }]));
 
@@ -200,6 +201,32 @@ describe('modlistRepositoryCommands update manifest', () => {
     expect(outcome).toMatchObject({ notes: [{ mod: 'ModB', note: expect.stringContaining('the game folder was not found') as unknown }] });
   });
 
+  it('hands no game files for a source mod or a separator, and notes neither when the game folder was not found', async () => {
+    const { commands, client, adapter } = commandsOver({}, new InMemoryMEditClient());
+    client.setCommandResult('updateManifest', UPDATED);
+    const asked: string[] = [];
+    const taking = adapter.adapter.gameFilesTakenBy;
+    adapter.adapter.gameFilesTakenBy = (dataFolder, mod) => { asked.push(mod); return taking(dataFolder, mod); };
+    const folders = modFoldersOf('ModA', 'Source', { kind: 'separator', name: 'Group', modName: 'Group_separator' });
+    const found = instanceOf(new Map([['Source', '/source/Source']]), FOUND, folders);
+
+    await commands.updateManifest(['ModA', 'Source', 'Group_separator'], found);
+    const outcome = await commands.updateManifest(['ModA', 'Source', 'Group_separator'], { ...found, gameFolder: NOT_FOUND });
+
+    expect(asked).toEqual(['ModA']);
+    expect(outcome).toMatchObject({ notes: [{ mod: 'ModA' }] });
+    expect(outcome.applied && outcome.notes).toHaveLength(1);
+  });
+
+  it('names the game folder by the game\'s release, and hands none for a game the tables hold no release for', async () => {
+    const { commands, client } = commandsOver();
+    client.setCommandResult('updateManifest', UPDATED);
+
+    await commands.updateManifest(['ModA'], { ...instanceOf(), gameRelease: undefined });
+
+    expect(client.calls[0]?.args[1]).toEqual({ statCache: '/instance/stat-cache' });
+  });
+
   it('refuses a mod whose game files the Instance adapter could not read, naming why, and updates the rest', async () => {
     const { commands, client } = commandsOver({ gameFilesTaken: new Map([['ModA', { kind: 'unreadable', reason: 'EACCES' }]]) });
     client.setCommandResult('updateManifest', UPDATED);
@@ -323,7 +350,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
           { name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], sourceFolder: '/source/ModA' },
           { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], sourceFolder: '/source/Old ModB' },
         ],
-        { statCache: '/instance/stat-cache', excludedSuffix: '.excluded', archives: null, gameFolder: GAME_FOLDER },
+        { statCache: '/instance/stat-cache', excludedSuffix: '.excluded', archives: archiveVariants('Fallout4'), gameFolder: GAME_FOLDER },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
       ],
     }]);

@@ -20,10 +20,14 @@ internal sealed class ManifestBuilder
         foreach (var entry in entries) _byPath.TryAdd(entry.Path, entry);
     }
 
-    public Manifest Manifest(IReadOnlyList<HashedFile> files, string? version) =>
-        FromGameFolder(files) is { } gameFolder
-            ? new(gameFolder, [.. files.Select(file => new ManifestFile(file.Path, new PackageEntry.Held()))], version)
-            : new(_package, [.. files.Select(EntryOf)], version);
+    /// <summary>The version rides the package line, so a mod with no package has none.</summary>
+    public Manifest Manifest(IReadOnlyList<HashedFile> files, string? version)
+    {
+        if (FromGameFolder(files) is { } gameFolder)
+            return new(gameFolder, [.. files.Select(file => new ManifestFile(file.Path, new PackageEntry.Held()))], version);
+        if (_package is null) return new(null, [.. files.Select(EntryOf)]);
+        return new(_package, [.. files.Select(EntryOf)], version);
+    }
 
     private ManifestPackage.GameFolder? FromGameFolder(IReadOnlyList<HashedFile> files)
     {

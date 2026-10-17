@@ -20,7 +20,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         internal sealed record InInstallationFile(string Path, string Hash, InstallationFile File, string EntryPath) : PackagedFile(Path, Hash);
 
         /// <summary>The game file, by its path as the game folder names it, that holds the bytes.</summary>
-        internal sealed record InGameFolder(string Path, string Hash, string GamePath) : PackagedFile(Path, Hash);
+        internal sealed record InGameFolder(string Path, string Hash, string DataFolder, string GamePath) : PackagedFile(Path, Hash);
     }
 
     /// <summary>Built is the source mod's remote and commit that build its files, none when its package is no source mod.</summary>
@@ -50,7 +50,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
     private static Lack? PinnedLack(ManifestPackage.GameFolder pinned, IReadOnlyList<PackagedFile> taken) =>
         FileHash.OfFilesTaken(taken.Select(file => new HashedFile(file.Path, file.Hash))) == pinned.Hash
             ? null
-            : new Lack("the game folder's files have other bytes");
+            : new Lack($"the files it takes from the game folder '{pinned.Name}' have other bytes");
 
     private (PackagedFile?, Lack?) EntryOf(ManifestFile file) => manifest.BytesOf(file) switch
     {
@@ -73,7 +73,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
 
     private (PackagedFile?, Lack?) EntryOf(string path, FileBytes.InGameFolder held) =>
         gameFolder?.Files.FirstOrDefault(file => string.Equals(file.Path, held.Path, StringComparison.OrdinalIgnoreCase)) is { } game
-            ? (new PackagedFile.InGameFolder(path, game.Hash, game.Path), null)
+            ? (new PackagedFile.InGameFolder(path, game.Hash, gameFolder.DataFolder, game.Path), null)
             : (null, new Lack.GameFileMissing(held.Path));
 
     private (Handed? Handed, Lack? Lack) Package(ManifestPackage.InstallationFile named) => _package ??= Find(named);

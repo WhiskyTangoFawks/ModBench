@@ -1,9 +1,9 @@
 import {
-  isRefused, type RestoreFacts, type RestoreMod, type RestoreOutcome, type MEditClient, type ModlistProgress, type ModRestoreDestroys, type NotFound,
+  isRefused, type RestoreFacts, type UpdateManifestFacts, type RestoreMod, type RestoreOutcome, type MEditClient, type ModlistProgress, type ModRestoreDestroys, type NotFound,
   type ModByFolder, type ModStatus, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions,
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
-import type { FileRead, GameFile, GameFolder, InstallationFile, InstanceAdapter, ModMetadata } from '../instanceAdapter/instanceAdapter';
+import type { FileRead, GameFile, GameFolder, InstallationFile, InstanceAdapter, ModFolders, ModMetadata } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -25,12 +25,12 @@ interface ModlistRepositoryCommandsDeps {
   trash: MoveToTrash;
 }
 
-/** The slice of the instance value the modlist gestures read: the game and where its folder is, the release whose archives a
- *  build packs, and each source mod's source folder. */
+/** The slice of the instance value the modlist gestures read: where the game's folder is, the release whose archives a
+ *  build packs and that names the game folder, the mod folders, and each source mod's source folder. */
 export interface ModlistInstance {
-  readonly gameName: string;
   readonly gameFolder: GameFolder;
   readonly gameRelease: string | undefined;
+  readonly modFolders: ModFolders | undefined;
   readonly paths: { readonly sourceDirs: ReadonlyMap<string, string> };
 }
 
@@ -58,6 +58,27 @@ type ReadMod = Omit<UpdateManifestMod, 'isSourceMod' | 'version'>;
 
 type InstallationFileOf = (mod: string) => Promise<FileRead<InstallationFile | undefined>>;
 
+/** The game folder a manifest can name as a mod's package: found, and the game known by its release. */
+interface NamedGameFolder {
+  readonly name: string;
+  readonly dataFolder: string;
+}
+
+/** The game folder update manifest hands for the mods `takes` holds true of; none found is `undefined` in `folder`. */
+interface GameToHand {
+  readonly takes: (mod: string) => boolean;
+  readonly folder: NamedGameFolder | undefined;
+}
+
+const namedGameFolder = ({ gameFolder, gameRelease }: ModlistInstance): NamedGameFolder | undefined =>
+  gameFolder.kind === 'found' && gameRelease !== undefined ? { name: gameRelease, dataFolder: gameFolder.dataFolder } : undefined;
+
+const takesTheGameFolder = ({ modFolders, paths }: ModlistInstance, mod: string): boolean =>
+  !paths.sourceDirs.has(mod) && modFolders?.all.find((folder) => folder.modName === mod)?.kind !== 'separator';
+
+const wireGameFolder = (folder: NamedGameFolder | undefined, files: readonly GameFile[]): UpdateManifestFacts['gameFolder'] =>
+  folder === undefined ? undefined : { ...folder, files: [...files] };
+
 interface ReadMods {
   readonly sent: readonly ReadMod[];
   readonly gameFiles: readonly GameFile[];
@@ -77,32 +98,31 @@ async function byFolder(adapter: Adapter, mods: readonly string[]): Promise<ModB
 const wireFile = ({ path, page, size, hash, entries }: InstallationFile): NonNullable<UpdateManifestMod['installationFile']> =>
   ({ path, page, size, hash, entries: [...entries] });
 
-// A mod with no installation file is from the game folder when the game folder holds each of its files.
 async function gameFilesOf(
-  adapter: Adapter, mod: string, gameFolder: GameFolder | undefined,
+  adapter: Adapter, mod: string, game: GameToHand | undefined,
 ): Promise<{ gameFiles: readonly GameFile[]; notes: readonly string[] } | { refusal: string }> {
-  if (gameFolder === undefined) return { gameFiles: [], notes: [] };
-  if (gameFolder.kind !== 'found') {
+  if (game === undefined || !game.takes(mod)) return { gameFiles: [], notes: [] };
+  if (game.folder === undefined) {
     return { gameFiles: [], notes: ['the game folder was not found, so its manifest cannot name the game folder as its package'] };
   }
-  const taken = await adapter.gameFilesTakenBy(gameFolder.dataFolder, mod);
+  const taken = await adapter.gameFilesTakenBy(game.folder.dataFolder, mod);
   return taken.kind === 'unreadable' ? { refusal: taken.reason } : { gameFiles: taken.answer.gameFiles, notes: taken.answer.notes };
 }
 
 async function readMod(
-  adapter: Adapter, mod: string, installationFileOf: InstallationFileOf, gameFolder: GameFolder | undefined,
+  adapter: Adapter, mod: string, installationFileOf: InstallationFileOf, game: GameToHand | undefined,
 ): Promise<{ read: ReadMod; gameFiles: readonly GameFile[]; notes: readonly string[] } | { refusal: string }> {
   const folder = await adapter.modFolderPath(mod);
   if (folder === undefined) return { refusal: 'its name gives it no folder' };
   const installed = await installationFileOf(mod);
   if (installed.kind === 'unreadable') return { refusal: installed.reason };
-  const game = installed.answer === undefined ? await gameFilesOf(adapter, mod, gameFolder) : { gameFiles: [], notes: [] };
-  if ('refusal' in game) return game;
+  const taken = installed.answer === undefined ? await gameFilesOf(adapter, mod, game) : { gameFiles: [], notes: [] };
+  if ('refusal' in taken) return taken;
   return {
     read: { name: mod, folder, installationFile: installed.answer === undefined ? undefined : wireFile(installed.answer), metadataFiles: [...adapter.metadataFilesInModFolder] },
-    gameFiles: game.gameFiles,
+    gameFiles: taken.gameFiles,
     notes: [
-      ...game.notes,
+      ...taken.notes,
       ...(installed.answer?.unpagedGame === undefined
         ? []
         : [`its installation file comes from '${installed.answer.unpagedGame}', a game whose host the instance adapter has no page on, so its manifest names no page`]),
@@ -111,7 +131,7 @@ async function readMod(
 }
 
 async function readMods(
-  adapter: Adapter, mods: readonly string[], installationFileOf: InstallationFileOf, gameFolder: GameFolder | undefined,
+  adapter: Adapter, mods: readonly string[], installationFileOf: InstallationFileOf, game: GameToHand | undefined,
   { onProgress, signal }: ModlistCallOptions<{ phase: 'ReadingFiles'; mod: string }>,
 ): Promise<ReadMods> {
   const sent: ReadMod[] = [];
@@ -121,7 +141,7 @@ async function readMods(
   for (const mod of mods) {
     if (signal?.aborted) break;
     onProgress?.({ phase: 'ReadingFiles', mod });
-    const read = await readMod(adapter, mod, installationFileOf, gameFolder);
+    const read = await readMod(adapter, mod, installationFileOf, game);
     if ('refusal' in read) { refused.push({ item: mod, reason: read.refusal }); continue; }
     sent.push(read.read);
     for (const file of read.gameFiles) gameFiles.set(file.path.toLowerCase(), file);
@@ -240,15 +260,13 @@ async function restoreFolders(
   { client, adapter }: ModlistRepositoryCommandsDeps, mods: readonly string[], instance: ModlistInstance,
   { onProgress, signal }: ModlistCallOptions<RestoreStatus>,
 ): Promise<Extract<RestoreResult, { applied: true }> | FoldersNotFinished> {
-  const { gameName, gameFolder, gameRelease, paths } = instance;
-  const dataFolder = gameFolder.kind === 'found' ? gameFolder.dataFolder : undefined;
+  const { gameRelease, paths } = instance;
+  const folder = namedGameFolder(instance);
   const read = await readMods(adapter, mods, noneBeforeTheManifestNamesThem, undefined, { onProgress, signal });
   if (read.sent.length === 0) return { applied: true, landed: [], refused: read.refused };
   const sent: readonly RestoreMod[] = read.sent.map((mod) => ({ ...mod, sourceFolder: paths.sourceDirs.get(mod.name) ?? adapter.sourceFolder(mod.name) }));
-  const gameFolderWith = (files: readonly GameFile[]): RestoreFacts['gameFolder'] =>
-    dataFolder === undefined ? undefined : { name: gameName, dataFolder, files: [...files] };
   const facts: RestoreFacts = {
-    statCache: adapter.statCacheFolder, excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(gameRelease), gameFolder: gameFolderWith([]),
+    statCache: adapter.statCacheFolder, excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(gameRelease), gameFolder: wireGameFolder(folder, []),
   };
   const restoring = { onProgress: (progress: ModlistProgress): void => { onProgress?.({ phase: 'Restoring', ...progress }); }, signal };
   const first = await restoreOnce(client, sent, facts, restoring);
@@ -260,13 +278,13 @@ async function restoreFolders(
     return { applied: true, landed: first.landed, refused: [...firstRefused, ...read.refused], ...cancelRefused(cancelRefusal) };
   }
 
-  const named = await namedGameFiles(adapter, dataFolder, first.notFound);
+  const named = await namedGameFiles(adapter, folder?.dataFolder, first.notFound);
   const downloaded = await namedDownloadedFiles(adapter, first.notFound);
   const again = sent.flatMap((mod) => {
     const notFound = retried.get(mod.name);
     return notFound === undefined ? [] : [{ ...mod, installationFile: downloaded.handed(notFound.installationFile) }];
   });
-  const second = await restoreOnce(client, again, { ...facts, gameFolder: gameFolderWith(named.found) }, restoring);
+  const second = await restoreOnce(client, again, { ...facts, gameFolder: wireGameFolder(folder, named.found) }, restoring);
   if (!second.applied) return { ...second, landed: first.landed };
   const unreadFor = new Map(second.notFound.map(({ mod, installationFile }) => [mod, named.unread + downloaded.unread(installationFile)]));
   return {
@@ -338,7 +356,8 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       mods: readonly string[], instance: ModlistInstance, { onProgress, signal }: ModlistCallOptions<UpdateManifestStatus> = {},
     ): Promise<UpdateManifestResult> => {
       const { sent, gameFiles, refused: unread, notes } = await readMods(
-        adapter, mods, (mod) => adapter.installationFile(mod), instance.gameFolder, { onProgress, signal });
+        adapter, mods, (mod) => adapter.installationFile(mod),
+        { takes: (mod) => takesTheGameFolder(instance, mod), folder: namedGameFolder(instance) }, { onProgress, signal });
       const refused = [...unread];
       if (sent.length === 0) return { applied: true, landed: [], refused, notes, submoduleNotes: [] };
       const versioned: UpdateManifestMod[] = [];
@@ -352,7 +371,7 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
         versioned,
         {
           statCache: adapter.statCacheFolder,
-          gameFolder: instance.gameFolder.kind === 'found' ? { name: instance.gameName, dataFolder: instance.gameFolder.dataFolder, files: [...gameFiles] } : undefined,
+          gameFolder: wireGameFolder(namedGameFolder(instance), gameFiles),
         },
         { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
       if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
