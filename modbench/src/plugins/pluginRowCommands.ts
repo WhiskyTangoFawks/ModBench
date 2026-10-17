@@ -239,8 +239,6 @@ export interface BuildDeps {
   modsView: string;
 }
 
-const NOT_A_SOURCE_MOD = 'it is not a source mod';
-
 type Built = GestureResult<BuildOutcome['landed'][number], string>;
 
 /** commands.md, `build`: the mods of Mods rows, plugin rows, a column header, the palette's
@@ -268,23 +266,20 @@ async function pickSourceMods(sourceDirs: ReadonlyMap<string, string>): Promise<
   return picked?.map((item) => item.label);
 }
 
-async function buildMods(deps: BuildDeps, { mods: named, refusedRows, invokedFrom }: ModsGiven): Promise<Built> {
+async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom }: ModsGiven): Promise<Built> {
   const { commands, instance } = deps;
-  const sourceDirs = deps.sourceDirs();
-  const mods = named.filter((mod) => sourceDirs.has(mod));
-  const notSource = named.filter((mod) => !sourceDirs.has(mod)).map((mod) => ({ item: mod, reason: NOT_A_SOURCE_MOD }));
-  if (mods.length === 0) return { applied: true, outcome: { landed: [], refused: [...refusedRows, ...notSource] } };
+  if (mods.length === 0) return { applied: true, outcome: { landed: [], refused: [...refusedRows] } };
   const unsaved = await savedFirst(deps, mods);
   if (unsaved !== undefined) return unsaved;
   return runWritingGesture(invokedFrom, instance, async (): Promise<Built> => {
-    const outcome = await commands.build(mods, deps.gameRelease(), sourceDirs);
+    const outcome = await commands.build(mods, deps.gameRelease(), deps.sourceDirs());
     if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
     for (const { compiled } of outcome.landed) {
       for (const plugin of compiled) deps.problems.publish(plugin, deps.sourceFiles(plugin.origin), plugin.diagnostics);
     }
     return {
       applied: true,
-      outcome: { landed: outcome.landed, refused: [...outcome.refused, ...refusedRows, ...notSource] },
+      outcome: { landed: outcome.landed, refused: [...refusedRows, ...outcome.refused] },
       partial: [...partlyBuilt(outcome), ...overwritten(outcome), ...builtUncommitted(outcome), ...builtUnpushed(outcome), ...refusedInMods(outcome)],
     };
   });
@@ -298,16 +293,10 @@ function reportBuildResult(reporter: Reporter, result: Built): void {
 
 // mods.md, Build, story 5: the plugins are built from what the user sees, so the mod's unsaved
 // plugin source is saved first, and a file VS Code does not save refuses the build before anything
-// is written.
+// is written. A mod with no source folder has nothing to save; source commands refuse it.
 async function savedFirst(deps: BuildDeps, mods: readonly string[]): Promise<Built | undefined> {
   const unsaved: string[] = [];
-  const homeless: string[] = [];
-  for (const mod of mods) {
-    const left = await deps.saveUnsaved(mod);
-    if (left === undefined) homeless.push(mod);
-    else unsaved.push(...left);
-  }
-  if (homeless.length > 0) return { applied: false, refusal: 'Could not build: no source folder for these mods.', detail: homeless.join('\n') };
+  for (const mod of mods) unsaved.push(...(await deps.saveUnsaved(mod) ?? []));
   if (unsaved.length === 0) return undefined;
   return { applied: false, refusal: 'Could not build: VS Code did not save its plugin source.', detail: unsaved.join('\n') };
 }
