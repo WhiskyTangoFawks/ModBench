@@ -46,7 +46,7 @@ The record index is a DuckDB database, so you filter records with SQL queries.
 
 ### External changes
 
-Modbench picks up a change another tool makes, such as MO2, xEdit or a git checkout, through VS Code's file watchers, and its views follow. When another tool changes a plugin a build wrote, Modbench tells you.
+Modbench picks up a change another tool makes, such as MO2, xEdit or a git checkout, through VS Code's file watchers. When another tool changes a plugin a build wrote, Modbench tells you.
 
 ### MCP server
 
