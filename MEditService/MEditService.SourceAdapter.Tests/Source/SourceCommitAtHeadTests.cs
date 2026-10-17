@@ -81,6 +81,74 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     }
 
     [Fact]
+    public void APresentSubmoduleDetachedAtThePin_LandsOnTheLocalBranchItFollows_WhenThatBranchIsAtThePin()
+    {
+        ClonedThenDetached();
+
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal((new SubmoduleHead(_commits["second"]), "main"), (head, Branch()));
+    }
+
+    [Fact]
+    public void APresentSubmoduleDetachedAtThePin_LandsOnANewBranchTrackingOrigin_WhenNoLocalBranchExists()
+    {
+        ClonedThenDetached();
+        Git(SourceFolder, "branch", "-q", "-D", "main");
+
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal((new SubmoduleHead(_commits["second"]), "main", "origin"), (head, Branch(), Git(SourceFolder, "config", "branch.main.remote").Trim()));
+    }
+
+    [Fact]
+    public void APresentSubmoduleDetachedAtThePin_StaysDetached_AndNamesTheBranch_WhenThatBranchIsAtAnotherCommit()
+    {
+        ClonedThenDetached();
+        Git(SourceFolder, "branch", "-q", "-f", "main", _commits["first"]);
+
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal(
+            (new SubmoduleHead(_commits["second"], $"its branch 'main' is at {_commits["first"]}, not at the pin, so it is left detached at the pin"), "HEAD", _commits["first"]),
+            (head, Branch(), Git(SourceFolder, "rev-parse", "main").Trim()));
+    }
+
+    [Fact]
+    public void APresentSubmoduleOnABranchAtThePin_IsLeftOnIt()
+    {
+        _submodule.Follow("main");
+        CommitAtHead(_commits["second"]).Value();
+        Git(SourceFolder, "checkout", "-q", "-b", "side");
+
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal((new SubmoduleHead(_commits["second"]), "side"), (head, Branch()));
+    }
+
+    [Fact]
+    public void APresentSubmoduleAtAnotherCommit_IsNotLandedOnTheBranchItFollows()
+    {
+        _submodule.Follow("main");
+        CommitAtHead(_commits["second"]).Value();
+        Git(SourceFolder, "checkout", "-q", "--detach", _commits["first"]);
+        Git(SourceFolder, "branch", "-q", "-f", "main", _commits["first"]);
+
+        var head = CommitAtHead(_commits["second"]).Value();
+
+        Assert.Equal((new SubmoduleHead(_commits["first"]), "HEAD"), (head, Branch()));
+    }
+
+    private void ClonedThenDetached()
+    {
+        _submodule.Follow("main");
+        CommitAtHead(_commits["second"]).Value();
+        Git(SourceFolder, "checkout", "-q", "--detach");
+    }
+
+    private string Branch() => Git(SourceFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim();
+
+    [Fact]
     public void APinItsRemoteLacked_IsClonedByARetry_OnceItsRemoteHoldsIt()
     {
         var developer = Directory.CreateDirectory(Path.Combine(_root, "developer")).FullName;
