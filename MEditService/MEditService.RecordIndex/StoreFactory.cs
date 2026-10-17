@@ -59,7 +59,7 @@ internal sealed class StoreFactory(
         long? atLeastSequence, out string? refusal)
     {
         var store = new Store(
-            _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), schemaReflector, ddlBuilder, plugins,
+            _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), instanceRoot, schemaReflector, ddlBuilder, plugins,
             timeProvider, openedPlugins, indexed, gate, filter, notifications);
         refusal = store.Open();
         if (refusal is not null)

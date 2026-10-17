@@ -66,6 +66,21 @@ public sealed class PersistentIndexTests : IDisposable
     }
 
     [Fact]
+    public void AnInstanceMovedToANewPath_KeepsItsModPluginsIndexed()
+    {
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
+        using (Launched([alpha])) { }
+        var moved = Path.Combine(_root.Path, "moved");
+        Directory.Move(_instanceRoot, moved);
+        var movedAlpha = alpha with { Path = alpha.Path.Replace(_instanceRoot, moved, StringComparison.Ordinal) };
+
+        using var second = new Launch(_gameDirectory, moved, [movedAlpha], disk: null);
+
+        Assert.Equal(0, second.Opens.OpenedTotal);
+        Assert.NotEmpty(second.Index.ListedIn(movedAlpha.KeyOf()));
+    }
+
+    [Fact]
     public void ReopeningTheSameFile_KeepsTheRows_AndRegisterAloneMakesThemAnswer()
     {
         var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
