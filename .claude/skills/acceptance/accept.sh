@@ -43,13 +43,7 @@ up() {
   [ -f "$root/modbench/out/extension.js" ] && [ -x "$root/modbench/backend/MEditService.Http" ] || {
     echo "refused: build first, in modbench/ through slot-run: npm run build, npm run build:backend" >&2; exit 1; }
 
-  # The index keys a mod plugin by absolute path, so a seeded game runs at the path its seed was built at.
-  if [ -n "$game" ]; then
-    dir="/tmp/modbench-accept.$game"
-    [ ! -e "$dir" ] || { echo "refused: $dir is left over from a run; accept.sh down it" >&2; exit 1; }
-    mkdir "$dir"
-  else dir="$(mktemp -d /tmp/modbench-accept.XXXX)"
-  fi
+  dir="$(mktemp -d /tmp/modbench-accept.XXXX)"
   instance="$dir/instance"
   if [ -n "$game" ]; then
     local fixture; fixture="DevList$(tr '[:lower:]' '[:upper:]' <<< "${game:0:1}")${game:1}"
