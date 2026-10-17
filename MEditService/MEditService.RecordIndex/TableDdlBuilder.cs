@@ -226,9 +226,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-    // No key or index on any appended table. DuckDB answers no lookup on a NOCASE column through an
-    // index, and a re-read's commit holds the index entries of the rows it deletes and of the rows it
-    // appends in memory it cannot evict.
+    // No key or index on any appended table: DuckDB serves no NOCASE lookup from one, and a re-read's
+    // commit pins in memory the entries of the rows it deletes and of the rows it appends.
     private static void CreateWinnersTable(DuckDBConnection connection)
     {
         DuckDbSql.Execute(connection, $"""
