@@ -1096,7 +1096,7 @@ internal sealed class Indexer : IDisposable
         {
             outcome = scope.Store.Commit(_ => scope.Failed.Read(plugin.Registered, state => ReadWhole(scope, plugin, state)));
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (ex is not OutOfMemoryException && !Store.Invalidates(ex))
         {
             FailRead(scope, key, ReadFailure(PluginLoadFailure.ReasonFor(ex), scope.Store.DerivationOf(key)));
             throw;
