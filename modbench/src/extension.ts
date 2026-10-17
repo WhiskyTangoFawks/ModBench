@@ -24,9 +24,8 @@ import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance
 import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
 import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onStringsLanguageChange, onTerminalEnvChange, stringsLanguage } from './workspaceConfig';
-import { createPlugins, type Plugins } from './plugins';
+import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
-import { PLUGINS_KEY_ARGS } from './plugins/gestureEntry';
 import { createModsView } from './mods/modsView';
 import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';

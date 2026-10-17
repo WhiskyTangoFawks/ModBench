@@ -32,7 +32,6 @@ import {
   registerModMoveCommand, registerOpenFolderCommand, registerOpenSourceCommand, registerSeparatorCommands, registerViewOnNexusCommand,
 } from './modManagementCommands';
 
-/** What decompile and commit and build need, which act on the mods of Mods rows and of Plugins rows. */
 interface SourceGestureDeps {
   commands: SourceCommands;
   /** The rows of the focused Mods or Plugins view, which the palette's decompile and commit and build act on. */

@@ -13,6 +13,7 @@ import { createPluginsView, type PluginsView, type PluginsViewDeps } from './plu
 import type { PluginConditions } from '../drivingLib/recordRowContext';
 import type { PluginAddress } from '../client';
 import type { ReconcileNarrator } from './reconcileNarrator';
+export { PLUGINS_KEY_ARGS } from './gestureEntry';
 
 type PluginsClient = PluginsViewDeps['client'] & ConstructorParameters<typeof RecordBrowser>[0]
   & Parameters<typeof createStatusBar>[0] & Parameters<typeof noticeExternalChanges>[1] & EditingDeps['client'];

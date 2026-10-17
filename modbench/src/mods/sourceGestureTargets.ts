@@ -1,6 +1,6 @@
 import type { PluginAddress } from '../client';
 import { modArgumentOf, pluginArgumentOf, rowNameOf } from '../drivingLib/argument';
-import { columnHeaderOf } from '../drivingLib/recordArgument';
+import { columnHeaderOf } from '../wire/columnHeader';
 import { argumentOfKind } from '../drivingLib/agentGesture';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Argument } from '../wire/argument';

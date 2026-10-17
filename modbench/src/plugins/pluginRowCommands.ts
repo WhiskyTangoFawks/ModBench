@@ -2,7 +2,7 @@ import type * as vscode from 'vscode';
 import { isRefused, type MEditClient, type PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import { columnHeaderOf } from '../drivingLib/recordArgument';
+import { columnHeaderOf } from '../wire/columnHeader';
 import type { PluginsTreeNode } from './pluginRows';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
