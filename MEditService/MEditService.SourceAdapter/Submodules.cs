@@ -24,7 +24,7 @@ internal static class Submodules
         var leftDetached = cloned ? Clone(submodule, cancel) : null;
         var git = new SourceRepositoryGit(submodule.Folder);
         if (!git.Exists) throw SourceStopException.Unreadable($"'{submodule.Folder}' holds no repository.");
-        if (!cloned && submodule.Branch is { } branch && git.HeadCommit() == submodule.Pin && !git.TryRun(out _, "symbolic-ref", "-q", "HEAD"))
+        if (!cloned && submodule.Branch is { } branch && git.HeadCommit() == submodule.Pin && git.Run("branch", "--show-current").Length == 0)
             leftDetached = OnTheBranch(git, branch, submodule.Pin);
         return new SubmoduleHead(git.HeadCommit(), leftDetached);
     }
