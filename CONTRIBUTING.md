@@ -48,7 +48,7 @@ for repo in Mutagen-Modding/Mutagen TES5Edit/TES5Edit ModOrganizer2/modorganizer
 done
 ```
 
-`DevListFallout/`, `DevListSkyrim/` and `DevListStarfield/` are MO2 instances for manual tests: Fallout 4, Skyrim Special Edition and Starfield. The repo holds their synthetic `MB-DEV` mods. Each holds a small modlist: a fixes master over vanilla, a plugin whose masters chain through it, two mods that disagree on vanilla records and share a loose file, a patch over both, and separators, beside edge cases such as a light plugin and a missing master. It does not hold the game files. With no `gamePath` in `ModOrganizer.ini`, Modbench finds the game in Steam. To give an instance its own copy of the game, hardlink the game's `Data` folder into it, then set `gamePath` to the absolute path of `Stock Game Folder`:
+`DevListFallout/`, `DevListSkyrim/` and `DevListStarfield/` are MO2 instances for manual tests: Fallout 4, Skyrim Special Edition and Starfield. The repo holds their synthetic `MB-DEV` mods. It does not hold the game files. Each holds a small modlist: a fixes master over vanilla, a plugin whose masters chain through it, two mods that disagree on vanilla records and share a loose file, a patch over both, and separators, beside edge cases such as a light plugin and a missing master. With no `gamePath` in `ModOrganizer.ini`, Modbench finds the game in Steam. To give an instance its own copy of the game, hardlink the game's `Data` folder into it, then set `gamePath` to the absolute path of `Stock Game Folder`:
 
 ```bash
 mkdir -p "DevListFallout/Stock Game Folder"
