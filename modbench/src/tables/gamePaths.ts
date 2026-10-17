@@ -96,7 +96,6 @@ const FALLOUT3_ARCHIVES: ArchiveLists = {
   myGamesFolder: 'Fallout3', defaultIni: 'Fallout_default.ini', userInis: ['Fallout.ini', 'FalloutCustom.ini'], keys: ['sArchiveList'], alwaysLoaded: [],
 };
 
-// Only Fallout 4 carries Steam autodetection facts today — a fixture choice, not a platform lock.
 const GAME_PATHS: Record<string, GamePathInfo> = {
   Fallout4: {
     gameName: 'Fallout 4', nexusSlug: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
@@ -123,7 +122,8 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     pluginCompanions: SKYRIM_COMPANIONS, archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim' },
   },
   SkyrimSE: {
-    gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', masters: SKYRIM_MASTERS,
+    gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
+    masters: SKYRIM_MASTERS,
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES,
   },
@@ -138,7 +138,8 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     pluginCompanions: SKYRIM_COMPANIONS, archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Enderal', userInis: ['Enderal.ini', 'EnderalCustom.ini'] },
   },
   Starfield: {
-    gameName: 'Starfield', nexusSlug: 'starfield', masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc',
+    gameName: 'Starfield', nexusSlug: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
+    masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc',
     scriptExtenderFolder: 'sfse', pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS, alwaysLoaded: [] },
   },
