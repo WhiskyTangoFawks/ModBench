@@ -470,7 +470,7 @@ export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['m
     renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
     newModNameRefusal: (...args: TailOf<typeof newModNameRefusal>) => newModNameRefusal(adapter, ...args),
     names: adapter.names,
-    installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, readStatus }, ...args),
+    installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, readStatus, listMod: (name) => changeModOrder(adapter, () => [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name } }]) }, ...args),
     upgradeLoss: (...args: TailOf<typeof upgradeLoss>) => upgradeLoss({ adapter, readStatus }, ...args),
   };
 }

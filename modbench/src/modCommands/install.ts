@@ -54,7 +54,6 @@ const lossOf = (status: ModStatus): string | undefined => {
     status.noManifest ? 'it has no manifest' : undefined,
     listed('files whose bytes differ from its manifest', status.differing),
     listed('files no line of its manifest names', status.namedByNoLine),
-    listed('files its manifest names that its folder lacks', status.gone),
     listed('files its package does not hold', status.notInPackage),
   ].filter((part) => part !== undefined);
   return parts.length === 0 ? undefined : parts.join('; ');
@@ -89,12 +88,13 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
   }
 }
 
-/** `modbench.mod.install`, then the downloaded file it installed from marked installed. `downloadedFileRefusal` says why the
- *  mark failed, so a landed install is not reported as failed (downloads.md, Reporting, story 1). */
+/** `modbench.mod.install`, then a new mod's line in mod order, then the downloaded file it installed from marked installed.
+ *  `lineRefusal` and `downloadedFileRefusal` say why a step after the landing failed, so a landed install is not reported as
+ *  failed (downloads.md, Reporting, story 1). */
 export async function installMod(
-  deps: { adapter: InstanceAdapter; readStatus: ReadModStatus },
+  deps: { adapter: InstanceAdapter; readStatus: ReadModStatus; listMod: (name: string) => Promise<CommandResult> },
   installed: ModPackage, target: InstallTarget, force: boolean,
-): Promise<CommandResult<{ isFomod: boolean; downloadedFile?: string; downloadedFileRefusal?: string }>> {
+): Promise<CommandResult<{ isFomod: boolean; lineRefusal?: string; downloadedFile?: string; downloadedFileRefusal?: string }>> {
   if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
   const loss = force ? undefined : await upgradeLoss(deps, target);
   if (loss !== undefined) return { applied: false, refusal: `${loss} Request it again with force to replace its files.` };
@@ -108,8 +108,10 @@ export async function installMod(
     return refuse(err);
   }
   if (!outcome.landed) return { applied: false, refusal: claimRefusal(target) };
-  if (file === undefined) return { applied: true, isFomod: outcome.isFomod };
-  const landed = { applied: true as const, isFomod: outcome.isFomod, downloadedFile: file.name };
+  const line = target.kind === 'new' ? await deps.listMod(target.name) : { applied: true as const };
+  const listed = { applied: true as const, isFomod: outcome.isFomod, ...(line.applied ? {} : { lineRefusal: line.refusal }) };
+  if (file === undefined) return listed;
+  const landed = { ...listed, downloadedFile: file.name };
   const downloadedFileRefusal = await markInstalled(deps.adapter, file.name);
   return downloadedFileRefusal === undefined ? landed : { ...landed, downloadedFileRefusal };
 }

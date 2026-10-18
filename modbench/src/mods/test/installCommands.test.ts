@@ -368,6 +368,18 @@ describe('modbench.mod.install called by the agent', () => {
     expect(warnIfFomod).not.toHaveBeenCalled();
   });
 
+  it('answers a new mod whose mod order line could not be written as a warning partial', async () => {
+    installMod.mockResolvedValueOnce({ applied: true, isFomod: false, lineRefusal: 'locked' });
+
+    registerModInstallCommands(deps());
+    const answered = await install([outsideArchive], { name: 'Bar' });
+
+    expect(answered).toMatchObject({
+      applied: true,
+      partial: [{ message: '"Bar" was installed, but its modlist.txt line could not be written', detail: 'locked', severity: 'warning' }],
+    });
+  });
+
   it('answers a downloaded file it could not mark installed as a log partial, writing no line itself', async () => {
     const log = vi.fn();
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false, downloadedFile: 'foo.7z', downloadedFileRefusal: 'locked' });
