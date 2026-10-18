@@ -78,17 +78,26 @@ function decodeIniValue(raw: string): string {
   return units.startsWith('@@') ? units.slice(1) : units;
 }
 
+const isNumericEscaped = (ch: string, escapeHigh: boolean, followsNumeric: boolean): boolean => {
+  const code = ch.codePointAt(0) ?? 0;
+  if (code === 0) return true;
+  if (ch in CONTROL_ESCAPES) return false;
+  return code <= 0x1f || (escapeHigh && code >= 0x7f) || (followsNumeric && /[0-9a-fA-F]/.test(ch));
+};
+
+const escapeUnit = (ch: string, numeric: boolean): string => {
+  if (numeric) return ch === '\0' ? '\\0' : `\\x${(ch.codePointAt(0) ?? 0).toString(16)}`;
+  if (ch in CONTROL_ESCAPES) return `\\${CONTROL_ESCAPES[ch]}`;
+  return ch === '"' || ch === '\\' ? `\\${ch}` : ch;
+};
+
 // A hex digit after a numeric escape would read as part of it, so it is escaped too.
 function escapeUnits(units: string, escapeHigh: boolean): string {
-  let numericEscape = false;
+  let followsNumeric = false;
   let out = '';
   for (const ch of units) {
-    const code = ch.codePointAt(0) ?? 0;
-    const numeric = code === 0 || (!(ch in CONTROL_ESCAPES) && (code <= 0x1f || (escapeHigh && code >= 0x7f) || (numericEscape && /[0-9a-fA-F]/.test(ch))));
-    if (numeric) out += code === 0 ? '\\0' : `\\x${code.toString(16)}`;
-    else if (ch in CONTROL_ESCAPES) out += `\\${CONTROL_ESCAPES[ch]}`;
-    else out += ch === '"' || ch === '\\' ? `\\${ch}` : ch;
-    numericEscape = numeric;
+    followsNumeric = isNumericEscaped(ch, escapeHigh, followsNumeric);
+    out += escapeUnit(ch, followsNumeric);
   }
   return out;
 }
