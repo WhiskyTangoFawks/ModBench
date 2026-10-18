@@ -1,5 +1,5 @@
-// MO2's modlist.txt: `+`/`-` prefix an enabled/disabled mod, a `_separator`
-// suffix marks a separator, and `*` (DLC/CC) and `#` lines are never surfaced.
+// MO2's modlist.txt: `-` prefixes a disabled mod, `+` or no prefix an enabled one, a
+// `_separator` suffix marks a separator, and `*` (unmanaged) and `#` lines are never surfaced.
 // The top of the file is the winning end. Mutations edit the lines.
 
 import type { EntryRef, ModlistEntry, MovePlace, OrderEnd, SeparatorsPlace } from '../instanceAdapter';
@@ -32,32 +32,48 @@ export const entryNamed = (modName: string): EntryRef => (modName.endsWith(SEPAR
   ? { kind: 'separator', name: modName.slice(0, -SEPARATOR_SUFFIX.length) }
   : { kind: 'mod', name: modName });
 
-// Deliberately state-insensitive: both prefixes match, and a caller that needs to
-// know which one did reads the prefix itself.
-const matchesModLine = (line: string, name: string): boolean => line === '+' + name || line === '-' + name;
+interface ModlistLine { readonly prefix: string; readonly name: string }
 
-/** File order, so the winning end comes first. Only `+`/`-` lines are surfaced;
- *  the rest carry no meaning here and are preserved on write. */
-export function parseModlist(text: string): ModlistEntry[] {
-  const entries: ModlistEntry[] = [];
-  for (const raw of stripBom(text).split(/\r\n|\r|\n/)) {
-    const prefix = raw[0];
-    if (prefix !== '+' && prefix !== '-') continue; // comment, *, blank
-    entries.push({ ...entryNamed(raw.slice(1)), enabled: prefix === '+' });
-  }
-  return entries;
+// A line as MO2 reads it (profile.cpp): no prefix is an enabled mod, and the name is trimmed.
+// A `*` line is MO2's unmanaged mod, which is no row (mods.md); `#` and blank lines are no mod.
+function readLine(line: string): ModlistLine | undefined {
+  if (line.startsWith('#') || line.startsWith('*')) return undefined;
+  const prefix = '+-'.includes(line[0] ?? '#') ? line.slice(0, 1) : '';
+  const name = line.slice(prefix.length).trim();
+  return name === '' ? undefined : { prefix, name };
 }
 
-const isEntryLine = (line: string): boolean => line[0] === '+' || line[0] === '-';
+const nameOfLine = (line: string): string | undefined => readLine(line)?.name;
 
-const isSeparatorLine = (line: string): boolean => isEntryLine(line) && line.endsWith(SEPARATOR_SUFFIX);
+const matchesModLine = (line: string, name: string): boolean => nameOfLine(line) === name;
+
+/** File order, so the winning end comes first. A name MO2 reads twice takes the state of the last line
+ *  that differs from the others in case; an exact repeat of an earlier line is not read. */
+export function parseModlist(text: string): ModlistEntry[] {
+  const lines = stripBom(text).split(/\r\n|\r|\n/).flatMap((raw) => readLine(raw) ?? []);
+  const seen = new Set<string>();
+  const stateOf = new Map<string, boolean>();
+  for (const { prefix, name } of lines) {
+    if (seen.has(name)) continue;
+    seen.add(name);
+    stateOf.set(modNameKey(name), prefix !== '-');
+  }
+  return lines.map(({ name }) => ({ ...entryNamed(name), enabled: stateOf.get(modNameKey(name)) ?? true }));
+}
+
+const isEntryLine = (line: string): boolean => readLine(line) !== undefined;
+
+const isSeparatorLine = (line: string): boolean => nameOfLine(line)?.endsWith(SEPARATOR_SUFFIX) ?? false;
 
 /** Throws if the mod is absent. */
 export function setEnabledInText(text: string, modName: string, enabled: boolean): string {
   return editLines(text, (lines) => {
-    const idx = modLineAt(lines, modName);
-    lines[idx] = (enabled ? '+' : '-') + (lines[idx] ?? '').slice(1);
-    return lines;
+    modLineAt(lines, modName);
+    return lines.map((line) => {
+      const read = readLine(line);
+      if (read === undefined || modNameKey(read.name) !== modNameKey(modName) || (read.prefix !== '-') === enabled) return line;
+      return (enabled ? '+' : '-') + read.name;
+    });
   });
 }
 
@@ -76,7 +92,7 @@ export function insertSeparatorBesideInText(text: string, name: string, anchor: 
 export function renameModLineInText(text: string, oldModName: string, newModName: string): string {
   return editLines(text, (lines) => {
     const idx = modLineAt(lines, oldModName);
-    lines[idx] = (lines[idx] ?? '').slice(0, 1) + newModName;
+    lines[idx] = (readLine(lines[idx] ?? '')?.prefix ?? '') + newModName;
     return lines;
   });
 }
@@ -129,7 +145,7 @@ function separatorLineAt(lines: readonly string[], separatorName: string): numbe
 // A separator trails the mods it holds, so its block runs back to the previous separator the
 // reading shows, or to the first entry line when none precedes it. A repeated line is no boundary.
 function lineBlockStartAt(lines: readonly string[], sepIdx: number): number {
-  const repeats = new Set(firstLines(entryLineIndices(lines, isEntryLine), (at) => modLineKey(entryNamed((lines[at] ?? '').slice(1)))).repeats);
+  const repeats = new Set(firstLines(entryLineIndices(lines, isEntryLine), (at) => modLineKey(entryNamed(nameOfLine(lines[at] ?? '') ?? ''))).repeats);
   const previous = lines.slice(0, sepIdx).findLastIndex((line, at) => isSeparatorLine(line) && !repeats.has(at));
   // Starting at the first entry line, so a leading comment or blank line stays where it is.
   return previous === -1 ? Math.min(firstEntryLineAt(lines), sepIdx) : previous + 1;

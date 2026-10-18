@@ -85,8 +85,22 @@ describe('parseModlist', () => {
     expect(entries).toEqual([{ kind: 'separator', name: 'ENB', enabled: true }]);
   });
 
-  it('returns no entries for a file of only comment/* /blank lines', () => {
-    expect(parseModlist('# header\r\n*DLC: Automatron\r\n\r\n')).toEqual([]);
+  it('returns no entries for a file of only comment, * and blank lines', () => {
+    expect(parseModlist('# header\r\n*DLC: Automatron\r\n\r\n   \r\n+\r\n')).toEqual([]);
+  });
+
+  it('reads a line with no prefix as an enabled mod, and trims the name', () => {
+    expect(parseModlist('Bare\r\n+ Padded  \r\n-  Off \r\n')).toEqual([
+      { kind: 'mod', name: 'Bare', enabled: true },
+      { kind: 'mod', name: 'Padded', enabled: true },
+      { kind: 'mod', name: 'Off', enabled: false },
+    ] satisfies Mod[]);
+  });
+
+  it('gives a name that two lines spell alike in case the state of the last, and a repeat of the same case none', () => {
+    expect(parseModlist('+Mod\r\n-mod\r\n')[0]?.enabled).toBe(false);
+    expect(parseModlist('-Mod\r\n+mod\r\n-Mod\r\n')[0]?.enabled).toBe(true);
+    expect(parseModlist('+Mod\r\n-Mod\r\n')[0]?.enabled).toBe(true);
   });
 
   it('strips a leading UTF-8 BOM so the top-priority mod is not silently dropped', () => {
@@ -98,7 +112,18 @@ describe('parseModlist', () => {
   });
 
   it('does not surface a false entry when a BOM is followed by a non-entry line', () => {
-    expect(parseModlist('\uFEFF# header\r\n*DLC: Automatron\r\n')).toEqual([]);
+    expect(parseModlist('\uFEFF# header\r\n')).toEqual([]);
+  });
+});
+
+describe('edits on lines MO2 reads', () => {
+  it('toggles an unprefixed, padded line and every case-variant line of its name', () => {
+    expect(setEnabledInText('Bare \r\n+Other\r\n-bare\r\n', 'Bare', false)).toBe('-Bare\r\n+Other\r\n-bare\r\n');
+    expect(setEnabledInText(' Bare \r\n-bare\r\n', 'Bare', true)).toBe(' Bare \r\n+bare\r\n');
+  });
+
+  it('renames an unprefixed line without inventing a prefix', () => {
+    expect(renameModLineInText('Bare\r\n', 'Bare', 'New')).toBe('New\r\n');
   });
 });
 
