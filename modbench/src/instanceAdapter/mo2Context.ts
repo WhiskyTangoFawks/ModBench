@@ -4,7 +4,7 @@
 import { errorMessage } from '../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
-import { exists, get, listDir, listFolders, readOrAbsent, rename, type Undo } from './files';
+import { exists, get, listDir, listFolders, readOrAbsent, rename, type SkippedLink, type Undo } from './files';
 import type { GameFolderResolver } from './gameFolder/gameFolderResolver';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from './instanceAdapter';
 import type { FileOrigin } from './instanceAdapter';
@@ -39,7 +39,7 @@ async function isBeingInstalled(folder: string): Promise<boolean> {
 /** The mod folders as entries; the reserved overwrite name holds none, nor does a folder a new
  *  mod is being installed into or one removed mid-listing. */
 export async function listModFolders(
-  { instanceRoot }: Mo2Context, skippedLink?: (name: string, reason: string) => void,
+  { instanceRoot }: Mo2Context, skippedLink?: SkippedLink,
 ): Promise<ModFolder[] | undefined> {
   const names = await readOrAbsent<string[] | undefined>(() => listFolders(modsDir(instanceRoot), skippedLink), undefined);
   const candidates = names?.filter((name) => modNameKey(name) !== OVERWRITE_DIR_NAME);

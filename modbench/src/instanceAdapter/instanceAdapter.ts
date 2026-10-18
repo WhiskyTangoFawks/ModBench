@@ -424,7 +424,7 @@ export interface InstanceReading extends InstanceGame {
   readonly profiles: readonly string[];
   /** Undefined when there is no folder for mods at all. */
   readonly modFolders: ModFolders | undefined;
-  /** Each link in mods/ that cannot be followed, by name, with why. */
+  /** Each link read as a folder or a file that cannot be followed, by path, with why. */
   readonly skippedLinks: ReadonlyMap<string, string>;
   /** The files the game wrote at run time. */
   readonly runtimeOutput: OriginFiles;

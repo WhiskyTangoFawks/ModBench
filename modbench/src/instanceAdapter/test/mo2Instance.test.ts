@@ -362,10 +362,18 @@ describe('the MO2 Instance adapter', () => {
         expect((await adapter.reading()).gameName).toBe('Rewritten');
       });
 
-      it('hands over a link in mods/ it cannot follow, by name', async () => {
+      it('hands over a link it cannot follow, by path', async () => {
         await symlink(join(root, 'nowhere'), join(root, 'mods', 'Dangling'));
 
-        expect([...(await adapter.reading()).skippedLinks.keys()]).toEqual(['Dangling']);
+        expect([...(await adapter.reading()).skippedLinks.keys()]).toEqual([join(root, 'mods', 'Dangling')]);
+      });
+
+      it('hands over, with the mods\' link, a link in profiles/ or downloads/ it cannot follow', async () => {
+        await symlink(join(root, 'nowhere'), join(root, 'profiles', 'Gone'));
+        await symlink(join(root, 'nowhere.7z'), join(root, 'downloads', 'Gone-1-0.7z'));
+
+        expect([...(await adapter.reading()).skippedLinks.keys()].sort())
+          .toEqual([join(root, 'downloads', 'Gone-1-0.7z'), join(root, 'profiles', 'Gone')]);
       });
 
       it('reads each listed mod\'s meta once, so one reading holds one answer for it', async () => {
@@ -544,16 +552,22 @@ describe('the MO2 Instance adapter', () => {
       await symlink(join(root, 'elsewhere', 'file'), join(root, 'profiles', 'FileLink'));
       await symlink(join(root, 'nowhere'), join(root, 'profiles', 'Broken'));
 
-      expect((await source.profiles()).sort()).toEqual(['Default', 'Linked', 'Secondary']);
+      const skipped: string[] = [];
+
+      expect((await source.profiles((link) => skipped.push(link))).sort()).toEqual(['Default', 'Linked', 'Secondary']);
+      expect(skipped).toEqual([join(root, 'profiles', 'Broken')]);
     });
 
-    it('answers a downloaded archive that is a link to a file', async () => {
+    it('answers a downloaded archive that is a link to a file, and hands over one that links to nothing', async () => {
       await writeFile(join(root, 'elsewhere.7z'), '');
       await symlink(join(root, 'elsewhere.7z'), join(root, 'downloads', 'Linked-1-0.7z'));
+      await symlink(join(root, 'nowhere.7z'), join(root, 'downloads', 'Broken-1-0.7z'));
+      const skipped: string[] = [];
 
-      const downloads = await (await source.settings()).downloadedFiles();
+      const downloads = await (await source.settings()).downloadedFiles((link) => skipped.push(link));
 
       expect(downloads.kind === 'listed' && downloads.files?.map(({ name }) => name)).toContain('Linked-1-0.7z');
+      expect(skipped).toEqual([join(root, 'downloads', 'Broken-1-0.7z')]);
     });
 
     it('answers no profiles when the instance has none', async () => {
@@ -701,7 +715,7 @@ describe('the MO2 Instance adapter', () => {
       const folders = await source.modFolders((name) => skipped.push(name));
 
       expect(folders?.all.map((f) => f.name)).not.toContain('Loop');
-      expect(skipped).toEqual(['Loop']);
+      expect(skipped).toEqual([join(root, 'mods', 'Loop')]);
     });
 
     it('answers undefined when there is no folder for mods at all', async () => {
@@ -768,7 +782,10 @@ describe('the MO2 Instance adapter', () => {
         await symlink(join(game, 'Real.esp'), join(data, 'Linked.esp'));
         await symlink(join(game, 'nowhere.esp'), join(data, 'Broken.esp'));
 
-        expect(await source.gameFolderPlugins(found(data))).toEqual({ kind: 'listed', names: new Set(['Linked.esp']) });
+        const skipped: string[] = [];
+
+        expect(await source.gameFolderPlugins(found(data), (link) => skipped.push(link))).toEqual({ kind: 'listed', names: new Set(['Linked.esp']) });
+        expect(skipped).toEqual([join(data, 'Broken.esp')]);
       });
 
       it('answers unresolved when the game folder was not found', async () => {
@@ -951,9 +968,13 @@ describe('the MO2 Instance adapter', () => {
         await symlink(join(game, 'Real', 'strings'), join(data, 'Strings'));
         await symlink(join(game, 'Real', 'strings', 'Fallout4_en.STRINGS'), join(game, 'Real', 'strings', 'Fallout4_de.STRINGS'));
 
-        expect(await source.gameFolderArchives(found(), 'Fallout4')).toEqual({
+        await symlink(join(game, 'nowhere.ba2'), join(data, 'Fallout4 - Broken.ba2'));
+        const skipped: string[] = [];
+
+        expect(await source.gameFolderArchives(found(), 'Fallout4', (link) => skipped.push(link))).toEqual({
           kind: 'listed', archives: ['Fallout4 - Linked.ba2'], stringsFiles: ['Strings/Fallout4_de.STRINGS', 'Strings/Fallout4_en.STRINGS'],
         });
+        expect(skipped).toEqual([join(data, 'Fallout4 - Broken.ba2')]);
       });
 
       it('answers unresolved when the game folder was not found', async () => {

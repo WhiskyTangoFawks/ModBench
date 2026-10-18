@@ -13,7 +13,7 @@ import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { gameOfSettings } from './mo2Game';
 import type { ManagerGamePath } from './gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from './gameFolder/dataFolder';
-import { factsOf, get, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, stampOf } from './files';
+import { factsOf, get, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, type SkippedLink, stampOf } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type GameFolder, type InstanceAdapter, type InstanceReading,
   type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided, type SourceMods,
@@ -36,25 +36,25 @@ interface InstanceSettings {
   /** Mutagen's release of that game; undefined when the tables hold none for it. */
   readonly gameRelease: string | undefined;
   gameFolder(): Promise<GameFolder>;
-  downloadedFiles(): Promise<DownloadedFiles>;
+  downloadedFiles(skippedLink?: SkippedLink): Promise<DownloadedFiles>;
 }
 
 /** What one reading is made of: each file read through its own codec, against the one read of the settings. */
 export interface ReadingSource extends ArchiveReads {
   settings(): Promise<InstanceSettings>;
   /** Every profile's name; none when the instance has no profiles. */
-  profiles(): Promise<string[]>;
+  profiles(skippedLink?: SkippedLink): Promise<string[]>;
   modOrder(profile: string): Promise<ModlistEntry[]>;
   /** Empty when the mod has no metadata. */
   modMeta(mod: string): Promise<ModMeta>;
   pluginOrder(profile: string): Promise<PluginEntry[]>;
-  gameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins>;
+  gameFolderPlugins(gameFolder: GameFolder, skippedLink?: SkippedLink): Promise<DataFolderPlugins>;
   /** The plugins the game folder's Creation Club list names, in its order; none when the release
    *  has no Creation Club, the game folder is not found, or it holds no list. */
   creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
   /** Undefined when there is no folder for mods at all. A link that cannot be followed is no
    *  folder, and is handed to `skippedLink`. */
-  modFolders(skippedLink?: (name: string, reason: string) => void): Promise<ModFolders | undefined>;
+  modFolders(skippedLink?: SkippedLink): Promise<ModFolders | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
   /** The files at an origin's root, as `originFiles` lists them. */
@@ -64,8 +64,8 @@ export interface ReadingSource extends ArchiveReads {
   watchNotes(): string[];
 }
 
-async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
-  const dirents = await readOrAbsent(() => listEntries(downloadsDir), undefined);
+async function listDownloadedFiles(downloadsDir: string, skippedLink?: SkippedLink): Promise<DownloadedFile[] | undefined> {
+  const dirents = await readOrAbsent(() => listEntries(downloadsDir, skippedLink), undefined);
   if (dirents === undefined) return undefined;
   const names = dirents
     .filter((d) => d.isFile && isArchiveName(d.name) && !isTempWrite(d.name))
@@ -112,18 +112,18 @@ export function readingSource(context: Mo2Context): ReadingSource {
           else watch.follow('creationClubList', dirname(creationClubList), basename(creationClubList));
           return gameFolder;
         },
-        downloadedFiles: async (): Promise<DownloadedFiles> => {
+        downloadedFiles: async (skippedLink?: SkippedLink): Promise<DownloadedFiles> => {
           const resolution = await resolveDownloadsFolder(instanceRoot, iniText);
           watch.follow('downloadedFiles', resolution.kind === 'resolved' ? resolution.downloadsDir : undefined, DOWNLOADS_WATCH_GLOB);
           if (resolution.kind === 'unresolved') return resolution;
           const { downloadsDir } = resolution;
-          return { kind: 'listed', downloadsDir, files: await listDownloadedFiles(downloadsDir) };
+          return { kind: 'listed', downloadsDir, files: await listDownloadedFiles(downloadsDir, skippedLink) };
         },
       };
     },
 
-    async profiles() {
-      const dirents = await readOrAbsent(() => listFolders(profilesDir(instanceRoot)), []);
+    async profiles(skippedLink) {
+      const dirents = await readOrAbsent(() => listFolders(profilesDir(instanceRoot), skippedLink), []);
       return dirents;
     },
 
@@ -218,24 +218,25 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
   const settings = await source.settings();
   const { profile, gameName, gameRelease } = settings;
   const skippedLinks = new Map<string, string>();
+  const skipLink: SkippedLink = (linkPath, reason) => skippedLinks.set(linkPath, reason);
   const modsRead = settled(() => modsWithMeta(source, profile)).then((listed) =>
     withNotes(listed, modLineKey, ({ kind, name }) => `${MODLIST_FILE_NAME} lists the ${kind} ${name}`));
   const modsKept = modsRead.then(({ kept }) => kept);
-  const modFoldersRead = source.modFolders((name, reason) => skippedLinks.set(name, reason));
+  const modFoldersRead = source.modFolders(skipLink);
   const sourceModsRead = source.sourceMods();
-  const downloadsRead = settings.downloadedFiles();
+  const downloadsRead = settings.downloadedFiles(skipLink);
   const [mods, pluginsListed, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceMods, modFiles, folderMeta, holdsRepository] = await Promise.all([
     modsRead,
     source.pluginOrder(profile),
     downloadsRead,
     settings.gameFolder().then(async (gameFolder) => ({
       gameFolder,
-      dataFolderPlugins: await source.gameFolderPlugins(gameFolder),
+      dataFolderPlugins: await source.gameFolderPlugins(gameFolder, skipLink),
       creationClubList: await source.creationClubList(gameFolder, gameRelease),
       archiveList: await source.archiveList(profile, gameFolder, gameRelease),
-      dataFolderArchives: await source.gameFolderArchives(gameFolder, gameRelease),
+      dataFolderArchives: await source.gameFolderArchives(gameFolder, gameRelease, skipLink),
     })),
-    source.profiles(),
+    source.profiles(skipLink),
     modFoldersRead,
     source.originFiles({ kind: 'runtimeOutput' }),
     sourceModsRead,

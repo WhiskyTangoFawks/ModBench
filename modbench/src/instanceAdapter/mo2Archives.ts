@@ -4,7 +4,7 @@
 import { keepsOwnGameInis } from './codecs/profileSettings';
 import { archiveListsOf, pluginCompanionRule } from '../tables/gamePaths';
 import { dataFolderOf } from './gameFolder/dataFolder';
-import { get, listEntries, readOrAbsent, readOrReason } from './files';
+import { get, listEntries, type SkippedLink, readOrAbsent, readOrReason } from './files';
 import { archivesListedIn } from './gameFolder/gameIni';
 import type { DataFolderArchives, GameFolder } from './instanceAdapter';
 import { anyCase, dataFolderArchivesGlob, fileInFolder, profileDir, profileSettingsFile } from './layout';
@@ -20,14 +20,14 @@ async function fileNamedIn(folder: string, name: string): Promise<string | undef
 const textOf = async (file: string | undefined): Promise<string[]> =>
   (file === undefined ? [] : [await readOrAbsent(() => get(file), '')]);
 
-async function listGameFolderArchives(dataFolder: string, gameRelease: string | undefined): Promise<DataFolderArchives> {
+async function listGameFolderArchives(dataFolder: string, gameRelease: string | undefined, skippedLink?: SkippedLink): Promise<DataFolderArchives> {
   const rule = pluginCompanionRule(gameRelease);
   const listing = await readOrReason(async () => {
-    const dirents = await listEntries(dataFolder);
+    const dirents = await listEntries(dataFolder, skippedLink);
     if (rule === undefined) return { archives: [], stringsFiles: [] };
     const archives = dirents.filter((d) => d.isFile && rule.isArchive(d.name)).map((d) => d.name);
     const stringsFolders = dirents.filter((d) => d.isDirectory && d.name.toLowerCase() === rule.stringsFolder).map((d) => d.name);
-    const stringsFiles = await Promise.all(stringsFolders.map(async (folder) => (await listEntries(fileInFolder(dataFolder, folder)))
+    const stringsFiles = await Promise.all(stringsFolders.map(async (folder) => (await listEntries(fileInFolder(dataFolder, folder), skippedLink))
       .map((d) => ({ d, relativePath: `${folder}/${d.name}` }))
       .filter(({ d, relativePath }) => d.isFile && rule.isStringsFile(relativePath))
       .map(({ relativePath }) => relativePath)));
@@ -62,7 +62,7 @@ export interface ArchiveReads {
   archiveList(
     profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
   ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;
-  gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined): Promise<DataFolderArchives>;
+  gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined, skippedLink?: SkippedLink): Promise<DataFolderArchives>;
 }
 
 export function mo2Archives(context: Mo2Context): ArchiveReads {
@@ -82,11 +82,11 @@ export function mo2Archives(context: Mo2Context): ArchiveReads {
       return { archives: archivesListedIn((await Promise.all(files.map(textOf))).flat(), lists), notes };
     },
 
-    gameFolderArchives(gameFolder, gameRelease) {
+    gameFolderArchives(gameFolder, gameRelease, skippedLink) {
       const rule = pluginCompanionRule(gameRelease);
       const dataFolder = dataFolderOf(gameFolder);
       watch.follow('gameFolderArchives', rule && dataFolder, rule ? dataFolderArchivesGlob(rule.archiveExtension, rule.stringsFolder) : '');
-      return dataFolder === undefined ? Promise.resolve({ kind: 'unresolved' }) : listGameFolderArchives(dataFolder, gameRelease);
+      return dataFolder === undefined ? Promise.resolve({ kind: 'unresolved' }) : listGameFolderArchives(dataFolder, gameRelease, skippedLink);
     },
   };
 }

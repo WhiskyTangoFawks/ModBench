@@ -315,7 +315,7 @@ export class Instance implements Subscription {
   private tellReading({ skippedLinks, archiveListNotes, orderNotes, sourceMods, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes }: InstanceReading): void {
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
     this.tellOnce('notes', notes.map((note) => `[instance] ${note}`), 'info');
-    this.tellOnce('links', [...skippedLinks].map(([name, reason]) => `[instance] mods/${name} is a link Modbench cannot follow, so it is not a mod folder: ${reason}`), 'info');
+    this.tellOnce('links', [...skippedLinks].map(([linkPath, reason]) => `[instance] ${linkPath} is a link Modbench cannot follow, so it is not read: ${reason}`), 'info');
     this.tellOnce('orderNotes', orderNotes.map((note) => `[instance] ${note}`), 'warn');
     this.tellOnce('archiveListNotes', archiveListNotes.map((note) => `[instance] ${note}`), 'warn');
     this.tellOnce('watchNotes', watchNotes.map((note) => `[instance] ${note}`), 'warn');
