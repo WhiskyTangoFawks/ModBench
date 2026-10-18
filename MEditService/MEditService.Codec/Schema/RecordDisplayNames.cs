@@ -1,8 +1,7 @@
 namespace MEditService.Codec.Schema;
 
-// xEdit's record type names, from the wbRecord calls in wbDefinitionsFO4, TES5 and SF1.pas; a game
-// that spells one differently overrides it in its annotations. A miss reads as the raw signature, so a new Mutagen type never
-// breaks startup.
+// xEdit's record type names, from the wbRecord calls in wbDefinitionsFO4, TES5 and SF1.pas; a game that
+// spells one differently overrides it in its annotations. A miss reads as the raw signature.
 internal static class RecordDisplayNames
 {
     private static readonly Dictionary<string, string> Names = new(StringComparer.OrdinalIgnoreCase)
