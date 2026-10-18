@@ -5,15 +5,15 @@ import { errorMessage } from '../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
 import { exists, get, listDir, listFolders, readOrAbsent, rename, type Undo } from './files';
-import type { GameDirectoryResolver } from './gameDirectory';
+import type { GameFolderResolver } from './gameFolder/gameFolderResolver';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from './instanceAdapter';
 import { entryDir, isNewModExtraction, manifestFileIn, mo2FolderName, modDir, modsDir, settingsFile } from './layout';
-import type { MyGamesResolver } from './myGames';
+import type { MyGamesResolver } from './gameFolder/myGames';
 import type { Mo2Watch } from './mo2Watch';
 
 export interface Mo2Context {
   readonly instanceRoot: string;
-  readonly resolveGameFolder: GameDirectoryResolver;
+  readonly resolveGameFolder: GameFolderResolver;
   readonly resolveDownloadsFolder: DownloadsDirectoryResolver;
   readonly resolveMyGames: MyGamesResolver;
   readonly watch: Mo2Watch;

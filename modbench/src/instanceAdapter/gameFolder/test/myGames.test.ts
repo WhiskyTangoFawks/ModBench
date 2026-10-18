@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { GameDetectors } from '../gameDirectory';
-import { NO_DETECTORS } from '../../test/noDetectors';
+import type { GameDetectors } from '../gameFolderResolver';
+import { NO_DETECTORS } from '../../../test/noDetectors';
 import { myGamesResolver } from '../myGames';
 
 describe('the My Games folder of a release', () => {

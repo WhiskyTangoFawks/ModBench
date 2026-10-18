@@ -9,7 +9,8 @@ import { parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
-import { creationClubListFile, dataFolderOf, gameReleaseForGame, loadedWithNoLineOf } from '../tables/gamePaths';
+import { creationClubListFile, gameReleaseForGame, loadedWithNoLineOf } from '../tables/gamePaths';
+import { dataFolderOf, listDataFolderPlugins, readCreationClubList } from './gameFolder/dataFolder';
 import { factsOf, get, isRepository, listDir, readOrAbsent, readOrReason, stampOf } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type GameFolder, type InstanceAdapter, type InstanceReading,
@@ -24,7 +25,6 @@ import { groupModOrder } from './modGroups';
 import { entryKey, folderHolding, listModFolders, modFoldersOf, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 import { sourceModsIn } from './sourceMods';
-import { isPluginFile } from '../tables/pluginFile';
 import { filesWinningFirst, pluginsProvidedOf } from './pluginsProvided';
 
 interface InstanceSettings {
@@ -78,22 +78,6 @@ async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile
     const meta = metaText === undefined ? undefined : parseDownloadMeta(metaText);
     return { name, path, metaPath, size: facts.size, mtimeMs: facts.mtimeMs, meta };
   }));
-}
-
-async function listGameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins> {
-  const dataFolder = dataFolderOf(gameFolder);
-  if (dataFolder === undefined) return { kind: 'unresolved' };
-  const dirents = await readOrReason(() => listDir(dataFolder));
-  if (dirents.kind === 'unreadable') return dirents;
-  return { kind: 'listed', names: new Set(dirents.answer.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => d.name)) };
-}
-
-// The game writes its Creation Club list in plugins.txt's own line format.
-async function readCreationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]> {
-  const file = gameFolder.kind === 'found' ? creationClubListFile(gameFolder.root, gameRelease) : undefined;
-  if (file === undefined) return [];
-  const text = await readOrAbsent<string | undefined>(() => get(file), undefined);
-  return text === undefined ? [] : parsePlugins(text).map((entry) => entry.name);
 }
 
 // The tables key each release on the game's name as `gameName=` spells it.
@@ -153,7 +137,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
       return parsePlugins(await get(pluginsFile(instanceRoot, profile)));
     },
 
-    gameFolderPlugins: listGameFolderPlugins,
+    gameFolderPlugins: listDataFolderPlugins,
 
     creationClubList: readCreationClubList,
 

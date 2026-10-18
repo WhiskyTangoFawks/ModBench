@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import { downloadsDirectoryResolver } from '../downloadsDirectory';
 import { NO_DETECTORS } from '../../test/noDetectors';
-import type { GameDetectors } from '../gameDirectory';
+import type { GameDetectors } from '../gameFolder/gameFolderResolver';
 
 const iniOf = (downloadDirectory?: string): string =>
   `[General]\r\ngameName=Fallout 4\r\n[Settings]\r\n${
