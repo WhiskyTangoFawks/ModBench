@@ -20,7 +20,7 @@ vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
 }));
 
-const { installMod, upgradeLoss, ask } = vi.hoisted(() => ({ installMod: vi.fn(), upgradeLoss: vi.fn(() => Promise.resolve(undefined)), ask: vi.fn() }));
+const { installMod, upgradeLoss, ask } = vi.hoisted(() => ({ installMod: vi.fn(), upgradeLoss: vi.fn<(target: unknown) => Promise<string | undefined>>(() => Promise.resolve(undefined)), ask: vi.fn() }));
 
 import { registerModInstallCommands } from '../installCommands';
 import type { DownloadFile, DownloadRow, Instance } from '../../instanceLoader/instance';
