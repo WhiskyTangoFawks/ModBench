@@ -1,6 +1,6 @@
 import type { FileOrigin, FileRead, FileStamp, InstanceAdapter, OriginFile } from '../instanceAdapter/instanceAdapter';
 import { present } from '../ports/present';
-import { foldPath } from './fileConflictIndex';
+import { foldPath } from '../instanceLoader/fileConflictIndex';
 
 /** One provider's copy of a file. Two copies of one file with the same `sameAs` hold the same
  *  bytes. */

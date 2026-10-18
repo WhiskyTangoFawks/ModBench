@@ -2,13 +2,14 @@
 // address of its own, so preview, an open tab and restore-after-reload are VS Code's.
 
 import * as vscode from 'vscode';
-import type { Instance, InstanceView } from '../instanceLoader/instance';
+import type { InstanceView } from '../instanceLoader/instance';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import {
   CONFLICT_CELL_VALUES, CONFLICT_TABLE_SHOWN, isConflictTableReady, modOfConflictColumn, type ConflictCellValue, type ConflictTable, type ConflictTableShown,
 } from '../wire/conflictTable';
 import { originLabel } from '../instanceLoader/fileConflictIndex';
 import { conflictPaths, conflictTable } from './conflictTable';
+import type { FileCopies } from './sameCopies';
 import { gestureEntry, singularArgument } from '../drivingLib/gestureEntry';
 import type { ModlistNode } from './ModListProvider';
 import type { Reporter } from '../ports/reporter';
@@ -28,11 +29,14 @@ const conflictTableUri = (mod: string): vscode.Uri =>
 
 const modOfUri = (uri: vscode.Uri): string => decodeURIComponent(uri.path.slice(1, -SUFFIX.length));
 
-type TableInstance = Pick<InstanceView, 'value' | 'sequence' | 'subscribe'> & Pick<Instance, 'sameCopies'>;
+type TableInstance = Pick<InstanceView, 'value' | 'sequence' | 'subscribe'>;
+
+/** Which copies of each file hold the same bytes, over the value the table is drawn from. */
+export type CopiesOf = (value: InstanceView['value'], relativePaths: readonly string[]) => Promise<FileCopies[]>;
 
 class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider {
   constructor(
-    private readonly instance: TableInstance, private readonly extensionUri: vscode.Uri, private readonly reporter: Reporter,
+    private readonly instance: TableInstance, private readonly copiesOf: CopiesOf, private readonly extensionUri: vscode.Uri, private readonly reporter: Reporter,
     private readonly settings: WorkspaceSettings,
   ) {}
 
@@ -59,7 +63,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
     const show = async (view: Pick<InstanceView, 'value' | 'sequence'>) => {
       const mine = ++newest;
       try {
-        const copies = await this.instance.sameCopies(conflictPaths(view, mod));
+        const copies = await this.copiesOf(view.value, conflictPaths(view, mod));
         if (mine !== newest) return;
         const unreadable = copies.flatMap(({ relativePath, copies: each }) => each.flatMap((copy) =>
           (copy.kind === 'unreadable' ? [{ key: JSON.stringify([copy.origin, relativePath, copy.reason]), relativePath, copy }] : [])));
@@ -98,12 +102,12 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
 /** commands.md, `open conflicts`: the mod of a Mods row, a column header, or the palette's one
  *  selected mod. */
 export function registerConflictTable(
-  instance: TableInstance, extensionUri: vscode.Uri, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+  instance: TableInstance, copiesOf: CopiesOf, extensionUri: vscode.Uri, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
   settings: WorkspaceSettings,
 ): vscode.Disposable[] {
   return [
     vscode.window.registerCustomEditorProvider(
-      CONFLICT_TABLE_VIEW_TYPE, new ConflictTableEditorProvider(instance, extensionUri, reporter, settings),
+      CONFLICT_TABLE_VIEW_TYPE, new ConflictTableEditorProvider(instance, copiesOf, extensionUri, reporter, settings),
       { webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true } }),
     vscode.commands.registerCommand('modbench.mod.openConflicts', async (clicked?: unknown, selected?: readonly ModlistNode[]) => {
       const mod = modOfConflictColumn(clicked)

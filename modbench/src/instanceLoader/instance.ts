@@ -18,7 +18,6 @@ import {
   type EntryRef, type ManagerNames, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
-import { sameCopies, type FileCopies } from './sameCopies';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
@@ -26,7 +25,6 @@ import { errorMessage } from '../ports/errorMessage';
 export { sameEntry } from '../instanceAdapter/instanceAdapter';
 export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow, UpgradeCandidate, UpgradeTier } from './downloadRows';
-export type { Copy, FileCopies } from './sameCopies';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 
@@ -303,12 +301,6 @@ export class Instance implements Subscription {
   async landed(): Promise<InstanceValue> {
     if (this.seq === 0) await this.refresh();
     return this.value;
-  }
-
-  /** For each file of the value it holds, by its path, which of its providers' copies are the
-   *  same, or why a copy could not be read. */
-  sameCopies(relativePaths: readonly string[]): Promise<FileCopies[]> {
-    return sameCopies(this.options.adapter, this.current, relativePaths);
   }
 
   dispose(): void {

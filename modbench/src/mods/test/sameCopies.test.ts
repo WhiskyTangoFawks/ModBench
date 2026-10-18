@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import type { FileStamp, OriginFile } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
-import { Instance } from '../instance';
+import { sameCopies } from '../sameCopies';
+import { Instance } from '../../instanceLoader/instance';
 
 const NONO = 'Ñoño\'s Retexture';
 const PATCH = 'Unofficial Fallout 4 Patch';
@@ -44,11 +45,11 @@ async function instanceOver(copies: Record<string, { size: number; hash?: string
 
 describe('Instance — which copies of a file are the same', () => {
   it('tells copies holding the same bytes from copies of the same size holding other bytes', async () => {
-    const { instance } = await instanceOver({
+    const { instance, fake } = await instanceOver({
       [modPath(NONO)]: { size: 4, hash: 'a' }, [modPath(PATCH)]: { size: 4, hash: 'a' }, [OVERWRITE_PATH]: { size: 4, hash: 'b' },
     });
 
-    expect(await instance.sameCopies([SHARED])).toEqual([{
+    expect(await sameCopies(fake.adapter, instance.value, [SHARED])).toEqual([{
       relativePath: SHARED,
       copies: [
         { origin: runtimeOutput, kind: 'read', sameAs: 0, size: 4n, modifiedNs: NS },
@@ -59,9 +60,9 @@ describe('Instance — which copies of a file are the same', () => {
   });
 
   it('gives each copy it read its size and date modified, a copy of a size of its own included', async () => {
-    const { instance } = await instanceOver({ [modPath(NONO)]: { size: 4 }, [modPath(PATCH)]: { size: 2 }, [OVERWRITE_PATH]: { size: 3 } });
+    const { instance, fake } = await instanceOver({ [modPath(NONO)]: { size: 4 }, [modPath(PATCH)]: { size: 2 }, [OVERWRITE_PATH]: { size: 3 } });
 
-    expect(await instance.sameCopies([SHARED])).toEqual([{
+    expect(await sameCopies(fake.adapter, instance.value, [SHARED])).toEqual([{
       relativePath: SHARED,
       copies: [
         { origin: runtimeOutput, kind: 'read', sameAs: 0, size: 3n, modifiedNs: NS },
@@ -76,16 +77,16 @@ describe('Instance — which copies of a file are the same', () => {
       [modPath(NONO)]: { size: 4, hash: 'a' }, [modPath(PATCH)]: { size: 4, hash: 'b' }, [OVERWRITE_PATH]: { size: 1, hash: 'c' },
     });
 
-    const [answer] = await instance.sameCopies([SHARED]);
+    const [answer] = await sameCopies(fake.adapter, instance.value, [SHARED]);
 
     expect(answer?.copies.map((copy) => copy.kind === 'read' && copy.sameAs)).toEqual([0, 1, 2]);
     expect(fake.hashed.sort()).toEqual([modPath(NONO), modPath(PATCH)].sort());
   });
 
   it('answers a copy that cannot be read with the reason, beside the copies that could', async () => {
-    const { instance } = await instanceOver({ [modPath(PATCH)]: { size: 4 }, [OVERWRITE_PATH]: { size: 4, hash: 'a' } });
+    const { instance, fake } = await instanceOver({ [modPath(PATCH)]: { size: 4 }, [OVERWRITE_PATH]: { size: 4, hash: 'a' } });
 
-    const [answer] = await instance.sameCopies([SHARED]);
+    const [answer] = await sameCopies(fake.adapter, instance.value, [SHARED]);
 
     const [overwrite, removed, locked] = answer?.copies ?? [];
     expect(overwrite).toEqual({ origin: runtimeOutput, kind: 'read', sameAs: 0, size: 4n, modifiedNs: NS });
@@ -94,12 +95,12 @@ describe('Instance — which copies of a file are the same', () => {
   });
 
   it('keeps Overwrite\'s copy apart from the copy of a mod named overwrite (ADR-0012)', async () => {
-    const { instance } = await instanceOver(
+    const { instance, fake } = await instanceOver(
       { [modPath('overwrite')]: { size: 4, hash: 'a' }, [OVERWRITE_PATH]: { size: 4, hash: 'b' } },
       ['overwrite'],
     );
 
-    const [answer] = await instance.sameCopies([SHARED]);
+    const [answer] = await sameCopies(fake.adapter, instance.value, [SHARED]);
 
     expect(answer?.copies).toEqual([
       { origin: runtimeOutput, kind: 'read', sameAs: 0, size: 4n, modifiedNs: NS },

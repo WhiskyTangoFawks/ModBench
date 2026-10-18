@@ -27,6 +27,8 @@ import { BuildProblems } from './buildProblems';
 import { registerDecompileAndCommitCommand } from './decompileAndCommitCommand';
 import { registerManifestGestures, type ManifestGestureDeps } from './manifestGestures';
 import { registerConflictTable } from './conflictTableEditor';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { sameCopies } from './sameCopies';
 import {
   modsCopyValueText, registerCreateEmptyModCommand, registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands,
   registerModMoveCommand, registerOpenFolderCommand, registerOpenSourceCommand, registerSeparatorCommands, registerViewOnNexusCommand,
@@ -49,7 +51,8 @@ interface SourceGestureDeps {
 type ManifestDeps = Pick<ManifestGestureDeps, 'commands' | 'toolboxView' | 'say' | 'focusedView'>;
 
 interface ModsViewDeps {
-  instance: InstanceView & Pick<Instance, 'refresh' | 'sameCopies'>;
+  instance: InstanceView & Pick<Instance, 'refresh'>;
+  adapter: Pick<InstanceAdapter, 'fileStamp' | 'originFileHash'>;
   commands: ModCommands;
   log: (line: string) => void;
   reporterFor: (tag: string) => Reporter;
@@ -141,7 +144,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       reveal: (row) => view.reveal(row, { select: true, focus: true }),
     }),
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
-    ...registerConflictTable(instance, deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
+    ...registerConflictTable(instance, (value, paths) => sameCopies(deps.adapter, value, paths), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     ...registerModInstallCommands({
       commands, instance, reporterFor, warnIfFomod: deps.warnIfFomod, downloadInstall: deps.downloadInstall,
     }),
