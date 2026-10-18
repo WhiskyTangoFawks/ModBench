@@ -6,7 +6,7 @@ import {
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
   type ChildRecordSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
-  type PluginLoadFailure, type CompareResult, type CompareRecordsResponse, type RecordCopy, type CopyText,
+  type PluginLoadFailure, type CompareResult, type CompareRecordsResponse, type CopyText,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -380,9 +380,9 @@ export interface MEditClient {
    *  Null: no active plugin holds it and no `text` gives it. With `text`, that plugin's column reads
    *  from it, outside the conflict states if inactive. */
   getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null | ReadFailed>;
-  /** Several records side by side: one column per copy, in order, with no conflict state. With no
-   *  `compare`, `missing` names each copy no plugin gave and why. */
-  getRecordsComparison(copies: RecordCopy[]): Promise<CompareRecordsResponse | ReadFailed>;
+  /** Several records side by side: one column per copy, in order, with no conflict state; `documentText`
+   *  spells a copy in place of its plugin's. With no `compare`, `missing` names each copy no plugin gave and why. */
+  getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsResponse | ReadFailed>;
   /** What each name means, in order, or why one cannot be: mEdit's refusal names every name it could not resolve, with each
    *  match of an ambiguous one. A name with an origin names a plugin. */
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed>;

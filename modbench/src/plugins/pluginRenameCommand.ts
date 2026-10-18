@@ -5,7 +5,7 @@ import type { PluginCommands } from '../pluginCommands/plugins';
 import { singularArgument } from '../drivingLib/gestureEntry';
 import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { promptRename } from '../drivingLib/promptRename';
-import { applyUnreported } from '../textDocuments/applyAnswered';
+import { applyAnswered } from '../textDocuments/applyAnswered';
 import type { SourceEditing } from '../textDocuments/sourceEditing';
 import type { AskQuestion } from '../ports/dialog';
 import type { Reporter } from '../ports/reporter';
@@ -36,7 +36,7 @@ const refused = (refusal: string, detail?: string): GestureResult<PluginAddress>
 
 async function renamed({ commands, source, instance }: RenameDeps, plugin: PluginAddress, newName: string): Promise<GestureResult<PluginAddress>> {
   const couldNot = `Could not rename "${plugin.name}" (${plugin.origin}): its plugin source`;
-  const apply = (changes: SourceChanges) => applyUnreported(source, [changes], [plugin]);
+  const apply = (changes: SourceChanges) => applyAnswered(source, [changes], [plugin]);
   const result = await commands.renamePlugin({ apply }, plugin, newName, instance.value.gameRelease);
   if (result.applied) return { applied: true, outcome: { landed: [{ name: newName, origin: plugin.origin }], refused: [] } };
   if ('reported' in result) return refused(`${couldNot} may be partly renamed. Reverting the source rename in git undoes it.`, result.reported);

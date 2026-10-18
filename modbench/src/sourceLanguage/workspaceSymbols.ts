@@ -3,7 +3,7 @@ import type { MEditClient, PluginMetadata, RecordSummary } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressOf } from '../wire/pluginAddress';
-import type { RecordCopy } from '../drivingLib/recordDocument';
+import type { RecordCopy } from '../wire/recordCopy';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
 import { formKeyMember } from './sourceText';
 import { recordLabel } from '../wire/recordLabel';

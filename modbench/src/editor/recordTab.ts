@@ -1,5 +1,6 @@
 import type * as vscode from 'vscode';
-import { EXTENSION_TO_WEBVIEW, type ColumnCopy, type ExtensionToWebview, type ViewState } from '../wire/messages';
+import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ViewState } from '../wire/messages';
+import type { RecordCopy } from '../wire/recordCopy';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import type { FocusedCellContext } from '../wire/messages';
 
@@ -27,7 +28,7 @@ export class RecordTab {
   private placeKept: ViewState | undefined;
   private focused: FocusedCellContext | undefined;
   private originsRead: readonly string[] = [];
-  private columnsRead: readonly ColumnCopy[] = [];
+  private columnsRead: readonly RecordCopy[] = [];
   private inFlight: InFlight | undefined;
   private readonly moves: Move[] = [];
   private clock = 0;
@@ -58,7 +59,7 @@ export class RecordTab {
   get origins(): readonly string[] { return this.originsRead; }
 
   /** The records the tab's last answered read showed beside its own. */
-  get columns(): readonly ColumnCopy[] { return this.columnsRead; }
+  get columns(): readonly RecordCopy[] { return this.columnsRead; }
 
   show({ formKey, plugin }: EditAddress): void {
     this.shown = { formKey, plugin };
@@ -147,7 +148,7 @@ export class RecordTab {
 
   /** The tab's read of `formKey` is answered: it shows that record from now on, and `columns`
    *  beside it. Reading a chain's last key ends every move in it, back to the key the tab last read. */
-  answered(formKey: string, columns: readonly ColumnCopy[]): void {
+  answered(formKey: string, columns: readonly RecordCopy[]): void {
     this.columnsRead = columns;
     const answeredAt = ++this.clock;
     let ended = this.moves.filter(move => move.readAnsweredAt === undefined && move.to === formKey);

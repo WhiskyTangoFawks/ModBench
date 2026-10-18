@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import type { components } from '../wire/generated/api';
 import type { RecordEditEnvelope } from '../wire/messages';
 import { SILENT_LOG, type Log } from '../ports/log';
 import {
   createApiClient, errorText, isTerminalLoadOrderStatusFor, openNotificationStream,
-  toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult, type CompareRecordsResponse, type RecordCopy, type CopyText,
+  toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult, type CompareRecordsResponse, type CopyText,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
 import { bundledBackendPath, spawnPiped } from './bundledBackend';
@@ -711,7 +712,7 @@ class HttpMEditClient implements MEditClient {
     noBodyFails, { absent: { status: 404, answers: null } });
   }
 
-  getRecordsComparison(copies: RecordCopy[]): Promise<CompareRecordsResponse | ReadFailed> {
+  getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsResponse | ReadFailed> {
     return this.read('getRecordsComparison', (signal) => this.apiClient.POST('/records/compare', { body: { copies }, signal }), noBodyFails);
   }
 

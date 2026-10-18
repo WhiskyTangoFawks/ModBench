@@ -21,9 +21,6 @@ export type CompareResult = Schemas['CompareResult'];
 /** `POST /records/compare`: the comparison, or the copies that stopped it. */
 export type CompareRecordsResponse = Schemas['CompareRecordsResponse'];
 
-/** One column of `POST /records/compare`: the copy a plugin holds, or the one `documentText` spells
- *  in its place. */
-export type RecordCopy = Schemas['RecordCopy'];
 export type CopyText = Schemas['CopyText'];
 
 export type ChangedPlugin = Schemas['ChangedPlugin'];

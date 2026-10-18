@@ -2,8 +2,9 @@ import type { PluginStanding } from '../instanceLoader/pluginStanding';
 import * as vscode from 'vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
-  type ColumnCopy, type ExtensionToWebview, type RecordRead, type ViewState, type WebviewToExtension,
+  type ExtensionToWebview, type RecordRead, type ViewState, type WebviewToExtension,
 } from '../wire/messages';
+import type { RecordCopy } from '../wire/recordCopy';
 import type { CompareRecordsResponse, MEditClient, PluginLoadFailure, PluginMetadata } from '../client';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
@@ -40,7 +41,7 @@ export interface RouteRecordPanelMessageDeps {
   plugin: PluginAddress;
   documentText: (pluginActive: boolean) => Promise<string | undefined>;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
-  readAnswered: (formKey: string, columns: readonly ColumnCopy[]) => void;
+  readAnswered: (formKey: string, columns: readonly RecordCopy[]) => void;
   // The grid's place, which the tab an edit's move of the file opens shows again.
   keepViewState: (state: ViewState) => void;
   // The latest load-order status, read rather than fetched.

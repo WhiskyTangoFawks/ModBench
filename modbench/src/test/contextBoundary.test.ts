@@ -2,45 +2,27 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
-import { importSpecifiers, isTestSupport, rootFiles, SRC } from './scanSource';
+import { importSpecifiers, isTestSupport, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'utf8');
 
 const importsOf = (source: string): string[] => importSpecifiers(source, 'source.ts');
 
-const CLIENT_DIR = 'client';
-const AGENT_DIR = 'agent';
-const PLUGINS_VIEW_DIR = 'plugins';
-const EDITOR_DIR = 'editor';
-const SOURCE_LANGUAGE_DIR = 'sourceLanguage';
-const GENERATED_DIR = 'generated';
-const WIRE_DIR = 'wire';
+const NEVER_SEE_A_RECORD = ['mods', 'downloads', 'toolbox'];
+const DRIVING_LIB_DIR = 'drivingLib';
 
-const COMPOSITION_ROOT = rootFiles().map((path) => relative(SRC, path));
+const boxOf = (relativePath: string): string => relativePath.split(sep)[0] ?? '';
 
-const isEditingView = (relativePath: string): boolean =>
-  [PLUGINS_VIEW_DIR, EDITOR_DIR, SOURCE_LANGUAGE_DIR].includes(relativePath.split(sep)[0] ?? '');
+const inDrivingLib = (relativePath: string): boolean => boxOf(relativePath) === DRIVING_LIB_DIR;
 
-function isExcluded(relativePath: string): boolean {
-  const segments = relativePath.split(sep);
-  if (segments.includes(GENERATED_DIR)) return true;
-  if (segments[0] === WIRE_DIR) return true;
-  if (segments[0] === CLIENT_DIR || segments[0] === AGENT_DIR) return true;
-  if (isEditingView(relativePath)) return true;
-  if (COMPOSITION_ROOT.includes(relativePath)) return true;
-  if (isTestSupport(relativePath)) return true;
-  return false;
-}
+const seesNoRecord = (relativePath: string): boolean =>
+  NEVER_SEE_A_RECORD.includes(boxOf(relativePath)) && !isTestSupport(relativePath);
 
 function domainVocabIn(text: string): string[] {
   const code = text.split('\n').filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).join('\n');
   return [...code.matchAll(/\b(records?|formkeys?|recordtypes?|editorids?)\b(?!\s*<)/gi)].map((m) => m[0]);
 }
-
-const DRIVING_LIB_DIR = 'drivingLib';
-
-const inDrivingLib = (relativePath: string): boolean => relativePath.split(sep)[0] === DRIVING_LIB_DIR;
 
 function importersOfLibFiles(root: string): Map<string, string[]> {
   const importers = new Map<string, string[]>();
@@ -55,9 +37,8 @@ function importersOfLibFiles(root: string): Map<string, string[]> {
 }
 
 function findOffenders(root: string): string[] {
-  const offenses: string[] = [];
   const importersOf = importersOfLibFiles(root);
-  const filesReaching = (libFile: string): string[] => {
+  const reachedFromABoxThatSeesNoRecord = (libFile: string): boolean => {
     const libFiles = new Set([libFile]);
     const reaching = new Set<string>();
     for (const file of libFiles) {
@@ -66,23 +47,18 @@ function findOffenders(root: string): string[] {
         if (inDrivingLib(relImporter)) libFiles.add(importer); else reaching.add(relImporter);
       }
     }
-    return [...reaching];
+    return [...reaching].some(seesNoRecord);
   };
-  const speaksForEditingAlone = (libFile: string): boolean => {
-    const reaching = filesReaching(libFile);
-    return reaching.some(isEditingView) && reaching.every(isExcluded);
-  };
-  for (const path of tsFiles(root)) {
-    const relPath = relative(root, path);
-    if (isExcluded(relPath)) continue;
-    const text = readFileSync(path, 'utf8');
-    const isEditingLibFile = inDrivingLib(relPath) && speaksForEditingAlone(path);
-    if (!isEditingLibFile && domainVocabIn(text).length > 0) offenses.push(relPath);
-  }
-  return offenses;
+  return tsFiles(root)
+    .filter((path) => {
+      const relPath = relative(root, path);
+      return seesNoRecord(relPath) || (inDrivingLib(relPath) && !isTestSupport(relPath) && reachedFromABoxThatSeesNoRecord(path));
+    })
+    .filter((path) => domainVocabIn(readFileSync(path, 'utf8')).length > 0)
+    .map((path) => relative(root, path));
 }
 
-describe('the MO2 side keys plugins by filename and origin, never by FormKey', () => {
+describe('Mods, Downloads and Toolbox never see a record (target-architecture.md): they key plugins by filename and origin, never by FormKey', () => {
   it('walks a real body of files', () => {
     expect(tsFiles(SRC).length).toBeGreaterThan(150);
   });
@@ -91,50 +67,11 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(findOffenders(SRC)).toEqual([]);
   });
 
-  it('the raw walk reaches the Plugins view', () => {
-    const reached = tsFiles(SRC).map((p) => relative(SRC, p));
-    expect(reached).toEqual(expect.arrayContaining([join('plugins', 'PluginsTreeProvider.ts'), join('plugins', 'RecordBrowser.ts')]));
+  it('the walk reaches each box that never sees a record', () => {
+    expect(tsFiles(SRC).map((p) => boxOf(relative(SRC, p)))).toEqual(expect.arrayContaining(NEVER_SEE_A_RECORD));
   });
 
-  it('the Plugins view is skipped by a stated exclusion', () => {
-    expect(isExcluded(join('plugins', 'PluginsTreeProvider.ts'))).toBe(true);
-    expect(isExcluded(join('plugins', 'RecordBrowser.ts'))).toBe(true);
-  });
-
-  it('the editor folder is skipped by a stated exclusion, the same as Plugins', () => {
-    expect(isExcluded(join('editor', 'recordPanelHost.ts'))).toBe(true);
-  });
-
-  it('the generated API client is excluded because it mirrors the backend schema', () => {
-    expect(isExcluded(join(WIRE_DIR, GENERATED_DIR, 'api.ts'))).toBe(true);
-  });
-
-  it('the wire box is excluded, protocol and schema alike', () => {
-    expect(isExcluded(join(WIRE_DIR, 'messages.ts'))).toBe(true);
-  });
-
-  it('the client box is excluded because it is the seam Editing speaks through, in the backend\'s own vocabulary', () => {
-    expect(isExcluded(join(CLIENT_DIR, 'MEditClient.ts'))).toBe(true);
-  });
-
-  it('the agent box is excluded because it names records as the agent does, in mEdit\'s own vocabulary', () => {
-    expect(isExcluded(join(AGENT_DIR, 'resolveNames.ts'))).toBe(true);
-  });
-
-  it('test files and test folders are excluded because their names and fixtures are prose and corpus data', () => {
-    expect(isExcluded(join('mods', 'modList.test.ts'))).toBe(true);
-    expect(isExcluded(join('mods', 'test', 'fixture.ts'))).toBe(true);
-  });
-
-  it('a file of the MO2 side is not excluded', () => {
-    expect(isExcluded(join('mods', 'modList.ts'))).toBe(false);
-  });
-
-  it('the files at the root of src are excluded as the composition root', () => {
-    expect(COMPOSITION_ROOT).toContain('extension.ts');
-  });
-
-  describe('a plant in each MO2-side directory is caught, and the same plant inside an excluded one is not', () => {
+  describe('a plant in each box that never sees a record is caught, and the same plant in another box is not', () => {
     function withPlantedTree(run: (root: string) => void): void {
       const root = mkdtempSync(join(tmpdir(), 'medit-context-boundary-'));
       try {
@@ -144,11 +81,20 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       }
     }
 
-    it('a FormKey import planted in a Mods-shaped file is caught', () => {
+    it.each(NEVER_SEE_A_RECORD)('a FormKey import planted in a file of %s is caught', (box) => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'mods'), { recursive: true });
-        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), "import type { FormKey } from '../wire/ApiClient';\n");
-        expect(findOffenders(root)).toEqual([join('mods', 'ModListProvider.ts')]);
+        mkdirSync(join(root, box), { recursive: true });
+        writeFileSync(join(root, box, 'planted.ts'), "import type { FormKey } from '../wire/ApiClient';\n");
+        expect(findOffenders(root)).toEqual([join(box, 'planted.ts')]);
+      });
+    });
+
+    it('a test file or test folder is not caught, its names and fixtures being prose and corpus data', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'mods', 'test'), { recursive: true });
+        writeFileSync(join(root, 'mods', 'modList.test.ts'), 'const formKey = 1;\n');
+        writeFileSync(join(root, 'mods', 'test', 'fixture.ts'), 'const formKey = 1;\n');
+        expect(findOffenders(root)).toEqual([]);
       });
     });
 
@@ -177,30 +123,6 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       });
     });
 
-    it('FormKey vocabulary in a driving lib file no view imports is caught', () => {
-      withPlantedTree((root) => {
-        plantLibFileImportedFrom(root);
-        expect(findOffenders(root)).toEqual([LIB_FILE]);
-      });
-    });
-
-    it('FormKey vocabulary in a driving lib file the composition root alone imports is caught', () => {
-      withPlantedTree((root) => {
-        plantLibFileImportedFrom(root);
-        writeFileSync(join(root, 'extension.ts'), "import { recordArgumentOf } from './drivingLib/recordArgument';\n");
-        expect(findOffenders(root)).toEqual([LIB_FILE]);
-      });
-    });
-
-    it('FormKey vocabulary in driving lib files that import each other and no view reaches is caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'drivingLib'), { recursive: true });
-        writeFileSync(join(root, LIB_FILE), "import { between } from './between';\nexport const formKey = between;\n");
-        writeFileSync(join(root, 'drivingLib', 'between.ts'), "import * as argument from './recordArgument';\nexport const between = argument;\n");
-        expect(findOffenders(root)).toEqual([LIB_FILE]);
-      });
-    });
-
     it('FormKey vocabulary in a driving lib file a Mods-shaped file reaches through another lib file is caught', () => {
       withPlantedTree((root) => {
         plantLibFileImportedFrom(root, 'editor');
@@ -221,15 +143,13 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
       });
     });
 
-    it('the same FormKey import inside the Plugins view is not caught — the walk still reaches it', () => {
+    it('the same FormKey import inside the Plugins view is not caught', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'mods'), { recursive: true });
         mkdirSync(join(root, 'plugins'), { recursive: true });
         const planted = "import type { FormKey } from '../wire/ApiClient';\n";
         writeFileSync(join(root, 'mods', 'ModListProvider.ts'), planted);
         writeFileSync(join(root, 'plugins', 'RecordBrowser.ts'), planted);
-        const reached = tsFiles(root).map((p) => relative(root, p));
-        expect(reached).toEqual(expect.arrayContaining([join('plugins', 'RecordBrowser.ts')]));
         expect(findOffenders(root)).toEqual([join('mods', 'ModListProvider.ts')]);
       });
     });
