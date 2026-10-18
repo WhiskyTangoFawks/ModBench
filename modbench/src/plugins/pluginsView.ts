@@ -205,7 +205,7 @@ function registerPluginsNameFilter(
     setFilter: (text) => provider.setFilter(text),
     hasRows: async () => (await provider.getChildren()).length > 0,
     viewMessage: () => messageLine(provider.viewMessage(), pluginSync.message()),
-    standingMessage: () => provider.lastGoodReadMessage(),
+    standingMessage: () => provider.standingMessage(),
     onRowsChanged: provider.onDidChangeTreeData,
     onViewMessageChanged: (listener) => pluginSync.onMessageChanged(listener),
   });

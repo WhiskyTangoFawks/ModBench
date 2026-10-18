@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { gameFolderNotFoundLine } from './gameFolderNotFoundLog';
 import { ErrorNode } from '../drivingLib/errorNode';
+import { messageLine } from '../drivingLib/nameFilter';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
-import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
+import { instanceMessages, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 
 type ToolboxDeps =
   | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'> }
@@ -84,7 +85,7 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
   }
 
   viewMessage(): string | undefined {
-    return this.gesture ?? (this.deps.instance && lastGoodReadMessage(this.deps.instance));
+    return this.gesture ?? (this.deps.instance && messageLine(...instanceMessages(this.deps.instance)));
   }
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {

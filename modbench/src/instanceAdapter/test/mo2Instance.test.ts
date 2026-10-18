@@ -41,7 +41,8 @@ import type {
 import { setIniValue } from '../codecs/qSettingsIni';
 import { tempWritePath } from '../layout';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
-import { contextOver } from '../../test/mo2/adapterOver';
+import { runningProgram } from '../../test/runningProgram';
+import { adapterOver, contextOver } from '../../test/mo2/adapterOver';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_LOAD_ORDER, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../test/mo2/corpusFixture';
@@ -320,6 +321,24 @@ describe('the MO2 Instance adapter', () => {
         expect(reading.modFiles.get('Ñoño\'s Retexture')?.files).toHaveLength(2);
         expect(reading.modFiles.get('Patch Mod')?.files).toHaveLength(1);
         expect(reading.modFiles.get('Harder VATS')?.files).toEqual([]);
+      });
+
+      it('answers MO2 running while any process runs ModOrganizer.exe, whichever instance it has open', async () => {
+        const mo2 = await runningProgram('ModOrganizer.exe');
+        try {
+          expect((await adapter.reading()).managerRunning).toEqual({ kind: 'running' });
+        } finally {
+          await mo2.stop();
+        }
+      });
+
+      it('answers whether MO2 is running, or why Modbench cannot tell', async () => {
+        const runningOf = async (mo2Running: () => Promise<boolean>) => (await adapterOver(root, { mo2Running }).reading()).managerRunning;
+
+        expect([
+          await runningOf(() => Promise.resolve(false)),
+          await runningOf(() => Promise.reject(new Error('tasklist exited with code 1'))),
+        ]).toEqual([{ kind: 'notRunning' }, { kind: 'unknown', reason: 'tasklist exited with code 1' }]);
       });
 
       it('answers the meta of a mod folder the mod order does not list, beside the listed ones', async () => {

@@ -14,7 +14,7 @@ import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './d
 import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
   type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type EntryRef, type ManagerNames, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
+  type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
 import { errorMessage } from '../ports/errorMessage';
@@ -30,7 +30,7 @@ export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
 const SETTLE_MS = 200;
 
-type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes';
+type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes' | 'managerRunning';
 
 type DownloadsResult =
   | { readonly kind: 'listed'; readonly rows: readonly DownloadFile[] }
@@ -86,6 +86,7 @@ export interface InstanceValue {
   /** How a message names the mod manager and its mod-order file: the adapter's answer, before any
    *  read too. */
   readonly managerNames: ManagerNames;
+  readonly managerRunning: ManagerRunning;
   /** How the mod manager matches an entry's name: the adapter's `entryKey`. */
   readonly entryKey: (entry: EntryRef) => string;
   /** The game as the mod manager's configuration names it. */
@@ -125,10 +126,17 @@ export type ReadFailureListener = () => void;
  *  channels they move on. */
 export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
 
-/** The message line a view shows once a read fails after rows landed: the rows stay (common.md,
- *  States, story 6). Before the first value it is the error row's business, not this. */
-export function lastGoodReadMessage({ sequence, readFailure }: Pick<InstanceView, 'sequence' | 'readFailure'>): string | undefined {
-  return sequence > 0 && readFailure !== undefined ? `Showing the last good read: ${readFailure}` : undefined;
+const cannotTellRunning = (manager: string, reason: string): string => `Cannot tell whether ${manager} is running: ${reason}.`;
+
+function managerRunningMessage({ managerRunning, managerNames: { manager } }: InstanceValue): string | undefined {
+  if (managerRunning.kind === 'unknown') return cannotTellRunning(manager, managerRunning.reason);
+  return managerRunning.kind === 'running' ? `${manager} is running, and overwrites your changes when it launches a program or exits.` : undefined;
+}
+
+/** What every view of the instance says on its message line (common.md, States), in order: the mod manager running
+ *  (story 8), and a read that failed after rows landed (story 6), the error row's business before then. */
+export function instanceMessages({ value, sequence, readFailure }: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'>): (string | undefined)[] {
+  return [managerRunningMessage(value), sequence > 0 && readFailure !== undefined ? `Showing the last good read: ${readFailure}` : undefined];
 }
 
 interface FocusWindow {
@@ -187,6 +195,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>, gameFo
   downloads: { kind: 'listed', rows: [] },
   activeProfile: '',
   managerNames: adapter.names,
+  managerRunning: { kind: 'notRunning' },
   entryKey: (entry) => adapter.entryKey(entry),
   gameName: '',
   gameRelease: undefined,
@@ -312,7 +321,9 @@ export class Instance implements Subscription {
     this.failureListeners = [];
   }
 
-  private tellReading({ skippedLinks, archiveListNotes, orderNotes, sourceMods, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes }: InstanceReading): void {
+  private tellReading({
+    skippedLinks, archiveListNotes, orderNotes, sourceMods, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes, managerRunning,
+  }: InstanceReading): void {
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
     this.tellOnce('notes', notes.map((note) => `[instance] ${note}`), 'info');
     this.tellOnce('links', [...skippedLinks].map(([linkPath, reason]) => `[instance] ${linkPath} is a link Modbench cannot follow, so it is not read: ${reason}`), 'info');
@@ -322,6 +333,8 @@ export class Instance implements Subscription {
     // An unreadable Data folder or its archives is an answer, never a failed read: the whole value
     // would otherwise go stale over a folder outside the instance.
     this.tellOnce('dataFolder', dataFolderPlugins.kind === 'unreadable' ? [`[instance] the game's Data folder could not be listed: ${dataFolderPlugins.reason}`] : [], 'warn');
+    const { manager } = this.options.adapter.names;
+    this.tellOnce('managerRunning', managerRunning.kind === 'unknown' ? [`[instance] ${cannotTellRunning(manager, managerRunning.reason)}`] : [], 'warn');
     this.tellOnce('gameArchives', dataFolderArchives.kind === 'unreadable' ? [`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`] : [], 'warn');
   }
 
@@ -432,6 +445,7 @@ export class Instance implements Subscription {
         },
       activeProfile: profile,
       managerNames: adapter.names,
+      managerRunning: reading.managerRunning,
       entryKey: (entry) => adapter.entryKey(entry),
       gameName,
       nexusDomainOf: nexusDomainForMetaGame,

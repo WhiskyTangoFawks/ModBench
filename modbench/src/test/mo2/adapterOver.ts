@@ -26,11 +26,14 @@ export interface AdapterAnswers {
   gameFolderSettingValue?: string;
   gameFolderSettingChanged?: (listener: () => void) => Subscription;
   detectors?: GameDetectors;
+  mo2Running?: () => Promise<boolean>;
 }
 
 /** MO2's context over `root`, detecting no game install, with the answers a test fixes in place. */
 export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Context {
-  const { gameFolder, downloadsFolder, gameFolderSettingValue, gameFolderSettingChanged, detectors = NO_DETECTORS } = answers;
+  const {
+    gameFolder, downloadsFolder, gameFolderSettingValue, gameFolderSettingChanged, detectors = NO_DETECTORS, mo2Running = () => Promise.resolve(false),
+  } = answers;
   const setting = fixedGameFolderSetting(gameFolderSettingValue, gameFolderSettingChanged);
   return {
     instanceRoot: root,
@@ -40,6 +43,7 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
     resolveDownloadsFolder: downloadsFolder !== undefined ? () => Promise.resolve(downloadsFolder) : downloadsDirectoryResolver(detectors),
     resolveMyGames: myGamesResolver(root, detectors),
     watch: mo2Watch(root, setting.changed),
+    mo2Running,
   };
 }
 

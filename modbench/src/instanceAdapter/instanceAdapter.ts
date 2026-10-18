@@ -401,6 +401,9 @@ interface InstanceGame {
   readonly gameRelease: string | undefined;
 }
 
+/** Whether the mod manager that made the instance is running, or why Modbench cannot tell. */
+export type ManagerRunning = { readonly kind: 'running' | 'notRunning' } | { readonly kind: 'unknown'; readonly reason: string };
+
 /** The instance as parsed facts, every one from the same read of its settings, and what the watch cannot hear. */
 export interface InstanceReading extends InstanceGame {
   /** The profile the mod manager's configuration selects. */
@@ -438,6 +441,7 @@ export interface InstanceReading extends InstanceGame {
   readonly holdsRepository: boolean;
   /** Why a folder's watch failed, once per reason: no change inside that folder is heard. */
   readonly watchNotes: readonly string[];
+  readonly managerRunning: ManagerRunning;
 }
 
 /** The names an entry may not take: the entries mod order lists and the folders mods are in. `modFolders` is undefined
