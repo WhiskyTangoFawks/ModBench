@@ -107,9 +107,8 @@ const BOUND_COMMAND_BOXES = {
     toolbox: ['instanceCommands/instanceCommands', 'sourceCommands/modlistRepositoryCommands'],
     plugins: ['pluginCommands/plugins', 'pluginCommands/renamePlugin', 'sourceCommands/sourceCommands'],
 };
-/** A view reaches the Instance adapter for a rule over file names and paths alone: Mods and
- *  Downloads for an archive's, and Mods for which downloaded file a picked path is. Mods also
- *  names the adapter's file reads, which open-conflicts draws it asking for a stamp and a hash. */
+/** A view reaches the Instance adapter for a rule over file names and paths, and Mods for the
+ *  file reads open-conflicts draws it asking for. */
 /** @type {Record<string, string[]>} */
 const ADAPTER_NAMES_A_VIEW_MAY_IMPORT = {
     mods: ['ARCHIVE_EXTENSIONS', 'defaultModName', 'defaultModNameForFolder', 'samePath', 'FileRead', 'FileStamp', 'HashedFile', 'InstanceAdapter'],
