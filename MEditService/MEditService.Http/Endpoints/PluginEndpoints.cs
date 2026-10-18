@@ -336,11 +336,12 @@ internal static class PluginEndpoints
 
     // decompile-plugin: the selection (commands.md, A selection is one gesture).
     internal static Task<IResult> Decompile(
-        DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory) =>
-        OverPlugins(req.Plugins, plugins => EndpointMapping.Answered(
-            "Decompile", loggerFactory.CreateLogger(nameof(PluginEndpoints)),
-            decompileHandler.DecompileAsync(plugins, req.Force),
-            EndpointMapping.Refusal));
+        DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        return OverPlugins(req.Plugins, plugins => EndpointMapping.Answered(
+            "Decompile", logger, decompileHandler.DecompileAsync(plugins, req.Force), EndpointMapping.Refusal));
+    }
 
     // compile-plugin: the selection (commands.md, A selection is one gesture).
     internal static Task<IResult> Compile(

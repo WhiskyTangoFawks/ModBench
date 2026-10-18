@@ -22,7 +22,7 @@ internal sealed class SameRecord : IEqualityComparer<RecordAt>
 public sealed record ItemLanded<TItem, TOutcome>(TItem Item, TOutcome Outcome);
 
 /// <summary>The outcome of a write that makes nothing.</summary>
-public readonly record struct NoOutcome;
+internal readonly record struct NoOutcome;
 
 /// <summary>An item of a selection that wrote nothing, with the typed refusal and the message naming
 /// the way out.</summary>
