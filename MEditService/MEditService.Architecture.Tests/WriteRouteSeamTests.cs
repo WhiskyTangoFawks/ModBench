@@ -32,7 +32,9 @@ public sealed class WriteRouteSeamTests
     private static readonly string[] EndpointFiles = ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs", "ModEndpoints.cs", "ManifestEndpoints.cs"];
 
     private static readonly Regex CallSite = new(@"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.Compiled);
-    private static readonly Regex ProblemCall = new(@"Results\.Problem\(", RegexOptions.Compiled);
+    private static readonly Regex ProblemCall = new(@"Results\.Problem\(|EndpointMapping\.BadRequest\(", RegexOptions.Compiled);
+    private static readonly Regex LiteralOrNamedConstant = new(
+        @"^(?:""(?:[^""\\]|\\.)*""|[A-Z]\w*(?:\.[A-Z]\w*)+)$", RegexOptions.Compiled);
     private const string BadRequestCall = "EndpointMapping.BadRequest(";
 
     private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
@@ -120,7 +122,7 @@ public sealed class WriteRouteSeamTests
                 Assert.False(MapsThroughSeamIn([file], "ThroughAHandRolledSibling"));
                 var offenders = ReachInFollowingEachHelperOnce([file], "ThroughAHandRolledSibling")
                     .SelectMany(ExtractProblemCalls)
-                            .ToArray();
+                    .ToArray();
                 Assert.Single(offenders);
             });
     }
@@ -172,6 +174,19 @@ public sealed class WriteRouteSeamTests
             file => Assert.False(MapsThroughSeamIn([file], "Route")));
     }
 
+    [Theory]
+    [InlineData("\"At least one mod is required.\"", 0)]
+    [InlineData("ArchiveVariantsRequest.NotOneEach", 0)]
+    [InlineData("refused.Message", 1)]
+    [InlineData("$\"Unknown {x}\"", 1)]
+    public void TheScan_FlagsABadRequestUnlessItsDetailIsALiteralOrANamedConstant(string detail, int flagged)
+    {
+        WithPlantedFile(
+            "internal static class PlantedEndpoints\n{\n"
+            + $"    internal static IResult Route(int x) => EndpointMapping.BadRequest({detail});\n}}\n",
+            file => Assert.Equal(flagged, ReachInFollowingEachHelperOnce([file], "Route").SelectMany(ExtractProblemCalls).Count()));
+    }
+
     private static void WithPlantedFile(string source, Action<string> assert)
     {
         using var root = new ScratchDirectory("medit-write-route-seam-scan-");
@@ -214,7 +229,10 @@ public sealed class WriteRouteSeamTests
         {
             var openIndex = m.Index + m.Length - 1;
             var closeIndex = MatchingDelimiter(body, openIndex, '(', ')');
-            yield return Normalize(body[m.Index..(closeIndex + 1)]);
+            var call = Normalize(body[m.Index..(closeIndex + 1)]);
+            var detail = Normalize(body[(openIndex + 1)..closeIndex]);
+            if (!call.StartsWith(BadRequestCall, StringComparison.Ordinal) || !LiteralOrNamedConstant.IsMatch(detail))
+                yield return call;
         }
     }
 
