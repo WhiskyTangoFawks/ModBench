@@ -12,10 +12,9 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import type * as vscode from 'vscode';
 import { heldText, isUnsaved, onHeldTextChanged } from '../heldText';
 
-const document = (text: string, isDirty: boolean) => ({ getText: () => text, isDirty }) as unknown as vscode.TextDocument;
+const document = (text: string, isDirty: boolean) => ({ getText: () => text, isDirty });
 
 describe('the text VS Code holds for a document', () => {
   it('is its text', () => {
