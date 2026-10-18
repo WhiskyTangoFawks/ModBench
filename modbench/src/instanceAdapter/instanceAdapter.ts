@@ -134,6 +134,9 @@ export interface OwnedMetaKeys {
   installedFiles?: readonly InstalledFileId[];
 }
 
+/** What the caller supplies for the record an install leaves with the mod; the adapter adds what it knows of the instance. */
+export type InstallKeys = Pick<OwnedMetaKeys, 'nexusId' | 'version' | 'archiveFilename' | 'installedFiles'>;
+
 export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 
 /** What a downloaded file's metadata says. `status` is the metadata's own claim, never
@@ -436,12 +439,27 @@ export interface InstanceReading extends InstanceGame {
   readonly watchNotes: readonly string[];
 }
 
+/** The names an entry may not take: the entries mod order lists and the folders mods are in. `modFolders` is undefined
+ *  when there is no folder for mods at all. */
+export interface TakenNames {
+  readonly mods: readonly EntryRef[];
+  readonly modFolders: readonly ModFolder[] | undefined;
+}
+
 export interface InstanceAdapter {
   /** The whole instance in one generation. A mod order that parses to no entries is read again
    *  after a settle before it is believed: another tool may be half-way through writing it. */
   reading(): Promise<InstanceReading>;
   /** The profile the mod manager's configuration selects now. */
   activeProfile(): Promise<string>;
+  /** Every profile's name. */
+  profiles(): Promise<readonly string[]>;
+  /** The active profile's mod order and the mod folders, without the rest of the instance. */
+  modOrder(): Promise<TakenNames>;
+  /** The downloaded files now, without the rest of the instance. */
+  downloadedFiles(): Promise<DownloadedFiles>;
+  /** Every source mod now. */
+  sourceMods(): Promise<SourceMods>;
   readonly names: ManagerNames;
 
   // Answers about a mod or a file.
@@ -553,7 +571,7 @@ export interface InstanceAdapter {
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
   /** Puts the package's files in a new folder, or in place of the mod's own. Rejects with why; a
    *  new mod's folder goes, and an upgrade that failed part way is not rolled back. */
-  install(installed: InstallPackage, target: InstallTarget, keys: OwnedMetaKeys): Promise<InstallOutcome>;
+  install(installed: InstallPackage, target: InstallTarget, keys: InstallKeys): Promise<InstallOutcome>;
 
   // Subscribe: the instance changed.
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's

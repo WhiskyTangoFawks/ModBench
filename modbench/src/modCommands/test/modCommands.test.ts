@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { unreadStatus } from '../../test/unreadStatus';
 import { modSyncOver, modCommands } from '../modCommands';
 import type {
-  EntryRef, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
+  EntryRef, InstanceReading, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, modFoldersOf, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -16,10 +16,14 @@ const FIXTURE_ORDER = [
   mod('SKK Fast Start'), separator(UNASSIGNED), mod('[NODELETE] Radfall'), mod('Unofficial Patch'),
   separator(RADFALL), mod('ENBoost'), mod('Harder VATS', false), mod('Cracked Screen'),
 ];
+const sourceMods = (folders: ReadonlyMap<string, string>): Pick<InstanceReading, 'sourceMods'> =>
+  ({ sourceMods: { folders, folderOf: (mod) => folders.get(mod), notes: [] } });
 const NO_TRASH = () => Promise.resolve();
 
-function over(order: readonly ModlistEntry[] = FIXTURE_ORDER, answers: InstanceAnswers = {}, mEdit = new InMemoryMEditClient()) {
-  const fake = fakeInstanceAdapter(readingFixture({ mods: order }), answers);
+function over(
+  order: readonly ModlistEntry[] = FIXTURE_ORDER, answers: InstanceAnswers = {}, mEdit = new InMemoryMEditClient(), reading: Partial<InstanceReading> = {},
+) {
+  const fake = fakeInstanceAdapter(readingFixture({ mods: order, ...reading }), answers);
   return { fake, mEdit, commands: modCommands(fake.adapter, mEdit, unreadStatus) };
 }
 
@@ -31,11 +35,11 @@ describe('the mod commands refuse the whole selection once when the adapter refu
   const separatorsPlace: SeparatorsPlace = { kind: 'modOrder' };
 
   it.each([
-    ['setModsEnabled', (c: ReturnType<typeof over>['commands']) => c.setModsEnabled('Default', ['Harder VATS', 'ENBoost'], true)],
-    ['moveMods', (c: ReturnType<typeof over>['commands']) => c.moveMods('Default', ['Harder VATS', 'ENBoost'], place, 'losing')],
-    ['moveSeparators', (c: ReturnType<typeof over>['commands']) => c.moveSeparators('Default', [UNASSIGNED, RADFALL], separatorsPlace, 'losing')],
-    ['insertSeparator', (c: ReturnType<typeof over>['commands']) => c.insertSeparator('Default', 'New Section', { kind: 'mod', name: 'ENBoost' })],
-    ['renameSeparator', (c: ReturnType<typeof over>['commands']) => c.renameSeparator('Default', UNASSIGNED, 'Renamed')],
+    ['setModsEnabled', (c: ReturnType<typeof over>['commands']) => c.setModsEnabled(['Harder VATS', 'ENBoost'], true)],
+    ['moveMods', (c: ReturnType<typeof over>['commands']) => c.moveMods(['Harder VATS', 'ENBoost'], place, 'losing')],
+    ['moveSeparators', (c: ReturnType<typeof over>['commands']) => c.moveSeparators([UNASSIGNED, RADFALL], separatorsPlace, 'losing')],
+    ['insertSeparator', (c: ReturnType<typeof over>['commands']) => c.insertSeparator('New Section', { kind: 'mod', name: 'ENBoost' })],
+    ['renameSeparator', (c: ReturnType<typeof over>['commands']) => c.renameSeparator(UNASSIGNED, 'Renamed')],
   ])('%s', async (_, run) => {
     const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('changeModOrder', 'ENOENT: no such file') });
 
@@ -48,7 +52,7 @@ describe('setModsEnabled', () => {
   it.each([true, false])('hands one change to set each mod enabled=%s, in one write', async (enabled) => {
     const { fake, commands } = over();
 
-    const outcome = await commands.setModsEnabled('Default', ['Harder VATS', 'ENBoost'], enabled);
+    const outcome = await commands.setModsEnabled(['Harder VATS', 'ENBoost'], enabled);
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: ['Harder VATS', 'ENBoost'], refused: [] } });
     expect(fake.calls).toEqual([orderWrite([
@@ -59,7 +63,7 @@ describe('setModsEnabled', () => {
   it('refuses a gone mod by name while the rest land, in one write', async () => {
     const { fake, commands } = over();
 
-    const outcome = await commands.setModsEnabled('Default', ['Harder VATS', 'No Such Mod'], true);
+    const outcome = await commands.setModsEnabled(['Harder VATS', 'No Such Mod'], true);
 
     expect(outcome).toEqual({
       applied: true,
@@ -71,7 +75,7 @@ describe('setModsEnabled', () => {
   it('lands a mod named as the mod manager matches names, whatever the case', async () => {
     const { fake, commands } = over();
 
-    const outcome = await commands.setModsEnabled('Default', ['harder vats'], true);
+    const outcome = await commands.setModsEnabled(['harder vats'], true);
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: ['harder vats'], refused: [] } });
     expect(fake.calls).toEqual([orderWrite([{ kind: 'enable', mod: 'harder vats', enabled: true }])]);
@@ -80,7 +84,7 @@ describe('setModsEnabled', () => {
   it('names an entry of the kind it is handed, when a separator shares the name of a mod', async () => {
     const { fake, commands } = over([separator('Gear'), mod('Armor')]);
 
-    const outcome = await commands.setModsEnabled('Default', ['Gear'], true);
+    const outcome = await commands.setModsEnabled(['Gear'], true);
 
     expect(outcome).toEqual({
       applied: true, outcome: { landed: [], refused: [{ item: 'Gear', reason: 'Mod not found in modlist: Gear' }] },
@@ -94,7 +98,7 @@ describe('moveMods and moveSeparators', () => {
     const { fake, commands } = over();
     const place: MovePlace = { kind: 'separator', name: UNASSIGNED };
 
-    const outcome = await commands.moveMods('Default', ['No Such Mod', 'Harder VATS'], place, 'losing');
+    const outcome = await commands.moveMods(['No Such Mod', 'Harder VATS'], place, 'losing');
 
     expect(outcome).toEqual({
       applied: true,
@@ -107,7 +111,7 @@ describe('moveMods and moveSeparators', () => {
     const { fake, commands } = over();
     const place: SeparatorsPlace = { kind: 'separator', name: RADFALL };
 
-    const outcome = await commands.moveSeparators('Default', ['Gone Separator', UNASSIGNED], place, 'winning');
+    const outcome = await commands.moveSeparators(['Gone Separator', UNASSIGNED], place, 'winning');
 
     expect(outcome).toEqual({
       applied: true,
@@ -122,7 +126,7 @@ describe('insertSeparator', () => {
     const { fake, commands } = over();
     const anchor = { kind: 'separator', name: RADFALL } as const;
 
-    const outcome = await commands.insertSeparator('Default', 'New Section', anchor);
+    const outcome = await commands.insertSeparator('New Section', anchor);
 
     expect(outcome).toEqual({ applied: true, wrote: true, name: 'New Section' });
     expect(fake.calls).toEqual([orderWrite([{ kind: 'addSeparator', separator: 'New Section', anchor }])]);
@@ -133,7 +137,7 @@ describe('renameSeparator', () => {
   it('hands the adapter one change, which renames the line and its folder', async () => {
     const { fake, commands } = over();
 
-    const outcome = await commands.renameSeparator('Default', UNASSIGNED, 'Renamed');
+    const outcome = await commands.renameSeparator(UNASSIGNED, 'Renamed');
 
     expect(outcome).toEqual({ applied: true, wrote: true, name: 'Renamed' });
     expect(fake.calls).toEqual([orderWrite([{ kind: 'renameSeparator', from: UNASSIGNED, to: 'Renamed' }])]);
@@ -144,7 +148,7 @@ describe('deleteSeparators', () => {
   it('trashes each folder before its line, and writes every selected line in one write', async () => {
     const { fake, commands } = over();
 
-    const outcome = await commands.deleteSeparators('Default', FIXTURE_ORDER, [UNASSIGNED, RADFALL], NO_TRASH);
+    const outcome = await commands.deleteSeparators([UNASSIGNED, RADFALL], NO_TRASH);
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: UNASSIGNED }, { name: RADFALL }], refused: [] } });
     expect(fake.calls).toEqual([
@@ -157,7 +161,7 @@ describe('deleteSeparators', () => {
   it('refuses a gone separator by name while the others land, trashing nothing for it', async () => {
     const { fake, commands } = over();
 
-    const outcome = await commands.deleteSeparators('Default', FIXTURE_ORDER, ['No Such Separator', UNASSIGNED], NO_TRASH);
+    const outcome = await commands.deleteSeparators(['No Such Separator', UNASSIGNED], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true,
@@ -177,7 +181,7 @@ describe('deleteSeparators', () => {
       refusals: (call) => (call.verb === 'trashEntryFolder' && call.entry.name === UNASSIGNED ? 'trash unavailable' : undefined),
     });
 
-    const outcome = await commands.deleteSeparators('Default', FIXTURE_ORDER, [UNASSIGNED, RADFALL], NO_TRASH);
+    const outcome = await commands.deleteSeparators([UNASSIGNED, RADFALL], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true,
@@ -189,7 +193,7 @@ describe('deleteSeparators', () => {
   it('a separator whose line cannot go after its folder was trashed still lands, carrying the part that failed, and one with no folder to trash is refused with the write\'s reason', async () => {
     const { commands } = over(FIXTURE_ORDER, { refusals: refusing('changeModOrder', 'disk full'), foldersAbsent: new Set([RADFALL]) });
 
-    const outcome = await commands.deleteSeparators('Default', FIXTURE_ORDER, [UNASSIGNED, RADFALL], NO_TRASH);
+    const outcome = await commands.deleteSeparators([UNASSIGNED, RADFALL], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true,
@@ -203,11 +207,13 @@ describe('deleteSeparators', () => {
 
 describe('uninstallMods', () => {
   const ARCHIVE = 'Unofficial Patch-4598-2-1-5.7z';
+  const installedFrom = (...pairs: readonly (readonly [string, string])[]): InstanceAnswers =>
+    ({ metadata: new Map(pairs.map(([mod, name]) => [mod, { installationFile: { name } }])) });
 
   it('trashes the folder, then the source folder, then removes the line, then marks the download uninstalled, in that order', async () => {
-    const { fake, commands } = over();
+    const { fake, commands } = over(FIXTURE_ORDER, installedFrom(['Unofficial Patch', ARCHIVE]));
 
-    const outcome = await commands.uninstallMods('Default', FIXTURE_ORDER, [{ name: 'Unofficial Patch', archiveFilename: ARCHIVE }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Unofficial Patch' }], refused: [] } });
     expect(fake.calls).toEqual([
@@ -218,10 +224,10 @@ describe('uninstallMods', () => {
     ]);
   });
 
-  it('removes every selected mod\'s line in one write, and marks no download for a mod handed none', async () => {
+  it('removes every selected mod\'s line in one write, and marks no download for a mod whose meta names none', async () => {
     const { fake, commands } = over();
 
-    const outcome = await commands.uninstallMods('Default', FIXTURE_ORDER, [{ name: 'Harder VATS' }, { name: 'ENBoost' }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Harder VATS', 'ENBoost'], NO_TRASH);
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Harder VATS' }, { name: 'ENBoost' }], refused: [] } });
     expect(fake.calls.filter((call) => call.verb === 'changeModOrder')).toEqual([
@@ -233,7 +239,7 @@ describe('uninstallMods', () => {
   it('lands the mod carrying the source\'s failure when the source folder cannot be trashed', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('trashSourceFolder', 'the trash refused it') });
 
-    const outcome = await commands.uninstallMods('Default', FIXTURE_ORDER, [{ name: 'Harder VATS' }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Harder VATS'], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true, outcome: { landed: [{ name: 'Harder VATS', sourceRefusal: 'the trash refused it' }], refused: [] },
@@ -242,9 +248,9 @@ describe('uninstallMods', () => {
   });
 
   it('refuses an unknown mod by name, trashing and marking nothing for it, while the rest land', async () => {
-    const { fake, commands } = over();
+    const { fake, commands } = over(FIXTURE_ORDER, installedFrom(['No Such Mod', 'Gone-1.7z']));
 
-    const outcome = await commands.uninstallMods('Default', FIXTURE_ORDER, [{ name: 'No Such Mod', archiveFilename: 'Gone-1.7z' }, { name: 'Harder VATS' }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['No Such Mod', 'Harder VATS'], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true,
@@ -258,11 +264,11 @@ describe('uninstallMods', () => {
 
   it('writes nothing for a mod whose folder the trash refuses, refusing it with the reason, while the others land and mark, leaving the refused mod\'s download unmarked', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, {
+      ...installedFrom(['Harder VATS', 'Harder VATS-1-0.7z'], ['Unofficial Patch', ARCHIVE]),
       refusals: (call) => (call.verb === 'trashEntryFolder' && call.entry.name === 'Harder VATS' ? 'trash unavailable' : undefined),
     });
 
-    const outcome = await commands.uninstallMods('Default', FIXTURE_ORDER,
-      [{ name: 'Harder VATS', archiveFilename: 'Harder VATS-1-0.7z' }, { name: 'Unofficial Patch', archiveFilename: ARCHIVE }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Harder VATS', 'Unofficial Patch'], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true,
@@ -278,9 +284,9 @@ describe('uninstallMods', () => {
   });
 
   it('a mod whose line cannot go after its folder was trashed still lands, carrying the part that failed, and marks nothing for it', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('changeModOrder', 'disk full') });
+    const { fake, commands } = over(FIXTURE_ORDER, { ...installedFrom(['Unofficial Patch', ARCHIVE]), refusals: refusing('changeModOrder', 'disk full') });
 
-    const outcome = await commands.uninstallMods('Default', FIXTURE_ORDER, [{ name: 'Unofficial Patch', archiveFilename: ARCHIVE }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true, outcome: { landed: [{ name: 'Unofficial Patch', lineRefusal: 'disk full' }], refused: [] },
@@ -289,9 +295,9 @@ describe('uninstallMods', () => {
   });
 
   it('carries the mark\'s refusal beside the landed mod, rather than leaving the download claiming a mod that is gone', async () => {
-    const { commands } = over(FIXTURE_ORDER, { refusals: refusing('markDownloadedFile', 'download_directory could not be resolved') });
+    const { commands } = over(FIXTURE_ORDER, { ...installedFrom(['Unofficial Patch', ARCHIVE]), refusals: refusing('markDownloadedFile', 'download_directory could not be resolved') });
 
-    const outcome = await commands.uninstallMods('Default', FIXTURE_ORDER, [{ name: 'Unofficial Patch', archiveFilename: ARCHIVE }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true,
@@ -300,21 +306,51 @@ describe('uninstallMods', () => {
   });
 
   it('lands the mod whose download is gone from disk, with no refusal', async () => {
-    const { commands } = over(FIXTURE_ORDER, { goneDownloads: new Set(['Long Gone-1-0.7z']) });
+    const { commands } = over(FIXTURE_ORDER, { ...installedFrom(['Harder VATS', 'Long Gone-1-0.7z']), goneDownloads: new Set(['Long Gone-1-0.7z']) });
 
-    const outcome = await commands.uninstallMods('Default', FIXTURE_ORDER, [{ name: 'Harder VATS', archiveFilename: 'Long Gone-1-0.7z' }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Harder VATS'], NO_TRASH);
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Harder VATS' }], refused: [] } });
+  });
+
+  it('reads the installation file before the folder that records it goes', async () => {
+    const { fake, commands } = over(FIXTURE_ORDER, installedFrom(['Unofficial Patch', ARCHIVE]));
+    const writesBeforeRead: number[] = [];
+    const read = fake.adapter.modMetadata.bind(fake.adapter);
+    fake.adapter.modMetadata = (mod) => { writesBeforeRead.push(fake.calls.length); return read(mod); };
+
+    await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
+
+    expect(writesBeforeRead).toEqual([0]);
+    expect(verbs(fake.calls)[0]).toBe('trashEntryFolder');
+  });
+
+  it('lands the mod carrying why its installation file could not be read, marking no download', async () => {
+    const { fake, commands } = over(FIXTURE_ORDER, { unreadableMetadata: new Map([['Unofficial Patch', 'meta.ini is locked']]) });
+
+    const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
+
+    expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Unofficial Patch', markRefusal: 'meta.ini is locked' }], refused: [] } });
+    expect(verbs(fake.calls)).not.toContain('markDownloadedFile');
+  });
+
+  it('refuses the selection, trashing nothing, when mod order cannot be read', async () => {
+    const { fake, commands } = over(FIXTURE_ORDER, { unreadReads: { modOrder: 'modlist.txt is locked' } });
+
+    expect(await commands.uninstallMods(['Harder VATS'], NO_TRASH)).toEqual({ applied: false, refusal: 'modlist.txt is locked' });
+    expect(fake.calls).toEqual([]);
   });
 });
 
 describe('renameMod', () => {
-  const rename = (commands: ReturnType<typeof over>['commands'], sourceFolder?: string) =>
-    commands.renameMod('Default', ['Secondary', 'Default'], 'Harder VATS', 'Harder VATS 2', sourceFolder);
+  const rename = (commands: ReturnType<typeof over>['commands']) => commands.renameMod('Harder VATS', 'Harder VATS 2');
+  const profiles = { profiles: ['Secondary', 'Default'] };
+  const SOURCE = '/instance/source/Harder VATS';
+  const sourced = { ...profiles, ...sourceMods(new Map([['Harder VATS', SOURCE]])) };
   const line = { kind: 'renameMod', from: 'Harder VATS', to: 'Harder VATS 2' } as const;
 
   it('renames the folder, then the line in each profile, the active one first', async () => {
-    const { fake, commands } = over();
+    const { fake, commands } = over(FIXTURE_ORDER, {}, undefined, profiles);
 
     const outcome = await rename(commands);
 
@@ -329,7 +365,7 @@ describe('renameMod', () => {
   it('names each profile whose line could not be written, the folder staying renamed', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, {
       refusals: (call) => (call.verb === 'changeModOrder' && call.profile === 'Secondary' ? 'disk full' : undefined),
-    });
+    }, undefined, profiles);
 
     const outcome = await rename(commands);
 
@@ -340,7 +376,7 @@ describe('renameMod', () => {
   it('writes nothing for the name it already has, saying nothing changed', async () => {
     const { fake, commands } = over();
 
-    const outcome = await commands.renameMod('Default', ['Default'], 'Harder VATS', 'Harder VATS', '/instance/source/Harder VATS');
+    const outcome = await commands.renameMod('Harder VATS', 'Harder VATS');
 
     expect(outcome).toEqual({ applied: true, lineRefusals: [], unchanged: true });
     expect(fake.calls).toEqual([]);
@@ -349,9 +385,16 @@ describe('renameMod', () => {
   it('refuses a blank name, writing nothing', async () => {
     const { fake, commands } = over();
 
-    const outcome = await commands.renameMod('Default', ['Default'], 'Harder VATS', '  ');
+    const outcome = await commands.renameMod('Harder VATS', '  ');
 
     expect(outcome).toEqual({ applied: false, refusal: 'A mod name cannot be empty.' });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it.each([['profiles'], ['sourceMods']] as const)('refuses, renaming nothing, when %s cannot be read', async (read) => {
+    const { fake, commands } = over(FIXTURE_ORDER, { unreadReads: { [read]: 'the read failed' } });
+
+    expect(await rename(commands)).toEqual({ applied: false, refusal: 'the read failed' });
     expect(fake.calls).toEqual([]);
   });
 
@@ -365,13 +408,11 @@ describe('renameMod', () => {
   });
 
   describe('a source mod: the build configuration written with the folder', () => {
-    const SOURCE = '/instance/source/Harder VATS';
-
     it('renames the folder and the output its build configuration names, then the lines', async () => {
-      const { fake, mEdit, commands } = over();
+      const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, sourced);
       mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
 
-      const outcome = await rename(commands, SOURCE);
+      const outcome = await rename(commands);
 
       expect(outcome).toEqual({ applied: true, lineRefusals: [] });
       expect(configuredBy(mEdit)).toEqual([[SOURCE, { output: 'Harder VATS 2' }]]);
@@ -379,10 +420,10 @@ describe('renameMod', () => {
     });
 
     it('puts the folder back and writes no line when mEdit refuses the build configuration', async () => {
-      const { fake, mEdit, commands } = over();
+      const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, sourced);
       mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
 
-      const outcome = await rename(commands, SOURCE);
+      const outcome = await rename(commands);
 
       expect(outcome).toEqual({ applied: false, refusal: 'it holds no build configuration' });
       expect(fake.calls).toEqual([
@@ -396,9 +437,9 @@ describe('renameMod', () => {
       mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
       const { commands } = over(FIXTURE_ORDER, {
         refusals: (call) => (call.verb === 'renameModFolder' && call.from === 'Harder VATS 2' ? 'the folder is in use' : undefined),
-      }, mEdit);
+      }, mEdit, sourced);
 
-      const outcome = await rename(commands, SOURCE);
+      const outcome = await rename(commands);
 
       expect(outcome).toEqual({
         applied: false,
@@ -413,7 +454,9 @@ const configuredBy = (mEdit: InMemoryMEditClient) =>
 
 describe('markFiles', () => {
   const SOURCE = '/instance/source/Harder VATS';
-  const SOURCES = new Map([['Harder VATS', SOURCE]]);
+  const OTHER = '/instance/source/ENBoost';
+  const SOURCES = sourceMods(new Map([['Harder VATS', SOURCE]]));
+  const TWO_SOURCES = sourceMods(new Map([['Harder VATS', SOURCE], ['ENBoost', OTHER]]));
   const fileOf = (name: string, relativePath: string) => ({ origin: { kind: 'mod', name }, relativePath }) as const;
   const markOf = (file: ReturnType<typeof fileOf>, mark: OriginFileMark): AdapterCall =>
     ({ verb: 'markOriginFile', origin: file.origin, relativePath: file.relativePath, mark });
@@ -423,11 +466,11 @@ describe('markFiles', () => {
     ['Excluded', 'Textures/a.dds', { exclude: ['Textures/a.dds'] }],
     ['Included', 'Textures/a.dds.excluded', { include: ['Textures/a.dds'] }],
   ] as const)('marks a file %s, and the build configuration\'s exclusion with it', async (mark, relativePath, change) => {
-    const { fake, mEdit, commands } = over();
+    const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
     mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
     const file = fileOf('Harder VATS', relativePath);
 
-    const outcome = await commands.markFiles([file], mark, SOURCES);
+    const outcome = await commands.markFiles([file], mark);
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [file], refused: [] } });
     expect(configuredBy(mEdit)).toEqual([[SOURCE, change]]);
@@ -435,7 +478,7 @@ describe('markFiles', () => {
   });
 
   it('asks mEdit once for every file of a source mod, before any file is marked, and marks none when it refuses', async () => {
-    const { fake, mEdit, commands } = over();
+    const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
     let markedWhenAsked = -1;
     mEdit.setCommandHandler('changeBuildConfiguration', () => {
       markedWhenAsked = fake.calls.length;
@@ -443,7 +486,7 @@ describe('markFiles', () => {
     });
     const files = [fileOf('Harder VATS', 'a.dds'), fileOf('Harder VATS', 'b.dds')];
 
-    const outcome = await commands.markFiles(files, 'Excluded', SOURCES);
+    const outcome = await commands.markFiles(files, 'Excluded');
 
     expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds', 'b.dds'] }]]);
     expect(markedWhenAsked).toBe(0);
@@ -452,35 +495,42 @@ describe('markFiles', () => {
   });
 
   it('marks the file of a mod with no source though mEdit refuses a source mod\'s', async () => {
-    const { fake, mEdit, commands } = over();
+    const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
     mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
     const inSource = fileOf('Harder VATS', 'a.dds');
     const inNoSource = fileOf('ENBoost', 'b.dds');
 
-    const outcome = await commands.markFiles([inSource, inNoSource], 'Excluded', SOURCES);
+    const outcome = await commands.markFiles([inSource, inNoSource], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [inNoSource], refused: [{ item: inSource, reason: 'it holds no build configuration' }] } });
     expect(fake.calls).toEqual([markOf(inNoSource, 'Excluded')]);
   });
 
+  it('refuses the whole selection, configuring and marking nothing, when the source mods cannot be read', async () => {
+    const { fake, mEdit, commands } = over(FIXTURE_ORDER, { unreadReads: { sourceMods: 'build.json is locked' } }, undefined, SOURCES);
+
+    expect(await commands.markFiles([fileOf('Harder VATS', 'a.dds')], 'Excluded')).toEqual({ applied: false, refusal: 'build.json is locked' });
+    expect(configuredBy(mEdit)).toEqual([]);
+    expect(fake.calls).toEqual([]);
+  });
+
   it('refuses the whole selection once, marking no file, when mEdit cannot be reached', async () => {
-    const { fake, mEdit, commands } = over();
+    const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
     mEdit.setCommandResult('changeBuildConfiguration', UNREACHABLE);
     const files = [fileOf('Harder VATS', 'a.dds'), fileOf('Harder VATS', 'b.dds'), fileOf('ENBoost', 'c.dds')];
 
-    const outcome = await commands.markFiles(files, 'Excluded', SOURCES);
+    const outcome = await commands.markFiles(files, 'Excluded');
 
     expect(outcome).toEqual({ applied: false, refusal: UNREACHABLE.message });
     expect(fake.calls).toEqual([]);
   });
 
   it('puts back a source mod\'s configuration already changed when mEdit cannot be reached for the next, naming what could not be put back', async () => {
-    const OTHER = '/instance/source/ENBoost';
-    const { fake, mEdit, commands } = over();
+    const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, TWO_SOURCES);
     mEdit.setCommandHandler('changeBuildConfiguration', () => Promise.resolve(configuredBy(mEdit).length === 1 ? { changed: true } : UNREACHABLE));
     const files = [fileOf('Harder VATS', 'a.dds'), fileOf('ENBoost', 'c.dds')];
 
-    const outcome = await commands.markFiles(files, 'Excluded', new Map([['Harder VATS', SOURCE], ['ENBoost', OTHER]]));
+    const outcome = await commands.markFiles(files, 'Excluded');
 
     expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'] }], [OTHER, { exclude: ['c.dds'] }], [SOURCE, { include: ['a.dds'] }]]);
     expect(outcome).toEqual({
@@ -491,13 +541,12 @@ describe('markFiles', () => {
   });
 
   it('names why a configuration already changed could not be put back', async () => {
-    const OTHER = '/instance/source/ENBoost';
-    const { mEdit, commands } = over();
+    const { mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, TWO_SOURCES);
     mEdit.setCommandHandler('changeBuildConfiguration', (folder, change) => Promise.resolve(
       change.include !== undefined ? { refused: true, message: 'the disk refused the write' } : folder === SOURCE ? { changed: true } : UNREACHABLE));
     const files = [fileOf('Harder VATS', 'a.dds'), fileOf('ENBoost', 'c.dds')];
 
-    const outcome = await commands.markFiles(files, 'Excluded', new Map([['Harder VATS', SOURCE], ['ENBoost', OTHER]]));
+    const outcome = await commands.markFiles(files, 'Excluded');
 
     expect(outcome).toEqual({
       applied: false,
@@ -506,35 +555,35 @@ describe('markFiles', () => {
   });
 
   it('takes back the exclusion of a file gone from disk, and lands the rest', async () => {
-    const { mEdit, commands } = over(FIXTURE_ORDER, { goneOriginFiles: [fileOf('Harder VATS', 'gone.dds')] });
+    const { mEdit, commands } = over(FIXTURE_ORDER, { goneOriginFiles: [fileOf('Harder VATS', 'gone.dds')] }, undefined, SOURCES);
     mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
     const marked = fileOf('Harder VATS', 'a.dds');
     const gone = fileOf('Harder VATS', 'gone.dds');
 
-    const outcome = await commands.markFiles([marked, gone], 'Excluded', SOURCES);
+    const outcome = await commands.markFiles([marked, gone], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [marked], refused: [{ item: gone, reason: '"gone.dds" is gone from disk.' }] } });
     expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds', 'gone.dds'] }], [SOURCE, { include: ['gone.dds'] }]]);
   });
 
   it('takes back the exclusion of a file the adapter refuses, with the adapter\'s reason', async () => {
-    const { mEdit, commands } = over(FIXTURE_ORDER, { refusals: refusing('markOriginFile', 'permission denied') });
+    const { mEdit, commands } = over(FIXTURE_ORDER, { refusals: refusing('markOriginFile', 'permission denied') }, undefined, SOURCES);
     mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
     const file = fileOf('Harder VATS', 'a.dds');
 
-    const outcome = await commands.markFiles([file], 'Excluded', SOURCES);
+    const outcome = await commands.markFiles([file], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: file, reason: 'permission denied' }] } });
     expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'] }], [SOURCE, { include: ['a.dds'] }]]);
   });
 
   it('names both failures when the exclusion of a file that could not be marked cannot be taken back', async () => {
-    const { mEdit, commands } = over(FIXTURE_ORDER, { goneOriginFiles: [fileOf('Harder VATS', 'gone.dds')] });
+    const { mEdit, commands } = over(FIXTURE_ORDER, { goneOriginFiles: [fileOf('Harder VATS', 'gone.dds')] }, undefined, SOURCES);
     mEdit.setCommandHandler('changeBuildConfiguration', (_, change) =>
       Promise.resolve(change.exclude === undefined ? { refused: true, message: 'the disk refused the write' } : { changed: true }));
     const gone = fileOf('Harder VATS', 'gone.dds');
 
-    const outcome = await commands.markFiles([gone], 'Excluded', SOURCES);
+    const outcome = await commands.markFiles([gone], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: [
       { item: gone, reason: '"gone.dds" is gone from disk. Its change to the build configuration could not be taken back: the disk refused the write' },
@@ -546,7 +595,7 @@ describe('createEmptyMod', () => {
   it('makes the folder, then adds a line at the winning end', async () => {
     const { fake, commands } = over();
 
-    const outcome = await commands.createEmptyMod('Default', 'My New Mod');
+    const outcome = await commands.createEmptyMod('My New Mod');
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     expect(fake.calls).toEqual([
@@ -558,7 +607,7 @@ describe('createEmptyMod', () => {
   it('refuses a blank name, writing nothing', async () => {
     const { fake, commands } = over();
 
-    const outcome = await commands.createEmptyMod('Default', '  ');
+    const outcome = await commands.createEmptyMod('  ');
 
     expect(outcome).toEqual({ applied: false, refusal: 'A mod name cannot be empty.' });
     expect(fake.calls).toEqual([]);
@@ -567,7 +616,7 @@ describe('createEmptyMod', () => {
   it('writes no line when the folder cannot be made, refusing with why', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('createModFolder', 'The folder is in the way') });
 
-    const outcome = await commands.createEmptyMod('Default', 'Harder VATS');
+    const outcome = await commands.createEmptyMod('Harder VATS');
 
     expect(outcome).toEqual({ applied: false, refusal: 'The folder is in the way' });
     expect(verbs(fake.calls)).toEqual(['createModFolder']);
@@ -576,7 +625,7 @@ describe('createEmptyMod', () => {
   it('a failed line write answers a partial, not a refusal, since the folder is on disk either way', async () => {
     const { commands } = over(FIXTURE_ORDER, { refusals: refusing('changeModOrder', 'disk full') });
 
-    const outcome = await commands.createEmptyMod('Default', 'Line Write Fails');
+    const outcome = await commands.createEmptyMod('Line Write Fails');
 
     expect(outcome).toEqual({ applied: true, wrote: false, lineRefusal: 'disk full' });
   });
@@ -646,18 +695,30 @@ describe('syncMods', () => {
 });
 
 describe('the names a separator or mod may take', () => {
-  const { commands } = over();
+  it('keys a name as the adapter keys it', async () => {
+    const { commands } = over([separator('Unassigned (Modlist Development)')]);
 
-  it('keys a name as the adapter keys it', () => {
-    const taken = { mods: [separator('Unassigned (Modlist Development)')], modFolders: [] };
-
-    expect(commands.separatorNameRefusal(taken, 'UNASSIGNED (modlist development)', 'Group B')).toBe('A separator with this name already exists');
+    expect(await commands.separatorNameRefusal('UNASSIGNED (modlist development)', 'Group B')).toBe('A separator with this name already exists');
   });
 
-  it('refuses a mod name that holds a path separator', () => {
-    const taken = { mods: [], modFolders: [] };
+  it('rejects with why mod order cannot be read, rather than calling the name free', async () => {
+    const { commands } = over([], { unreadReads: { modOrder: 'modlist.txt is locked' } });
 
-    expect(commands.renameModNameRefusal(taken, 'a/b', 'Mod B')).toBe('A mod name cannot contain / or \\');
-    expect(commands.renameModNameRefusal(taken, 'a\\b', 'Mod B')).toBe('A mod name cannot contain / or \\');
+    await expect(commands.newModNameRefusal('Anything')).rejects.toThrow('modlist.txt is locked');
+    await expect(commands.separatorNameRefusal('Anything')).rejects.toThrow('modlist.txt is locked');
+  });
+
+  it('refuses a name a mod folder holds, listed or not', async () => {
+    const { commands } = over([], {}, undefined, { modFolders: modFoldersOf('Unlisted Mod') });
+
+    expect(await commands.newModNameRefusal('unlisted mod')).toMatch(/already exists/);
+    expect(await commands.renameModNameRefusal('UNLISTED MOD', 'Mod B')).toBe('A mod with this name already exists');
+  });
+
+  it('refuses a mod name that holds a path separator', async () => {
+    const { commands } = over([]);
+
+    expect(await commands.renameModNameRefusal('a/b', 'Mod B')).toBe('A mod name cannot contain / or \\');
+    expect(await commands.renameModNameRefusal('a\\b', 'Mod B')).toBe('A mod name cannot contain / or \\');
   });
 });

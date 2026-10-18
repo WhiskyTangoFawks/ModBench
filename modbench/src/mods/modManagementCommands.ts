@@ -23,6 +23,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { Refusal } from '../drivingLib/refusal';
+import { promptRefusal, refuseAgentName } from './nameRefusals';
 
 // modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
 // Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
@@ -38,7 +39,7 @@ export function registerModEnableCommands(
         return modNames.length === 0 ? undefined : modNames;
       },
       fromAgent: ({ argument }) => argument.map(modNameOf),
-      run: (modNames) => runModsWriting(instance, () => commands.setModsEnabled(instance.value.activeProfile, modNames, enabled)),
+      run: (modNames) => runModsWriting(instance, () => commands.setModsEnabled(modNames, enabled)),
       report: (result, modNames) => {
         if (!result.applied) {
           reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
@@ -71,7 +72,7 @@ export function registerFileExclusionCommands(
       },
       fromAgent: ({ argument }) => argument.map(fileRefOf),
       run: async (refs) => {
-        const result = await runModsWriting(instance, () => commands.markFiles(refs, mark, instance.value.paths.sourceDirs));
+        const result = await runModsWriting(instance, () => commands.markFiles(refs, mark));
         return result.applied ? result : { applied: false, refusal: `Could not ${verb} ${refs.length} files.`, detail: result.refusal };
       },
       report: (result, refs) => {
@@ -145,10 +146,10 @@ export function registerModMoveCommand(
         if (place.kind === 'mod' && names.includes(place.name)) {
           return { applied: true, outcome: { landed: [], refused: names.map((item) => ({ item, reason: `The target is "${place.name}", which is moving.` })) } };
         }
-        return runModsWriting(instance, async () => asMoveResult(kind, await commands.moveMods(instance.value.activeProfile, names, place, end)));
+        return runModsWriting(instance, async () => asMoveResult(kind, await commands.moveMods(names, place, end)));
       }
       if (!isSeparatorsPlace(place)) return failed(kind, SEPARATOR_PLACES);
-      return runModsWriting(instance, async () => asMoveResult(kind, await commands.moveSeparators(instance.value.activeProfile, names, place, end)));
+      return runModsWriting(instance, async () => asMoveResult(kind, await commands.moveSeparators(names, place, end)));
     },
     report: (result, { kind, names }) => {
       if (!result.applied) {
@@ -191,11 +192,6 @@ interface Rename {
 
 type Uninstalled = Extract<Awaited<ReturnType<ModCommands['uninstallMods']>>, { applied: true }>['outcome']['landed'][number];
 
-interface ModToUninstall {
-  readonly name: string;
-  readonly archiveFilename?: string;
-}
-
 function partialsOfUninstall(item: Uninstalled, modOrderFile: string): PartialFailure[] {
   const partial: PartialFailure[] = [];
   if (item.sourceRefusal !== undefined) {
@@ -217,27 +213,25 @@ export function registerModContextCommands(
       const node = singularArgument(entry, 'mod');
       if (!node) return undefined;
       const oldName = node.mod.name;
-      const newName = await promptRename('Rename mod', oldName, modNamePrompt(commands, instance, oldName));
+      const newName = await promptRename('Rename mod', oldName, modNamePrompt(commands, oldName));
       return newName === undefined ? undefined : { oldName, newName };
     },
-    fromAgent: ({ argument, options: { name } }) => {
+    fromAgent: async ({ argument, options: { name } }) => {
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a mod carries one mod.');
       const oldName = modNameOf(only);
-      const refusal = commands.renameModNameRefusal(instance.value, name, oldName);
-      if (refusal !== undefined) throw new Refusal(refusal);
+      await refuseAgentName(commands.renameModNameRefusal(name, oldName));
       return { oldName, newName: name };
     },
     run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
-      const { activeProfile, profiles, paths, managerNames } = instance.value;
-      const result = await commands.renameMod(activeProfile, profiles, oldName, newName, paths.sourceDirs.get(oldName));
+      const result = await commands.renameMod(oldName, newName);
       if (!result.applied) return { applied: false, refusal: 'Failed to rename mod.', detail: result.refusal };
       if (result.unchanged) return { applied: true, outcome: { landed: [], refused: [] } };
       return {
         applied: true,
         outcome: { landed: [newName], refused: [] },
         partial: result.lineRefusals.map(({ profile, refusal }) => ({
-          message: `"${oldName}" was renamed, but its ${managerNames.modOrderFile} line in profile "${profile}" could not be renamed.`,
+          message: `"${oldName}" was renamed, but its ${commands.names.modOrderFile} line in profile "${profile}" could not be renamed.`,
           detail: refusal, severity: 'warning',
         })),
       };
@@ -248,22 +242,19 @@ export function registerModContextCommands(
     },
   };
 
-  const uninstall: AgentGesture<ModlistNode, readonly ModToUninstall[], GestureResult<Uninstalled>> = {
+  const uninstall: AgentGesture<ModlistNode, readonly string[], GestureResult<Uninstalled>> = {
     fromView: async (entry) => {
       const rows = pluralArgument(entry, 'mod');
-      const mods = rows.map((n) => ({ name: n.mod.name, archiveFilename: n.mod.archiveFilename }));
+      const mods = rows.map((n) => n.mod.name);
       if (mods.length === 0) return undefined;
       const sourceMods = rows.filter((n) => n.facts?.sourceMod === true).map((n) => n.mod.name);
-      return (await confirmUninstall(mods.map((m) => m.name), sourceMods, ask)) ? mods : undefined;
+      return (await confirmUninstall(mods, sourceMods, ask)) ? mods : undefined;
     },
-    fromAgent: ({ argument }) => argument.map(modNameOf).map((name) => ({
-      name, archiveFilename: instance.value.mods.flatMap((entry) => (entry.kind === 'mod' && entry.name === name ? [entry.archiveFilename] : []))[0],
-    })),
+    fromAgent: ({ argument }) => argument.map(modNameOf),
     run: (mods) => runModsWriting(instance, async (): Promise<GestureResult<Uninstalled>> => {
-      const { activeProfile, mods: order, managerNames } = instance.value;
-      const result = await commands.uninstallMods(activeProfile, order, mods, trash);
+      const result = await commands.uninstallMods(mods, trash);
       if (!result.applied) return { applied: false, refusal: 'Failed to uninstall mods.', detail: result.refusal };
-      return { applied: true, outcome: result.outcome, partial: result.outcome.landed.flatMap((item) => partialsOfUninstall(item, managerNames.modOrderFile)) };
+      return { applied: true, outcome: result.outcome, partial: result.outcome.landed.flatMap((item) => partialsOfUninstall(item, commands.names.modOrderFile)) };
     }),
     report: (result, mods) => {
       if (!result.applied) {
@@ -282,15 +273,15 @@ export function registerModContextCommands(
   ];
 }
 function separatorNamePrompt(
-  commands: ModCommands, instance: Pick<Instance, 'value'>, own?: string,
-): (value: string) => string | undefined {
-  return (value) => (value === '' ? undefined : commands.separatorNameRefusal(instance.value, value, own));
+  commands: ModCommands, own?: string,
+): (value: string) => Promise<string | undefined> | undefined {
+  return (value) => (value === '' ? undefined : promptRefusal(commands.separatorNameRefusal(value, own)));
 }
 
 function modNamePrompt(
-  commands: ModCommands, instance: Pick<Instance, 'value'>, own: string,
-): (value: string) => string | undefined {
-  return (value) => (value === '' ? undefined : commands.renameModNameRefusal(instance.value, value, own));
+  commands: ModCommands, own: string,
+): (value: string) => Promise<string | undefined> | undefined {
+  return (value) => (value === '' ? undefined : promptRefusal(commands.renameModNameRefusal(value, own)));
 }
 
 async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion): Promise<boolean> {
@@ -320,19 +311,18 @@ function renameGesture(
       const node = singularArgument(entry, 'separator');
       if (!node) return undefined;
       const oldName = node.separator.name;
-      const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(commands, instance, oldName));
+      const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(commands, oldName));
       return newName === undefined ? undefined : { oldName, newName };
     },
-    fromAgent: ({ argument, options: { name } }) => {
+    fromAgent: async ({ argument, options: { name } }) => {
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a separator carries one separator.');
       const oldName = separatorNameOf(only);
-      const refusal = commands.separatorNameRefusal(instance.value, name, oldName);
-      if (refusal !== undefined) throw new Refusal(refusal);
+      await refuseAgentName(commands.separatorNameRefusal(name, oldName));
       return { oldName, newName: name };
     },
     run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
-      const result = await commands.renameSeparator(instance.value.activeProfile, oldName, newName);
+      const result = await commands.renameSeparator(oldName, newName);
       if (!result.applied) return { applied: false, refusal: 'Failed to rename separator.', detail: result.refusal };
       return { applied: true, outcome: { landed: result.wrote ? [result.name] : [], refused: [] } };
     }),
@@ -350,21 +340,20 @@ function renameGesture(
       const node = singularArgument(entry, 'mod', 'separator');
       if (!node) return undefined;
       const name = await vscode.window.showInputBox({
-        prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(commands, instance),
+        prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(commands),
       });
       if (!name) return undefined;
       const anchor = node.kind === 'mod' ? node.mod : node.separator;
       return { name, anchor: { kind: anchor.kind, name: anchor.name } };
     },
-    fromAgent: ({ argument, options: { name } }) => {
+    fromAgent: async ({ argument, options: { name } }) => {
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to add a separator carries one mod or separator, the anchor.');
-      const refusal = commands.separatorNameRefusal(instance.value, name);
-      if (refusal !== undefined) throw new Refusal(refusal);
+      await refuseAgentName(commands.separatorNameRefusal(name));
       return { name, anchor: entryRefOf(only) };
     },
     run: ({ name, anchor }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
-      const result = await commands.insertSeparator(instance.value.activeProfile, name, anchor);
+      const result = await commands.insertSeparator(name, anchor);
       return result.applied
         ? { applied: true, outcome: { landed: [result.name], refused: [] } }
         : { applied: false, refusal: 'Failed to add separator.', detail: result.refusal };
@@ -385,14 +374,13 @@ function renameGesture(
     },
     fromAgent: ({ argument }) => argument.map(separatorNameOf),
     run: (names) => runModsWriting(instance, async (): Promise<GestureResult<DeletedSeparator>> => {
-      const { activeProfile, mods, managerNames } = instance.value;
-      const result = await commands.deleteSeparators(activeProfile, mods, names, trash);
+      const result = await commands.deleteSeparators(names, trash);
       if (!result.applied) return { applied: false, refusal: 'Failed to delete separators.', detail: result.refusal };
       return {
         applied: true,
         outcome: result.outcome,
         partial: result.outcome.landed.flatMap((item) => (item.lineRefusal === undefined ? [] : [{
-          message: `"${item.name}" was deleted, but its ${managerNames.modOrderFile} line could not be removed.`,
+          message: `"${item.name}" was deleted, but its ${commands.names.modOrderFile} line could not be removed.`,
           detail: item.lineRefusal, severity: 'warning' as const,
         }])),
       };
@@ -429,21 +417,20 @@ function renameGesture(
       fromView: async () => {
         const name = await vscode.window.showInputBox({
           prompt: 'New mod name', placeHolder: 'My New Mod',
-          validateInput: (value) => commands.newModNameRefusal(instance.value, value),
+          validateInput: (value) => promptRefusal(commands.newModNameRefusal(value)),
         });
         return name || undefined;
       },
-      fromAgent: ({ options: { name } }) => {
-        const refusal = commands.newModNameRefusal(instance.value, name);
-        if (refusal !== undefined) throw new Refusal(refusal);
+      fromAgent: async ({ options: { name } }) => {
+        await refuseAgentName(commands.newModNameRefusal(name));
         return name;
       },
       run: (name) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
         const failed = `Failed to create "${name}".`;
         try {
-          const outcome = await commands.createEmptyMod(instance.value.activeProfile, name);
+          const outcome = await commands.createEmptyMod(name);
           return outcome.applied
-            ? { applied: true, outcome: { landed: [name], refused: [] }, partial: createPartial(name, outcome.lineRefusal, instance.value.managerNames.modOrderFile) }
+            ? { applied: true, outcome: { landed: [name], refused: [] }, partial: createPartial(name, outcome.lineRefusal, commands.names.modOrderFile) }
             : { applied: false, refusal: failed, detail: outcome.refusal };
         } catch (err) {
           return { applied: false, refusal: failed, detail: errorMessage(err) };

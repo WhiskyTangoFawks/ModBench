@@ -9,6 +9,7 @@ import { fileInFolder, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeEx
 import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
+import type { ReadingSource } from './mo2Reads';
 import { releaseRoot } from './releaseRoot';
 
 interface Extraction {
@@ -86,20 +87,21 @@ async function abandonAfter(extraction: Extraction, failure: unknown): Promise<n
   throw failure;
 }
 
-export function mo2Landing(context: Mo2Context, archives: ArchiveReader): Pick<InstanceAdapter, 'install'> {
+export function mo2Landing(context: Mo2Context, archives: ArchiveReader, { settings }: Pick<ReadingSource, 'settings'>): Pick<InstanceAdapter, 'install'> {
   const fill = (installed: InstallPackage, path: string): Promise<void> =>
     (installed.kind === 'archive' ? archives.extract(installed.path, path) : copyTree(installed.path, path));
 
   return {
     // One lock per instance: two installs of one name must not both pass the name check.
     install: (installed, target, keys) => withLock(context.instanceRoot, async () => {
+      const { gameName } = await settings();
       const holding = await folderHolding(context, { kind: 'mod', name: target.name });
       if ((target.kind === 'new') !== (holding === undefined)) return { landed: false };
       const extraction = holding === undefined ? await extractNewMod(context, target.name) : await extractUpgrade(target.name, holding.path);
       try {
         await fill(installed, extraction.path);
         const { root, isFomod } = await releaseRoot(extraction.path);
-        await extraction.land(root, keys);
+        await extraction.land(root, { ...keys, gameName });
         return { landed: true, isFomod };
       } catch (err) {
         return abandonAfter(extraction, err);

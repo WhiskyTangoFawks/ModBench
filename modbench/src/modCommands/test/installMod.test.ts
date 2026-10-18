@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { modCommands, type ModPackage } from '../modCommands';
-import type { InstallPackage, InstallTarget } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import type { DownloadedFile, DownloadMeta, InstallPackage, InstallTarget } from '../../instanceAdapter/instanceAdapter';
+import { fakeInstanceAdapter, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ModStatus } from '../../client';
 import type { ReadModStatus } from '../../client';
 import type { ReadFailed } from '../../wire/readFailed';
@@ -9,15 +9,21 @@ import { unreadStatus } from '../../test/unreadStatus';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const MOD = 'Freshly Installed Mod';
-const GAME_NAME = 'Fallout 4';
 const ARCHIVE: InstallPackage = { kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' };
 const NEW_MOD: InstallTarget = { kind: 'new', name: MOD };
 const UPGRADED = { kind: 'upgrade', name: 'Harder VATS' } as const;
-const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z', path: '/downloads/Freshly-1-0.7z' } as const;
+const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z' } as const;
+const DOWNLOADED_PATH = '/downloads/Freshly-1-0.7z';
+const downloadedFile = (name: string, path: string, meta?: Partial<DownloadMeta>): DownloadedFile =>
+  ({ name, path, metaPath: `${path}.meta`, size: 1, mtimeMs: 1, meta: meta && { status: 'Downloaded', excluded: false, ...meta } });
+const FRESHLY = downloadedFile(DOWNLOADED.name, DOWNLOADED_PATH, { modID: '111', fileID: '222', version: '3.0.0' });
 
-function install(installed: ModPackage, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadModStatus = unreadStatus) {
-  const fake = fakeInstanceAdapter(undefined, answers);
-  const outcome = modCommands(fake.adapter, new InMemoryMEditClient(), readStatus).installMod(installed, target, GAME_NAME, force);
+function install(
+  installed: ModPackage, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadModStatus = unreadStatus,
+  files: readonly DownloadedFile[] = [FRESHLY],
+) {
+  const fake = fakeInstanceAdapter(readingFixture({ downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files } }), answers);
+  const outcome = modCommands(fake.adapter, new InMemoryMEditClient(), readStatus).installMod(installed, target, force);
   return outcome.then((result) => ({ result, calls: fake.calls }));
 }
 
@@ -127,21 +133,43 @@ describe('installMod', () => {
   });
 
   it.each([
-    ['a folder', { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'folder', path: '/elsewhere/Loose' }, { gameName: GAME_NAME }],
-    ['an archive, recording its file name', ARCHIVE, ARCHIVE, { gameName: GAME_NAME, archiveFilename: 'Freshly-1-0.7z' }],
-    ['a downloaded file, recording its name, Nexus ids and version', { ...DOWNLOADED, modID: '111', fileID: '222', version: '3.0.0' },
-      { kind: 'archive', path: DOWNLOADED.path },
-      { gameName: GAME_NAME, archiveFilename: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFiles: [{ nexusId: '111', fileId: '222' }] }],
+    ['a folder', { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'folder', path: '/elsewhere/Loose' }, {}],
+    ['an archive, recording its file name', ARCHIVE, ARCHIVE, { archiveFilename: 'Freshly-1-0.7z' }],
+    ['a downloaded file, recording its name, Nexus ids and version', DOWNLOADED, { kind: 'archive', path: DOWNLOADED_PATH },
+      { archiveFilename: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFiles: [{ nexusId: '111', fileId: '222' }] }],
+    ['an archive that is a downloaded file, recording what the file\'s metadata holds', { kind: 'archive', path: DOWNLOADED_PATH }, { kind: 'archive', path: DOWNLOADED_PATH },
+      { archiveFilename: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFiles: [{ nexusId: '111', fileId: '222' }] }],
   ] as const)('hands the adapter %s with the keys its meta is to hold', async (_, installed, handed, keys) => {
     const { calls } = await install(installed);
 
     expect(calls[0]).toEqual({ verb: 'install', package: handed, target: NEW_MOD, keys });
   });
 
+  it('records no Nexus id for a downloaded file whose metadata holds none', async () => {
+    const { calls } = await install(DOWNLOADED, NEW_MOD, {}, true, unreadStatus, [downloadedFile(DOWNLOADED.name, DOWNLOADED_PATH)]);
+
+    expect(calls[0]).toMatchObject({ verb: 'install', keys: { archiveFilename: 'Freshly-1-0.7z', nexusId: undefined, installedFiles: undefined } });
+  });
+
   it('marks a downloaded file installed once it landed, and marks no file for an archive, though a downloaded file bears its name', async () => {
     expect((await install(DOWNLOADED)).calls.map((call) => call.verb)).toEqual(['install', 'markDownloadedFile']);
     expect((await install(DOWNLOADED)).calls[1]).toEqual({ verb: 'markDownloadedFile', name: DOWNLOADED.name, mark: 'Installed' });
-    expect((await install({ kind: 'archive', path: DOWNLOADED.path })).calls.map((call) => call.verb)).toEqual(['install']);
+    expect((await install({ kind: 'archive', path: DOWNLOADED_PATH })).calls[1]).toEqual({ verb: 'markDownloadedFile', name: DOWNLOADED.name, mark: 'Installed' });
+    expect((await install({ kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' })).calls.map((call) => call.verb)).toEqual(['install']);
+  });
+
+  it('refuses a downloaded file the downloads folder lacks, installing nothing', async () => {
+    const { result, calls } = await install(DOWNLOADED, NEW_MOD, {}, true, unreadStatus, []);
+
+    expect(result).toEqual({ applied: false, refusal: '"Freshly-1-0.7z" is gone from Downloads.' });
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses, installing nothing, when the downloaded files cannot be read', async () => {
+    const { result, calls } = await install(ARCHIVE, NEW_MOD, { unreadReads: { downloadedFiles: 'downloads is locked' } });
+
+    expect(result).toEqual({ applied: false, refusal: 'downloads is locked' });
+    expect(calls).toEqual([]);
   });
 
   it('marks no downloaded file when nothing landed', async () => {
@@ -157,6 +185,6 @@ describe('installMod', () => {
     const { result } = await install(DOWNLOADED, NEW_MOD, answers);
 
     expect(result).toMatchObject({ applied: true, isFomod: false });
-    expect(result.applied && result.downloadRefusal).toMatch(why);
+    expect(result.applied && result.downloadedFileRefusal).toMatch(why);
   });
 });

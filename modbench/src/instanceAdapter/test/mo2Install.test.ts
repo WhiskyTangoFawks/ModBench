@@ -26,7 +26,7 @@ const UPGRADED = 'Unofficial Fallout 4 Patch';
 const DOWNLOAD = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 const PAYLOAD = ['Installed.esp', 'textures/added.dds', 'meshes/deep/nested.nif'];
 const ARCHIVE: InstallPackage = { kind: 'archive', path: '/elsewhere/Release-1-0.7z' };
-const KEYS = { gameName: 'Fallout 4' };
+const KEYS = {};
 
 const errnoError = (code: string, message: string): NodeJS.ErrnoException =>
   Object.assign(new Error(`${code}: ${message}`), { code });
@@ -214,10 +214,10 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     });
 
     it('sets the keys it is given over the meta the mod had, keeping each value they leave out, and never over a meta the release ships', async () => {
-      await holding(['meta.ini']).install(ARCHIVE, { kind: 'upgrade', name: UPGRADED }, { gameName: 'Fallout4', version: '2.2' });
+      await holding(['meta.ini']).install(ARCHIVE, { kind: 'upgrade', name: UPGRADED }, { version: '2.2' });
 
       expect(await meta(UPGRADED)).toBe(
-        `[General]\r\ngameName=Fallout4\r\nmodid=4598\r\nversion=2.2\r\ncategory="-1,"\r\ninstallationFile=${DOWNLOAD}\r\n`,
+        `[General]\r\ngameName=Fallout 4\r\nmodid=4598\r\nversion=2.2\r\ncategory="-1,"\r\ninstallationFile=${DOWNLOAD}\r\n`,
       );
     });
 
