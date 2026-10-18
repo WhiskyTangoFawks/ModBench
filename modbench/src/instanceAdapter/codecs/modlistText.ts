@@ -70,9 +70,9 @@ export function setEnabledInText(text: string, modName: string, enabled: boolean
   return editLines(text, (lines) => {
     modLineAt(lines, modName);
     return lines.map((line) => {
-      const name = nameOfLine(line);
-      if (name === undefined || modNameKey(name) !== modNameKey(modName)) return line;
-      return (enabled ? '+' : '-') + name;
+      const read = readLine(line);
+      if (read === undefined || modNameKey(read.name) !== modNameKey(modName) || (read.prefix !== '-') === enabled) return line;
+      return (enabled ? '+' : '-') + read.name;
     });
   });
 }

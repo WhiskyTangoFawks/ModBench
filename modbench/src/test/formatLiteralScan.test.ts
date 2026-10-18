@@ -189,7 +189,7 @@ describe('format literals, scanned over the extension and webview trees against 
     expect(allowedTokens(join('src', 'instanceAdapter', 'codecs', 'pluginsText.ts'))).toEqual(new Set());
   });
 
-  it('catches MO2\'s separator marker planted in the game\'s codec', async () => {
+  it('catches MO2\'s markers planted in the game\'s codec', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-format-literal-scan-'));
     try {
       await mkdir(join(dir, 'instanceAdapter', 'codecs'), { recursive: true });
@@ -197,8 +197,8 @@ describe('format literals, scanned over the extension and webview trees against 
       const managerCodec = join(dir, 'instanceAdapter', 'codecs', 'modlistText.ts');
       const gameCodec = join(dir, 'loadOrderFileCodec', 'pluginsText.ts');
       await writeFile(managerCodec, "export const marks = ['+'];\n");
-      await writeFile(gameCodec, "export const marks = ['*', '_separator'];\n");
-      expect(findLeaks([dir])).toEqual({ [gameCodec]: ['_separator'] });
+      await writeFile(gameCodec, "export const marks = ['*', '+', '_separator'];\n");
+      expect(findLeaks([dir])).toEqual({ [gameCodec]: ['+', '_separator'] });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -119,7 +119,7 @@ describe('parseModlist', () => {
 describe('edits on lines MO2 reads', () => {
   it('toggles an unprefixed, padded line and every case-variant line of its name', () => {
     expect(setEnabledInText('Bare \r\n+Other\r\n-bare\r\n', 'Bare', false)).toBe('-Bare\r\n+Other\r\n-bare\r\n');
-    expect(setEnabledInText('Bare\r\n-bare\r\n', 'Bare', true)).toBe('+Bare\r\n+bare\r\n');
+    expect(setEnabledInText(' Bare \r\n-bare\r\n', 'Bare', true)).toBe(' Bare \r\n+bare\r\n');
   });
 
   it('renames an unprefixed line without inventing a prefix', () => {
