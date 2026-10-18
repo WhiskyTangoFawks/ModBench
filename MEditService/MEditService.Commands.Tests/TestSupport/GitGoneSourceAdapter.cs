@@ -11,17 +11,18 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// the verb that last ran it.</summary>
 internal sealed class GitGoneSourceAdapter : ISourceAdapter
 {
-    private readonly ISourceAdapter _inner = TestAdapters.Source();
-    private readonly SourceFailure _gitMissing;
+    private static readonly Lazy<SourceFailure> GitMissing = new(ReadWithNoPath);
 
-    /// <summary>Changes the process's PATH while it reads the failure, so its caller holds the process environment.</summary>
-    internal GitGoneSourceAdapter()
+    private readonly ISourceAdapter _inner = TestAdapters.Source();
+
+    /// <summary>Reads the failure with the process's PATH emptied, once per process, so only the first caller holds the environment.</summary>
+    private static SourceFailure ReadWithNoPath()
     {
         var path = Environment.GetEnvironmentVariable("PATH");
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try
         {
-            _gitMissing = _inner.WhyGitCannotRun() ?? throw new InvalidOperationException("Expected git to be missing with no PATH.");
+            return TestAdapters.Source().WhyGitCannotRun() ?? throw new InvalidOperationException("Expected git to be missing with no PATH.");
         }
         finally
         {
@@ -29,7 +30,7 @@ internal sealed class GitGoneSourceAdapter : ISourceAdapter
         }
     }
 
-    public SourceFailure? WhyGitCannotRun() => _gitMissing;
+    public SourceFailure? WhyGitCannotRun() => GitMissing.Value;
 
     public bool SourceReads(RegisteredPlugin plugin) => _inner.SourceReads(plugin);
 
