@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO.Compression;
 using System.Text;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -63,6 +64,76 @@ public sealed class PluginByteComparisonTests : IDisposable
 
         Assert.False(comparison.Identical);
         Assert.Null(comparison.Loss);
+    }
+
+    [Fact]
+    public async Task ARewriteLackingARecord_NamesItAsAbsent()
+    {
+        var kept = Record("MISC", 3, Sub("DATA", [1]));
+        var lost = Record("MISC", 4, Sub("DATA", [1]));
+
+        var unverified = await UnverifiedAsync([.. kept, .. lost], kept);
+
+        Assert.Equal(("MISC", "000004:a.esp", UnverifiedReason.AbsentFromRewrite),
+            (unverified?.RecordType, unverified?.FormKey.ToString(), unverified?.Reason));
+    }
+
+    [Fact]
+    public async Task TwoOriginalRecordsOfOneIdentity_NeedTwoInTheRewrite()
+    {
+        var record = Record("MISC", 3, Sub("DATA", [1]));
+
+        var unverified = await UnverifiedAsync([.. record, .. record], record);
+
+        Assert.Equal(UnverifiedReason.AbsentFromRewrite, unverified?.Reason);
+    }
+
+    [Fact]
+    public async Task APairWhoseCompressionDiffers_IsNotComparable()
+    {
+        var payload = Sub("DATA", [1]);
+
+        var unverified = await UnverifiedAsync([.. Tes4(), .. Record("MISC", 3, payload)], [.. Tes4(), .. CompressedRecord("MISC", 3, payload)]);
+
+        Assert.Equal(("MISC", UnverifiedReason.NotComparable), (unverified?.RecordType, unverified?.Reason));
+    }
+
+    [Fact]
+    public async Task APairBothCompressedAndRead_IsVerified()
+    {
+        var payload = Sub("DATA", [1]);
+
+        Assert.Null(await UnverifiedAsync([.. Tes4(), .. CompressedRecord("MISC", 3, payload)], [.. Tes4(), .. CompressedRecord("MISC", 3, payload)]));
+    }
+
+    [Fact]
+    public async Task WhenTheRewritePrunesAMaster_ThePluginHeaderStillPairs()
+    {
+        var unverified = await UnverifiedAsync(Tes4("A.esm", "B.esm"), Tes4("B.esm"));
+
+        Assert.Null(unverified);
+    }
+
+    private async Task<UnverifiedRecord?> UnverifiedAsync(byte[] original, byte[] rewritten) =>
+        (await Adapter.CompareBytesAsync(Write("a.esp", original), Write("b.esp", rewritten), EmptyLoadOrder.Of(GameRelease.Fallout4)))
+        .Answered().Unverified;
+
+    private static byte[] Tes4(params string[] masters) =>
+        Record("TES4", 0, [Sub("HEDR", new byte[12]), .. masters.SelectMany(master => new[]
+            { Sub("MAST", Encoding.ASCII.GetBytes(master + "\0")), Sub("DATA", new byte[8]) })]);
+
+    private static byte[] CompressedRecord(string type, uint formId, params byte[][] subrecords)
+    {
+        var payload = subrecords.SelectMany(s => s).ToArray();
+        using var stream = new MemoryStream();
+        stream.Write(BitConverter.GetBytes(payload.Length));
+        using (var zlib = new ZLibStream(stream, CompressionLevel.Optimal, leaveOpen: true))
+            zlib.Write(payload);
+        var record = Record(type, formId);
+        var data = stream.ToArray();
+        BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(4), (uint)data.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(8), 0x00040000);
+        return [.. record, .. data];
     }
 
     private string Write(string name, byte[] bytes)

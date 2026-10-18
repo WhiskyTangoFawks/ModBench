@@ -181,18 +181,19 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                 return new PluginByteComparison(Identical: true);
 
             var plugin = ModKey.FromFileName(Path.GetFileName(originalPath));
-            var pairs = PluginBinaryWalk.PairByFormKey(
+            var pairing = PluginBinaryWalk.PairByFormKey(
                 originalBytes, PluginBinaryWalk.MastersOf(new ModPath(plugin, originalPath), loadOrder),
                 recompiledBytes, PluginBinaryWalk.MastersOf(new ModPath(plugin, recompiledPath), loadOrder), loadOrder.GameRelease);
-            var deletedRecordEmptied = PluginBinaryWalk.FirstEmptiedDeletedRecord(pairs) is { } emptied
+            var deletedRecordEmptied = PluginBinaryWalk.FirstEmptiedDeletedRecord(pairing.Pairs) is { } emptied
                 ? $"{emptied.Original.RecordType} {emptied.FormKey}"
                 : null;
-            if (PluginBinaryWalk.FindFirstSubrecordLoss(pairs) is not { } loss)
-                return new PluginByteComparison(Identical: false, DeletedRecordEmptied: deletedRecordEmptied);
+            var unverified = PluginBinaryWalk.FirstUnverified(pairing);
+            if (PluginBinaryWalk.FindFirstSubrecordLoss(pairing.Pairs) is not { } loss)
+                return new PluginByteComparison(Identical: false, DeletedRecordEmptied: deletedRecordEmptied, Unverified: unverified);
 
             var cause = MalformedPluginScan.Scan(originalBytes, loadOrder.GameRelease).FirstOrDefault(d =>
                 d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
-            return new PluginByteComparison(Identical: false, loss, cause, deletedRecordEmptied);
+            return new PluginByteComparison(Identical: false, loss, cause, deletedRecordEmptied, unverified);
         });
 
     // Mutagen's parallel import shares the form version of the record being read across threads, so a

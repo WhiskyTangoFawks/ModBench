@@ -430,6 +430,28 @@ public sealed class InitModTests
     }
 
     [Fact]
+    public async Task InitMod_ARecordInAGroupMutagenDrops_RefusesNamingIt_SinceTheRewriteLacksIt()
+    {
+        using var modFolder = new ScratchDirectory("medit-init-dropped-group-");
+        using var gameDir = new ScratchDirectory("medit-init-dropped-group-game-");
+        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+        var mod = ModKey.FromFileName("Fixture.esp");
+        var dropped = new FormKey(mod, 0x801);
+        UnknownGroupPlugin.Write(pluginPath, new FormKey(mod, 0x800), dropped);
+
+        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
+        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+
+        Assert.Equal((false, InitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal(
+            $"Fixture.esp does not round-trip through its own source: MISC {dropped} is absent from the rewrite, " +
+            "so its records cannot be proven intact.",
+            result.Message);
+        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
+    }
+
+    [Fact]
     public async Task InitMod_ARecordWithANullFormId_RefusesNamingIt_SinceThePluginIsMalformed()
     {
         using var modFolder = new ScratchDirectory("medit-init-null-formid-");
