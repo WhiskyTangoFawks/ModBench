@@ -7,12 +7,13 @@ import {
   appendPluginInText, movePluginsInText, parsePlugins, pluginKey, removePluginFromText, setPluginEnabledInText,
   type PluginEntry,
 } from '../loadOrderFileCodec/pluginsText';
+import { loadOrderTextOf } from './codecs/loadOrderText';
 import { parseDownloadMeta, setHiddenInText, setInstalledInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadMeta, trashDownloadMeta } from './downloadMeta';
-import { ensureDir, exists, putIfChanged } from './files';
+import { ensureDir, exists, putIfChanged, withLock, write } from './files';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from './instanceAdapter';
-import { downloadFile, pluginsFile, settingsFile } from './layout';
+import { downloadFile, pluginOrderFiles, settingsFile } from './layout';
 import { sourceModsIn } from './sourceMods';
 import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from './mo2Reads';
@@ -64,13 +65,24 @@ const pluginOrderIn = (text: string): PluginEntry[] => firstLines(parsePlugins(t
 export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Changes {
   const { instanceRoot } = context;
 
+  // MO2 takes the order from loadorder.txt and only the enabled state from plugins.txt, so a
+  // changed plugins.txt brings loadorder.txt with it.
+  function putPluginOrder(profile: string, edit: (before: string) => string | Promise<string>): Promise<{ wrote: boolean }> {
+    const [loadOrder, plugins] = pluginOrderFiles(instanceRoot, profile);
+    return withLock(loadOrder, () => putIfChanged(plugins, async (before) => {
+      const after = await edit(before);
+      if (after !== before) await write(loadOrder, loadOrderTextOf(after));
+      return after;
+    }));
+  }
+
   return {
     changePluginOrder(profile, decide) {
-      return putIfChanged(pluginsFile(instanceRoot, profile), (text) => decide(pluginOrderIn(text)).reduce(splicePluginOrderChange, text));
+      return putPluginOrder(profile, (text) => decide(pluginOrderIn(text)).reduce(splicePluginOrderChange, text));
     },
 
     changePluginOrderOverProvided(profile, decide) {
-      return putIfChanged(pluginsFile(instanceRoot, profile), async (text) => {
+      return putPluginOrder(profile, async (text) => {
         const order = pluginOrderIn(text);
         return decide(order, await readPluginsProvided(source, profile)).reduce(splicePluginOrderChange, text);
       });

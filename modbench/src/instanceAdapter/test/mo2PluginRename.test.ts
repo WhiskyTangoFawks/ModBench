@@ -36,6 +36,8 @@ const MOD = 'mods/Patch Mod';
 const ORIGIN: FileOrigin = { kind: 'mod', name: 'Patch Mod' };
 const DEFAULT_PLUGINS = 'profiles/Default/plugins.txt';
 const SECONDARY_PLUGINS = 'profiles/Secondary/plugins.txt';
+const DEFAULT_LOAD_ORDER = 'profiles/Default/loadorder.txt';
+const SECONDARY_LOAD_ORDER = 'profiles/Secondary/loadorder.txt';
 
 const NAMED_FOR_IT: ReadonlyArray<readonly [before: string, after: string]> = [
   ['Patch Mod.esp', 'Renamed Patch.esp'],
@@ -126,6 +128,25 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     expect(await text(SECONDARY_PLUGINS)).toBe('*Unofficial Fallout 4 Patch.esp\r\nRenamed Patch.esp\r\n*Last.esp\r\n');
     expect((await text(DEFAULT_PLUGINS)).startsWith('﻿')).toBe(true);
   });
+
+  it('renames the plugin\'s line in every loadorder.txt that lists it, as MO2 takes the order from there', async () => {
+    await put(DEFAULT_LOAD_ORDER, 'Patch Mod.esp\r\nOther.esp\r\n');
+    await put(SECONDARY_LOAD_ORDER, 'Other.esp\r\n');
+
+    await rename();
+
+    expect(await text(DEFAULT_LOAD_ORDER)).toBe('Renamed Patch.esp\r\nOther.esp\r\n');
+    expect(await text(SECONDARY_LOAD_ORDER)).toBe('Other.esp\r\n');
+  });
+
+  it('settles a plugin move overlapping a rename on one profile, both taking the plugin order files\' locks in one order', async () => {
+    await put(DEFAULT_LOAD_ORDER, 'Patch Mod.esp\r\nOther.esp\r\n');
+    const move = adapter.changePluginOrder('Default', () => [{ kind: 'move', plugins: ['Patch Mod.esp'], toIndex: 0 }]);
+
+    await Promise.all([rename(), move]);
+
+    expect(await text(DEFAULT_LOAD_ORDER)).toContain('Renamed Patch.esp');
+  }, 2000);
 
   it('leaves the files of other plugins named alike, the plugin source and an archive of another name where they are', async () => {
     await rename();
@@ -229,6 +250,18 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
 
   describe('a failed write leaves every file under its old name', () => {
     it('puts back the files and the lines already written when a later line cannot be written', async () => {
+      const before = await snapshotTree(root);
+      vi.mocked(fsRename).mockImplementation((from, to) =>
+        (String(to) === at(SECONDARY_PLUGINS) ? Promise.reject(new Error('disk full')) : actualRename(from, to)));
+
+      await expect(rename()).rejects.toThrow('disk full');
+
+      assertOnlyChanged(before, await snapshotTree(root), new Set());
+    });
+
+    it('puts back the loadorder.txt already written when a later line cannot be written', async () => {
+      await put(DEFAULT_LOAD_ORDER, 'Patch Mod.esp\r\n');
+      await put(SECONDARY_LOAD_ORDER, 'Patch Mod.esp\r\n');
       const before = await snapshotTree(root);
       vi.mocked(fsRename).mockImplementation((from, to) =>
         (String(to) === at(SECONDARY_PLUGINS) ? Promise.reject(new Error('disk full')) : actualRename(from, to)));
