@@ -16,9 +16,9 @@ public sealed class CompileRecordingTheLastWriteTests : IDisposable
     public async Task Compile_WorkingTree_LeavesTheCompiledBinaryAsTheOneModbenchLastWrote()
     {
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
         Assert.Empty(answer.Refused);
-        Assert.Single(answer.Landed);
+        Assert.Single(answer.Applied);
 
         Assert.Empty(ExternalChanges.NamedBy(_mod.LoadOrder));
     }
@@ -28,7 +28,7 @@ public sealed class CompileRecordingTheLastWriteTests : IDisposable
     {
         TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         Assert.Single(answer.Refused);
         Assert.Empty(ExternalChanges.NamedBy(_mod.LoadOrder));
@@ -42,10 +42,10 @@ public sealed class CompileRecordingTheLastWriteTests : IDisposable
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
         LastWriteRecord.RefuseRefUpdatesAfterTheFirst(_mod.ModFolder);
 
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         Assert.NotEqual(before, File.ReadAllBytes(pluginPath));
         Assert.Single(diagnostics, d => d.Message.Contains("could not be finished", StringComparison.Ordinal));
     }
@@ -58,7 +58,7 @@ public sealed class CompileRecordingTheLastWriteTests : IDisposable
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
         LastWriteRecord.RefuseRefUpdates(_mod.ModFolder);
 
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Equal(CompileRefusal.WriteFailed, refused.Refusal);

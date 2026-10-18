@@ -30,10 +30,10 @@ public sealed class CompilePluginMisplacedFileTests : IDisposable
         var belongsAt = LayoutPath;
         var renamed = RenameTheNpcFile();
 
-        var answer = await _mod.CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await _mod.CompileService().CompileAsync([_mod.Plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         var diagnostic = Assert.Single(diagnostics, Misplaces);
         Assert.Equal(_mod.Npc.ToString(), diagnostic.FormKey);
         Assert.Equal(renamed, diagnostic.SourceRelativePath);
@@ -50,9 +50,9 @@ public sealed class CompilePluginMisplacedFileTests : IDisposable
 
         Assert.True(File.Exists(Path.Combine(_mod.ModFolder, belongsAt)));
         Assert.False(File.Exists(Path.Combine(_mod.ModFolder, renamed)));
-        var answer = await _mod.CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await _mod.CompileService().CompileAsync([_mod.Plugin])).Value();
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         Assert.DoesNotContain(diagnostics, Misplaces);
     }
 }

@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -77,8 +76,8 @@ public sealed class CompilePluginLinkTests : IDisposable
             GameRelease.Fallout4,
             npc => npc.Keywords = [new FormLink<IKeywordGetter>(keyword)]);
 
-    private async Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileHost() =>
-        await CompileServices.Over(_loadOrder).CompileAsync([_host]);
+    private async Task<CompileResult> CompileHost() =>
+        (await CompileServices.Over(_loadOrder).CompileAsync([_host])).Value();
 
     private IReadOnlyList<FormKey> KeywordsInTheBinary()
     {
@@ -97,7 +96,7 @@ public sealed class CompilePluginLinkTests : IDisposable
         var answer = await CompileHost();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         var diagnostic = Assert.Single(diagnostics, d => d.Message.Contains(Dangling, StringComparison.Ordinal));
         Assert.Equal(_npc.ToString(), diagnostic.FormKey);
         Assert.Equal($"Keywords: [0]: [{Dangling}] <Error: Could not be resolved>", diagnostic.Message);
@@ -110,7 +109,7 @@ public sealed class CompilePluginLinkTests : IDisposable
         var answer = await CompileHost();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         Assert.DoesNotContain(
             diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
     }
@@ -123,7 +122,7 @@ public sealed class CompilePluginLinkTests : IDisposable
         var answer = await CompileHost();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         Assert.DoesNotContain(
             diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
     }
@@ -136,7 +135,7 @@ public sealed class CompilePluginLinkTests : IDisposable
         var answer = await CompileHost();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         var aboutTheFile = Assert.Single(
             diagnostics, d => d.Message.StartsWith(TargetName, StringComparison.Ordinal));
         Assert.Contains("could not be read", aboutTheFile.Message, StringComparison.Ordinal);
@@ -150,11 +149,11 @@ public sealed class CompilePluginLinkTests : IDisposable
     [Fact]
     public async Task Compile_WhenTheLinkCheckItselfFails_StillSucceeds_AndSaysTheCheckDidNotRun()
     {
-        var answer = await CompileServices.Over(_loadOrder, new FaultyLinkAdapter())
-            .CompileAsync([_host]);
+        var answer = (await CompileServices.Over(_loadOrder, new FaultyLinkAdapter())
+            .CompileAsync([_host])).Value();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         var diagnostic = Assert.Single(diagnostics);
         Assert.Contains("links could not be checked", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains(FaultyLinkAdapter.Fault, diagnostic.Message, StringComparison.Ordinal);
@@ -185,7 +184,7 @@ public sealed class CompilePluginLinkTests : IDisposable
         var answer = await CompileHost();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         Assert.DoesNotContain(
             diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
     }

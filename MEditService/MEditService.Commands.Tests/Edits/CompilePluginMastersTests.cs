@@ -83,10 +83,10 @@ public sealed class CompilePluginMastersTests : IDisposable
     [Fact]
     public async Task Compile_ForALinkIntoAPluginTheLoadOrderHolds_ReportsNoUnresolvedDiagnostic()
     {
-        var answer = await CompileService().CompileAsync([_plugin]);
+        var answer = (await CompileService().CompileAsync([_plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         Assert.DoesNotContain(
             diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
     }
@@ -97,7 +97,7 @@ public sealed class CompilePluginMastersTests : IDisposable
         var binary = File.ReadAllBytes(Path.Combine(_modFolder, PluginName));
         var withoutBravo = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, _entries.Where(entry => entry.Name != BravoName));
 
-        var answer = await CompileServices.Over(withoutBravo).CompileAsync([_plugin]);
+        var answer = (await CompileServices.Over(withoutBravo).CompileAsync([_plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Equal(
@@ -114,10 +114,10 @@ public sealed class CompilePluginMastersTests : IDisposable
             new Keyword(_deltaKeyword, Fallout4Release.Fallout4) { EditorID = "DeltaKeyword" },
             "kywd", GameRelease.Fallout4);
 
-        var answer = await CompileService().CompileAsync([_plugin]);
+        var answer = (await CompileService().CompileAsync([_plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        Assert.Single(answer.Landed);
+        Assert.Single(answer.Applied);
 
         using var overlayDisposable = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(PluginName), Path.Combine(_modFolder, PluginName)), GameRelease.Fallout4);
@@ -134,10 +134,10 @@ public sealed class CompilePluginMastersTests : IDisposable
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
             npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_bravoRace)));
 
-        var answer = await CompileService().CompileAsync([_plugin]);
+        var answer = (await CompileService().CompileAsync([_plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         var diagnostic = Assert.Single(
             diagnostics, d => d.Message.Contains("RACE reference", StringComparison.Ordinal));
         Assert.Equal(_npc.ToString(), diagnostic.FormKey);
@@ -147,9 +147,9 @@ public sealed class CompilePluginMastersTests : IDisposable
     [Fact]
     public async Task Compile_WritesMasters_InCurrentLoadOrder_NotAlphabetical()
     {
-        var answer = await CompileService().CompileAsync([_plugin]);
+        var answer = (await CompileService().CompileAsync([_plugin])).Value();
         Assert.Empty(answer.Refused);
-        Assert.Single(answer.Landed);
+        Assert.Single(answer.Applied);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);
         using var overlayDisposable = ModFactory.ImportGetter(
@@ -168,9 +168,9 @@ public sealed class CompilePluginMastersTests : IDisposable
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
             npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_deltaKeyword)));
 
-        var answer = await CompileService().CompileAsync([_plugin]);
+        var answer = (await CompileService().CompileAsync([_plugin])).Value();
         Assert.Empty(answer.Refused);
-        Assert.Single(answer.Landed);
+        Assert.Single(answer.Applied);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);
         using var overlayDisposable = ModFactory.ImportGetter(

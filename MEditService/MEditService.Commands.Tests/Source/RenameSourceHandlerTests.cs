@@ -206,10 +206,10 @@ public sealed class RenameSourceHandlerTests : IDisposable
         Assert.Contains("Other.esp", result.Message, StringComparison.Ordinal);
     }
 
-    private sealed record Read(RenameSourceRefusal? Refusal, string? Message, SourceChanges? Changes, string? TreeName)
+    private sealed record Read(RenameSourceRefusal? Refusal, string? Message, RenameSourceChanges? Changes)
     {
         internal Read(RenameSourceResult result)
-            : this(result.Match<Read>((changes, tree) => new(null, null, changes, tree), (refusal, message) => new(refusal, message, null, null)))
+            : this(result.Match<Read>(changes => new(null, null, changes), (refusal, message) => new(refusal, message, null)))
         {
         }
     }
@@ -222,13 +222,13 @@ public sealed class RenameSourceHandlerTests : IDisposable
         EditSaving.Save(
             changes.Moves.Select(move => (move.From, move.To)), changes.Deletions,
             changes.Documents.Select(document => (document.Path, document.Text)));
-        var moved = Moving.MoveLastWritten(plugin, answered.TreeName.Require(), newName);
-        return moved.Refusal is null ? answered : new Read(moved.Refusal, moved.Message, null, null);
+        var moved = Moving.MoveLastWritten(plugin, changes.TreeName, newName);
+        return moved.Refusal is null ? answered : new Read(moved.Refusal, moved.Message, null);
     }
 
     private async Task<byte[]> CompiledBytes(PluginAddress plugin)
     {
-        var compiled = await TestEditService.CompileHandler(_holder).CompileAsync([plugin]);
+        var compiled = (await TestEditService.CompileHandler(_holder).CompileAsync([plugin])).Value();
         Assert.Empty(compiled.Refused);
         return File.ReadAllBytes(Path.Combine(_sourceMod, plugin.Name));
     }
