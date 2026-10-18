@@ -67,7 +67,8 @@ internal sealed class SourceRepositoryLayout(string sourceFolder, GameRelease re
         return Directory.Exists(assets)
             ? [.. Directory.EnumerateFiles(assets, "*", SearchOption.AllDirectories)
                 .Order(StringComparer.Ordinal)
-                .Select(file => new Asset(Path.GetRelativePath(assets, file).Replace('\\', '/'), () => File.OpenRead(file)))]
+                .Select(file => new Asset(Path.GetRelativePath(assets, file).Replace('\\', '/'), () => File.OpenRead(file)))
+                .Where(asset => !TempName.HoldsTemp(asset.Path))]
             : [];
     }
 

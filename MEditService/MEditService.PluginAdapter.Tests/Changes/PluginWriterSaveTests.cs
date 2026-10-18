@@ -48,6 +48,19 @@ public sealed class PluginWriterSaveTests
     }
 
     [Fact]
+    public async Task ASave_RemovesALeftoverOfAWriterThatIsGone()
+    {
+        using var data = new PluginFixtureBuilder("pw-save-leftover")
+            .WithPlugin("TestPlugin.esp")
+            .Build();
+        var leftover = TempLeftover.DeadWriters(data.DataFolder);
+
+        await RewriteAsync(Path.Combine(data.DataFolder, "TestPlugin.esp"));
+
+        Assert.False(File.Exists(leftover));
+    }
+
+    [Fact]
     public async Task Commit_ThatCannotMoveTheNewBinaryIn_LeavesTheOldOne()
     {
         using var data = new PluginFixtureBuilder("pw-commit-keeps-old")
