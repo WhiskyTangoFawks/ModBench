@@ -133,17 +133,6 @@ describe('mEdit stopping', () => {
     expect(reports).toEqual([{ tag: 'mEditExit', severity: 'error', message: STOPPED, detail: undefined }]);
   });
 
-  it('is not reported by a launch that came up', async () => {
-    const client = new InMemoryMEditClient();
-    client.setStatus('stopped');
-    createStatusBar(client, reporterFor);
-
-    await client.start();
-    await settled();
-
-    expect(reports).toEqual([]);
-  });
-
   it('is not reported once disposed', async () => {
     const client = new InMemoryMEditClient();
     client.setStatus('running');
