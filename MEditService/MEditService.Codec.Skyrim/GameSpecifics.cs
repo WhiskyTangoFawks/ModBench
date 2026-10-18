@@ -6,10 +6,7 @@ namespace MEditService.Codec.Game;
 /// <summary>What the shared codec source asks each game's project to answer.</summary>
 internal static class GameSpecifics
 {
-    public static SiblingsInUseRows SiblingsInUse { get; } = new(new Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>>
-    {
-        [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
-    });
+    public const int BlueprintFlag = 0;
 
     // Proven over the five masters and every Creation Club plugin: 865 entry-point effects, 276 region
     // RDATs, 240 races. No Skyrim record has a power-grid counter or a weapon template.

@@ -1,17 +1,9 @@
-using Mutagen.Bethesda;
-
 namespace MEditService.Codec.Schema;
 
-// xEdit's record type names, from the wbRecord calls in wbDefinitionsFO4, TES5 and SF1.pas; the games
-// agree on all but one shared name. A miss reads as the raw signature, so a new Mutagen type never
-// breaks startup.
+// xEdit's record type names, from the wbRecord calls in wbDefinitionsFO4, TES5 and SF1.pas. A miss reads as
+// the raw signature, since Mutagen can add a type this table lacks.
 internal static class RecordDisplayNames
 {
-    private static readonly Dictionary<(GameCategory, string), string> OneGamesOwn = new()
-    {
-        [(GameCategory.Starfield, "idle")] = "Animation",
-    };
-
     private static readonly Dictionary<string, string> Names = new(StringComparer.OrdinalIgnoreCase)
     {
         ["npc_"] = "Non-Player Character",
@@ -237,9 +229,9 @@ internal static class RecordDisplayNames
         ["zoom"] = "Zoom",
     };
 
-    public static string For(GameCategory game, string tableName)
+    public static string For(SchemaAnnotations annotations, string tableName)
     {
-        if (OneGamesOwn.TryGetValue((game, tableName), out var own)) return own;
+        if (annotations.DisplayNameOverrides.TryGetValue(tableName, out var own)) return own;
         return Names.TryGetValue(tableName, out var name) ? name : tableName;
     }
 }

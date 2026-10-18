@@ -7,9 +7,9 @@ namespace MEditService.Codec.Schema;
 
 /// <summary>What one known Mutagen defect does to the schema and to a gesture: the member it is
 /// keyed to, and the reason the user is shown.</summary>
-internal sealed record KnownDefect(string TypeName, string MemberName, KnownDefectEffect Effect, string Reason);
+public sealed record KnownDefect(string TypeName, string MemberName, KnownDefectEffect Effect, string Reason);
 
-internal enum KnownDefectEffect
+public enum KnownDefectEffect
 {
     /// <summary>The schema names the member and carries the reason; the write path refuses any
     /// path reaching it.</summary>
@@ -19,23 +19,23 @@ internal enum KnownDefectEffect
 /// <summary>One member of the plugin header the editor presents: its xEdit label where it is a
 /// record header member, why a write reaching it is refused, and whether it reads as the header's
 /// FormKey.</summary>
-internal sealed record PluginHeaderMember(
+public sealed record PluginHeaderMember(
     string TypeName, string MemberName, string? HeaderLabel = null, string? ReadOnlyReason = null, bool IsRecordFormKey = false,
     bool IsVersionControlInfo1 = false);
 
 /// <summary>A member that says where a record sits in its container, on every record whose getter has
 /// the interface TypeName names, and why a write to it is refused.</summary>
-internal sealed record ContainmentMember(string TypeName, string MemberName, string Reason);
+public sealed record ContainmentMember(string TypeName, string MemberName, string Reason);
 
 /// <summary>One member of the record header: its xEdit label, and whether the game ignores it, so the
 /// compare shows it and takes it into no conflict (xEdit's cpIgnore).</summary>
-internal sealed record RecordHeaderMember(
+public sealed record RecordHeaderMember(
     string TypeName, string MemberName, string Label, bool IgnoredInConflicts = false, bool IsVersionControlInfo1 = false);
 
 /// <summary>Hand-written per-game facts overlaid on reflection, keyed by Mutagen type and member
 /// name. <see cref="Validate"/> fails schema generation naming any row the assembly does not bear
 /// out.</summary>
-internal sealed record SchemaAnnotations(
+public sealed record SchemaAnnotations(
     // Top-level properties that are not record data: GRUP timestamps. The serializer still writes
     // them (ADR-0006); a reflected column and a source-document field are different promises.
     HashSet<(string TypeName, string MemberName)> ExcludedColumns,
@@ -69,7 +69,7 @@ internal sealed record SchemaAnnotations(
     IReadOnlyList<KnownDefect> KnownDefects,
     // See FieldMetadata.SiblingsInUse. The inner map must name every enum value, since an unnamed one
     // would silently idle every member the row governs; validated in all four directions.
-    SiblingsInUseRows SiblingsInUse,
+    IReadOnlyDictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
     // xEdit's wbArrayS: elements identified by key members (Mutagen member names, dotted one struct
     // down), not by position. Aligned by key in the compare grid, kept in the order held.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
@@ -103,19 +103,21 @@ internal sealed record SchemaAnnotations(
     // Members a field edit cannot move a record by, keyed by an interface the record's getter has,
     // not the member's declarer, so a row reaches every record of its kind. Child slots are
     // reflected, not rows.
-    IReadOnlyList<ContainmentMember> ContainmentMembers)
+    IReadOnlyList<ContainmentMember> ContainmentMembers,
+    // xEdit's name for a record type the game spells differently from the other games, by table name.
+    IReadOnlyDictionary<string, string> DisplayNameOverrides)
 {
-    // Rows every game shares are named once here; a row true of only some games is written inline
-    // in each table that has it, so each table still states that game's complete facts.
+    // Rows several games share are named once here; a row of one game is written inline in that
+    // game's table.
 
-    private static readonly (string, string)[] GrupTimestampColumns =
+    public static readonly IReadOnlyList<(string, string)> GrupTimestampColumns =
     [
         ("ICellGetter", "Timestamp"), ("ICellGetter", "PersistentTimestamp"), ("ICellGetter", "TemporaryTimestamp"),
         ("IDialogTopicGetter", "Timestamp"),
     ];
 
     // Not editor surface in any game: Mutagen.Bethesda.Core / Loqui plumbing, and one generated alias.
-    private static readonly (string, string)[] PlumbingMembers =
+    public static readonly IReadOnlyList<(string, string)> PlumbingMembers =
     [
         ("ILoquiObject", "Registration"),                    // Loqui's own registration handle
         ("IBinaryItem", "BinaryWriteTranslator"),            // Mutagen's binary write-strategy object
@@ -125,7 +127,7 @@ internal sealed record SchemaAnnotations(
     ];
 
     // Mutagen's names for a condition slot's raw value under a function that reads nothing from it.
-    private static readonly (string, string)[] UnusedConditionSlotCarriers =
+    public static readonly IReadOnlyList<(string, string)> UnusedConditionSlotCarriers =
     [
         ("ConditionData", "FirstUnusedIntParameter"),
         ("ConditionData", "FirstUnusedStringParameter"),
@@ -135,7 +137,7 @@ internal sealed record SchemaAnnotations(
 
     // The header members Mutagen.Bethesda.Core declares on every game's major records, leading
     // xEdit's order; each game's base adds the rest.
-    private static readonly RecordHeaderMember[] RecordHeaderMembersInEveryGame =
+    public static readonly IReadOnlyList<RecordHeaderMember> RecordHeaderMembersInEveryGame =
     [
         new("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
         new("IFormKeyGetter", "FormKey", "FormID"),
@@ -143,13 +145,9 @@ internal sealed record SchemaAnnotations(
         new("IMajorRecordGetter", "FormVersion", "Form Version", IgnoredInConflicts: true),
     ];
 
-    private static string ModHeaderGetter(GameCategory game) => $"I{game}ModHeaderGetter";
-
-    private static string MajorRecordGetter(GameCategory game) => $"I{game}MajorRecordGetter";
-
     // Each game's ModHeader declares these (its *ModHeader.xml in Mutagen), the TES4 record's header
     // first, in wbRecordHeader's order (wbDefinitionsCommon.pas).
-    private static PluginHeaderMember[] PluginHeaderMembersOf(string modHeaderGetter) =>
+    public static PluginHeaderMember[] PluginHeaderMembersOf(string modHeaderGetter) =>
     [
         new(modHeaderGetter, "Flags", "Record Flags"),
         new(modHeaderGetter, "FormID", "FormID", PluginHeader.FormIdReadOnly, IsRecordFormKey: true),
@@ -161,27 +159,27 @@ internal sealed record SchemaAnnotations(
         new(modHeaderGetter, PluginHeader.MastersFieldName, ReadOnlyReason: "masters are wholly content-derived at compile time"),
     ];
 
-    private static readonly ContainmentMember CellGridInEveryGame = new(
+    public static readonly ContainmentMember CellGridInEveryGame = new(
         "ICellGetter", RecordTypes.CellGridMember,
         "it is an exterior cell's own place in the world — it decides the block and sub-block directories that hold " +
         "the cell's source, so moving it restructures the tree rather than rewriting one file. That is a structural " +
         "gesture, not a field edit");
 
-    private static readonly string[] EmptySubSchemaTypesInEveryGame =
+    public static readonly IReadOnlyList<string> EmptySubSchemaTypesInEveryGame =
     [
         "IPlacedGetter",                     // abstract placed-record base, no members of its own
     ];
 
     // The siblings left out (P2Double, P3Double, P3Int, the wrapper types) are the shape of no
     // member in these games' record graphs, which is what the validation below proves.
-    private static readonly string[] VectorStructTypesInEveryGame =
+    public static readonly IReadOnlyList<string> VectorStructTypesInEveryGame =
     [
         "Noggog.P3Int16", "Noggog.P3Float",
         "Noggog.P2Int", "Noggog.P2Int16", "Noggog.P2Float",
     ];
 
     // Counts are live, from the audit's enumeration over Fallout 4.
-    private static readonly KeyValuePair<string, string>[] RefusedShapesInEveryGame =
+    public static readonly IReadOnlyList<KeyValuePair<string, string>> RefusedShapesInEveryGame =
     [
         // Real modding content: Race height, head data, models and voices per sex, ArmorAddon models,
         // faction rank titles. Presenting a gendered pair is a maintainer's shape decision.
@@ -207,16 +205,16 @@ internal sealed record SchemaAnnotations(
 
     // wbFileHeader in wbDefinitionsFO4.pas and wbDefinitionsTES5.pas spells the master and light-master bits ESM and ESL.
     // Localized is already xEdit's own spelling, so it carries no label.
-    private static readonly Dictionary<string, string> XEditModHeaderFlagNames = new(StringComparer.Ordinal)
+    public static readonly IReadOnlyDictionary<string, string> XEditModHeaderFlagNames = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["Master"] = "ESM",
         ["Small"] = "ESL",
     };
 
-    private const string PartialFormName = "PartialForm";
+    public const string PartialFormName = "PartialForm";
 
     // PlacedObject.cs's per-base-type enums in every game, as wbREFRRecordFlagsDecider chooses them.
-    private static readonly (string, string)[] PlacedObjectRecordFlagEnums =
+    public static readonly IReadOnlyList<(string, string)> PlacedObjectRecordFlagEnums =
     [
         ("IPlacedObjectGetter", "DefaultMajorFlag"),
         ("IPlacedObjectGetter", "StaticMajorFlag"),
@@ -228,244 +226,47 @@ internal sealed record SchemaAnnotations(
         ("IPlacedObjectGetter", "ItemMajorFlag"),
     ];
 
-    private static readonly Dictionary<GameCategory, SchemaAnnotations> Tables = new()
-    {
-        [GameCategory.Fallout4] = new(
-            ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
-            ExcludedMembers:
-            [
-                .. PlumbingMembers,
-                ("IGlobalGetter", "TypeChar"),  // GLOB's derived subclass discriminant char
-                // Reserved padding Mutagen names Unused in both games; wbUnused(3)/wbUnused(2) in wbDefinitionsFO4.pas's wbObjectModProperties
-                ("IObjectModStringPropertyGetter`1", "Unused"),
-                ("IObjectModEnumPropertyGetter`1", "Unused"),
-            ],
-            ExcludedUnions:
-            [
-                // A concrete base with two leaves, one of whose binary-overlay Type getter is an
-                // unimplemented throw upstream; the member it sits on is a KnownDefects row below.
-                "ASceneActionType",
-            ],
-            FunctionUnions: [],
-            UnusedSlotMembers: [],
-            CycleTruncations: ["IScriptStructPropertyGetter", "IScriptStructListPropertyGetter"],
-            EmptySubSchemaTypes:
-            [
-                .. EmptySubSchemaTypesInEveryGame,
-                "IASceneActionTypeGetter",      // deliberately not abstract upstream; see KnownDefects
-            ],
-            VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P3UInt8", "Noggog.P3UInt16", "Noggog.P2UInt8"],
-            RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
-            EnumMemberLabels: new()
-            {
-                [(ModHeaderGetter(GameCategory.Fallout4), "Flags")] = XEditModHeaderFlagNames,
-            },
-            KnownDefects:
-            [
-                new("ISceneActionGetter", "Type", KnownDefectEffect.MemberReadOnly,
-                    "SceneActionTypicalType's binary-overlay Type getter is an unimplemented throw upstream, so the "
-                    + "leaves under ASceneActionType cannot be read; the member is named as the document holds it and never written"),
-            ],
-            SiblingsInUse: SiblingsInUseRows.None,
-            KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4KeyedArrayAnnotations.KeyedArrays).ToDictionary(
-                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
-            ExtendedKeys: Fallout4KeyedArrayAnnotations.ExtendedKeys.ToDictionary(
-                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
-            PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
-            SyntheticFlagMembers: new()
-            {
-                [(ModHeaderGetter(GameCategory.Fallout4), "IsSmallMaster")] = ("Flags", "Small"),
-            },
-            RecordHeaderMembers:
-            [
-                .. RecordHeaderMembersInEveryGame,
-                new(MajorRecordGetter(GameCategory.Fallout4), "Version2", "Version Control Info 2", IgnoredInConflicts: true),
-            ],
-            // Quest's MajorFlag names it; wbDefinitionsFO4.pas gives CELL, DIAL and WRLD bit 14 too.
-            RecordFlagNames:
-            [
-                ("ICellGetter", PartialFormFlag.Bit, PartialFormName),
-                ("IDialogTopicGetter", PartialFormFlag.Bit, PartialFormName),
-                ("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName),
-            ],
-            // Static.xml spells its majorFlag attribute majorFlags, so no member carries Static.MajorFlag.
-            RecordFlagEnums: [.. PlacedObjectRecordFlagEnums, ("IStaticGetter", "MajorFlag")],
-            // Mutagen's Fallout 4 worldspace bounds divide by it.
-            ExteriorCellWidth: 4096f,
-            PartialFormCellsDefinedIn: "Fallout4.esm",
-            PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetter(GameCategory.Fallout4)),
-            ContainmentMembers: [CellGridInEveryGame]),
-
-        [GameCategory.Skyrim] = new(
-            ExcludedColumns: [.. GrupTimestampColumns],
-            ExcludedMembers:
-            [
-                .. PlumbingMembers,
-                ("IGlobalGetter", "TypeChar"),
-                ("IGlobalUnknownGetter", "TypeChar"),
-                // Mutagen's untyped view over each condition function's own typed members: not record
-                // data, and the abstract ConditionData's implementation throws.
-                ("IConditionParametersGetter", "StringParameter1"),
-                ("IConditionParametersGetter", "StringParameter2"),
-                ("IConditionParametersGetter", "Parameter1"),
-                ("IConditionParametersGetter", "Parameter2"),
-                ("IConditionParametersGetter", "Parameter1Type"),
-                ("IConditionParametersGetter", "Parameter2Type"),
-                // Mutagen's answer to which function a leaf is: the document never holds it, since the
-                // leaf's class names the function, and GetEventData's own Function is another member.
-                ("IConditionDataGetter", "Function"),
-            ],
-            ExcludedUnions: [],
-            FunctionUnions: ["ConditionData"],
-            UnusedSlotMembers: [.. UnusedConditionSlotCarriers, ("ConditionData", "Unused")],
-            CycleTruncations: [],
-            EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
-            VectorStructTypes: [.. VectorStructTypesInEveryGame, "Noggog.P3UInt8", "Noggog.P3UInt16"],
-            RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
-            EnumMemberLabels: new()
-            {
-                [(ModHeaderGetter(GameCategory.Skyrim), "Flags")] = XEditModHeaderFlagNames,
-            },
-            KnownDefects: [],
-            SiblingsInUse: SiblingsInUseRows.None,
-            KeyedArrays: SkyrimVmadAnnotations.KeyedArrays.Concat(SkyrimKeyedArrayAnnotations.KeyedArrays).ToDictionary(
-                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
-            ExtendedKeys: SkyrimKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
-                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
-            PermittedNullFormLinks: [.. SkyrimVmadAnnotations.PermittedNullFormLinks],
-            SyntheticFlagMembers: new()
-            {
-                [(ModHeaderGetter(GameCategory.Skyrim), "IsSmallMaster")] = ("Flags", "Small"),
-            },
-            RecordHeaderMembers:
-            [
-                .. RecordHeaderMembersInEveryGame,
-                new(MajorRecordGetter(GameCategory.Skyrim), "Version2", "Version Control Info 2", IgnoredInConflicts: true),
-            ],
-            // Mutagen names bit 14 on no Skyrim type; wbDefinitionsTES5.pas gives it to CELL, DIAL and WRLD.
-            RecordFlagNames:
-            [
-                ("ICellGetter", PartialFormFlag.Bit, PartialFormName),
-                ("IDialogTopicGetter", PartialFormFlag.Bit, PartialFormName),
-                ("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName),
-            ],
-            RecordFlagEnums: [.. PlacedObjectRecordFlagEnums],
-            // Mutagen's Skyrim containing-cell lookup divides by it.
-            ExteriorCellWidth: 4096f,
-            PartialFormCellsDefinedIn: null,
-            PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetter(GameCategory.Skyrim)),
-            ContainmentMembers: [CellGridInEveryGame]),
-
-        [GameCategory.Starfield] = new(
-            ExcludedColumns: [.. GrupTimestampColumns, ("IQuestGetter", "Timestamp")],
-            ExcludedMembers:
-            [
-                .. PlumbingMembers,
-                ("IObjectModStringPropertyGetter`1", "Unused"),
-                ("IObjectModEnumPropertyGetter`1", "Unused"),
-                ("IConditionDataGetter", "Function"),
-            ],
-            ExcludedUnions: [],
-            FunctionUnions: ["ConditionData"],
-            UnusedSlotMembers: [.. UnusedConditionSlotCarriers, .. StarfieldConditionAnnotations.UnusedSlotMembers],
-            // As in Fallout 4, no struct member is a struct.
-            CycleTruncations: ["IScriptStructPropertyGetter", "IScriptStructListPropertyGetter"],
-            EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
-            VectorStructTypes: [.. VectorStructTypesInEveryGame],
-            RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
-            // wbDefinitionsSF1.pas's TES4 record spells the light-master and overlay bits Small and Update.
-            EnumMemberLabels: new()
-            {
-                [(ModHeaderGetter(GameCategory.Starfield), "Flags")] = new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["Light"] = "Small",
-                    ["Overlay"] = "Update",
-                },
-            },
-            KnownDefects: [],
-            SiblingsInUse: SiblingsInUseRows.None,
-            KeyedArrays: StarfieldVmadAnnotations.KeyedArrays.Concat(StarfieldKeyedArrayAnnotations.KeyedArrays).ToDictionary(
-                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
-            ExtendedKeys: StarfieldKeyedArrayAnnotations.ExtendedKeys.ToDictionary(
-                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
-            PermittedNullFormLinks: [.. StarfieldVmadAnnotations.PermittedNullFormLinks],
-            SyntheticFlagMembers: new()
-            {
-                [(ModHeaderGetter(GameCategory.Starfield), "IsSmallMaster")] = ("Flags", "Light"),
-            },
-            RecordHeaderMembers:
-            [
-                .. RecordHeaderMembersInEveryGame,
-                new(MajorRecordGetter(GameCategory.Starfield), "Version2", "Version Control Info 2", IgnoredInConflicts: true),
-            ],
-            // Mutagen names it on Starfield's Cell, DialogTopic and Quest; wbDefinitionsSF1.pas gives WRLD bit 14 too.
-            RecordFlagNames: [("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName)],
-            // Static.xml and StaticCollection.xml spell their majorFlag attribute majorFlags; Key.xml,
-            // Region.xml and LeveledBaseForm.xml declare none.
-            RecordFlagEnums:
-            [
-                .. PlacedObjectRecordFlagEnums,
-                ("IStaticGetter", "MajorFlag"),
-                ("IStaticCollectionGetter", "MajorFlag"),
-                ("IKeyGetter", "MajorFlag"),
-                ("IRegionGetter", "MajorFlag"),
-                ("ILeveledBaseFormGetter", "MajorFlag"),
-            ],
-            // The installed masters' exterior references sit in their cell's grid at 100 units a cell, and
-            // wbDefinitionsSF1.pas sets wbCellSizeFactor to 100; Mutagen's 4096 scales worldspace bounds.
-            ExteriorCellWidth: 100f,
-            PartialFormCellsDefinedIn: null,
-            PluginHeaderMembers: PluginHeaderMembersOf(ModHeaderGetter(GameCategory.Starfield)),
-            ContainmentMembers: [CellGridInEveryGame]),
-    };
-
-    /// <summary>A game with no table is a game nobody has written the facts for — loud, not empty.</summary>
-    public static SchemaAnnotations For(GameCategory category) =>
-        Tables.TryGetValue(category, out var annotations)
-            ? annotations
-            : throw new InvalidOperationException($"No schema annotation table for {category}");
-
-    public bool IsExcludedColumn(PropertyInfo prop) => ExcludedColumns.Contains(Key(prop));
-    public bool IsExcludedMember(PropertyInfo prop) => ExcludedMembers.Contains(Key(prop));
-    public bool IsExcludedUnion(Type setterType)
+    internal bool IsExcludedColumn(PropertyInfo prop) => ExcludedColumns.Contains(Key(prop));
+    internal bool IsExcludedMember(PropertyInfo prop) => ExcludedMembers.Contains(Key(prop));
+    internal bool IsExcludedUnion(Type setterType)
     {
         for (var t = setterType; t != null; t = t.BaseType)
             if (ExcludedUnions.Contains(t.Name)) return true;
         return false;
     }
-    public bool IsFunctionUnion(Type setterType) => FunctionUnions.Contains(setterType.Name);
-    public bool IsUnusedSlotMember(Type leafGetter, PropertyInfo prop) =>
+    internal bool IsFunctionUnion(Type setterType) => FunctionUnions.Contains(setterType.Name);
+    internal bool IsUnusedSlotMember(Type leafGetter, PropertyInfo prop) =>
         ReflectedTypes.GetSetterType(leafGetter) is { } leaf
         && ReflectedTypes.BaseChain(leaf).Any(t => UnusedSlotMembers.Contains((t.Name, prop.Name)));
-    public bool IsCycleTruncation(Type getterInterface) => CycleTruncations.Contains(getterInterface.Name);
-    public bool IsEmptySubSchemaType(Type getterInterface) => EmptySubSchemaTypes.Contains(getterInterface.Name);
-    public bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type.FullName ?? type.Name);
-    public string? RefusedShapeReason(Type shape) => RefusedShapes.GetValueOrDefault(ShapeName(shape));
-    public bool IsPermittedNullFormLink(PropertyInfo prop) => PermittedNullFormLinks.Contains(Key(prop));
-    public IReadOnlyDictionary<string, string>? EnumLabelsFor(PropertyInfo prop) =>
+    internal bool IsCycleTruncation(Type getterInterface) => CycleTruncations.Contains(getterInterface.Name);
+    internal bool IsEmptySubSchemaType(Type getterInterface) => EmptySubSchemaTypes.Contains(getterInterface.Name);
+    internal bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type.FullName ?? type.Name);
+    internal string? RefusedShapeReason(Type shape) => RefusedShapes.GetValueOrDefault(ShapeName(shape));
+    internal bool IsPermittedNullFormLink(PropertyInfo prop) => PermittedNullFormLinks.Contains(Key(prop));
+    internal IReadOnlyDictionary<string, string>? EnumLabelsFor(PropertyInfo prop) =>
         EnumMemberLabels.GetValueOrDefault(Key(prop));
-    public IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
+    internal IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
         SiblingsInUse.GetValueOrDefault(Key(prop));
-    public IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
-    public IReadOnlyList<string>? ExtendedKeyMembersFor(PropertyInfo prop) => ExtendedKeys.GetValueOrDefault(Key(prop));
+    internal IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
+    internal IReadOnlyList<string>? ExtendedKeyMembersFor(PropertyInfo prop) => ExtendedKeys.GetValueOrDefault(Key(prop));
 
     /// <summary>The defect keyed to this member, or null: a member with no row is an ordinary one.</summary>
-    public KnownDefect? DefectFor(PropertyInfo prop) =>
+    internal KnownDefect? DefectFor(PropertyInfo prop) =>
         KnownDefects.FirstOrDefault(d => d.TypeName == ReflectedTypes.DeclaringTypeOf(prop).Name && d.MemberName == prop.Name);
 
     /// <summary>Why a defect keeps this member out of every write, or null.</summary>
-    public string? ReadOnlyReasonFor(PropertyInfo prop) =>
+    internal string? ReadOnlyReasonFor(PropertyInfo prop) =>
         DefectFor(prop) is { Effect: KnownDefectEffect.MemberReadOnly } defect ? defect.Reason : null;
 
     /// <summary>Why a write to <paramref name="member"/> of a record of these getters is refused, or null.</summary>
-    public string? ContainmentReasonFor(IEnumerable<Type> recordGetters, string member) =>
+    internal string? ContainmentReasonFor(IEnumerable<Type> recordGetters, string member) =>
         ContainmentMembers.FirstOrDefault(row => row.MemberName == member
             && recordGetters.Any(getter => getter.GetInterfaces().Append(getter).Any(i => i.Name == row.TypeName)))?.Reason;
 
-    public IEnumerable<(long Bit, string Name)> RecordFlagNamesFor(Type getterType) =>
+    internal IEnumerable<(long Bit, string Name)> RecordFlagNamesFor(Type getterType) =>
         RecordFlagNames.Where(r => r.TypeName == getterType.Name).Select(r => (r.Bit, r.Name));
 
-    public IReadOnlyList<Type> RecordFlagEnumsFor(Type getterType) =>
+    internal IReadOnlyList<Type> RecordFlagEnumsFor(Type getterType) =>
         ReflectedTypes.GetSetterType(getterType) is { } recordClass
             ? [.. RecordFlagEnums.Where(r => r.TypeName == getterType.Name).Select(r => NestedEnum(recordClass, r.EnumName)).OfType<Type>()]
             : [];
@@ -473,7 +274,7 @@ internal sealed record SchemaAnnotations(
     private static Type? NestedEnum(Type recordClass, string name) =>
         ReflectedTypes.BaseChain(recordClass).Select(c => c.GetNestedType(name)).FirstOrDefault(t => t is { IsEnum: true });
 
-    public IEnumerable<(string Name, string BackingMember, string Flag)> SyntheticFlagMembersFor(Type getterType) =>
+    internal IEnumerable<(string Name, string BackingMember, string Flag)> SyntheticFlagMembersFor(Type getterType) =>
         SyntheticFlagMembers
             .Where(e => e.Key.TypeName == getterType.Name)
             .Select(e => (e.Key.MemberName, e.Value.BackingMember, e.Value.Flag));
@@ -721,7 +522,7 @@ internal sealed record SchemaAnnotations(
 
     /// <summary>Resolves every row against the assembly's types and the shapes its members hold, and
     /// throws naming each row that does not resolve or is not the kind of thing its table says it is.</summary>
-    public void Validate(GameCategory category, Assembly gameAssembly)
+    internal void Validate(GameCategory category, Assembly gameAssembly)
     {
         var allTypes = gameAssembly.GetTypes()
             .SelectMany(t => t.GetInterfaces().Append(t))
@@ -783,7 +584,7 @@ internal sealed record SchemaAnnotations(
 
     /// <summary>Throws naming each row that claims something about the walk the walk never did.
     /// Neither fact exists before the whole schema is built.</summary>
-    public void ValidateObserved(string gameAssemblyName, WalkObservations observed)
+    internal void ValidateObserved(string gameAssemblyName, WalkObservations observed)
     {
         string[] idle =
         [
