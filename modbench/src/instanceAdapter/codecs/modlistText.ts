@@ -71,9 +71,10 @@ const isSeparatorLine = (line: string): boolean => nameOfLine(line)?.endsWith(SE
 export function setEnabledInText(text: string, modName: string, enabled: boolean): string {
   return editLines(text, (lines) => {
     modLineAt(lines, modName);
-    return lines.map((line) => (modNameKey(nameOfLine(line) ?? '') === modNameKey(modName)
-      ? (enabled ? '+' : '-') + nameOfLine(line)
-      : line));
+    return lines.map((line) => {
+      const name = nameOfLine(line);
+      return name !== undefined && modNameKey(name) === modNameKey(modName) ? (enabled ? '+' : '-') + name : line;
+    });
   });
 }
 
