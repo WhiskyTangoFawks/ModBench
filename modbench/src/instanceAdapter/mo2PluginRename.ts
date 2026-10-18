@@ -1,4 +1,4 @@
-// MO2's rename of a plugin: its files and its line in every profile's plugin order, under every
+// MO2's rename of a plugin: its files and its line in every profile's plugins.txt and loadorder.txt, under every
 // plugin order's lock, and put back if a write fails.
 
 import { parse } from 'node:path';
@@ -6,7 +6,7 @@ import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCod
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
 import { get, listDir, readOrAbsent, rename, undoAll, type Undo, withLock, write } from './files';
 import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
-import { fileInFolder, originDir, pluginsFile, profilesDir } from './layout';
+import { fileInFolder, loadOrderFile, originDir, pluginsFile, profilesDir } from './layout';
 import type { Mo2Context } from './mo2Context';
 
 type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin' | 'originHoldsPlugin'>;
@@ -35,7 +35,6 @@ async function entriesIn(folder: string): Promise<Entry[]> {
 
 interface Line {
   readonly file: string;
-  readonly before: string;
   readonly after: string;
 }
 
@@ -50,7 +49,7 @@ async function renamedLines(files: readonly string[], from: string, to: string):
     if (before === undefined || line === undefined) continue;
     const other = listed.find((p) => sameName(p.name, to) && !sameName(p.name, from));
     if (other !== undefined) throw new Error(`Plugin already in plugins.txt: ${other.name}`);
-    lines.push({ file, before, after: renamePluginInText(before, line.name, to) });
+    lines.push({ file, after: renamePluginInText(before, line.name, to) });
   }
   return lines;
 }
@@ -93,7 +92,7 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
 
   async function orderFiles(): Promise<string[]> {
     const profiles = (await readOrAbsent(() => listDir(profilesDir(instanceRoot)), [])).filter((d) => d.isDirectory());
-    return profiles.map((d) => pluginsFile(instanceRoot, d.name)).sort();
+    return profiles.flatMap((d) => [pluginsFile(instanceRoot, d.name), loadOrderFile(instanceRoot, d.name)]).sort();
   }
 
   // Everything the rename refuses, read before any write.
@@ -122,9 +121,9 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
             await rename(move.from, move.to);
             undos.unshift(() => rename(move.to, move.from));
           }
-          for (const { file, before, after } of lines) {
+          for (const { file, after } of lines) {
             await write(file, after);
-            undos.unshift(() => write(file, before));
+            undos.unshift(async () => write(file, renamePluginInText(await get(file), to, from)));
           }
         } catch (err) {
           throw await undoAll(undos, err);

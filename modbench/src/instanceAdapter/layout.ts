@@ -123,6 +123,9 @@ export const modlistFile = (instanceRoot: string, profile: string): string =>
 export const pluginsFile = (instanceRoot: string, profile: string): string =>
   join(profileDir(instanceRoot, profile), PLUGINS_FILE_NAME);
 
+export const loadOrderFile = (instanceRoot: string, profile: string): string =>
+  join(profileDir(instanceRoot, profile), PLUGIN_ORDER_FILE);
+
 export const downloadFile = (downloadsDir: string, name: string): string => join(downloadsDir, name);
 
 export const downloadSidecarFile = (downloadsDir: string, name: string): string =>

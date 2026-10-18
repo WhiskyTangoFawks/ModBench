@@ -9,7 +9,7 @@ import { pluginSyncOver, type PluginSyncRun } from '../../pluginCommands/plugins
 import { withLock } from '../../instanceAdapter/files';
 import { pluginsFile } from '../../instanceAdapter/layout';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_LOAD_ORDER, DEFAULT_PLUGINS, snapshotTree,
 } from './corpusFixture';
 import { adapterOver, pluginCommandsOver, readPluginLines } from './adapterOver';
 
@@ -49,7 +49,7 @@ describe('plugins.txt corpus', () => {
     const orderBefore = await pluginOrder(dir);
     const result = await pluginCommandsOver(dir).setPluginsEnabled(PROFILE, ['Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
     const after = await snapshotTree(dir);
-    assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
+    assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS, DEFAULT_LOAD_ORDER]));
 
     expect(result).toEqual({
       applied: true,
@@ -61,14 +61,14 @@ describe('plugins.txt corpus', () => {
     expect(await pluginOrder(dir)).toEqual(orderBefore);
   });
 
-  it('setPluginsParticipation flips a mixed selection in one write, touching only plugins.txt', async () => {
+  it('setPluginsParticipation flips a mixed selection in one write, touching only plugins.txt and loadorder.txt', async () => {
     const before = await snapshotTree(dir);
     const result = await pluginCommandsOver(dir).setPluginsParticipation(PROFILE, [
       { name: 'Patch Mod.esp', enabled: false },
       { name: 'NonAsciiRetexture.esp', enabled: true },
     ]);
     const after = await snapshotTree(dir);
-    assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
+    assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS, DEFAULT_LOAD_ORDER]));
 
     expect(result).toEqual({
       applied: true,
@@ -79,12 +79,12 @@ describe('plugins.txt corpus', () => {
     expect(enabled).toContain('NonAsciiRetexture.esp');
   });
 
-  it('syncPlugins converges the fixture on disk, touching only plugins.txt', async () => {
+  it('syncPlugins converges the fixture on disk, touching only plugins.txt and loadorder.txt', async () => {
     const sync = await syncWithGameFolderHolding(dir, 'ccsbjfo4003-grenade.esl');
     const before = await snapshotTree(dir);
     const result = await sync();
     const after = await snapshotTree(dir);
-    assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
+    assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS, DEFAULT_LOAD_ORDER]));
 
     expect(result).toEqual({
       applied: true, wrote: true, added: ['NonAsciiRetexture - Addon.esl'], dropped: ['Unofficial Fallout 4 Patch.esp'],
@@ -118,11 +118,11 @@ describe('plugins.txt corpus', () => {
     expect((await pluginOrder(dir)).indexOf('Harder VATS.esp')).toBe(1);
   });
 
-  it('reorderPlugins moves a plugin within load order, touching only plugins.txt', async () => {
+  it('reorderPlugins moves a plugin within load order, touching only plugins.txt and loadorder.txt', async () => {
     const before = await snapshotTree(dir);
     await pluginCommandsOver(dir, NOT_INDEXED).reorderPlugins(PROFILE, moving('NonAsciiRetexture.esp'), { kind: 'winningEnd' }, []);
     const after = await snapshotTree(dir);
-    assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
+    assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS, DEFAULT_LOAD_ORDER]));
 
     expect((await pluginOrder(dir)).at(-1)).toBe('NonAsciiRetexture.esp');
   });
