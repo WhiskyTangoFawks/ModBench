@@ -34,7 +34,7 @@ describe('a plugin disabled, or in a disabled mod', () => {
   });
 
   it('is not one the game loads with no line', () => {
-    expect(disabled([mod('ModA', true)], [row({ line: null, enabled: false })], [A])).toBe(false);
+    expect(disabled([mod('ModA', true)], [row({ line: null, enabled: false })], [{ ...A, path: '/mods/ModA/A.esp' }])).toBe(false);
   });
 
   it('is not one the instance does not list', () => {
