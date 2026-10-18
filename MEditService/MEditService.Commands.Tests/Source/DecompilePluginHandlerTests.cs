@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -61,7 +60,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
         var result = await Decompile(CompiledPlugin("Second.esp"));
 
-        Assert.Equal([CompiledPlugin("Second.esp")], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([CompiledPlugin("Second.esp")], result.Applied);
         Assert.Empty(result.Refused);
         Assert.Contains("SecondNpc", SourceTextOf("Second.esp"), StringComparison.Ordinal);
         Assert.Equal(headBefore, Head());
@@ -97,7 +96,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
         var result = await Decompile(force: true, CompiledPlugin("First.esp"));
 
-        Assert.Equal([CompiledPlugin("First.esp")], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([CompiledPlugin("First.esp")], result.Applied);
         Assert.False(File.Exists(stray));
         var text = SourceTextOf("First.esp");
         Assert.Contains("UpgradedNpc", text, StringComparison.Ordinal);
@@ -116,7 +115,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
         var result = await Decompile(CompiledPlugin("First.esp"));
 
-        Assert.Empty(result.Landed);
+        Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.WorkingTreeChanges, refused.Refusal);
         Assert.Contains("Stray.json", refused.Message, StringComparison.Ordinal);
@@ -134,7 +133,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
         var result = await Decompile(CompiledPlugin("First.esp"));
 
-        Assert.Empty(result.Landed);
+        Assert.Empty(result.Applied);
         Assert.Equal(DecompileRefusal.WorkingTreeStatusUnreadable, Assert.Single(result.Refused).Refusal);
         Assert.Equal(before, SourceTextOf("First.esp"));
     }
@@ -149,7 +148,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
         var result = await Decompile(CompiledPlugin("First.esp"), CompiledPlugin("Second.esp"));
 
-        Assert.Equal([CompiledPlugin("Second.esp")], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([CompiledPlugin("Second.esp")], result.Applied);
         Assert.Equal(CompiledPlugin("First.esp"), Assert.Single(result.Refused).Item);
     }
 
@@ -158,7 +157,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     {
         var result = await Decompile(new PluginAddress("Other.esp", NonSourceModName));
 
-        Assert.Empty(result.Landed);
+        Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.NotInSourceMod, refused.Refusal);
         Assert.Contains("Other.esp", refused.Message, StringComparison.Ordinal);
@@ -173,7 +172,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     {
         var result = await Decompile(new PluginAddress("Vanilla.esp", PluginOrigin.DataDirectory));
 
-        Assert.Empty(result.Landed);
+        Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
         Assert.Equal(DecompileRefusal.NotFromAMod, refused.Refusal);
         Assert.Contains("Vanilla.esp", refused.Message, StringComparison.Ordinal);
@@ -200,7 +199,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
     {
         var result = await Decompile(new PluginAddress("NoSuch.esp", SourceModName), CompiledPlugin("Second.esp"));
 
-        Assert.Equal([CompiledPlugin("Second.esp")], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([CompiledPlugin("Second.esp")], result.Applied);
         var refused = Assert.Single(result.Refused);
         Assert.Equal((new PluginAddress("NoSuch.esp", SourceModName), DecompileRefusal.PluginNotLoaded), (refused.Item, refused.Refusal));
     }
@@ -213,7 +212,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         var result = await Decompile(CompiledPlugin("Second.esp"), spelledAgain);
 
         Assert.Empty(result.Refused);
-        Assert.Equal([CompiledPlugin("Second.esp")], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([CompiledPlugin("Second.esp")], result.Applied);
     }
 
     [Fact]
@@ -238,14 +237,14 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
     private static PluginAddress CompiledPlugin(string plugin) => new(plugin, SourceModName);
 
-    private Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> Decompile(params PluginAddress[] plugins) =>
+    private Task<DecompileResult> Decompile(params PluginAddress[] plugins) =>
         Decompile(force: false, plugins);
 
-    private Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> Decompile(bool force, params PluginAddress[] plugins) =>
-        TestEditService.DecompileHandler(_holder).DecompileAsync(plugins, force);
+    private async Task<DecompileResult> Decompile(bool force, params PluginAddress[] plugins) =>
+        (await TestEditService.DecompileHandler(_holder).DecompileAsync(plugins, force)).Value();
 
-    private Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> Decompile(IPluginAdapter adapter, params PluginAddress[] plugins) =>
-        TestEditService.DecompileHandler(_holder, adapter).DecompileAsync(plugins, force: false);
+    private async Task<DecompileResult> Decompile(IPluginAdapter adapter, params PluginAddress[] plugins) =>
+        (await TestEditService.DecompileHandler(_holder, adapter).DecompileAsync(plugins, force: false)).Value();
 
     private static void WritePlugin(string modFolder, string name, string editorId)
     {

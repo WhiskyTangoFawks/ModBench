@@ -167,7 +167,7 @@ internal static class PluginEndpoints
         app.MapPost("/plugins/decompile", Decompile)
             .WithName("DecompilePlugin")
             .WithTags(Tag)
-            .Produces<DecompileResponse>()
+            .Produces<DecompileResult>()
             .ProducesProblem(400)
             // git missing refuses the whole selection; every other refusal is an item of the answer.
             .ProducesProblem(500)
@@ -340,12 +340,7 @@ internal static class PluginEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         return OverPlugins(req.Plugins, plugins => EndpointMapping.Answered(
-            "Decompile", logger,
-            decompileHandler.DecompileAsync(plugins, req.Force),
-            EndpointMapping.Refusal,
-            landed => landed.Item,
-            refused => new PluginDecompileRefusal(refused.Item, refused.Refusal, refused.Message),
-            (applied, refused) => new DecompileResponse(applied, refused)));
+            "Decompile", logger, decompileHandler.DecompileAsync(plugins, req.Force), EndpointMapping.Refusal));
     }
 
     // compile-plugin: the selection (commands.md, A selection is one gesture).
@@ -427,13 +422,6 @@ internal sealed record RenameSourceChangesRequest(string Origin, string Name, st
 internal sealed record MoveLastWrittenRequest(string Origin, string Name, string TreeName, string NewName);
 
 internal sealed record DecompileRequest(IReadOnlyList<PluginAddress> Plugins, bool Force);
-
-/// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
-internal sealed record DecompileResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginDecompileRefusal> Refused);
-
-/// <summary>A plugin of the selection that wrote nothing, with the typed refusal and the message naming
-/// the way out.</summary>
-internal sealed record PluginDecompileRefusal(PluginAddress Item, DecompileRefusal Refusal, string Message);
 
 internal sealed record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 

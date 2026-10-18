@@ -1,6 +1,7 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -20,20 +21,21 @@ public sealed class DecompilePluginHandler
     /// <summary>Refuses with <see cref="DecompileRefusal.NoLoadOrder"/>, writing nothing, when none is held; git
     /// missing refuses the whole selection once. A plugin whose source has working-tree changes is refused
     /// unless <paramref name="force"/>.</summary>
-    public Task<SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>> DecompileAsync(
+    public async Task<Answer<DecompileResult, SelectionRefusal<DecompileRefusal>>> DecompileAsync(
         IReadOnlyList<PluginAddress> plugins, bool force, CancellationToken cancel = default)
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
-        {
-            return Task.FromResult(SelectionResult<PluginAddress, DecompileRefusal, NoOutcome>.WholeSelectionRefused(
-                DecompileRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage));
-        }
+            return new SelectionRefusal<DecompileRefusal>(DecompileRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
 
-        return ItemWrite.OverAsync(_source, plugins, PluginAddress.Comparer, DecompileRefusal.GitUnavailable, plugin =>
+        var decompiled = await ItemWrite.OverAsync(_source, plugins, PluginAddress.Comparer, DecompileRefusal.GitUnavailable, plugin =>
         {
             cancel.ThrowIfCancellationRequested();
             return DecompileOneAsync(loadOrder, plugin, force, cancel);
         });
+        return decompiled.ToAnswer(
+            landed => landed.Item,
+            refused => new DecompileRefused(refused.Item, refused.Refusal, refused.Message),
+            (applied, refused) => new DecompileResult(applied, refused));
     }
 
     private async Task<ItemAnswer<DecompileRefusal, NoOutcome>> DecompileOneAsync(
