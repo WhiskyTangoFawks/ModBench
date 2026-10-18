@@ -25,8 +25,8 @@ import { pinnedArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen 
 import { recordTitle } from './recordTitle';
 import { followReportedCopies } from './recordCopy';
 import { RenderedDocuments } from './renderedDocument';
-import { ChildRecordDocuments } from './childRecordDocument';
-import { holdOneTextPerFile } from './oneTextPerFile';
+import { ChildRecordDocuments } from '../textDocuments/childRecordDocument';
+import { holdOneTextPerFile } from '../textDocuments/oneTextPerFile';
 import { copyDocument } from '../textDocuments/recordDocument';
 import type { RecordCopy } from '../wire/recordCopy';
 import type { ModFacts } from './modsByOrigin';
@@ -85,19 +85,23 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     client: meditClient, reporter: deps.reporterFor('extendedField'),
     commit: (field, value) => commitField(commitDeps, field, value),
   });
+  const childRecordDocuments = new ChildRecordDocuments();
   const editorOptions = { webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true } };
 
   return [
     { dispose: subscribeRecordTabsToNotifications(meditClient, tabs) },
     extendedFields,
     new RenderedDocuments(meditClient),
-    new ChildRecordDocuments(meditClient),
+    childRecordDocuments,
     holdOneTextPerFile(outputChannel),
     { dispose: meditClient.onLoadOrderSettled(() => { announceConflictsComputed(tabs); }) },
     vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, editorOptions),
     { dispose: meditClient.onNotification('load-order-status', () => { recordEditorProvider.readAgain(); }) },
-    // A report names the records that changed, and a move of any of them can move a child's carrier.
-    followReportedCopies(meditClient, (affects) => { void recordEditorProvider.followCarried(affects); },
+    // A report names the records that changed. A change to any of them can be in a child's file, and a move can move its carrier.
+    followReportedCopies(meditClient, (affects) => {
+      childRecordDocuments.changedWhere(affects);
+      void recordEditorProvider.followCarried(affects);
+    },
       ({ plugin }) => (copy) => samePluginAddress(copy.plugin, plugin)),
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended-field documents.
