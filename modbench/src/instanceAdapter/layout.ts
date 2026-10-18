@@ -11,7 +11,7 @@ import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { PROFILE_SETTINGS_FILE_NAME } from './codecs/profileSettings';
 import { PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
 import type { EntryRef, FileOrigin } from './instanceAdapter';
-import { PLUGIN_EXTENSIONS } from './pluginFile';
+import { PLUGIN_EXTENSIONS } from '../tables/pluginFile';
 
 const PROFILES = 'profiles';
 const MODS = 'mods';

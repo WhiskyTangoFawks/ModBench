@@ -106,11 +106,10 @@ const BOUND_COMMAND_BOXES = {
     toolbox: ['instanceCommands/instanceCommands', 'sourceCommands/modlistRepositoryCommands'],
     plugins: ['pluginCommands/plugins', 'pluginCommands/renamePlugin', 'sourceCommands/sourceCommands'],
 };
-/** A view reaches the Instance adapter for a rule over file names and paths alone: Plugins for a plugin file's, Mods and
+/** A view reaches the Instance adapter for a rule over file names and paths alone: Mods and
  *  Downloads for an archive's, and Mods for which downloaded file a picked path is. */
 /** @type {Record<string, string[]>} */
 const ADAPTER_NAMES_A_VIEW_MAY_IMPORT = {
-    plugins: ['fileExtension'],
     mods: ['ARCHIVE_EXTENSIONS', 'defaultModName', 'defaultModNameForFolder', 'samePath'],
     downloads: ['isArchiveName'],
 };
