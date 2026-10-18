@@ -17,7 +17,7 @@ internal static class InitEveryPluginOf
     {
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
-        return TestEditService.InitHandler(holder, adapter, notifications, source).InitAsync(ToInit.In(loadOrder, mod));
+        return TestEditService.InitModHandler(holder, adapter, notifications, source).InitAsync(ToInit.In(loadOrder, mod));
     }
 
     /// <summary>Every reason something of the selection did not init, whole mods and single plugins alike.</summary>

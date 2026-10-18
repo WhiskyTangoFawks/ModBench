@@ -104,13 +104,13 @@ public static class CommandHandlers
             sp.GetRequiredService<UnsavedDocuments>(),
             sp.GetRequiredService<ILogger<CopyRecordChangesHandler>>()));
 
-        services.AddSingleton(sp => new InitHandler(
+        services.AddSingleton(sp => new InitModHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<INotificationPublisher>(),
-            sp.GetRequiredService<ILogger<InitHandler>>()));
+            sp.GetRequiredService<ILogger<InitModHandler>>()));
 
         services.AddSingleton(sp => new DecompilePluginHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
@@ -140,7 +140,7 @@ public static class CommandHandlers
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<IPluginAdapter>()));
 
-        services.AddSingleton(sp => new BuildHandler(
+        services.AddSingleton(sp => new BuildModHandler(
             sp.GetRequiredService<SourceModBuild>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ISourceAdapter>(),
@@ -156,7 +156,7 @@ public static class CommandHandlers
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<SourceModBuild>()));
 
-        services.AddSingleton(sp => new BuildConfigurationHandler(sp.GetRequiredService<ISourceAdapter>()));
+        services.AddSingleton(sp => new ChangeBuildConfigurationHandler(sp.GetRequiredService<ISourceAdapter>()));
 
         services.AddSingleton(sp => new CreatePluginHandler(
             sp.GetRequiredService<IPluginAdapter>(),

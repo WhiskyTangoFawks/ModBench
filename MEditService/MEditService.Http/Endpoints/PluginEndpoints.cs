@@ -256,7 +256,7 @@ internal static class PluginEndpoints
             "CreateRecord", loggerFactory.CreateLogger(nameof(PluginEndpoints)),
             logReceived: null,
             validate: () => string.IsNullOrWhiteSpace(req.RecordType)
-                ? Results.Problem("A record type is required.", statusCode: 400)
+                ? EndpointMapping.BadRequest("A record type is required.")
                 : null,
             execute: () => Task.FromResult(creates.Create(address, req.RecordType, req.Container, req.Position)),
             onApplied: result => Results.Ok(new RecordWrittenResponse(EndpointMapping.RequireNewFormKey(result))));
@@ -277,7 +277,7 @@ internal static class PluginEndpoints
         CreatePluginInModRequest req, CreatePluginInModHandler create, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return Results.Problem("Plugin name and origin are required.", statusCode: 400);
+        if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return EndpointMapping.BadRequest("Plugin name and origin are required.");
 
         var result = await create.CreatePluginIn(plugin.Origin, plugin.Name);
         return Created(logger, "Create plugin in mod", plugin, result);
@@ -296,16 +296,16 @@ internal static class PluginEndpoints
     private static IResult? Malformed(CreatePluginRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.Name))
-            return Results.Problem("Plugin name is required.", statusCode: 400);
+            return EndpointMapping.BadRequest("Plugin name is required.");
         return string.IsNullOrWhiteSpace(req.Folder) || string.IsNullOrWhiteSpace(req.Origin)
-            ? Results.Problem("The folder and the origin are required.", statusCode: 400)
+            ? EndpointMapping.BadRequest("The folder and the origin are required.")
             : null;
     }
 
     internal static IResult RenameSourceChanges(
         RenameSourceChangesRequest req, RenameSourceChangesHandler rename, ILoggerFactory loggerFactory)
     {
-        if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return Results.Problem("Plugin name and origin are required.", statusCode: 400);
+        if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return EndpointMapping.BadRequest("Plugin name and origin are required.");
 
         var result = rename.RenameSource(plugin, req.NewName ?? string.Empty);
         return result.Match(
@@ -317,7 +317,7 @@ internal static class PluginEndpoints
         MoveLastWrittenRequest req, MoveLastWrittenHandler move, ILoggerFactory loggerFactory)
     {
         if (RenamedPlugin(req.Name, req.Origin) is not { } plugin || string.IsNullOrWhiteSpace(req.TreeName))
-            return Results.Problem("Plugin name, origin and tree name are required.", statusCode: 400);
+            return EndpointMapping.BadRequest("Plugin name, origin and tree name are required.");
 
         var result = move.MoveLastWritten(plugin, req.TreeName, req.NewName ?? string.Empty);
         return result.Refusal is { } refusal
@@ -364,9 +364,9 @@ internal static class PluginEndpoints
     {
         var plugins = requested ?? [];
         if (plugins.Count == 0)
-            return Results.Problem("At least one plugin is required.", statusCode: 400);
+            return EndpointMapping.BadRequest("At least one plugin is required.");
         if (plugins.Any(p => string.IsNullOrWhiteSpace(p.Name) || string.IsNullOrWhiteSpace(p.Origin)))
-            return Results.Problem("Every plugin needs a name and an origin.", statusCode: 400);
+            return EndpointMapping.BadRequest("Every plugin needs a name and an origin.");
 
         return await answer(plugins);
     }
@@ -382,7 +382,7 @@ internal static class PluginEndpoints
             "Create record", logger,
             logReceived: null,
             validate: () => string.IsNullOrWhiteSpace(req.RecordType)
-                ? Results.Problem("A record type is required.", statusCode: 400)
+                ? EndpointMapping.BadRequest("A record type is required.")
                 : null,
             execute: () => edits.CreateRecord(
                 address, req.RecordType, req.Container, req.Position),

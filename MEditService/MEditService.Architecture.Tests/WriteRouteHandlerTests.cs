@@ -1,5 +1,6 @@
 using System.Reflection;
 using MEditService.Commands;
+using MEditService.Commands.Build;
 using MEditService.RecordIndex.Queries;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
@@ -26,6 +27,11 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/plugins/move-last-written", typeof(MoveLastWrittenHandler)),
         ("POST", "/plugins/{plugin}/create-record-changes", typeof(CreateRecordChangesHandler)),
         ("PUT", "/load-order", typeof(PutLoadOrderHandler)),
+        ("POST", "/build", typeof(BuildModHandler)),
+        ("POST", "/init", typeof(InitModHandler)),
+        ("POST", "/build-configuration", typeof(ChangeBuildConfigurationHandler)),
+        ("POST", "/update-manifest", typeof(UpdateManifestHandler)),
+        ("POST", "/restore-from-manifest", typeof(RestoreFromManifestHandler)),
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";
@@ -105,7 +111,9 @@ public sealed class WriteRouteHandlerTests
     }
 
     private static bool IsHandler(Type type) =>
-        type.Namespace == CommandsNamespace && type.Name.EndsWith("Handler", StringComparison.Ordinal);
+        (type.Namespace == CommandsNamespace
+            || type.Namespace?.StartsWith(CommandsNamespace + ".", StringComparison.Ordinal) == true)
+        && type.Name.EndsWith("Handler", StringComparison.Ordinal);
 
     private readonly record struct MappedRoute(
         string Method, string Pattern, string? Name, IReadOnlyList<Type> Parameters)

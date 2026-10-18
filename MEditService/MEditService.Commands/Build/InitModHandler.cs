@@ -11,7 +11,7 @@ namespace MEditService.Commands.Build;
 
 /// <summary>The init gesture's handler (ADR-0007, ADR-0014). The mod is the item of the selection:
 /// it lands whole with one commit, `Init &lt;mod&gt;`, or refuses whole.</summary>
-public sealed class InitHandler
+public sealed class InitModHandler
 {
     private readonly LoadOrderHolder _loadOrder;
     private readonly ILogger _logger;
@@ -22,9 +22,9 @@ public sealed class InitHandler
     private readonly PluginDecompiler _decompiler;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal InitHandler(
+    internal InitModHandler(
         LoadOrderHolder loadOrder, IPluginAdapter adapter, ISourceAdapter source, IModFolderRepository modFolders,
-        INotificationPublisher notifications, ILogger<InitHandler> logger) =>
+        INotificationPublisher notifications, ILogger<InitModHandler> logger) =>
         (_loadOrder, _source, _modFolders, _plugins, _notifications, _logger, _decompiler) =
             (loadOrder, source, modFolders, adapter, notifications, logger, new PluginDecompiler(logger, adapter, source));
 

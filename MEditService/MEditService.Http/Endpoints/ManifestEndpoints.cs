@@ -97,11 +97,11 @@ internal static class ManifestEndpoints
         var mods = req.Mods ?? [];
         if (Malformed(mods, req.StatCache, req.GameFolder) is { } malformed) return malformed;
         if (string.IsNullOrWhiteSpace(req.ExcludedSuffix))
-            return Results.Problem("The suffix the mod manager gives an excluded file's name is required.", statusCode: 400);
+            return EndpointMapping.BadRequest("The suffix the mod manager gives an excluded file's name is required.");
         var variants = req.Archives?.Variants();
-        if (req.Archives is not null && variants is null) return Results.Problem(ArchiveVariantsRequest.NotOneEach, statusCode: 400);
+        if (req.Archives is not null && variants is null) return EndpointMapping.BadRequest(ArchiveVariantsRequest.NotOneEach);
         if (mods.Any(mod => mod.Submodule is { IsWhole: false }))
-            return Results.Problem("Every submodule needs the folder git checks it out in and the commit the instance repository pins.", statusCode: 400);
+            return EndpointMapping.BadRequest("Every submodule needs the folder git checks it out in and the commit the instance repository pins.");
 
         using var running = cancels.Run(req.Gesture, aborted);
         var result = await handler.RestoreAsync(
@@ -150,8 +150,8 @@ internal static class ManifestEndpoints
     private static IResult? MalformedFolders(ModFoldersRequest req)
     {
         if (req.Mods is not { Count: > 0 } || !ModsByFolder.AreWhole(req.Mods))
-            return Results.Problem("At least one mod is required, and every mod needs a name, a folder and its metadata files, and either its metadata or why it is unreadable.", statusCode: 400);
-        return string.IsNullOrWhiteSpace(req.StatCache) ? Results.Problem("The folder of the stat cache is required.", statusCode: 400) : null;
+            return EndpointMapping.BadRequest("At least one mod is required, and every mod needs a name, a folder and its metadata files, and either its metadata or why it is unreadable.");
+        return string.IsNullOrWhiteSpace(req.StatCache) ? EndpointMapping.BadRequest("The folder of the stat cache is required.") : null;
     }
 
     private static List<ModStatus> StatusOf(ModFoldersRequest req, IModFolderRepository repository) =>
@@ -159,20 +159,18 @@ internal static class ManifestEndpoints
 
     private static IResult? Malformed(IReadOnlyList<IModRequest> mods, string? statCache, GameFolderRequest? gameFolder)
     {
-        if (mods.Count == 0) return Results.Problem("At least one mod is required.", statusCode: 400);
-        if (string.IsNullOrWhiteSpace(statCache)) return Results.Problem("The folder of the stat cache is required.", statusCode: 400);
+        if (mods.Count == 0) return EndpointMapping.BadRequest("At least one mod is required.");
+        if (string.IsNullOrWhiteSpace(statCache)) return EndpointMapping.BadRequest("The folder of the stat cache is required.");
         var installationFiles = mods.Select(mod => mod.InstallationFile).OfType<InstallationFileRequest>().ToList();
         if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.Folder)) || installationFiles.Any(file => !file.IsWhole))
         {
-            return Results.Problem(
-                "Every mod needs a name and a folder, and every installation file a path, a size, a hash and its entries, each with a path and a hash.",
-                statusCode: 400);
+            return EndpointMapping.BadRequest("Every mod needs a name and a folder, and every installation file a path, a size, a hash and its entries, each with a path and a hash.");
         }
         if (installationFiles.Any(file => !FileHash.IsHash(file.Hash) || file.Entries.Any(entry => !FileHash.IsHash(entry.Hash))))
-            return Results.Problem("Every hash is xxHash64 as Wabbajack writes it: eight bytes in base64.", statusCode: 400);
+            return EndpointMapping.BadRequest("Every hash is xxHash64 as Wabbajack writes it: eight bytes in base64.");
         return gameFolder is null || gameFolder.IsWhole
             ? null
-            : Results.Problem("The game folder needs its name, its Data folder, and each game file a path and an xxHash64 hash.", statusCode: 400);
+            : EndpointMapping.BadRequest("The game folder needs its name, its Data folder, and each game file a path and an xxHash64 hash.");
     }
 
 }
