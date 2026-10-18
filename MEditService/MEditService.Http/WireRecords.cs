@@ -104,17 +104,6 @@ internal sealed record RecordCreateChangesResponse(
     }
 }
 
-/// <summary>The changes renaming a plugin's source makes, and the name its tree was filed under.</summary>
-internal sealed record RenameSourceChangesResponse(
-    string TreeName, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents)
-{
-    internal static RenameSourceChangesResponse Of(string treeName, SourceChanges changes)
-    {
-        var (moves, deletions, documents) = changes;
-        return new(treeName, moves, deletions, documents);
-    }
-}
-
 /// <summary>A record and the plugin holding it (ADR-0012).</summary>
 internal sealed record RecordAddress(string FormKey, string Plugin, string Origin);
 

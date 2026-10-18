@@ -22,9 +22,9 @@ public sealed class CompilePluginTests : IDisposable
 
     private async Task<(IFallout4ModGetter Mod, IDisposable Handle)> CompileAndReimport()
     {
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
         Assert.Empty(answer.Refused);
-        Assert.Single(answer.Landed);
+        Assert.Single(answer.Applied);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var overlay = ModFactory.ImportGetter(
@@ -37,10 +37,10 @@ public sealed class CompilePluginTests : IDisposable
     {
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
 
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        Assert.Single(answer.Landed);
+        Assert.Single(answer.Applied);
 
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         using var overlayDisposable = ModFactory.ImportGetter(
@@ -70,20 +70,20 @@ public sealed class CompilePluginTests : IDisposable
     [Fact]
     public async Task Compile_WithASemanticallyBrokenRecord_SucceedsWithDiagnostics()
     {
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         Assert.Contains(diagnostics, d => d.FormKey == _mod.Race.ToString());
     }
 
     [Fact]
     public async Task Compile_NamesADiagnosticsOwnDocument_RelativeToTheModFolder()
     {
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         var diagnostic = diagnostics.First(d => d.FormKey == _mod.Race.ToString());
         var race = _mod.Document(_mod.Race.ToString()).Require();
         Assert.Equal(
@@ -148,7 +148,7 @@ public sealed class CompilePluginTests : IDisposable
     {
         var stray = TreeTampering.StrayGroupDocument(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, stray), refused.Message, StringComparison.Ordinal);

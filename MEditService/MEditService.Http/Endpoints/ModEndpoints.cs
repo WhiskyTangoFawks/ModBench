@@ -1,3 +1,4 @@
+using MEditService.Commands;
 using MEditService.Commands.Build;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
@@ -114,7 +115,7 @@ internal static class ModEndpoints
             landed => new BuiltModResponse(
                 landed.Item,
                 [.. landed.Outcome.Compiled.Select(c => new CompiledPlugin(c.Item.Name, c.Item.Origin, c.Outcome))],
-                [.. landed.Outcome.Refused.Select(r => new PluginCompileRefusal(r.Item, r.Refusal, r.Message))],
+                [.. landed.Outcome.Refused.Select(r => new CompileRefused(r.Item, r.Refusal, r.Message))],
                 [.. landed.Outcome.ArchivesRefused.Select(r => new ArchivePackRefusal(r.Item, r.Refusal, r.Message))],
                 landed.Outcome.Overwritten, landed.Outcome.Failure, landed.Outcome.Uncommitted, landed.Outcome.Unpushed),
             refused => new ModBuildRefusal(refused.Item, refused.Refusal, refused.Message),
@@ -183,7 +184,7 @@ internal sealed record InitResponse(IReadOnlyList<InitializedModResponse> Applie
 /// <summary>A mod of the selection that built: the plugins that compiled, the plugins and archives refused, which
 /// stay as they were, each file it replaced that held other bytes, what stopped it part way, Uncommitted and Unpushed.</summary>
 internal sealed record BuiltModResponse(
-    string Mod, IReadOnlyList<CompiledPlugin> Compiled, IReadOnlyList<PluginCompileRefusal> Refused,
+    string Mod, IReadOnlyList<CompiledPlugin> Compiled, IReadOnlyList<CompileRefused> Refused,
     IReadOnlyList<ArchivePackRefusal> ArchivesRefused, IReadOnlyList<string> Overwritten, string? Failure, bool Uncommitted, bool Unpushed);
 
 /// <summary>An archive of a built mod that was not packed, by its path in the mod folder.</summary>

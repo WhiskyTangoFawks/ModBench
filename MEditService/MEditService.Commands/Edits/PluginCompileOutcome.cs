@@ -6,15 +6,15 @@ public sealed record CompileDiagnostic(string FormKey, string SourceRelativePath
 
 /// <summary>A refusal is typed, never an exception: a state structurally impossible to emit (a
 /// FormKey collision). Everything else compiles with <see cref="Diagnostics"/>.</summary>
-internal sealed record CompileResult(
+internal sealed record PluginCompileOutcome(
     bool Succeeded,
     CompileRefusal Refusal,
     string? RefusalReason,
     IReadOnlyList<CompileDiagnostic> Diagnostics)
 {
-    public static CompileResult Refused(CompileRefusal refusal, string reason) =>
+    public static PluginCompileOutcome Refused(CompileRefusal refusal, string reason) =>
         new(false, refusal, reason, []);
 
-    public static CompileResult Success(IReadOnlyList<CompileDiagnostic> diagnostics) =>
+    public static PluginCompileOutcome Success(IReadOnlyList<CompileDiagnostic> diagnostics) =>
         new(true, CompileRefusal.None, null, diagnostics);
 }

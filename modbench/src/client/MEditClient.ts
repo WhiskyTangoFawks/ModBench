@@ -150,9 +150,6 @@ export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type InteriorCellBlock = components['schemas']['InteriorCellBlock'];
 export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock'];
 
-// apiClient.ts aliases the wire shapes its own module needs; these are the port's own, named
-// here for the same reason (modbench/CLAUDE.md: the generated schema is the frontend type).
-export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 export type { PluginAddress };
 
 interface InitializedMod {
@@ -321,7 +318,7 @@ export type BuildConfigurationChange = Omit<components['schemas']['BuildConfigur
 export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
-  createPlugin(plugin: PluginAddress, folder: string, sourceFolder: string | undefined): Promise<PluginCreatedResponse | WriteRefused>;
+  createPlugin(plugin: PluginAddress, folder: string, sourceFolder: string | undefined): Promise<PluginAddress | WriteRefused>;
   // The changes renaming the plugin source makes over the unsaved documents mEdit holds, and the name its tree is
   // filed under. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getRenameSourceChanges(plugin: PluginAddress, newName: string): Promise<RenameSourceChangesOutcome | WriteRefused>;

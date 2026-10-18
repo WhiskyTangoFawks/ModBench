@@ -60,10 +60,10 @@ public sealed class CompilePluginLocalizedTests : IDisposable
 
         var plugin = new PluginAddress(PluginName, Origin);
         var compileService = CompileServices.Over(_loadOrder);
-        var answer = await compileService.CompileAsync([plugin]);
+        var answer = (await compileService.CompileAsync([plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        Assert.Single(answer.Landed);
+        Assert.Single(answer.Applied);
 
         using (var recompiled = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(PluginName), pluginPath), Fallout4Release.Fallout4))

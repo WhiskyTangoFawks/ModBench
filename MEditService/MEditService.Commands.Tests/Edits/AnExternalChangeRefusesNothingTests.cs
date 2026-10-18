@@ -1,3 +1,5 @@
+using MEditService.Commands.Tests.TestSupport;
+
 namespace MEditService.Commands.Tests.Edits;
 
 public sealed class AnExternalChangeRefusesNothingTests : IDisposable
@@ -13,7 +15,7 @@ public sealed class AnExternalChangeRefusesNothingTests : IDisposable
         byte[] theirs = "changed-by-xedit"u8.ToArray();
         File.WriteAllBytes(path, theirs);
 
-        var result = await _mod.CompileService().CompileAsync([_mod.Plugin]);
+        var result = (await _mod.CompileService().CompileAsync([_mod.Plugin])).Value();
 
         Assert.Empty(result.Refused);
         Assert.NotEqual(theirs, File.ReadAllBytes(path));

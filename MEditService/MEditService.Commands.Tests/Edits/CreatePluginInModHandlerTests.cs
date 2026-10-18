@@ -46,8 +46,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
 
         var result = await Handler.CreatePluginIn(Mod.ToUpperInvariant(), "Second.esp");
 
-        Assert.Null(result.Refusal);
-        Assert.Equal(new PluginAddress("Second.esp", Mod), result.Created);
+        Assert.Equal(new PluginAddress("Second.esp", Mod), result.Created());
         Assert.True(File.Exists(Path.Combine(_folder, "Second.esp")));
         Assert.True(_holder.ArrivalAwaited > awaited);
     }
@@ -60,7 +59,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
 
         var result = await Handler.CreatePluginIn("EmptyMod", "Patch.esp");
 
-        Assert.Null(result.Refusal);
+        result.Created();
         Assert.True(File.Exists(Path.Combine(emptyFolder, "Patch.esp")));
     }
 
@@ -72,8 +71,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
 
         var result = await Handler.CreatePluginIn(PluginOrigin.Overwrite, "Patch.esp");
 
-        Assert.Null(result.Refusal);
-        Assert.Equal(new PluginAddress("Patch.esp", PluginOrigin.Overwrite), result.Created);
+        Assert.Equal(new PluginAddress("Patch.esp", PluginOrigin.Overwrite), result.Created());
         Assert.True(File.Exists(Path.Combine(overwrite, "Patch.esp")));
     }
 
@@ -82,7 +80,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     {
         var awaited = _holder.ArrivalAwaited;
 
-        var result = await Handler.CreatePluginIn(Mod, "First.esp");
+        var result = (await Handler.CreatePluginIn(Mod, "First.esp")).Refused();
 
         Assert.Equal(PluginCreateRefusal.FileExists, result.Refusal);
         Assert.Equal(awaited, _holder.ArrivalAwaited);
@@ -95,7 +93,7 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     {
         var awaited = _holder.ArrivalAwaited;
 
-        var result = await Handler.CreatePluginIn(origin, "Second.esp");
+        var result = (await Handler.CreatePluginIn(origin, "Second.esp")).Refused();
 
         Assert.Equal(PluginCreateRefusal.OriginNotAMod, result.Refusal);
         Assert.Contains(origin, result.Message, StringComparison.Ordinal);

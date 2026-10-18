@@ -46,9 +46,9 @@ public sealed class HeaderFlagEditTests : IDisposable
         SourceModTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
-        var answer = await CompileService().CompileAsync([_fixture.Plugin]);
+        var answer = (await CompileService().CompileAsync([_fixture.Plugin])).Value();
 
-        Assert.Empty(answer.Landed);
+        Assert.Empty(answer.Applied);
         var refused = Assert.Single(answer.Refused);
         Assert.Equal(
             (CompileRefusal.FormIdOutsideFlagLimit,
@@ -63,7 +63,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         using var light = SourceEditFixture.CompiledPluginLight("Fixture.esl");
         SourceModTree.Seed(light.ModFolder, light.Plugin, "001000:Fixture.esl");
 
-        var refused = Assert.Single((await CompileServices.Over(light.LoadOrder).CompileAsync([light.Plugin])).Refused);
+        var refused = Assert.Single((await CompileServices.Over(light.LoadOrder).CompileAsync([light.Plugin])).Value().Refused);
 
         Assert.EndsWith(". Clear the light flag, rename the plugin off .esl, or change the records' FormIDs.", refused.Message, StringComparison.Ordinal);
     }
