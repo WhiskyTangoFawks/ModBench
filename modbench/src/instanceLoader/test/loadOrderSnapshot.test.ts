@@ -4,11 +4,10 @@ import type { DataFolderPlugins, FileRead, FileStamp, GameFolder, ModFolders, Or
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { buildFileConflictIndex, FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, sourceFiles, stampedSnapshot,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, sourceFiles, type PluginWithNoLine, stampedSnapshot,
   type ArchiveSources,
   type LoadOrderPlugin, type LoadOrderPluginLine,
 } from '../loadOrderSnapshot';
-import type { PluginAddress } from '../../wire/pluginAddress';
 
 type LoadOrderPluginRow = LoadOrderPlugin | LoadOrderPluginLine;
 import { present } from '../../ports/present';
@@ -252,18 +251,32 @@ describe('pluginsLoadedWithNoLineOf', () => {
   it('names a game master a line names in the game folder at that line\'s plugin\'s spelling', () => {
     const lined = { name: 'master.esm', path: join(DATA_FOLDER, 'master.esm'), origin: 'Data/', line: 0, enabled: true, winning: true };
 
-    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('master.esm'), [lined]))
-      .toEqual([{ name: 'master.esm', origin: 'Data/' }]);
+    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('master.esm'), [lined], GAME_FOLDER))
+      .toEqual([{ name: 'master.esm', origin: 'Data/', path: join(DATA_FOLDER, 'master.esm') }]);
   });
 
   it('names a game master the Data folder spells otherwise by the folder\'s spelling', () => {
-    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('MASTER.ESM'), []))
-      .toEqual([{ name: 'MASTER.ESM', origin: 'Data/' }]);
+    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('MASTER.ESM'), [], GAME_FOLDER))
+      .toEqual([{ name: 'MASTER.ESM', origin: 'Data/', path: join(DATA_FOLDER, 'MASTER.ESM') }]);
   });
 
   it('names each of two Data folder files that differ only in case', () => {
-    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('Master.esm', 'master.esm'), []))
-      .toEqual([{ name: 'Master.esm', origin: 'Data/' }, { name: 'master.esm', origin: 'Data/' }]);
+    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('Master.esm', 'master.esm'), [], GAME_FOLDER))
+      .toEqual([
+        { name: 'Master.esm', origin: 'Data/', path: join(DATA_FOLDER, 'Master.esm') },
+        { name: 'master.esm', origin: 'Data/', path: join(DATA_FOLDER, 'master.esm') },
+      ]);
+  });
+
+  it('names a game master a mod provides at that mod\'s file', () => {
+    const provided = { name: 'Master.esm', path: '/mods/A/Master.esm', origin: 'A', line: 0, enabled: true, winning: true };
+
+    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('Master.esm'), [provided], GAME_FOLDER))
+      .toEqual([{ name: 'Master.esm', origin: 'A', path: '/mods/A/Master.esm' }]);
+  });
+
+  it('names none while the game folder is not found', () => {
+    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('Master.esm'), [], GAME_FOLDER_NOT_FOUND)).toBeUndefined();
   });
 });
 
@@ -326,11 +339,11 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
   const NO_MODLIST = { mods: [], metadataFiles: ['meta.ini'], statCache: '/mo2/stat-cache' };
   const outcomeOf = (plugins: LoadOrderPluginRow[], folders: ModFolders = modFolders) =>
     loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders: folders, sourceDirs, places: [], modlist: NO_MODLIST, archives: NO_ARCHIVES });
-  const snapshotOf = (plugins: LoadOrderPluginRow[], pluginsLoadedWithNoLine: readonly PluginAddress[] = [], archives = NO_ARCHIVES) => {
+  const snapshotOf = (plugins: LoadOrderPluginRow[], pluginsLoadedWithNoLine: readonly PluginWithNoLine[] = [], archives = NO_ARCHIVES) => {
     const outcome = loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine, modFolders, sourceDirs, places: [], modlist: NO_MODLIST, archives });
     return outcome !== undefined && 'refusal' in outcome ? undefined : outcome;
   };
-  const inGameFolder = (name: string): PluginAddress => ({ name, origin: 'Data/' });
+  const inGameFolder = (name: string): PluginWithNoLine => ({ name, origin: 'Data/', path: join('/game/Data', name) });
 
   it('is undefined — no put at all — while the game folder\'s plugins cannot be listed, as a snapshot lacking the game\'s masters is not sent', () => {
     expect(loadOrderSnapshotOf({
@@ -527,7 +540,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
   it('sends a plugin the game loads with no line as the mod the Mod override order resolves its name to, once', () => {
     const provided = row('Master.esm', 'ModM', null, { enabled: false });
 
-    const snapshot = snapshotOf([provided], [address(provided)]);
+    const snapshot = snapshotOf([provided], [{ ...address(provided), path: provided.path }]);
 
     expect(snapshot?.active).toEqual([address(provided)]);
     expect(snapshot?.loadedWithNoLine).toEqual([address(provided)]);

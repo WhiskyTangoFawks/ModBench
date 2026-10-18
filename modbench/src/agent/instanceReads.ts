@@ -29,7 +29,7 @@ export const INSTANCE_READS: readonly Read[] = [
     of: ({ plugins, pluginsLoadedWithNoLine, gameFolder, dataFolderPlugins }) => {
       const { loadedWithNoLine, fromLines, others } = pluginOrderOf(
         { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] },
-        (address) => ({ ...address, path: '', line: null, enabled: true, winning: true }),
+        (address) => ({ ...address, line: null, enabled: true, winning: true }),
       );
       const answer = {
         plugins: [

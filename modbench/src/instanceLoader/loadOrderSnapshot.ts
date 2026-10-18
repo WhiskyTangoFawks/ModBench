@@ -122,23 +122,27 @@ function byOrigin<T>(origin: string, answers: { overwrite: T; data: T; mod: (nam
   return answers.mod(origin);
 }
 
+export type PluginWithNoLine = PluginAddress & { readonly path: string };
+
 /** The plugins the game loads with no line (ADR-0013), in load order, each from the mod providing
- *  it, else the game folder, at its file's own spelling. */
+ *  it, else the game folder, at its file's own spelling, with that file's path. */
 export function pluginsLoadedWithNoLineOf(
   loadedWithNoLine: readonly string[], inData: DataFolderPlugins,
-  plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[],
-): PluginAddress[] | undefined {
-  if (inData.kind !== 'listed') return undefined;
-  const providedBy = new Map(plugins.filter((p) => p.path !== undefined && p.winning && p.origin !== DATA_DIRECTORY_ORIGIN).map((p) => [foldPath(p.name), p] as const));
+  plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[], gameFolder: GameFolder,
+): PluginWithNoLine[] | undefined {
+  if (inData.kind !== 'listed' || gameFolder.kind !== 'found') return undefined;
+  const providedBy = new Map(plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined && p.winning && p.origin !== DATA_DIRECTORY_ORIGIN).map((p) => [foldPath(p.name), p] as const));
   const seen = new Set<string>();
   return loadedWithNoLine.flatMap((name) => {
     const provided = providedBy.get(foldPath(name));
-    const found = provided === undefined ? dataSpellings(inData, name).map((spelled) => ({ name: spelled, origin: DATA_DIRECTORY_ORIGIN })) : [provided];
-    return found.flatMap(({ name: spelled, origin }) => {
+    const found = provided === undefined
+      ? dataSpellings(inData, name).map((spelled) => ({ name: spelled, origin: DATA_DIRECTORY_ORIGIN, path: fileInFolder(gameFolder.dataFolder, spelled) }))
+      : [provided];
+    return found.flatMap(({ name: spelled, origin, path }) => {
       const key = exactPluginAddressKey({ name: spelled, origin });
       if (seen.has(key)) return [];
       seen.add(key);
-      return [{ name: spelled, origin }];
+      return [{ name: spelled, origin, path }];
     });
   });
 }
@@ -261,7 +265,7 @@ export function listedArchivesNothingHolds({ gameRelease, listed, inData, files 
 export function loadOrderSnapshotOf(value: {
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   readonly gameFolder: GameFolder;
-  readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
+  readonly pluginsLoadedWithNoLine: readonly PluginWithNoLine[] | undefined;
   readonly modFolders: ModFolders | undefined;
   /** Each source mod's source folder, by mod name. */
   readonly sourceDirs: ReadonlyMap<string, string>;
@@ -290,7 +294,7 @@ export function loadOrderSnapshotOf(value: {
   });
   const order = pluginOrderOf(
     { plugins: rows, pluginsLoadedWithNoLine: value.pluginsLoadedWithNoLine },
-    (p) => ({ ...p, path: fileInFolder(dataFolder, p.name), line: null, enabled: true, winning: true }),
+    (p) => ({ ...p, line: null, enabled: true, winning: true }),
   );
   const { loadedWithNoLine } = order;
   const fromLines = order.fromLines.filter((p) => p.enabled);

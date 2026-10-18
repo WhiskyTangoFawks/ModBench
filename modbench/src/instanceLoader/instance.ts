@@ -5,11 +5,10 @@ import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './
 import {
   buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, OVERWRITE_ORIGIN, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
   type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
-  type LoadOrderSnapshotValue,
+  type LoadOrderSnapshotValue, type PluginWithNoLine,
 } from './loadOrderSnapshot';
 import { withMetadataRead } from '../wire/modByFolder';
 import { modNameOf, modNamesOf } from './modName';
-import type { PluginAddress } from '../wire/pluginAddress';
 import { present } from '../ports/present';
 import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
 import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
@@ -104,7 +103,7 @@ export interface InstanceValue {
   readonly dataFolderPlugins: DataFolderPlugins;
   /** The plugins the game loads with no line, in the order it loads them; undefined while the
    *  game folder's plugins cannot be listed. */
-  readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
+  readonly pluginsLoadedWithNoLine: readonly PluginWithNoLine[] | undefined;
   /** ADR-0013's snapshot; undefined while the game folder is not found or its plugins cannot be
    *  listed, so nothing silently wrong is sent. */
   readonly loadOrderSnapshot: LoadOrderSnapshotValue | LoadOrderSnapshotRefusal | undefined;
@@ -391,7 +390,7 @@ export class Instance implements Subscription {
     this.tellReading(reading);
     const index = buildFileConflictIndex(entries, runtimeOutput.files, reading.modFiles, (line) => log.info(line));
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
-    const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(loadedWithNoLineOf(gameRelease, creationClub), dataFolderPlugins, plugins);
+    const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(loadedWithNoLineOf(gameRelease, creationClub), dataFolderPlugins, plugins, gameFolder);
     // Installed reads every mod folder, not one profile's mod order: a folder no profile has synced
     // into its mod order yet still owns its meta's claim. A separator is never installed from a
     // downloaded file.

@@ -19,7 +19,6 @@ import { oneAtATime } from './textDocuments/oneAtATime';
 import { Instance } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
 import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
-import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
@@ -135,7 +134,6 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.sourceGestureRowsIn');
   const plugins = own(pluginsBox.onInstance({
     instance, commands: pluginCommands({ adapter, client }), pluginSync,
-    dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({

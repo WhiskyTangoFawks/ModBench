@@ -8,8 +8,8 @@ interface Placed extends PluginAddress {
 /** The plugin order (ADR-0013): the plugins the game loads with no line, then the winning lines by line.
  *  A plugin appears once, at its first place. `others` are the plugins outside the order. */
 export function pluginOrderOf<R extends Placed>(
-  value: { readonly plugins: readonly R[]; readonly pluginsLoadedWithNoLine: readonly PluginAddress[] },
-  absent: (address: PluginAddress) => R,
+  value: { readonly plugins: readonly R[]; readonly pluginsLoadedWithNoLine: readonly (PluginAddress & { readonly path: string })[] },
+  absent: (address: PluginAddress & { readonly path: string }) => R,
 ): { loadedWithNoLine: R[]; fromLines: (R & { line: number })[]; others: R[] } {
   const rowAt = new Map(value.plugins.map((p) => [exactPluginAddressKey(p), p] as const));
   const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((address) => rowAt.get(exactPluginAddressKey(address)) ?? absent(address));
