@@ -1600,6 +1600,7 @@ describe('Delete separator, as VS Code runs it on the Mods view\'s selection', (
     trashedBefore = trashInfoNames();
     original = readFileSync(modlistPath, 'utf8');
     mkdirSync(doomedDir, { recursive: true });
+    writeFileSync(path.join(doomedDir, 'readme.txt'), 'content');
     writeFileSync(modlistPath, '-Doomed_separator\r\n');
   });
 
@@ -1621,6 +1622,44 @@ describe('Delete separator, as VS Code runs it on the Mods view\'s selection', (
       assert.ok(!existsSync(doomedDir), 'the delete should have taken the separator\'s folder from mods/');
       if (process.platform === 'linux') {
         assert.strictEqual(takeFromTrash(doomedDir, trashedBefore), 1, 'the separator\'s folder should be in the OS trash');
+      }
+    } finally {
+      (vscode.window as { showWarningMessage: unknown }).showWarningMessage = warn;
+    }
+  });
+});
+
+describe('Uninstall, as VS Code runs it on the Mods view\'s selection', () => {
+  const doomedDir = path.join(root, 'mods', 'Doomed Mod');
+  let original = '';
+  let trashedBefore: ReadonlySet<string> = new Set();
+
+  before(() => {
+    trashedBefore = trashInfoNames();
+    original = readFileSync(modlistPath, 'utf8');
+    mkdirSync(doomedDir, { recursive: true });
+    writeFileSync(path.join(doomedDir, 'readme.txt'), 'content');
+    writeFileSync(modlistPath, '+Doomed Mod\r\n');
+  });
+
+  after(() => {
+    takeFromTrash(doomedDir, trashedBefore);
+    rmSync(doomedDir, { recursive: true, force: true });
+    writeFileSync(modlistPath, original);
+  });
+
+  it('takes its line from modlist.txt and its folder to the OS trash', async () => {
+    const warn = vscode.window.showWarningMessage;
+    (vscode.window as { showWarningMessage: unknown }).showWarningMessage = () => Promise.resolve('Uninstall');
+    try {
+      await waitFor('the uninstall to write modlist.txt, the Mods view reloading after the setup writes having dropped its selection', async () => {
+        await selectFirstRow('modbench.modList', 'Doomed Mod');
+        await vscode.commands.executeCommand('modbench.mod.uninstall');
+        return !readFileSync(modlistPath, 'utf8').includes('Doomed Mod');
+      });
+      assert.ok(!existsSync(doomedDir), 'the uninstall should have taken the mod\'s folder from mods/');
+      if (process.platform === 'linux') {
+        assert.strictEqual(takeFromTrash(doomedDir, trashedBefore), 1, 'the mod\'s folder should be in the OS trash');
       }
     } finally {
       (vscode.window as { showWarningMessage: unknown }).showWarningMessage = warn;
