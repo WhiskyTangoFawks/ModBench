@@ -212,7 +212,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
   });
 
   describe('the cell value setting', () => {
-    const stamped = (instance: FakeInstance) => {
+    const stamped = () => {
       copiesDouble.answer = (paths) => Promise.resolve(paths.map((relativePath) => ({
         relativePath,
         copies: [
@@ -229,7 +229,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
     it.each([['unset', undefined], ['not a value it offers', 'colour']])('shows the size when the setting is %s', async (_, setting) => {
       const instance = new FakeInstance(await shared());
-      stamped(instance);
+      stamped();
       cellValueSetting = setting;
       const panel = openTable(instance, 'High');
       panel.webview.receive?.(ready);
@@ -240,7 +240,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
     it('shows the value it names, and shows again when it changes, until the tab closes', async () => {
       const instance = new FakeInstance(await shared());
-      stamped(instance);
+      stamped();
       cellValueSetting = 'contents';
       const panel = openTable(instance, 'High');
       panel.webview.receive?.(ready);
@@ -257,7 +257,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
     it('shows again for this setting only, not for another', async () => {
       const instance = new FakeInstance(await shared());
-      stamped(instance);
+      stamped();
       const panel = openTable(instance, 'High');
       panel.webview.receive?.(ready);
       await posted(panel, 1);
