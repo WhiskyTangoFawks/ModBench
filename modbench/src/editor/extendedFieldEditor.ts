@@ -6,7 +6,8 @@ import { isPluginAddress, type PathHop, type StringValueContext } from '../wire/
 import { columnKey } from '../wire/columnKey';
 import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
 import type { EditAddress } from './recordTab';
-import { followReportedCopies, type CopyChanged } from './recordCopy';
+import type { CopyChanged } from '../wire/recordCopy';
+import { followReportedCopies } from './recordCopy';
 import { answerOf } from '../wire/readFailed';
 
 /** Where a cell's text lives: the plugin copy of the record, and the field's path. */

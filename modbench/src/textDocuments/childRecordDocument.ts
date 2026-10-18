@@ -1,10 +1,8 @@
 import * as vscode from 'vscode';
-import type { RecordCopy } from '../wire/recordCopy';
-import { CHILD_RECORD_SCHEME, CONTAINER_SCHEMES, copyOf } from '../textDocuments/recordDocument';
+import type { CopyChanged } from '../wire/recordCopy';
+import { CHILD_RECORD_SCHEME, CONTAINER_SCHEMES, copyOf } from './recordDocument';
 import { fileText } from './fileText';
 import { takeText } from './oneTextPerFile';
-
-export type CopyChanged = (copy: RecordCopy) => boolean;
 
 const containerFileOf = (uri: vscode.Uri): vscode.Uri => uri.with({ scheme: 'file', query: '' });
 
@@ -77,7 +75,6 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
     for (const read of reads) read.ownWrite = ownWrite;
   }
 
-  /** Reads again the open child documents whose copy `affects` names; a change to any record of a plugin can be in the file. */
   changedWhere(affects: CopyChanged): void {
     const changed = vscode.workspace.textDocuments
       .filter(({ uri }) => uri.scheme === CHILD_RECORD_SCHEME && affects(copyOf(uri)))

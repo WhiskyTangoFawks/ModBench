@@ -22,7 +22,7 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { pinnedArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
-import { followChangedCopies } from './copyFollowers';
+import { followCopiesIntoDocuments } from './copyFollowers';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from '../textDocuments/childRecordDocument';
 import { holdOneTextPerFile } from '../textDocuments/oneTextPerFile';
@@ -96,7 +96,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     { dispose: meditClient.onLoadOrderSettled(() => { announceConflictsComputed(tabs); }) },
     vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, editorOptions),
     { dispose: meditClient.onNotification('load-order-status', () => { recordEditorProvider.readAgain(); }) },
-    followChangedCopies(meditClient, childRecordDocuments, recordEditorProvider),
+    followCopiesIntoDocuments(meditClient, childRecordDocuments, recordEditorProvider),
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended-field documents.
     ...registerRecordPanelContextCommands({

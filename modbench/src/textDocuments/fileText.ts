@@ -7,7 +7,7 @@ export async function fileText(uri: vscode.Uri): Promise<string> {
 }
 
 /** The file on disk, as VS Code misses a write to a file outside the workspace while its tab is
- *  hidden. A document's text has no byte order mark. A file gone is undefined. */
+ *  hidden. A document's text has no byte order mark. */
 export async function savedText(uri: vscode.Uri): Promise<string | undefined> {
   try {
     return (await fileText(uri)).replace(/^\uFEFF/, '');

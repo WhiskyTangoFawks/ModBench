@@ -1,9 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient, NotificationPayloads } from '../client';
 import { samePluginAddress } from '../wire/pluginAddress';
-import type { CopyChanged } from '../textDocuments/childRecordDocument';
-
-export type { CopyChanged };
+import type { CopyChanged } from '../wire/recordCopy';
 
 /** Hands `changedWhere` the copies mEdit reports changed: those a rows-changed report touches, as
  *  `touches` reads it, each copy of a plugin mEdit read again whole, and every copy when its reports

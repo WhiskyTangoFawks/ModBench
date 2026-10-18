@@ -8,8 +8,9 @@ import type { RecordTabs } from './recordTabs';
 import type { FileMove } from '../textDocuments/applyWorkspaceChanges';
 import { recordTitle } from './recordTitle';
 import { inTabsStead, type TabShowOptions } from './inTabsStead';
-import type { CopyChanged } from './recordCopy';
+import type { CopyChanged } from '../wire/recordCopy';
 import { savedText } from '../textDocuments/fileText';
+import { heldText, isUnsaved, onHeldTextChanged } from '../textDocuments/heldText';
 import {
   CHILD_RECORD_SCHEME, RENDERED_DOCUMENT_SCHEME, copyDocument, copyOf, type RecordDocument,
 } from '../textDocuments/recordDocument';
@@ -230,13 +231,11 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     titleFromRead: TabDocument['titleFromRead'],
   ): void {
     const documentText = async (pluginActive: boolean) => {
-      if (document.isDirty || tab.waitingFor()) return document.getText();
+      if (isUnsaved(document) || tab.waitingFor()) return heldText(document);
       return pluginActive ? undefined : savedText(document.uri);
     };
     this.show(panel, tab, copy, page, { titleFromRead, plugin: copy.plugin, documentText });
-    tab.own(vscode.workspace.onDidChangeTextDocument((change) => {
-      if (change.document === document && change.contentChanges.length > 0) tab.refresh();
-    }));
+    tab.own(onHeldTextChanged(document, () => { tab.refresh(); }));
   }
 
   private show(panel: vscode.WebviewPanel, tab: RecordTab, { formKey, plugin }: RecordCopy, { columns, place }: GridPage, document: TabDocument): void {
