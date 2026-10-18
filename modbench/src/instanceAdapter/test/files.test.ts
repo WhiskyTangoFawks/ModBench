@@ -147,6 +147,26 @@ describe('putIfChanged', () => {
     expect(await readFile(path, 'utf8')).toBe('original');
     expect(await readdir(root)).toEqual(['plugins.txt']);
   });
+
+  const CRLF = String.fromCharCode(13, 10);
+  const BOM = String.fromCharCode(0xfeff);
+
+  it('refuses a file holding a byte that is not UTF-8, naming the file and the line, and writes nothing over it', async () => {
+    const cp1252 = Buffer.concat([Buffer.from(`*A.esp${CRLF}*Caf`), Buffer.from([0xe9]), Buffer.from(`.esp${CRLF}`)]);
+    await writeFile(path, cp1252);
+
+    await expect(putIfChanged(path, (text) => `${text}B.esp${CRLF}`)).rejects.toThrow(`${path} line 2`);
+
+    expect(await readFile(path)).toEqual(cp1252);
+  });
+
+  it('writes back every line it does not change byte for byte, a BOM and a name outside ASCII among them', async () => {
+    await writeFile(path, `${BOM}*Café.esp${CRLF}*A.esp${CRLF}`);
+
+    await putIfChanged(path, (text) => text.replace('*A.esp', 'A.esp'));
+
+    expect(await readFile(path, 'utf8')).toBe(`${BOM}*Café.esp${CRLF}A.esp${CRLF}`);
+  });
 });
 
 describe('isRepository', () => {

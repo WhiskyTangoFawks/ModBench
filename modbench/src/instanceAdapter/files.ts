@@ -39,10 +39,23 @@ export function withLock<T>(key: string, task: () => Promise<T>): Promise<T> {
   return next;
 }
 
-async function readOr(path: string, ifMissing: string | undefined): Promise<string> {
-  if (ifMissing === undefined) return readFile(path, 'utf8');
+// Writes are UTF-8, Mutagen's own format for plugins.txt. A byte that is not UTF-8 refuses the read
+// rather than come back as U+FFFD and be written over.
+async function readText(path: string): Promise<string> {
   try {
-    return await readFile(path, 'utf8');
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await readFile(path));
+  } catch (err) {
+    if (errnoCode(err) !== 'ERR_ENCODING_INVALID_ENCODED_DATA') throw err;
+    const lines = (await readFile(path, 'utf8')).split(/\r\n|\r|\n/);
+    const at = lines.findIndex((line) => line.includes('\uFFFD'));
+    throw new Error(`${path} line ${at + 1} is not UTF-8: ${lines[at] ?? ''}`, { cause: err });
+  }
+}
+
+async function readOr(path: string, ifMissing: string | undefined): Promise<string> {
+  if (ifMissing === undefined) return readText(path);
+  try {
+    return await readText(path);
   } catch (err) {
     if (errnoCode(err) !== 'ENOENT') throw err;
     return ifMissing;
