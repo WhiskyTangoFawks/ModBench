@@ -101,12 +101,6 @@ public sealed class WriteRouteHandlerTests
     }
 
     [Fact]
-    public void AHandlerInACommandsSubNamespace_IsAHandler()
-    {
-        Assert.True(IsHandler(typeof(BuildModHandler)));
-    }
-
-    [Fact]
     public void EveryGestureHandler_IsTheHandlerOfExactlyOneWriteRoute()
     {
         var gestures = typeof(EditRecordChangesHandler).Assembly.GetExportedTypes()

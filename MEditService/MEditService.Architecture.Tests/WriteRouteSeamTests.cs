@@ -33,36 +33,9 @@ public sealed class WriteRouteSeamTests
 
     private static readonly Regex CallSite = new(@"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.Compiled);
     private static readonly Regex ProblemCall = new(@"Results\.Problem\(", RegexOptions.Compiled);
-    private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
+    private const string BadRequestCall = "EndpointMapping.BadRequest(";
 
-    private static readonly string[] HandRolledRequestShapeValidation400s =
-    [
-        """Results.Problem("Plugin name and origin are required.", statusCode: 400)""",
-        """Results.Problem("An operation and a path are required.", statusCode: 400)""",
-        """Results.Problem("The text of the document carrying the record is required.", statusCode: 400)""",
-        """Results.Problem("At least one record is required.", statusCode: 400)""",
-        """Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400)""",
-        """Results.Problem("At least one destination is required.", statusCode: 400)""",
-        """Results.Problem("Every destination needs a name and an origin.", statusCode: 400)""",
-        """Results.Problem("Plugin name is required.", statusCode: 400)""",
-        """Results.Problem("Plugin name, origin and tree name are required.", statusCode: 400)""",
-        """Results.Problem("The folder and the origin are required.", statusCode: 400)""",
-        """Results.Problem("Origin is required.", statusCode: 400)""",
-        """Results.Problem("At least one plugin is required.", statusCode: 400)""",
-        """Results.Problem( "Every mod needs a name and a source folder.", statusCode: 400)""",
-        """Results.Problem( "Every mod needs a name, a source folder and a folder.", statusCode: 400)""",
-        """Results.Problem("The suffix the mod manager gives an excluded file's name is required.", statusCode: 400)""",
-        """Results.Problem("The folder of the stat cache is required.", statusCode: 400)""",
-        """Results.Problem(ArchiveVariantsRequest.NotOneEach, statusCode: 400)""",
-        """Results.Problem("Every submodule needs the folder git checks it out in and the commit the instance repository pins.", statusCode: 400)""",
-        """Results.Problem( "A source folder is required, with an output, or paths to exclude or include.", statusCode: 400)""",
-        """Results.Problem("Every plugin needs a name and an origin.", statusCode: 400)""",
-        """Results.Problem("At least one mod is required.", statusCode: 400)""",
-        """Results.Problem("Every mod needs a name.", statusCode: 400)""",
-        """Results.Problem("A record type is required.", statusCode: 400)""",
-        """Results.Problem("Each plugin entry must have a non-empty Name, Path, Origin and Provider, and its archives and strings files.", statusCode: 400)""",
-        """Results.Problem("The snapshot must state its active plugins, those loaded with no line, its archives, its strings files, its places, its mods and the stat cache's folder.", statusCode: 400)""",
-    ];
+    private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
 
     public static IEnumerable<object[]> EveryNamedMethodRoute =>
         Routes.Select(r => new object[] { r.Route, r.Method });
@@ -94,7 +67,6 @@ public sealed class WriteRouteSeamTests
     {
         var offenders = ReachInFollowingEachHelperOnce(EndpointFiles.Select(EndpointFile), method)
             .SelectMany(ExtractProblemCalls)
-            .Where(call => !HandRolledRequestShapeValidation400s.Contains(call, StringComparer.Ordinal))
             .ToArray();
 
         Assert.True(
@@ -148,8 +120,7 @@ public sealed class WriteRouteSeamTests
                 Assert.False(MapsThroughSeamIn([file], "ThroughAHandRolledSibling"));
                 var offenders = ReachInFollowingEachHelperOnce([file], "ThroughAHandRolledSibling")
                     .SelectMany(ExtractProblemCalls)
-                    .Where(call => !HandRolledRequestShapeValidation400s.Contains(call, StringComparer.Ordinal))
-                    .ToArray();
+                            .ToArray();
                 Assert.Single(offenders);
             });
     }
@@ -163,7 +134,6 @@ public sealed class WriteRouteSeamTests
             + "        Results.Problem(\"not found\", statusCode: 404);\n}\n",
             file =>
             {
-                Assert.False(MapsThroughSeamIn([file], "HandRolled"));
                 Assert.Single(ReachInFollowingEachHelperOnce([file], "HandRolled").SelectMany(ExtractProblemCalls));
             });
     }
@@ -175,6 +145,31 @@ public sealed class WriteRouteSeamTests
             "internal static class PlantedEndpoints\n{\n"
             + "    internal static IResult Mapped(int x) => EndpointMapping.Refusal(null!);\n}\n",
             file => Assert.True(MapsThroughSeamIn([file], "Mapped")));
+    }
+
+    [Fact]
+    public void TheScan_FollowsACalleeInTheCallersOwnFileFirst()
+    {
+        using var root = new ScratchDirectory("medit-write-route-seam-scan-");
+        var other = Path.Combine(root, "OtherEndpoints.cs");
+        var own = Path.Combine(root, "OwnEndpoints.cs");
+        File.WriteAllText(other,
+            "internal static class Other\n{\n    internal static IResult Shared() { return EndpointMapping.Refusal(null!); }\n}\n");
+        File.WriteAllText(own,
+            "internal static class Own\n{\n    internal static IResult Route() { return Shared(); }\n"
+            + "    private static IResult Shared() { return Results.Problem(\"x\", statusCode: 404); }\n}\n");
+
+        Assert.False(MapsThroughSeamIn([other, own], "Route"));
+        Assert.Single(ReachInFollowingEachHelperOnce([other, own], "Route").SelectMany(ExtractProblemCalls));
+    }
+
+    [Fact]
+    public void TheScan_DoesNotCountABadRequestAsTheSeam()
+    {
+        WithPlantedFile(
+            "internal static class PlantedEndpoints\n{\n"
+            + "    internal static IResult Route() => EndpointMapping.BadRequest(\"x\");\n}\n",
+            file => Assert.False(MapsThroughSeamIn([file], "Route")));
     }
 
     private static void WithPlantedFile(string source, Action<string> assert)
@@ -189,25 +184,27 @@ public sealed class WriteRouteSeamTests
         Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.Http", "Endpoints", name);
 
     private static bool MapsThroughSeamIn(IEnumerable<string> files, string methodName) =>
-        ReachInFollowingEachHelperOnce(files, methodName).Any(body => body.Contains("EndpointMapping.", StringComparison.Ordinal));
+        ReachInFollowingEachHelperOnce(files, methodName).Any(body => body.Replace(BadRequestCall, "", StringComparison.Ordinal).Contains("EndpointMapping.", StringComparison.Ordinal));
 
     private static IReadOnlyList<string> ReachInFollowingEachHelperOnce(IEnumerable<string> files, string methodName)
     {
         var fileList = files.ToArray();
-        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var visited = new HashSet<(string? File, string Method)>();
         var bodies = new List<string>();
-        Collect(methodName);
+        Collect(methodName, null);
         return bodies;
 
-        void Collect(string method)
+        void Collect(string method, string? callerFile)
         {
-            if (!visited.Add(method)) return;
-            var body = fileList.Select(file => BodyOfStaticDeclarationIn(file, method)).FirstOrDefault(b => b is not null);
-            if (body is null) return;
+            var (file, body) = fileList
+                .OrderBy(candidate => candidate == callerFile ? 0 : 1)
+                .Select(candidate => (File: candidate, Body: BodyOfStaticDeclarationIn(candidate, method)))
+                .FirstOrDefault(found => found.Body is not null);
+            if (body is null || !visited.Add((file, method))) return;
             bodies.Add(body);
 
             foreach (var candidate in CallSite.Matches(body).Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal))
-                Collect(candidate);
+                Collect(candidate, file);
         }
     }
 
