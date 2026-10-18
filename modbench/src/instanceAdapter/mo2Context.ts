@@ -7,7 +7,8 @@ import type { DownloadsDirectoryResolver } from './downloadsDirectory';
 import { exists, get, listDir, listFolders, readOrAbsent, rename, type Undo } from './files';
 import type { GameFolderResolver } from './gameFolder/gameFolderResolver';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from './instanceAdapter';
-import { entryDir, isNewModExtraction, manifestFileIn, mo2FolderName, modDir, modsDir, settingsFile } from './layout';
+import type { FileOrigin } from './instanceAdapter';
+import { entryDir, isNewModExtraction, manifestFileIn, mo2FolderName, modDir, modsDir, overwriteDir, settingsFile } from './layout';
 import type { MyGamesResolver } from './gameFolder/myGames';
 import type { Mo2Watch } from './mo2Watch';
 
@@ -71,6 +72,22 @@ export function newModFolder({ instanceRoot }: Mo2Context, mod: string): string 
 export async function folderHolding(context: Mo2Context, entry: EntryRef): Promise<ModFolder | undefined> {
   const all = await listModFolders(context);
   return all === undefined ? undefined : modFoldersOf(all).holding(entry);
+}
+
+/** The folder of the mod `name`, found as MO2 finds it, without case; a folder of exactly that name wins. Where no folder
+ *  is there, the folder the name would give it; `undefined` when the name gives none. */
+export async function modFolderNamed({ instanceRoot }: Mo2Context, name: string): Promise<string | undefined> {
+  const exact = entryDir(instanceRoot, { kind: 'mod', name });
+  if (exact === undefined || await exists(exact)) return exact;
+  const key = entryKey({ kind: 'mod', name });
+  const folders = await readOrAbsent(() => listFolders(modsDir(instanceRoot)), []);
+  const found = folders.find((folder) => entryKey({ kind: 'mod', name: folder }) === key);
+  return found === undefined ? exact : modDir(instanceRoot, found);
+}
+
+/** The folder an origin's files are in; `undefined` for a mod whose name gives it none. */
+export async function originFolder(context: Mo2Context, origin: FileOrigin): Promise<string | undefined> {
+  return origin.kind === 'runtimeOutput' ? overwriteDir(context.instanceRoot) : modFolderNamed(context, origin.name);
 }
 
 /** A folder already there, listed or not, is never replaced or adopted: the change is refused

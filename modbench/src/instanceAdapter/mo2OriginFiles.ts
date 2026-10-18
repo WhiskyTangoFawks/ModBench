@@ -3,8 +3,8 @@
 import { isAbsolute, relative, sep } from 'node:path';
 import { exists, realPathIfThere, rename, withLock } from './files';
 import type { InstanceAdapter, OriginFileMark, OriginFileMarked } from './instanceAdapter';
-import { EXCLUDED_SUFFIX, excludedName, fileInFolder, includedName, isExcludedName, originDir } from './layout';
-import type { Mo2Context } from './mo2Context';
+import { EXCLUDED_SUFFIX, excludedName, fileInFolder, includedName, isExcludedName } from './layout';
+import { originFolder, type Mo2Context } from './mo2Context';
 
 type Mo2OriginFiles = Pick<InstanceAdapter, 'markOriginFile' | 'trashModFile' | 'includedPath' | 'excludedSuffix'>;
 
@@ -13,10 +13,10 @@ function fileUnder(folder: string | undefined, relativePath: string): string | u
   return folder === undefined || reachesOut ? undefined : fileInFolder(folder, relativePath);
 }
 
-export function mo2OriginFiles({ instanceRoot }: Mo2Context): Mo2OriginFiles {
+export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
   return {
     async markOriginFile(origin, relativePath, mark: OriginFileMark) {
-      const from = fileUnder(originDir(instanceRoot, origin), relativePath);
+      const from = fileUnder(await originFolder(context, origin), relativePath);
       if (from === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${relativePath}"`);
       return withLock(from, async (): Promise<OriginFileMarked> => {
         if (!(await exists(from))) return { gone: true };
@@ -34,7 +34,7 @@ export function mo2OriginFiles({ instanceRoot }: Mo2Context): Mo2OriginFiles {
     },
 
     async trashModFile(mod, relativePath, trash) {
-      const folder = originDir(instanceRoot, { kind: 'mod', name: mod });
+      const folder = await originFolder(context, { kind: 'mod', name: mod });
       const file = fileUnder(folder, relativePath);
       const notAFile = new Error(`Not a file of mod "${mod}": "${relativePath}"`);
       if (folder === undefined || file === undefined) throw notAFile;

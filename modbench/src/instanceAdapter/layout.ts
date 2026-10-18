@@ -10,7 +10,7 @@ import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codec
 import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { PROFILE_SETTINGS_FILE_NAME } from './codecs/profileSettings';
 import { PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
-import type { EntryRef, FileOrigin } from './instanceAdapter';
+import type { EntryRef } from './instanceAdapter';
 import { PLUGIN_EXTENSIONS } from '../tables/pluginFile';
 import { BUILD_CONFIGURATION_FILE, PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 
@@ -71,10 +71,6 @@ export const entryDir = (instanceRoot: string, entry: EntryRef): string | undefi
   return folder === undefined ? undefined : modDir(instanceRoot, folder);
 };
 
-/** The folder an origin's files are in; `undefined` for a mod whose name gives it none. */
-export const originDir = (instanceRoot: string, origin: FileOrigin): string | undefined =>
-  (origin.kind === 'runtimeOutput' ? overwriteDir(instanceRoot) : entryDir(instanceRoot, { kind: 'mod', name: origin.name }));
-
 export const EXCLUDED_SUFFIX = '.mohidden';
 
 export const isExcludedName = (name: string): boolean => name.toLowerCase().endsWith(EXCLUDED_SUFFIX);
@@ -111,8 +107,6 @@ export const manifestFileIn = (modFolder: string, modName: string): string => jo
 
 /** The meta file of the mod folder `modFolder`, wherever that folder is. */
 export const modMetaFileIn = (modFolder: string): string => join(modFolder, MOD_META_FILE_NAME);
-
-export const modMetaFile = (instanceRoot: string, modName: string): string => modMetaFileIn(modDir(instanceRoot, modName));
 
 export const profileSettingsFile = (instanceRoot: string, profile: string): string =>
   join(profileDir(instanceRoot, profile), PROFILE_SETTINGS_FILE_NAME);

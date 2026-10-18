@@ -8,7 +8,8 @@ import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from './codecs/modlistText';
 import { factsOf, listDir } from './files';
 import type { FileOrigin, OriginFile, OriginFiles, OriginFolder } from './instanceAdapter';
-import { isExcludedName, isExtraction, isTempWrite, originDir, overwriteDir } from './layout';
+import { isExcludedName, isExtraction, isTempWrite, overwriteDir } from './layout';
+import { originFolder, type Mo2Context } from './mo2Context';
 
 // The mod's metadata is MO2's, not the mod's content: nearly every mod has one.
 const NOT_CONTENT = new Set([MOD_META_FILE_NAME]);
@@ -140,12 +141,12 @@ async function listOverwrite(folder: string, rootOnly: boolean): Promise<Walk> {
   return walk;
 }
 
-export async function originFilesIn(instanceRoot: string, origin: FileOrigin, rootOnly = false): Promise<OriginFiles> {
+export async function originFilesIn(context: Mo2Context, origin: FileOrigin, rootOnly = false): Promise<OriginFiles> {
   if (origin.kind === 'runtimeOutput') {
-    const { root, files, folders, notes } = await listOverwrite(overwriteDir(instanceRoot), rootOnly);
+    const { root, files, folders, notes } = await listOverwrite(overwriteDir(context.instanceRoot), rootOnly);
     return { origin: OVERWRITE_ORIGIN, folder: root, files, folders, notes };
   }
-  const folder = originDir(instanceRoot, origin);
+  const folder = await originFolder(context, origin);
   if (folder === undefined) return { origin: origin.name, folder: undefined, files: [], folders: [], notes: [] };
   const { files, folders, notes } = await walkMod(folder, rootOnly);
   return { origin: origin.name, folder, files, folders, notes };
