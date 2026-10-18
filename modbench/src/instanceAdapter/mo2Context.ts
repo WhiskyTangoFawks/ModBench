@@ -4,11 +4,11 @@
 import { errorMessage } from '../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
-import { exists, get, ignoreSkippedLink, listDir, listFolders, readOrAbsent, rename, type SkippedLink, type Undo } from './files';
+import { exists, get, ignoreSkippedLink, listFolders, readOrAbsent, rename, type SkippedLink, type Undo } from './files';
 import type { GameFolderResolver } from './gameFolder/gameFolderResolver';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from './instanceAdapter';
 import type { FileOrigin } from './instanceAdapter';
-import { entryDir, isNewModExtraction, manifestFileIn, mo2FolderName, modDir, modsDir, overwriteDir, settingsFile } from './layout';
+import { entryDir, manifestFileIn, mo2FolderName, modDir, modsDir, overwriteDir, settingsFile } from './layout';
 import type { MyGamesResolver } from './gameFolder/myGames';
 import type { Mo2Watch } from './mo2Watch';
 
@@ -29,23 +29,14 @@ export const entryKey = (entry: EntryRef): string =>
 export const listedAs = (order: readonly ModlistEntry[], entry: EntryRef): ModlistEntry | undefined =>
   order.find((e) => e.kind === entry.kind && entryKey(e) === entryKey(entry));
 
-// A new mod's folder holds its extraction until the install settles; a folder removed since the
-// listing is gone, and any other failure to read it surfaces.
-async function isBeingInstalled(folder: string): Promise<boolean> {
-  const entries = await readOrAbsent(() => listDir(folder), undefined);
-  return entries === undefined || entries.some((entry) => isNewModExtraction(entry.name));
-}
-
-/** The mod folders as entries; the reserved overwrite name holds none, nor does a folder a new
- *  mod is being installed into or one removed mid-listing. */
+/** The mod folders as entries; the reserved overwrite name holds none. A folder an install was
+ *  interrupted in is listed like any other, with the state its files give it. */
 export async function listModFolders(
   { instanceRoot }: Mo2Context, skippedLink: SkippedLink,
 ): Promise<ModFolder[] | undefined> {
   const names = await readOrAbsent<string[] | undefined>(() => listFolders(modsDir(instanceRoot), skippedLink), undefined);
-  const candidates = names?.filter((name) => modNameKey(name) !== OVERWRITE_DIR_NAME);
-  const installing = await Promise.all(candidates?.map((name) => isBeingInstalled(modDir(instanceRoot, name))) ?? []);
-  return candidates
-    ?.filter((_, i) => !installing[i])
+  return names
+    ?.filter((name) => modNameKey(name) !== OVERWRITE_DIR_NAME)
     .map((name) => ({ ...entryNamed(name), path: modDir(instanceRoot, name), modName: name }));
 }
 

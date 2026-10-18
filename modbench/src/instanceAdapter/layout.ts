@@ -88,11 +88,11 @@ export const newModExtractionPrefix = (modFolder: string): string => join(modFol
 /** The prefix an upgrade's extraction folder, inside the mod's folder, is named from. */
 export const upgradeExtractionPrefix = (modFolder: string): string => join(modFolder, UPGRADE_EXTRACTION_PREFIX);
 
-export const isNewModExtraction = (name: string): boolean => name.startsWith(NEW_MOD_EXTRACTION_PREFIX);
+const MEDIT_TEMP_PREFIX = '.medit_tmp_';
 
-/** Whether `name`, in a mod's folder, is an install's extraction in flight. */
-export const isExtraction = (name: string): boolean =>
-  isNewModExtraction(name) || name.startsWith(UPGRADE_EXTRACTION_PREFIX);
+/** Whether `name` is a temp that Modbench, mEdit or an install's extraction left in an instance folder: never a mod's file. */
+export const isOwnTemp = (name: string): boolean =>
+  isTempWrite(name) || [NEW_MOD_EXTRACTION_PREFIX, UPGRADE_EXTRACTION_PREFIX, MEDIT_TEMP_PREFIX].some((prefix) => name.startsWith(prefix));
 
 export const overwriteDir = (instanceRoot: string): string => join(instanceRoot, OVERWRITE_DIR_NAME);
 
