@@ -41,7 +41,7 @@ import { tempWritePath } from '../layout';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
 import { contextOver } from '../../test/mo2/adapterOver';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_LOAD_ORDER, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../test/mo2/corpusFixture';
 
 async function settleWaitArmed(): Promise<void> {
@@ -2640,14 +2640,22 @@ describe('the MO2 Instance adapter', () => {
       ]);
 
       expect(written).toEqual({ wrote: true });
-      assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_PLUGINS]));
+      assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_PLUGINS, DEFAULT_LOAD_ORDER]));
       expect(await source.pluginOrder('Default')).toEqual([
         { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
         { name: 'Patch Mod.esp', enabled: false },
         { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
         { name: 'New.esp', enabled: false },
       ]);
+      expect(await text(root, DEFAULT_LOAD_ORDER))
+        .toBe('ccSBJFO4003-Grenade.esl\r\nPatch Mod.esp\r\nUnofficial Fallout 4 Patch.esp\r\nNew.esp\r\n');
       expect((await text(root, DEFAULT_PLUGINS)).startsWith('﻿')).toBe(true);
+    });
+
+    it('writes no loadorder.txt when plugin order is unchanged', async () => {
+      await change([{ kind: 'enable', plugin: 'Patch Mod.esp', enabled: true }]);
+
+      await expect(text(root, DEFAULT_LOAD_ORDER)).rejects.toThrow(/ENOENT/);
     });
 
     it('hands the decision the order as it stands', async () => {
