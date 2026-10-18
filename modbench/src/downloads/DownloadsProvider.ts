@@ -6,10 +6,11 @@ import {
   downloadContextValue, filterExcludedRows, sortDownloadRows, type DownloadSortColumn,
 } from './downloadRows';
 import {
-  instanceMessage, type DownloadFile, type DownloadRow, type DownloadStatus, type InstanceValue, type InstanceView,
+  instanceMessages, type DownloadFile, type DownloadRow, type DownloadStatus, type InstanceValue, type InstanceView,
 } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
+import { messageLine } from '../drivingLib/nameFilter';
 import type { DownloadArgument } from '../drivingLib/argument';
 
 // Mirrors the reference tool's own colour-coded Status cell. The icon is always set explicitly so
@@ -112,7 +113,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   }
 
   viewMessage(): string | undefined {
-    return instanceMessage(this.instance);
+    return messageLine(...instanceMessages(this.instance));
   }
 
   dispose(): void {

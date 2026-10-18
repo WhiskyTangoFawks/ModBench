@@ -7,7 +7,7 @@ import type {
 } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture } from '../../test/fakeInstanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { Instance, instanceMessage, type InstanceValue } from '../instance';
+import { Instance, instanceMessages, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
 
 const instances: Instance[] = [];
@@ -147,23 +147,24 @@ describe('Instance — the value', () => {
     expect(instance.value.holdsRepository).toBe(true);
   });
 
-  it('says on the message line that the mod manager overwrites the user\'s changes while it runs, beside the last good read, and nothing once it stops', async () => {
+  it('says on the message line that the mod manager overwrites the user\'s changes while it runs, before the last good read, and nothing once it stops', async () => {
     const { instance, fake } = loader({ managerRunning: { kind: 'running' } });
-    const beforeRead = instanceMessage(instance);
+    const beforeRead = instanceMessages(instance);
     await instance.refresh();
-    const running = instanceMessage(instance);
+    const running = instanceMessages(instance);
     fake.failReading('EACCES modlist.txt');
     await instance.refresh();
-    const beside = instanceMessage(instance);
+    const beside = instanceMessages(instance);
     fake.failReading(undefined);
     fake.read({ managerRunning: { kind: 'notRunning' } });
     await instance.refresh();
 
-    expect([beforeRead, running, beside, instanceMessage(instance)]).toEqual([
-      undefined,
-      'Fake manager is running, and overwrites your changes when it launches a program or exits.',
-      'Fake manager is running, and overwrites your changes when it launches a program or exits. Showing the last good read: EACCES modlist.txt',
-      undefined,
+    const warning = 'Fake manager is running, and overwrites your changes when it launches a program or exits.';
+    expect([beforeRead, running, beside, instanceMessages(instance)]).toEqual([
+      [undefined, undefined],
+      [warning, undefined],
+      [warning, 'Showing the last good read: EACCES modlist.txt'],
+      [undefined, undefined],
     ]);
   });
 
@@ -171,12 +172,18 @@ describe('Instance — the value', () => {
     const { instance, fake, warnings } = loader({ managerRunning: { kind: 'unknown', reason: 'tasklist exited with code 1' } });
     await instance.refresh();
     await instance.refresh();
-    const message = instanceMessage(instance);
+    const message = instanceMessages(instance);
+    fake.read({ managerRunning: { kind: 'unknown', reason: 'tasklist timed out' } });
+    await instance.refresh();
+    await instance.refresh();
     fake.read({ managerRunning: { kind: 'notRunning' } });
     await instance.refresh();
 
-    expect([message, instanceMessage(instance)]).toEqual(['Cannot tell whether Fake manager is running: tasklist exited with code 1', undefined]);
-    expect(warnings).toEqual(['[instance] Cannot tell whether Fake manager is running: tasklist exited with code 1']);
+    expect([message, instanceMessages(instance)]).toEqual([['Cannot tell whether Fake manager is running: tasklist exited with code 1.', undefined], [undefined, undefined]]);
+    expect(warnings).toEqual([
+      '[instance] Cannot tell whether Fake manager is running: tasklist exited with code 1.',
+      '[instance] Cannot tell whether Fake manager is running: tasklist timed out.',
+    ]);
   });
 
   it('carries each mod a repository builds as a source mod, with that repository as its source folder, and each repository alone as a source mod', async () => {

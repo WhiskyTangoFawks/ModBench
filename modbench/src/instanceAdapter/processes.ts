@@ -1,5 +1,3 @@
-// Whether a program runs on this machine, asked of each platform's own process table.
-
 import { execFile } from 'node:child_process';
 import { readdir, readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
@@ -23,10 +21,15 @@ async function runningOnLinux(fileName: string): Promise<boolean> {
   return names.includes(fileName.slice(0, LINUX_NAME_LENGTH));
 }
 
-// tasklist matches the image name without case, and prints a line in the system's language when none runs.
+const TASKLIST_TIMEOUT_MS = 5_000;
+
+const isCsvRow = (line: string): boolean => line.startsWith('"');
+
 async function runningOnWindows(fileName: string): Promise<boolean> {
-  const { stdout } = await promisify(execFile)('tasklist', ['/FI', `IMAGENAME eq ${fileName}`, '/FO', 'CSV', '/NH'], { windowsHide: true });
-  return stdout.split(/\r?\n/).some((line) => line.startsWith('"'));
+  const { stdout } = await promisify(execFile)(
+    'tasklist', ['/FI', `IMAGENAME eq ${fileName}`, '/FO', 'CSV', '/NH'], { windowsHide: true, timeout: TASKLIST_TIMEOUT_MS },
+  );
+  return stdout.split(/\r?\n/).some(isCsvRow);
 }
 
 /** Whether a process runs the program file named `fileName`. */

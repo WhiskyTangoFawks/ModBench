@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { PluginDiagnosisReport, PluginAddress } from '../client';
-import { instanceMessage, type Instance, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
+import { instanceMessages, type Instance, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 import { messageLine } from '../drivingLib/nameFilter';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
@@ -152,11 +152,11 @@ export class PluginsTreeProvider
   }
 
   viewMessage(): string | undefined {
-    return [this.firstHeldMessage(), this.standingMessage()].filter((part) => part !== undefined).join(' ') || undefined;
+    return messageLine(this.firstHeldMessage(), this.standingMessage());
   }
 
   standingMessage(): string | undefined {
-    return messageLine(instanceMessage(this.instance), this.facts.rows.laterReadFailureMessage());
+    return messageLine(...instanceMessages(this.instance), this.facts.rows.laterReadFailureMessage());
   }
 
   // The game folder not found (common.md, States 5), a failed index (plugins.md, States 6), no rows
