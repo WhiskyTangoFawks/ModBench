@@ -1,6 +1,6 @@
 import { fixedGameFolderSetting } from '../../test/gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -460,12 +460,8 @@ describe('the MO2 adapter\'s repository', () => {
         runGit('commit', '--quiet', '--allow-empty', '-m', 'pin');
       };
       const pushRefusal = (): string | undefined => {
-        try {
-          execFileSync('git', ['push', '--quiet', 'origin', 'main'], { cwd: root, stdio: 'pipe' });
-          return undefined;
-        } catch (err) {
-          return String((err as { stderr: Buffer }).stderr);
-        }
+        const { status, stderr } = spawnSync('git', ['push', '--quiet', 'origin', 'main'], { cwd: root, encoding: 'utf8' });
+        return status === 0 ? undefined : stderr;
       };
 
       const REMOTE_LACKS = /Push refused: source\/Mod A pins \w+, which https:\/\/example\.test\/mod-a\.git lacks\./;
