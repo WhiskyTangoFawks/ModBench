@@ -3,11 +3,11 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import {
-  gameDirectoryResolver, normalizeGamePath, type GameDetectors,
-} from '../gameDirectory';
-import { NO_DETECTORS } from '../../test/noDetectors';
+  gameFolderResolver, normalizeGamePath, type GameDetectors,
+} from '../gameFolderResolver';
+import { NO_DETECTORS } from '../../../test/noDetectors';
 import { documentsFolder } from '../documentsFolder';
-import type { GameDirectoryOverrides } from '../instanceAdapter';
+import type { GameDirectoryOverrides } from '../../instanceAdapter';
 
 const noDetectPrefix = () => Promise.resolve(null);
 
@@ -20,7 +20,7 @@ const STEAM_PLACE = 'the Steam install';
 
 const resolverWith = (
   overrides: GameDirectoryOverrides = {}, detectors: GameDetectors = NO_DETECTORS,
-) => gameDirectoryResolver(() => overrides, detectors);
+) => gameFolderResolver(() => overrides, detectors);
 
 describe('documentsFolder', () => {
   it('reads a non-ASCII Documents path as UTF-8, having told PowerShell to write it so', async () => {
@@ -85,7 +85,7 @@ describe('normalizeGamePath', () => {
   });
 });
 
-describe('the game directory resolver', () => {
+describe('the game folder resolver', () => {
   const dirs: string[] = [];
 
   afterEach(async () => {

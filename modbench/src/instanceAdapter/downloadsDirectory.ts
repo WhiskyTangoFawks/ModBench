@@ -5,7 +5,7 @@
 import { isAbsolute, join } from 'node:path';
 import { readDownloadDirectory } from './codecs/modOrganizerIni';
 import { defaultDownloadsDir } from './layout';
-import { normalizeGamePath, winePrefixDetectorFor, type GameDetectors } from './gameDirectory';
+import { normalizeGamePath, winePrefixDetectorFor, type GameDetectors } from './gameFolder/gameFolderResolver';
 import { errorMessage } from '../ports/errorMessage';
 
 const BASE_DIR_VARIABLE = '%BASE_DIR%';

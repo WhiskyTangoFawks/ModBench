@@ -1,7 +1,7 @@
 import { join } from 'node:path';
-import { SCRIPT_EXTENDER_FOLDERS } from '../tables/gamePaths';
-import { present } from '../ports/present';
-import { listDir } from './files';
+import { SCRIPT_EXTENDER_FOLDERS } from '../../tables/gamePaths';
+import { present } from '../../ports/present';
+import { listDir } from '../files';
 
 const DATA_DIRS = new Set([
   'meshes', 'textures', 'materials', 'sound', 'music', 'scripts', 'source',

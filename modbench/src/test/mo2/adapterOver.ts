@@ -4,10 +4,10 @@ import type {
 import type { DownloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
 import type { Mo2Context } from '../../instanceAdapter/mo2Context';
 import { downloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
-import { gameDirectoryResolver, type GameDetectors } from '../../instanceAdapter/gameDirectory';
+import { gameFolderResolver, type GameDetectors } from '../../instanceAdapter/gameFolder/gameFolderResolver';
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { mo2Watch } from '../../instanceAdapter/mo2Watch';
-import { myGamesResolver } from '../../instanceAdapter/myGames';
+import { myGamesResolver } from '../../instanceAdapter/gameFolder/myGames';
 import { readingSource, type ReadingSource } from '../../instanceAdapter/mo2Reads';
 import type { PluginCommands, pluginCommands } from '../../pluginCommands/plugins';
 import { pluginCommandsWith } from '../pluginCommandsWith';
@@ -34,7 +34,7 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
     instanceRoot: root,
     resolveGameFolder: gameFolder !== undefined
       ? (typeof gameFolder === 'function' ? gameFolder : () => Promise.resolve(gameFolder))
-      : gameDirectoryResolver(() => ({ gameDirectory }), detectors),
+      : gameFolderResolver(() => ({ gameDirectory }), detectors),
     resolveDownloadsFolder: downloadsFolder !== undefined ? () => Promise.resolve(downloadsFolder) : downloadsDirectoryResolver(detectors),
     resolveMyGames: myGamesResolver(root, detectors),
     watch: mo2Watch(root, gameDirectoryChanged),
