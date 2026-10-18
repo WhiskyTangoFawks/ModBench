@@ -1,5 +1,6 @@
 import type { components } from './generated/api';
 import type { PluginAddress } from './pluginAddress';
+import type { RecordCopy } from './recordCopy';
 import type { ArgumentOf } from './argument';
 import type { ColumnKey } from './columnKey';
 import type { ReadFailed } from './readFailed';
@@ -70,12 +71,9 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER; requestId: string; choices: EnumChoice[]; current: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: FocusedCellContext | null; entered: boolean }
-  | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string; columns: ColumnCopy[] }
-  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_COLUMNS; records: ColumnCopy[] }
+  | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string; columns: RecordCopy[] }
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_COLUMNS; records: RecordCopy[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.VIEW_STATE; state: ViewState };
-
-/** A record's copy the grid shows beside its document's own (editor.md, Columns, story 7). */
-export type ColumnCopy = Omit<components['schemas']['RecordCopy'], 'documentText'>;
 
 /** The rows collapsed, the columns collapsed, the focused cell and the scroll of a grid. */
 export interface ViewState {
@@ -109,7 +107,7 @@ export function isPluginAddress(value: unknown): value is PluginAddress {
     && 'name' in value && isString(value.name) && 'origin' in value && isString(value.origin);
 }
 
-export function isColumnCopies(value: unknown): value is ColumnCopy[] {
+export function isColumnCopies(value: unknown): value is RecordCopy[] {
   return Array.isArray(value) && value.every((copy: unknown) =>
     typeof copy === 'object' && copy !== null && 'formKey' in copy && isString(copy.formKey)
     && 'plugin' in copy && isPluginAddress(copy.plugin));
@@ -260,7 +258,7 @@ export type ExtensionToWebview =
   | ({ type: typeof EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED; requestId: string } & RecordLoadAnswer)
   | { type: typeof EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR }
   | { type: typeof EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL; text: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.SHOW_COLUMNS; columns: ColumnCopy[] }
+  | { type: typeof EXTENSION_TO_WEBVIEW.SHOW_COLUMNS; columns: RecordCopy[] }
   | { type: typeof EXTENSION_TO_WEBVIEW.MODS_CHANGED; modsByOrigin: Record<string, ModRepository> };
 
 export function isString(value: unknown): value is string {

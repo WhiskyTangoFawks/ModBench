@@ -4,7 +4,8 @@ import { unreadableSources, type UnreadableSource } from '../../src/wire/unreada
 import { pluginAddressOf, samePluginAddress } from '../../src/wire/pluginAddress';
 import { pageGlobals, requestRecordLoad } from './nativeBridge';
 import { tabState } from './vscode';
-import { isColumnCopies, type ColumnCopy, type ModRepository } from '../../src/wire/messages';
+import { isColumnCopies, type ModRepository } from '../../src/wire/messages';
+import type { RecordCopy } from '../../src/wire/recordCopy';
 import { pluginCanBeEdited } from '../../src/wire/pluginEditable';
 import type { ReadFailed } from '../../src/wire/readFailed';
 
@@ -48,17 +49,17 @@ export interface RecordPanelClient {
   // lets a test hold a bare reference to it (`vi.mocked(client.load)`) without an
   // unbound-method warning.
   load: (formKey: string) => Promise<LoadResult>;
-  showColumns: (columns: ColumnCopy[]) => void;
+  showColumns: (columns: RecordCopy[]) => void;
 }
 
 // The columns are kept with the tab, so they outlive a reload.
-function keptColumns(): ColumnCopy[] | undefined {
+function keptColumns(): RecordCopy[] | undefined {
   const state = tabState.getState();
   const kept = typeof state === 'object' && state !== null && 'columns' in state ? state.columns : undefined;
   return isColumnCopies(kept) ? kept : undefined;
 }
 
-const keepColumns = (columns: ColumnCopy[]): void => { tabState.setState({ columns }); };
+const keepColumns = (columns: RecordCopy[]): void => { tabState.setState({ columns }); };
 
 export function createRecordPanelClient(): RecordPanelClient {
   // The page states the columns only when the tab is new.

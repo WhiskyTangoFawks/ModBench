@@ -26,6 +26,12 @@ function recordLabel({ formKey, plugin, origin }: RecordAddress, label: string |
   return `${recordName(formKey, label)} in ${plugin} (${origin})`;
 }
 
+function landedUnless<T>(failure: string | undefined, items: readonly T[], reporter: Reporter, notApplied: string): readonly T[] {
+  if (failure === undefined) return items;
+  reporter.report('error', notApplied, failure);
+  return [];
+}
+
 function askToDelete(labels: readonly string[], ask: AskQuestion): PromiseLike<string | undefined> {
   const [only] = labels;
   if (labels.length === 1 && only) {
@@ -101,8 +107,7 @@ export function registerRecordLifecycleCommands(
           `Could not delete ${refused.length} of ${records.length + unreadable.length} records.`, { landed, refused }, label);
         const touched = answer.applied.map(({ record }) => record);
         const failure = await applyAnswered(source, answer.applied, touched.map(pluginAddressOf));
-        if (failure !== undefined) reporter.report('error', 'Could not delete the records.', failure);
-        outcome(failure === undefined ? touched : []);
+        outcome(landedUnless(failure, touched, reporter, 'Could not delete the records.'));
       });
       await (records.length > 0 ? write(reportOutcome) : reportOutcome());
     }),
@@ -219,8 +224,7 @@ export function registerRecordCopyCommands(
         const answered = answer.applied.map(({ record, destination }) => ({ record, destination }));
         const attempted = copiesWritten(answered, mode).length + answer.refused.length;
         const failure = await applyAnswered(source, answer.applied, answered.map(({ destination }) => destination));
-        if (failure !== undefined) reporter.report('error', 'Could not copy the records.', failure);
-        const landed = failure === undefined ? answered : [];
+        const landed = landedUnless(failure, answered, reporter, 'Could not copy the records.');
         const written = copiesWritten(landed, mode);
         if (written.length > 0) reporter.landed(landedMessage(written, labels));
         const into = (item: CopyItem) =>
