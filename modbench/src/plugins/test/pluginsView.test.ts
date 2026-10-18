@@ -211,19 +211,10 @@ beforeEach(() => {
 describe('the Plugins view registers its own gestures', () => {
   it.each([
     'modbench.plugin.move', 'modbench.plugin.decompile', 'modbench.record.create',
-    'modbench.plugin.rename', 'modbench.plugin.create', 'modbench.plugin.sync',
+    'modbench.plugin.rename', 'modbench.plugin.create',
   ])('registers %s with the view', (command) => {
     pluginsView();
     expect(h.commands.has(command)).toBe(true);
-  });
-
-  it('runs plugin sync when modbench.plugin.sync fires', async () => {
-    const sync = vi.fn(() => Promise.resolve({ applied: true as const, wrote: false, added: [], dropped: [] }));
-    pluginsView(instanceValueFixture(), { pluginSync: createPluginSync(sync, silentChannel) });
-
-    await present(h.commands.get('modbench.plugin.sync'), 'the modbench.plugin.sync handler')();
-
-    expect(sync).toHaveBeenCalledOnce();
   });
 
   it('runs modbench.plugin.create under its own reporter', async () => {
@@ -277,7 +268,7 @@ describe('the Plugins view says what it knows of whether a plugin is a compiled 
         sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
       });
       const onInstance = () => plugins.onInstance({
-        instance: new FakeInstance(value), instanceRoot: '/instance', commands: pluginCommandsWith(fakeInstanceAdapter().adapter),
+        instance: new FakeInstance(value), commands: pluginCommandsWith(fakeInstanceAdapter().adapter),
         pluginSync: syncRefusing().pluginSync, dataFolderFile: () => undefined,
       });
       return { plugins, onInstance };

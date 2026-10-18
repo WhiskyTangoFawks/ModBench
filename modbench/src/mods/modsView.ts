@@ -143,7 +143,6 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     }),
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
     ...registerConflictTable(instance, deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
-    vscode.commands.registerCommand('modbench.mod.sync', () => modSync.run()),
     ...registerModInstallCommands({
       commands, instance, reporterFor, warnIfFomod: deps.warnIfFomod, downloadInstall: deps.downloadInstall,
     }),

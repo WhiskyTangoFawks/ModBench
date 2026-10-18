@@ -166,7 +166,7 @@ function publishKeyContext(selection: readonly PluginsTreeNode[], tree: PluginsT
 }
 
 function registerPluginGestures(
-  { instance, commands, client, ask, pluginSync, reporterFor, recordWrite, sourceEditing }: PluginsViewDeps,
+  { instance, commands, client, ask, reporterFor, recordWrite, sourceEditing }: PluginsViewDeps,
   { tree, view, selection }: {
     tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; selection: () => readonly PluginsTreeNode[];
   },
@@ -179,7 +179,6 @@ function registerPluginGestures(
     }, selection),
     registerRenamePluginCommand({ client, commands, ask, instance, reporter: reporterFor('plugin.rename'), source: sourceEditing }, selection),
     registerCreatePluginCommand(client, instance, reporterFor('newPlugin')),
-    vscode.commands.registerCommand('modbench.plugin.sync', () => pluginSync.run()),
   ];
 }
 

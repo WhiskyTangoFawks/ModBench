@@ -3,7 +3,7 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
-import { editingFlow, type EditingDeps, type EditingFlow } from '../instanceCommands/editing';
+import type { EditingDeps } from '../instanceCommands/editing';
 import { RecordBrowser } from './RecordBrowser';
 import { createStatusBar } from './statusBar';
 import { noticeExternalChanges } from './externalChangeNotice';
@@ -31,7 +31,7 @@ export interface PluginsDeps {
 
 type PluginsInstanceDeps = Pick<PluginsViewDeps,
   'instance' | 'commands' | 'pluginSync' | 'dataFolderFile'
-> & { instanceRoot: string };
+>;
 
 interface PluginsOnInstance extends vscode.Disposable {
   followed: PluginsView['followed'];
@@ -39,8 +39,8 @@ interface PluginsOnInstance extends vscode.Disposable {
   copyValue: PluginsView['copyValue'];
   /** The Plugins view's message line, where another view's gesture says its phase. */
   say: PluginsView['progress']['say'];
-  /** The launch and the load order's puts, which the Plugins view says. */
-  editing: EditingFlow;
+  /** How the launch and the load order's puts show in the Plugins view. */
+  editingShown: Pick<EditingDeps, 'around' | 'onPut'>;
   nextRefill: ReconcileNarrator['nextRefill'];
 }
 
@@ -63,7 +63,7 @@ export function createPlugins(deps: PluginsDeps): Plugins {
   return {
     recordWrite,
     conditionsOf: (plugin) => shown?.conditionsOf(plugin) ?? { editable: false },
-    onInstance: ({ instanceRoot, ...instanceDeps }) => {
+    onInstance: (instanceDeps) => {
       const view = createPluginsView({
         ...instanceDeps, recordBrowser, client, statusBar, channel, registerRepositories: deps.registerRepositories, reporterFor,
         ask: deps.ask, recordWrite, sourceEditing: deps.sourceEditing,
@@ -74,15 +74,12 @@ export function createPlugins(deps: PluginsDeps): Plugins {
         narrator: view.narrator, progress: view.progress, log: channel, revealLog: () => channel.show(true), loadOrderPut: view.loadOrderPut,
         reporterFor,
       });
-      const editing = editingFlow({
-        client, instanceRoot, around: editingShown.around, onPut: editingShown.onPut, reporterFor, log: (line) => channel.error(line),
-      });
       return {
-        followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, say: view.progress.say, editing,
+        followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, say: view.progress.say, editingShown,
         nextRefill: () => view.narrator.nextRefill(),
         dispose: () => {
           if (shown === view) shown = undefined;
-          vscode.Disposable.from(editing, view).dispose();
+          view.dispose();
         },
       };
     },
