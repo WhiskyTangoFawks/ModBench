@@ -8,17 +8,13 @@ describe('gameReleaseForGame', () => {
   it('maps a game\'s name, as an instance\'s settings spell it, to Mutagen\'s release name', () => {
     expect(gameReleaseForGame('Fallout 4')).toBe('Fallout4');
     expect(gameReleaseForGame('Fallout 4 VR')).toBe('Fallout4VR');
-    expect(gameReleaseForGame('Fallout 3')).toBe('Fallout3');
-    expect(gameReleaseForGame('Fallout New Vegas')).toBe('FalloutNV');
     expect(gameReleaseForGame('Skyrim Special Edition')).toBe('SkyrimSE');
     expect(gameReleaseForGame('Skyrim VR')).toBe('SkyrimVR');
-    expect(gameReleaseForGame('Enderal')).toBe('EnderalLE');
-    expect(gameReleaseForGame('Oblivion')).toBe('Oblivion');
     expect(gameReleaseForGame('Starfield')).toBe('Starfield');
   });
 
-  it('maps MO2\'s bare "Skyrim" to the Legendary Edition, not to "Skyrim", the one name whose vocabularies disagree beyond spacing, so a whitespace strip would answer a release that does not exist', () => {
-    expect(gameReleaseForGame('Skyrim')).toBe('SkyrimLE');
+  it.each(['Skyrim', 'Enderal', 'Oblivion', 'Fallout 3', 'Fallout New Vegas'])('answers undefined for %s, a game whose plugins.txt Modbench does not write', (game) => {
+    expect(gameReleaseForGame(game)).toBeUndefined();
   });
 
   it('answers undefined for a game Mutagen has no release for, as every value must be a name the backend\'s Enum.TryParse<GameRelease> accepts', () => {
@@ -48,7 +44,6 @@ describe('nexusDomainForMetaGame', () => {
     ['Fallout 4', 'fallout4'],
     ['SkyrimSE', 'skyrimspecialedition'],
     ['Skyrim Special Edition', 'skyrimspecialedition'],
-    ['Fallout New Vegas', 'newvegas'],
     ['Fallout 4 VR', 'fallout4'],
     ['SkyrimVR', 'skyrimspecialedition'],
   ])('maps %s, as a mod\'s or a download\'s metadata spells it, to its Nexus domain', (game, domain) => {
@@ -70,8 +65,8 @@ describe('gamePathInfoForRelease', () => {
   });
 
   it('answers no Steam facts for a release the table only knows the Nexus slug for, the autodetector\'s signal to give up rather than guess a folder', () => {
-    const info = gamePathInfoForRelease('Oblivion');
-    expect(info).toMatchObject({ gameName: 'Oblivion', nexusSlug: 'oblivion' });
+    const info = gamePathInfoForRelease('SkyrimVR');
+    expect(info).toMatchObject({ gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition' });
     expect(info?.steamAppId).toBeUndefined();
     expect(info?.steamFolderName).toBeUndefined();
   });
@@ -94,7 +89,6 @@ describe('loadedWithNoLineOf', () => {
       'DLCNukaWorld.esm',
     ]);
     expect(loadedWithNoLineOf('SkyrimSE', [])).toEqual(['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm']);
-    expect(loadedWithNoLineOf('Oblivion', [])).toEqual(['Oblivion.esm']);
     expect(loadedWithNoLineOf('Starfield', [])).toEqual([
       'Starfield.esm', 'Constellation.esm', 'OldMars.esm', 'BlueprintShips-Starfield.esm', 'ShatteredSpace.esm',
       'SFBGS006.esm', 'SFBGS007.esm', 'SFBGS003.esm', 'SFBGS008.esm', 'SFBGS004.esm', 'SFBGS00D.esm', 'SFBGS047.esm',
@@ -108,7 +102,7 @@ describe('loadedWithNoLineOf', () => {
   });
 
   it('answers the game\'s masters, then the Creation Club plugins, in that order', () => {
-    expect(loadedWithNoLineOf('Oblivion', ['ccA.esl', 'ccB.esl'])).toEqual(['Oblivion.esm', 'ccA.esl', 'ccB.esl']);
+    expect(loadedWithNoLineOf('SkyrimSE', ['ccA.esl', 'ccB.esl'])).toEqual([...loadedWithNoLineOf('SkyrimSE', []), 'ccA.esl', 'ccB.esl']);
   });
 });
 
@@ -120,7 +114,7 @@ describe('creationClubListFile', () => {
   });
 
   it('names none for a release with no Creation Club, or no release', () => {
-    expect(creationClubListFile('/game', 'Oblivion')).toBeUndefined();
+    expect(creationClubListFile('/game', 'SomeRelease')).toBeUndefined();
     expect(creationClubListFile('/game', undefined)).toBeUndefined();
   });
 });
@@ -168,9 +162,8 @@ describe('pluginCompanionRule', () => {
     expect(rule('Fallout4').isArchive(relativePath)).toBe(taken);
   });
 
-  it('takes the ini of the plugin\'s name for a release that ties one to its plugins', () => {
+  it('takes the ini of the plugin\'s name', () => {
     expect(rule('Fallout4').inRoot('Foo.esp', 'foo.INI')).toBe(true);
-    expect(rule('Oblivion').inRoot('Foo.esp', 'Foo.ini')).toBe(false);
   });
 
   it('takes the strings of the plugin in each language of the release, whatever their case', () => {
@@ -179,10 +172,6 @@ describe('pluginCompanionRule', () => {
     expect(rule('Fallout4').inStringsFolder('Foo.esp', 'Foo_English.STRINGS')).toBe(false);
     expect(rule('SkyrimSE').inStringsFolder('Foo.esp', 'Foo_English.STRINGS')).toBe(true);
     expect(rule('Fallout4').inStringsFolder('Foo.esp', 'Foo_Bar_en.STRINGS')).toBe(false);
-  });
-
-  it('takes no strings for a release whose plugins carry none', () => {
-    expect(rule('Oblivion').inStringsFolder('Foo.esp', 'Foo_en.STRINGS')).toBe(false);
   });
 
   it('answers undefined for no release, or a release the table holds no row for', () => {
@@ -198,7 +187,7 @@ describe('archiveListsOf', () => {
   });
 
   it.each([
-    ['Fallout4', 'Fallout4'], ['SkyrimSE', 'Skyrim Special Edition'], ['SkyrimLE', 'Skyrim'], ['SkyrimVR', 'Skyrim VR'], ['FalloutNV', 'FalloutNV'],
+    ['Fallout4', 'Fallout4'], ['SkyrimSE', 'Skyrim Special Edition'], ['SkyrimVR', 'Skyrim VR'],
   ])('keeps %s\'s INIs in the My Games folder %s', (release, folder) => {
     expect(archiveListsOf(release)?.myGamesFolder).toBe(folder);
   });

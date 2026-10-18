@@ -18,13 +18,9 @@ function archiveKeysIn(text: string, values: Map<string, string>): void {
   }
 }
 
-/** The archives `keys` list in `[Archive]`, key by key, as the INIs give them read in order, then the
- *  ones the game loads whatever they list. */
-export function archivesListedIn(
-  inis: readonly string[], { keys, alwaysLoaded }: Pick<ArchiveLists, 'keys' | 'alwaysLoaded'>,
-): string[] {
+/** The archives `keys` list in `[Archive]`, key by key, as the INIs give them read in order. */
+export function archivesListedIn(inis: readonly string[], { keys }: Pick<ArchiveLists, 'keys'>): string[] {
   const values = new Map<string, string>();
   for (const text of inis) archiveKeysIn(text, values);
-  const listed = keys.flatMap((key) => (values.get(key.toLowerCase()) ?? '').split(',').map((name) => name.trim()).filter((name) => name !== ''));
-  return [...listed, ...alwaysLoaded];
+  return keys.flatMap((key) => (values.get(key.toLowerCase()) ?? '').split(',').map((name) => name.trim()).filter((name) => name !== ''));
 }

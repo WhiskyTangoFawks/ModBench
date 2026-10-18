@@ -44,19 +44,14 @@ export interface ArchiveLists {
   readonly myGamesFolder: string;
   /** In the order the game loads the archives they list. */
   readonly keys: readonly string[];
-  /** The archives the game loads after those, whatever its INIs list. */
-  readonly alwaysLoaded: readonly string[];
 }
 
 interface PluginCompanions {
   /** With its period: Mutagen's `ArchiveExtensionProvider` for the release. */
   readonly archiveExtension: string;
   /** As Mutagen's `StringsLanguageFormat` for the release spells them in `<plugin>_<language>.STRINGS`;
-   *  which of them the game ships is this table's own. None for a game with no strings. */
+   *  which of them the game ships is this table's own. */
   readonly stringsLanguages: readonly string[];
-  /** Whether the game ties `<plugin>.ini` to the plugin. No reference defines this: it is the
-   *  Creation Engine's convention, which Oblivion and the Fallout 3 engine do not share. */
-  readonly pluginIni: boolean;
 }
 
 const FALLOUT4_MASTERS = [
@@ -72,14 +67,11 @@ const STARFIELD_MASTERS = [
 const FALLOUT4_COMPANIONS: PluginCompanions = {
   archiveExtension: '.ba2',
   stringsLanguages: ['en', 'de', 'it', 'es', 'esmx', 'fr', 'pl', 'cn', 'zhhans', 'ja', 'ptbr', 'ru'],
-  pluginIni: true,
 };
 const SKYRIM_COMPANIONS: PluginCompanions = {
   archiveExtension: '.bsa',
   stringsLanguages: ['English', 'German', 'Italian', 'Spanish', 'French', 'Polish', 'Russian', 'Japanese', 'Czech', 'Chinese'],
-  pluginIni: true,
 };
-const NO_STRINGS_COMPANIONS: PluginCompanions = { archiveExtension: '.bsa', stringsLanguages: [], pluginIni: false };
 
 // Next-gen Fallout 4 reads version 1 too, and writes versions 7 and 8 that mEdit does not.
 const FALLOUT4_BA2_VERSIONS: Ba2Versions = { general: 1, textures: 1 };
@@ -87,13 +79,10 @@ const FALLOUT4_BA2_VERSIONS: Ba2Versions = { general: 1, textures: 1 };
 const RESOURCE_ARCHIVE_KEYS = ['sResourceArchiveList', 'sResourceArchiveList2'];
 const RESOURCE_INDEX_KEYS = ['sResourceIndexFileList', 'sResourceStartUpArchiveList', ...RESOURCE_ARCHIVE_KEYS];
 const FALLOUT4_ARCHIVES: ArchiveLists = {
-  myGamesFolder: 'Fallout4', defaultIni: 'Fallout4_Default.ini', userInis: ['Fallout4.ini', 'Fallout4Custom.ini'], keys: RESOURCE_INDEX_KEYS, alwaysLoaded: [],
+  myGamesFolder: 'Fallout4', defaultIni: 'Fallout4_Default.ini', userInis: ['Fallout4.ini', 'Fallout4Custom.ini'], keys: RESOURCE_INDEX_KEYS,
 };
 const SKYRIM_ARCHIVES: ArchiveLists = {
-  myGamesFolder: 'Skyrim Special Edition', defaultIni: 'Skyrim_Default.ini', userInis: ['Skyrim.ini', 'SkyrimCustom.ini'], keys: RESOURCE_ARCHIVE_KEYS, alwaysLoaded: [],
-};
-const FALLOUT3_ARCHIVES: ArchiveLists = {
-  myGamesFolder: 'Fallout3', defaultIni: 'Fallout_default.ini', userInis: ['Fallout.ini', 'FalloutCustom.ini'], keys: ['sArchiveList'], alwaysLoaded: [],
+  myGamesFolder: 'Skyrim Special Edition', defaultIni: 'Skyrim_Default.ini', userInis: ['Skyrim.ini', 'SkyrimCustom.ini'], keys: RESOURCE_ARCHIVE_KEYS,
 };
 
 const GAME_PATHS: Record<string, GamePathInfo> = {
@@ -109,18 +98,6 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
-  Fallout3: {
-    gameName: 'Fallout 3', nexusSlug: 'fallout3', masters: ['Fallout3.esm'], scriptExtenderFolder: 'fose',
-    pluginCompanions: NO_STRINGS_COMPANIONS, archiveLists: FALLOUT3_ARCHIVES,
-  },
-  FalloutNV: {
-    gameName: 'Fallout New Vegas', nexusSlug: 'newvegas', masters: ['FalloutNV.esm'], scriptExtenderFolder: 'nvse',
-    pluginCompanions: NO_STRINGS_COMPANIONS, archiveLists: { ...FALLOUT3_ARCHIVES, myGamesFolder: 'FalloutNV', alwaysLoaded: ['Update.bsa'] },
-  },
-  SkyrimLE: {
-    gameName: 'Skyrim', nexusSlug: 'skyrim', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse',
-    pluginCompanions: SKYRIM_COMPANIONS, archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim' },
-  },
   SkyrimSE: {
     gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
     masters: SKYRIM_MASTERS,
@@ -133,20 +110,11 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS,
     archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim VR', defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
   },
-  EnderalLE: {
-    gameName: 'Enderal', nexusSlug: 'enderal', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc', scriptExtenderFolder: 'skse',
-    pluginCompanions: SKYRIM_COMPANIONS, archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Enderal', userInis: ['Enderal.ini', 'EnderalCustom.ini'] },
-  },
   Starfield: {
     gameName: 'Starfield', nexusSlug: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
     masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc',
     scriptExtenderFolder: 'sfse', pluginCompanions: FALLOUT4_COMPANIONS,
-    archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS, alwaysLoaded: [] },
-  },
-  Oblivion: {
-    gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'], scriptExtenderFolder: 'obse',
-    pluginCompanions: NO_STRINGS_COMPANIONS,
-    archiveLists: { myGamesFolder: 'Oblivion', defaultIni: 'Oblivion_default.ini', userInis: ['Oblivion.ini'], keys: ['sArchiveList'], alwaysLoaded: [] },
+    archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS },
   },
 };
 
@@ -270,7 +238,7 @@ export function pluginCompanionRule(release: string | undefined): PluginCompanio
     isStringsFileOf: (plugin, relativePath) => isStringsFile(relativePath) && inStringsFolder(plugin, relativePath.slice(STRINGS_FOLDER.length + 1)),
     inRoot: (plugin, name) => {
       const stem = stemOf(plugin);
-      return isArchiveOf(stem, name, companions.archiveExtension) || (companions.pluginIni && name.toLowerCase() === `${stem}.ini`);
+      return isArchiveOf(stem, name, companions.archiveExtension) || name.toLowerCase() === `${stem}.ini`;
     },
     inStringsFolder,
   };

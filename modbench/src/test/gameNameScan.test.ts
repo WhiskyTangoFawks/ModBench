@@ -77,17 +77,17 @@ describe('no extension file names a game outside the table, in a literal a stati
     try {
       await mkdir(join(dir, 'nested'));
       await writeFile(join(dir, 'topLevel.ts'), "export const label = 'not a game';\n");
-      await writeFile(join(dir, 'nested', 'plantedGame.ts'), "export const label = 'Skyrim';\n");
+      await writeFile(join(dir, 'nested', 'plantedGame.ts'), "export const label = 'Starfield';\n");
       const offenders = findOffenders([dir], []);
       expect(Object.keys(offenders)).toEqual([join('nested', 'plantedGame.ts')]);
-      expect(offenders[join('nested', 'plantedGame.ts')]).toEqual(expect.arrayContaining(['Skyrim']));
+      expect(offenders[join('nested', 'plantedGame.ts')]).toEqual(expect.arrayContaining(['Starfield']));
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
   });
 
   it('flags a game name planted in production source', () => {
-    expect(gameNameLiteralsIn("export const label = 'Skyrim';\n")).toContain('Skyrim');
+    expect(gameNameLiteralsIn("export const label = 'Starfield';\n")).toContain('Starfield');
   });
 
   it('forbids every script-extender folder the table names', () => {
