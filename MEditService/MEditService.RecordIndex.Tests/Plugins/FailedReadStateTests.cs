@@ -442,6 +442,56 @@ public sealed class FailedReadStateTests : IDisposable
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
     }
 
+    [Fact]
+    public void AValidationThatRunsOutOfMemory_FailsThePluginToRead_WithoutReadingItWhole()
+    {
+        SourceMods.Init(Plugin);
+        using var index = Reconciled();
+        var document = NpcDocument;
+        File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{NpcEditorId}\"", "\"EditedNpc\"", StringComparison.Ordinal));
+        var thrown = Faults.Of(typeof(OutOfMemoryException));
+        Arm(TreeMoment.RecordRead, () => throw thrown);
+        var readsBefore = TreeReads();
+
+        index.NextSnapshotUntil(() => Failed(index), "the plugin's failure");
+
+        Assert.Contains(thrown.Message, Reason(index), StringComparison.Ordinal);
+        Assert.Equal(readsBefore, TreeReads());
+    }
+
+    [Fact]
+    public void AWarmLoadWhoseValidationRunsOutOfMemory_FailsThePluginToRead_WithoutReadingItWhole()
+    {
+        SourceMods.Init(Plugin);
+        using (Reconciled()) { }
+        var document = NpcDocument;
+        File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{NpcEditorId}\"", "\"EditedNpc\"", StringComparison.Ordinal));
+        var thrown = Faults.Of(typeof(OutOfMemoryException));
+        Arm(TreeMoment.RecordRead, () => throw thrown);
+        var readsBefore = TreeReads();
+
+        using var index = Reconciled();
+
+        Assert.Contains(thrown.Message, Reason(index), StringComparison.Ordinal);
+        Assert.Equal(readsBefore, TreeReads());
+    }
+
+    [Fact]
+    public void ATreeWhoseReadRunsOutOfMemory_SaysSo_AndIsNotReadAgainWhileItsDocumentsHold()
+    {
+        SourceMods.Init(Plugin);
+        var thrown = Faults.Of(typeof(OutOfMemoryException));
+        Arm(TreeMoment.ReadBegins, () => throw thrown);
+        using var index = Reconciled();
+        Assert.Contains(thrown.Message, index.PluginRowOf(Plugin.KeyOf())?.PluginSourceUnreadable?.Reason, StringComparison.Ordinal);
+        var readsBefore = TreeReads();
+
+        index.Reconcile(index.Holder, _fixture.GameDirectory, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
+            GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        Assert.Equal(readsBefore, TreeReads());
+    }
+
     [Theory]
     [InlineData("the codec broke", "the codec broke")]
     [InlineData("", "could not be read")]

@@ -498,6 +498,10 @@ internal sealed class Indexer : IDisposable
     private bool FailsOnePlugin(Exception ex, CancellationToken token) =>
         !Store.IsInvalidation(ex) && !CancelledBy(ex, token);
 
+    // A whole read after a validation that ran out of memory would run out again.
+    private bool WholeReadMayMend(Exception ex, CancellationToken token) =>
+        ex is not OutOfMemoryException && FailsOnePlugin(ex, token);
+
     // Called with the exclusive right held, so no other reconcile can be in flight.
     private CancellationToken BeginReconcile()
     {
@@ -832,7 +836,7 @@ internal sealed class Indexer : IDisposable
                 _logger.LogWarning("Validating {Plugin} at load: {Failure}", plugin.Name, failure);
             return !report.NeedsRebuild;
         }
-        catch (Exception ex) when (FailsOnePlugin(ex, token))
+        catch (Exception ex) when (WholeReadMayMend(ex, token))
         {
             // A validation that failed is no evidence the rows are still true: the whole read below
             // re-derives them and reports its own failure.
@@ -1066,7 +1070,7 @@ internal sealed class Indexer : IDisposable
             // A non-compiled plugin's rows went with its file, and the file is back.
             return report.NeedsRebuild || (!holdsTree && scope.Store.IndexedContentHash(key) is null);
         }
-        catch (Exception ex) when (FailsOnePlugin(ex, token))
+        catch (Exception ex) when (WholeReadMayMend(ex, token))
         {
             _logger.LogWarning(ex, "Reconciling {Plugin}: its rows cannot be validated, so it is read whole", key.Name);
             return true;

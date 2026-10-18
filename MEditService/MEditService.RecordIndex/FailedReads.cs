@@ -81,8 +81,8 @@ internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger lo
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // A plugin file's own failure is an answer, so a throw is the store's or the tree's, save
-            // running out of memory: the reads run one at a time, so a read again would run out again.
-            Settle(plugin.Key, FailureOf(plugin.Key, state, stands: ex is OutOfMemoryException && state is { Vouches: true }, treeStopped: null, why: null));
+            // what StateObserves names.
+            Settle(plugin.Key, FailureOf(plugin.Key, state, state is { Vouches: true } && StateObserves(ReadOutcome.StoppedAt(ex)), treeStopped: null, why: null));
             throw;
         }
     }
@@ -94,9 +94,10 @@ internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger lo
     }
 
     // A stopped read stands on what the state holds: a tree's document stamps, a binary's hash. A
-    // failure of git, or not of the plugin's bytes, is read again at the next reconcile.
+    // failure of git, or not of the plugin's bytes, is read again at the next reconcile. Reads run one
+    // at a time, so one that ran out of memory would run out again.
     private static bool StateObserves(ReadOutcome outcome) =>
-        outcome is { Failure: null or { OfItsBytes: true }, StoppedBy: null, TreeStopped: null or SourceFailure.Unreadable or SourceFailure.Ambiguous };
+        outcome is { Failure: null or { OfItsBytes: true }, StoppedBy: null or OutOfMemoryException, TreeStopped: null or SourceFailure.Unreadable or SourceFailure.Ambiguous };
 
     private static UnreadableSource? WhyStopped(ReadOutcome outcome)
     {
