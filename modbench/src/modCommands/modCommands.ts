@@ -326,9 +326,8 @@ interface UninstalledMod extends TrashedEntry {
   markRefusal?: string;
 }
 
-// `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
-// then the downloaded file it was installed from marked unless that file is gone (mods.md, Reporting, story 4).
-// The installation file is read before the folder goes, as the folder holds its record.
+// `modbench.mod.uninstall` over the selection (mods.md, Reporting, story 4). The installation file is read before
+// the folder that records it is trashed.
 async function uninstallMods(
   adapter: InstanceAdapter, mods: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<UninstalledMod>> {
