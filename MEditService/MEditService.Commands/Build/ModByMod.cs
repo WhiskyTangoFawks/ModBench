@@ -3,7 +3,7 @@ using MEditService.Ports;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A modlist gesture over a selection: each distinct mod lands or is refused on its own, given the progress it is at.
+/// <summary>A modlist gesture over a selection: each distinct mod lands or is refused on its own, given its progress.
 /// Progress goes before each mod and at rest at the end. A cancel stops it after the mod in hand.</summary>
 internal static class ModByMod
 {
