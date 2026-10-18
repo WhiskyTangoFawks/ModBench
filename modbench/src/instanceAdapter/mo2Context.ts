@@ -4,7 +4,7 @@
 import { errorMessage } from '../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
-import { exists, get, listDir, listFolders, readOrAbsent, rename, type SkippedLink, type Undo } from './files';
+import { exists, get, ignoreSkippedLink, listDir, listFolders, readOrAbsent, rename, type SkippedLink, type Undo } from './files';
 import type { GameFolderResolver } from './gameFolder/gameFolderResolver';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from './instanceAdapter';
 import type { FileOrigin } from './instanceAdapter';
@@ -39,7 +39,7 @@ async function isBeingInstalled(folder: string): Promise<boolean> {
 /** The mod folders as entries; the reserved overwrite name holds none, nor does a folder a new
  *  mod is being installed into or one removed mid-listing. */
 export async function listModFolders(
-  { instanceRoot }: Mo2Context, skippedLink?: SkippedLink,
+  { instanceRoot }: Mo2Context, skippedLink: SkippedLink,
 ): Promise<ModFolder[] | undefined> {
   const names = await readOrAbsent<string[] | undefined>(() => listFolders(modsDir(instanceRoot), skippedLink), undefined);
   const candidates = names?.filter((name) => modNameKey(name) !== OVERWRITE_DIR_NAME);
@@ -70,7 +70,7 @@ export function newModFolder({ instanceRoot }: Mo2Context, mod: string): string 
 
 /** The folder that holds `entry`, matched as MO2 matches names. */
 export async function folderHolding(context: Mo2Context, entry: EntryRef): Promise<ModFolder | undefined> {
-  const all = await listModFolders(context);
+  const all = await listModFolders(context, ignoreSkippedLink);
   return all === undefined ? undefined : modFoldersOf(all).holding(entry);
 }
 
@@ -80,7 +80,7 @@ export async function modFolderNamed({ instanceRoot }: Mo2Context, name: string)
   const exact = entryDir(instanceRoot, { kind: 'mod', name });
   if (exact === undefined || await exists(exact)) return exact;
   const key = entryKey({ kind: 'mod', name });
-  const folders = await readOrAbsent(() => listFolders(modsDir(instanceRoot)), []);
+  const folders = await readOrAbsent(() => listFolders(modsDir(instanceRoot), ignoreSkippedLink), []);
   const found = folders.find((folder) => entryKey({ kind: 'mod', name: folder }) === key);
   return found === undefined ? exact : modDir(instanceRoot, found);
 }

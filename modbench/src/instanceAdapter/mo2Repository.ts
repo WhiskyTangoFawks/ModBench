@@ -1,7 +1,7 @@
 // What MO2's implementation lets the instance repository hold, and which game files a mod's files take.
 
 import { join } from 'node:path';
-import { exists, listEntries, remove, type ResolvedEntry, write } from './files';
+import { exists, ignoreSkippedLink, listEntries, remove, type ResolvedEntry, write } from './files';
 import type { HashIndex } from './hashIndex';
 import type { GameFile, InstanceAdapter } from './instanceAdapter';
 import { ignoreListFile, WHITELIST_IGNORE_LIST } from './layout';
@@ -16,7 +16,7 @@ const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry>
 function caseBlindFinder(dataFolder: string) {
   const listings = new Map<string, Promise<Map<string, ResolvedEntry>>>();
   const listingOf = (folder: string): Promise<Map<string, ResolvedEntry>> => {
-    const kept = listings.get(folder) ?? listEntries(folder).then(lowerCased, () => new Map<string, ResolvedEntry>());
+    const kept = listings.get(folder) ?? listEntries(folder, ignoreSkippedLink).then(lowerCased, () => new Map<string, ResolvedEntry>());
     listings.set(folder, kept);
     return kept;
   };

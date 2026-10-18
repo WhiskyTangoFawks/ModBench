@@ -5,7 +5,7 @@
 import { join } from 'node:path';
 import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
-import { get, isRepository, listFolders, readOrAbsent } from './files';
+import { get, ignoreSkippedLink, isRepository, listFolders, readOrAbsent } from './files';
 import type { SourceMods } from './instanceAdapter';
 import { BUILD_OUTPUT_KEY } from '../wire/sourceMod';
 import { buildConfigurationFile, modFolderName, sourceRootDir } from './layout';
@@ -35,7 +35,7 @@ export async function sourceModsIn(instanceRoot: string): Promise<SourceMods> {
   const root = sourceRootDir(instanceRoot);
   const byKey = new Map<string, { output: string; folder: string }>();
   const notes: string[] = [];
-  for (const name of (await readOrAbsent(() => listFolders(root), [])).sort()) {
+  for (const name of (await readOrAbsent(() => listFolders(root, ignoreSkippedLink), [])).sort()) {
     const folder = join(root, name);
     if (!(await isRepository(folder))) continue;
     const built = await outputOf(folder);

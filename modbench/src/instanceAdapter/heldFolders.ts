@@ -5,7 +5,7 @@ import { existsSync, watch, type FSWatcher } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
-import { listFolders } from './files';
+import { ignoreSkippedLink, listFolders } from './files';
 
 export interface HeldFolderWatch {
   /** Watches each folder, at any depth, that `folder` holds, while open; settles once each is watched. */
@@ -45,7 +45,7 @@ function reasonOf(error: unknown): string {
 // A link is followed as MO2 follows it, as `listFolders` lists it.
 async function foldersIn(folder: string): Promise<string[]> {
   try {
-    return (await listFolders(folder)).map((name) => join(folder, name));
+    return (await listFolders(folder, ignoreSkippedLink)).map((name) => join(folder, name));
   } catch {
     return [];
   }

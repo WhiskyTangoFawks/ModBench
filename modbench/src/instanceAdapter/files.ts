@@ -210,6 +210,9 @@ export function listDir(path: string): Promise<Dirent[]> {
 /** Hands over a link that cannot be followed, by its path, with why. */
 export type SkippedLink = (linkPath: string, reason: string) => void;
 
+/** For a caller to whom a link it cannot follow is the same as no entry. */
+export const ignoreSkippedLink: SkippedLink = () => undefined;
+
 /** A directory entry as what it is, a link being what it links to. */
 export interface ResolvedEntry {
   readonly name: string;
@@ -220,7 +223,7 @@ export interface ResolvedEntry {
 /** The entries directly in `path`, following links as MO2 does (QDir without NoSymLinks).
  *  A link whose target cannot be checked is skipped, as MO2 skips it, and handed to `skippedLink`. */
 export async function listEntries(
-  path: string, skippedLink?: SkippedLink,
+  path: string, skippedLink: SkippedLink,
 ): Promise<ResolvedEntry[]> {
   const entries = await Promise.all((await listDir(path)).map(async (dirent): Promise<ResolvedEntry | undefined> => {
     const { name } = dirent;
@@ -229,7 +232,7 @@ export async function listEntries(
       const target = await stat(join(path, name));
       return { name, isFile: target.isFile(), isDirectory: target.isDirectory() };
     } catch (err) {
-      skippedLink?.(join(path, name), errorMessage(err));
+      skippedLink(join(path, name), errorMessage(err));
       return undefined;
     }
   }));
@@ -238,7 +241,7 @@ export async function listEntries(
 
 /** The folders directly in `path`, links followed as `listEntries` follows them. */
 export async function listFolders(
-  path: string, skippedLink?: SkippedLink,
+  path: string, skippedLink: SkippedLink,
 ): Promise<string[]> {
   return (await listEntries(path, skippedLink)).filter((entry) => entry.isDirectory).map((entry) => entry.name);
 }

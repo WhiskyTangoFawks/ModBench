@@ -4,7 +4,7 @@
 import { keepsOwnGameInis } from './codecs/profileSettings';
 import { archiveListsOf, pluginCompanionRule } from '../tables/gamePaths';
 import { dataFolderOf } from './gameFolder/dataFolder';
-import { get, listEntries, type SkippedLink, readOrAbsent, readOrReason } from './files';
+import { get, ignoreSkippedLink, listEntries, readOrAbsent, readOrReason, type SkippedLink } from './files';
 import { archivesListedIn } from './gameFolder/gameIni';
 import type { DataFolderArchives, GameFolder } from './instanceAdapter';
 import { anyCase, dataFolderArchivesGlob, fileInFolder, profileDir, profileSettingsFile } from './layout';
@@ -12,7 +12,7 @@ import type { Mo2Context } from './mo2Context';
 
 // The one spelled as `name` first, then one Windows takes for it.
 async function fileNamedIn(folder: string, name: string): Promise<string | undefined> {
-  const names = (await readOrAbsent(() => listEntries(folder), [])).filter((d) => d.isFile).map((d) => d.name);
+  const names = (await readOrAbsent(() => listEntries(folder, ignoreSkippedLink), [])).filter((d) => d.isFile).map((d) => d.name);
   const spelled = names.find((entry) => entry === name) ?? names.find((entry) => entry.toLowerCase() === name.toLowerCase());
   return spelled === undefined ? undefined : fileInFolder(folder, spelled);
 }
@@ -20,7 +20,7 @@ async function fileNamedIn(folder: string, name: string): Promise<string | undef
 const textOf = async (file: string | undefined): Promise<string[]> =>
   (file === undefined ? [] : [await readOrAbsent(() => get(file), '')]);
 
-async function listGameFolderArchives(dataFolder: string, gameRelease: string | undefined, skippedLink?: SkippedLink): Promise<DataFolderArchives> {
+async function listGameFolderArchives(dataFolder: string, gameRelease: string | undefined, skippedLink: SkippedLink): Promise<DataFolderArchives> {
   const rule = pluginCompanionRule(gameRelease);
   const listing = await readOrReason(async () => {
     const dirents = await listEntries(dataFolder, skippedLink);
@@ -62,7 +62,7 @@ export interface ArchiveReads {
   archiveList(
     profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
   ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;
-  gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined, skippedLink?: SkippedLink): Promise<DataFolderArchives>;
+  gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined, skippedLink: SkippedLink): Promise<DataFolderArchives>;
 }
 
 export function mo2Archives(context: Mo2Context): ArchiveReads {

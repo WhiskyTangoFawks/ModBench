@@ -11,6 +11,7 @@ import {
   entryNotFound, type EntryRef, type InstanceAdapter, type ModlistEntry, type ModOrderChange, type MovePlace,
   type SeparatorsPlace,
 } from './instanceAdapter';
+import { ignoreSkippedLink } from './files';
 import { mo2FolderName, modlistFile, separatorDir } from './layout';
 import {
   entryKey, folderHolding, listedAs, listModFolders, modFoldersOf, refuseFolderTaken, renameFolderWithManifest, type Mo2Context,
@@ -158,7 +159,7 @@ export function mo2ModOrder(context: Mo2Context): Mo2ModOrder {
       const file = modlistFile(instanceRoot, profile);
       return withLock(file, async () => {
         const before = await get(file);
-        const folders = await listModFolders(context);
+        const folders = await listModFolders(context, ignoreSkippedLink);
         const changes = decide(firstLines(parseModlist(before), modLineKey).kept, folders && modFoldersOf(folders));
         let after = before;
         const resolved: ModOrderChange[] = [];

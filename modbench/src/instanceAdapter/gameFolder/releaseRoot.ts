@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { SCRIPT_EXTENDER_FOLDERS } from '../../tables/gamePaths';
 import { present } from '../../ports/present';
-import { listEntries } from '../files';
+import { ignoreSkippedLink, listEntries } from '../files';
 
 const DATA_DIRS = new Set([
   'meshes', 'textures', 'materials', 'sound', 'music', 'scripts', 'source',
@@ -16,7 +16,7 @@ const MAX_WRAPPERS = 32;
 const named = (name: string) => (entry: { name: string }): boolean => entry.name.toLowerCase() === name;
 
 async function hasModuleConfig(fomodDir: string): Promise<boolean> {
-  return (await listEntries(fomodDir)).some((entry) => entry.isFile && named('moduleconfig.xml')(entry));
+  return (await listEntries(fomodDir, ignoreSkippedLink)).some((entry) => entry.isFile && named('moduleconfig.xml')(entry));
 }
 
 /** Where a release's files start: its Data folder, or below each lone wrapper folder. A
@@ -24,7 +24,7 @@ async function hasModuleConfig(fomodDir: string): Promise<boolean> {
 export async function releaseRoot(extracted: string): Promise<{ root: string; isFomod: boolean }> {
   let level = extracted;
   for (let depth = 0; depth < MAX_WRAPPERS; depth++) {
-    const entries = await listEntries(level);
+    const entries = await listEntries(level, ignoreSkippedLink);
     const folders = entries.filter((entry) => entry.isDirectory);
 
     const fomodDir = folders.find(named('fomod'));

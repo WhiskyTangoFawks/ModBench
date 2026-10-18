@@ -1,10 +1,10 @@
 // MO2's rename of a plugin: its files and its line in every profile's plugins.txt and loadorder.txt, under every
 // plugin order's lock, and put back if a write fails.
 
-import { parse } from 'node:path';
+import { basename, parse } from 'node:path';
 import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCodec/pluginsText';
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
-import { get, listEntries, listFolders, readOrAbsent, rename, undoAll, type Undo, withLock, write } from './files';
+import { get, ignoreSkippedLink, listEntries, listFolders, readOrAbsent, rename, undoAll, type Undo, withLock, write } from './files';
 import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
 import { fileInFolder, pluginOrderFiles, profilesDir } from './layout';
 import { originFolder, type Mo2Context } from './mo2Context';
@@ -29,8 +29,9 @@ const notAFileOf = (origin: FileOrigin, name: string): Error =>
 const namedFile = (name: string): boolean => name !== '' && name !== '.' && name !== '..' && !/[\\/]/.test(name);
 
 async function entriesIn(folder: string): Promise<Entry[]> {
-  const dirents = await readOrAbsent(() => listEntries(folder), []);
-  return dirents.map((d) => ({ name: d.name, isFolder: d.isDirectory }));
+  const unfollowable: Entry[] = [];
+  const dirents = await readOrAbsent(() => listEntries(folder, (link) => unfollowable.push({ name: basename(link), isFolder: false })), []);
+  return [...dirents.map((d) => ({ name: d.name, isFolder: d.isDirectory })), ...unfollowable];
 }
 
 interface Line {
@@ -91,7 +92,7 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
   }
 
   async function orderFiles(): Promise<string[]> {
-    const profiles = await readOrAbsent(() => listFolders(profilesDir(instanceRoot)), []);
+    const profiles = await readOrAbsent(() => listFolders(profilesDir(instanceRoot), ignoreSkippedLink), []);
     return profiles.sort().flatMap((name) => pluginOrderFiles(instanceRoot, name));
   }
 

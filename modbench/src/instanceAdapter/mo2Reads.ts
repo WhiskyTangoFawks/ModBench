@@ -13,7 +13,7 @@ import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { gameOfSettings } from './mo2Game';
 import type { ManagerGamePath } from './gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from './gameFolder/dataFolder';
-import { factsOf, get, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, type SkippedLink, stampOf } from './files';
+import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, type SkippedLink, stampOf } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type GameFolder, type InstanceAdapter, type InstanceReading,
   type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided, type SourceMods,
@@ -36,25 +36,25 @@ interface InstanceSettings {
   /** Mutagen's release of that game; undefined when the tables hold none for it. */
   readonly gameRelease: string | undefined;
   gameFolder(): Promise<GameFolder>;
-  downloadedFiles(skippedLink?: SkippedLink): Promise<DownloadedFiles>;
+  downloadedFiles(skippedLink: SkippedLink): Promise<DownloadedFiles>;
 }
 
 /** What one reading is made of: each file read through its own codec, against the one read of the settings. */
 export interface ReadingSource extends ArchiveReads {
   settings(): Promise<InstanceSettings>;
   /** Every profile's name; none when the instance has no profiles. */
-  profiles(skippedLink?: SkippedLink): Promise<string[]>;
+  profiles(skippedLink: SkippedLink): Promise<string[]>;
   modOrder(profile: string): Promise<ModlistEntry[]>;
   /** Empty when the mod has no metadata. */
   modMeta(mod: string): Promise<ModMeta>;
   pluginOrder(profile: string): Promise<PluginEntry[]>;
-  gameFolderPlugins(gameFolder: GameFolder, skippedLink?: SkippedLink): Promise<DataFolderPlugins>;
+  gameFolderPlugins(gameFolder: GameFolder, skippedLink: SkippedLink): Promise<DataFolderPlugins>;
   /** The plugins the game folder's Creation Club list names, in its order; none when the release
    *  has no Creation Club, the game folder is not found, or it holds no list. */
   creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
   /** Undefined when there is no folder for mods at all. A link that cannot be followed is no
    *  folder, and is handed to `skippedLink`. */
-  modFolders(skippedLink?: SkippedLink): Promise<ModFolders | undefined>;
+  modFolders(skippedLink: SkippedLink): Promise<ModFolders | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
   /** The files at an origin's root, as `originFiles` lists them. */
@@ -64,7 +64,7 @@ export interface ReadingSource extends ArchiveReads {
   watchNotes(): string[];
 }
 
-async function listDownloadedFiles(downloadsDir: string, skippedLink?: SkippedLink): Promise<DownloadedFile[] | undefined> {
+async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLink): Promise<DownloadedFile[] | undefined> {
   const dirents = await readOrAbsent(() => listEntries(downloadsDir, skippedLink), undefined);
   if (dirents === undefined) return undefined;
   const names = dirents
@@ -112,7 +112,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
           else watch.follow('creationClubList', dirname(creationClubList), basename(creationClubList));
           return gameFolder;
         },
-        downloadedFiles: async (skippedLink?: SkippedLink): Promise<DownloadedFiles> => {
+        downloadedFiles: async (skippedLink: SkippedLink): Promise<DownloadedFiles> => {
           const resolution = await resolveDownloadsFolder(instanceRoot, iniText);
           watch.follow('downloadedFiles', resolution.kind === 'resolved' ? resolution.downloadsDir : undefined, DOWNLOADS_WATCH_GLOB);
           if (resolution.kind === 'unresolved') return resolution;
@@ -123,8 +123,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
     },
 
     async profiles(skippedLink) {
-      const dirents = await readOrAbsent(() => listFolders(profilesDir(instanceRoot), skippedLink), []);
-      return dirents;
+      return readOrAbsent(() => listFolders(profilesDir(instanceRoot), skippedLink), []);
     },
 
     async modOrder(profile) {
@@ -166,9 +165,9 @@ export function mo2Reads(
 ): Pick<InstanceAdapter, 'modFolderPath' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceMods'> {
   const { instanceRoot } = context;
   return {
-    profiles: () => source.profiles(),
-    downloadedFiles: async () => (await source.settings()).downloadedFiles(),
-    modOrder: async () => ({ mods: await source.modOrder((await source.settings()).profile), modFolders: await listModFolders(context) }),
+    profiles: () => source.profiles(ignoreSkippedLink),
+    downloadedFiles: async () => (await source.settings()).downloadedFiles(ignoreSkippedLink),
+    modOrder: async () => ({ mods: await source.modOrder((await source.settings()).profile), modFolders: await listModFolders(context, ignoreSkippedLink) }),
     sourceMods: () => source.sourceMods(),
     modFolderPath: (name) => modFolderNamed(context, name),
     sourceFolder: (mod) => modSourceDir(instanceRoot, mod),
@@ -267,7 +266,7 @@ export async function readPluginsProvided(source: ReadingSource, profile: string
   const [modFiles, dataFolderPlugins, creationClubList] = await Promise.all([
     Promise.all(filesWinningFirst(mods, [], () => []).flatMap(({ origin }) => (origin.kind === 'mod' ? [origin] : []))
       .map(async (origin) => [origin.name, (await source.originRootFiles(origin)).files] as const)).then((listed) => new Map(listed)),
-    source.gameFolderPlugins(gameFolder),
+    source.gameFolderPlugins(gameFolder, ignoreSkippedLink),
     source.creationClubList(gameFolder, settings.gameRelease),
   ]);
   return pluginsProvidedOf(
