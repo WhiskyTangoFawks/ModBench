@@ -1597,6 +1597,7 @@ describe('Delete separator, as VS Code runs it on the Mods view\'s selection', (
     trashedBefore = trashInfoNames();
     original = readFileSync(modlistPath, 'utf8');
     mkdirSync(doomedDir, { recursive: true });
+    writeFileSync(path.join(doomedDir, 'readme.txt'), 'content');
     writeFileSync(modlistPath, '-Doomed_separator\r\n');
   });
 
