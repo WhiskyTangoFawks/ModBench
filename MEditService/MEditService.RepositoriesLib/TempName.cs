@@ -2,9 +2,8 @@ using System.Diagnostics;
 
 namespace MEditService.RepositoriesLib;
 
-/// <summary>The name of a file or folder Modbench holds a write in until it renames it into place. It carries the
-/// writing process's id, so a leftover is a temp whose writer is no longer running. A leftover is Modbench's
-/// artifact, never a mod's file.</summary>
+/// <summary>The name of a file or folder a write is held in until renamed into place. It carries the writing
+/// process id, so a leftover is a temp whose writer has exited.</summary>
 public static class TempName
 {
     private const string Prefix = ".medit_tmp_";
