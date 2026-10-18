@@ -1,4 +1,4 @@
-import { GENERAL_SECTION, readIniValue, setIniByteArray } from './qSettingsIni';
+import { GENERAL_SECTION, readIniValue, setIniByteArray, setIniValue } from './qSettingsIni';
 
 /** MO2's settings file, at the instance root. */
 export const SETTINGS_FILE_NAME = 'ModOrganizer.ini';
@@ -24,6 +24,9 @@ export const readGamePath = (text: string): string => readRequired(text, 'gamePa
 export function readDownloadDirectory(text: string): string | undefined {
   return readIniValue(text, 'Settings', 'download_directory') || undefined;
 }
+
+export const setDownloadDirectoryInText = (text: string, directory: string): string =>
+  setIniValue(text, 'Settings', 'download_directory', directory);
 
 export function setSelectedProfileInText(text: string, profile: string): string {
   if (readIniValue(text, GENERAL_SECTION, SELECTED_PROFILE_KEY) === undefined) throw missingKey(SELECTED_PROFILE_KEY);

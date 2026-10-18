@@ -74,7 +74,7 @@ function decodeIniValue(raw: string): string {
   const quoted = trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"');
   const units = unescapeUnits(quoted ? trimmed.slice(1, -1) : trimmed);
   const bytes = /^@ByteArray\((.*)\)$/s.exec(units)?.[1];
-  if (bytes !== undefined) return Buffer.from(bytes.replace(/[^\x00-\xff]/g, '?'), 'latin1').toString('utf8');
+  if (bytes !== undefined) return Buffer.from(bytes.replace(/[Ā-￿]/g, '?'), 'latin1').toString('utf8');
   return units.startsWith('@@') ? units.slice(1) : units;
 }
 
