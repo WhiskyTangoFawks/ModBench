@@ -282,12 +282,12 @@ internal static class PluginEndpoints
         return Created(logger, "Create plugin in mod", plugin, result);
     }
 
-    private static IResult Created(ILogger logger, string gesture, PluginAddress plugin, PluginCreateResult result)
+    private static IResult Created(ILogger logger, string gesture, PluginAddress plugin, Answer<PluginAddress, PluginCreateRefused> answer)
     {
-        if (result.Refusal is not { } refusal) return Results.Ok(result.Created ?? plugin);
+        if (answer.Holds(out var created, out var refused)) return Results.Ok(created);
 
-        EndpointMapping.LogRefusal(logger, gesture, refusal, result.Message, plugin);
-        return EndpointMapping.Refusal(refusal, result.Message);
+        EndpointMapping.LogRefusal(logger, gesture, refused.Refusal, refused.Message, plugin);
+        return EndpointMapping.Refusal(refused.Refusal, refused.Message);
     }
 
     // The refusals a malformed request earns, taken before the door so a name that could never be

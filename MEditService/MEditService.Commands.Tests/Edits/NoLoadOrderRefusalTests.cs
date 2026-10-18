@@ -52,7 +52,7 @@ public sealed class NoLoadOrderRefusalTests
     {
         using var scratch = new ScratchDirectory("medit-no-load-order-");
 
-        var result = await Handler<CreatePluginHandler>().CreatePlugin(Plugin, scratch.Path, scratch.Path);
+        var result = (await Handler<CreatePluginHandler>().CreatePlugin(Plugin, scratch.Path, scratch.Path)).Refused();
 
         Assert.Equal(PluginCreateRefusal.NoLoadOrder, result.Refusal);
         Assert.Empty(Directory.EnumerateFileSystemEntries(scratch.Path));

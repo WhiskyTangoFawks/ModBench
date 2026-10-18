@@ -33,7 +33,6 @@ public abstract record RenameSourceResult
     }
 }
 
-/// <summary>The changes renaming a plugin's source makes, and the name its tree was filed under.</summary>
 public sealed record RenameSourceChanges(
     string TreeName, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents);
 

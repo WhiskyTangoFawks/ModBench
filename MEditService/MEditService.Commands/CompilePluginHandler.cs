@@ -23,10 +23,9 @@ public sealed class CompilePluginHandler
     {
         if (WhyNoPluginCompiles() is { } none) return none;
         var (landed, refused) = await Each(plugins, _compileService.CompileAsync);
-        return SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>.PerItem(landed, refused).ToAnswer(
-            compiled => new CompiledPlugin(compiled.Item.Name, compiled.Item.Origin, compiled.Outcome),
-            refusedItem => new CompileRefused(refusedItem.Item, refusedItem.Refusal, refusedItem.Message),
-            (applied, refusedItems) => new CompileResult(applied, refusedItems));
+        return new CompileResult(
+            [.. landed.Select(compiled => new CompiledPlugin(compiled.Item.Name, compiled.Item.Origin, compiled.Outcome))],
+            [.. refused.Select(item => new CompileRefused(item.Item, item.Refusal, item.Message))]);
     }
 
     /// <summary>Each plugin a build places, compiled to its path whether or not the load order holds it. No two differ
