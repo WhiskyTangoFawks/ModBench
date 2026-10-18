@@ -85,7 +85,13 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         }
 
         if (comparison.Unverified is { } unverified)
-            return $"{pluginName} does not round-trip through its own source: {unverified}, so its records cannot be proven intact.";
+        {
+            var state = unverified.Reason == UnverifiedReason.AbsentFromRewrite
+                ? "is absent from the rewrite"
+                : "could not be compared with its rewrite";
+            return $"{pluginName} does not round-trip through its own source: {unverified.RecordType} {unverified.FormKey} {state}, " +
+                   "so its records cannot be proven intact.";
+        }
 
         // Both are reparsed, so only bytes that differ pay for it.
         if (!adapter.DivergenceFrom(pluginName, originalPluginPath, recompiledPath, loadOrder, strings)

@@ -17,11 +17,13 @@ public static class PluginBinaryWalk
     /// original. <c>FormId</c> is the original's stored FormID, as a diagnosis of its bytes anchors it.</summary>
     public readonly record struct SubrecordLoss(string RecordType, uint FormId, FormKey FormKey, IReadOnlyList<string> Signatures);
 
+    private const string HeaderType = "TES4";
+
     /// <summary>One record of a plugin and of its rewrite.</summary>
     internal readonly record struct RecordPair(FormKey FormKey, MajorRecordFrame Original, MajorRecordFrame Rewritten);
 
     /// <summary>The records a plugin and its rewrite both hold, and the first original record the rewrite lacks.</summary>
-    internal readonly record struct Pairing(List<RecordPair> Pairs, string? FirstMissing);
+    internal readonly record struct Pairing(List<RecordPair> Pairs, UnverifiedRecord? FirstMissing);
 
     /// <summary>The records a plugin and its rewrite both hold, paired by type and FormKey, each FormID read
     /// through its own plugin's masters: a rewrite prunes unneeded masters, which moves every index after
@@ -30,26 +32,31 @@ public static class PluginBinaryWalk
         byte[] original, IReadOnlySeparatedMasterPackage originalMasters, byte[] rewritten, IReadOnlySeparatedMasterPackage rewrittenMasters,
         GameRelease release)
     {
-        var rewrittenByIdentity = new Dictionary<(RecordType Type, FormKey FormKey), MajorRecordFrame>();
+        var rewrittenByIdentity = new Dictionary<(RecordType Type, FormKey FormKey), Queue<MajorRecordFrame>>();
         foreach (var record in Records(rewritten, release))
-            rewrittenByIdentity.TryAdd((record.RecordType, IdentityOf(record, rewrittenMasters)), record);
+        {
+            var identity = (record.RecordType, IdentityOf(record, rewrittenMasters));
+            if (!rewrittenByIdentity.TryGetValue(identity, out var partners))
+                rewrittenByIdentity[identity] = partners = new Queue<MajorRecordFrame>();
+            partners.Enqueue(record);
+        }
 
         var pairs = new List<RecordPair>();
-        string? firstMissing = null;
+        UnverifiedRecord? firstMissing = null;
         foreach (var record in Records(original, release))
         {
             var formKey = IdentityOf(record, originalMasters);
-            if (rewrittenByIdentity.TryGetValue((record.RecordType, formKey), out var partner))
+            if (rewrittenByIdentity.TryGetValue((record.RecordType, formKey), out var partners) && partners.TryDequeue(out var partner))
                 pairs.Add(new RecordPair(formKey, record, partner));
             else
-                firstMissing ??= $"{record.RecordType} {formKey}";
+                firstMissing ??= new UnverifiedRecord(UnverifiedReason.AbsentFromRewrite, record.RecordType.Type, formKey);
         }
         return new Pairing(pairs, firstMissing);
     }
 
     // The header's FormID is no reference: read through masters it names whichever plugin holds index 0.
     private static FormKey IdentityOf(MajorRecordFrame record, IReadOnlySeparatedMasterPackage masters) =>
-        record.RecordType.Type == "TES4" ? FormKey.Null : masters.GetFormKey(record.FormID, reference: false);
+        record.RecordType.Type == HeaderType ? FormKey.Null : masters.GetFormKey(record.FormID, reference: false);
 
     /// <summary>How the plugin's FormIDs name records: through its own masters, each in the style the load
     /// order's copy of it carries.</summary>
@@ -140,13 +147,13 @@ public static class PluginBinaryWalk
 
     /// <summary>The first original record whose rewrite is absent, or whose pair the subrecord check cannot
     /// read.</summary>
-    internal static string? FirstUnverified(Pairing pairing)
+    internal static UnverifiedRecord? FirstUnverified(Pairing pairing)
     {
         if (pairing.FirstMissing is { } missing)
-            return $"{missing} is absent from the rewrite";
+            return missing;
 
         var unread = pairing.Pairs.Cast<RecordPair?>().FirstOrDefault(pair => pair is { } p && SubrecordsOfBoth(p.Original, p.Rewritten) is null);
-        return unread is { } u ? $"{u.Original.RecordType} {u.FormKey} could not be compared with its rewrite" : null;
+        return unread is { } u ? new UnverifiedRecord(UnverifiedReason.NotComparable, u.Original.RecordType.Type, u.FormKey) : null;
     }
 
     /// <summary>The first paired record whose subrecord inventory shows a drop, or null. TES4's MAST/DATA
@@ -160,7 +167,7 @@ public static class PluginBinaryWalk
 
             var type = original.RecordType.Type;
             var dropped = DroppedSignatures(originalSubrecords, rewrittenSubrecords);
-            if (type == "TES4")
+            if (type == HeaderType)
                 dropped = dropped.Where(sig => sig is not ("MAST" or "DATA")).ToList();
             if (dropped.Count > 0)
                 return new SubrecordLoss(type, original.FormID.Raw, formKey, dropped);
