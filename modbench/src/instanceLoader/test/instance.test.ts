@@ -787,7 +787,7 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
     await instance.refresh();
 
     const provided = { name: 'dlccoast.esm', origin: 'Consumer' };
-    expect(instance.value.pluginsLoadedWithNoLine).toEqual([{ ...provided, path: join('/mods/Consumer', 'dlccoast.esm') }]);
+    expect(instance.value.pluginsLoadedWithNoLine).toEqual([{ ...provided, path: '/mods/Consumer/dlccoast.esm' }]);
     expect(instance.value.loadOrderSnapshot).toMatchObject({ loadedWithNoLine: [provided] });
   });
 
