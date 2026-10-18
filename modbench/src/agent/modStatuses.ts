@@ -7,8 +7,7 @@ export const LIST_MOD_STATUSES = {
   name: 'list_mod_statuses',
   description: 'Each mod\'s and separator\'s folder, by kind and name as list_mods gives them, against its manifest: whether it has no manifest, and the files whose bytes differ from the manifest\'s, '
     + 'that no line of it names, that its folder lacks, and that its package does not hold. An instance that is no repository has no manifests to compare.',
-  of: async (value: InstanceValue, readStatus: ReadModStatus | undefined) => {
-    if (readStatus === undefined) throw new Refusal('There is no Modbench instance open in this window.');
+  of: async (value: InstanceValue, readStatus: ReadModStatus) => {
     if (!value.holdsRepository) throw new Refusal('The instance is not a repository, so no mod has a manifest to compare. Request git init first.');
     const folders = value.modFolders ?? [];
     const answer = await readStatus(folders.map(({ modName }) => modName));
