@@ -2,9 +2,9 @@ using MEditService.Commands.Edits;
 using MEditService.Ports;
 
 namespace MEditService.Commands.Build;
+
 /// <summary>A modlist gesture over a selection: each distinct mod lands or is refused on its own, given the progress it is at.
 /// Progress goes before each mod, and at rest at the end. A cancel stops it after the mod in hand.</summary>
-/// each mod, and at rest at the end; the mod in hand is given the progress it is at. A cancel stops it after the mod in hand.</summary>
 internal static class ModByMod
 {
     public static async Task<SelectionResult<string, TRefusal, TOutcome>> OverAsync<TMod, TRefusal, TOutcome>(
