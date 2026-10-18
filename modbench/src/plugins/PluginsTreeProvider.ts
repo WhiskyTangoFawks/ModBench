@@ -366,11 +366,15 @@ export class PluginsTreeProvider
     return element;
   }
 
-  // plugins.md, The tree, story 4: a disabled plugin's records are not the game's to load, so there
-  // is nothing behind the row to expand into.
+  // plugins.md, The tree, stories 4 and 7: a disabled plugin's records are not the game's to load,
+  // and a line the listed Data folder does not hold has no file to read.
   private collapsibleStateOf(element: PluginListNode): vscode.TreeItemCollapsibleState {
-    if (element.kind === 'plugin' && !element.plugin.enabled) return vscode.TreeItemCollapsibleState.None;
+    if (element.kind === 'plugin' && (!element.plugin.enabled || this.namesNoFile(element))) return vscode.TreeItemCollapsibleState.None;
     return vscode.TreeItemCollapsibleState.Collapsed;
+  }
+
+  private namesNoFile(row: PluginNode): boolean {
+    return this.instanceValue.dataFolderPlugins.kind === 'listed' && this.pluginFile(addressOfRow(row)) === undefined;
   }
 
   private readonly originalDecoration = new WeakMap<object, RowDecoration>();

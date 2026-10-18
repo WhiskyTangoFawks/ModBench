@@ -1082,6 +1082,23 @@ describe('PluginsTreeProvider — a disabled plugin row has no expander', () => 
   });
 });
 
+describe('PluginsTreeProvider — an enabled line no file answers to', () => {
+  const lineOnly = plugin({ name: 'Gone.esp', line: 0, origin: 'Data/', path: undefined });
+  const collapsibleStateWith = async (dataFolderPlugins: InstanceValue['dataFolderPlugins']) => {
+    const { tree } = makeTree([], { instance: new FakeInstance({ ...valueOf([lineOnly]), dataFolderPlugins }) });
+    const [row] = await tree.getChildren();
+    return tree.getTreeItem(present(row, 'the sole row')).collapsibleState;
+  };
+
+  it('has no expander once the Data folder is listed without it', async () => {
+    expect(await collapsibleStateWith({ kind: 'listed', names: new Set() })).toBe(vscode.TreeItemCollapsibleState.None);
+  });
+
+  it('keeps its chevron while the Data folder cannot be listed, so the records mEdit holds still show', async () => {
+    expect(await collapsibleStateWith({ kind: 'unreadable', reason: 'EACCES' })).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+  });
+});
+
 describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
   it('never asks the record browser before any reconcile has landed, answering "still indexing" instead', async () => {
     const { tree, client } = makeTree([A_ROW()]);
