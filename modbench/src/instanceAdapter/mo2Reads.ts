@@ -8,8 +8,9 @@ import { isArchiveName } from './archiveNames';
 import { parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
-import { readGameName, readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
-import { gameReleaseForGame, loadedWithNoLineOf } from '../tables/gamePaths';
+import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
+import { loadedWithNoLineOf } from '../tables/gamePaths';
+import { gameOfSettings } from './mo2Game';
 import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from './gameFolder/dataFolder';
 import { factsOf, get, isRepository, listDir, readOrAbsent, readOrReason, stampOf } from './files';
 import {
@@ -80,12 +81,8 @@ async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile
   }));
 }
 
-// The tables key each release on the game's name as `gameName=` spells it.
-const gameOf = (gameName: string) => ({ gameName, gameRelease: gameReleaseForGame(gameName) });
-
 const GAME_PATH_PLACE = `${SETTINGS_FILE_NAME}'s gamePath`;
 
-// A configuration that names no gamePath names no folder; the resolver reads that as the manager having no answer.
 function gamePathOf(iniText: string): string | undefined {
   try {
     return readGamePath(iniText);
@@ -100,7 +97,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
     ...mo2Archives(context),
     async settings() {
       const iniText = await get(settingsFile(instanceRoot));
-      const game = gameOf(readGameName(iniText));
+      const game = gameOfSettings(iniText);
       return {
         profile: readSelectedProfile(iniText),
         ...game,

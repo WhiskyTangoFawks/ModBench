@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import {
-  gameFolderResolver, normalizeGamePath, type GameDetectors, type GameFolderResolver,
+  gameFolderResolver, normalizeGamePath, type GameDetectors, type ManagerGamePath,
 } from '../gameFolderResolver';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import { documentsFolder } from '../documentsFolder';
@@ -14,8 +14,8 @@ const noDetectPrefix = () => Promise.resolve(null);
 const RELEASE_WITH_STEAM_FACTS = 'Fallout4';
 const GAME_PATH_PLACE = "the manager's game path";
 
-const managerNaming = (path?: string, release: string | undefined = RELEASE_WITH_STEAM_FACTS): Parameters<GameFolderResolver>[0] => ({ path, place: GAME_PATH_PLACE, release });
-const managerNamingNoRelease = (): Parameters<GameFolderResolver>[0] => ({ path: undefined, place: GAME_PATH_PLACE, release: undefined });
+const managerNaming = (path?: string, ...release: [] | [string | undefined]): ManagerGamePath =>
+  ({ path, place: GAME_PATH_PLACE, release: release.length === 0 ? RELEASE_WITH_STEAM_FACTS : release[0] });
 
 const SETTING_PLACE = `the game folder setting, ${GAME_FOLDER_SETTING_ID}`;
 const STEAM_PLACE = 'the Steam install';
@@ -237,7 +237,7 @@ describe('the game folder resolver', () => {
   });
 
   it('answers not found for a game the tables hold no Steam facts for, rather than guessing a folder', async () => {
-    const unknownGame = managerNamingNoRelease();
+    const unknownGame = managerNaming(undefined, undefined);
     let asked = false;
     const detectors: GameDetectors = {
       ...NO_DETECTORS,

@@ -114,7 +114,7 @@ function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened 
         instanceRoot, gameFolderSetting, archives: sevenZip,
       });
       const instance = own(new Instance({
-        adapter, gameFolderSetting: gameFolderSetting.id, window: vscode.window, log: outputChannel,
+        adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
       }));
       return { facts: factsOf(instance), side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },

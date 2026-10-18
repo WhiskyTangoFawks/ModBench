@@ -1,5 +1,4 @@
 // Where the game is: the setting, then the manager's game path, then Steam and Wine detection.
-// Both arrive as values; nothing here reads a setting or a file of the manager's.
 
 import { exec } from 'node:child_process';
 import { dirname, join, posix, win32 } from 'node:path';
@@ -13,7 +12,7 @@ import { errorMessage } from '../../ports/errorMessage';
 import type { GameFolder, GameFolderLook, GameFolderSetting } from '../instanceAdapter';
 
 // What the mod manager says about where the game is, read by the manager from its own configuration.
-interface ManagerGamePath {
+export interface ManagerGamePath {
   // As the manager spells it, a Windows path under Wine; undefined when it names none.
   readonly path: string | undefined;
   readonly place: string;

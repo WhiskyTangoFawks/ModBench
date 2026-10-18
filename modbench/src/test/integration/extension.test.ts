@@ -1735,7 +1735,7 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
   });
 });
 
-describe('The game-directory setting reaches the Instance as a recompute', () => {
+describe('The game folder setting reaches the Instance as a recompute', () => {
   let providing = '';
   let empty = '';
 

@@ -60,7 +60,7 @@ function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: Instan
   };
   const instance = new Instance({
     adapter: wrap(fake.adapter),
-    gameFolderSetting: GAME_FOLDER_SETTING_ID,
+    gameFolderSettingId: GAME_FOLDER_SETTING_ID,
     window,
     log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => errorLines.push(line) },
   });

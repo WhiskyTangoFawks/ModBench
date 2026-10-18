@@ -72,7 +72,7 @@ describe('a rename while a recompute is reading', () => {
       },
     };
     instance = new Instance({
-      gameFolderSetting: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} },
+      gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} },
       adapter: { ...writer, reading: () => readInstance(holdingSource) },
     });
     const { pluginSync } = instanceSyncs({

@@ -18,7 +18,7 @@ export { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder } from './a
 export { samePath } from './samePath';
 export { sevenZip } from './sevenZip';
 
-/** The setting that names the game folder outright, which the composition root passes in: its id
+/** The setting that names the game folder outright: its id
  *  is what fixes a folder not found, its value is read fresh on each resolve, and a change is heard
  *  through `changed`. */
 export interface GameFolderSetting {

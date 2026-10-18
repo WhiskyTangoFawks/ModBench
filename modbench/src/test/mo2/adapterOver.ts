@@ -23,15 +23,15 @@ export interface AdapterAnswers {
   /** What every archive holds; none when the test fixes no reader. */
   archives?: ArchiveReader;
   /** The setting that names the game's folder. */
-  gameFolderSetting?: string;
+  gameFolderSettingValue?: string;
   gameFolderSettingChanged?: (listener: () => void) => Subscription;
   detectors?: GameDetectors;
 }
 
 /** MO2's context over `root`, detecting no game install, with the answers a test fixes in place. */
 export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Context {
-  const { gameFolder, downloadsFolder, gameFolderSetting, gameFolderSettingChanged, detectors = NO_DETECTORS } = answers;
-  const setting = fixedGameFolderSetting(gameFolderSetting, gameFolderSettingChanged);
+  const { gameFolder, downloadsFolder, gameFolderSettingValue, gameFolderSettingChanged, detectors = NO_DETECTORS } = answers;
+  const setting = fixedGameFolderSetting(gameFolderSettingValue, gameFolderSettingChanged);
   return {
     instanceRoot: root,
     resolveGameFolder: gameFolder !== undefined

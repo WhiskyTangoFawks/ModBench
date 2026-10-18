@@ -140,7 +140,7 @@ interface InstanceOptions {
   /** The one reader of the instance; each recompute reads its settings once. */
   adapter: InstanceAdapter;
   /** The id of the setting that names the game folder, for a game folder not yet read. */
-  gameFolderSetting: string;
+  gameFolderSettingId: string;
   window: FocusWindow;
   log: Log;
 }
@@ -171,7 +171,7 @@ function pathsOf(
   };
 }
 
-const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>, gameFolderSetting: string): InstanceValue => ({
+const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>, gameFolderSettingId: string): InstanceValue => ({
   mods: [],
   modGroups: { ungrouped: [], groups: [] },
   modFolders: [],
@@ -192,7 +192,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>, gameFo
   gameRelease: undefined,
   nexusDomainOf: nexusDomainForMetaGame,
   // Not read yet reads as not found, so a view that says not found waits for sequence 1.
-  gameFolder: { kind: 'notFound', looked: [], setting: gameFolderSetting },
+  gameFolder: { kind: 'notFound', looked: [], setting: gameFolderSettingId },
   dataFolderPlugins: { kind: 'unresolved' },
   pluginsLoadedWithNoLine: undefined,
   loadOrderSnapshot: undefined,
@@ -229,7 +229,7 @@ export class Instance implements Subscription {
   private readonly told = new Map<NoteKind, ReadonlySet<string>>();
 
   constructor(private readonly options: InstanceOptions) {
-    this.current = emptyValue(options.adapter, options.gameFolderSetting);
+    this.current = emptyValue(options.adapter, options.gameFolderSettingId);
     this.changes = options.adapter.subscribe(() => this.schedule());
     let focused = options.window.state.focused;
     this.focus = options.window.onDidChangeWindowState((state) => {

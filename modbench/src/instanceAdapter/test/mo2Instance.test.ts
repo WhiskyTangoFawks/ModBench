@@ -56,16 +56,16 @@ const INI = 'ModOrganizer.ini';
 const DOWNLOAD = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
 const adapterAt = (
-  instanceRoot: string, gameFolderSetting?: string, gameFolderSettingChanged?: (listener: () => void) => Subscription,
+  instanceRoot: string, gameFolderSettingValue?: string, gameFolderSettingChanged?: (listener: () => void) => Subscription,
   archives: ArchiveReader = fakeArchiveReader([]),
 ): InstanceAdapter => mo2InstanceAdapter({
-  instanceRoot, gameFolderSetting: fixedGameFolderSetting(gameFolderSetting, gameFolderSettingChanged), detectors: NO_DETECTORS, archives,
+  instanceRoot, gameFolderSetting: fixedGameFolderSetting(gameFolderSettingValue, gameFolderSettingChanged), detectors: NO_DETECTORS, archives,
 });
 
 const watchedOver = (context: Mo2Context): ReadingSource & Pick<InstanceAdapter, 'subscribe'> =>
   ({ ...readingSource(context), subscribe: (listener) => context.watch.subscribe(listener) });
 
-const sourceAt = (instanceRoot: string, gameFolderSetting?: string): ReadingSource => readingSource(contextOver(instanceRoot, { gameFolderSetting }));
+const sourceAt = (instanceRoot: string, gameFolderSettingValue?: string): ReadingSource => readingSource(contextOver(instanceRoot, { gameFolderSettingValue }));
 
 async function installHeld(root: string, target: InstallTarget): Promise<{ extraction: string; settle: () => Promise<void> }> {
   const release = fakeArchiveReader(['New.esp']);
@@ -472,10 +472,15 @@ describe('the MO2 Instance adapter', () => {
       }
     });
 
-    it('answers each place it looked when no game folder is found', async () => {
+    it("answers the settings' own gamePath as a place it looked, not set, when the settings hold none", async () => {
+      await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n');
+
       const folder = await (await source.settings()).gameFolder();
 
-      expect(folder.kind).toBe('notFound');
+      expect(folder).toMatchObject({
+        kind: 'notFound',
+        looked: expect.arrayContaining([{ place: "ModOrganizer.ini's gamePath", answer: 'not set' }]) as unknown,
+      });
     });
 
     it('lists only the files install can take, with their metadata parsed: no folder, no partial download, no lone metadata', async () => {
@@ -1215,7 +1220,7 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-game-'));
       try {
         await mkdir(join(game, 'Data'));
-        const watched = watchedOver(contextOver(root, { gameFolderSetting: game }));
+        const watched = watchedOver(contextOver(root, { gameFolderSettingValue: game }));
         watched.subscribe(() => undefined);
 
         await (await watched.settings()).gameFolder();
@@ -1232,7 +1237,7 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-ccc-'));
       try {
         await mkdir(join(game, 'Data'));
-        const watched = watchedOver(contextOver(root, { gameFolderSetting: game }));
+        const watched = watchedOver(contextOver(root, { gameFolderSettingValue: game }));
         watched.subscribe(() => undefined);
 
         await (await watched.settings()).gameFolder();
