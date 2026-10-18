@@ -125,6 +125,10 @@ const otherDeps = () => ({
     pluginsView: 'modbench.pluginListTree', say: () => undefined, saveUnsavedPluginSource: () => Promise.resolve([]),
     registerRepositories: () => Promise.resolve(),
   },
+  manifestGestures: {
+    commands: { updateManifest: vi.fn(), restoreFromManifest: vi.fn(), whatRestoreDestroys: vi.fn() }, say: () => undefined,
+    focusedView: { id: () => undefined, selection: () => [] },
+  },
 });
 
 const silentChannel = { error: () => undefined, info: () => undefined };
@@ -211,6 +215,7 @@ describe('the Mods view registers its own gestures', () => {
     'modbench.mod.rename', 'modbench.mod.uninstall', 'modbench.mod.enable', 'modbench.mod.move', 'modbench.mod.createEmpty',
     'modbench.mod.openFolder', 'modbench.mod.goToMod', 'modbench.mod.compareFile', 'modbench.mod.openConflicts', 'modbench.mod.sync',
     'modbench.mod.install', 'modbench.mod.viewOnNexus', 'modbench.mod.decompileAndCommit', 'modbench.mod.build',
+    'modbench.mod.updateManifest', 'modbench.mod.restoreFromManifest', 'modbench.modList.updateManifestHere', 'modbench.modList.restoreFromManifestHere',
   ])('registers %s with the view', (command) => {
     createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
     expect(h.state.commands.has(command)).toBe(true);

@@ -26,6 +26,7 @@ import { registerGoToModCommand } from './goToMod';
 import { registerBuildCommand } from './buildCommand';
 import { BuildProblems } from './buildProblems';
 import { registerDecompileAndCommitCommand } from './decompileAndCommitCommand';
+import { registerManifestGestures } from './manifestGestures';
 import { registerConflictTable } from './conflictTableEditor';
 import {
   modsCopyValueText, registerCreateEmptyModCommand, registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands,
@@ -46,6 +47,14 @@ interface SourceGestureDeps {
   registerRepositories: () => Promise<void>;
 }
 
+interface ManifestDeps {
+  commands: Parameters<typeof registerManifestGestures>[0]['commands'];
+  /** The Toolbox's message line, where update manifest and restore from manifest say their phase. */
+  say: (message: string | undefined) => void;
+  /** The palette has no clicked row, so it takes the focused view's selection. */
+  focusedView: Parameters<typeof registerManifestGestures>[0]['focusedView'];
+}
+
 interface ModsViewDeps {
   instance: InstanceView & Pick<Instance, 'refresh' | 'sameCopies'>;
   commands: ModCommands;
@@ -61,6 +70,7 @@ interface ModsViewDeps {
   /** Mod sync, whose failure the view's message line says. */
   modSync: Sync;
   sourceGestures: SourceGestureDeps;
+  manifestGestures: ManifestDeps;
   /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
   modStatus: { push: Pick<MEditClient, 'onNotification' | 'onReconnected'>; readStatus: ReadModStatus };
 }
@@ -122,7 +132,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       commands, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
       log,
     }),
-    ...registerSourceGestures(deps, provider),
+    ...registerSourceGestures(deps, provider), ...registerManifestGestures({ ...deps.manifestGestures, instance, reporter: reporterFor('modlist'), ask }),
     ...registerModEnableCommands(commands, instance, () => view.selection, reporterFor('mod.enableDisable')),
     ...registerFileExclusionCommands(commands, instance, () => view.selection, reporterFor('mod.excludeFile')),
     registerModMoveCommand(

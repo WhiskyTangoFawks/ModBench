@@ -25,7 +25,6 @@ import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapte
 import { serveAgent } from './agent/agentServer';
 import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onStringsLanguageChange, onTerminalEnvChange, stringsLanguage } from './workspaceConfig';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
-import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';
@@ -142,6 +141,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
+  const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   const modlist = modlistRepositoryCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot), trash });
   const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
   const mods = own(createModsView({
@@ -157,6 +157,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
       registerRepositories: deps.registerRepositories,
     },
+    manifestGestures: { commands: modlist, say: (message) => { toolboxProvider.say(message); }, focusedView: deps.focusedView },
     modStatus: { push: client, readStatus },
   }));
   const { editing } = plugins;
@@ -166,13 +167,9 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(loadOrderPutOnEachValue(instance, putLoadOrder));
   own(loadOrderPutOnEachLanguageChange(onStringsLanguageChange, instance, putLoadOrder));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
-  const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
   own(publishRepository(instance, instanceRoot));
-  ownAll(own, registerModlistCommands({
-    commands: modlist,
-    instance, reporter: reporterFor('modlist'), ask, say: (message) => { toolboxProvider.say(message); }, focusedView: deps.focusedView, modsView: MODS_KEY_ARGS.view,
-  }));
+  ownAll(own, registerModlistCommands({ commands: modlist, instance, reporter: reporterFor('modlist') }));
   own(deps.focusedView.follow('modbench.modList', mods.view));
   own(deps.focusedView.follow('modbench.pluginListTree', plugins.followed));
   own(deps.focusedView.follow('modbench.downloads', downloadsView));
