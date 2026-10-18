@@ -12,7 +12,7 @@ As a user, I want:
 2. My agent to edit plugin source as files, and to change the mod manager's files only through the gestures I use. A question the files cannot answer, it asks Modbench. Cites: Existing tools; Orthogonality
 3. My agent's changes to reach every view as mine do. Cites: common, A view, story 2; ADR-0015
 4. To approve my agent's requests to Modbench as I approve any of its tools, in my agent's own way. Modbench adds no approval of its own, and a gesture my agent requests does not confirm: my approval of the request stands in for it. This is an exception to commands.md, Principles, Confirm what destroys. Cites: VS Code's interaction; Minimal by default
-5. Modbench to take one port for my agent, the same in every workspace unless I set another for a workspace, so two windows on two instances each have their own. A window that cannot take its port says so, and names the setting.
+5. While an instance is open, Modbench to take one port for my agent, the same in every workspace unless I set another for a workspace, so two windows on two instances each have their own. A window that cannot take its port says so, and names the setting.
 6. My agent to learn Modbench from Modbench: what plugin source holds, how each object is named, and which job is a file edit, which a gesture and which a script. I set up nothing to teach it. Cites: Minimal by default
 7. A gesture with a force Option to refuse each item my agent's request names that would lose what neither git nor the trash keeps. The refusal lists what the item would lose and names force, and my agent requests it again with force once I agree, as git refuses a checkout over my changes until it is forced. This is an exception to story 4. Cites: Never silently wrong; Existing tools
 
