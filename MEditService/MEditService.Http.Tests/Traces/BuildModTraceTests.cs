@@ -71,8 +71,8 @@ public sealed class BuildModTraceTests : HostedTests
         Assert.Equal(0.5, await HeightMaxOfTheWrittenBytes(SecondPlugin, otherFormKey), 3);
 
         var progress = await stream.EventsUntil(
-            "build-progress", e => e.GetProperty("buildProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
-        Assert.Contains(progress, e => e.GetProperty("buildProgress").GetProperty("mod").GetString() == Origin);
+            "build-progress", e => e.GetProperty("modlistProgress").GetProperty("mod").ValueKind == JsonValueKind.Null);
+        Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Origin);
     }
 
     [Fact]

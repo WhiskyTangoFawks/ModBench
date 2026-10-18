@@ -1010,13 +1010,6 @@ export interface components {
             version?: string | null;
             isSubmodule: boolean;
         };
-        BuildProgress: {
-            mod?: string | null;
-            /** Format: int32 */
-            modsDone: number;
-            /** Format: int32 */
-            modsTotal: number;
-        };
         /** @enum {string} */
         BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset";
         BuildRequest: {
@@ -1481,7 +1474,6 @@ export interface components {
             sequence: number;
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
             initProgress?: components["schemas"]["InitProgress"] | null;
-            buildProgress?: components["schemas"]["BuildProgress"] | null;
             changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
             pluginWithUnreadableSources?: components["schemas"]["PluginWithUnreadableSource"][] | null;
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;

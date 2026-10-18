@@ -221,6 +221,22 @@ public sealed class GitMissingApiTests : HostedTests
         Assert.Equal(before, FilesOutsideGit(modFolder));
     }
 
+    [Fact]
+    public async Task BuildingASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndWritesNothing()
+    {
+        using var fx = await SourceMod("trace-build-without-git");
+        var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
+        var before = FilesOutsideGit(modFolder);
+
+        var response = await WithGitMissing(() => Client.Build([(Origin, modFolder)], Path.Combine(fx.Root, "stat-cache")));
+
+        var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
+        Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
+        Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
+        Assert.Equal(before, FilesOutsideGit(modFolder));
+        Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Build", StringComparison.Ordinal));
+    }
+
     private async Task<ScatteredFixtureData> SourceMod(string prefix)
     {
         var fx = new PluginFixtureBuilder(prefix)
