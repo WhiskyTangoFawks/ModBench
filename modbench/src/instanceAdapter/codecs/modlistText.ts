@@ -73,7 +73,8 @@ export function setEnabledInText(text: string, modName: string, enabled: boolean
     modLineAt(lines, modName);
     return lines.map((line) => {
       const name = nameOfLine(line);
-      return name !== undefined && modNameKey(name) === modNameKey(modName) ? (enabled ? '+' : '-') + name : line;
+      if (name === undefined || modNameKey(name) !== modNameKey(modName)) return line;
+      return (enabled ? '+' : '-') + name;
     });
   });
 }
