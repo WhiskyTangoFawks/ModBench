@@ -19,8 +19,11 @@ import { mo2PluginRename } from './mo2PluginRename';
 import { mo2Installation } from './mo2Installation';
 import { mo2Reads, readingSource, readInstance } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
+import { programRunning } from './processes';
 import { hashIndex } from './hashIndex';
 import { hashIndexDir, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
+
+const MO2_PROGRAM = 'ModOrganizer.exe';
 
 interface Mo2Machine {
   gameFolderSetting: GameFolderSetting;
@@ -48,6 +51,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
     resolveDownloadsFolder: downloadsDirectoryResolver(options.detectors),
     resolveMyGames: myGamesResolver(instanceRoot, options.detectors ?? STEAM),
     watch: mo2Watch(instanceRoot, options.gameFolderSetting.changed),
+    mo2Running: () => programRunning(MO2_PROGRAM),
   };
   const hashes = hashIndex(hashIndexDir(instanceRoot), archives);
   const names: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };

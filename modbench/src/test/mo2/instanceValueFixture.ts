@@ -23,6 +23,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     downloads: { kind: 'listed', rows: [] },
     activeProfile: 'Default',
     managerNames: { manager: 'MO2', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
+    managerRunning: { kind: 'notRunning' },
     gameName: 'Fallout 4',
     gameRelease: 'Fallout4',
     nexusDomainOf: nexusDomainForMetaGame,
