@@ -81,8 +81,11 @@ function tokenLeaks(sourceText: string, fileName: string): string[] {
 
 const isCodecOrItsTest = (path: string, { file, test }: Codec): boolean => path.endsWith(sep + file) || path.endsWith(sep + test);
 
+const INTEGRATION_SUITE_WRITING_A_DOWNLOAD_DIRECTORY_THROUGH_THE_CODEC = join('test', 'integration', 'extension.test.ts');
+
 function allowedTokens(path: string): ReadonlySet<string> {
   if (basename(path) === THIS_FILE_HOLDING_EVERY_TOKEN_AS_DATA_NOT_READING_ANY_INSTANCE_FILE) return new Set(TOKENS);
+  if (path.endsWith(sep + INTEGRATION_SUITE_WRITING_A_DOWNLOAD_DIRECTORY_THROUGH_THE_CODEC)) return new Set(['download_directory']);
   return new Set(FORMATS.filter((format) => format.codecs.some((codec) => isCodecOrItsTest(path, codec))).flatMap((f) => f.tokens));
 }
 
