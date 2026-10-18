@@ -269,6 +269,26 @@ describe('the agent server, given an instance value', () => {
     expect(refusal.isError).toBe(true);
     expect(refusal.text).toContain('not been read');
   });
+
+  it('answers beside the last good read with the message every view shows, and with none once a read lands', async () => {
+    const instance = new FakeInstance(VALUE);
+    const client = await clientOf(instance);
+    const blocks = async () => CallToolResultSchema.parse(await client.callTool({ name: 'list_profiles' })).content.map((block) => block.type === 'text' ? block.text : '');
+
+    instance.readFailure = 'plugins.txt is half written';
+    expect((await blocks()).slice(1)).toEqual(['Showing the last good read: plugins.txt is half written']);
+
+    instance.publish(VALUE);
+    expect(await blocks()).toHaveLength(1);
+  });
+
+  it('refuses a read whose first read failed with the failure, as the view\'s error row does', async () => {
+    const instance = new FakeInstance(VALUE, 0);
+    instance.readFailure = 'Modbench does not support Oblivion';
+    const client = await clientOf(instance);
+
+    expect(await call(client, 'list_profiles')).toEqual({ isError: true, text: 'Failed to load: Modbench does not support Oblivion' });
+  });
 });
 
 const providing = (relativePath: string, ...providers: ConflictEntry['providers']): ConflictEntry =>
