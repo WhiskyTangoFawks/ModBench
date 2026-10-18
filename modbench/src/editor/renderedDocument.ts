@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { samePluginAddress } from '../wire/pluginAddress';
-import { followReportedCopies, type CopyChanged } from './recordCopy';
+import type { CopyChanged } from '../wire/recordCopy';
+import { followReportedCopies } from './recordCopy';
 import { RENDERED_DOCUMENT_SCHEME, copyOf } from '../textDocuments/recordDocument';
 import { renderedCopy } from '../drivingLib/renderedCopy';
 

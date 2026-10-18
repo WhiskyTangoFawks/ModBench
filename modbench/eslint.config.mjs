@@ -318,7 +318,7 @@ export default defineConfig(
         rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('watcher')) },
     },
     {
-        files: ['src/downloads/**/*.ts', 'src/drivingLib/**/*.ts'],
+        files: ['src/downloads/**/*.ts', 'src/drivingLib/**/*.ts', 'src/editor/**/*.ts'],
         ignores: NOT_PRODUCTION,
         rules: { 'no-restricted-syntax': restrictedSyntax([...EVERYWHERE_IN_SRC, 'hostFs']) },
     },
