@@ -175,6 +175,20 @@ describe('a tell that threw', () => {
   });
 });
 
+describe('telling a launch that threw', () => {
+  it('reaches the Output once, naming the launch', async () => {
+    const { client, land, logged } = wired('stopped');
+    client.answerStart(() => Promise.resolve().then(() => { client.setStatus('running'); }));
+    client.latestLoadOrder = () => Promise.reject(new Error('boom'));
+
+    void client.start();
+    land(valueWith('A.esp'));
+    await until(() => logged.length > 0);
+
+    expect(logged).toEqual(['[loadOrder] telling the launch of mEdit threw: boom']);
+  });
+});
+
 describe('a recompute after a failed launch', () => {
   it('neither launches mEdit again nor tells nor shows anything', async () => {
     const { client, told, land, around } = wired('stopped');

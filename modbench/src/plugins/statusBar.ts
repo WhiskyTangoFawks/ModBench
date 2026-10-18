@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import type { BackendStatus, MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
-import { errorMessage } from '../ports/errorMessage';
 
 const STATUS_TEXT: Record<BackendStatus, string> = {
   starting:     '$(loading~spin) mEdit: Starting…',
@@ -36,7 +35,7 @@ export function createStatusBar(
         if (outcome.outcome !== 'failed') return;
         if (outcome.error === undefined) reportStopped('enterEditing');
         else reportStopped('launch', outcome.error);
-      }).catch((e: unknown) => { reporterFor('launch').report('error', STOPPED, errorMessage(e)); });
+      });
     }),
   ];
   return {
