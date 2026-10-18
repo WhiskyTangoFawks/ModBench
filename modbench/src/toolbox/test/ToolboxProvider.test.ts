@@ -135,10 +135,10 @@ describe('the Toolbox view, given the game folder not found', () => {
   it('names each place Modbench looked, and the setting that fixes it, in the Game row\'s tooltip', () => {
     expect(row(new FakeInstance(NOT_FOUND), 'Game').tooltip).toBe([
       'Game folder not found. Modbench looked at:',
-      'the game folder setting, modbench.mods.gameDirectory: not set',
+      'the game folder setting, modbench.mods.gameFolder: not set',
       "ModOrganizer.ini's gamePath: not set",
       'the Steam install: the game is in no Steam library',
-      'Set modbench.mods.gameDirectory to the game folder to fix it.',
+      'Set modbench.mods.gameFolder to the game folder to fix it.',
     ].join('\n'));
   });
 

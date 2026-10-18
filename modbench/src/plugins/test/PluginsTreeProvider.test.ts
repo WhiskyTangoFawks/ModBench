@@ -1392,7 +1392,7 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
 });
 
 describe('PluginsTreeProvider — the message line takes the first message that holds (common.md, States 5; plugins.md, States 1, 5 and 6)', () => {
-  const GAME_FOLDER_MESSAGE = "Game folder not found: set modbench.mods.gameDirectory. The Toolbox's Game row names each place Modbench looked.";
+  const GAME_FOLDER_MESSAGE = "Game folder not found: set modbench.mods.gameFolder. The Toolbox's Game row names each place Modbench looked.";
   const indexFailed = { kind: 'failed', message: 'the record index threw' } as const;
 
   const withoutGameFolder = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]) =>

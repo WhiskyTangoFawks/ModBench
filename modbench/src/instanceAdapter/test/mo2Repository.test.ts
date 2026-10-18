@@ -1,3 +1,4 @@
+import { fixedGameFolderSetting } from '../../test/gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -22,7 +23,7 @@ afterEach(async () => {
 async function instance() {
   root = await mkdtemp(join(tmpdir(), 'modbench-mo2-repository-'));
   return mo2InstanceAdapter({
-    instanceRoot: root, gameDirectoryOverrides: () => ({}), gameDirectoryChanged: () => ({ dispose: () => {} }), detectors: NO_DETECTORS,
+    instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS,
     archives: fakeArchiveReader([]),
   });
 }

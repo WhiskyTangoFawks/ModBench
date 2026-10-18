@@ -12,9 +12,9 @@ const FOUND = instanceValueFixture({ gameFolder: { kind: 'found', root: '/game',
 const NOT_FOUND = instanceValueFixture({ gameFolder: GAME_FOLDER_NOT_FOUND });
 
 const LINE =
-  '[instance] Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameDirectory: not set; ' +
+  '[instance] Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameFolder: not set; ' +
   "ModOrganizer.ini's gamePath: not set; the Steam install: the game is in no Steam library. " +
-  'Set modbench.mods.gameDirectory to the game folder to fix it.';
+  'Set modbench.mods.gameFolder to the game folder to fix it.';
 
 function logged(instance: FakeInstance): string[] {
   const lines: string[] = [];
@@ -68,8 +68,8 @@ describe('the game folder not found, in the Output', () => {
     const lines = logged(instance);
     const elsewhere = instanceValueFixture({
       gameFolder: {
-        kind: 'notFound', setting: 'modbench.mods.gameDirectory',
-        looked: [{ place: 'the game folder setting, modbench.mods.gameDirectory', answer: '/moved has no Data folder' }],
+        kind: 'notFound', setting: 'modbench.mods.gameFolder',
+        looked: [{ place: 'the game folder setting, modbench.mods.gameFolder', answer: '/moved has no Data folder' }],
       },
     });
 
@@ -78,8 +78,8 @@ describe('the game folder not found, in the Output', () => {
 
     expect(lines).toEqual([
       LINE,
-      '[instance] Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameDirectory: ' +
-        '/moved has no Data folder. Set modbench.mods.gameDirectory to the game folder to fix it.',
+      '[instance] Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameFolder: ' +
+        '/moved has no Data folder. Set modbench.mods.gameFolder to the game folder to fix it.',
     ]);
   });
 });

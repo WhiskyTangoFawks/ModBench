@@ -18,13 +18,13 @@ export { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder } from './a
 export { samePath } from './samePath';
 export { sevenZip } from './sevenZip';
 
-/** The setting that names the game folder outright, and so the one that fixes a folder not found. */
-export const GAME_FOLDER_SETTING = 'modbench.mods.gameDirectory';
-
-/** What the user set, read fresh on each resolve by whoever built the resolver. */
-export interface GameDirectoryOverrides {
-  /** The game folder outright (`GAME_FOLDER_SETTING`). */
-  gameDirectory?: string;
+/** The setting that names the game folder outright: its id
+ *  is what fixes a folder not found, its value is read fresh on each resolve, and a change is heard
+ *  through `changed`. */
+export interface GameFolderSetting {
+  readonly id: string;
+  readonly value: () => string | undefined;
+  readonly changed: (listener: () => void) => Subscription;
 }
 
 /** One place Modbench looked for the game folder, and what it found there. */
