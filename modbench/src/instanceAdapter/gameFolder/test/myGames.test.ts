@@ -116,7 +116,7 @@ describe('the My Games folder of a release', () => {
     });
 
     it('does not ask Steam for a release with no app id', async () => {
-      const resolved = await myGamesResolver(base, detectors({ winePrefix: () => Promise.reject(new Error('asked')) }), 'linux')('Oblivion');
+      const resolved = await myGamesResolver(base, detectors({ winePrefix: () => Promise.reject(new Error('asked')) }), 'linux')('SkyrimVR');
 
       expect(resolved).toEqual({
         kind: 'notFound',

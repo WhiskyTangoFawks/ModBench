@@ -353,7 +353,7 @@ describe('the MO2 Instance adapter', () => {
           ...source,
           settings: async () => {
             const settings = await source.settings();
-            await writeFile(join(root, INI), (await text(root, INI)).replace('gameName=Fallout 4', 'gameName=Rewritten'));
+            await writeFile(join(root, INI), (await text(root, INI)).replace('gameName=Fallout 4', 'gameName=Skyrim VR'));
             return settings;
           },
         };
@@ -361,7 +361,7 @@ describe('the MO2 Instance adapter', () => {
         const reading = await readInstance(rewriting);
 
         expect(reading.gameName).toBe('Fallout 4');
-        expect((await adapter.reading()).gameName).toBe('Rewritten');
+        expect((await adapter.reading()).gameName).toBe('Skyrim VR');
       });
 
       it('hands over a link it cannot follow, by path', async () => {
@@ -448,13 +448,20 @@ describe('the MO2 Instance adapter', () => {
       expect(adapter.names).toEqual({ manager: 'MO2', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' });
     });
 
-    it('answers no release for a game the tables hold none for, not one guessed from the name, which has the backend answer about another game', async () => {
-      await writeFile(join(root, INI), '[General]\r\ngameName=Morrowind\r\nselected_profile=@ByteArray(Default)\r\n');
+    it.each(['Morrowind', 'Oblivion', 'Skyrim'])('refuses an instance of %s, which Modbench does not support, naming it', async (game) => {
+      await writeFile(join(root, INI), `[General]\r\ngameName=${game}\r\nselected_profile=@ByteArray(Default)\r\n`);
 
-      const settings = await source.settings();
+      await expect(source.settings()).rejects.toThrow(`Modbench does not support ${game}`);
+    });
 
-      expect(settings.gameName).toBe('Morrowind');
-      expect(settings.gameRelease).toBeUndefined();
+    it('writes no file of an instance it refuses', async () => {
+      await writeFile(join(root, INI), '[General]\r\ngameName=Oblivion\r\nselected_profile=@ByteArray(Default)\r\n');
+      const held = async (): Promise<string[]> => Promise.all(['modlist.txt', 'plugins.txt', 'loadorder.txt'].map((name) => text(join(root, 'profiles', 'Default'), name).catch(() => '')));
+      const before = [await text(root, INI), ...await held()];
+
+      await expect(adapter.reading()).rejects.toThrow('Modbench does not support Oblivion');
+
+      expect([await text(root, INI), ...await held()]).toEqual(before);
     });
 
     it('rejects when the settings name no game', async () => {
@@ -928,12 +935,6 @@ describe('the MO2 Instance adapter', () => {
         expect((await source.archiveList('Default', gameFolder(), release)).archives).toEqual([]);
       });
 
-      it('lists after the INIs\' archives the ones the release loads whatever they list', async () => {
-        await writeFile(join(game, 'Fallout_default.ini'), '[Archive]\nSArchiveList=Fallout - Textures.bsa, Fallout - Meshes.bsa\n');
-
-        expect((await source.archiveList('Default', found(), 'FalloutNV')).archives)
-          .toEqual(['Fallout - Textures.bsa', 'Fallout - Meshes.bsa', 'Update.bsa']);
-      });
     });
 
     describe('the game folder\'s archives and strings files', () => {
@@ -1943,7 +1944,7 @@ describe('the MO2 Instance adapter', () => {
         });
 
         it('reads back as what it was handed', async () => {
-          const written = { version: '3.0', installationFile: { name: 'Patch-3.7z', page: 'https://www.nexusmods.com/newvegas/mods/5?tab=files&file_id=6' } };
+          const written = { version: '3.0', installationFile: { name: 'Patch-3.7z', page: 'https://www.nexusmods.com/starfield/mods/5?tab=files&file_id=6' } };
 
           await adapter.writeModMetadata('Brand New', written);
 
