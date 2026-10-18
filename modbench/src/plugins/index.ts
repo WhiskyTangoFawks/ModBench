@@ -39,8 +39,7 @@ interface PluginsOnInstance extends vscode.Disposable {
   copyValue: PluginsView['copyValue'];
   /** The Plugins view's message line, where another view's gesture says its phase. */
   say: PluginsView['progress']['say'];
-  /** How the launch and the load order's puts show in the Plugins view. */
-  editingShown: Pick<EditingDeps, 'around' | 'onPut'>;
+  editingInPluginsView: Pick<EditingDeps, 'around' | 'onPut'>;
   nextRefill: ReconcileNarrator['nextRefill'];
 }
 
@@ -70,12 +69,12 @@ export function createPlugins(deps: PluginsDeps): Plugins {
         log: (level, msg) => channel[level](msg),
       });
       shown = view;
-      const editingShown = editingView({
+      const editingInPluginsView = editingView({
         narrator: view.narrator, progress: view.progress, log: channel, revealLog: () => channel.show(true), loadOrderPut: view.loadOrderPut,
         reporterFor,
       });
       return {
-        followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, say: view.progress.say, editingShown,
+        followed: view.followed, nameFilter: view.nameFilter, copyValue: view.copyValue, say: view.progress.say, editingInPluginsView,
         nextRefill: () => view.narrator.nextRefill(),
         dispose: () => {
           if (shown === view) shown = undefined;

@@ -43,7 +43,7 @@ export function instanceSyncs({ instance, syncMods, syncPlugins, channel }: Inst
 }
 
 export function registerSyncCommands(
-  register: (command: string, handler: () => unknown) => vscode.Disposable, { modSync, pluginSync }: { modSync: Pick<Sync, 'run'>; pluginSync: Pick<Sync, 'run'> },
+  register: (command: string, handler: () => unknown) => vscode.Disposable, { modSync, pluginSync }: Pick<InstanceSyncs, 'modSync' | 'pluginSync'>,
 ): vscode.Disposable[] {
   return [
     register('modbench.mod.sync', () => modSync.run()),

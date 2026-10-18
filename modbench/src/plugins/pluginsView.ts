@@ -8,7 +8,7 @@ import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
 import type { Instance } from '../instanceLoader/instance';
-import { reportSyncFailures, type Sync, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
+import { reportSyncFailures, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
 import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';
 import { type PluginsTreeNode } from './pluginRows';
 import type { PluginFactsClient } from './pluginFactsFeed';
@@ -55,7 +55,7 @@ export interface PluginsViewDeps {
   recordWrite: RecordWrite;
   sourceEditing: SourceEditing;
   /** Plugin sync, whose failure the view's message line says. */
-  pluginSync: Sync;
+  pluginSync: SyncMessage;
   channel: SyncChannel;
   /** The path of a file at the root of the Data folder, answered by a box this view does not
    *  reference. */

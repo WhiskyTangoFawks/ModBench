@@ -163,7 +163,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     modStatus: { push: client, readStatus },
   }));
   const editing = own(editingFlow({
-    client, instanceRoot, ...plugins.editingShown, reporterFor, log: (line) => outputChannel.error(line),
+    client, instanceRoot, ...plugins.editingInPluginsView, reporterFor, log: (line) => outputChannel.error(line),
   }));
   void editing.enter(instance.landed());
   void client.start();
