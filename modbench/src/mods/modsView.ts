@@ -60,8 +60,8 @@ interface ModsViewDeps {
   nexusRow: () => NexusModRow | undefined;
   /** Mod sync, whose failure the view's message line says. */
   modSync: Sync;
-  /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
   sourceGestures: SourceGestureDeps;
+  /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
   modStatus: { push: Pick<MEditClient, 'onNotification' | 'onReconnected'>; readStatus: ReadModStatus };
 }
 

@@ -9,7 +9,8 @@ import type { Reporter } from '../ports/reporter';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import { MODS_KEY_ARGS } from './gestureEntry';
 import type { BuildProblems } from './buildProblems';
-import { givenByAgent, rowName, targetsOf, viewOf, type ModsGiven } from './sourceGestureTargets';
+import { pluginRowName } from '../wire/pluginAddress';
+import { givenByAgent, targetsOf, viewOf, type ModsGiven } from './sourceGestureTargets';
 
 /** What build needs: the build itself, the Instance loader's refresh, where the diagnostics go, and
  *  how the user is told. */
@@ -113,7 +114,7 @@ function reportBuilt(reporter: Reporter, outcome: BuildOutcome): void {
     const rest = diagnostics > 0 ? ` The rest compiled with ${diagnosticsWords(diagnostics)}` : '';
     reporter.selectionOutcome(`Could not build ${counts.join(' and ')}.${rest}`, {
       landed: outcome.landed.map((built) => built.mod),
-      refused: [...outcome.refused, ...refusedPlugins.map(({ item, reason }) => ({ item: rowName(item), reason })), ...refusedArchives],
+      refused: [...outcome.refused, ...refusedPlugins.map(({ item, reason }) => ({ item: pluginRowName(item), reason })), ...refusedArchives],
     }, (name) => name);
     return;
   }
@@ -163,7 +164,7 @@ function namedBuilt(mods: readonly { mod: string }[], message: { one: string; ma
 
 function refusedInMods(outcome: BuildOutcome): PartialFailure[] {
   return outcome.landed.flatMap(({ mod, refused, archivesRefused }) => [
-    ...refused.map(({ item, reason }) => ({ message: `Could not build "${rowName(item)}" in "${mod}".`, detail: reason, severity: 'log' as const })),
+    ...refused.map(({ item, reason }) => ({ message: `Could not build "${pluginRowName(item)}" in "${mod}".`, detail: reason, severity: 'log' as const })),
     ...archivesRefused.map(({ item, reason }) => ({ message: `Could not pack "${item}" in "${mod}".`, detail: reason, severity: 'log' as const })),
   ]);
 }

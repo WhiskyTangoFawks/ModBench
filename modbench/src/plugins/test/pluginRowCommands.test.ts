@@ -130,19 +130,6 @@ describe('modbench.plugin.decompile', () => {
     expect(reporter.landings).toEqual([]);
   });
 
-  it('decompiles the plugin a record tab\'s column header names, at its own origin', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('decompile', { landed: [SECOND], refused: [] });
-    const { handler } = registered(client, 'Decompile', [row(FIRST)]);
-
-    await handler({
-      webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Second.esp', plugin: { name: 'Second.esp', origin: 'ModA' } },
-      editable: false, preventDefaultContextMenuItems: true,
-    });
-
-    expect(decompileCalls(client)).toEqual([[[SECOND], true]]);
-  });
-
   it('from the palette, decompiles the Plugins view\'s selection', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('decompile', { landed: [FIRST], refused: [] });

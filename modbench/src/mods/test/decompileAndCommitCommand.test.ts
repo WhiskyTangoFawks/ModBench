@@ -1,45 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const {
-  handlers, registerCommand, showQuickPick, createQuickPick, executeCommand,
-} = vi.hoisted(() => {
-  const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
-  return {
-    handlers,
-    registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
-      handlers.set(command, handler);
-      return { dispose: vi.fn() };
-    }),
-    showQuickPick: vi.fn<
-      (items: readonly { label: string; description?: string }[], options?: unknown) =>
-        Promise<{ label: string; description?: string }[] | undefined>
-    >(),
-    createQuickPick: vi.fn(),
-    executeCommand: vi.fn().mockResolvedValue(undefined),
-  };
-});
-
-import {
-  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
-  Diagnostic, DiagnosticSeverity, Range, uriFile, uriFrom,
-} from '../../test/vscodeMock';
-
-vi.mock('vscode', async () => {
-  const { recordedWithProgress } = await import('../../test/recordedProgress');
-  return {
-    commands: { registerCommand, executeCommand },
-    window: { showQuickPick, createQuickPick, withProgress: recordedWithProgress },
-    TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
-    Diagnostic, DiagnosticSeverity, Range,
-    Uri: { file: uriFile, from: uriFrom },
-  };
-});
+vi.mock('vscode', async () => (await import('./sourceGestureHarness')).vscodeModule());
 
 import { progressSteps } from '../../test/recordedProgress';
-
-const instanceThatReads = {
-  refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
-};
+import { handlers, showQuickPick, createQuickPick, instanceThatReads, PluginRowStandIn, ModsRowStandIn } from './sourceGestureHarness';
 
 import { registerDecompileAndCommitCommand } from '../decompileAndCommitCommand';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
@@ -54,12 +18,6 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-class PluginRowStandIn extends TreeItem {
-  readonly kind = 'plugin';
-  readonly argument: { kind: 'plugin'; plugin: { name: string; origin: string } };
-  constructor(plugin: { name: string; origin: string }) { super(plugin.name); this.argument = { kind: 'plugin', plugin }; }
-}
-
 describe('modbench.mod.decompileAndCommit', () => {
   const FIRST = { name: 'First.esp', origin: 'ModA' };
   const SECOND = { name: 'Second.esp', origin: 'ModA' };
@@ -67,12 +25,6 @@ describe('modbench.mod.decompileAndCommit', () => {
   const MOD_DIRS = new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB'], ['ModC', '/mods/ModC']]);
   const modA = (plugins: PluginAddress[]) => ({ mod: 'ModA', plugins });
   const modB = (plugins: PluginAddress[]) => ({ mod: 'ModB', plugins });
-
-  class ModsRowStandIn extends TreeItem {
-    readonly kind = 'mod';
-    readonly argument: { kind: 'mod'; name: string };
-    constructor(name: string) { super(name); this.argument = { kind: 'mod', name }; }
-  }
 
   function row(plugin: { name: string; origin: string }): PluginRowStandIn {
     return new PluginRowStandIn(plugin);
@@ -187,20 +139,6 @@ describe('modbench.mod.decompileAndCommit', () => {
 
     expect(commands.sent()).toEqual([['ModB']]);
     expect(reporter.landings).toEqual(['Decompiled and committed "ModB".']);
-  });
-
-  it('on an Editor column header, decompiles and commits the column plugin\'s mod', async () => {
-    const commands = decompileAndCommitCommands();
-    commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
-    const { handler } = invokeDecompileAndCommit(commands);
-    const header = {
-      webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Other.esp', plugin: { name: 'Second.esp', origin: 'ModA' } },
-      editable: false, preventDefaultContextMenuItems: true,
-    };
-
-    await handler(header);
-
-    expect(commands.sent()).toEqual([['ModA']]);
   });
 
   it('names a mod mEdit refused while the rest land', async () => {

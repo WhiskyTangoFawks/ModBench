@@ -1,15 +1,11 @@
 import type { PluginAddress } from '../client';
+import { pluginRowName } from '../wire/pluginAddress';
 import { modArgumentOf, pluginArgumentOf, rowNameOf } from '../drivingLib/argument';
 import { columnHeaderOf } from '../wire/columnHeader';
 import { argumentOfKind } from '../drivingLib/agentGesture';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Argument } from '../wire/argument';
 import { MODS_KEY_ARGS } from './gestureEntry';
-
-// ADR-0012.
-export function rowName(row: PluginAddress): string {
-  return `${row.name} (${row.origin})`;
-}
 
 export interface ModTargets {
   mods: readonly string[];
@@ -43,7 +39,7 @@ export function targetsOf(rows: readonly unknown[], modOfOrigin: (origin: string
     const plugin = pluginAddressOf(row);
     if (plugin === undefined) { refusedRows.push({ item: rowNameOf(row), reason: NO_MOD_OR_PLUGIN }); continue; }
     const owner = modOfOrigin(plugin.origin);
-    if (owner === undefined) refusedRows.push({ item: rowName(plugin), reason: NOT_IN_A_MOD }); else mods.add(owner);
+    if (owner === undefined) refusedRows.push({ item: pluginRowName(plugin), reason: NOT_IN_A_MOD }); else mods.add(owner);
   }
   return { mods: [...mods], refusedRows };
 }

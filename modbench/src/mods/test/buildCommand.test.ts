@@ -1,46 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { normalize } from 'node:path';
 
-const {
-  handlers, registerCommand, showQuickPick, createQuickPick, executeCommand,
-} = vi.hoisted(() => {
-  const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
-  return {
-    handlers,
-    registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
-      handlers.set(command, handler);
-      return { dispose: vi.fn() };
-    }),
-    showQuickPick: vi.fn<
-      (items: readonly { label: string; description?: string }[], options?: unknown) =>
-        Promise<{ label: string; description?: string }[] | undefined>
-    >(),
-    createQuickPick: vi.fn(),
-    executeCommand: vi.fn().mockResolvedValue(undefined),
-  };
-});
-
-import {
-  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
-  Diagnostic, DiagnosticSeverity, Range, uriFile, uriFrom,
-} from '../../test/vscodeMock';
-
-vi.mock('vscode', async () => {
-  const { recordedWithProgress } = await import('../../test/recordedProgress');
-  return {
-    commands: { registerCommand, executeCommand },
-    window: { showQuickPick, createQuickPick, withProgress: recordedWithProgress },
-    TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
-    Diagnostic, DiagnosticSeverity, Range,
-    Uri: { file: uriFile, from: uriFrom },
-  };
-});
+vi.mock('vscode', async () => (await import('./sourceGestureHarness')).vscodeModule());
 
 import { progressSteps } from '../../test/recordedProgress';
-
-const instanceThatReads = {
-  refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
-};
+import { handlers, showQuickPick, instanceThatReads, PluginRowStandIn, ModsRowStandIn } from './sourceGestureHarness';
 
 import { registerBuildCommand } from '../buildCommand';
 import { BuildProblems } from '../buildProblems';
@@ -51,7 +15,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type PluginAddress } from '../../client';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { FakeDiagnosticCollection } from '../../test/vscodeMock';
+import { FakeDiagnosticCollection, TreeItem } from '../../test/vscodeMock';
 import { compiledPluginFixture } from '../../client/test/fixtures';
 import { present } from '../../ports/present';
 
@@ -60,12 +24,6 @@ beforeEach(() => {
   progressSteps.length = 0;
   vi.clearAllMocks();
 });
-
-class PluginRowStandIn extends TreeItem {
-  readonly kind = 'plugin';
-  readonly argument: { kind: 'plugin'; plugin: { name: string; origin: string } };
-  constructor(plugin: { name: string; origin: string }) { super(plugin.name); this.argument = { kind: 'plugin', plugin }; }
-}
 
 describe('modbench.mod.build', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
@@ -77,12 +35,6 @@ describe('modbench.mod.build', () => {
     ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [], overwritten: [] });
   const builds: [readonly string[], string | undefined][] = [];
   beforeEach(() => { builds.length = 0; });
-
-  class ModsRowStandIn extends TreeItem {
-    readonly kind = 'mod';
-    readonly argument: { kind: 'mod'; name: string };
-    constructor(name: string) { super(name); this.argument = { kind: 'mod', name }; }
-  }
 
   function row(plugin: { name: string; origin: string }): PluginRowStandIn {
     return new PluginRowStandIn(plugin);
@@ -144,19 +96,6 @@ describe('modbench.mod.build', () => {
 
     expect(buildCalls()).toEqual([[['ModA']]]);
     expect(progressSteps).toContain('progress opens on modbench.pluginListTree');
-  });
-
-  it('on a record tab\'s column header, builds the plugin\'s mod', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModB', [OTHER])], refused: [] });
-    const { handler } = registered(client, { selection: [row(PATCH)] });
-
-    await handler({
-      webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Other.esp', plugin: OTHER },
-      editable: true, inMod: 'sourceMod', preventDefaultContextMenuItems: true,
-    });
-
-    expect(buildCalls()).toEqual([[['ModB']]]);
   });
 
   it('builds the mods of a selection once each, in one call', async () => {

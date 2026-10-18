@@ -9,6 +9,7 @@ import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGest
 import type { SelectionResult } from '../pluginCommands/plugins';
 import { selectionArgument } from '../drivingLib/gestureEntry';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
+import { pluginRowName } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 
@@ -19,11 +20,6 @@ export interface PluginsViewProgress {
   while: (work: () => Promise<void>) => Promise<void>;
   /** `undefined` gives the line back to whatever else had something to say. */
   say: (message: string | undefined) => void;
-}
-
-// ADR-0012.
-function rowName(row: PluginAddress): string {
-  return `${row.name} (${row.origin})`;
 }
 
 /** What decompile needs: the call, the Instance loader's refresh, its one confirmation, and how the user
@@ -72,7 +68,7 @@ async function confirmDecompile(ask: AskQuestion, plugins: readonly PluginAddres
     ? await ask(`Decompile "${only.name}" in ${only.origin}? Decompile replaces its source in the working tree from its bytes.`,
       { modal: true }, 'Decompile')
     : await ask(`Decompile ${plugins.length} plugins? Decompile replaces their source in the working tree from their bytes.`,
-      { modal: true, detail: plugins.map(rowName).join('\n') }, 'Decompile');
+      { modal: true, detail: plugins.map(pluginRowName).join('\n') }, 'Decompile');
   return answer === 'Decompile';
 }
 
@@ -80,7 +76,7 @@ function reportDecompiled(reporter: Reporter, outcome: SelectionOutcome<PluginAd
   const [refused] = outcome.refused;
   if (refused !== undefined) {
     const what = total === 1 ? `"${refused.item.name}"` : `${outcome.refused.length} of ${total} plugins`;
-    reporter.selectionOutcome(`Could not decompile ${what}.`, outcome, rowName);
+    reporter.selectionOutcome(`Could not decompile ${what}.`, outcome, pluginRowName);
     return;
   }
   const [only, ...more] = outcome.landed;

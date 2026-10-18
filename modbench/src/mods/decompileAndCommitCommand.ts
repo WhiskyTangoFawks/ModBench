@@ -8,7 +8,8 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import { decompileAndCommitProgressMessage } from './decompileAndCommitProgress';
-import { givenByAgent, rowName, targetsOf, viewOf, type ModsGiven } from './sourceGestureTargets';
+import { pluginRowName } from '../wire/pluginAddress';
+import { givenByAgent, targetsOf, viewOf, type ModsGiven } from './sourceGestureTargets';
 
 export interface DecompileAndCommitDeps {
   /** The Plugins view's message line, which the phase line goes on. */
@@ -36,8 +37,6 @@ export function registerDecompileAndCommitCommand(deps: DecompileAndCommitDeps, 
   return registerAgentGesture('modbench.mod.decompileAndCommit', paletteSelection, gesture, isClickedRow);
 }
 
-// A mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost, so this runs
-// under the Plugins-view progress indicator.
 async function decompileAndCommitMods(
   { progress, instance, commands, onCommitted }: DecompileAndCommitDeps, mods: readonly string[], invokedFrom: string,
 ): Promise<DecompiledAndCommitted> {
@@ -86,7 +85,7 @@ function reportRefused(reporter: Reporter, modCount: number, report: DecompileAn
       : []),
   ];
   reporter.selectionOutcome(`Could not decompile and commit ${counts.join(' and ')}.`, {
-    landed: report.plugins.map(rowName),
+    landed: report.plugins.map(pluginRowName),
     refused: [
       ...report.refusedPlugins,
       ...report.refused,
