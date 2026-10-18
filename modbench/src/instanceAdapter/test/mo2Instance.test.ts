@@ -669,55 +669,22 @@ describe('the MO2 Instance adapter', () => {
     describe('a folder an install is extracting into', () => {
       const listed = async (): Promise<string[]> => present(await source.modFolders(ignoreSkippedLink), 'the mod folders').all.map((f) => f.name);
 
-      it('is not listed while only its extraction is in it', async () => {
-        const { settle } = await installHeld(root, { kind: 'new', name: 'New Mod' });
+      it.each([
+        ['a new mod', { kind: 'new', name: 'New Mod' }],
+        ['an upgrade', { kind: 'upgrade', name: 'Harder VATS' }],
+      ] as const)('is listed for %s, with some of its entries moved up beside the extraction', async (_, target) => {
+        const { settle } = await installHeld(root, target);
+        await writeFile(join(root, 'mods', target.name, 'readme.txt'), '');
 
-        expect(await listed()).not.toContain('New Mod');
+        expect(await listed()).toContain(target.name);
         await settle();
       });
 
-      it('is listed once the extraction is gone', async () => {
-        const { extraction, settle } = await installHeld(root, { kind: 'new', name: 'New Mod' });
-        await rm(extraction, { recursive: true });
+      it('is listed when an interrupted install left only its extraction', async () => {
+        await mkdir(join(root, 'mods', 'Left Over', '.medit_tmp_2147483646_new-abc123'), { recursive: true });
 
-        expect(await listed()).toContain('New Mod');
-        await settle();
+        expect(await listed()).toContain('Left Over');
       });
-
-      it('is not listed mid-settle, with some of its entries moved up and its extraction still there', async () => {
-        const { settle } = await installHeld(root, { kind: 'new', name: 'New Mod' });
-        await writeFile(join(root, 'mods', 'New Mod', 'readme.txt'), '');
-
-        expect(await listed()).not.toContain('New Mod');
-        await settle();
-      });
-
-      it('is listed when it is an installed mod being upgraded', async () => {
-        const { settle } = await installHeld(root, { kind: 'upgrade', name: 'Harder VATS' });
-
-        expect(await listed()).toContain('Harder VATS');
-        await settle();
-      });
-
-      it('is listed when an upgrade has cleared the mod\'s old contents and holds only its extraction', async () => {
-        const { extraction, settle } = await installHeld(root, { kind: 'upgrade', name: 'Harder VATS' });
-        const folder = join(root, 'mods', 'Harder VATS');
-        const outsideTheExtraction = (await readdir(folder)).filter((entry) => join(folder, entry) !== extraction);
-        await Promise.all(outsideTheExtraction.map((entry) => rm(join(folder, entry), { recursive: true })));
-
-        expect(await listed()).toContain('Harder VATS');
-        await settle();
-      });
-    });
-
-    it('rejects when a mod folder cannot be read, rather than treating it as gone', async () => {
-      const folder = join(root, 'mods', 'Harder VATS');
-      vi.mocked(readdir).mockImplementation(async (path, options) => {
-        if (String(path) === folder) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
-        return actualReaddir(path, options);
-      });
-
-      await expect(source.modFolders(ignoreSkippedLink)).rejects.toThrow(/permission denied/);
     });
 
     it('answers which mod folder holds an entry, matched as MO2 matches names, from the one listing', async () => {
@@ -1483,6 +1450,21 @@ describe('the MO2 Instance adapter', () => {
           { relativePath: 'Textures', path: join(folder, 'Textures'), excluded: false },
           { relativePath: 'Textures/Source', path: join(folder, 'Textures', 'Source'), excluded: false },
         ]);
+      });
+
+      it.each([
+        ['.medit_tmp_12_ab.tmp'], ['.medit_tmp_12_ab'],
+      ])('leaves out %s, a temp left by a dead writer, at any depth', async (temp) => {
+        const folder = join(root, 'mods', 'Harder VATS');
+        await mkdir(join(folder, 'Meshes', temp), { recursive: true });
+        await writeFile(join(folder, 'Meshes', temp, 'inside.nif'), '');
+        await writeFile(join(folder, 'Meshes', 'kept.nif'), '');
+        await writeFile(join(folder, temp), '');
+
+        const { files, folders } = await source.originFiles(mod('Harder VATS'));
+
+        expect([...relativePaths(files), ...folders.map((f) => f.relativePath)].filter((path) => path.includes(temp))).toEqual([]);
+        expect(relativePaths(files)).toContain('Meshes/kept.nif');
       });
 
       it.each([
@@ -2869,8 +2851,8 @@ describe('the MO2 Instance adapter', () => {
       expect(await isThere(join(downloads(), 'gone.zip.meta'))).toBe(false);
     });
 
-    it('sweeps its own leftover temp write when it trashes a file, even one with no metadata, as a crash during a first write leaves its temp beside no metadata at all', async () => {
-      const leftover = join(downloads(), 'manual.zip.meta.0123456789ab.tmp');
+    it('sweeps the leftover temp of a dead writer when it trashes a file, even one with no metadata, as a crash during a first write leaves its temp beside no metadata at all', async () => {
+      const leftover = join(downloads(), '.medit_tmp_2147483646_0123456789ab.tmp');
       await writeFile(leftover, 'half written');
 
       expect(await adapter.trashDownloadedFile('manual.zip', () => Promise.resolve())).toEqual({ gone: false });

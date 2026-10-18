@@ -6,9 +6,9 @@ import { constants, type Dirent } from 'node:fs';
 import {
   access, appendFile, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
 } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
-  isTempWriteOf, repositoryGitDir, tempWritePath,
+  isOwnTemp, repositoryGitDir, tempOwner, tempWritePath,
 } from './layout';
 import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
@@ -142,11 +142,19 @@ async function modeOf(target: string): Promise<number | undefined> {
   }
 }
 
-/** Removes the temp writes a crash left behind for `target`, between a temp landing and its
- *  rename; a write for `target` sweeps them before starting its own. */
+const isRunning = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return errnoCode(err) !== 'ESRCH';
+  }
+};
+
+/** Removes the temps in `target`'s folder whose writing process is gone; a write sweeps them before
+ *  starting its own. A temp with no process id in its name is kept. */
 export async function removeStaleTempsFor(target: string): Promise<void> {
   const dir = dirname(target);
-  const base = basename(target);
   let names: string[];
   try {
     names = await readdir(dir);
@@ -155,8 +163,8 @@ export async function removeStaleTempsFor(target: string): Promise<void> {
     return;
   }
   await Promise.all(
-    names.filter((name) => isTempWriteOf(base, name))
-      .map((name) => rm(join(dir, name), { force: true })),
+    names.filter((name) => isOwnTemp(name) && !isRunning(tempOwner(name) ?? process.pid))
+      .map((name) => rm(join(dir, name), { recursive: true, force: true })),
   );
 }
 
