@@ -24,7 +24,7 @@ import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance
 import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
 import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onStringsLanguageChange, onTerminalEnvChange, stringsLanguage } from './workspaceConfig';
-import { createPlugins, type Plugins } from './plugins';
+import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
@@ -63,6 +63,7 @@ interface ViewsDeps {
   outputChannel: vscode.LogOutputChannel;
   client: ViewsClient;
   plugins: Plugins;
+  registerRepositories: () => Promise<void>;
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
   trash: MoveToTrash;
@@ -132,8 +133,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const sourceGestureRows = selectionInFocusedView(
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.sourceGestureRowsIn');
   const plugins = own(pluginsBox.onInstance({
-    instance, instanceRoot, commands: pluginCommands({ adapter, client }), sourceCommands: sourceCommands({ client, adapter }), pluginSync, sourceGestureRows, modsView: MODS_KEY_ARGS.view,
-    saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
+    instance, instanceRoot, commands: pluginCommands({ adapter, client }), pluginSync,
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
@@ -152,6 +152,11 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       progressViewId: DOWNLOADS_KEY_ARGS.view,
     },
     nexusRow: nexusRowInFocusedView(own, deps.focusedView, ['modbench.modList', 'modbench.downloads'], 'modbench.mod.nexusRowIn'),
+    sourceGestures: {
+      commands: sourceCommands({ client, adapter }), rows: sourceGestureRows, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
+      saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
+      registerRepositories: deps.registerRepositories,
+    },
     modStatus: { push: client, readStatus },
   }));
   const { editing } = plugins;
@@ -261,7 +266,7 @@ export function activate(context: vscode.ExtensionContext): void {
     reporterFor,
     ask: askQuestion,
     trash: moveToTrash,
-    plugins,
+    plugins, registerRepositories: sourceModRepositories.registerRepositories,
     extensionId: context.extension.id,
     extensionUri: context.extensionUri,
     focusedView,
