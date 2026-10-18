@@ -127,7 +127,7 @@ public sealed class DecompileChurnTests : IDisposable
     private async Task Decompile()
     {
         var result = await TestEditService.DecompileHandler(_holder).DecompileAsync([Plugin], force: true);
-        Assert.Empty(result.Refused);
+        Assert.Empty(result.Value().Refused);
     }
 
     private string[] SourceStatus() =>
