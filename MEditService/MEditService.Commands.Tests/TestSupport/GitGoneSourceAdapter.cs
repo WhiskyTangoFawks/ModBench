@@ -11,26 +11,13 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// the verb that last ran it.</summary>
 internal sealed class GitGoneSourceAdapter : ISourceAdapter
 {
-    private static readonly Lazy<SourceFailure> GitMissing = new(ReadWithNoPath);
-
     private readonly ISourceAdapter _inner = TestAdapters.Source();
 
-    /// <summary>Reads the failure with the process's PATH emptied, once per process, so only the first caller holds the environment.</summary>
-    private static SourceFailure ReadWithNoPath()
-    {
-        var path = Environment.GetEnvironmentVariable("PATH");
-        Environment.SetEnvironmentVariable("PATH", string.Empty);
-        try
-        {
-            return TestAdapters.Source().WhyGitCannotRun() ?? throw new InvalidOperationException("Expected git to be missing with no PATH.");
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PATH", path);
-        }
-    }
+    private static readonly SourceFailure GitMissing =
+        Activator.CreateInstance(typeof(SourceFailure.GitUnavailable), nonPublic: true) as SourceFailure
+        ?? throw new InvalidOperationException("Expected SourceFailure.GitUnavailable to be constructible.");
 
-    public SourceFailure? WhyGitCannotRun() => GitMissing.Value;
+    public SourceFailure? WhyGitCannotRun() => GitMissing;
 
     public bool SourceReads(RegisteredPlugin plugin) => _inner.SourceReads(plugin);
 
