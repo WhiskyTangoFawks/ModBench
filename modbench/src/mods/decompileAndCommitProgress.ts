@@ -1,25 +1,19 @@
-import type { InitStatus } from '../client';
+import type { ModlistProgress } from '../client';
 
-/** Pure, so it is testable without a VS Code harness. The counts are plugins, not records —
- *  decompile and commit serializes a whole plugin in one call, with no per-record progress to report — and this
- *  text must not mislabel them. */
-export function decompileAndCommitProgressMessage(mod: string, status: InitStatus): string {
-  switch (status.phase) {
-    case 'Idle':
-      return `Decompiling and committing "${mod}"…`;
+/** Pure, so it is testable without a VS Code harness. A progress with no phase is the gesture between steps. */
+export function decompileAndCommitProgressMessage(mod: string, phase: ModlistProgress['phase']): string {
+  const doing = `Decompiling and committing "${mod}"`;
+  switch (phase) {
     case 'Parsing':
-      return status.pluginsTotal > 0
-        ? `Decompiling and committing "${mod}" — parsing ${pluralizePlugin(status.pluginsTotal)}…`
-        : `Decompiling and committing "${mod}" — parsing…`;
+      return `${doing} — parsing…`;
     case 'Serializing':
-      return `Decompiling and committing "${mod}" — serialized ${status.pluginsDone} of ${pluralizePlugin(status.pluginsTotal)}…`;
+      return `${doing} — serializing…`;
     case 'ReadingFiles':
-      return `Decompiling and committing "${mod}" — reading its files…`;
+      return `${doing} — reading its files…`;
     case 'Committing':
-      return `Decompiling and committing "${mod}" — committing to git…`;
+      return `${doing} — committing to git…`;
+    case undefined:
+    case null:
+      return `${doing}…`;
   }
-}
-
-function pluralizePlugin(count: number): string {
-  return count === 1 ? '1 plugin' : `${count} plugins`;
 }

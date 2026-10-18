@@ -31,7 +31,7 @@ internal static class ModEndpoints
             .WithDescription(
                 "Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every " +
                 "plugin it provides, the files no installation file yields as its assets, and a build configuration naming " +
-                "its folder as the output, in one commit. A mod lands or is refused whole. Progress is the init-progress notification.")
+                "its folder as the output, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification.")
             .Produces<InitResponse>()
             .ProducesProblem(400)
             .ProducesProblem(500)

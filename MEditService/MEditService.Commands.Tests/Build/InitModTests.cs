@@ -154,7 +154,7 @@ public sealed class InitModTests
     }
 
     [Fact]
-    public async Task InitMod_OverTwoPluginsOfOneOrigin_ProgressStepsBetweenThePlugins_AndEndsIdle()
+    public async Task InitMod_OverTwoPluginsOfOneOrigin_ProgressNamesTheModAndEachPhase_AndEndsAtRest()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-progress-");
         using var gameDir = new ScratchDirectory("medit-initservice-progress-game-");
@@ -178,10 +178,13 @@ public sealed class InitModTests
         var notifications = new InMemoryNotificationPublisher();
         await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", notifications: notifications);
 
-        var observed = notifications.Notifications.OfType<InitProgressNotification>().Select(n => n.Progress).ToList();
-        Assert.Contains(observed, p => p.Phase == InitPhase.Serializing && p.PluginsDone > 0 && p.PluginsDone < p.PluginsTotal);
-        Assert.All(observed.Where(p => p.Phase != InitPhase.Idle), p => Assert.Equal("FixtureMod", p.Mod));
-        Assert.Equal(InitPhase.Idle, observed[^1].Phase);
+        var observed = notifications.Notifications.OfType<DecompileAndCommitProgressNotification>().Select(n => n.Progress).ToList();
+        Assert.Equal(
+            [DecompileAndCommitPhase.Parsing, DecompileAndCommitPhase.Serializing, DecompileAndCommitPhase.Parsing, DecompileAndCommitPhase.Serializing,
+             DecompileAndCommitPhase.ReadingFiles, DecompileAndCommitPhase.Committing],
+            observed.Select(p => p.Phase).OfType<DecompileAndCommitPhase>());
+        Assert.All(observed.Where(p => p.Phase is not null), p => Assert.Equal("FixtureMod", p.Mod));
+        Assert.Equal(new ModlistProgress(null, null, 0, 0), observed[^1]);
     }
 
     [Fact]

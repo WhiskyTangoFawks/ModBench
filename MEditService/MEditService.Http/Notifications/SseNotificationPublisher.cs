@@ -63,7 +63,6 @@ internal sealed class SseNotificationPublisher : INotificationPublisher
 internal sealed record NotificationEvent(
     string Kind, string Plugin, string Origin, IReadOnlyList<string> Keys, long Sequence,
     LoadOrderStatus? LoadOrderStatus = null,
-    InitProgress? InitProgress = null,
     IReadOnlyList<ChangedPlugin>? ChangedPlugins = null,
     IReadOnlyList<PluginWithUnreadableSource>? PluginWithUnreadableSources = null,
     RecordFilterClearedNotification? RecordFilterCleared = null,
@@ -75,7 +74,7 @@ internal sealed record NotificationEvent(
         RowsChangedNotification n => new("rows-changed", n.Plugin.Name, n.Plugin.Origin, n.Keys, n.Sequence),
         PluginChangedNotification n => new("plugin-changed", n.Plugin.Name, n.Plugin.Origin, [], n.Sequence),
         LoadOrderStatusNotification n => new("load-order-status", "", "", [], 0, LoadOrderStatus: n.Status),
-        InitProgressNotification n => new("init-progress", "", n.Progress.Mod ?? "", [], 0, InitProgress: n.Progress),
+        DecompileAndCommitProgressNotification n => new("decompile-and-commit-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress),
         UpdateManifestProgressNotification n => new("update-manifest-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress),
         RestoreFromManifestProgressNotification n => new("restore-from-manifest-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress),
         BuildProgressNotification n => new("build-progress", "", n.Progress.Mod ?? "", [], 0, ModlistProgress: n.Progress),

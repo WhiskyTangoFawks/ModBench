@@ -43,7 +43,7 @@ export interface ModNote { readonly mod: string; readonly note: string }
 export type UpdateManifestResult = ({ applied: true; notes: readonly ModNote[]; submoduleNotes: readonly string[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
 
 /** Where update manifest is: the Instance adapter reading a mod's files, or mEdit updating manifests. */
-export type UpdateManifestStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Updating' } & ModlistProgress);
+export type UpdateManifestStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Updating' } & Omit<ModlistProgress, 'phase'>);
 
 /** pushRefusalNotWritten: why the instance repository does not refuse a push of a pin its source mod's remote lacks. */
 export type RestoreResult =
@@ -54,7 +54,7 @@ export type RestoreResult =
  *  mEdit could not say. */
 export type WhatRestoreDestroys = { destroys: readonly ModRestoreDestroys[]; refused: readonly ItemRefusal<string>[] } | { refusal: string };
 
-export type RestoreStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Restoring' } & ModlistProgress);
+export type RestoreStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Restoring' } & Omit<ModlistProgress, 'phase'>);
 
 type ReadMod = Omit<UpdateManifestMod, 'isSourceMod' | 'version'>;
 
@@ -306,7 +306,7 @@ async function restoreFolders(
   const facts: RestoreFacts = {
     statCache: adapter.statCacheFolder, excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(instance.gameRelease), gameFolder: wireGameFolder(folder, []),
   };
-  const restoring = { onProgress: (progress: ModlistProgress): void => { onProgress?.({ phase: 'Restoring', ...progress }); }, signal };
+  const restoring = { onProgress: (progress: ModlistProgress): void => { onProgress?.({ ...progress, phase: 'Restoring' }); }, signal };
   const first = await restoreOnce(client, sent, facts, restoring);
   if (!first.applied) return { ...first, landed: [] };
   const { cancelRefusal } = first;
@@ -414,7 +414,7 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
           statCache: adapter.statCacheFolder,
           gameFolder: wireGameFolder(namedGameFolder(instance), gameFiles),
         },
-        { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
+        { onProgress: (progress) => onProgress?.({ ...progress, phase: 'Updating' }), signal });
       if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
       const submodules = await submodulesWritten(adapter);
       return { applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes], submoduleNotes: submodules.submoduleNotes };

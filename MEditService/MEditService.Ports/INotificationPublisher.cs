@@ -26,9 +26,6 @@ public sealed record PluginChangedNotification(PluginAddress Plugin, long Sequen
 /// Ready, the same transitions <c>GET /load-order/status</c> polling would have observed.</summary>
 public sealed record LoadOrderStatusNotification(LoadOrderStatus Status) : INotification;
 
-/// <summary>Init's own progress (<see cref="InitProgress"/>) as it advances through its phases.</summary>
-public sealed record InitProgressNotification(InitProgress Progress) : INotification;
-
 /// <summary>At a snapshot: each compiled plugin whose bytes differ from what Modbench last wrote
 /// (ADR-0003). The mod's whole answer, so a plugin it leaves out matches; a mod whose
 /// repository went names none.</summary>

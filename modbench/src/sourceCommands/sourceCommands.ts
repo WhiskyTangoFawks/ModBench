@@ -1,5 +1,5 @@
 import {
-  isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type InitMod, type InitOutcome, type InitStatus, type MEditClient, type WriteRefused,
+  isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type InitMod, type InitOutcome, type ModlistProgress, type MEditClient, type WriteRefused,
 } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -47,7 +47,7 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
 
     /** A mod whose name gives it no source folder is refused here, naming why, and mEdit decompiles and commits the rest. */
     decompileAndCommit: async (
-      mods: readonly string[], options: { onProgress?: (status: InitStatus) => void } = {},
+      mods: readonly string[], options: { onProgress?: (status: ModlistProgress) => void } = {},
     ): Promise<InitOutcome | WriteRefused> => {
       const sent: InitMod[] = [];
       const refused: ItemRefusal<string>[] = [];

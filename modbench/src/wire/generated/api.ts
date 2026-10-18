@@ -228,7 +228,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the files no installation file yields as its assets, and a build configuration naming its folder as the output, in one commit. A mod lands or is refused whole. Progress is the init-progress notification. */
+        /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the files no installation file yields as its assets, and a build configuration naming its folder as the output, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification. */
         post: operations["InitMod"];
         delete?: never;
         options?: never;
@@ -1170,6 +1170,8 @@ export interface components {
             sourceFolder?: string | null;
         };
         /** @enum {string} */
+        DecompileAndCommitPhase: "Parsing" | "Serializing" | "ReadingFiles" | "Committing";
+        /** @enum {string} */
         DecompileRefusal: "None" | "PluginNotLoaded" | "NotInSourceMod" | "NotFromAMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "WorkingTreeStatusUnreadable" | "GitUnavailable" | "WorkingTreeChanges" | "NoLoadOrder";
         DecompileRefused: {
             item: components["schemas"]["PluginAddress"];
@@ -1287,16 +1289,6 @@ export interface components {
             name: string;
             sourceFolder: string;
             metadataFiles: string[];
-        };
-        /** @enum {string} */
-        InitPhase: "Idle" | "Parsing" | "Serializing" | "ReadingFiles" | "Committing";
-        InitProgress: {
-            mod?: string | null;
-            phase: components["schemas"]["InitPhase"];
-            /** Format: int32 */
-            pluginsDone: number;
-            /** Format: int32 */
-            pluginsTotal: number;
         };
         /** @enum {string} */
         InitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "ModFilesUnreadable" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
@@ -1459,6 +1451,7 @@ export interface components {
             modsDone: number;
             /** Format: int32 */
             modsTotal: number;
+            phase?: components["schemas"]["DecompileAndCommitPhase"] | null;
         };
         MoveLastWrittenRequest: {
             origin: string;
@@ -1483,7 +1476,6 @@ export interface components {
             /** Format: int64 */
             sequence: number;
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
-            initProgress?: components["schemas"]["InitProgress"] | null;
             changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
             pluginWithUnreadableSources?: components["schemas"]["PluginWithUnreadableSource"][] | null;
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;

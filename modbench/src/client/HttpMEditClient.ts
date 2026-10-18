@@ -21,7 +21,7 @@ import {
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAddress, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
-  type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type InitMod, type InitStatus, type InitOutcome,
+  type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type InitMod, type InitOutcome, type ModlistProgress,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -385,10 +385,10 @@ class HttpMEditClient implements MEditClient {
 
   /** ADR-0007; commands.md, A selection is one gesture, and each item lands on its own. */
   async init(
-    mods: readonly InitMod[], options: { onProgress?: (status: InitStatus) => void } = {},
+    mods: readonly InitMod[], options: { onProgress?: (status: ModlistProgress) => void } = {},
   ): Promise<InitOutcome | WriteRefused> {
     // The POST stays blocking, so progress rides the init-progress notification alongside it.
-    const unsubscribe = options.onProgress ? this.notifications.onNotification('init-progress', options.onProgress) : () => {};
+    const unsubscribe = options.onProgress ? this.notifications.onNotification('decompile-and-commit-progress', options.onProgress) : () => {};
     try {
       return await this.mutateEach({
         verb: 'decompile and commit', noun: 'mod', items: mods.map((mod) => mod.name),

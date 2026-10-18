@@ -2,7 +2,7 @@ import type { components } from '../wire/generated/api';
 import {
   type CompiledPlugin, type CompileDiagnostic,
   type ChangedPlugin,
-  type InitStatus, type PluginMetadata, type PluginDiagnosisReport,
+  type PluginMetadata, type PluginDiagnosisReport,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
   type ChildRecordSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
@@ -47,7 +47,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'init-progress', 'update-manifest-progress', 'restore-from-manifest-progress', 'external-change',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'decompile-and-commit-progress', 'update-manifest-progress', 'restore-from-manifest-progress', 'external-change',
   'plugin-source-unreadable', 'record-filter-cleared', 'mod-status-changed',
 ] as const;
 
@@ -59,7 +59,7 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number];
  *  `NotificationEvent`, carrying only the fields its kind uses. */
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
-  'init-progress': InitStatus;
+  'decompile-and-commit-progress': ModlistProgress;
   'update-manifest-progress': ModlistProgress;
   'restore-from-manifest-progress': ModlistProgress;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
@@ -325,7 +325,7 @@ export interface MEditClient {
   // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
   moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
-  init(mods: readonly InitMod[], options?: { onProgress?: (status: InitStatus) => void }): Promise<InitOutcome | WriteRefused>;
+  init(mods: readonly InitMod[], options?: { onProgress?: (status: ModlistProgress) => void }): Promise<InitOutcome | WriteRefused>;
   // Over the unsaved documents mEdit holds. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getCreateChanges(
     plugin: PluginAddress, recordType: string,
@@ -464,7 +464,7 @@ export interface MEditClient {
 }
 
 export type {
-  InitStatus, PluginMetadata, PluginDiagnosisReport,
+  PluginMetadata, PluginDiagnosisReport,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, CompileDiagnostic,
   LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsResponse,
