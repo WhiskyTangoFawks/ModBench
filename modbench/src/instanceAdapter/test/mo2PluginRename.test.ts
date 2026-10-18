@@ -139,6 +139,15 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     expect(await text(SECONDARY_LOAD_ORDER)).toBe('Other.esp\r\n');
   });
 
+  it('settles a plugin move overlapping a rename on one profile, both taking the plugin order files\' locks in one order', async () => {
+    await put(DEFAULT_LOAD_ORDER, 'Patch Mod.esp\r\nOther.esp\r\n');
+    const move = adapter.changePluginOrder('Default', () => [{ kind: 'move', plugins: ['Patch Mod.esp'], toIndex: 0 }]);
+
+    await Promise.all([rename(), move]);
+
+    expect(await text(DEFAULT_LOAD_ORDER)).toContain('Renamed Patch.esp');
+  }, 2000);
+
   it('leaves the files of other plugins named alike, the plugin source and an archive of another name where they are', async () => {
     await rename();
 
