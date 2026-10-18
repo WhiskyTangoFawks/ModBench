@@ -23,7 +23,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { file, indexedValueOf, mod } from './indexedValue';
 import { CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN, parseConflictTableShown } from '../../wire/conflictTable';
 import type { FileOrigin } from '../../instanceLoader/instance';
-import type { FileCopies } from '../../modCommands/sameCopies';
+import type { FileCopies } from '../sameCopies';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const conflictTableUri = (mod: string) => vscode.Uri.from({ scheme: 'modbench-conflicts', path: `/${mod}.modbench-conflicts` });

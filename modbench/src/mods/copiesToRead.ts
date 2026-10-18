@@ -1,6 +1,6 @@
 import type { FileOrigin, OriginFile } from '../instanceLoader/instance';
 import { foldPath } from '../instanceLoader/fileConflictIndex';
-import type { FileToCompare } from '../modCommands/sameCopies';
+import type { FileToCompare } from './sameCopies';
 import { present } from '../ports/present';
 
 type CopyFile = Pick<OriginFile, 'relativePath' | 'sourcePath'>;

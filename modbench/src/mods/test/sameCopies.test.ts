@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { FileOrigin, FileStamp } from '../../instanceAdapter/instanceAdapter';
+import type { FileOrigin, FileStamp } from '../../instanceLoader/instance';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { sameCopies, type FileToCompare } from '../sameCopies';
 

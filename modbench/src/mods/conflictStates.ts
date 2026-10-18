@@ -1,6 +1,6 @@
 // mods-conflicts.md, Cells: a file's row state and each copy's cell state, from which copies are the same.
 
-import type { Copy } from '../modCommands/sameCopies';
+import type { Copy } from './sameCopies';
 import type { ConflictCellState, ConflictRowState } from '../wire/conflictTable';
 
 interface FileStates {

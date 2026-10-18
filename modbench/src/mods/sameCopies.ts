@@ -1,4 +1,4 @@
-import type { FileOrigin, FileRead, FileStamp, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { FileOrigin, FileRead, FileStamp, HashedFile } from '../instanceLoader/instance';
 
 /** One provider's copy of a file. Two copies of one file with the same `sameAs` hold the same
  *  bytes. */
@@ -46,7 +46,10 @@ function numbered(copies: readonly Stamped[]): Copy[] {
   });
 }
 
-type CopyReads = Pick<InstanceAdapter, 'fileStamp' | 'originFileHash'>;
+export interface CopyReads {
+  fileStamp(path: string): Promise<FileRead<FileStamp>>;
+  originFileHash(path: string): Promise<FileRead<HashedFile>>;
+}
 
 async function contentsOf(adapter: CopyReads, path: string, stamp: FileRead<FileStamp>, sizes: readonly bigint[]): Promise<Contents> {
   if (stamp.kind === 'unreadable') return stamp;
