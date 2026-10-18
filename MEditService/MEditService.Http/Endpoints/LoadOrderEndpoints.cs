@@ -44,7 +44,7 @@ internal static class LoadOrderEndpoints
 
         if (RegisteredPluginsOf(req.Plugins) is not { } registered)
         {
-            return Results.Problem("Each plugin entry must have a non-empty Name, Path, Origin and Provider, and its archives and strings files.", statusCode: 400);
+            return EndpointMapping.BadRequest("Each plugin entry must have a non-empty Name, Path, Origin and Provider, and its archives and strings files.");
         }
         // Never defaulted here (ADR-0013).
         if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine
@@ -52,7 +52,7 @@ internal static class LoadOrderEndpoints
             || req.Places is not { } places || places.Any(place => string.IsNullOrEmpty(place?.Name) || string.IsNullOrEmpty(place.Folder))
             || !ModsByFolder.AreWhole(req.Mods) || string.IsNullOrWhiteSpace(req.StatCache))
         {
-            return Results.Problem("The snapshot must state its active plugins, those loaded with no line, its archives, its strings files, its places, its mods and the stat cache's folder.", statusCode: 400);
+            return EndpointMapping.BadRequest("The snapshot must state its active plugins, those loaded with no line, its archives, its strings files, its places, its mods and the stat cache's folder.");
         }
 
         var result = handler.Put(

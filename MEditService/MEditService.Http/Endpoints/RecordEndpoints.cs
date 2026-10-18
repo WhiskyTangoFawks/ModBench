@@ -31,7 +31,7 @@ internal static class RecordEndpoints
             if (!string.IsNullOrWhiteSpace(plugin) && !string.IsNullOrWhiteSpace(origin))
                 address = new PluginAddress(plugin, origin);
             else if (!string.IsNullOrWhiteSpace(plugin) || !string.IsNullOrWhiteSpace(origin))
-                return Results.Problem("Name a plugin with both plugin and origin, or neither to browse every plugin.", statusCode: 400);
+                return EndpointMapping.BadRequest("Name a plugin with both plugin and origin, or neither to browse every plugin.");
             return EndpointMapping.Ok(svc.GetRecords(type is { Length: > 0 } ? type : null, address, search, limit, offset));
         })
         .WithName("GetRecords")
@@ -128,7 +128,7 @@ internal static class RecordEndpoints
         app.MapGet("/plugin-source/record", (string? path, IQueries svc) =>
         {
             if (path is null || !Path.IsPathFullyQualified(path))
-                return Results.Problem("Name the file by its absolute path.", statusCode: 400);
+                return EndpointMapping.BadRequest("Name the file by its absolute path.");
             return EndpointMapping.Answered(svc.GetRecordOfFile(path), file => file switch
             {
                 RecordOfFileAnswer.Holds holds => Results.Ok(Addressed(holds.Record)),
@@ -313,7 +313,7 @@ internal static class RecordEndpoints
             logReceived: null,
             validate: () => AddressProblem(request.Record) ?? (
                 string.IsNullOrWhiteSpace(request.Destination.Name) || string.IsNullOrWhiteSpace(request.Destination.Origin)
-                    ? Results.Problem("Every destination needs a name and an origin.", statusCode: 400)
+                    ? EndpointMapping.BadRequest("Every destination needs a name and an origin.")
                     : null),
             execute: () => copies.Copy(AtRecord(request.Record), request.Mode, request.Destination, request.Replace),
             onApplied: result => Results.Ok(new RecordWrittenResponse(EndpointMapping.RequireNewFormKey(result))));
@@ -331,7 +331,7 @@ internal static class RecordEndpoints
 
     private static IResult? AddressProblem(RecordAddress? record) =>
         string.IsNullOrWhiteSpace(record?.FormKey) || string.IsNullOrWhiteSpace(record.Plugin) || string.IsNullOrWhiteSpace(record.Origin)
-            ? Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400)
+            ? EndpointMapping.BadRequest("Every record needs a FormKey, a plugin name and an origin.")
             : null;
 
     private static RecordAt AtRecord(RecordAddress record) => new(new PluginAddress(record.Plugin, record.Origin), record.FormKey);
@@ -349,9 +349,9 @@ internal static class RecordEndpoints
     private static IResult? EditRequestProblem(RecordEditRequest? request)
     {
         if (string.IsNullOrWhiteSpace(request?.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
-            return Results.Problem("Plugin name and origin are required.", statusCode: 400);
+            return EndpointMapping.BadRequest("Plugin name and origin are required.");
         if (string.IsNullOrWhiteSpace(request.Op) || request.Path is not { Count: > 0 })
-            return Results.Problem("An operation and a path are required.", statusCode: 400);
+            return EndpointMapping.BadRequest("An operation and a path are required.");
         return null;
     }
 
@@ -390,9 +390,9 @@ internal static class RecordEndpoints
         return OverRecords(records, validateOptions: () =>
         {
             if (destinations.Count == 0)
-                return Results.Problem("At least one destination is required.", statusCode: 400);
+                return EndpointMapping.BadRequest("At least one destination is required.");
             if (destinations.Any(d => string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.Origin)))
-                return Results.Problem("Every destination needs a name and an origin.", statusCode: 400);
+                return EndpointMapping.BadRequest("Every destination needs a name and an origin.");
             return null;
         }, answer: addressed =>
         {
@@ -415,10 +415,10 @@ internal static class RecordEndpoints
         Func<IResult?> validateOptions, Func<IReadOnlyList<RecordAt>, Task<IResult>> answer)
     {
         if (records.Count == 0)
-            return Results.Problem("At least one record is required.", statusCode: 400);
+            return EndpointMapping.BadRequest("At least one record is required.");
         if (records.Any(r =>
                 string.IsNullOrWhiteSpace(r.FormKey) || string.IsNullOrWhiteSpace(r.Plugin) || string.IsNullOrWhiteSpace(r.Origin)))
-            return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
+            return EndpointMapping.BadRequest("Every record needs a FormKey, a plugin name and an origin.");
         if (validateOptions() is { } invalid) return invalid;
 
         return await answer([.. records.Select(r => new RecordAt(new PluginAddress(r.Plugin, r.Origin), r.FormKey))]);
@@ -433,10 +433,10 @@ internal static class RecordEndpoints
     internal static IResult CompareRecords(IReadOnlyList<RecordCopy> copies, IQueries svc)
     {
         if (copies.Count == 0)
-            return Results.Problem("At least one record is required.", statusCode: 400);
+            return EndpointMapping.BadRequest("At least one record is required.");
         if (copies.Any(c => string.IsNullOrWhiteSpace(c.FormKey)
                 || string.IsNullOrWhiteSpace(c.Plugin.Name) || string.IsNullOrWhiteSpace(c.Plugin.Origin)))
-            return Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400);
+            return EndpointMapping.BadRequest("Every record needs a FormKey, a plugin name and an origin.");
         return EndpointMapping.Answered(
             svc.GetCompareRecords(copies), answer => Results.Ok(answer switch
             {
@@ -449,7 +449,7 @@ internal static class RecordEndpoints
     internal static IResult CompareRecord(string formKey, CopyText copy, IQueries svc)
     {
         if (copy.DocumentText is null || string.IsNullOrWhiteSpace(copy.Plugin.Name) || string.IsNullOrWhiteSpace(copy.Plugin.Origin))
-            return Results.Problem("A plugin name, an origin and a document text are required.", statusCode: 400);
+            return EndpointMapping.BadRequest("A plugin name, an origin and a document text are required.");
         return EndpointMapping.Answered(
             svc.GetCompare(formKey, copy),
             result => result is not null ? Results.Ok(result) : Results.Problem("No plugin indexes this record.", statusCode: 404));

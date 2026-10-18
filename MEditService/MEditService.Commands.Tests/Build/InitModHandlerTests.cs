@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Build;
 
-public sealed class InitHandlerTests : IDisposable
+public sealed class InitModHandlerTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
     private const string Origin = "FixtureMod";
@@ -19,7 +19,7 @@ public sealed class InitHandlerTests : IDisposable
     private readonly LoadOrderHolder _holder = new();
     private readonly PluginProvider.FromMod _mod;
 
-    public InitHandlerTests()
+    public InitModHandlerTests()
     {
         _mod = new PluginProvider.FromMod(
             Origin,
@@ -46,7 +46,7 @@ public sealed class InitHandlerTests : IDisposable
     public async Task Init_OverTheHeldLoadOrder_PutsThePluginsSourceInItsSourceFolder_AndWritesNothingInItsModFolder()
     {
         _holder.Apply(Snapshot);
-        var handler = TestEditService.InitHandler(_holder);
+        var handler = TestEditService.InitModHandler(_holder);
         var modFolderBefore = TreeSnapshot.Of(_mod.Folder);
 
         var result = await handler.InitAsync(ToInit.In(Snapshot, Origin));
@@ -60,7 +60,7 @@ public sealed class InitHandlerTests : IDisposable
     public async Task Init_OverAModTwiceUnderDifferentCasing_InitsItOnce_AndRefusesTheModThatProvidesNothingOnItsOwn()
     {
         _holder.Apply(Snapshot);
-        var handler = TestEditService.InitHandler(_holder);
+        var handler = TestEditService.InitModHandler(_holder);
 
         var result = await handler.InitAsync(ToInit.In(Snapshot, Origin, "NoSuchMod", Origin.ToUpperInvariant()));
 
@@ -105,7 +105,7 @@ public sealed class InitHandlerTests : IDisposable
     private Task<SelectionResult<string, InitRefusal, InitializedMod>> InitWith(ModToInit mod)
     {
         _holder.Apply(Snapshot);
-        return TestEditService.InitHandler(_holder).InitAsync([mod]);
+        return TestEditService.InitModHandler(_holder).InitAsync([mod]);
     }
 
     private void WriteInModFolder(string path, string text)
