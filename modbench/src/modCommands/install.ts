@@ -1,31 +1,43 @@
 import { basename } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
+import { samePath } from '../instanceAdapter/instanceAdapter';
 import type {
-  InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, OwnedMetaKeys,
+  InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstallKeys, DownloadedFile,
 } from '../instanceAdapter/instanceAdapter';
 import { EMPTY_MOD_NAME, goneFromDisk, modNameTakenRefusal } from '../coreLib/commandRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { ModStatus, ReadModStatus } from '../client';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 
-/** What a mod is installed from: an archive or a folder the user picked, or a downloaded file by
- *  its name and path in the instance value, with the Nexus ids and version its metadata holds. */
-export type ModPackage = InstallPackage | {
-  readonly kind: 'downloadedFile';
-  readonly name: string;
-  readonly path: string;
-  readonly modID?: string;
-  readonly fileID?: string;
-  readonly version?: string;
-};
+/** What a mod is installed from: an archive or a folder the user picked, or a downloaded file by its name. An
+ *  archive that is one of the downloaded files installs as that file. */
+export type ModPackage = InstallPackage | { readonly kind: 'downloadedFile'; readonly name: string };
 
-function keysFor(installed: ModPackage, gameName: string): OwnedMetaKeys {
-  if (installed.kind === 'folder') return { gameName };
-  if (installed.kind === 'archive') return { gameName, archiveFilename: basename(installed.path) };
-  const { name, modID, fileID, version } = installed;
-  const installedFiles = modID && fileID ? [{ nexusId: modID, fileId: fileID }] : undefined;
-  return { gameName, archiveFilename: name, nexusId: modID, version, installedFiles };
+interface Resolved {
+  readonly extracted: InstallPackage;
+  readonly file: DownloadedFile | undefined;
+}
+
+// The downloaded file a package is, with the Nexus ids and version its metadata holds; none for a folder or an
+// archive outside the downloaded files.
+async function resolve(adapter: InstanceAdapter, installed: ModPackage): Promise<Resolved> {
+  if (installed.kind === 'folder') return { extracted: installed, file: undefined };
+  const listed = await adapter.downloadedFiles();
+  const files = listed.kind === 'listed' ? listed.files ?? [] : [];
+  if (installed.kind === 'archive') return { extracted: installed, file: files.find(({ path }) => samePath(path, installed.path)) };
+  const file = files.find(({ name }) => name === installed.name);
+  if (file === undefined) throw new Error(`"${installed.name}" is gone from Downloads.`);
+  return { extracted: { kind: 'archive', path: file.path }, file };
+}
+
+function keysFor(installed: ModPackage, file: DownloadedFile | undefined): InstallKeys {
+  if (file !== undefined) {
+    const { modID, fileID, version } = file.meta ?? {};
+    const installedFiles = modID && fileID ? [{ nexusId: modID, fileId: fileID }] : undefined;
+    return { archiveFilename: file.name, nexusId: modID, version, installedFiles };
+  }
+  return installed.kind === 'archive' ? { archiveFilename: basename(installed.path) } : {};
 }
 
 // The folder can appear or vanish between the caller's decision and the install, as the mod
@@ -80,25 +92,27 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
   }
 }
 
-/** `modbench.mod.install`, then a downloaded file marked installed. `downloadRefusal` says why the
+/** `modbench.mod.install`, then the downloaded file it installed from marked installed. `downloadedFileRefusal` says why the
  *  mark failed, so a landed install is not reported as failed (downloads.md, Reporting, story 1). */
 export async function installMod(
   deps: { adapter: InstanceAdapter; readStatus: ReadModStatus },
-  installed: ModPackage, target: InstallTarget, gameName: string, force: boolean,
-): Promise<CommandResult<{ isFomod: boolean; downloadRefusal?: string }>> {
+  installed: ModPackage, target: InstallTarget, force: boolean,
+): Promise<CommandResult<{ isFomod: boolean; downloadedFile?: string; downloadedFileRefusal?: string }>> {
   if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
   const refusal = await upgradeRefusal(deps, target, force);
   if (refusal !== undefined) return { applied: false, refusal };
   let outcome: InstallOutcome;
+  let file: DownloadedFile | undefined;
   try {
-    const extracted = installed.kind === 'downloadedFile' ? { kind: 'archive' as const, path: installed.path } : installed;
-    outcome = await deps.adapter.install(extracted, target, keysFor(installed, gameName));
+    const resolved = await resolve(deps.adapter, installed);
+    ({ file } = resolved);
+    outcome = await deps.adapter.install(resolved.extracted, target, keysFor(installed, file));
   } catch (err) {
     return refuse(err);
   }
   if (!outcome.landed) return { applied: false, refusal: claimRefusal(target) };
-  const landed = { applied: true as const, isFomod: outcome.isFomod };
-  if (installed.kind !== 'downloadedFile') return landed;
-  const downloadRefusal = await markInstalled(deps.adapter, installed.name);
-  return downloadRefusal === undefined ? landed : { ...landed, downloadRefusal };
+  if (file === undefined) return { applied: true, isFomod: outcome.isFomod };
+  const landed = { applied: true as const, isFomod: outcome.isFomod, downloadedFile: file.name };
+  const downloadedFileRefusal = await markInstalled(deps.adapter, file.name);
+  return downloadedFileRefusal === undefined ? landed : { ...landed, downloadedFileRefusal };
 }

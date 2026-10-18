@@ -80,7 +80,7 @@ async function installHeld(root: string, target: InstallTarget): Promise<{ extra
       await held;
     },
   };
-  const installing = adapterAt(root, undefined, undefined, archives).install({ kind: 'archive', path: '/elsewhere/New.7z' }, target, { gameName: 'Fallout4' });
+  const installing = adapterAt(root, undefined, undefined, archives).install({ kind: 'archive', path: '/elsewhere/New.7z' }, target, {});
   return {
     extraction: await extraction,
     settle: () => {
@@ -139,6 +139,46 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, INI), (await text(root, INI)).replace('selected_profile=@ByteArray(Default)', 'selected_profile=@ByteArray(Other)'));
 
         expect([before, await adapter.activeProfile()]).toEqual(['Default', 'Other']);
+      });
+
+      it('answers every profile', async () => {
+        expect([...await adapter.profiles()].sort()).toEqual(['Default', 'Secondary']);
+      });
+
+      it('answers the active profile\'s mod order, and the folders the mods are in with the separators\'', async () => {
+        const { mods, modFolders } = await adapter.modOrder();
+
+        expect(mods).toContainEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
+        expect(mods).toContainEqual(expect.objectContaining({ kind: 'mod', name: 'Harder VATS', enabled: false }));
+        expect(mods).toHaveLength(10);
+        expect(modFolders?.map(({ kind, name }) => `${kind}:${name}`).sort()).toEqual([
+          'mod:Cracked and Smudged Pip-Boy Screen', 'mod:DragIn Manual Extract', 'mod:ENBoost - 12k', 'mod:Harder VATS', 'mod:Patch Mod',
+          'mod:SKK Fast Start new game (Fallout 4)', 'mod:Unofficial Fallout 4 Patch', 'mod:Ñoño\'s Retexture',
+          'separator:Unassigned (Modlist Development)',
+        ].sort());
+      });
+
+      it('answers the mod order of the profile the settings select now', async () => {
+        await writeFile(join(root, INI), (await text(root, INI)).replace('selected_profile=@ByteArray(Default)', 'selected_profile=@ByteArray(Secondary)'));
+        await writeFile(join(root, 'profiles', 'Secondary', 'modlist.txt'), '+Only Here\n');
+
+        expect((await adapter.modOrder()).mods).toEqual([{ kind: 'mod', name: 'Only Here', enabled: true }]);
+      });
+
+      it('answers the source mods by the output their build configuration names', async () => {
+        await mkdir(join(root, 'source', 'Old Name', '.git'), { recursive: true });
+        await writeFile(join(root, 'source', 'Old Name', 'build.json'), '{"output":"Harder VATS"}');
+
+        const sourceMods = await adapter.sourceMods();
+
+        expect(sourceMods.folderOf('harder vats')).toBe(join(root, 'source', 'Old Name'));
+        expect(sourceMods.folderOf('ENBoost - 12k')).toBeUndefined();
+      });
+
+      it('answers the downloaded files now', async () => {
+        const downloads = await adapter.downloadedFiles();
+
+        expect(downloads.kind === 'listed' && downloads.files?.map(({ name }) => name)).toEqual(['Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z']);
       });
     });
 
