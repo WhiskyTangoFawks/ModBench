@@ -54,7 +54,7 @@ export interface Plugins extends vscode.Disposable {
 
 export function createPlugins(deps: PluginsDeps): Plugins {
   const { client, channel, reporterFor } = deps;
-  const statusBar = createStatusBar(client);
+  const statusBar = createStatusBar(client, reporterFor);
   const externalChanges = noticeExternalChanges(reporterFor('externalChange'), client);
   const recordBrowser = new RecordBrowser(client, channel);
   const recordWrite = recordWriteOver(deps.facts, client);
