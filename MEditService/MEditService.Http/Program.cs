@@ -57,8 +57,6 @@ try
                 formatProvider: CultureInfo.InvariantCulture,
                 rollingInterval: RollingInterval.Day));
 
-    builder.Services.AddCors(opts =>
-        opts.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
     builder.Services.ConfigureHttpJsonOptions(options =>
         options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
     builder.Services.AddEndpointsApiExplorer();
@@ -106,7 +104,18 @@ try
     };
 
     app.UseExceptionHandler();
-    app.UseCors();
+    // A browser sends Origin from any page; Swagger UI's is this service's own. The extension and
+    // medit.py send none.
+    app.Use(async (ctx, next) =>
+    {
+        var origin = ctx.Request.Headers.Origin.ToString();
+        if (origin.Length > 0 && origin != $"{ctx.Request.Scheme}://{ctx.Request.Host}")
+        {
+            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+        await next();
+    });
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
