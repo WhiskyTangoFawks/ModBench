@@ -37,7 +37,6 @@ describe('installMod', () => {
     it.each<[string, Partial<ModStatus>, string]>([
       ['differs from its manifest', { differing: ['a.esp'] }, 'files whose bytes differ from its manifest: a.esp'],
       ['holds a file no line names', { namedByNoLine: ['stray.txt'] }, 'files no line of its manifest names: stray.txt'],
-      ['lacks a file its manifest names', { gone: ['b.nif'] }, 'files its manifest names that its folder lacks: b.nif'],
       ['has no manifest', { noManifest: true }, 'it has no manifest'],
       ['has a file its package does not hold', { notInPackage: ['c.dds'] }, 'files its package does not hold: c.dds'],
     ])('refuses a mod that %s, listing the loss and naming force, and installs nothing', async (_, over, loss) => {
@@ -85,6 +84,21 @@ describe('installMod', () => {
       expect(result).toEqual({ applied: false, refusal: 'Cannot upgrade "Vanished Mod": there is no folder by that name under mods/.' });
     });
 
+    it('installs over a mod whose folder only lacks files its manifest names, which the upgrade does not lose', async () => {
+      const { result } = await install(ARCHIVE, UPGRADED, {}, false, reading([statusOf({ gone: ['b.nif'] })]));
+
+      expect(result).toEqual({ applied: true, isFomod: false });
+    });
+
+    it('lists only what the upgrade destroys when the folder also lacks files', async () => {
+      const { result } = await install(ARCHIVE, UPGRADED, {}, false, reading([statusOf({ differing: ['b.txt'], gone: ['textures/a.dds'] })]));
+
+      expect(result).toEqual({
+        applied: false,
+        refusal: 'The upgrade would lose, in "Harder VATS": files whose bytes differ from its manifest: b.txt. Request it again with force to replace its files.',
+      });
+    });
+
     it('installs over a mod whose status shows nothing to lose', async () => {
       const { result } = await install(ARCHIVE, UPGRADED, {}, false, reading([statusOf()]));
 
@@ -120,6 +134,20 @@ describe('installMod', () => {
     expect(calls).toEqual([]);
   });
 
+  it('lists a new mod in mod order before it ends, so the read after it holds the mod', async () => {
+    const { result, calls } = await install(ARCHIVE, NEW_MOD);
+
+    expect(result).toEqual({ applied: true, isFomod: false });
+    expect(calls.map((call) => call.verb)).toEqual(['install', 'changeModOrder']);
+    expect(calls[1]).toMatchObject({ changes: [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name: MOD } }] });
+  });
+
+  it('lands the mod carrying why its line could not be written', async () => {
+    const { result } = await install(ARCHIVE, NEW_MOD, { refusals: refusing('changeModOrder', 'modlist.txt is locked') });
+
+    expect(result).toEqual({ applied: true, isFomod: false, lineRefusal: 'modlist.txt is locked' });
+  });
+
   it('refuses with why the adapter failed', async () => {
     const { result } = await install(ARCHIVE, NEW_MOD, { refusals: refusing('install', 'archive is corrupt') });
 
@@ -152,10 +180,10 @@ describe('installMod', () => {
   });
 
   it('marks a downloaded file installed once it landed, and marks no file for an archive, though a downloaded file bears its name', async () => {
-    expect((await install(DOWNLOADED)).calls.map((call) => call.verb)).toEqual(['install', 'markDownloadedFile']);
-    expect((await install(DOWNLOADED)).calls[1]).toEqual({ verb: 'markDownloadedFile', name: DOWNLOADED.name, mark: 'Installed' });
-    expect((await install({ kind: 'archive', path: DOWNLOADED_PATH })).calls[1]).toEqual({ verb: 'markDownloadedFile', name: DOWNLOADED.name, mark: 'Installed' });
-    expect((await install({ kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' })).calls.map((call) => call.verb)).toEqual(['install']);
+    expect((await install(DOWNLOADED)).calls.map((call) => call.verb)).toEqual(['install', 'changeModOrder', 'markDownloadedFile']);
+    expect((await install(DOWNLOADED)).calls[2]).toEqual({ verb: 'markDownloadedFile', name: DOWNLOADED.name, mark: 'Installed' });
+    expect((await install({ kind: 'archive', path: DOWNLOADED_PATH })).calls[2]).toEqual({ verb: 'markDownloadedFile', name: DOWNLOADED.name, mark: 'Installed' });
+    expect((await install({ kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' })).calls.map((call) => call.verb)).toEqual(['install', 'changeModOrder']);
   });
 
   it('refuses a downloaded file the downloads folder lacks, installing nothing', async () => {
