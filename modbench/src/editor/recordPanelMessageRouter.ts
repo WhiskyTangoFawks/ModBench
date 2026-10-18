@@ -140,8 +140,8 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
   let m: WebviewToExtension;
   try {
     m = parseWebviewToExtension(msg);
-  } catch {
-    // A message this build doesn't recognize (a stale webview build) or garbage stays a no-op.
+  } catch (err) {
+    deps.channel.warn(`Dropped a message from a record tab's page: ${errorMessage(err)} ${JSON.stringify(msg)}`);
     return;
   }
   await dispatch(deps, m);

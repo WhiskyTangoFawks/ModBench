@@ -625,7 +625,8 @@ describe('modbench.record.open', () => {
     await openRecord({ formKey: 'Fallout4.esm:000001' });
 
     await waitFor('the winning copy\'s tab', () => hasRenderedTab('Fallout4.esm:000001') || undefined);
-    await waitFor('the record\'s read', () => askedToRead('Fallout4.esm:000001'));
+    await waitFor('the read of the run\'s first record tab, which loads before any test opens another, as on a new profile VS Code 1.140 '
+      + 'never loads a webview page opened while the first registers its origin\'s service worker', () => askedToRead('Fallout4.esm:000001'));
   });
 
   it('a second click replaces the preview tab instead of adding one', async () => {
