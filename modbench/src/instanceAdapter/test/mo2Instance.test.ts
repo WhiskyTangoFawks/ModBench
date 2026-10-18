@@ -537,6 +537,25 @@ describe('the MO2 Instance adapter', () => {
       expect((await source.profiles()).sort()).toEqual(['Default', 'Secondary']);
     });
 
+    it('answers a profile folder that is a link to a folder, and no link to a file or to nothing', async () => {
+      await mkdir(join(root, 'elsewhere', 'Linked'), { recursive: true });
+      await symlink(join(root, 'elsewhere', 'Linked'), join(root, 'profiles', 'Linked'));
+      await writeFile(join(root, 'elsewhere', 'file'), '');
+      await symlink(join(root, 'elsewhere', 'file'), join(root, 'profiles', 'FileLink'));
+      await symlink(join(root, 'nowhere'), join(root, 'profiles', 'Broken'));
+
+      expect((await source.profiles()).sort()).toEqual(['Default', 'Linked', 'Secondary']);
+    });
+
+    it('answers a downloaded archive that is a link to a file', async () => {
+      await writeFile(join(root, 'elsewhere.7z'), '');
+      await symlink(join(root, 'elsewhere.7z'), join(root, 'downloads', 'Linked-1-0.7z'));
+
+      const downloads = await (await source.settings()).downloadedFiles();
+
+      expect(downloads.kind === 'listed' && downloads.files?.map(({ name }) => name)).toContain('Linked-1-0.7z');
+    });
+
     it('answers no profiles when the instance has none', async () => {
       await rm(join(root, 'profiles'), { recursive: true });
 
@@ -742,6 +761,16 @@ describe('the MO2 Instance adapter', () => {
         expect(await source.gameFolderPlugins(found(data))).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
       });
 
+      it('answers a plugin that is a link to a file, and no link to nothing', async () => {
+        const data = join(game, 'Data');
+        await mkdir(data, { recursive: true });
+        await writeFile(join(game, 'Real.esp'), '');
+        await symlink(join(game, 'Real.esp'), join(data, 'Linked.esp'));
+        await symlink(join(game, 'nowhere.esp'), join(data, 'Broken.esp'));
+
+        expect(await source.gameFolderPlugins(found(data))).toEqual({ kind: 'listed', names: new Set(['Linked.esp']) });
+      });
+
       it('answers unresolved when the game folder was not found', async () => {
         const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
 
@@ -909,6 +938,21 @@ describe('the MO2 Instance adapter', () => {
 
         expect(await source.gameFolderArchives(found(), 'Fallout4')).toEqual({
           kind: 'listed', archives: ['Fallout4 - Interface.BA2'], stringsFiles: ['STRINGS/Fallout4_en.STRINGS'],
+        });
+      });
+
+      it('answers an archive that is a link to a file, and a strings folder that is a link to a folder', async () => {
+        const data = join(game, 'Data');
+        await mkdir(join(game, 'Real', 'strings'), { recursive: true });
+        await mkdir(data, { recursive: true });
+        await writeFile(join(game, 'Real.ba2'), '');
+        await writeFile(join(game, 'Real', 'strings', 'Fallout4_en.STRINGS'), '');
+        await symlink(join(game, 'Real.ba2'), join(data, 'Fallout4 - Linked.ba2'));
+        await symlink(join(game, 'Real', 'strings'), join(data, 'Strings'));
+        await symlink(join(game, 'Real', 'strings', 'Fallout4_en.STRINGS'), join(game, 'Real', 'strings', 'Fallout4_de.STRINGS'));
+
+        expect(await source.gameFolderArchives(found(), 'Fallout4')).toEqual({
+          kind: 'listed', archives: ['Fallout4 - Linked.ba2'], stringsFiles: ['Strings/Fallout4_de.STRINGS', 'Strings/Fallout4_en.STRINGS'],
         });
       });
 

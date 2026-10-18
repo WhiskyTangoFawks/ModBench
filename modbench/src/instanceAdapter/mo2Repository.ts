@@ -1,8 +1,7 @@
 // What MO2's implementation lets the instance repository hold, and which game files a mod's files take.
 
-import type { Dirent } from 'node:fs';
 import { join } from 'node:path';
-import { exists, listDir, remove, write } from './files';
+import { exists, listEntries, remove, type ResolvedEntry, write } from './files';
 import type { HashIndex } from './hashIndex';
 import type { GameFile, InstanceAdapter } from './instanceAdapter';
 import { ignoreListFile, WHITELIST_IGNORE_LIST } from './layout';
@@ -11,13 +10,13 @@ import { originFilesIn } from './mo2Files';
 
 type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'removeIgnoreList'>;
 
-const lowerCased = (names: readonly Dirent[]): Map<string, Dirent> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
+const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
 // The game's folder is as case-sensitive as its file system, and a mod's paths are the game's, which ignores case.
 function caseBlindFinder(dataFolder: string) {
-  const listings = new Map<string, Promise<Map<string, Dirent>>>();
-  const listingOf = (folder: string): Promise<Map<string, Dirent>> => {
-    const kept = listings.get(folder) ?? listDir(folder).then(lowerCased, () => new Map<string, Dirent>());
+  const listings = new Map<string, Promise<Map<string, ResolvedEntry>>>();
+  const listingOf = (folder: string): Promise<Map<string, ResolvedEntry>> => {
+    const kept = listings.get(folder) ?? listEntries(folder).then(lowerCased, () => new Map<string, ResolvedEntry>());
     listings.set(folder, kept);
     return kept;
   };
@@ -26,7 +25,7 @@ function caseBlindFinder(dataFolder: string) {
     const segments = path.split('/');
     for (const [i, segment] of segments.entries()) {
       const entry = (await listingOf(join(dataFolder, ...found))).get(segment.toLowerCase());
-      if (entry === undefined || entry.isDirectory() === (i === segments.length - 1)) return undefined;
+      if (entry === undefined || entry.isDirectory === (i === segments.length - 1)) return undefined;
       found.push(entry.name);
     }
     return found;

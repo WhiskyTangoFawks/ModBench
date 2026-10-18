@@ -13,7 +13,7 @@ import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { gameOfSettings } from './mo2Game';
 import type { ManagerGamePath } from './gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from './gameFolder/dataFolder';
-import { factsOf, get, isRepository, listDir, readOrAbsent, readOrReason, stampOf } from './files';
+import { factsOf, get, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, stampOf } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type GameFolder, type InstanceAdapter, type InstanceReading,
   type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided, type SourceMods,
@@ -65,10 +65,10 @@ export interface ReadingSource extends ArchiveReads {
 }
 
 async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
-  const dirents = await readOrAbsent(() => listDir(downloadsDir), undefined);
+  const dirents = await readOrAbsent(() => listEntries(downloadsDir), undefined);
   if (dirents === undefined) return undefined;
   const names = dirents
-    .filter((d) => d.isFile() && isArchiveName(d.name) && !isTempWrite(d.name))
+    .filter((d) => d.isFile && isArchiveName(d.name) && !isTempWrite(d.name))
     .map((d) => d.name);
   return Promise.all(names.map(async (name) => {
     const path = downloadFile(downloadsDir, name);
@@ -123,8 +123,8 @@ export function readingSource(context: Mo2Context): ReadingSource {
     },
 
     async profiles() {
-      const dirents = await readOrAbsent(() => listDir(profilesDir(instanceRoot)), []);
-      return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
+      const dirents = await readOrAbsent(() => listFolders(profilesDir(instanceRoot)), []);
+      return dirents;
     },
 
     async modOrder(profile) {

@@ -207,22 +207,37 @@ export function listDir(path: string): Promise<Dirent[]> {
   return readdir(path, { withFileTypes: true });
 }
 
-/** The folders directly in `path`, following links as MO2 does (QDir::Dirs without NoSymLinks).
+/** A directory entry as what it is, a link being what it links to. */
+export interface ResolvedEntry {
+  readonly name: string;
+  readonly isFile: boolean;
+  readonly isDirectory: boolean;
+}
+
+/** The entries directly in `path`, following links as MO2 does (QDir without NoSymLinks).
  *  A link whose target cannot be checked is skipped, as MO2 skips it, and handed to `skippedLink`. */
-export async function listFolders(
+export async function listEntries(
   path: string, skippedLink?: (name: string, reason: string) => void,
-): Promise<string[]> {
-  const folders = await Promise.all((await listDir(path)).map(async (dirent) => {
-    if (dirent.isDirectory()) return dirent.name;
-    if (!dirent.isSymbolicLink()) return undefined;
+): Promise<ResolvedEntry[]> {
+  const entries = await Promise.all((await listDir(path)).map(async (dirent): Promise<ResolvedEntry | undefined> => {
+    const { name } = dirent;
+    if (!dirent.isSymbolicLink()) return { name, isFile: dirent.isFile(), isDirectory: dirent.isDirectory() };
     try {
-      return (await stat(join(path, dirent.name))).isDirectory() ? dirent.name : undefined;
+      const target = await stat(join(path, name));
+      return { name, isFile: target.isFile(), isDirectory: target.isDirectory() };
     } catch (err) {
-      skippedLink?.(dirent.name, errorMessage(err));
+      skippedLink?.(name, errorMessage(err));
       return undefined;
     }
   }));
-  return folders.filter((name): name is string => name !== undefined);
+  return entries.filter((entry): entry is ResolvedEntry => entry !== undefined);
+}
+
+/** The folders directly in `path`, links followed as `listEntries` follows them. */
+export async function listFolders(
+  path: string, skippedLink?: (name: string, reason: string) => void,
+): Promise<string[]> {
+  return (await listEntries(path, skippedLink)).filter((entry) => entry.isDirectory).map((entry) => entry.name);
 }
 
 /** Creates `path` and every missing parent; a no-op when it is already there. */

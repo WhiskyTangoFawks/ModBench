@@ -1,7 +1,7 @@
 import { fixedGameFolderSetting } from '../../test/gameFolderSetting';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rename as fsRename, rm, writeFile } from 'node:fs/promises';
-import { Dirent, type PathLike } from 'node:fs';
+import type { PathLike } from 'node:fs';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { present } from '../../ports/present';
@@ -9,7 +9,7 @@ import { present } from '../../ports/present';
 vi.mock('vscode', () => fakeVscodeModule());
 const real = vi.hoisted(() => ({
   rename: undefined as typeof import('node:fs/promises').rename | undefined,
-  listDir: undefined as typeof import('../files').listDir | undefined,
+  listEntries: undefined as typeof import('../files').listEntries | undefined,
 }));
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -18,13 +18,13 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 vi.mock('../files', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../files')>();
-  real.listDir = actual.listDir;
-  return { ...actual, listDir: vi.fn(actual.listDir) };
+  real.listEntries = actual.listEntries;
+  return { ...actual, listEntries: vi.fn(actual.listEntries) };
 });
-const actualListDir = (path: string): ReturnType<typeof listDir> => present(real.listDir, 'the real listDir')(path);
+const actualListEntries = (path: string): ReturnType<typeof listEntries> => present(real.listEntries, 'the real listEntries')(path);
 const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
 
-import { listDir } from '../files';
+import { listEntries } from '../files';
 import type { FileOrigin, InstanceAdapter } from '../instanceAdapter';
 import { mo2InstanceAdapter } from '../mo2Instance';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
@@ -83,7 +83,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
   });
   afterEach(async () => {
     vi.mocked(fsRename).mockImplementation(actualRename);
-    vi.mocked(listDir).mockImplementation(actualListDir);
+    vi.mocked(listEntries).mockImplementation(actualListEntries);
     await rm(root, { recursive: true, force: true });
   });
 
@@ -238,11 +238,9 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     });
 
     it('refuses two files that the rename would put on one name, which on a file system that tells case apart would overwrite one with the other', async () => {
-      class TwinIni extends Dirent {
-        override name = 'patch mod.ini';
-      }
-      vi.mocked(listDir).mockImplementation(async (path) => [...await actualListDir(path), ...(path === at(MOD) ? [new TwinIni()] : [])]);
-      await refused(() => rename().finally(() => vi.mocked(listDir).mockImplementation(actualListDir)), /is in the way/);
+      const twinIni = { name: 'patch mod.ini', isFile: true, isDirectory: false };
+      vi.mocked(listEntries).mockImplementation(async (path) => [...await actualListEntries(path), ...(path === at(MOD) ? [twinIni] : [])]);
+      await refused(() => rename().finally(() => vi.mocked(listEntries).mockImplementation(actualListEntries)), /is in the way/);
     });
 
     it.each(['a/b.esp', 'a\\b.esp', '..', ''])('refuses the name "%s", which is no file of the origin', (name) =>

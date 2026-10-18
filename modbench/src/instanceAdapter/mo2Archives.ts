@@ -4,7 +4,7 @@
 import { keepsOwnGameInis } from './codecs/profileSettings';
 import { archiveListsOf, pluginCompanionRule } from '../tables/gamePaths';
 import { dataFolderOf } from './gameFolder/dataFolder';
-import { get, listDir, readOrAbsent, readOrReason } from './files';
+import { get, listEntries, readOrAbsent, readOrReason } from './files';
 import { archivesListedIn } from './gameFolder/gameIni';
 import type { DataFolderArchives, GameFolder } from './instanceAdapter';
 import { anyCase, dataFolderArchivesGlob, fileInFolder, profileDir, profileSettingsFile } from './layout';
@@ -12,7 +12,7 @@ import type { Mo2Context } from './mo2Context';
 
 // The one spelled as `name` first, then one Windows takes for it.
 async function fileNamedIn(folder: string, name: string): Promise<string | undefined> {
-  const names = (await readOrAbsent(() => listDir(folder), [])).filter((d) => d.isFile()).map((d) => d.name);
+  const names = (await readOrAbsent(() => listEntries(folder), [])).filter((d) => d.isFile).map((d) => d.name);
   const spelled = names.find((entry) => entry === name) ?? names.find((entry) => entry.toLowerCase() === name.toLowerCase());
   return spelled === undefined ? undefined : fileInFolder(folder, spelled);
 }
@@ -23,13 +23,13 @@ const textOf = async (file: string | undefined): Promise<string[]> =>
 async function listGameFolderArchives(dataFolder: string, gameRelease: string | undefined): Promise<DataFolderArchives> {
   const rule = pluginCompanionRule(gameRelease);
   const listing = await readOrReason(async () => {
-    const dirents = await listDir(dataFolder);
+    const dirents = await listEntries(dataFolder);
     if (rule === undefined) return { archives: [], stringsFiles: [] };
-    const archives = dirents.filter((d) => d.isFile() && rule.isArchive(d.name)).map((d) => d.name);
-    const stringsFolders = dirents.filter((d) => d.isDirectory() && d.name.toLowerCase() === rule.stringsFolder).map((d) => d.name);
-    const stringsFiles = await Promise.all(stringsFolders.map(async (folder) => (await listDir(fileInFolder(dataFolder, folder)))
+    const archives = dirents.filter((d) => d.isFile && rule.isArchive(d.name)).map((d) => d.name);
+    const stringsFolders = dirents.filter((d) => d.isDirectory && d.name.toLowerCase() === rule.stringsFolder).map((d) => d.name);
+    const stringsFiles = await Promise.all(stringsFolders.map(async (folder) => (await listEntries(fileInFolder(dataFolder, folder)))
       .map((d) => ({ d, relativePath: `${folder}/${d.name}` }))
-      .filter(({ d, relativePath }) => d.isFile() && rule.isStringsFile(relativePath))
+      .filter(({ d, relativePath }) => d.isFile && rule.isStringsFile(relativePath))
       .map(({ relativePath }) => relativePath)));
     return { archives, stringsFiles: stringsFiles.flat() };
   });

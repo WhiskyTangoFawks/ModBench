@@ -4,7 +4,7 @@
 import { parse } from 'node:path';
 import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCodec/pluginsText';
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
-import { get, listDir, readOrAbsent, rename, undoAll, type Undo, withLock, write } from './files';
+import { get, listEntries, listFolders, readOrAbsent, rename, undoAll, type Undo, withLock, write } from './files';
 import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
 import { fileInFolder, pluginOrderFiles, profilesDir } from './layout';
 import { originFolder, type Mo2Context } from './mo2Context';
@@ -29,8 +29,8 @@ const notAFileOf = (origin: FileOrigin, name: string): Error =>
 const namedFile = (name: string): boolean => name !== '' && name !== '.' && name !== '..' && !/[\\/]/.test(name);
 
 async function entriesIn(folder: string): Promise<Entry[]> {
-  const dirents = await readOrAbsent(() => listDir(folder), []);
-  return dirents.map((d) => ({ name: d.name, isFolder: d.isDirectory() }));
+  const dirents = await readOrAbsent(() => listEntries(folder), []);
+  return dirents.map((d) => ({ name: d.name, isFolder: d.isDirectory }));
 }
 
 interface Line {
@@ -91,8 +91,8 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
   }
 
   async function orderFiles(): Promise<string[]> {
-    const profiles = (await readOrAbsent(() => listDir(profilesDir(instanceRoot)), [])).filter((d) => d.isDirectory());
-    return profiles.map((d) => d.name).sort().flatMap((name) => pluginOrderFiles(instanceRoot, name));
+    const profiles = await readOrAbsent(() => listFolders(profilesDir(instanceRoot)), []);
+    return profiles.sort().flatMap((name) => pluginOrderFiles(instanceRoot, name));
   }
 
   // Everything the rename refuses, read before any write.
