@@ -101,14 +101,14 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
     const rule = pluginCompanionRule(gameRelease);
     if (rule === undefined) throw new Error(`No table of the files named for a plugin for the release ${gameRelease ?? 'of this game'}`);
     if (!namedFile(to)) throw new Error(`Not a valid plugin file name: "${to}"`);
-    const folder = await originFolder(context, origin);
+    const folder = await originFolder(context, origin, 'list');
     if (folder === undefined) throw notAFileOf(origin, from);
     return { lines: await renamedLines(orders, from, to), files: await moves(origin, folder, from, to, rule) };
   }
 
   return {
     async originHoldsPlugin(origin, name) {
-      const folder = await originFolder(context, origin);
+      const folder = await originFolder(context, origin, 'list');
       return folder !== undefined && (await entriesIn(folder)).some((entry) => !entry.isFolder && sameName(entry.name, name));
     },
 

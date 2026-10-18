@@ -47,7 +47,7 @@ export interface ReadingSource extends ArchiveReads {
   profiles(skippedLink: SkippedLink): Promise<string[]>;
   modOrder(profile: string): Promise<ModlistEntry[]>;
   /** Empty when the mod has no metadata. */
-  modMeta(mod: string, folders?: ModFolders): Promise<ModMeta>;
+  modMeta(mod: string, folders: ModFolders | undefined | 'list'): Promise<ModMeta>;
   pluginOrder(profile: string): Promise<PluginEntry[]>;
   gameFolderPlugins(gameFolder: GameFolder, skippedLink: SkippedLink): Promise<DataFolderPlugins>;
   /** The plugins the game folder's Creation Club list names, in its order; none when the release
@@ -57,9 +57,9 @@ export interface ReadingSource extends ArchiveReads {
    *  folder, and is handed to `skippedLink`. */
   modFolders(skippedLink: SkippedLink): Promise<ModFolders | undefined>;
   /** An origin's files, none when its folder is not there. */
-  originFiles(origin: FileOrigin, folders?: ModFolders): Promise<OriginFiles>;
+  originFiles(origin: FileOrigin, folders: ModFolders | undefined | 'list'): Promise<OriginFiles>;
   /** The files at an origin's root, as `originFiles` lists them. */
-  originRootFiles(origin: FileOrigin, folders?: ModFolders): Promise<OriginFiles>;
+  originRootFiles(origin: FileOrigin, folders: ModFolders | undefined | 'list'): Promise<OriginFiles>;
   sourceMods(): Promise<SourceMods>;
   holdsRepository(): Promise<boolean>;
   watchNotes(): string[];
@@ -175,7 +175,7 @@ export function mo2Reads(
     downloadedFiles: async () => (await source.settings()).downloadedFiles(ignoreSkippedLink),
     modOrder: async () => ({ mods: await source.modOrder((await source.settings()).profile), modFolders: await listModFolders(context, ignoreSkippedLink) }),
     sourceMods: () => source.sourceMods(),
-    modFolderPath: (name) => modFolderNamed(context, name),
+    modFolderPath: (name) => modFolderNamed(context, name, 'list'),
     sourceFolder: (mod) => modSourceDir(instanceRoot, mod),
     entryKey,
     fileStamp: (path) => readOrReason(() => stampOf(path)),
@@ -243,7 +243,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     })),
     source.profiles(skipLink),
     modFoldersRead,
-    source.originFiles({ kind: 'runtimeOutput' }),
+    source.originFiles({ kind: 'runtimeOutput' }, 'list'),
     sourceModsRead,
     Promise.all([modsKept, modFoldersRead]).then(async ([entries, folders]) => new Map(await Promise.all(entries.filter((entry) => entry.kind === 'mod')
       .map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name }, folders)] as const)))),
@@ -267,7 +267,7 @@ export async function readPluginsProvided(source: ReadingSource, profile: string
   const settings = await source.settings();
   const [mods, runtimeOutput, gameFolder, modFolders] = await Promise.all([
     settled(() => source.modOrder(profile)).then((listed) => firstLines(listed, modLineKey).kept),
-    source.originRootFiles({ kind: 'runtimeOutput' }),
+    source.originRootFiles({ kind: 'runtimeOutput' }, 'list'),
     settings.gameFolder(),
     source.modFolders(ignoreSkippedLink),
   ]);

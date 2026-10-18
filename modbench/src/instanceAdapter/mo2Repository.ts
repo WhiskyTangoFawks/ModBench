@@ -61,7 +61,7 @@ export function mo2Repository(
     gameFiles,
 
     async gameFilesTakenBy(dataFolder, mod) {
-      const { files, notes } = await originFilesIn(context, { kind: 'mod', name: mod });
+      const { files, notes } = await originFilesIn(context, { kind: 'mod', name: mod }, false, 'list');
       const taken = await gameFiles(dataFolder, files.map((file) => file.relativePath));
       return taken.kind === 'read' ? { kind: 'read', answer: { gameFiles: taken.answer, notes } } : taken;
     },

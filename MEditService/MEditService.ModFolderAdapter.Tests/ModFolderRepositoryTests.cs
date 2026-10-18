@@ -485,7 +485,7 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void WriteManifest_FailingPartWay_LeavesTheOldManifestWholeAndNoTempBehind()
+    public void WriteFile_FailingPartWay_LeavesTheOldFileWholeAndNoTempBehind()
     {
         _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("a.txt", new PackageEntry.NotHeld())]));
         var path = Path.Combine(_root, "mod.manifest.json");

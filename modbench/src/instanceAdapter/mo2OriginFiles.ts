@@ -16,7 +16,7 @@ function fileUnder(folder: string | undefined, relativePath: string): string | u
 export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
   return {
     async markOriginFile(origin, relativePath, mark: OriginFileMark) {
-      const from = fileUnder(await originFolder(context, origin), relativePath);
+      const from = fileUnder(await originFolder(context, origin, 'list'), relativePath);
       if (from === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${relativePath}"`);
       return withLock(from, async (): Promise<OriginFileMarked> => {
         if (!(await exists(from))) return { gone: true };
@@ -34,7 +34,7 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
     },
 
     async trashModFile(mod, relativePath, trash) {
-      const folder = await originFolder(context, { kind: 'mod', name: mod });
+      const folder = await originFolder(context, { kind: 'mod', name: mod }, 'list');
       const file = fileUnder(folder, relativePath);
       const notAFile = new Error(`Not a file of mod "${mod}": "${relativePath}"`);
       if (folder === undefined || file === undefined) throw notAFile;

@@ -141,7 +141,7 @@ async function listOverwrite(folder: string, rootOnly: boolean): Promise<Walk> {
   return walk;
 }
 
-export async function originFilesIn(context: Mo2Context, origin: FileOrigin, rootOnly = false, modFolders?: ModFolders): Promise<OriginFiles> {
+export async function originFilesIn(context: Mo2Context, origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list'): Promise<OriginFiles> {
   if (origin.kind === 'runtimeOutput') {
     const { root, files, folders, notes } = await listOverwrite(overwriteDir(context.instanceRoot), rootOnly);
     return { origin: OVERWRITE_ORIGIN, folder: root, files, folders, notes };

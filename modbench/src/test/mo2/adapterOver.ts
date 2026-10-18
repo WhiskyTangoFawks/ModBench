@@ -75,7 +75,7 @@ export async function readDownloadedFileMeta(root: string, name: string): Promis
 /** Each listed mod's own files, as a reading holds them. */
 export async function modFilesOf(source: ReadingSource, entries: readonly ModlistEntry[]): Promise<Map<string, OriginFiles>> {
   const mods = entries.filter((entry) => entry.kind === 'mod');
-  return new Map(await Promise.all(mods.map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name })] as const)));
+  return new Map(await Promise.all(mods.map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name }, 'list')] as const)));
 }
 
 type PluginCommandsClient = Parameters<typeof pluginCommands>[0]['client'];

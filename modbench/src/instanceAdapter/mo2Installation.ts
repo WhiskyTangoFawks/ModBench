@@ -88,7 +88,7 @@ export function mo2Installation(
   context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>, { modMeta }: Pick<ReadingSource, 'modMeta'>,
 ): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'modMetadata' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
   return {
-    modMetadata: (mod) => readOrReason(async () => metadataOf(await modMeta(mod), context)),
+    modMetadata: (mod) => readOrReason(async () => metadataOf(await modMeta(mod, 'list'), context)),
 
     metadataOf: (meta) => metadataOf(meta, context),
 
@@ -106,7 +106,7 @@ export function mo2Installation(
     }),
 
     async installationFile(mod) {
-      const meta = await modMeta(mod);
+      const meta = await modMeta(mod, 'list');
       const { archiveFilename } = meta;
       if (archiveFilename === undefined) return { kind: 'read', answer: undefined };
       const refused = (why: string): FileRead<InstallationFile | undefined> =>
