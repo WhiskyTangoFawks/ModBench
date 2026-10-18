@@ -41,7 +41,7 @@ interface InstallOptions {
 }
 
 interface ModInstallDeps {
-  commands: Pick<ModCommands, 'installMod' | 'newModNameRefusal' | 'upgradeLoss'>;
+  commands: Pick<ModCommands, 'installMod' | 'newModNameRefusal' | 'upgradeLoss' | 'names'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
@@ -61,6 +61,9 @@ const unmarked = (downloadedFile: string | undefined, downloadedFileRefusal: str
   downloadedFile !== undefined && downloadedFileRefusal !== undefined
     ? [{ message: `"${downloadedFile}" was installed, but its Downloads status could not be updated`, detail: downloadedFileRefusal, severity: 'log' }]
     : [];
+
+const unlined = (mod: string, modOrderFile: string, lineRefusal: string | undefined): PartialFailure[] =>
+  (lineRefusal === undefined ? [] : [{ message: `"${mod}" was installed, but its ${modOrderFile} line could not be written`, detail: lineRefusal, severity: 'warning' }]);
 
 const packageOf = (argument: readonly Argument[]): Pick<Install, 'package' | 'via'> => {
   const [only, ...more] = argument;
@@ -115,7 +118,10 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       return {
         applied: true,
         outcome: { landed: [{ name: install.target.name, isFomod: outcome.isFomod }], refused: [] },
-        partial: unmarked(outcome.downloadedFile, outcome.downloadedFileRefusal),
+        partial: [
+          ...unlined(install.target.name, commands.names.modOrderFile, outcome.lineRefusal),
+          ...unmarked(outcome.downloadedFile, outcome.downloadedFileRefusal),
+        ],
       };
     } catch (err) {
       return { applied: false, refusal: failedMessage(install), detail: errorMessage(err) };

@@ -83,7 +83,7 @@ describe('mod lifecycle corpus (install)', () => {
 
   const MANUAL = 'Manually Dropped Archive.7z';
 
-  it('installMod from a downloaded file writes the new mod\'s folder and the file\'s metadata, clearing the uninstalled key MO2 left as its own markInstalled does — nothing else', async () => {
+  it('installMod from a downloaded file writes the new mod\'s folder, its disabled line in mod order and the file\'s metadata, clearing the uninstalled key MO2 left as its own markInstalled does — nothing else', async () => {
     await writeFile(join(dir, 'downloads', MANUAL), 'archive bytes');
     await writeFile(join(dir, 'downloads', `${MANUAL}.meta`), '[General]\r\nuninstalled=true\r\n');
     const before = await snapshotTree(dir);
@@ -93,7 +93,8 @@ describe('mod lifecycle corpus (install)', () => {
     const after = await snapshotTree(dir);
 
     expect(outcome).toEqual({ applied: true, isFomod: false, downloadedFile: MANUAL });
-    assertOnlyChanged(before, after, new Set(['mods/Manual/Manual.esp', 'mods/Manual/meta.ini', `downloads/${MANUAL}.meta`]));
+    assertOnlyChanged(before, after, new Set(['mods/Manual/Manual.esp', 'mods/Manual/meta.ini', 'profiles/Default/modlist.txt', `downloads/${MANUAL}.meta`]));
+    expect(await readFile(join(dir, 'profiles', 'Default', 'modlist.txt'), 'utf8')).toContain('-Manual');
     expect(await readDownloadedFileMeta(dir, MANUAL)).toMatchObject({ status: 'Installed' });
   });
 });
