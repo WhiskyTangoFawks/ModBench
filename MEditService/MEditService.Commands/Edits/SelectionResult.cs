@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.Commands.Edits;
 
@@ -30,6 +31,24 @@ public sealed record ItemRefused<TItem, TRefusal>(TItem Item, TRefusal Refusal, 
 /// <summary>A cause no item of a selection escapes.</summary>
 public sealed record SelectionRefusal<TRefusal>(TRefusal Refusal, string Message);
 
+/// <summary>A gesture's answer over a selection, whatever the gesture: each item it refused.</summary>
+public interface ISelectionAnswer<out TRefused>
+    where TRefused : IItemRefused
+{
+    IReadOnlyList<TRefused> Refused { get; }
+}
+
+/// <summary>An item of a selection that wrote nothing, whatever the gesture: the item, the typed refusal and the message
+/// naming the way out.</summary>
+public interface IItemRefused
+{
+    object Item { get; }
+
+    object Refusal { get; }
+
+    string Message { get; }
+}
+
 /// <summary>A gesture over a selection (commands.md, A selection is one gesture): the items that
 /// landed, each refused item with its reason, and a cause no item escapes as
 /// <see cref="SelectionRefusal"/> (ADR-0019).</summary>
@@ -52,4 +71,14 @@ public sealed class SelectionResult<TItem, TRefusal, TOutcome>
     public IReadOnlyList<ItemRefused<TItem, TRefusal>> Refused { get; }
 
     public SelectionRefusal<TRefusal>? SelectionRefusal { get; }
+
+    /// <summary>The gesture's own answer of what landed and what was refused, or the refusal of the whole selection.</summary>
+    internal Answer<TAnswer, SelectionRefusal<TRefusal>> As<TApplied, TRefused, TAnswer>(
+        Func<ItemLanded<TItem, TOutcome>, TApplied> applied,
+        Func<ItemRefused<TItem, TRefusal>, TRefused> refused,
+        Func<IReadOnlyList<TApplied>, IReadOnlyList<TRefused>, TAnswer> answer)
+    {
+        if (SelectionRefusal is { } whole) return whole;
+        return answer([.. Landed.Select(applied)], [.. Refused.Select(refused)]);
+    }
 }

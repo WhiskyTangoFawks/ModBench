@@ -336,17 +336,11 @@ internal static class PluginEndpoints
 
     // decompile-plugin: the selection (commands.md, A selection is one gesture).
     internal static Task<IResult> Decompile(
-        DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        return OverPlugins(req.Plugins, plugins => EndpointMapping.Answered(
-            "Decompile", logger,
+        DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory) =>
+        OverPlugins(req.Plugins, plugins => EndpointMapping.Answered(
+            "Decompile", loggerFactory.CreateLogger(nameof(PluginEndpoints)),
             decompileHandler.DecompileAsync(plugins, req.Force),
-            EndpointMapping.Refusal,
-            landed => landed.Item,
-            refused => new PluginDecompileRefusal(refused.Item, refused.Refusal, refused.Message),
-            (applied, refused) => new DecompileResponse(applied, refused)));
-    }
+            EndpointMapping.Refusal));
 
     // compile-plugin: the selection (commands.md, A selection is one gesture).
     internal static Task<IResult> Compile(
@@ -427,13 +421,6 @@ internal sealed record RenameSourceChangesRequest(string Origin, string Name, st
 internal sealed record MoveLastWrittenRequest(string Origin, string Name, string TreeName, string NewName);
 
 internal sealed record DecompileRequest(IReadOnlyList<PluginAddress> Plugins, bool Force);
-
-/// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
-internal sealed record DecompileResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginDecompileRefusal> Refused);
-
-/// <summary>A plugin of the selection that wrote nothing, with the typed refusal and the message naming
-/// the way out.</summary>
-internal sealed record PluginDecompileRefusal(PluginAddress Item, DecompileRefusal Refusal, string Message);
 
 internal sealed record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 
