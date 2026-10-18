@@ -76,7 +76,8 @@ const BYTE_READ_PATHS = ['node:fs', 'node:fs/promises', 'fs', 'fs/promises'].map
     importNames: BYTE_READS,
     message: 'The extension interprets no plugin binary (ADR-0004): the one byte-level read is the Instance adapter\'s content digest.',
 }));
-const VSCODE_IMPORT = { name: 'vscode', message: 'Only a view takes VS Code types, and the Instance adapter\'s watch.' };
+const VSCODE_BOXES = [...DRIVING_BOXES, 'textDocuments'];
+const VSCODE_IMPORT = { name: 'vscode', message: 'Only a view takes VS Code types, the Instance adapter\'s watch, and Text documents.' };
 const REPORTER_IMPORT = {
     group: ['**/reporter'],
     message: 'The Instance leaves a read failure in its value for a subscriber to render; it raises no notification.',
@@ -220,7 +221,7 @@ export default defineConfig(
         ignores: NOT_PRODUCTION,
         rules: {
             'no-restricted-imports': restrictedImports({
-                vscode: !DRIVING_BOXES.includes(box),
+                vscode: !VSCODE_BOXES.includes(box),
                 packages: !PACKAGE_BOXES.includes(box),
                 path: PATHLESS_BOXES.includes(box),
                 client: box === 'toolbox',
@@ -381,6 +382,7 @@ export default defineConfig(
                     './src/downloadedFileCommands/tsconfig.json',
                     './src/client/tsconfig.json',
                     './src/drivingLib/tsconfig.json',
+                    './src/textDocuments/tsconfig.json',
                     './src/mods/tsconfig.json',
                     './src/downloads/tsconfig.json',
                     './src/plugins/tsconfig.json',

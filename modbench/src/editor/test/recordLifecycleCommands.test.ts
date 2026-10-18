@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type { CopyItem, RecordAddress } from '../../client';
 import type { ItemRefusal } from '../../ports/selectionOutcome';
-import type { SourceEditing } from '../../drivingLib/sourceEditing';
+import type { SourceEditing } from '../../textDocuments/sourceEditing';
 
 interface PickItem { label: string; description?: string; mode?: string; plugin?: { name: string } }
 type ShowQuickPick = (items: readonly PickItem[], options?: { canPickMany?: boolean }) => Promise<unknown>;
