@@ -57,8 +57,6 @@ try
                 formatProvider: CultureInfo.InvariantCulture,
                 rollingInterval: RollingInterval.Day));
 
-    builder.Services.AddCors(opts =>
-        opts.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
     builder.Services.ConfigureHttpJsonOptions(options =>
         options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
     builder.Services.AddEndpointsApiExplorer();
@@ -106,7 +104,7 @@ try
     };
 
     app.UseExceptionHandler();
-    app.UseCors();
+    app.UseSameOriginOnly();
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
