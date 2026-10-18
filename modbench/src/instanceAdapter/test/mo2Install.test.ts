@@ -187,7 +187,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       await writeFile(join(folder(UPGRADED), 'plugin-source', 'shipped', 'Old.json'), '');
     });
 
-    it('replaces every file the folder held, and leaves the mod\'s repository beside mods/ as it was', async () => {
+    it('replaces the folder\'s files other than its manifest, and leaves the mod\'s repository beside mods/ as it was', async () => {
       const repository = join(root, 'source', UPGRADED);
       await mkdir(join(repository, '.git'), { recursive: true });
       await writeFile(join(repository, '.git', 'HEAD'), 'ref');
