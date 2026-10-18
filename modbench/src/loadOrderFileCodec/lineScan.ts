@@ -5,16 +5,22 @@ export const stripBom = (text: string): string => (text.startsWith(BOM) ? text.s
 export const splitLines = (text: string): string[] => text.split(/\r\n|\r|\n/);
 
 /** Applies `edit` to the lines. The file keeps its BOM and whether its last line has a
- *  terminator, and is written whole with the one line ending `detectEol` names. */
+ *  terminator, and each line keeps its own terminator; a new line takes the one `detectEol` names. */
 export function editLines(text: string, edit: (lines: string[]) => readonly string[]): string {
   const bom = text.startsWith(BOM) ? BOM : '';
-  const body = text.slice(bom.length);
-  const lines = body === '' ? [] : splitLines(body);
-  const terminated = lines.at(-1) === '' || body === '';
-  if (lines.at(-1) === '') lines.pop();
+  const parts = text.slice(bom.length).split(/(\r\n|\r|\n)/);
+  const lines = parts.filter((_, at) => at % 2 === 0);
+  const terminated = lines.at(-1) === '';
+  if (terminated) lines.pop();
+  const endsOf = new Map<string, string[]>();
+  lines.forEach((line, at) => {
+    const end = parts[2 * at + 1];
+    if (end !== undefined) endsOf.set(line, [...endsOf.get(line) ?? [], end]);
+  });
   const edited = edit(lines);
   const eol = detectEol(text);
-  return bom + edited.join(eol) + (terminated && edited.length > 0 ? eol : '');
+  return bom + edited.map((line, at) =>
+    (!terminated && at === edited.length - 1 ? line : line + (endsOf.get(line)?.shift() ?? eol))).join('');
 }
 
 /** The positions of the lines `isEntry` accepts. */
