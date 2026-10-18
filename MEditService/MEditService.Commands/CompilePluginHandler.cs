@@ -22,12 +22,12 @@ public sealed class CompilePluginHandler
         Over(plugins, _compileService.CompileAsync);
 
     /// <summary>Each plugin a build places, compiled to its path whether or not the load order holds it. No two differ
-    /// in case alone. The build has asked <see cref="WhyNoPluginCompiles"/>, so this refuses no whole selection.</summary>
-    internal Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileAsync(
+    /// in case alone. The build has asked <see cref="WhyNoPluginCompiles"/>.</summary>
+    internal async Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> CompileAsync(
         IReadOnlyList<RegisteredPlugin> placed)
     {
         var byKey = placed.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
-        return Each([.. byKey.Keys], plugin => _compileService.CompileAsync(byKey[plugin]));
+        return await Each([.. byKey.Keys], plugin => _compileService.CompileAsync(byKey[plugin]));
     }
 
     /// <summary>The cause no plugin of a selection escapes: no load order held, or git unable to run.</summary>
@@ -37,13 +37,16 @@ public sealed class CompilePluginHandler
         return _source.WhyGitCannotRun() is { } gitMissing ? new(CompileRefusal.GitUnavailable, gitMissing.Reason) : null;
     }
 
-    private Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> Over(
-        IReadOnlyList<PluginAddress> plugins, Func<PluginAddress, Task<CompileResult>> compile) =>
-        WhyNoPluginCompiles() is { } none
-            ? Task.FromResult(SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>.WholeSelectionRefused(none.Refusal, none.Message))
-            : Each(plugins, compile);
+    private async Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> Over(
+        IReadOnlyList<PluginAddress> plugins, Func<PluginAddress, Task<CompileResult>> compile)
+    {
+        if (WhyNoPluginCompiles() is { } none)
+            return SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>.WholeSelectionRefused(none.Refusal, none.Message);
+        var (landed, refused) = await Each(plugins, compile);
+        return SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>.PerItem(landed, refused);
+    }
 
-    private static Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> Each(
+    private static Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> Each(
         IReadOnlyList<PluginAddress> plugins, Func<PluginAddress, Task<CompileResult>> compile) =>
         ItemWrite.EachAsync(plugins, PluginAddress.Comparer, async plugin => Answered(await compile(plugin)));
 

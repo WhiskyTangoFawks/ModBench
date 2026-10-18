@@ -29,12 +29,13 @@ internal static class ItemWrite
     {
         if (source.WhyGitCannotRun() is { } gitMissing)
             return SelectionResult<TItem, TRefusal, TOutcome>.WholeSelectionRefused(gitUnavailable, gitMissing.Reason);
-        return await EachAsync(items, sameItem, write);
+        var (landed, refused) = await EachAsync(items, sameItem, write);
+        return SelectionResult<TItem, TRefusal, TOutcome>.PerItem(landed, refused);
     }
 
     /// <summary>Each distinct item lands or is refused on its own, as its caller has already checked what no item
     /// escapes.</summary>
-    internal static async Task<SelectionResult<TItem, TRefusal, TOutcome>> EachAsync<TItem, TRefusal, TOutcome>(
+    internal static async Task<(IReadOnlyList<ItemLanded<TItem, TOutcome>> Landed, IReadOnlyList<ItemRefused<TItem, TRefusal>> Refused)> EachAsync<TItem, TRefusal, TOutcome>(
         IEnumerable<TItem> items, IEqualityComparer<TItem> sameItem, Func<TItem, Task<ItemAnswer<TRefusal, TOutcome>>> write)
     {
         var landed = new List<ItemLanded<TItem, TOutcome>>();
@@ -51,7 +52,7 @@ internal static class ItemWrite
                     break;
             }
         }
-        return SelectionResult<TItem, TRefusal, TOutcome>.PerItem(landed, refused);
+        return (landed, refused);
     }
 
     /// <summary>What a selection of one item came to.</summary>

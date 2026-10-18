@@ -22,16 +22,12 @@ internal sealed class SourceModBuild
         CompilePluginHandler compile, LoadOrderHolder loadOrder, ISourceAdapter source, IModFolderRepository modFolders, IPluginAdapter plugins) =>
         (_compile, _loadOrder, _source, _modFolders, _plugins) = (compile, loadOrder, source, modFolders, plugins);
 
-    /// <summary>Compiled against the held load order; refused with <see cref="BuildRefusal.NoLoadOrder"/> when none is held.</summary>
-    internal async Task<ItemAnswer<BuildRefusal, BuiltMod>> BuildAsync(ModToBuild mod, InstanceToBuild instance) =>
-        _loadOrder.Held is { Snapshot: var loadOrder }
-            ? await BuildModAsync(loadOrder, mod, instance)
-            : Refused(BuildRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
-
-    // Everything that refuses the mod is checked before its first write (mods.md, Build, story 4).
-    private async Task<ItemAnswer<BuildRefusal, BuiltMod>> BuildModAsync(LoadOrderSnapshot loadOrder, ModToBuild mod, InstanceToBuild instance)
+    /// <summary>Compiled against the held load order. Everything that refuses the mod is checked before its first write
+    /// (mods.md, Build, story 4).</summary>
+    internal async Task<ItemAnswer<BuildRefusal, BuiltMod>> BuildAsync(ModToBuild mod, InstanceToBuild instance)
     {
         if (_compile.WhyNoPluginCompiles() is { } none) return Refused(WholeCompileRefused(none.Refusal), none.Message);
+        var loadOrder = _loadOrder.Require();
         if (!_source.SourceToBuild(mod.SourceFolder).Holds(out var source, out var unread))
             return Refused(BuildRefusal.SourceUnreadable, unread.Reason);
         var folderName = _modFolders.FolderName(mod.Folder);
