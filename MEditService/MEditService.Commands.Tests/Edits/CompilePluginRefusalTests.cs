@@ -22,7 +22,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
     {
         TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains(_mod.Npc.ToString(), refused.Message);
@@ -34,7 +34,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
         var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
         using var held = TreeTampering.HoldOpen(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, file), refused.Message, StringComparison.Ordinal);
@@ -46,12 +46,12 @@ public sealed class CompilePluginRefusalTests : IDisposable
         var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
         _mod.Overwrite(_mod.NpcIdentity, "{ not valid json");
 
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Equal(CompileRefusal.SourceDoesNotParse, refused.Refusal);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, file), refused.Message, StringComparison.Ordinal);
-        Assert.Empty(answer.Landed);
+        Assert.Empty(answer.Applied);
     }
 
     [Fact]
@@ -62,11 +62,11 @@ public sealed class CompilePluginRefusalTests : IDisposable
         Assert.Contains("\"Race\"", npcSourceText);
         _mod.Overwrite(_mod.NpcIdentity, npcSourceText.Replace("\"Race\"", "\"RaceOld\"", StringComparison.Ordinal));
 
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains($"{Path.GetRelativePath(_mod.ModFolder, file)}: RaceOld", refused.Message, StringComparison.Ordinal);
-        Assert.Empty(answer.Landed);
+        Assert.Empty(answer.Applied);
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
         _mod.Overwrite(_mod.NpcIdentity, _mod.Document(_mod.Npc.ToString()).Require().Body.Replace("\"Race\"", "\"RaceOld\"", StringComparison.Ordinal));
         _mod.Overwrite(otherIdentity, _mod.Document(_mod.OtherNpc.ToString()).Require().Body.Replace("\"EditorID\"", "\"EditorTypo\"", StringComparison.Ordinal));
 
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains($"{Path.GetRelativePath(_mod.ModFolder, npcFile)}: RaceOld", refused.Message, StringComparison.Ordinal);
@@ -97,7 +97,7 @@ public sealed class CompilePluginRefusalTests : IDisposable
         var level = Path.GetRelativePath(_mod.ModFolder, levels[0]);
         File.WriteAllText(levels[0], File.ReadAllText(levels[0]).Replace("BlockNumber", "BlockNumbr", StringComparison.Ordinal));
 
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains($"{level}: BlockNumbr", refused.Message, StringComparison.Ordinal);
@@ -113,9 +113,9 @@ public sealed class CompilePluginRefusalTests : IDisposable
         members["EditorID"] = editorId;
         _mod.Overwrite(_mod.NpcIdentity, members.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\n", "\n\n", StringComparison.Ordinal));
 
-        var answer = await CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        Assert.Single(answer.Landed);
+        Assert.Single(answer.Applied);
     }
 }

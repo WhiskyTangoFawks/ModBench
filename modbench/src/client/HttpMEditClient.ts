@@ -18,7 +18,7 @@ import {
   type UpdateManifestFacts, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome, type ModByFolder, type ModStatus, type WhatRestoreDestroys,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
-  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
+  type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAddress, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
   type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type InitMod, type InitStatus, type InitOutcome,
@@ -220,7 +220,7 @@ class HttpMEditClient implements MEditClient {
     return isRefused(answer) ? answer : spec.outcome(answer);
   }
 
-  async createPlugin(plugin: PluginAddress, folder: string, sourceFolder: string | undefined): Promise<PluginCreatedResponse | WriteRefused> {
+  async createPlugin(plugin: PluginAddress, folder: string, sourceFolder: string | undefined): Promise<PluginAddress | WriteRefused> {
     const failMsg = `Could not create "${plugin.name}"`;
     const answer = await this.mutate({
       op: `createPlugin(${plugin.name}, ${plugin.origin})`,

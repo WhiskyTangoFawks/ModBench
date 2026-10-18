@@ -1025,7 +1025,7 @@ export interface components {
         BuiltModResponse: {
             mod: string;
             compiled: components["schemas"]["CompiledPlugin"][];
-            refused: components["schemas"]["PluginCompileRefusal"][];
+            refused: components["schemas"]["CompileRefused"][];
             archivesRefused: components["schemas"]["ArchivePackRefusal"][];
             overwritten: string[];
             failure?: string | null;
@@ -1101,12 +1101,17 @@ export interface components {
         };
         /** @enum {string} */
         CompileRefusal: "None" | "PluginNotInLoadOrder" | "PluginNotCompiledPlugin" | "PluginSourceUnreadable" | "TwinPluginSources" | "NoSource" | "SourceFileHeld" | "SourceDoesNotParse" | "SourceValueDropped" | "FormKeyCollision" | "FormIdOutsideFlagLimit" | "FormIdUnmappable" | "MasterNotInLoadOrder" | "MasterUnreadable" | "WriteFailed" | "GitUnavailable" | "NoLoadOrder";
+        CompileRefused: {
+            item: components["schemas"]["PluginAddress"];
+            refusal: components["schemas"]["CompileRefusal"];
+            message: string;
+        };
         CompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
         };
-        CompileResponse: {
+        CompileResult: {
             applied: components["schemas"]["CompiledPlugin"][];
-            refused: components["schemas"]["PluginCompileRefusal"][];
+            refused: components["schemas"]["CompileRefused"][];
         };
         CompiledPlugin: {
             name: string;
@@ -1495,15 +1500,6 @@ export interface components {
             name: string;
             origin: string;
         };
-        PluginCompileRefusal: {
-            item: components["schemas"]["PluginAddress"];
-            refusal: components["schemas"]["CompileRefusal"];
-            message: string;
-        };
-        PluginCreatedResponse: {
-            name: string;
-            origin: string;
-        };
         PluginDependantsResponse: {
             dependants: components["schemas"]["PluginAddress"][];
             unreadable: components["schemas"]["PluginAddress"][];
@@ -1728,16 +1724,16 @@ export interface components {
             recordTypeName: string;
             editorId?: string | null;
         };
-        RenameSourceChangesRequest: {
-            origin: string;
-            name: string;
-            newName: string;
-        };
-        RenameSourceChangesResponse: {
+        RenameSourceChanges: {
             treeName: string;
             moves: components["schemas"]["SourceMove"][];
             deletions: string[];
             documents: components["schemas"]["DocumentChange"][];
+        };
+        RenameSourceChangesRequest: {
+            origin: string;
+            name: string;
+            newName: string;
         };
         RenderedDocument: {
             fileName: string;
@@ -2542,7 +2538,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RenameSourceChangesResponse"];
+                    "application/json": components["schemas"]["RenameSourceChanges"];
                 };
             };
             /** @description Bad Request */
@@ -3065,7 +3061,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PluginCreatedResponse"];
+                    "application/json": components["schemas"]["PluginAddress"];
                 };
             };
             /** @description Bad Request */
@@ -3134,7 +3130,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PluginCreatedResponse"];
+                    "application/json": components["schemas"]["PluginAddress"];
                 };
             };
             /** @description Bad Request */
@@ -3321,7 +3317,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CompileResponse"];
+                    "application/json": components["schemas"]["CompileResult"];
                 };
             };
             /** @description Bad Request */

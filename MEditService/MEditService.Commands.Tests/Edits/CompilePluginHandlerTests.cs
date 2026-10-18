@@ -1,4 +1,3 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -21,13 +20,13 @@ public sealed class CompilePluginHandlerTests : IDisposable
     {
         var spelledAgain = new PluginAddress(_mod.Plugin.Name.ToUpperInvariant(), _mod.Plugin.Origin);
 
-        var result = await _mod.CompileHandler.CompileAsync([_mod.Plugin, spelledAgain]);
+        var result = (await _mod.CompileHandler.CompileAsync([_mod.Plugin, spelledAgain])).Value();
 
         Assert.Empty(result.Refused);
-        Assert.Equal([_mod.Plugin], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([_mod.Plugin.Name], result.Applied.Select(compiled => compiled.Name));
     }
 
-    private static Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileAPatchOfADisabledMaster(
+    private static async Task<CompileResult> CompileAPatchOfADisabledMaster(
         LoadOrderOfPlugins plugins, bool patchEnabled)
     {
         var game = Plugin("Fallout4.esm", mod => mod.Keywords.AddNew("GameKeyword"));
@@ -52,7 +51,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
         plugins.Load((game, false), (master, false), (patch, true));
         plugins.Relist(Address(master), entry => entry with { Enabled = false });
         plugins.Relist(Address(patch), entry => entry with { Enabled = patchEnabled });
-        return plugins.CompileHandler.CompileAsync([Address(patch)]);
+        return (await plugins.CompileHandler.CompileAsync([Address(patch)])).Value();
     }
 
     [Fact]
@@ -63,7 +62,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
         var result = await CompileAPatchOfADisabledMaster(plugins, patchEnabled: false);
 
         Assert.Empty(result.Refused);
-        Assert.Single(result.Landed);
+        Assert.Single(result.Applied);
     }
 
     [Fact]
@@ -73,7 +72,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
 
         var result = await CompileAPatchOfADisabledMaster(plugins, patchEnabled: false);
 
-        Assert.DoesNotContain(Assert.Single(result.Landed).Outcome, diagnostic => diagnostic.Message.StartsWith("Keywords", StringComparison.Ordinal));
+        Assert.DoesNotContain(Assert.Single(result.Applied).Diagnostics, diagnostic => diagnostic.Message.StartsWith("Keywords", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -83,7 +82,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
 
         var result = await CompileAPatchOfADisabledMaster(plugins, patchEnabled: true);
 
-        Assert.Contains(Assert.Single(result.Landed).Outcome, diagnostic => diagnostic.Message.StartsWith("Keywords: [1]", StringComparison.Ordinal));
+        Assert.Contains(Assert.Single(result.Applied).Diagnostics, diagnostic => diagnostic.Message.StartsWith("Keywords: [1]", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -105,9 +104,9 @@ public sealed class CompilePluginHandlerTests : IDisposable
         plugins.Relist(new("Middle.esp", "SecondMod"), entry => entry with { Winning = true, Enabled = false });
         plugins.Relist(new("Patch.esp", "PatchMod"), entry => entry with { Enabled = false });
 
-        var result = await plugins.CompileHandler.CompileAsync([new("Patch.esp", "PatchMod")]);
+        var result = (await plugins.CompileHandler.CompileAsync([new("Patch.esp", "PatchMod")])).Value();
 
-        Assert.DoesNotContain(Assert.Single(result.Landed).Outcome, diagnostic => diagnostic.Message.StartsWith("Keywords", StringComparison.Ordinal));
+        Assert.DoesNotContain(Assert.Single(result.Applied).Diagnostics, diagnostic => diagnostic.Message.StartsWith("Keywords", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -124,9 +123,9 @@ public sealed class CompilePluginHandlerTests : IDisposable
         plugins.Relist(Address(master), entry => entry with { Line = null });
         plugins.Relist(Address(patch), entry => entry with { Enabled = false });
 
-        var result = await plugins.CompileHandler.CompileAsync([Address(patch)]);
+        var result = (await plugins.CompileHandler.CompileAsync([Address(patch)])).Value();
 
-        Assert.DoesNotContain(Assert.Single(result.Landed).Outcome, diagnostic => diagnostic.Message.StartsWith("Keywords", StringComparison.Ordinal));
+        Assert.DoesNotContain(Assert.Single(result.Applied).Diagnostics, diagnostic => diagnostic.Message.StartsWith("Keywords", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -134,9 +133,9 @@ public sealed class CompilePluginHandlerTests : IDisposable
     {
         var stranger = new PluginAddress("Stranger.esp", CompileFixture.Origin);
 
-        var result = await _mod.CompileHandler.CompileAsync([stranger, _mod.Plugin]);
+        var result = (await _mod.CompileHandler.CompileAsync([stranger, _mod.Plugin])).Value();
 
-        Assert.Equal([_mod.Plugin], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([_mod.Plugin.Name], result.Applied.Select(compiled => compiled.Name));
         var refused = Assert.Single(result.Refused);
         Assert.Equal((stranger, CompileRefusal.PluginNotInLoadOrder), (refused.Item, refused.Refusal));
         Assert.Equal("Stranger.esp is not in the load order.", refused.Message);
@@ -149,7 +148,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
         var before = File.ReadAllBytes(pluginPath);
         Directory.Delete(PluginSourceRoot.In(_mod.ModFolder, CompileFixture.PluginName), recursive: true);
 
-        var result = await _mod.CompileHandler.CompileAsync([_mod.Plugin]);
+        var result = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(CompileRefusal.PluginSourceUnreadable, refused.Refusal);
@@ -167,7 +166,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
         Directory.Move(Path.Combine(sources, CompileFixture.PluginName), Path.Combine(sources, CompileFixture.PluginName.ToUpperInvariant()));
         Directory.CreateDirectory(Path.Combine(sources, CompileFixture.PluginName.ToLowerInvariant()));
 
-        var result = await _mod.CompileHandler.CompileAsync([_mod.Plugin]);
+        var result = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(CompileRefusal.PluginSourceUnreadable, refused.Refusal);
@@ -185,7 +184,7 @@ public sealed class CompilePluginHandlerTests : IDisposable
         Directory.Delete(root, recursive: true);
         Directory.CreateDirectory(root);
 
-        var result = await _mod.CompileHandler.CompileAsync([_mod.Plugin]);
+        var result = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
         Assert.Equal(CompileRefusal.NoSource, Assert.Single(result.Refused).Refusal);
         Assert.Equal(before, File.ReadAllBytes(pluginPath));

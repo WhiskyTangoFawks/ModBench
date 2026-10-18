@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda.Plugins;
@@ -21,24 +22,24 @@ public sealed class CreatePluginHandler
     internal CreatePluginHandler(IPluginAdapter adapter, LoadOrderHolder holder, ISourceAdapter source, ILogger<CreatePluginHandler> logger) =>
         (_adapter, _holder, _source, _decompiler) = (adapter, holder, source, new PluginDecompiler(logger, adapter, source));
 
-    private async Task<PluginCreateResult> LandSourceIfCompiledPlugin(
+    private async Task<Answer<PluginAddress, PluginCreateRefused>> LandSourceIfCompiledPlugin(
         LoadOrderSnapshot loadOrder, PluginAddress address, string folder, string? sourceFolder, string written)
     {
-        if (sourceFolder is null) return new PluginCreateResult();
+        if (sourceFolder is null) return address;
 
         var mod = new PluginProvider.FromMod(address.Origin, folder, sourceFolder);
         var modKey = ModKey.FromFileName(address.Name);
         var plugin = new RegisteredPlugin(address.Name, address.Origin, _adapter.PathOfEmpty(modKey, folder), mod, Line: null, PluginStrings.None);
-        if (!_source.IsSourceMod(plugin)) return new PluginCreateResult();
+        if (!_source.IsSourceMod(plugin)) return address;
 
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, folder, onParsed: () => { }, default);
         var failure = decompiled.Source is { } source
             ? _source.OverFolder(mod, loadOrder.GameRelease)
                 .ReplaceSourceFrom(address, source.Files, source.BinarySha256)?.Reason
             : decompiled.Message;
-        if (failure is null) return new PluginCreateResult();
+        if (failure is null) return address;
 
-        return new PluginCreateResult(PluginCreateRefusal.WriteFailed,
+        return new PluginCreateRefused(PluginCreateRefusal.WriteFailed,
             $"Could not write {address.Name}'s source into {mod.SourceFolder}: {failure} {TakeBack(modKey, address.Name, folder, written)}");
     }
 
@@ -56,32 +57,32 @@ public sealed class CreatePluginHandler
 
     /// <summary>Refuses with <see cref="PluginCreateRefusal.NoLoadOrder"/>, writing nothing, when no load order
     /// is held, since the release comes from it. <paramref name="sourceFolder"/> is the mod's, null for Overwrite.</summary>
-    public async Task<PluginCreateResult> CreatePlugin(PluginAddress plugin, string folder, string? sourceFolder)
+    public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePlugin(PluginAddress plugin, string folder, string? sourceFolder)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })
-            return new PluginCreateResult(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
+            return new PluginCreateRefused(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
 
         var release = loadOrder.GameRelease;
         if (!ModKey.TryFromFileName(plugin.Name, out var modKey))
         {
-            return new PluginCreateResult(PluginCreateRefusal.NotAPluginFile, NotAPluginFile.Message(plugin.Name, release));
+            return new PluginCreateRefused(PluginCreateRefusal.NotAPluginFile, NotAPluginFile.Message(plugin.Name, release));
         }
 
         if (modKey.Type == ModType.Light && !LightPluginSupport.Of(release))
         {
-            return new PluginCreateResult(PluginCreateRefusal.LightPluginUnsupported,
+            return new PluginCreateRefused(PluginCreateRefusal.LightPluginUnsupported,
                 $"{release} has no light plugins, so {plugin.Name} cannot be created.");
         }
 
         if (!(await _adapter.CreateAndWriteAsync(modKey, folder, release)).Holds(out var created, out var failure))
-            return new PluginCreateResult(PluginCreateRefusal.WriteFailed, $"Could not write {plugin.Name} into {folder}: {failure.Reason}");
+            return new PluginCreateRefused(PluginCreateRefusal.WriteFailed, $"Could not write {plugin.Name} into {folder}: {failure.Reason}");
 
         return created.Outcome switch
         {
             EmptyPluginWrite.Written => await LandSourceIfCompiledPlugin(loadOrder, plugin, folder, sourceFolder, created.Written),
-            EmptyPluginWrite.FolderGone => new PluginCreateResult(PluginCreateRefusal.FolderGone,
+            EmptyPluginWrite.FolderGone => new PluginCreateRefused(PluginCreateRefusal.FolderGone,
                 $"The folder {folder} has gone, so {plugin.Name} was not created."),
-            EmptyPluginWrite.FileExists => new PluginCreateResult(PluginCreateRefusal.FileExists,
+            EmptyPluginWrite.FileExists => new PluginCreateRefused(PluginCreateRefusal.FileExists,
                 $"{folder} already holds a file named {plugin.Name}, so it was not created."),
             var outcome => throw new InvalidOperationException($"Unhandled {nameof(EmptyPluginWrite)} outcome: {outcome}."),
         };

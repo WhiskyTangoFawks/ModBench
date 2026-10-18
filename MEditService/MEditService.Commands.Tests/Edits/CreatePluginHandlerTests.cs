@@ -26,7 +26,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
     private string ModFolder(string name) => Directory.CreateDirectory(Path.Combine(_data.DataFolder, name)).FullName;
 
-    private Task<PluginCreateResult> Create(string name, string folder, string origin) =>
+    private Task<Answer<PluginAddress, PluginCreateRefused>> Create(string name, string folder, string origin) =>
         Handler.CreatePlugin(new PluginAddress(name, origin), folder, origin == PluginOrigin.Overwrite ? null : folder);
 
     [Fact]
@@ -36,7 +36,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         var result = await Create("NewPlugin.esp", folder, "StateMod");
 
-        Assert.Null(result.Refusal);
+        result.Created();
         Assert.True(File.Exists(Path.Combine(folder, "NewPlugin.esp")));
     }
 
@@ -87,7 +87,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         var result = await Create("Second.esp", folder, "SourceMod");
 
-        Assert.Null(result.Refusal);
+        result.Created();
         Assert.Equal(firstBefore, SourceModTree.Records(folder, first));
         Assert.True(TestAdapters.Source().SourceReads(Registered("Second.esp", "SourceMod", folder)));
         Assert.Equal(headBefore, Head(folder));
@@ -102,7 +102,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         var result = await Create("Second.esp", folder, "EmptiedMod");
 
-        Assert.Null(result.Refusal);
+        result.Created();
         Assert.True(TestAdapters.Source().SourceReads(Registered("Second.esp", "EmptiedMod", folder)));
     }
 
@@ -112,7 +112,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var folder = await SourceModWith("FailingMod", "First.esp");
         var adapter = new SourceUnreadableAdapter();
 
-        var result = await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "FailingMod"), folder, folder);
+        var result = (await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "FailingMod"), folder, folder)).Refused();
 
         Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
         Assert.Contains("Second.esp", result.Message, StringComparison.Ordinal);
@@ -130,7 +130,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         var result = await Create("Second.esp", folder, PluginOrigin.Overwrite);
 
-        Assert.Null(result.Refusal);
+        result.Created();
         Assert.True(File.Exists(Path.Combine(folder, "Second.esp")));
         Assert.False(TestAdapters.Source().SourceReads(Registered("Second.esp", "HostMod", folder)));
     }
@@ -142,7 +142,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var blocker = Path.Combine(folder, "plugin-source", "Second.esp");
         File.WriteAllText(blocker, "not a folder");
 
-        var result = await Create("Second.esp", folder, "BlockedMod");
+        var result = (await Create("Second.esp", folder, "BlockedMod")).Refused();
 
         Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
         Assert.False(File.Exists(Path.Combine(folder, "Second.esp")));
@@ -156,7 +156,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var created = Path.Combine(folder, "Second.esp");
         var adapter = new SourceUnreadableAdapter { Before = () => File.WriteAllText(created, "another tool's file") };
 
-        var result = await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "ChangedMod"), folder, folder);
+        var result = (await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "ChangedMod"), folder, folder)).Refused();
 
         Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
         Assert.Contains("left in", result.Message, StringComparison.Ordinal);
@@ -171,7 +171,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var takeBackFailure = PluginFailures.Inaccessible();
         var adapter = new SourceUnreadableAdapter { TakeBackFailure = takeBackFailure };
 
-        var result = await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "LockedMod"), folder, folder);
+        var result = (await TestEditService.PluginCreateHandler(_holder, adapter).CreatePlugin(new PluginAddress("Second.esp", "LockedMod"), folder, folder)).Refused();
 
         Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
         Assert.Contains(adapter.Unread.Reason, result.Message, StringComparison.Ordinal);
@@ -213,7 +213,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     {
         var gone = Path.Combine(_data.DataFolder, "GoneMod");
 
-        var result = await Create("New.esp", gone, "GoneMod");
+        var result = (await Create("New.esp", gone, "GoneMod")).Refused();
 
         Assert.Equal(PluginCreateRefusal.FolderGone, result.Refusal);
         Assert.Contains(gone, result.Message, StringComparison.Ordinal);
@@ -227,7 +227,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var occupied = Path.Combine(folder, "Occupied.esp");
         File.WriteAllText(occupied, "another tool's file");
 
-        var result = await Create("Occupied.esp", folder, "OccupiedMod");
+        var result = (await Create("Occupied.esp", folder, "OccupiedMod")).Refused();
 
         Assert.Equal(PluginCreateRefusal.FileExists, result.Refusal);
         Assert.Contains(folder, result.Message, StringComparison.Ordinal);
@@ -242,7 +242,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     {
         var folder = ModFolder("LightMod");
 
-        var result = await HandlerIn(release).CreatePlugin(new PluginAddress("Light.esl", "LightMod"), folder, folder);
+        var result = (await HandlerIn(release).CreatePlugin(new PluginAddress("Light.esl", "LightMod"), folder, folder)).Refused();
 
         Assert.Equal(PluginCreateRefusal.LightPluginUnsupported, result.Refusal);
         Assert.Contains(release.ToString(), result.Message, StringComparison.Ordinal);
@@ -257,7 +257,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     {
         var folder = ModFolder("BadMod");
 
-        var result = await HandlerIn(GameRelease.Fallout4).CreatePlugin(new PluginAddress(name, "BadMod"), folder, folder);
+        var result = (await HandlerIn(GameRelease.Fallout4).CreatePlugin(new PluginAddress(name, "BadMod"), folder, folder)).Refused();
 
         Assert.Equal(PluginCreateRefusal.NotAPluginFile, result.Refusal);
         Assert.Contains(name, result.Message, StringComparison.Ordinal);
@@ -269,7 +269,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     [InlineData(GameRelease.Oblivion, "must be .esm or .esp.")]
     public async Task CreatePlugin_ANonPluginName_IsRefusedNamingTheExtensionsTheReleaseTakes(GameRelease release, string expected)
     {
-        var result = await HandlerIn(release).CreatePlugin(new PluginAddress("Mod.txt", "BadMod"), ModFolder("BadMod"), ModFolder("BadMod"));
+        var result = (await HandlerIn(release).CreatePlugin(new PluginAddress("Mod.txt", "BadMod"), ModFolder("BadMod"), ModFolder("BadMod"))).Refused();
 
         Assert.EndsWith(expected, result.Message, StringComparison.Ordinal);
     }
@@ -284,7 +284,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         var result = await HandlerIn(GameRelease.Oblivion, adapter).CreatePlugin(new PluginAddress(name, "FullMod"), folder, folder);
 
-        Assert.Null(result.Refusal);
+        result.Created();
         Assert.Equal([GameRelease.Oblivion], adapter.Asked);
         Assert.True(File.Exists(Path.Combine(folder, name)));
     }
@@ -295,7 +295,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var failure = PluginFailures.Inaccessible();
         var adapter = new FailingWriteAdapter(failure);
 
-        var result = await HandlerIn(GameRelease.Fallout4, adapter).CreatePlugin(new PluginAddress("Full.esp", "FullMod"), ModFolder("FullMod"), ModFolder("FullMod"));
+        var result = (await HandlerIn(GameRelease.Fallout4, adapter).CreatePlugin(new PluginAddress("Full.esp", "FullMod"), ModFolder("FullMod"), ModFolder("FullMod"))).Refused();
 
         Assert.Equal(PluginCreateRefusal.WriteFailed, result.Refusal);
         Assert.Contains("Full.esp", result.Message, StringComparison.Ordinal);

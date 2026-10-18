@@ -22,23 +22,23 @@ internal sealed class PluginCompileService(
     // A source mod refuses init, so decompile is the way back (ADR-0007).
     private const string RegenerateTheSource = "Decompile the plugin to regenerate the source.";
 
-    public async Task<CompileResult> CompileAsync(PluginAddress plugin) =>
+    public async Task<PluginCompileOutcome> CompileAsync(PluginAddress plugin) =>
         loadOrderHolder.Current.Plugin(plugin) is { } registered
             ? await CompileAsync(registered)
-            : CompileResult.Refused(CompileRefusal.PluginNotInLoadOrder, $"{plugin.Name} is not in the load order.");
+            : PluginCompileOutcome.Refused(CompileRefusal.PluginNotInLoadOrder, $"{plugin.Name} is not in the load order.");
 
     /// <summary>The plugin compiled to its path, which the load order need not hold yet, as a fresh clone's build's does
     /// not (mods.md, Build, story 7).</summary>
-    public async Task<CompileResult> CompileAsync(RegisteredPlugin registered)
+    public async Task<PluginCompileOutcome> CompileAsync(RegisteredPlugin registered)
     {
         var plugin = registered.Key;
         var loadOrder = loadOrderHolder.Current;
         if (registered.Provider is not PluginProvider.FromMod mod || !source.IsSourceMod(registered))
-            return CompileResult.Refused(CompileRefusal.PluginNotCompiledPlugin, $"{plugin.Name} is not a compiled plugin, so there is no source to compile.");
+            return PluginCompileOutcome.Refused(CompileRefusal.PluginNotCompiledPlugin, $"{plugin.Name} is not a compiled plugin, so there is no source to compile.");
 
         if (source.WhySourceDoesNotRead(registered) is { } why)
         {
-            return CompileResult.Refused(
+            return PluginCompileOutcome.Refused(
                 CompileRefusal.PluginSourceUnreadable,
                 $"{plugin.Name}'s plugin source is unreadable, so it cannot be compiled: {why.Reason}" +
                 (why.DecompileRepairs ? $" {RegenerateTheSource}" : ""));
@@ -53,7 +53,7 @@ internal sealed class PluginCompileService(
         // (ADR-0019).
         if (sourceFiles.Unreadable is { } unreadable)
         {
-            return CompileResult.Refused(
+            return PluginCompileOutcome.Refused(
                 CompileRefusal.SourceFileHeld,
                 $"{plugin.Name} could not be read from its source: {unreadable} could not be opened. " +
                 "Another program may be holding it; close it and compile again.");
@@ -62,7 +62,7 @@ internal sealed class PluginCompileService(
         var files = sourceFiles.Files;
         if (files.Count == 0)
         {
-            return CompileResult.Refused(
+            return PluginCompileOutcome.Refused(
                 CompileRefusal.NoSource,
                 $"{plugin.Name}'s source folder holds no files, so there is nothing to compile. {RegenerateTheSource}");
         }
@@ -70,14 +70,14 @@ internal sealed class PluginCompileService(
         if (!repository.RefusedFilesOf(plugin).Holds(out var refusedFiles, out unread)) return SourceDoesNotParse(plugin, unread);
         if (refusedFiles.Count > 0)
         {
-            return CompileResult.Refused(
+            return PluginCompileOutcome.Refused(
                 CompileRefusal.SourceDoesNotParse,
                 $"{plugin.Name} cannot be compiled: {string.Join("; ", refusedFiles.Select(file => $"{file.Path}: {file.Reason}"))}");
         }
 
         var (parsedTree, deserializeRefusal) = await DeserializeSource(files, plugin, repository, loadOrder);
         if (deserializeRefusal != null)
-            return CompileResult.Refused(CompileRefusal.SourceDoesNotParse, deserializeRefusal);
+            return PluginCompileOutcome.Refused(CompileRefusal.SourceDoesNotParse, deserializeRefusal);
         var tree = parsedTree
             ?? throw new InvalidOperationException("Expected DeserializeSource to produce a tree when it does not refuse.");
 
@@ -87,7 +87,7 @@ internal sealed class PluginCompileService(
         {
             var outOfRange = limited.Outside(tree.ModKey, tree.FormKeys);
             if (outOfRange.Count > 0)
-                return CompileResult.Refused(CompileRefusal.FormIdOutsideFlagLimit, limited.Refusal(plugin.Name, outOfRange));
+                return PluginCompileOutcome.Refused(CompileRefusal.FormIdOutsideFlagLimit, limited.Refusal(plugin.Name, outOfRange));
         }
 
         // Two source units claiming one FormKey can only become one binary record, so refuse rather
@@ -97,7 +97,7 @@ internal sealed class PluginCompileService(
             return SourceDoesNotParse(plugin, unread);
         if (collidingFormKeys.Count > 0)
         {
-            return CompileResult.Refused(
+            return PluginCompileOutcome.Refused(
                 CompileRefusal.FormKeyCollision,
                 $"{plugin.Name} cannot be compiled: more than one source file claims the same FormKey — " +
                 $"{string.Join(", ", collidingFormKeys)}.");
@@ -107,7 +107,7 @@ internal sealed class PluginCompileService(
             return SourceDoesNotParse(plugin, unread);
         var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(comparison.Divergences, plugin);
         if (roundTripRefusal != null)
-            return CompileResult.Refused(CompileRefusal.SourceDoesNotParse, roundTripRefusal);
+            return PluginCompileOutcome.Refused(CompileRefusal.SourceDoesNotParse, roundTripRefusal);
 
         var content = ContentFacts(tree, plugin, loadOrder);
 
@@ -118,9 +118,9 @@ internal sealed class PluginCompileService(
         {
             return failure switch
             {
-                PluginFailure.PrunedMaster => CompileResult.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be compiled: {failure.Reason}"),
-                PluginFailure.MasterNotInLoadOrder => CompileResult.Refused(CompileRefusal.MasterNotInLoadOrder, $"{plugin.Name} could not be compiled: {failure.Reason}"),
-                PluginFailure.MasterUnreadable master => CompileResult.Refused(
+                PluginFailure.PrunedMaster => PluginCompileOutcome.Refused(CompileRefusal.FormIdUnmappable, $"{plugin.Name} could not be compiled: {failure.Reason}"),
+                PluginFailure.MasterNotInLoadOrder => PluginCompileOutcome.Refused(CompileRefusal.MasterNotInLoadOrder, $"{plugin.Name} could not be compiled: {failure.Reason}"),
+                PluginFailure.MasterUnreadable master => PluginCompileOutcome.Refused(
                     CompileRefusal.MasterUnreadable,
                     $"{plugin.Name} could not be compiled: {failure.Reason} Fix or restore {master.Master}, then compile again."),
                 _ => WriteFailed(plugin, failure.Reason),
@@ -142,10 +142,10 @@ internal sealed class PluginCompileService(
                 $"{plugin.Name} compiled, but the record of the binary Modbench last wrote could not be finished. " +
                 "Compile it again to update the record."));
         }
-        return CompileResult.Success(diagnostics);
+        return PluginCompileOutcome.Success(diagnostics);
     }
 
-    private static Answer<bool, CompileResult> Land(PreparedPluginSave save, CompiledTree tree, PluginAddress plugin, ISourceRepository repository)
+    private static Answer<bool, PluginCompileOutcome> Land(PreparedPluginSave save, CompiledTree tree, PluginAddress plugin, ISourceRepository repository)
     {
         if (tree.DropsIn(save) is { Count: > 0 } drops) return Dropped(plugin, repository, drops);
         return repository.WriteBinary(plugin, save.BinarySha256(), save.Commit).Holds(out var recorded, out var unwritten)
@@ -153,7 +153,7 @@ internal sealed class PluginCompileService(
             : WriteFailed(plugin, unwritten.Reason);
     }
 
-    private static CompileResult Dropped(PluginAddress plugin, ISourceRepository repository, IReadOnlyList<DroppedValue> drops)
+    private static PluginCompileOutcome Dropped(PluginAddress plugin, ISourceRepository repository, IReadOnlyList<DroppedValue> drops)
     {
         var named = new List<string>();
         foreach (var drop in drops)
@@ -162,16 +162,16 @@ internal sealed class PluginCompileService(
             var held = file ?? throw new InvalidOperationException($"Expected the tree this compile read to hold {drop.Record.FormKey}'s document.");
             named.Add($"in {held}, {string.Join(", ", drop.Paths.Select(path => $"'{path}'"))}");
         }
-        return CompileResult.Refused(
+        return PluginCompileOutcome.Refused(
             CompileRefusal.SourceValueDropped,
             $"{plugin.Name} cannot be compiled: the plugin written from its source would not hold, {string.Join("; ", named)}. Nothing was written.");
     }
 
-    private static CompileResult SourceDoesNotParse(PluginAddress plugin, SourceFailure unread) =>
-        CompileResult.Refused(CompileRefusal.SourceDoesNotParse, $"{plugin.Name} could not be read from its source: {unread.Reason}");
+    private static PluginCompileOutcome SourceDoesNotParse(PluginAddress plugin, SourceFailure unread) =>
+        PluginCompileOutcome.Refused(CompileRefusal.SourceDoesNotParse, $"{plugin.Name} could not be read from its source: {unread.Reason}");
 
-    private static CompileResult WriteFailed(PluginAddress plugin, string reason) =>
-        CompileResult.Refused(
+    private static PluginCompileOutcome WriteFailed(PluginAddress plugin, string reason) =>
+        PluginCompileOutcome.Refused(
             CompileRefusal.WriteFailed, $"Could not write {plugin.Name}: {reason} Its source is untouched, so compiling again rebuilds it.");
 
     private sealed record Content(IReadOnlyList<SourceRecord> Records, IReadOnlyCollection<string> Links, IReadOnlySet<string> Masters);

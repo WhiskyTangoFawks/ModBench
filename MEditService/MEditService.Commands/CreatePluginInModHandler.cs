@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.Commands;
 
@@ -12,21 +13,20 @@ public sealed class CreatePluginInModHandler
     internal CreatePluginInModHandler(CreatePluginHandler create, LoadOrderHolder holder) =>
         (_create, _holder) = (create, holder);
 
-    public async Task<PluginCreateResult> CreatePluginIn(string origin, string name)
+    public async Task<Answer<PluginAddress, PluginCreateRefused>> CreatePluginIn(string origin, string name)
     {
         if (_holder.Held is not { Snapshot: var loadOrder })
-            return new PluginCreateResult(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
+            return new PluginCreateRefused(PluginCreateRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
 
         var place = loadOrder.Places.FirstOrDefault(held => string.Equals(held.Name, origin, StringComparison.OrdinalIgnoreCase));
         if (place is null)
         {
-            return new PluginCreateResult(PluginCreateRefusal.OriginNotAMod,
+            return new PluginCreateRefused(PluginCreateRefusal.OriginNotAMod,
                 $"'{origin}' is not an enabled mod or Overwrite, so {name} was not created in it.");
         }
 
-        var created = new PluginAddress(name, place.Name);
-        var result = await _create.CreatePlugin(created, place.Folder, place.SourceFolder);
-        if (result.Refusal is null) _holder.SourceWritten();
-        return result with { Created = created };
+        var result = await _create.CreatePlugin(new PluginAddress(name, place.Name), place.Folder, place.SourceFolder);
+        if (result.Holds(out _, out _)) _holder.SourceWritten();
+        return result;
     }
 }

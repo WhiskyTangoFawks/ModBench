@@ -170,7 +170,7 @@ public sealed class StarfieldGestureTests : IDisposable
     {
         File.WriteAllBytes(Path.Combine(_instance.ModFolderOf(_light), LightName), "not a plugin"u8.ToArray());
 
-        var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_compiledPlugin])).Refused);
+        var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_compiledPlugin])).Value().Refused);
 
         Assert.Equal(
             (CompileRefusal.MasterUnreadable,
@@ -188,7 +188,7 @@ public sealed class StarfieldGestureTests : IDisposable
         var flagged = _instance.EditHandler.Set(_compiledPlugin, Header, "Flags", JsonDocument.Parse("[\"Medium\"]").RootElement);
 
         Assert.True(flagged.Applied, flagged.Message);
-        var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_compiledPlugin])).Refused);
+        var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_compiledPlugin])).Value().Refused);
         Assert.Equal(
             (CompileRefusal.FormIdOutsideFlagLimit,
              $"{CompiledPluginName} is a medium plugin but holds native FormID(s) outside the medium range (0x0-0xFFFF): {wide}. " +
