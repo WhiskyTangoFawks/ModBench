@@ -15,9 +15,9 @@ describe('a line the instance repeats', () => {
 
   it.each([
     { what: 'mod', file: DEFAULT_MODLIST, line: '-Patch Mod', note: 'modlist.txt lists the mod Patch Mod' },
-    { what: 'mod, whatever its case', file: DEFAULT_MODLIST, line: '-PATCH MOD', note: 'modlist.txt lists the mod PATCH MOD' },
+    { what: 'mod, whatever its case', file: DEFAULT_MODLIST, line: '+PATCH MOD', note: 'modlist.txt lists the mod PATCH MOD' },
     { what: 'separator', file: DEFAULT_MODLIST, line: '+Unassigned (Modlist Development)_separator', note: 'modlist.txt lists the separator Unassigned (Modlist Development)' },
-    { what: 'separator, whatever its case', file: DEFAULT_MODLIST, line: '+UNASSIGNED (MODLIST DEVELOPMENT)_separator', note: 'modlist.txt lists the separator UNASSIGNED (MODLIST DEVELOPMENT)' },
+    { what: 'separator, whatever its case', file: DEFAULT_MODLIST, line: '-UNASSIGNED (MODLIST DEVELOPMENT)_separator', note: 'modlist.txt lists the separator UNASSIGNED (MODLIST DEVELOPMENT)' },
     { what: 'plugin, whatever its case', file: DEFAULT_PLUGINS, line: 'NONASCIIRETEXTURE.ESP', note: 'plugins.txt lists the plugin NONASCIIRETEXTURE.ESP' },
   ])('is one $what in the reading, the first line holding, and a note names the repeat', async ({ file, line, note }) => {
     const before = await readInstanceOf(dir);
@@ -27,5 +27,13 @@ describe('a line the instance repeats', () => {
 
     expect({ mods: reading.mods, pluginOrder: reading.pluginOrder }).toEqual({ mods: before.mods, pluginOrder: before.pluginOrder });
     expect(reading.orderNotes).toEqual([`${note} on more than one line; the first line holds`]);
+  });
+
+  it('sets a mod\'s state by the last line that spells it in another case, as MO2 reads it', async () => {
+    await appendFile(join(dir, DEFAULT_MODLIST), '-PATCH MOD\n');
+
+    const reading = await readInstanceOf(dir);
+
+    expect(reading.mods.find((mod) => mod.name === 'Patch Mod')?.enabled).toBe(false);
   });
 });
