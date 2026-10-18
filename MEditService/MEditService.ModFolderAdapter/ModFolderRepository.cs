@@ -15,7 +15,6 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
 
     public ModFolderFiles Files(string modFolder, string modName, IReadOnlySet<string> leftOut, string? statCache)
     {
-        RemoveStaleTemps(modFolder);
         var paths = FilesOf(modFolder, modName).Where(path => !leftOut.Contains(path)).ToList();
         if (statCache is null) return new([.. paths.Select(path => new HashedFile(path, HashOf(modFolder, path)))]);
 
@@ -51,7 +50,6 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
     {
         try
         {
-            RemoveStaleTemps(modFolder);
             if (ReadManifest(modFolder, modName) is not { } manifest) return new(modName, NoManifest: true, [], [], [], []);
 
             var cache = new StatCache(statCache, modFolder, time);
@@ -109,27 +107,6 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
             .Select(file => PathIn(modFolder, file.FullName))
             .Where(path => path != ManifestName(modName) && !TempName.HoldsTemp(path));
 
-    // A write killed mid-way leaves its temp behind, and the mod manager would deploy it. One a write could still
-    // be holding is too new to be a leftover.
-    private void RemoveStaleTemps(string modFolder)
-    {
-        if (!Directory.Exists(modFolder)) return;
-        var now = time.GetUtcNow();
-        foreach (var entry in new DirectoryInfo(modFolder).EnumerateFileSystemInfos("*", SearchOption.AllDirectories).Where(entry => TempName.IsTemp(entry.Name)).ToList())
-        {
-            try
-            {
-                if (!TempName.IsStale(entry.FullName, now)) continue;
-                if (entry is DirectoryInfo directory) directory.Delete(recursive: true);
-                else entry.Delete();
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // Another program holds it; it stays out of every listing and the next read tries again.
-            }
-        }
-    }
-
     public Stream OpenFile(string modFolder, string path) => File.OpenRead(Path.Combine(modFolder, path));
 
     public bool InstallationFileExists(string path) => File.Exists(path);
@@ -149,7 +126,8 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
     {
         var target = Path.Combine(folder, path);
         Directory.CreateDirectory(folder);
-        var partial = TempName.In(folder, ".tmp");
+        TempName.RemoveLeftovers(folder);
+        var partial = TempName.FileIn(folder);
         try
         {
             using (var content = new FileStream(partial, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))

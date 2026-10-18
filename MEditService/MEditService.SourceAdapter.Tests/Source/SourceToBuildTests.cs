@@ -32,6 +32,15 @@ public sealed class SourceToBuildTests : IDisposable
         Assert.Empty(source.Archives);
     }
 
+    [Fact]
+    public void ALeftoverInTheAssets_IsNoAssetOfTheBuild()
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Mod", [], [new Asset("textures/a.dds", () => new MemoryStream("texture"u8.ToArray()))]));
+        TempLeftover.DeadWriters(Path.Combine(_sourceFolder, "assets", "textures"));
+
+        Assert.Equal(["textures/a.dds"], Built().Assets.Select(asset => asset.Path));
+    }
+
     [Theory]
     [InlineData("assets/textures/new.dds", true)]
     [InlineData("notes.txt", false)]

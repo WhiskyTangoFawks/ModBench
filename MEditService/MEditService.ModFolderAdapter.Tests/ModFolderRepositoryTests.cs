@@ -37,8 +37,8 @@ public sealed class ModFolderRepositoryTests : IDisposable
     public void ALeftoverOfAKilledWrite_IsNoFileOfTheMod()
     {
         Write("a.txt", "hello");
-        Write(".medit_tmp_abc.tmp", "half");
-        Write(Path.Combine(".medit_tmp_dir", "mod.esp"), "half");
+        TempLeftover.DeadWriters(_root);
+        Write(Path.Combine(".medit_tmp_1_dir", "mod.esp"), "half");
 
         Assert.Equal(["a.txt"], _repository.Files(_root, "mod", new HashSet<string>(), statCache: null).Files.Select(f => f.Path));
         Assert.Equal(["a.txt"], _repository.FilePaths(_root));
@@ -46,26 +46,26 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void AStaleLeftover_IsRemovedWhenTheFolderIsRead()
+    public void AWrite_RemovesTheLeftoversOfWritersThatAreGone_AndKeepsThoseOfWritersThatRun()
     {
-        Write("a.txt", "hello");
-        Write(".medit_tmp_abc.tmp", "half");
-        Write(Path.Combine(".medit_tmp_dir", "mod.esp"), "half");
+        var dead = TempLeftover.DeadWriters(_root);
+        var running = TempLeftover.RunningWriters(_root);
+        var deadFolder = Directory.CreateDirectory(Path.Combine(_root, ".medit_tmp_2000000000_dir")).FullName;
 
-        Files();
+        _repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8));
 
-        Assert.Equal(["a.txt"], Directory.GetFileSystemEntries(_root).Select(Path.GetFileName));
+        Assert.False(File.Exists(dead));
+        Assert.False(Directory.Exists(deadFolder));
+        Assert.True(File.Exists(running));
     }
 
     [Fact]
-    public void AFreshTempFile_IsLeftForTheWriteHoldingIt()
+    public void AWrite_WhoseLeftoverCannotBeRemoved_Fails()
     {
-        var now = new ModFolderRepository(TimeProvider.System);
-        Write(".medit_tmp_abc.tmp", "half");
+        using var stuck = TempLeftover.Undeletable(_root);
 
-        now.Files(_root, "mod", new HashSet<string>(), statCache: null);
-
-        Assert.True(File.Exists(Path.Combine(_root, ".medit_tmp_abc.tmp")));
+        Assert.ThrowsAny<SystemException>(() => _repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8)));
+        Assert.False(File.Exists(Path.Combine(_root, "mod.ba2")));
     }
 
     [Fact]

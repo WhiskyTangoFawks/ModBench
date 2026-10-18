@@ -18,10 +18,8 @@ public readonly record struct FileStamp(long Size, long Modified, long Changed)
     private const int SettledAfterSeconds = 2;
 
     /// <summary>True once the file's last change is old enough that a later write would move the stamp.</summary>
-    internal bool SettledAt(DateTimeOffset moment) => ChangedBefore(moment.AddSeconds(-SettledAfterSeconds));
-
-    internal bool ChangedBefore(DateTimeOffset moment) =>
-        Changed < (moment - DateTimeOffset.UnixEpoch).Ticks * (1_000_000_000 / TimeSpan.TicksPerSecond);
+    internal bool SettledAt(DateTimeOffset moment) =>
+        Changed < (moment.AddSeconds(-SettledAfterSeconds) - DateTimeOffset.UnixEpoch).Ticks * (1_000_000_000 / TimeSpan.TicksPerSecond);
 }
 
 internal static class LinuxFileStamp

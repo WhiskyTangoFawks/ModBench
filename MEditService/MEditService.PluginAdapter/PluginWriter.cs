@@ -19,7 +19,8 @@ internal static class PluginWriter
     {
         var dir = Path.GetDirectoryName(pluginPath)
             ?? throw new InvalidOperationException($"Expected '{pluginPath}' to have a parent directory.");
-        var tmpDir = TempName.In(dir);
+        TempName.RemoveLeftovers(dir);
+        var tmpDir = TempName.FolderIn(dir);
         var tmpPath = Path.Combine(tmpDir, Path.GetFileName(pluginPath));
         var tmpStringsDir = Path.Combine(tmpDir, "Strings");
         Directory.CreateDirectory(tmpDir);

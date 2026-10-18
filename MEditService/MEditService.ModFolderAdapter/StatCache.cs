@@ -104,7 +104,7 @@ internal sealed class StatCache
 
     private void Replace(Content content)
     {
-        var partial = TempName.In(_folder, ".tmp");
+        var partial = TempName.FileIn(_folder);
         try
         {
             using (var stream = new FileStream(partial, FileMode.CreateNew, FileAccess.Write, FileShare.None))
