@@ -23,6 +23,17 @@ public sealed class BuildConfigurationChangeTests : IDisposable
         Assert.Equal(" M build.json\n", Git("status", "--porcelain"));
     }
 
+    [Fact]
+    public void AWrite_RemovesALeftoverOfAWriterThatIsGone_BesideIt()
+    {
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, "Old Name", [], []));
+        var leftover = TempLeftover.DeadWriters(_sourceFolder);
+
+        Assert.Null(TestAdapters.Source().ChangeBuildConfiguration(_sourceFolder, new BuildConfigurationChange("New Name", [], [])));
+
+        Assert.False(File.Exists(leftover));
+    }
+
     [Theory]
     [InlineData("{\"output\": \"Mod\"}", new[] { "textures/b.dds", "meshes" }, new string[0],
         "{\n  \"output\": \"Mod\",\n  \"exclude\": [\n    \"meshes\",\n    \"textures/b.dds\"\n  ]\n}\n")]

@@ -255,9 +255,10 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         // NoModKeySync lifts Mutagen's file-name-matches-ModKey check, so the temp file needs no
         // folder of its own — nothing here can create or resurrect one. The fixed .tmp suffix
         // keeps a random plugin extension from ever landing here.
-        var tempPath = Path.Combine(folder, ".medit_tmp_" + Path.GetRandomFileName() + ".tmp");
+        var tempPath = TempName.FileIn(folder);
         try
         {
+            TempName.RemoveLeftovers(folder);
             await WriteAsync(plugin, tempPath, noModKeySync: true);
             var written = HashOf(await File.ReadAllBytesAsync(tempPath));
             File.Move(tempPath, destinationPath, overwrite: false);

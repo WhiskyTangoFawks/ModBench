@@ -66,6 +66,29 @@ public sealed class PluginAdapterTests
         Assert.Empty(reread.ModHeader.MasterReferences);
     }
 
+    [Fact]
+    public async Task CreateAndWriteAsync_RemovesALeftoverOfAWriterThatIsGone()
+    {
+        using var scratch = new ScratchDirectory("medit-adapter-create-leftover-");
+        var leftover = TempLeftover.DeadWriters(scratch);
+
+        Assert.Equal(
+            EmptyPluginWrite.Written,
+            (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4)).Answered().Outcome);
+
+        Assert.False(File.Exists(leftover));
+    }
+
+    [Fact]
+    public async Task CreateAndWriteAsync_WhoseLeftoverCannotBeRemoved_IsInaccessible()
+    {
+        using var scratch = new ScratchDirectory("medit-adapter-create-stuck-");
+        using var stuck = TempLeftover.Undeletable(scratch);
+
+        Assert.IsType<PluginFailure.Inaccessible>((await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4)).Failure());
+        Assert.False(File.Exists(Path.Combine(scratch, PluginName)));
+    }
+
     [Theory]
     [InlineData(GameRelease.Fallout4, "Plain.esp", false, false)]
     [InlineData(GameRelease.Fallout4, "Master.esm", true, false)]

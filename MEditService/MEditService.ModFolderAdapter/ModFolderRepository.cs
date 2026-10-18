@@ -1,4 +1,5 @@
 using System.Text;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.ModFolderAdapter;
 
@@ -104,7 +105,7 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
     private IEnumerable<string> FilesOf(string modFolder, string modName) =>
         new DirectoryInfo(modFolder).EnumerateFiles("*", SearchOption.AllDirectories)
             .Select(file => PathIn(modFolder, file.FullName))
-            .Where(path => path != ManifestName(modName));
+            .Where(path => path != ManifestName(modName) && !TempName.HoldsTemp(path));
 
     public Stream OpenFile(string modFolder, string path) => File.OpenRead(Path.Combine(modFolder, path));
 
@@ -114,7 +115,7 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
 
     public IReadOnlyList<string> FilePaths(string modFolder) =>
         Directory.Exists(modFolder)
-            ? [.. Directory.EnumerateFiles(modFolder, "*", SearchOption.AllDirectories).Select(file => PathIn(modFolder, file))]
+            ? [.. Directory.EnumerateFiles(modFolder, "*", SearchOption.AllDirectories).Select(file => PathIn(modFolder, file)).Where(path => !TempName.HoldsTemp(path))]
             : [];
 
     public string FolderName(string modFolder) => Path.GetFileName(Path.TrimEndingDirectorySeparator(modFolder));
@@ -125,7 +126,8 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
     {
         var target = Path.Combine(folder, path);
         Directory.CreateDirectory(folder);
-        var partial = Path.Combine(folder, ".medit_tmp_" + Path.GetRandomFileName() + ".tmp");
+        TempName.RemoveLeftovers(folder);
+        var partial = TempName.FileIn(folder);
         try
         {
             using (var content = new FileStream(partial, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))

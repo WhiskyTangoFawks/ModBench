@@ -1,3 +1,4 @@
+using MEditService.RepositoriesLib;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
@@ -18,7 +19,8 @@ internal static class PluginWriter
     {
         var dir = Path.GetDirectoryName(pluginPath)
             ?? throw new InvalidOperationException($"Expected '{pluginPath}' to have a parent directory.");
-        var tmpDir = Path.Combine(dir, ".medit_tmp_" + Path.GetRandomFileName());
+        TempName.RemoveLeftovers(dir);
+        var tmpDir = TempName.FolderIn(dir);
         var tmpPath = Path.Combine(tmpDir, Path.GetFileName(pluginPath));
         var tmpStringsDir = Path.Combine(tmpDir, "Strings");
         Directory.CreateDirectory(tmpDir);
