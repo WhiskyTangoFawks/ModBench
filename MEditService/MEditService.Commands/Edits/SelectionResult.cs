@@ -33,18 +33,16 @@ public sealed record SelectionRefusal<TRefusal>(TRefusal Refusal, string Message
 
 /// <summary>A gesture's answer over a selection, whatever the gesture: each item it refused.</summary>
 public interface ISelectionAnswer<out TRefused>
-    where TRefused : IItemRefused
 {
     IReadOnlyList<TRefused> Refused { get; }
 }
 
-/// <summary>An item of a selection that wrote nothing, whatever the gesture: the item, the typed refusal and the message
-/// naming the way out.</summary>
-public interface IItemRefused
+/// <summary>An <see cref="ItemRefused{TItem, TRefusal}"/>, whatever the gesture.</summary>
+public interface IItemRefused<out TRefusal>
 {
     object Item { get; }
 
-    object Refusal { get; }
+    TRefusal Refusal { get; }
 
     string Message { get; }
 }
@@ -72,8 +70,7 @@ public sealed class SelectionResult<TItem, TRefusal, TOutcome>
 
     public SelectionRefusal<TRefusal>? SelectionRefusal { get; }
 
-    /// <summary>The gesture's own answer of what landed and what was refused, or the refusal of the whole selection.</summary>
-    internal Answer<TAnswer, SelectionRefusal<TRefusal>> As<TApplied, TRefused, TAnswer>(
+    internal Answer<TAnswer, SelectionRefusal<TRefusal>> ToAnswer<TApplied, TRefused, TAnswer>(
         Func<ItemLanded<TItem, TOutcome>, TApplied> applied,
         Func<ItemRefused<TItem, TRefusal>, TRefused> refused,
         Func<IReadOnlyList<TApplied>, IReadOnlyList<TRefused>, TAnswer> answer)

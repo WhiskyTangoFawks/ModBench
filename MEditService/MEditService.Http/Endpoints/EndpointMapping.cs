@@ -208,7 +208,7 @@ internal static class EndpointMapping
         string gesture, ILogger logger,
         Task<Answer<TAnswer, SelectionRefusal<TRefusal>>> answer,
         Func<SelectionRefusal<TRefusal>, IResult> refusal)
-        where TAnswer : ISelectionAnswer<IItemRefused>
+        where TAnswer : ISelectionAnswer<IItemRefused<TRefusal>>
     {
         if (!(await answer).Holds(out var answered, out var selectionRefusal))
         {

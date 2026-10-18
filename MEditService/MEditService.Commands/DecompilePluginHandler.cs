@@ -21,7 +21,7 @@ public sealed class DecompilePluginHandler
     /// <summary>Refuses with <see cref="DecompileRefusal.NoLoadOrder"/>, writing nothing, when none is held; git
     /// missing refuses the whole selection once. A plugin whose source has working-tree changes is refused
     /// unless <paramref name="force"/>.</summary>
-    public async Task<Answer<DecompileResponse, SelectionRefusal<DecompileRefusal>>> DecompileAsync(
+    public async Task<Answer<DecompileResult, SelectionRefusal<DecompileRefusal>>> DecompileAsync(
         IReadOnlyList<PluginAddress> plugins, bool force, CancellationToken cancel = default)
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
@@ -32,10 +32,10 @@ public sealed class DecompilePluginHandler
             cancel.ThrowIfCancellationRequested();
             return DecompileOneAsync(loadOrder, plugin, force, cancel);
         });
-        return decompiled.As(
+        return decompiled.ToAnswer(
             landed => landed.Item,
-            refused => new PluginDecompileRefusal(refused.Item, refused.Refusal, refused.Message),
-            (applied, refused) => new DecompileResponse(applied, refused));
+            refused => new DecompileRefused(refused.Item, refused.Refusal, refused.Message),
+            (applied, refused) => new DecompileResult(applied, refused));
     }
 
     private async Task<ItemAnswer<DecompileRefusal, NoOutcome>> DecompileOneAsync(

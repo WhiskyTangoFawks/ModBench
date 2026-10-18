@@ -12,7 +12,7 @@ internal static class SelectionAnswers
             : throw new InvalidOperationException($"Expected the gesture to answer here: {whole.Refusal}: {whole.Message}");
 
     /// <summary>The refusal of the whole selection, which the test asked for.</summary>
-    internal static SelectionRefusal<TRefusal> Refused<T, TRefusal>(this Answer<T, SelectionRefusal<TRefusal>> answer) =>
+    internal static SelectionRefusal<TRefusal> WholeSelectionRefusal<T, TRefusal>(this Answer<T, SelectionRefusal<TRefusal>> answer) =>
         answer.Holds(out _, out var whole)
             ? throw new InvalidOperationException("Expected the gesture to refuse the whole selection here.")
             : whole;

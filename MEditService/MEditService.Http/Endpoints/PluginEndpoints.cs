@@ -167,7 +167,7 @@ internal static class PluginEndpoints
         app.MapPost("/plugins/decompile", Decompile)
             .WithName("DecompilePlugin")
             .WithTags(Tag)
-            .Produces<DecompileResponse>()
+            .Produces<DecompileResult>()
             .ProducesProblem(400)
             // git missing refuses the whole selection; every other refusal is an item of the answer.
             .ProducesProblem(500)

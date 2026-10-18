@@ -237,13 +237,13 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
     private static PluginAddress CompiledPlugin(string plugin) => new(plugin, SourceModName);
 
-    private Task<DecompileResponse> Decompile(params PluginAddress[] plugins) =>
+    private Task<DecompileResult> Decompile(params PluginAddress[] plugins) =>
         Decompile(force: false, plugins);
 
-    private async Task<DecompileResponse> Decompile(bool force, params PluginAddress[] plugins) =>
+    private async Task<DecompileResult> Decompile(bool force, params PluginAddress[] plugins) =>
         (await TestEditService.DecompileHandler(_holder).DecompileAsync(plugins, force)).Value();
 
-    private async Task<DecompileResponse> Decompile(IPluginAdapter adapter, params PluginAddress[] plugins) =>
+    private async Task<DecompileResult> Decompile(IPluginAdapter adapter, params PluginAddress[] plugins) =>
         (await TestEditService.DecompileHandler(_holder, adapter).DecompileAsync(plugins, force: false)).Value();
 
     private static void WritePlugin(string modFolder, string name, string editorId)
