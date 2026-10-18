@@ -1166,13 +1166,18 @@ export interface components {
         };
         /** @enum {string} */
         DecompileRefusal: "None" | "PluginNotLoaded" | "NotInSourceMod" | "NotFromAMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "WorkingTreeStatusUnreadable" | "GitUnavailable" | "WorkingTreeChanges" | "NoLoadOrder";
+        DecompileRefused: {
+            item: components["schemas"]["PluginAddress"];
+            refusal: components["schemas"]["DecompileRefusal"];
+            message: string;
+        };
         DecompileRequest: {
             plugins: components["schemas"]["PluginAddress"][];
             force: boolean;
         };
-        DecompileResponse: {
+        DecompileResult: {
             applied: components["schemas"]["PluginAddress"][];
-            refused: components["schemas"]["PluginDecompileRefusal"][];
+            refused: components["schemas"]["DecompileRefused"][];
         };
         DocumentChange: {
             path: string;
@@ -1498,11 +1503,6 @@ export interface components {
         PluginCreatedResponse: {
             name: string;
             origin: string;
-        };
-        PluginDecompileRefusal: {
-            item: components["schemas"]["PluginAddress"];
-            refusal: components["schemas"]["DecompileRefusal"];
-            message: string;
         };
         PluginDependantsResponse: {
             dependants: components["schemas"]["PluginAddress"][];
@@ -3203,7 +3203,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DecompileResponse"];
+                    "application/json": components["schemas"]["DecompileResult"];
                 };
             };
             /** @description Bad Request */

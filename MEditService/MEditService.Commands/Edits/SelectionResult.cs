@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.Commands.Edits;
 
@@ -21,7 +22,7 @@ internal sealed class SameRecord : IEqualityComparer<RecordAt>
 public sealed record ItemLanded<TItem, TOutcome>(TItem Item, TOutcome Outcome);
 
 /// <summary>The outcome of a write that makes nothing.</summary>
-public readonly record struct NoOutcome;
+internal readonly record struct NoOutcome;
 
 /// <summary>An item of a selection that wrote nothing, with the typed refusal and the message naming
 /// the way out.</summary>
@@ -29,6 +30,22 @@ public sealed record ItemRefused<TItem, TRefusal>(TItem Item, TRefusal Refusal, 
 
 /// <summary>A cause no item of a selection escapes.</summary>
 public sealed record SelectionRefusal<TRefusal>(TRefusal Refusal, string Message);
+
+/// <summary>A gesture's answer over a selection, whatever the gesture: each item it refused.</summary>
+public interface ISelectionAnswer<out TRefused>
+{
+    IReadOnlyList<TRefused> Refused { get; }
+}
+
+/// <summary>An <see cref="ItemRefused{TItem, TRefusal}"/>, whatever the gesture.</summary>
+public interface IItemRefused<out TRefusal>
+{
+    object Item { get; }
+
+    TRefusal Refusal { get; }
+
+    string Message { get; }
+}
 
 /// <summary>A gesture over a selection (commands.md, A selection is one gesture): the items that
 /// landed, each refused item with its reason, and a cause no item escapes as
@@ -52,4 +69,13 @@ public sealed class SelectionResult<TItem, TRefusal, TOutcome>
     public IReadOnlyList<ItemRefused<TItem, TRefusal>> Refused { get; }
 
     public SelectionRefusal<TRefusal>? SelectionRefusal { get; }
+
+    internal Answer<TAnswer, SelectionRefusal<TRefusal>> ToAnswer<TApplied, TRefused, TAnswer>(
+        Func<ItemLanded<TItem, TOutcome>, TApplied> applied,
+        Func<ItemRefused<TItem, TRefusal>, TRefused> refused,
+        Func<IReadOnlyList<TApplied>, IReadOnlyList<TRefused>, TAnswer> answer)
+    {
+        if (SelectionRefusal is { } whole) return whole;
+        return answer([.. Landed.Select(applied)], [.. Refused.Select(refused)]);
+    }
 }

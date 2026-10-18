@@ -49,6 +49,16 @@ public sealed class RefusalLoggingApiTests : HostedTests
     }
 
     [Fact]
+    public async Task ARefusedDecompileItem_IsLoggedOnce_NamingThePluginAndWhy()
+    {
+        await LoadedAndCompiledPlugin();
+
+        await Client.Decompile([("NotLoaded.esp", Origin)]);
+
+        AssertLoggedOnce("Refused Decompile of PluginAddress { Name = NotLoaded.esp, Origin = HeldMod }:", "PluginNotLoaded");
+    }
+
+    [Fact]
     public async Task ARefusedEdit_IsLoggedOnce_NamingWhy()
     {
         await LoadedAndCompiledPlugin();

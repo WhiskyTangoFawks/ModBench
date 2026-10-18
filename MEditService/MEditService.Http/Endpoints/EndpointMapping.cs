@@ -202,6 +202,25 @@ internal static class EndpointMapping
     internal static IResult Answered<T>(Answer<T, IndexRefused> answer, Func<T, IResult> onAnswered) =>
         answer.Holds(out var value, out var refused) ? onAnswered(value) : Refusal(refused);
 
+    /// <summary>A gesture over a selection answers 200 with its answer, or the refusal of the whole
+    /// selection (ADR-0019).</summary>
+    internal static async Task<IResult> Answered<TAnswer, TRefusal>(
+        string gesture, ILogger logger,
+        Task<Answer<TAnswer, SelectionRefusal<TRefusal>>> answer,
+        Func<SelectionRefusal<TRefusal>, IResult> refusal)
+        where TAnswer : ISelectionAnswer<IItemRefused<TRefusal>>
+    {
+        if (!(await answer).Holds(out var answered, out var selectionRefusal))
+        {
+            LogRefusal(logger, gesture, selectionRefusal.Refusal, selectionRefusal.Message);
+            return refusal(selectionRefusal);
+        }
+
+        foreach (var item in answered.Refused)
+            LogRefusal(logger, gesture, item.Refusal, item.Message, item.Item);
+        return Results.Ok(answered);
+    }
+
     /// <summary>A gesture over a selection answers 200 with what landed and what was refused, or the
     /// refusal of the whole selection (ADR-0019).</summary>
     internal static async Task<IResult> Answered<TItem, TRefusal, TOutcome, TLanded, TRefused>(
