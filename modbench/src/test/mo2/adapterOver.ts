@@ -13,6 +13,7 @@ import type { PluginCommands, pluginCommands } from '../../pluginCommands/plugin
 import { pluginCommandsWith } from '../pluginCommandsWith';
 import { fakeArchiveReader } from '../fakeArchiveReader';
 import { NO_DETECTORS } from '../noDetectors';
+import { fixedGameFolderSetting } from '../gameFolderSetting';
 
 /** What a test fixes in place of asking the machine it runs on. */
 export interface AdapterAnswers {
@@ -22,22 +23,23 @@ export interface AdapterAnswers {
   /** What every archive holds; none when the test fixes no reader. */
   archives?: ArchiveReader;
   /** The setting that names the game's folder. */
-  gameDirectory?: string;
-  gameDirectoryChanged?: (listener: () => void) => Subscription;
+  gameFolderSettingValue?: string;
+  gameFolderSettingChanged?: (listener: () => void) => Subscription;
   detectors?: GameDetectors;
 }
 
 /** MO2's context over `root`, detecting no game install, with the answers a test fixes in place. */
 export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Context {
-  const { gameFolder, downloadsFolder, gameDirectory, gameDirectoryChanged = () => ({ dispose: () => {} }), detectors = NO_DETECTORS } = answers;
+  const { gameFolder, downloadsFolder, gameFolderSettingValue, gameFolderSettingChanged, detectors = NO_DETECTORS } = answers;
+  const setting = fixedGameFolderSetting(gameFolderSettingValue, gameFolderSettingChanged);
   return {
     instanceRoot: root,
     resolveGameFolder: gameFolder !== undefined
       ? (typeof gameFolder === 'function' ? gameFolder : () => Promise.resolve(gameFolder))
-      : gameFolderResolver(() => ({ gameDirectory }), detectors),
+      : gameFolderResolver(setting, detectors),
     resolveDownloadsFolder: downloadsFolder !== undefined ? () => Promise.resolve(downloadsFolder) : downloadsDirectoryResolver(detectors),
     resolveMyGames: myGamesResolver(root, detectors),
-    watch: mo2Watch(root, gameDirectoryChanged),
+    watch: mo2Watch(root, setting.changed),
   };
 }
 

@@ -1,3 +1,4 @@
+import { fixedGameFolderSetting } from '../../test/gameFolderSetting';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rename as fsRename, rm, writeFile } from 'node:fs/promises';
 import { Dirent, type PathLike } from 'node:fs';
@@ -70,8 +71,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     root = cloneCorpusFixture();
     adapter = mo2InstanceAdapter({
       instanceRoot: root,
-      gameDirectoryOverrides: () => ({}),
-      gameDirectoryChanged: () => ({ dispose: () => {} }),
+      gameFolderSetting: fixedGameFolderSetting(),
       detectors: NO_DETECTORS,
       archives: fakeArchiveReader([]),
     });

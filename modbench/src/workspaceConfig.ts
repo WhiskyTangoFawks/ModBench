@@ -1,20 +1,19 @@
 import * as vscode from 'vscode';
-import { GAME_FOLDER_SETTING, type GameDirectoryOverrides } from './instanceAdapter/instanceAdapter';
+import type { GameFolderSetting } from './instanceAdapter/instanceAdapter';
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
-/** Hears the game-folder setting change; the Instance adapter turns it into its own signal. */
-export function onGameDirectoryChange(listener: () => void): vscode.Disposable {
-  return vscode.workspace.onDidChangeConfiguration((change) => {
-    if (change.affectsConfiguration(GAME_FOLDER_SETTING)) listener();
-  });
-}
+const GAME_FOLDER_SETTING_KEY = 'mods.gameFolder';
 
 /** The setting that overrides where the game is, read fresh on each resolve. Reading it is all
  *  this does: the Instance adapter decides what it means. */
-export function gameDirectoryOverrides(): GameDirectoryOverrides {
-  return { gameDirectory: meditConfig().get<string>('mods.gameDirectory') };
-}
+export const gameFolderSetting: GameFolderSetting = {
+  id: `modbench.${GAME_FOLDER_SETTING_KEY}`,
+  value: () => meditConfig().get<string>(GAME_FOLDER_SETTING_KEY),
+  changed: (listener) => vscode.workspace.onDidChangeConfiguration((change) => {
+    if (change.affectsConfiguration(`modbench.${GAME_FOLDER_SETTING_KEY}`)) listener();
+  }),
+};
 
 const STRINGS_LANGUAGE_SETTING = 'stringsLanguage';
 

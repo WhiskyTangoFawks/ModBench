@@ -18,15 +18,15 @@ const agentPort = await freePort();
 const runDir = mkdtempSync(path.join(tmpdir(), 'modbench-it-'));
 
 // Named by the setting so the instance never falls back to detecting this machine's own install.
-const gameDirectory = path.join(runDir, 'game');
-mkdirSync(path.join(gameDirectory, 'Data'), { recursive: true });
+const gameFolder = path.join(runDir, 'game');
+mkdirSync(path.join(gameFolder, 'Data'), { recursive: true });
 
 const workspace = (name, fixture) => {
   const folder = path.join(runDir, name);
   if (fixture) cpSync(path.join(import.meta.dirname, fixture), folder, { recursive: true });
   mkdirSync(path.join(folder, '.vscode'), { recursive: true });
   writeFileSync(path.join(folder, '.vscode', 'settings.json'), JSON.stringify({
-    'modbench.attachToBackendPort': port, 'modbench.mods.gameDirectory': gameDirectory, 'modbench.agent.port': agentPort,
+    'modbench.attachToBackendPort': port, 'modbench.mods.gameFolder': gameFolder, 'modbench.agent.port': agentPort,
   }));
   return folder;
 };

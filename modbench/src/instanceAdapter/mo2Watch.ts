@@ -58,7 +58,7 @@ export interface Mo2Watch {
   watchNotes(): string[];
 }
 
-export function mo2Watch(instanceRoot: string, gameDirectoryChanged: (listener: () => void) => Subscription): Mo2Watch {
+export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () => void) => Subscription): Mo2Watch {
   const listeners = new Set<() => void>();
   const followed = new Map<FollowedFolder, Followed>();
   let fixed: Subscription[] = [];
@@ -84,7 +84,7 @@ export function mo2Watch(instanceRoot: string, gameDirectoryChanged: (listener: 
   const arm = (): void => {
     fixed = [MODS_GLOB, OVERWRITE_GLOB, SOURCE_GLOB, MODLIST_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB, REPOSITORY_WATCH_GLOB]
       .map((glob) => watch(instanceRoot, glob));
-    fixed.push(gameDirectoryChanged(changed));
+    fixed.push(gameFolderChanged(changed));
     for (const folder of followed.values()) folder.watch = watch(folder.base, folder.glob);
   };
   const disarm = (): void => {

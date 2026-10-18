@@ -8,8 +8,10 @@ import { isArchiveName } from './archiveNames';
 import { parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
-import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
-import { gameReleaseForGame, loadedWithNoLineOf } from '../tables/gamePaths';
+import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
+import { loadedWithNoLineOf } from '../tables/gamePaths';
+import { gameOfSettings } from './mo2Game';
+import type { ManagerGamePath } from './gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from './gameFolder/dataFolder';
 import { factsOf, get, isRepository, listDir, readOrAbsent, readOrReason, stampOf } from './files';
 import {
@@ -80,8 +82,15 @@ async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile
   }));
 }
 
-// The tables key each release on the game's name as `gameName=` spells it.
-const gameOf = (gameName: string) => ({ gameName, gameRelease: gameReleaseForGame(gameName) });
+const GAME_PATH_PLACE = `${SETTINGS_FILE_NAME}'s gamePath`;
+
+function gamePathOf(iniText: string): string | undefined {
+  try {
+    return readGamePath(iniText);
+  } catch {
+    return undefined;
+  }
+}
 
 export function readingSource(context: Mo2Context): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch } = context;
@@ -89,13 +98,14 @@ export function readingSource(context: Mo2Context): ReadingSource {
     ...mo2Archives(context),
     async settings() {
       const iniText = await get(settingsFile(instanceRoot));
-      const game = gameOf(readGameName(iniText));
+      const game = gameOfSettings(iniText);
       return {
         profile: readSelectedProfile(iniText),
         ...game,
         // What the settings resolve is what the watch follows.
         gameFolder: async () => {
-          const gameFolder = await resolveGameFolder(iniText);
+          const managed: ManagerGamePath = { path: gamePathOf(iniText), place: GAME_PATH_PLACE, release: game.gameRelease };
+          const gameFolder = await resolveGameFolder(managed);
           watch.follow('gameFolderPlugins', dataFolderOf(gameFolder), DATA_FOLDER_PLUGINS_GLOB);
           const creationClubList = creationClubFileOf(gameFolder, game.gameRelease);
           if (creationClubList === undefined) watch.follow('creationClubList', undefined, '');

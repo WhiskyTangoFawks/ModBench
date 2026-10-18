@@ -59,7 +59,7 @@ describe('detectGamePaths (Linux)', () => {
   });
 });
 
-describe('detectWinePrefix, the Proton prefix root for gameDirectory.ts\'s Wine translation found by reading Steam\'s library folders file', () => {
+describe('detectWinePrefix, the Proton prefix root for gameFolderResolver\'s Wine translation found by reading Steam\'s library folders file', () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
