@@ -15,22 +15,22 @@ public sealed class BuildConfigurationCrossSideTests
         new(@"(?:export )?const BUILD_OUTPUT_KEY = '([^']+)';", RegexOptions.Compiled);
 
     private static readonly string Root = ServiceProjects.SolutionDirectory();
-    private static readonly string FrontendLayout = Path.Combine(Root, "..", "modbench", "src", "wire", "sourceMod.ts");
+    private static readonly string FrontendSourceMod = Path.Combine(Root, "..", "modbench", "src", "wire", "sourceMod.ts");
 
     [Fact]
     public void TheBackendAndFrontendFileNames_Agree() =>
         Assert.Equal(
             ValueIn(Path.Combine(Root, "MEditService.SourceAdapter", "SourceRepositoryLayout.cs"), BackendFileName),
-            ValueIn(FrontendLayout, FrontendFileName));
+            ValueIn(FrontendSourceMod, FrontendFileName));
 
     [Fact]
     public void TheBackendAndFrontendOutputKeys_Agree() =>
         Assert.Equal(
             ValueIn(Path.Combine(Root, "MEditService.SourceAdapter", "BuildConfiguration.cs"), BackendOutputKey),
-            ValueIn(FrontendLayout, FrontendOutputKey));
+            ValueIn(FrontendSourceMod, FrontendOutputKey));
 
     [Fact]
-    public void TheScan_CatchesAPlantedMismatch()
+    public void TheScan_CatchesAPlantedOutputKeyMismatch()
     {
         using var dir = new ScratchDirectory("medit-build-configuration-cross-side-");
         var backendFile = Path.Combine(dir, "BuildConfiguration.cs");
@@ -39,6 +39,18 @@ public sealed class BuildConfigurationCrossSideTests
         File.WriteAllText(frontendFile, "export const BUILD_OUTPUT_KEY = 'outputFolder';");
 
         Assert.NotEqual(ValueIn(backendFile, BackendOutputKey), ValueIn(frontendFile, FrontendOutputKey));
+    }
+
+    [Fact]
+    public void TheScan_CatchesAPlantedFileNameMismatch()
+    {
+        using var dir = new ScratchDirectory("medit-build-configuration-cross-side-");
+        var backendFile = Path.Combine(dir, "SourceRepositoryLayout.cs");
+        var frontendFile = Path.Combine(dir, "sourceMod.ts");
+        File.WriteAllText(backendFile, "internal const string BuildConfigurationFileName = \"build.json\";");
+        File.WriteAllText(frontendFile, "export const BUILD_CONFIGURATION_FILE = 'builds.json';");
+
+        Assert.NotEqual(ValueIn(backendFile, BackendFileName), ValueIn(frontendFile, FrontendFileName));
     }
 
     private static string ValueIn(string file, Regex pattern)
