@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { stripBom } from '../loadOrderFileCodec/lineScan';
+import { stripBom } from '../../loadOrderFileCodec/lineScan';
 
 const execFileAsync = promisify(execFile);
 

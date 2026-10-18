@@ -10,7 +10,7 @@ import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 import type { ReadingSource } from './mo2Reads';
-import { releaseRoot } from './releaseRoot';
+import { releaseRoot } from './gameFolder/releaseRoot';
 
 interface Extraction {
   readonly path: string;

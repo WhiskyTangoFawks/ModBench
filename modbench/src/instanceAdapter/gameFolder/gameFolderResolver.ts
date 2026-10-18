@@ -4,18 +4,18 @@
 import { exec } from 'node:child_process';
 import { dirname, join, posix, win32 } from 'node:path';
 import { promisify } from 'node:util';
-import { readGameName, readGamePath, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
-import { gamePathInfoForRelease, gameReleaseForGame } from '../tables/gamePaths';
+import { readGameName, readGamePath, SETTINGS_FILE_NAME } from '../codecs/modOrganizerIni';
+import { gamePathInfoForRelease, gameReleaseForGame } from '../../tables/gamePaths';
 import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths } from './gamePathDetector';
 import { documentsFolder } from './documentsFolder';
-import { factsOf } from './files';
-import { present } from '../ports/present';
-import { errorMessage } from '../ports/errorMessage';
-import { GAME_FOLDER_SETTING, type GameDirectoryOverrides, type GameFolder, type GameFolderLook } from './instanceAdapter';
+import { factsOf } from '../files';
+import { present } from '../../ports/present';
+import { errorMessage } from '../../ports/errorMessage';
+import { GAME_FOLDER_SETTING, type GameDirectoryOverrides, type GameFolder, type GameFolderLook } from '../instanceAdapter';
 
 /** Answers where the game is for one generation of ModOrganizer.ini's text — the Instance's own
  *  read, so a resolution can never come from a different generation than the value it lands in. */
-export type GameDirectoryResolver = (iniText: string) => Promise<GameFolder>;
+export type GameFolderResolver = (iniText: string) => Promise<GameFolder>;
 
 type DetectWinePrefix = () => Promise<string | null>;
 
@@ -134,9 +134,9 @@ async function iniGamePath(iniText: string, detectors: GameDetectors): Promise<L
 
 /** The setting, then MO2's `gamePath`, then autodetect. A folder the setting or `gamePath` names
  *  that has no Data folder refuses to fall through: the user chose that folder. */
-export function gameDirectoryResolver(
+export function gameFolderResolver(
   overridesOf: () => GameDirectoryOverrides, detectors: GameDetectors = STEAM,
-): GameDirectoryResolver {
+): GameFolderResolver {
   return async (iniText: string): Promise<GameFolder> => {
     const facts = autodetectFacts(iniText);
     const at = (root: string): GameFolder => ({ kind: 'found', root, dataFolder: join(root, 'Data') });

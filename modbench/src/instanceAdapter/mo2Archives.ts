@@ -2,9 +2,10 @@
 // its own game INIs when its settings say so, and the archives and strings files of the Data folder.
 
 import { keepsOwnGameInis } from './codecs/profileSettings';
-import { archiveListsOf, dataFolderOf, pluginCompanionRule } from '../tables/gamePaths';
+import { archiveListsOf, pluginCompanionRule } from '../tables/gamePaths';
+import { dataFolderOf } from './gameFolder/dataFolder';
 import { get, listDir, readOrAbsent, readOrReason } from './files';
-import { archivesListedIn } from './gameIni';
+import { archivesListedIn } from './gameFolder/gameIni';
 import type { DataFolderArchives, GameFolder } from './instanceAdapter';
 import { anyCase, dataFolderArchivesGlob, fileInFolder, profileDir, profileSettingsFile } from './layout';
 import type { Mo2Context } from './mo2Context';

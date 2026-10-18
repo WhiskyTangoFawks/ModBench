@@ -8,6 +8,7 @@ import type { MoveToTrash } from '../ports/trash';
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 export { filesWinningFirst } from './pluginsProvided';
+export { dataFolderFile } from './gameFolder/dataFolder';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
 export { OVERWRITE_ORIGIN } from './codecs/modlistText';

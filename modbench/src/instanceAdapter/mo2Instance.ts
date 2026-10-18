@@ -5,8 +5,8 @@ import { existsSync } from 'node:fs';
 import { MODLIST_FILE_NAME } from './codecs/modlistText';
 import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
-import { gameDirectoryResolver, STEAM, type GameDetectors } from './gameDirectory';
-import { myGamesResolver } from './myGames';
+import { gameFolderResolver, STEAM, type GameDetectors } from './gameFolder/gameFolderResolver';
+import { myGamesResolver } from './gameFolder/myGames';
 import type { ArchiveReader, GameDirectoryOverrides, InstanceAdapter, ManagerNames, Subscription } from './instanceAdapter';
 import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
@@ -46,7 +46,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
   const { instanceRoot, archives } = options;
   const context: Mo2Context = 'context' in options ? options.context : {
     instanceRoot,
-    resolveGameFolder: gameDirectoryResolver(options.gameDirectoryOverrides, options.detectors),
+    resolveGameFolder: gameFolderResolver(options.gameDirectoryOverrides, options.detectors),
     resolveDownloadsFolder: downloadsDirectoryResolver(options.detectors),
     resolveMyGames: myGamesResolver(instanceRoot, options.detectors ?? STEAM),
     watch: mo2Watch(instanceRoot, options.gameDirectoryChanged),

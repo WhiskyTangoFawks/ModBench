@@ -1,4 +1,4 @@
-import type { GameDetectors } from '../instanceAdapter/gameDirectory';
+import type { GameDetectors } from '../instanceAdapter/gameFolder/gameFolderResolver';
 
 export const NO_DETECTORS: GameDetectors = {
   paths: () => Promise.resolve(null),
