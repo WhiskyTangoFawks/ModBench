@@ -53,30 +53,69 @@ export function readIniSection(text: string, section: string): Map<string, strin
 export const readIniValue = (text: string, section: string, key: string): string | undefined =>
   readIniSection(text, section).get(key);
 
-// Qt's INI writer escapes backslashes and quotes, inside `@ByteArray(...)` too, and
-// quote-wraps a value holding `,` `;` `=` or starting or ending with a space.
-const UNESCAPES: Record<string, string> = { '\\': '\\', '"': '"', n: '\n', r: '\r', t: '\t' };
-const ESCAPES: Record<string, string> = { '\\': '\\\\', '"': '\\"', '\n': '\\n', '\r': '\\r', '\t': '\\t' };
+// Qt's INI reader and writer (qsettings.cpp: iniUnescapedStringList, iniEscapedString,
+// variantToString): an escape yields one UTF-16 unit, `\x` takes any number of hex digits, an
+// unknown escape is dropped, and a QByteArray is `@ByteArray(` its bytes as latin-1 `)`.
+const NAMED_ESCAPES: Record<string, string> = {
+  a: '\x07', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v', '"': '"', '?': '?', "'": "'", '\\': '\\',
+};
+const CONTROL_ESCAPES: Record<string, string> = { '\x07': 'a', '\b': 'b', '\f': 'f', '\n': 'n', '\r': 'r', '\t': 't', '\v': 'v' };
+
+function unescapeUnits(body: string): string {
+  return body.replace(/\\(?:x([0-9a-fA-F]+)|([0-7]+)|([\s\S])?)/g, (_whole, hex?: string, octal?: string, ch?: string) => {
+    if (hex !== undefined) return String.fromCharCode(parseInt(hex, 16));
+    if (octal !== undefined) return String.fromCharCode(parseInt(octal, 8));
+    return NAMED_ESCAPES[ch ?? ''] ?? '';
+  });
+}
 
 function decodeIniValue(raw: string): string {
   const trimmed = raw.trim();
   const quoted = trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"');
-  const body = quoted ? trimmed.slice(1, -1) : trimmed;
-  const unescaped = body.replace(/\\(.)/gs, (whole: string, ch: string) => UNESCAPES[ch] ?? whole);
-  return /^@ByteArray\((.*)\)$/s.exec(unescaped)?.[1] ?? unescaped;
+  const units = unescapeUnits(quoted ? trimmed.slice(1, -1) : trimmed);
+  const bytes = /^@ByteArray\((.*)\)$/s.exec(units)?.[1];
+  if (bytes !== undefined) return Buffer.from(bytes, 'latin1').toString('utf8');
+  return units.startsWith('@@') ? units.slice(1) : units;
 }
 
+// A hex digit after a numeric escape would read as part of it, so it is escaped too.
+function escapeUnits(units: string, escapeHigh: boolean): string {
+  let numericEscape = false;
+  let out = '';
+  for (const ch of units) {
+    const code = ch.codePointAt(0) ?? 0;
+    const numeric = code === 0 || (!(ch in CONTROL_ESCAPES) && (code <= 0x1f || (escapeHigh && code >= 0x7f) || (numericEscape && /[0-9a-fA-F]/.test(ch))));
+    if (numeric) out += code === 0 ? '\\0' : `\\x${code.toString(16)}`;
+    else if (ch in CONTROL_ESCAPES) out += `\\${CONTROL_ESCAPES[ch]}`;
+    else out += ch === '"' || ch === '\\' ? `\\${ch}` : ch;
+    numericEscape = numeric;
+  }
+  return out;
+}
+
+const quoteIfNeeded = (text: string, escaped: string): string => (/[,;=]|^ | $/.test(text) ? `"${escaped}"` : escaped);
+
 // The raw value Qt writes for `value`; `decodeIniValue` reads it back.
-function encodeIniValue(value: string): string {
-  const escaped = value.replace(/[\\"\n\r\t]/g, (ch) => ESCAPES[ch] ?? ch);
-  return /[,;=]|^ | $/.test(value) ? `"${escaped}"` : escaped;
+const encodeIniValue = (value: string): string => quoteIfNeeded(value, escapeUnits(value.startsWith('@') ? `@${value}` : value, false));
+
+// The raw value Qt writes for a QByteArray holding `value` as UTF-8.
+function encodeByteArray(value: string): string {
+  const bytes = `@ByteArray(${Buffer.from(value, 'utf8').toString('latin1')})`;
+  return quoteIfNeeded(bytes, escapeUnits(bytes, true));
 }
 
 /** Sets, adds (right after its header) or, for an undefined value, deletes one key. An
  *  absent section is added ahead of everything. Every other line stays as found. */
-export function setIniValue(text: string, section: string, key: string, value: string | undefined): string {
+export const setIniValue = (text: string, section: string, key: string, value: string | undefined): string =>
+  setRawIniValue(text, section, key, value === undefined ? undefined : encodeIniValue(value));
+
+/** Sets one key to `value` as a QByteArray of its UTF-8 bytes, which is how MO2 stores a path or name. */
+export const setIniByteArray = (text: string, section: string, key: string, value: string): string =>
+  setRawIniValue(text, section, key, encodeByteArray(value));
+
+function setRawIniValue(text: string, section: string, key: string, raw: string | undefined): string {
   return editLines(text, (lines) => {
-    const line = value === undefined ? undefined : `${key}=${encodeIniValue(value)}`;
+    const line = raw === undefined ? undefined : `${key}=${raw}`;
     const span = findSection(lines, section);
     if (!span) return line === undefined ? lines : [`[${section}]`, line, ...lines];
     const at = findKeyLine(lines, span, key);
