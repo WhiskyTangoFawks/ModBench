@@ -33,7 +33,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, matchesGlob, sep } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import type { Mo2Context } from '../mo2Context';
-import { readingSource, readInstance, type ReadingSource } from '../mo2Reads';
+import { readingSource, readInstance, readPluginsProvided, type ReadingSource } from '../mo2Reads';
 import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
 import type {
   ArchiveReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
@@ -1379,6 +1379,26 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.modFolderPath('harder vats')).toBe(join(root, 'mods', 'Harder VATS'));
       expect(await adapter.modFolderPath('Cloned Mod')).toBe(join(root, 'mods', 'Cloned Mod'));
       expect(await adapter.modFolderPath('Mods/Cloned Mod')).toBeUndefined();
+    });
+
+    describe('listing mods/ for a read of every mod', () => {
+      const listingsOfMods = (): number => vi.mocked(readdir).mock.calls.filter(([path]) => String(path) === join(root, 'mods')).length;
+
+      it('lists it once to read the instance whole', async () => {
+        vi.mocked(readdir).mockClear();
+
+        await readInstance(source);
+
+        expect(listingsOfMods()).toBe(1);
+      });
+
+      it('lists it once to read the plugins the mod order provides', async () => {
+        vi.mocked(readdir).mockClear();
+
+        await readPluginsProvided(source, 'Default');
+
+        expect(listingsOfMods()).toBe(1);
+      });
     });
 
     it('answers a mod named as a separator\'s folder with that separator\'s folder, MO2 knowing a mod by its folder\'s name and a folder named for a separator holding that separator', async () => {
