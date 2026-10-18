@@ -1,5 +1,5 @@
-// Where the game is: the setting first, then the game path the mod manager names, then Steam and Wine detection.
-// The setting and the manager's game path arrive as values; nothing here reads a setting or a file of the manager's.
+// Where the game is: the setting, then the manager's game path, then Steam and Wine detection.
+// Both arrive as values; nothing here reads a setting or a file of the manager's.
 
 import { exec } from 'node:child_process';
 import { dirname, join, posix, win32 } from 'node:path';
@@ -12,13 +12,12 @@ import { present } from '../../ports/present';
 import { errorMessage } from '../../ports/errorMessage';
 import type { GameFolder, GameFolderLook, GameFolderSetting } from '../instanceAdapter';
 
-/** What the mod manager says about where the game is, read by the manager from its own configuration. */
-export interface ManagerGamePath {
-  /** The game path as the manager spells it, a Windows path under Wine; undefined when it names none. */
+// What the mod manager says about where the game is, read by the manager from its own configuration.
+interface ManagerGamePath {
+  // As the manager spells it, a Windows path under Wine; undefined when it names none.
   readonly path: string | undefined;
-  /** How a look names the manager's answer. */
   readonly place: string;
-  /** The Mutagen release of the game the manager is for; undefined when it names none the tables know. */
+  // The Mutagen release of the game the manager is for; undefined when it names none the tables know.
   readonly release: string | undefined;
 }
 
