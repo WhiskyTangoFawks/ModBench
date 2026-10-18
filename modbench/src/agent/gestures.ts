@@ -252,7 +252,6 @@ function refusalIn(outcome: GestureOutcome): string | undefined {
   return [...refusals, ...partials].join(' ') || undefined;
 }
 
-/** What the agent is told: what landed and what was refused, never the `applied` flag a view reads. */
 function answerOf(outcome: GestureOutcome) {
   if (!outcome.applied) return outcome.detail === undefined ? { refusal: outcome.refusal } : { refusal: outcome.refusal, detail: outcome.detail };
   const { landed, refused } = outcome.outcome;
