@@ -26,6 +26,7 @@ import { registerGoToModCommand } from './goToMod';
 import { registerBuildCommand } from './buildCommand';
 import { BuildProblems } from './buildProblems';
 import { registerDecompileAndCommitCommand } from './decompileAndCommitCommand';
+import { registerManifestGestures, type ManifestGestureDeps } from './manifestGestures';
 import { registerConflictTable } from './conflictTableEditor';
 import {
   modsCopyValueText, registerCreateEmptyModCommand, registerFileExclusionCommands, registerModContextCommands, registerModEnableCommands,
@@ -46,6 +47,8 @@ interface SourceGestureDeps {
   registerRepositories: () => Promise<void>;
 }
 
+type ManifestDeps = Pick<ManifestGestureDeps, 'commands' | 'toolboxView' | 'say' | 'focusedView'>;
+
 interface ModsViewDeps {
   instance: InstanceView & Pick<Instance, 'refresh' | 'sameCopies'>;
   commands: ModCommands;
@@ -61,6 +64,7 @@ interface ModsViewDeps {
   /** Mod sync, whose failure the view's message line says. */
   modSync: Sync;
   sourceGestures: SourceGestureDeps;
+  manifestGestures: ManifestDeps;
   /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
   modStatus: { push: Pick<MEditClient, 'onNotification' | 'onReconnected'>; readStatus: ReadModStatus };
 }
@@ -123,6 +127,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
       log,
     }),
     ...registerSourceGestures(deps, provider),
+    ...registerManifestGestures({ ...deps.manifestGestures, instance, reporter: reporterFor('modlist'), ask }),
     ...registerModEnableCommands(commands, instance, () => view.selection, reporterFor('mod.enableDisable')),
     ...registerFileExclusionCommands(commands, instance, () => view.selection, reporterFor('mod.excludeFile')),
     registerModMoveCommand(

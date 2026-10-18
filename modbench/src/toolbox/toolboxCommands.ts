@@ -5,7 +5,7 @@ import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 
-const TOOLBOX_VIEW = 'modbench.toolbox';
+export const TOOLBOX_VIEW = 'modbench.toolbox';
 
 interface ToolboxCommandDeps {
   commands: Pick<InstanceCommands, 'switchProfile'>;
