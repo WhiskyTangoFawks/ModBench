@@ -41,7 +41,7 @@ export function registerRevealInExplorerCommand(
     const name = node.kind === 'plugin' ? node.plugin.name : node.name;
     const filePath = await pluginsTree.resolvePluginPath(node);
     if (!filePath) {
-      const why = node.kind === 'plugin' ? 'no mod or Overwrite holds this file' : 'the game folder was not found';
+      const why = node.kind === 'plugin' ? 'no mod or Overwrite holds this file' : 'the instance does not list this file';
       // ADR-0019.
       reporter.report('error', `Could not resolve a file location for "${name}" — ${why}.`);
       return;

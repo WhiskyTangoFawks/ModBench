@@ -181,7 +181,7 @@ function pluginsView(
     instance, commands: pluginCommandsWith(fakeInstanceAdapter().adapter), recordBrowser, client,
     pluginSync,
     channel: silentChannel,
-    dataFolderFile: () => undefined, log: () => undefined,
+    log: () => undefined,
     reporterFor: (tag) => { const reporter = recordingReporter(); reporters.set(tag, reporter); return reporter; },
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, registerRepositories: () => Promise.resolve(),
     ask: scriptedDialog(), recordWrite: (command) => command(),
@@ -269,7 +269,7 @@ describe('the Plugins view says what it knows of whether a plugin is a compiled 
       });
       const onInstance = () => plugins.onInstance({
         instance: new FakeInstance(value), commands: pluginCommandsWith(fakeInstanceAdapter().adapter),
-        pluginSync: syncRefusing().pluginSync, dataFolderFile: () => undefined,
+        pluginSync: syncRefusing().pluginSync,
       });
       return { plugins, onInstance };
     }
