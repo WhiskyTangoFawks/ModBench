@@ -28,6 +28,18 @@ const changed: Scene = (facts) => changedOutside(facts, 'SomeMod', 'A.esp');
 const malformed: Scene = (facts) => facts.diagnosed([diagnosis('first'), diagnosis('second')]);
 const scenes = (...parts: Scene[]): Scene => (facts) => parts.forEach((part) => part(facts));
 
+describe('PluginFacts — the tooltip names the origin (plugins.md, A row, Plugin, Tooltip)', () => {
+  it.each([
+    ['Data/', 'the game folder'],
+    ['overwrite/', 'Overwrite'],
+    ['SomeMod', 'SomeMod'],
+    ['Data', 'Data'],
+    ['overwrite', 'overwrite'],
+  ])('%s as %s', (origin, named) => {
+    expect(new PluginFacts().tooltipLines({ name: 'A.esp', origin })).toEqual(['A.esp', named]);
+  });
+});
+
 describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
   it.each([
     ['nothing', scenes(), undefined, undefined, []],

@@ -1,6 +1,7 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import type { UnreadableSource } from '../wire/unreadableSource';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
+import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { ByPluginAddress } from './pluginAddress';
@@ -252,7 +253,7 @@ export class PluginFacts {
   /** The tooltip: file name, origin, read-only when its records cannot be edited, and a line for
    *  each status. */
   tooltipLines(address: PluginAddress): string[] {
-    const lines = [address.name, address.origin];
+    const lines = [address.name, pluginOriginName(address.origin)];
     if (this.reads.get(address)?.readOnly === true) lines.push('read-only');
     return [...lines, ...this.statuses(address).map((s) => s.tooltipLine)];
   }

@@ -92,7 +92,7 @@ export interface ArchiveSources {
 }
 
 /** A plugins.txt line with no resolvable plugin file: no mod or overwrite/ provides it, and
- *  there is no Data/ to fall back to. Existence, line and enabled still come from plugins.txt. */
+ *  the Data folder does not hold it or cannot be listed. Existence, line and enabled still come from plugins.txt. */
 export interface LoadOrderPluginLine extends Omit<LoadOrderPlugin, 'path'> {
   readonly path: undefined;
 }
@@ -166,8 +166,8 @@ function winningPlugins(files: FileWinners): Map<string, PluginFile> {
 }
 
 /** A disabled plugins.txt line is still sent (ADR-0013), `enabled: false`. A listed
- *  name no mod or overwrite/ provides takes the Data folder's file, or is line-only with no game
- *  folder found. */
+ *  name no mod or overwrite/ provides takes the Data folder's file, or is line-only when the Data
+ *  folder does not hold it. */
 export function buildLoadOrderRows(
   pluginOrder: readonly PluginEntry[],
   index: FileConflictIndex,
@@ -189,7 +189,7 @@ export function buildLoadOrderRows(
     const spellings = dataSpellings(inData, name).sort((a, b) => Number(b === name) - Number(a === name));
     const plugins = provided !== undefined ? [provided] : spellings.length > 0
       ? spellings.map((spelled) => ({ name: spelled, path: dataFolderFile(gameFolder, spelled), origin: DATA_DIRECTORY_ORIGIN }))
-      : [{ name, path: dataFolderFile(gameFolder, name), origin: DATA_DIRECTORY_ORIGIN }];
+      : [{ name, path: undefined, origin: DATA_DIRECTORY_ORIGIN }];
     return plugins.map((plugin, i) => ({ ...plugin, line, enabled: isEnabled(name), winning: i === 0 }));
   });
 

@@ -76,7 +76,7 @@ export interface InstanceValue {
   readonly foldersByMod: ReadonlyMap<string, readonly OriginFolder[]>;
   /** Every plugin file, with origin, line, enabled and winning. A listed
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
-   *  undefined — when the game folder is not found. */
+   *  undefined — when the Data folder does not hold it or cannot be listed. */
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   /** The downloaded files' rows, their metadata folded in — status and excluded included; or the
    *  reason their folder could not be resolved. */
