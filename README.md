@@ -26,7 +26,7 @@ VS Code edits files, and git stores files. So Modbench works on files, and turns
 
 Git does not hold gigabytes of binary files. So the modlist repository holds each mod as a manifest, which restores the mod as installed. The profiles and MO2's modlist configuration sit beside the manifests. An upgrade, a new mod or a removed file reads as a change to a manifest, which git tracks.
 
-The instance stays MO2's, in MO2's own format. You switch between MO2 and Modbench at any time. Nothing Modbench does breaks using the list in MO2.
+The instance stays MO2's, in MO2's own format, so you can switch between MO2 and Modbench: close one, then open the other. Nothing Modbench does breaks using the list in MO2.
 
 ### A plugin is its source
 
