@@ -16,7 +16,7 @@ import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationCl
 import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, type SkippedLink, stampOf } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type GameFolder, type InstanceAdapter, type InstanceReading,
-  type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided, type SourceMods,
+  type ManagerRunning, type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided, type SourceMods,
 } from './instanceAdapter';
 import {
   DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadSidecarFile, isTempWrite, modlistFile,
@@ -28,6 +28,7 @@ import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context
 import { originFilesIn } from './mo2Files';
 import { sourceModsIn } from './sourceMods';
 import { filesWinningFirst, pluginsProvidedOf } from './pluginsProvided';
+import { errorMessage } from '../ports/errorMessage';
 
 interface InstanceSettings {
   readonly profile: string;
@@ -62,6 +63,7 @@ export interface ReadingSource extends ArchiveReads {
   sourceMods(): Promise<SourceMods>;
   holdsRepository(): Promise<boolean>;
   watchNotes(): string[];
+  managerRunning(): Promise<ManagerRunning>;
 }
 
 async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLink): Promise<DownloadedFile[] | undefined> {
@@ -93,7 +95,7 @@ function gamePathOf(iniText: string): string | undefined {
 }
 
 export function readingSource(context: Mo2Context): ReadingSource {
-  const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch } = context;
+  const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
   return {
     ...mo2Archives(context),
     async settings() {
@@ -157,6 +159,10 @@ export function readingSource(context: Mo2Context): ReadingSource {
 
     holdsRepository: () => isRepository(instanceRoot),
     watchNotes: () => watch.watchNotes(),
+    managerRunning: () => mo2Running().then(
+      (running): ManagerRunning => ({ kind: running ? 'running' : 'notRunning' }),
+      (err: unknown): ManagerRunning => ({ kind: 'unknown', reason: errorMessage(err) }),
+    ),
   };
 }
 
@@ -224,7 +230,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
   const modFoldersRead = source.modFolders(skipLink);
   const sourceModsRead = source.sourceMods();
   const downloadsRead = settings.downloadedFiles(skipLink);
-  const [mods, pluginsListed, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceMods, modFiles, folderMeta, holdsRepository] = await Promise.all([
+  const [mods, pluginsListed, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceMods, modFiles, folderMeta, holdsRepository, managerRunning] = await Promise.all([
     modsRead,
     source.pluginOrder(profile),
     downloadsRead,
@@ -244,6 +250,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     Promise.all([modsKept, modFoldersRead, downloadsRead]).then(([entries, folders, downloads]) =>
       folderMetaOf(source, entries, folders, downloads.kind === 'listed' && downloads.files !== undefined)),
     source.holdsRepository(),
+    source.managerRunning(),
   ]);
   const { archiveList, dataFolderArchives, ...gameFacts } = game;
   const pluginOrder = withNotes(pluginsListed, ({ name }) => pluginKey(name), ({ name }) => `${PLUGINS_FILE_NAME} lists the plugin ${name}`);
@@ -251,7 +258,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     profile, gameName, gameRelease, mods: mods.kept, modGroups: groupModOrder(mods.kept), pluginOrder: pluginOrder.kept, orderNotes: [...mods.notes, ...pluginOrder.notes], downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
     profiles, modFolders, skippedLinks, runtimeOutput, modFiles, folderMeta,
-    sourceMods, holdsRepository, watchNotes: source.watchNotes(),
+    sourceMods, holdsRepository, watchNotes: source.watchNotes(), managerRunning,
   };
 }
 

@@ -328,7 +328,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
     await reconcile(h, [failing]);
     expect(h.tree.viewMessage()).toContain('Showing the last good read: "A.esp"');
-    expect(h.tree.lastGoodReadMessage()).toContain('A.esp/Npc.json: bad');
+    expect(h.tree.standingMessage()).toContain('A.esp/Npc.json: bad');
 
     await reconcile(h, [held('A.esp')]);
     expect(h.tree.viewMessage()).toBeUndefined();

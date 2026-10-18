@@ -6,7 +6,7 @@ import {
   downloadContextValue, filterExcludedRows, sortDownloadRows, type DownloadSortColumn,
 } from './downloadRows';
 import {
-  lastGoodReadMessage, type DownloadFile, type DownloadRow, type DownloadStatus, type InstanceValue, type InstanceView,
+  instanceMessage, type DownloadFile, type DownloadRow, type DownloadStatus, type InstanceValue, type InstanceView,
 } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
@@ -112,7 +112,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   }
 
   viewMessage(): string | undefined {
-    return lastGoodReadMessage(this.instance);
+    return instanceMessage(this.instance);
   }
 
   dispose(): void {

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import { lastGoodReadMessage, type InstanceValue, type InstanceView, type ModGroup, type ModGroups } from '../instanceLoader/instance';
+import { instanceMessage, type InstanceValue, type InstanceView, type ModGroup, type ModGroups } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
@@ -244,11 +244,11 @@ export class ModListProvider
    *  list says so here, above it. */
   viewMessage(): string | undefined {
     const empty = this.instance.sequence !== 0 && this.instanceValue.mods.length === 0 ? NO_MODS_MESSAGE : undefined;
-    return [empty, this.lastGoodReadMessage()].filter((part) => part !== undefined).join(' ') || undefined;
+    return [empty, this.standingMessage()].filter((part) => part !== undefined).join(' ') || undefined;
   }
 
-  lastGoodReadMessage(): string | undefined {
-    return lastGoodReadMessage(this.instance);
+  standingMessage(): string | undefined {
+    return instanceMessage(this.instance);
   }
 
   // No stable API names the focused row. VS Code appends the row a click selects to the selection

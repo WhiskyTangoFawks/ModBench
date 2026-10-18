@@ -7,7 +7,7 @@ import type {
 } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture } from '../../test/fakeInstanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { Instance, type InstanceValue } from '../instance';
+import { Instance, instanceMessage, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
 
 const instances: Instance[] = [];
@@ -145,6 +145,38 @@ describe('Instance — the value', () => {
     await instance.refresh();
 
     expect(instance.value.holdsRepository).toBe(true);
+  });
+
+  it('says on the message line that the mod manager overwrites the user\'s changes while it runs, beside the last good read, and nothing once it stops', async () => {
+    const { instance, fake } = loader({ managerRunning: { kind: 'running' } });
+    const beforeRead = instanceMessage(instance);
+    await instance.refresh();
+    const running = instanceMessage(instance);
+    fake.failReading('EACCES modlist.txt');
+    await instance.refresh();
+    const beside = instanceMessage(instance);
+    fake.failReading(undefined);
+    fake.read({ managerRunning: { kind: 'notRunning' } });
+    await instance.refresh();
+
+    expect([beforeRead, running, beside, instanceMessage(instance)]).toEqual([
+      undefined,
+      'Fake manager is running, and overwrites your changes when it launches a program or exits.',
+      'Fake manager is running, and overwrites your changes when it launches a program or exits. Showing the last good read: EACCES modlist.txt',
+      undefined,
+    ]);
+  });
+
+  it('says on the message line, and once in the Output until the reason changes, that it cannot tell whether the mod manager is running', async () => {
+    const { instance, fake, warnings } = loader({ managerRunning: { kind: 'unknown', reason: 'tasklist exited with code 1' } });
+    await instance.refresh();
+    await instance.refresh();
+    const message = instanceMessage(instance);
+    fake.read({ managerRunning: { kind: 'notRunning' } });
+    await instance.refresh();
+
+    expect([message, instanceMessage(instance)]).toEqual(['Cannot tell whether Fake manager is running: tasklist exited with code 1', undefined]);
+    expect(warnings).toEqual(['[instance] Cannot tell whether Fake manager is running: tasklist exited with code 1']);
   });
 
   it('carries each mod a repository builds as a source mod, with that repository as its source folder, and each repository alone as a source mod', async () => {

@@ -18,6 +18,7 @@ export interface Mo2Context {
   readonly resolveDownloadsFolder: DownloadsDirectoryResolver;
   readonly resolveMyGames: MyGamesResolver;
   readonly watch: Mo2Watch;
+  readonly mo2Running: () => Promise<boolean>;
 }
 
 /** How MO2 matches an entry: by the name of its folder, without case, a separator's folder named
