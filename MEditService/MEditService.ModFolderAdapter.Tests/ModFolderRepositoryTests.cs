@@ -450,6 +450,20 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void WriteManifest_ReplacingAManifest_LeavesAReaderOfTheOldOneItsWholeText()
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("a.txt", new PackageEntry.NotHeld())]));
+        var path = Path.Combine(_root, "mod.manifest.json");
+        var before = File.ReadAllText(path);
+        using var reader = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
+
+        _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("b.txt", new PackageEntry.NotHeld())]));
+
+        Assert.Equal(before, reader.ReadToEnd());
+        Assert.Equal(["mod.manifest.json"], Directory.GetFiles(_root).Select(Path.GetFileName));
+    }
+
+    [Fact]
     public void WriteManifest_OfTheTextAlreadyThere_WritesNothing()
     {
         var manifest = new Manifest(null, [new ManifestFile("a.txt", new PackageEntry.NotHeld())]);
