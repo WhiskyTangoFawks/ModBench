@@ -516,7 +516,7 @@ export interface InstanceAdapter {
   /** Rejects, naming it, when `core.hooksPath` points outside the git directory, or a pre-push hook is where
    *  `refuseUnpublishedPins` would write one. */
   checkPushRefusalFree(): Promise<void>;
-  /** Makes the instance repository refuse a push of a pin that is on none of its source mod's remotes. Rejects, writing
+  /** Makes the instance repository refuse a push of a pin that the remote `.gitmodules` names lacks when asked. Rejects, writing
    *  nothing, when a pre-push hook other than this one is there. */
   refuseUnpublishedPins(): Promise<void>;
   /** The stamp of an origin file, at the path it is read from. */
