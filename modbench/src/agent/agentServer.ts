@@ -4,7 +4,7 @@ import { text } from 'node:stream/consumers';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
-import type { InstanceView } from '../instanceLoader/instance';
+import { instanceMessages, type InstanceView } from '../instanceLoader/instance';
 import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
@@ -48,15 +48,18 @@ function currentValue(instance: Instance) {
   return instance.value;
 }
 
-async function answer(log: Log, name: string, work: () => unknown) {
+const textBlock = (text: string) => ({ type: 'text' as const, text });
+
+// The messages every view of the instance shows, beside each answer as a block of their own.
+async function answer(log: Log, standing: () => string[], name: string, work: () => unknown) {
   try {
-    return { content: [{ type: 'text' as const, text: JSON.stringify(await work()) }] };
+    return { content: [textBlock(JSON.stringify(await work())), ...standing().map(textBlock)] };
   } catch (error) {
     const line = `[agent] ${name}: ${errorMessage(error)}`;
     if (error instanceof Refusal) log.warn(line);
     else log.error(line);
     const text = error instanceof Refusal && error.answer !== undefined ? JSON.stringify(error.answer) : errorMessage(error);
-    return { isError: true, content: [{ type: 'text' as const, text }] };
+    return { isError: true, content: [textBlock(text), ...standing().map(textBlock)] };
   }
 }
 
@@ -69,11 +72,11 @@ interface Tool<Shape extends z.ZodRawShape> {
 // The SDK refuses an input its schema rejects before the handler runs, with no Output line
 // (agent.md, Reporting, story 1), so it holds one that takes any object and advertises the tool's.
 function register<Shape extends z.ZodRawShape>(
-  server: McpServer, log: Log, { name, description, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
+  server: McpServer, log: Log, standing: () => string[], { name, description, input }: Tool<Shape>, run: (args: z.output<z.ZodObject<Shape>>) => unknown,
 ): void {
   const schema = z.object(input);
   const anyObject = z.looseObject({}).meta(z.toJSONSchema(schema, { io: 'input', target: 'draft-7' }));
-  server.registerTool(name, { description, inputSchema: anyObject }, (args) => answer(log, name, () => {
+  server.registerTool(name, { description, inputSchema: anyObject }, (args) => answer(log, standing, name, () => {
     return run(parseOrRefuse(schema, args));
   }));
 }
@@ -90,17 +93,18 @@ Ask Modbench what the files cannot answer.`;
 
 function mcpServerOf({ instance, mEdit, terminalEnvironment, readStatus, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
-  for (const read of INSTANCE_READS) register(server, log, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance)));
-  register(server, log, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), readStatus));
-  register(server, log, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), args));
-  register(server, log, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
-  register(server, log, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
-  register(server, log, READ_RECORD, (args) => READ_RECORD.of(mEdit, currentValue(instance), args));
-  register(server, log, LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
-  register(server, log, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
-  for (const gesture of GESTURE_TOOLS) register(server, log, gesture, (args) => gesture.of(currentValue(instance), mEdit, args));
-  register(server, log, { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
-  register(server, log, { ...SOURCE_PROBLEMS, input: NO_INPUT }, SOURCE_PROBLEMS.of);
+  const standing = () => instanceMessages(instance).filter((message) => message !== undefined);
+  for (const read of INSTANCE_READS) register(server, log, standing, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance)));
+  register(server, log, standing, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), readStatus));
+  register(server, log, standing, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), args));
+  register(server, log, standing, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
+  register(server, log, standing, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
+  register(server, log, standing, READ_RECORD, (args) => READ_RECORD.of(mEdit, currentValue(instance), args));
+  register(server, log, standing, LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
+  register(server, log, standing, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
+  for (const gesture of GESTURE_TOOLS) register(server, log, standing, gesture, (args) => gesture.of(currentValue(instance), mEdit, args));
+  register(server, log, standing, { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
+  register(server, log, standing, { ...SOURCE_PROBLEMS, input: NO_INPUT }, SOURCE_PROBLEMS.of);
   return server;
 }
 
