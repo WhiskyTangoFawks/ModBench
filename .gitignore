@@ -31,6 +31,8 @@ modbench/out/
 # just be a staleness trap against their real sources.
 modbench/backend/
 modbench/LICENSE
+modbench/README.md
+modbench/THIRD-PARTY-NOTICES.txt
 modbench/scripts/
 
 # OS
