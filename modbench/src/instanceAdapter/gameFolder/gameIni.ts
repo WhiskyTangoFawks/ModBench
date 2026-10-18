@@ -1,8 +1,8 @@
 // The game's own INI format: `[section]` headers, `key=value` lines and `;` comments, sections and
 // keys matched without case. Any mod manager's implementation reads the game's INIs through it.
 
-import { splitLines, stripBom } from '../loadOrderFileCodec/lineScan';
-import type { ArchiveLists } from '../tables/gamePaths';
+import { splitLines, stripBom } from '../../loadOrderFileCodec/lineScan';
+import type { ArchiveLists } from '../../tables/gamePaths';
 
 const ARCHIVE_SECTION = 'archive';
 

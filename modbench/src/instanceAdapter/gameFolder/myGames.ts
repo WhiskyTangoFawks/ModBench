@@ -1,9 +1,9 @@
 import { userInfo } from 'node:os';
 import { join, posix } from 'node:path';
-import { archiveListsOf, gamePathInfoForRelease } from '../tables/gamePaths';
-import { errorMessage } from '../ports/errorMessage';
-import { factsOf } from './files';
-import type { GameDetectors } from './gameDirectory';
+import { archiveListsOf, gamePathInfoForRelease } from '../../tables/gamePaths';
+import { errorMessage } from '../../ports/errorMessage';
+import { factsOf } from '../files';
+import type { GameDetectors } from './gameFolderResolver';
 
 type MyGamesResolution = { readonly kind: 'found'; readonly folder: string } | { readonly kind: 'notFound'; readonly looked: readonly string[] };
 

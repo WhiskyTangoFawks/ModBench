@@ -281,17 +281,3 @@ export function pluginCompanionRule(release: string | undefined): PluginCompanio
 export function archiveListsOf(release: string | undefined): ArchiveLists | undefined {
   return release === undefined ? undefined : GAME_PATHS[release]?.archiveLists;
 }
-
-/** A game folder as plain data: found, with its Data folder, or not found. */
-export type GameFolderData = { readonly kind: 'found'; readonly dataFolder: string } | { readonly kind: 'notFound' };
-
-/** The Data folder of a game folder found, undefined when it was not. */
-export function dataFolderOf(folder: GameFolderData): string | undefined {
-  return folder.kind === 'found' ? folder.dataFolder : undefined;
-}
-
-/** A file at the root of the Data folder of a game folder found, undefined when it was not. */
-export function dataFolderFile(folder: GameFolderData, name: string): string | undefined {
-  const dataFolder = dataFolderOf(folder);
-  return dataFolder === undefined ? undefined : join(dataFolder, name);
-}
