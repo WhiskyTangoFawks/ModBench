@@ -440,19 +440,27 @@ describe('the MO2 adapter\'s repository', () => {
         return folder;
       };
 
-      async function pinnedSourceMod() {
+      async function pinnedSourceMods(names: readonly string[]) {
         const adapter = await instance();
         runGit('init', '--quiet', '--initial-branch=main');
         runGit('config', 'user.name', 't');
         runGit('config', 'user.email', 't@t');
         await adapter.writeIgnoreList();
-        const hosted = 'https://example.test/mod-a.git';
-        const mod = await sourceMod('Mod A', 'Mod A', hosted);
+        const hosted = (name: string): string => `https://example.test/${name.toLowerCase().replace(' ', '-')}.git`;
+        const mods = await Promise.all(names.map((name) => sourceMod(name, name, hosted(name))));
         await adapter.writeSubmodules();
-        const modRemote = await bareRepository();
-        git(mod, 'config', `url.${modRemote}.insteadOf`, hosted);
+        const pinned = await Promise.all(mods.map(async (mod) => ({ mod, modRemote: await bareRepository() })));
+        for (const { mod } of pinned) {
+          for (const [index, { modRemote }] of pinned.entries()) git(mod, 'config', `url.${modRemote}.insteadOf`, hosted(names[index] ?? ''));
+        }
         runGit('remote', 'add', 'origin', await bareRepository());
-        return { adapter, mod, modRemote };
+        return { adapter, pinned };
+      }
+
+      async function pinnedSourceMod() {
+        const { adapter, pinned: [only] } = await pinnedSourceMods(['Mod A']);
+        if (only === undefined) throw new Error('no source mod was pinned');
+        return { adapter, ...only };
       }
 
       const pin = (): void => {
@@ -526,6 +534,16 @@ describe('the MO2 adapter\'s repository', () => {
         await put('.gitmodules', named);
 
         expect(pushRefusal()).toMatch(/Push refused: source\/Mod A pins \w+, and \.gitmodules names no remote for it\./);
+      });
+
+      it('judges each pin by its own source mod\'s remote, though another source mod\'s remote holds it', async () => {
+        const { adapter, pinned: [first, second] } = await pinnedSourceMods(['Mod A', 'Mod B']);
+        await adapter.refuseUnpublishedPins();
+        git(first?.mod ?? '', 'push', '--quiet', 'origin', 'main');
+        git(second?.mod ?? '', 'push', '--quiet', first?.modRemote ?? '', 'main:refs/heads/mod-b');
+        pin();
+
+        expect(pushRefusal()).toMatch(/Push refused: source\/Mod B pins \w+, which https:\/\/example\.test\/mod-b\.git lacks\./);
       });
 
       it('is refused, saying so, while the source mod\'s remote cannot be reached', async () => {
