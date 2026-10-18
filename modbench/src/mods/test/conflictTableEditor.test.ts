@@ -343,7 +343,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
       const instance = new FakeInstance(await shared());
       const reporter = recordingReporter();
       const panel = openTable(instance, 'High', reporter);
-      const publishAs = async (copies: typeof instance.copies, count: number) => {
+      const publishAs = async (copies: typeof copiesDouble.answer, count: number) => {
         copiesDouble.answer = copies;
         instance.publish(await shared());
         await posted(panel, count);
