@@ -9,7 +9,6 @@ const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'ut
 
 const importsOf = (source: string): string[] => importSpecifiers(source, 'source.ts');
 
-// target-architecture.md: Mods, Downloads and Toolbox never see a record.
 const NEVER_SEE_A_RECORD = ['mods', 'downloads', 'toolbox'];
 const DRIVING_LIB_DIR = 'drivingLib';
 
@@ -59,7 +58,7 @@ function findOffenders(root: string): string[] {
     .map((path) => relative(root, path));
 }
 
-describe('the MO2 side keys plugins by filename and origin, never by FormKey', () => {
+describe('Mods, Downloads and Toolbox never see a record (target-architecture.md): they key plugins by filename and origin, never by FormKey', () => {
   it('walks a real body of files', () => {
     expect(tsFiles(SRC).length).toBeGreaterThan(150);
   });
