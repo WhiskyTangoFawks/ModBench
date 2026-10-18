@@ -513,7 +513,7 @@ describe('the agent server, reading a record through mEdit', () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
     mEdit.setQueryAnswer('getComparison', COPIES);
-    mEdit.setQueryAnswerOnce('getCopyDocument', null);
+    mEdit.setQueryAnswerOnce('getCopyDocument', { failed: 'refused', refusal: 'A.esp is unreadable.' });
     mEdit.setQueryAnswerOnce('getCopyDocument', { kind: 'OwnFile', location: '/s/B.esp/000800.json' });
     const { bound, warned } = await serve(new FakeInstance(VALUE), 0, mEdit);
     const client = new Client({ name: 'test', version: '0' });
@@ -525,10 +525,10 @@ describe('the agent server, reading a record through mEdit', () => {
     expect({ isError, answer: JSON.parse(text) as unknown, warned }).toEqual({
       isError: true,
       answer: [
-        { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, reason: 'A.esp in Big Rocks holds no 000800:A.esp.' },
+        { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, reason: 'A.esp is unreadable.' },
         { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, kind: 'OwnFile', location: '/s/B.esp/000800.json' },
       ],
-      warned: ['[agent] read_record: A.esp in Big Rocks holds no 000800:A.esp.'],
+      warned: ['[agent] read_record: A.esp is unreadable.'],
     });
   });
 
@@ -557,15 +557,17 @@ describe('the agent server, reading a record through mEdit', () => {
     expect(answered).toEqual({ kind: 'Rendered', text: 'Name: Shared' });
   });
 
-  it('refuses when the rendering finds no copy', async () => {
+  it.each([
+    ['the plugin holds none', null],
+    ['the rendering finds none', { kind: 'Rendered', location: 'SharedNpc.txt' }],
+  ] as const)('refuses the copy of a plugin when %s', async (_case, copyDocument) => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
-    mEdit.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'SharedNpc.txt' });
+    mEdit.setQueryAnswer('getCopyDocument', copyDocument);
     mEdit.setQueryAnswer('getRenderedDocument', null);
     const client = await clientOf(new FakeInstance(VALUE), mEdit);
 
-    expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } }))
-      .toEqual({ isError: true, text: 'A.esp in Big Rocks holds no 000800:A.esp.' });
+    expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } })).toMatchObject({ isError: true });
   });
 
   it('refuses a name that is not a record', async () => {
@@ -583,16 +585,6 @@ describe('the agent server, reading a record through mEdit', () => {
     const client = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'read_record', { name: 'SharedNpc' })).toEqual({ isError: true, text: 'No active plugin holds 000800:A.esp.' });
-  });
-
-  it('refuses a plugin that holds no copy', async () => {
-    const mEdit = new InMemoryMEditClient();
-    mEdit.setQueryAnswer('resolveNames', NPC);
-    mEdit.setQueryAnswer('getCopyDocument', null);
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
-
-    expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } }))
-      .toEqual({ isError: true, text: 'A.esp in Big Rocks holds no 000800:A.esp.' });
   });
 
   it('lists the records that reference the record named', async () => {

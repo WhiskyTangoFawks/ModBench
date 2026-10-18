@@ -11,8 +11,9 @@ import { inTabsStead, type TabShowOptions } from './inTabsStead';
 import type { CopyChanged } from './recordCopy';
 import { fileText } from './fileText';
 import {
-  CHILD_RECORD_SCHEME, RENDERED_DOCUMENT_SCHEME, copyDocument, copyOf, type RecordCopy, type RecordDocument,
-} from '../drivingLib/recordDocument';
+  CHILD_RECORD_SCHEME, RENDERED_DOCUMENT_SCHEME, copyDocument, copyOf, type RecordDocument,
+} from '../textDocuments/recordDocument';
+import type { RecordCopy } from '../wire/recordCopy';
 import { errorMessage } from '../ports/errorMessage';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension, type ViewState } from '../wire/messages';
 import type { RecordPageGlobals } from '../wire/recordPage';

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { samePluginAddress } from '../wire/pluginAddress';
 import { followReportedCopies, type CopyChanged } from './recordCopy';
-import { CHILD_RECORD_SCHEME, CONTAINER_SCHEMES, copyOf } from '../drivingLib/recordDocument';
+import { CHILD_RECORD_SCHEME, CONTAINER_SCHEMES, copyOf } from '../textDocuments/recordDocument';
 import { fileText } from './fileText';
 import { takeText } from './oneTextPerFile';
 

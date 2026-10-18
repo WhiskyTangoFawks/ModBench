@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MEditClient, NotificationPayloads } from '../client';
 import { samePluginAddress } from '../wire/pluginAddress';
-import type { RecordCopy } from '../drivingLib/recordDocument';
+import type { RecordCopy } from '../wire/recordCopy';
 
 export type CopyChanged = (copy: RecordCopy) => boolean;
 

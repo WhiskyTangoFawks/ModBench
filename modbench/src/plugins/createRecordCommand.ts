@@ -149,10 +149,11 @@ export function registerRecordCreateCommand(
           deps.reporter.report('error', changes.message);
           return;
         }
-        const applied = await applyAnswered(
-          deps.source, deps.reporter, [changes], [plugin],
-          `Could not create the ${typeName} record.`);
-        if (!applied) return;
+        const failure = await applyAnswered(deps.source, [changes], [plugin]);
+        if (failure !== undefined) {
+          deps.reporter.report('error', `Could not create the ${typeName} record.`, failure);
+          return;
+        }
         answer.formKey = changes.formKey;
         deps.reporter.landed(`Created ${changes.formKey}.`);
       }));
