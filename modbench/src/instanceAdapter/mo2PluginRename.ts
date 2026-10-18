@@ -6,8 +6,8 @@ import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCod
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
 import { get, listDir, readOrAbsent, rename, undoAll, type Undo, withLock, write } from './files';
 import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
-import { fileInFolder, originDir, pluginOrderFiles, profilesDir } from './layout';
-import type { Mo2Context } from './mo2Context';
+import { fileInFolder, pluginOrderFiles, profilesDir } from './layout';
+import { originFolder, type Mo2Context } from './mo2Context';
 
 type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin' | 'originHoldsPlugin'>;
 
@@ -100,14 +100,14 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
     const rule = pluginCompanionRule(gameRelease);
     if (rule === undefined) throw new Error(`No table of the files named for a plugin for the release ${gameRelease ?? 'of this game'}`);
     if (!namedFile(to)) throw new Error(`Not a valid plugin file name: "${to}"`);
-    const folder = originDir(instanceRoot, origin);
+    const folder = await originFolder(context, origin);
     if (folder === undefined) throw notAFileOf(origin, from);
     return { lines: await renamedLines(orders, from, to), files: await moves(origin, folder, from, to, rule) };
   }
 
   return {
     async originHoldsPlugin(origin, name) {
-      const folder = originDir(instanceRoot, origin);
+      const folder = await originFolder(context, origin);
       return folder !== undefined && (await entriesIn(folder)).some((entry) => !entry.isFolder && sameName(entry.name, name));
     },
 

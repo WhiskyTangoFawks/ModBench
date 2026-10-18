@@ -20,11 +20,11 @@ import {
 } from './instanceAdapter';
 import {
   DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, entryDir, downloadSidecarFile, isTempWrite, modlistFile,
-  modMetaFile, modSourceDir, pluginsFile, profilesDir, settingsFile,
+  modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile,
 } from './layout';
 import { type ArchiveReads, mo2Archives } from './mo2Archives';
 import { groupModOrder } from './modGroups';
-import { entryKey, folderHolding, listModFolders, modFoldersOf, type Mo2Context } from './mo2Context';
+import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 import { sourceModsIn } from './sourceMods';
 import { filesWinningFirst, pluginsProvidedOf } from './pluginsProvided';
@@ -131,9 +131,10 @@ export function readingSource(context: Mo2Context): ReadingSource {
       return parseModlist(await get(modlistFile(instanceRoot, profile)));
     },
 
-    modMeta(mod) {
-      if (entryNamed(mod).kind === 'separator') return Promise.resolve({});
-      return readOrAbsent(async () => parseMetaIni(await get(modMetaFile(instanceRoot, mod))), {});
+    async modMeta(mod) {
+      if (entryNamed(mod).kind === 'separator') return {};
+      const folder = await modFolderNamed(context, mod);
+      return folder === undefined ? {} : readOrAbsent(async () => parseMetaIni(await get(modMetaFileIn(folder))), {});
     },
 
     modFolders: async (skippedLink) => {
@@ -149,9 +150,9 @@ export function readingSource(context: Mo2Context): ReadingSource {
 
     creationClubList: readCreationClubList,
 
-    originFiles: (origin) => originFilesIn(instanceRoot, origin),
+    originFiles: (origin) => originFilesIn(context, origin),
 
-    originRootFiles: (origin) => originFilesIn(instanceRoot, origin, true),
+    originRootFiles: (origin) => originFilesIn(context, origin, true),
 
     sourceMods: () => sourceModsIn(instanceRoot),
 
@@ -169,7 +170,7 @@ export function mo2Reads(
     downloadedFiles: async () => (await source.settings()).downloadedFiles(),
     modOrder: async () => ({ mods: await source.modOrder((await source.settings()).profile), modFolders: await listModFolders(context) }),
     sourceMods: () => source.sourceMods(),
-    modFolderPath: async (name) => (await folderHolding(context, { kind: 'mod', name }))?.path ?? entryDir(instanceRoot, { kind: 'mod', name }),
+    modFolderPath: (name) => modFolderNamed(context, name),
     sourceFolder: (mod) => modSourceDir(instanceRoot, mod),
     entryKey,
     fileStamp: (path) => readOrReason(() => stampOf(path)),
