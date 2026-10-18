@@ -122,9 +122,11 @@ public enum EmptyPluginWrite
 }
 
 /// <summary>Whether two plugin files hold the same bytes. If not: the first deleted record the rewrite
-/// emptied, the first record whose rewrite dropped subrecords, and the original's diagnosis of it.</summary>
+/// emptied, the first record whose rewrite dropped subrecords, the original's diagnosis of it, and the
+/// first record the rewrite lacks or the subrecord check could not read.</summary>
 public sealed record PluginByteComparison(
-    bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, PluginDiagnosis? LossCause = null, string? DeletedRecordEmptied = null);
+    bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, PluginDiagnosis? LossCause = null, string? DeletedRecordEmptied = null,
+    string? Unverified = null);
 
 /// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> did, and for a plugin it wrote, the
 /// hash of those bytes, which the take-back is later handed.</summary>

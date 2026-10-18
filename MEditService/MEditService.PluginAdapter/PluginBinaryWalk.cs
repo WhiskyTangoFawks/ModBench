@@ -20,26 +20,36 @@ public static class PluginBinaryWalk
     /// <summary>One record of a plugin and of its rewrite.</summary>
     internal readonly record struct RecordPair(FormKey FormKey, MajorRecordFrame Original, MajorRecordFrame Rewritten);
 
+    /// <summary>The records a plugin and its rewrite both hold, and the first original record the rewrite lacks.</summary>
+    internal readonly record struct Pairing(List<RecordPair> Pairs, string? FirstMissing);
+
     /// <summary>The records a plugin and its rewrite both hold, paired by type and FormKey, each FormID read
     /// through its own plugin's masters: a rewrite prunes unneeded masters, which moves every index after
     /// them.</summary>
-    internal static List<RecordPair> PairByFormKey(
+    internal static Pairing PairByFormKey(
         byte[] original, IReadOnlySeparatedMasterPackage originalMasters, byte[] rewritten, IReadOnlySeparatedMasterPackage rewrittenMasters,
         GameRelease release)
     {
         var rewrittenByIdentity = new Dictionary<(RecordType Type, FormKey FormKey), MajorRecordFrame>();
         foreach (var record in Records(rewritten, release))
-            rewrittenByIdentity.TryAdd((record.RecordType, rewrittenMasters.GetFormKey(record.FormID, reference: false)), record);
+            rewrittenByIdentity.TryAdd((record.RecordType, IdentityOf(record, rewrittenMasters)), record);
 
         var pairs = new List<RecordPair>();
+        string? firstMissing = null;
         foreach (var record in Records(original, release))
         {
-            var formKey = originalMasters.GetFormKey(record.FormID, reference: false);
+            var formKey = IdentityOf(record, originalMasters);
             if (rewrittenByIdentity.TryGetValue((record.RecordType, formKey), out var partner))
                 pairs.Add(new RecordPair(formKey, record, partner));
+            else
+                firstMissing ??= $"{record.RecordType} {formKey}";
         }
-        return pairs;
+        return new Pairing(pairs, firstMissing);
     }
+
+    // The header's FormID is no reference: read through masters it names whichever plugin holds index 0.
+    private static FormKey IdentityOf(MajorRecordFrame record, IReadOnlySeparatedMasterPackage masters) =>
+        record.RecordType.Type == "TES4" ? FormKey.Null : masters.GetFormKey(record.FormID, reference: false);
 
     /// <summary>How the plugin's FormIDs name records: through its own masters, each in the style the load
     /// order's copy of it carries.</summary>
@@ -121,15 +131,31 @@ public static class PluginBinaryWalk
             .GroupBy(sub => sub.RecordType.Type, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
 
+    private static (List<SubrecordPinFrame>, List<SubrecordPinFrame>)? SubrecordsOfBoth(MajorRecordFrame original, MajorRecordFrame rewritten) =>
+        original.IsCompressed == rewritten.IsCompressed
+        && Subrecords(original) is { } originalSubrecords
+        && Subrecords(rewritten) is { } rewrittenSubrecords
+            ? (originalSubrecords, rewrittenSubrecords)
+            : null;
+
+    /// <summary>The first original record whose rewrite is absent, or whose pair the subrecord check cannot
+    /// read.</summary>
+    internal static string? FirstUnverified(Pairing pairing)
+    {
+        if (pairing.FirstMissing is { } missing)
+            return $"{missing} is absent from the rewrite";
+
+        var unread = pairing.Pairs.Cast<RecordPair?>().FirstOrDefault(pair => pair is { } p && SubrecordsOfBoth(p.Original, p.Rewritten) is null);
+        return unread is { } u ? $"{u.Original.RecordType} {u.FormKey} could not be compared with its rewrite" : null;
+    }
+
     /// <summary>The first paired record whose subrecord inventory shows a drop, or null. TES4's MAST/DATA
     /// are exempt (ADR-0008).</summary>
     internal static SubrecordLoss? FindFirstSubrecordLoss(IEnumerable<RecordPair> pairs)
     {
         foreach (var (formKey, original, rewritten) in pairs)
         {
-            if (original.IsCompressed != rewritten.IsCompressed
-                || Subrecords(original) is not { } originalSubrecords
-                || Subrecords(rewritten) is not { } rewrittenSubrecords)
+            if (SubrecordsOfBoth(original, rewritten) is not var (originalSubrecords, rewrittenSubrecords))
                 continue;
 
             var type = original.RecordType.Type;
