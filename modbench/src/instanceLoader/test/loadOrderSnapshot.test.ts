@@ -533,7 +533,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(snapshot?.active).toEqual([
       { name: 'Master.esm', origin: 'Data/' }, { name: 'cc.esl', origin: 'Data/' }, address(a),
     ]);
-    expect(snapshot?.plugins).toContainEqual({ name: 'Master.esm', origin: 'Data/', path: '/game/Data/Master.esm', provider: { kind: 'Game' }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] });
+    expect(snapshot?.plugins).toContainEqual({ name: 'Master.esm', origin: 'Data/', path: join(DATA_FOLDER, 'Master.esm'), provider: { kind: 'Game' }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] });
     expect(snapshot?.loadedWithNoLine).toEqual([{ name: 'Master.esm', origin: 'Data/' }, { name: 'cc.esl', origin: 'Data/' }]);
   });
 
