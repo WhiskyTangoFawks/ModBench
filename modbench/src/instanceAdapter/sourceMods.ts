@@ -3,13 +3,12 @@
 // which mod a source builds.
 
 import { join } from 'node:path';
-import { errnoCode } from '../ports/errno';
+import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
-import { get, isRepository, listFolders } from './files';
+import { get, isRepository, listFolders, readOrAbsent } from './files';
 import type { SourceMods } from './instanceAdapter';
 import { BUILD_OUTPUT_KEY, buildConfigurationFile, modFolderName, sourceRootDir } from './layout';
 import { modNameKey } from './codecs/modlistText';
-import { readOrAbsent } from './mo2Context';
 
 async function outputOf(sourceFolder: string): Promise<{ output: string } | { reason: string }> {
   let text: string;

@@ -6,7 +6,7 @@ import type { ArchiveReader } from './archiveReader';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from './files';
 import type { InstallPackage, InstanceAdapter, ModMeta, OwnedMetaKeys } from './instanceAdapter';
 import { fileInFolder, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix } from './layout';
-import { errnoCode } from '../ports/errno';
+import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 import { releaseRoot } from './releaseRoot';

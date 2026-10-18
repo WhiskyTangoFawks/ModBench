@@ -4,10 +4,10 @@
 import { parse } from 'node:path';
 import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCodec/pluginsText';
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
-import { get, listDir, rename, undoAll, type Undo, withLock, write } from './files';
+import { get, listDir, readOrAbsent, rename, undoAll, type Undo, withLock, write } from './files';
 import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
 import { fileInFolder, originDir, pluginsFile, profilesDir } from './layout';
-import { readOrAbsent, type Mo2Context } from './mo2Context';
+import type { Mo2Context } from './mo2Context';
 
 type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin' | 'originHoldsPlugin'>;
 

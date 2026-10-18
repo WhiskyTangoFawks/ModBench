@@ -1,7 +1,7 @@
 // Where the game gets a file from: the merge a VFS performs over mod order.
 
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
-import { isPluginFile, isRootLevel } from './pluginFile';
+import { isPluginFile, isRootLevel } from '../tables/pluginFile';
 import type { DataFolderPlugins, FileOrigin, ModlistEntry, OriginFile, PluginsProvided } from './instanceAdapter';
 
 export interface OriginProvides {

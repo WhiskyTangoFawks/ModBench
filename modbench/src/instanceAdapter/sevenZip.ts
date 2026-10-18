@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { errnoCode } from '../ports/errno';
+import { errnoCode } from './errno';
 import { ARCHIVE_EXTENSIONS } from './archiveNames';
 import { errorMessage } from '../ports/errorMessage';
 import type { ArchiveReader } from './archiveReader';
