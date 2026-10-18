@@ -18,6 +18,19 @@ namespace MEditService.Commands.Tests.Build;
 public sealed class InitModTests
 {
     [Fact]
+    public async Task InitMod_WhenGitCannotRun_RefusesTheWholeSelection_WithoutNamingAnyMod()
+    {
+        using var gameDir = new ScratchDirectory("medit-init-nogit-game-");
+        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], [], [], [], Language.English);
+
+        var result = await InitEveryPluginOf.ModAsync(loadOrder, "AnyMod", source: new GitGoneSourceAdapter());
+
+        Assert.Equal(InitRefusal.GitUnavailable, result.SelectionRefusal?.Refusal);
+        Assert.Empty(result.Refused);
+        Assert.Empty(result.Landed);
+    }
+
+    [Fact]
     public async Task InitMod_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
     {
         using var gameDir = new ScratchDirectory("medit-init-noorigin-game-");
