@@ -21,9 +21,8 @@ public sealed class CompilePluginHandler
         IReadOnlyList<PluginAddress> plugins) =>
         Over(plugins, _compileService.CompileAsync);
 
-    /// <summary>Each plugin a build places, compiled to its path whether or not the load order holds its file. No two
-    /// differ in case alone. The build asks <see cref="WhyNoPluginCompiles"/> before its first write, so this never
-    /// refuses the whole selection.</summary>
+    /// <summary>Each plugin a build places, compiled to its path whether or not the load order holds it. No two differ
+    /// in case alone. The build has asked <see cref="WhyNoPluginCompiles"/>, so this refuses no whole selection.</summary>
     internal Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileAsync(
         IReadOnlyList<RegisteredPlugin> placed)
     {
