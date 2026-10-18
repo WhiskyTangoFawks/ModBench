@@ -1,3 +1,4 @@
+import { fixedGameFolderSetting } from '../../test/gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -25,7 +26,7 @@ describe('the MO2 adapter\'s hashes', () => {
     await writeFile(join(root, 'Mod.7z'), 'aaaa');
     await writeFile(join(root, 'mods', 'Mod', 'meta.ini'), `[General]\r\ninstallationFile=${join(root, 'Mod.7z')}\r\n`);
     const adapter = mo2InstanceAdapter({
-      instanceRoot: root, gameDirectoryOverrides: () => ({}), gameDirectoryChanged: () => ({ dispose: () => {} }), detectors: NO_DETECTORS,
+      instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS,
       archives: fakeArchiveReader([]),
     });
 

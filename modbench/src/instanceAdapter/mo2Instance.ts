@@ -7,7 +7,7 @@ import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { gameFolderResolver, STEAM, type GameDetectors } from './gameFolder/gameFolderResolver';
 import { myGamesResolver } from './gameFolder/myGames';
-import type { ArchiveReader, GameDirectoryOverrides, InstanceAdapter, ManagerNames, Subscription } from './instanceAdapter';
+import type { ArchiveReader, GameFolderSetting, InstanceAdapter, ManagerNames } from './instanceAdapter';
 import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
@@ -23,9 +23,7 @@ import { hashIndex } from './hashIndex';
 import { hashIndexDir, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
 
 interface Mo2Machine {
-  gameDirectoryOverrides: () => GameDirectoryOverrides;
-  /** Hears the setting behind `gameDirectoryOverrides` change. */
-  gameDirectoryChanged: (listener: () => void) => Subscription;
+  gameFolderSetting: GameFolderSetting;
   /** Steam and Wine detection; the real ones when omitted. */
   detectors?: GameDetectors;
 }
@@ -46,10 +44,10 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
   const { instanceRoot, archives } = options;
   const context: Mo2Context = 'context' in options ? options.context : {
     instanceRoot,
-    resolveGameFolder: gameFolderResolver(options.gameDirectoryOverrides, options.detectors),
+    resolveGameFolder: gameFolderResolver(options.gameFolderSetting, options.detectors),
     resolveDownloadsFolder: downloadsDirectoryResolver(options.detectors),
     resolveMyGames: myGamesResolver(instanceRoot, options.detectors ?? STEAM),
-    watch: mo2Watch(instanceRoot, options.gameDirectoryChanged),
+    watch: mo2Watch(instanceRoot, options.gameFolderSetting.changed),
   };
   const hashes = hashIndex(hashIndexDir(instanceRoot), archives);
   const names: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };

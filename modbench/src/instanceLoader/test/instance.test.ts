@@ -1,3 +1,4 @@
+import { GAME_FOLDER_SETTING_ID } from '../../test/gameFolderSetting';
 import { join } from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type {
@@ -59,6 +60,7 @@ function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: Instan
   };
   const instance = new Instance({
     adapter: wrap(fake.adapter),
+    gameFolderSettingId: GAME_FOLDER_SETTING_ID,
     window,
     log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => errorLines.push(line) },
   });

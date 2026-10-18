@@ -4,7 +4,7 @@ import { dataFolderFile } from '../dataFolder';
 import type { GameFolder } from '../../instanceAdapter';
 
 const found = (dataFolder: string): GameFolder => ({ kind: 'found', root: '/game', dataFolder });
-const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameDirectory' };
+const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameFolder' };
 
 describe('dataFolderFile', () => {
   it.each([

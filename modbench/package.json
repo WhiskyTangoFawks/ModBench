@@ -165,11 +165,11 @@
           "default": 47200,
           "description": "The port Modbench serves your agent's MCP server on, at http://127.0.0.1:<port>/mcp. Set another for a workspace so two windows each have their own."
         },
-        "modbench.mods.gameDirectory": {
+        "modbench.mods.gameFolder": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "The game directory (the folder containing the game executable and Data/). A Steam install or a stock game folder. Leave blank to fall back to ModOrganizer.ini's gamePath, then Steam auto-detect."
+          "description": "The game folder (the folder containing the game executable and Data/). A Steam install or a stock game folder. Leave blank to fall back to the mod manager's game path, then Steam auto-detect."
         },
         "modbench.mods.conflictTable.cellValue": {
           "type": "string",
