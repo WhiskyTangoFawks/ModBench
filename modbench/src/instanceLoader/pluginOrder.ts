@@ -5,11 +5,14 @@ interface Placed extends PluginAddress {
   readonly winning: boolean;
 }
 
+/** A plugin the game loads with no line that no row holds: enabled, winning and on no line. */
+export const unplaced = <N extends PluginAddress>(address: N) => ({ ...address, line: null, enabled: true, winning: true });
+
 /** The plugin order (ADR-0013): the plugins the game loads with no line, then the winning lines by line.
  *  A plugin appears once, at its first place. `others` are the plugins outside the order. */
-export function pluginOrderOf<R extends Placed>(
-  value: { readonly plugins: readonly R[]; readonly pluginsLoadedWithNoLine: readonly PluginAddress[] },
-  absent: (address: PluginAddress) => R,
+export function pluginOrderOf<R extends Placed, N extends PluginAddress>(
+  value: { readonly plugins: readonly R[]; readonly pluginsLoadedWithNoLine: readonly N[] },
+  absent: (address: N) => R,
 ): { loadedWithNoLine: R[]; fromLines: (R & { line: number })[]; others: R[] } {
   const rowAt = new Map(value.plugins.map((p) => [exactPluginAddressKey(p), p] as const));
   const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((address) => rowAt.get(exactPluginAddressKey(address)) ?? absent(address));

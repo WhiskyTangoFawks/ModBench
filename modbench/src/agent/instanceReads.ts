@@ -1,5 +1,5 @@
 import type { InstanceValue } from '../instanceLoader/instance';
-import { pluginOrderOf } from '../instanceLoader/pluginOrder';
+import { pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 import { Refusal } from '../drivingLib/refusal';
 
 export interface Read {
@@ -29,7 +29,7 @@ export const INSTANCE_READS: readonly Read[] = [
     of: ({ plugins, pluginsLoadedWithNoLine, gameFolder, dataFolderPlugins }) => {
       const { loadedWithNoLine, fromLines, others } = pluginOrderOf(
         { plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine ?? [] },
-        (address) => ({ ...address, path: '', line: null, enabled: true, winning: true }),
+        unplaced,
       );
       const answer = {
         plugins: [

@@ -9,8 +9,8 @@ const row = (over: Partial<LoadOrderPlugin>): LoadOrderPlugin =>
   ({ name: 'A.esp', path: '/mods/ModA/A.esp', origin: 'ModA', line: 0, enabled: true, winning: true, ...over });
 const A = { name: 'A.esp', origin: 'ModA' };
 
-const disabled = (mods: Mod[], plugins: LoadOrderPlugin[], pluginsLoadedWithNoLine: { name: string; origin: string }[] = []) =>
-  isDisabledOrInDisabledMod({ mods, plugins, pluginsLoadedWithNoLine, entryKey: instanceValueFixture().entryKey }, A);
+const disabled = (mods: Mod[], plugins: LoadOrderPlugin[], pluginsLoadedWithNoLine: { name: string; origin: string; path: string }[] = []) =>
+  isDisabledOrInDisabledMod({ mods, plugins, pluginsLoadedWithNoLine: pluginsLoadedWithNoLine, entryKey: instanceValueFixture().entryKey }, A);
 
 describe('a plugin disabled, or in a disabled mod', () => {
   it('is one whose line is disabled', () => {
@@ -34,7 +34,7 @@ describe('a plugin disabled, or in a disabled mod', () => {
   });
 
   it('is not one the game loads with no line', () => {
-    expect(disabled([mod('ModA', true)], [row({ line: null, enabled: false })], [A])).toBe(false);
+    expect(disabled([mod('ModA', true)], [row({ line: null, enabled: false })], [{ ...A, path: '/mods/ModA/A.esp' }])).toBe(false);
   });
 
   it('is not one the instance does not list', () => {

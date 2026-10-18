@@ -17,7 +17,6 @@ export function pluginsTreeOver(
     publishChangedOutside: () => undefined,
     publishFailedToRead: () => undefined,
     log: () => undefined,
-    dataFolderFile: () => undefined,
     ...overrides,
   });
 }

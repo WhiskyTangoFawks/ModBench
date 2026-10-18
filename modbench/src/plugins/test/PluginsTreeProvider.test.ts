@@ -68,7 +68,10 @@ function valueOf(
   return instanceValueFixture({
     mods: mods.map((name) => ({ kind: 'mod' as const, name, enabled: true })),
     gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
-    pluginsLoadedWithNoLine: pluginsLoadedWithNoLine?.map((p) => (typeof p === 'string' ? { name: p, origin: 'Data/' } : p)),
+    pluginsLoadedWithNoLine: pluginsLoadedWithNoLine?.map((p) => {
+      const address = typeof p === 'string' ? { name: p, origin: 'Data/' } : p;
+      return { ...address, path: address.origin === 'Data/' ? `/game/Data/${address.name}` : `/instance/mods/${address.origin}/${address.name}` };
+    }),
     plugins, paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map(mods.map((m) => [m, `/instance/mods/${m}`])), sourceDirs: new Map() },
   });
 }
@@ -161,7 +164,6 @@ function makeTree(
     client: InMemoryMEditClient;
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
     publishChangedOutside: ConstructorParameters<typeof PluginsTreeProvider>[0]['publishChangedOutside'];
-    dataFolderFile: (name: string) => string | undefined;
     loadedWithNoLine: readonly (string | PluginAddress)[];
   }> = {},
 ): Harness {
@@ -174,7 +176,6 @@ function makeTree(
     log: (level, msg) => logged.push({ level, msg }),
     ...(extra.publishDiagnoses && { publishDiagnoses: extra.publishDiagnoses }),
     ...(extra.publishChangedOutside && { publishChangedOutside: extra.publishChangedOutside }),
-    ...(extra.dataFolderFile && { dataFolderFile: extra.dataFolderFile }),
   });
   return { tree, client, records, instance, logged };
 }
@@ -364,7 +365,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     const { tree } = makeTree([
       plugin({ name: 'Fallout4.esm', line: 0, origin: 'Data/', path: '/unresolved/Fallout4.esm' }),
       plugin({ name: 'Mod.esp', line: 1, origin: 'SomeMod' }),
-    ], { dataFolderFile: () => undefined });
+    ]);
 
     const rows = (await tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode);
     expect(rows.map((n) => n.plugin.name)).toEqual(['Fallout4.esm', 'Mod.esp']);
@@ -752,14 +753,14 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
 
   it('returns undefined when no plugin has the row\'s origin and file name', async () => {
     const { tree } = makeTree(
-      [plugin({ name: 'Base.esp', line: 0, origin: 'OtherMod' })], { dataFolderFile: (name) => `/game/Data/${name}` });
+      [plugin({ name: 'Base.esp', line: 0, origin: 'OtherMod' })]);
     expect(await tree.resolvePluginPath(new PluginNode({ name: 'Base.esp', enabled: true }, 'SomeMod'))).toBeUndefined();
   });
 
   it('resolves a locked row the game loads from a mod to that mod\'s copy, not the game folder\'s', async () => {
     const { tree } = makeTree(
       [plugin({ name: 'Fallout4.esm', line: 0, origin: 'SomeMod', path: '/instance/mods/SomeMod/Fallout4.esm' })],
-      { dataFolderFile: (name) => `/game/Data/${name}`, loadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'SomeMod' }] });
+      { loadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'SomeMod' }] });
     const locked = await lockedRowOf(tree);
 
     expect(locked.origin).toBe('SomeMod');
@@ -769,13 +770,13 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
   it('resolves a locked row no mod provides to the game folder\'s copy', async () => {
     const { tree } = makeTree(
       [plugin({ name: 'Mod.esp', line: 0 })],
-      { dataFolderFile: (name) => `/game/Data/${name}`, loadedWithNoLine: ['Fallout4.esm'] });
+      { loadedWithNoLine: ['Fallout4.esm'] });
 
     expect(await tree.resolvePluginPath(await lockedRowOf(tree))).toBe('/game/Data/Fallout4.esm');
   });
 
-  it('resolves a locked row to nothing while the game folder is not found', async () => {
-    const { tree } = makeTree([], { dataFolderFile: () => undefined });
+  it('resolves a locked row the value does not list to nothing', async () => {
+    const { tree } = makeTree([]);
     expect(await tree.resolvePluginPath(new ImplicitMasterNode('Fallout4.esm', 'Data/'))).toBeUndefined();
   });
 });

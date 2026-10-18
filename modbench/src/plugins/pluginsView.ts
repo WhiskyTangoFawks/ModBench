@@ -57,9 +57,6 @@ export interface PluginsViewDeps {
   /** Plugin sync, whose failure the view's message line says. */
   pluginSync: SyncMessage;
   channel: SyncChannel;
-  /** The path of a file at the root of the Data folder, answered by a box this view does not
-   *  reference. */
-  dataFolderFile: (name: string) => string | undefined;
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   reporterFor: (tag: string) => Reporter;
 }
@@ -89,7 +86,6 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const failedToReadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-failed-to-read');
   const tree = new PluginsTreeProvider({
     instance, log,
-    dataFolderFile: deps.dataFolderFile,
     records: recordBrowser,
     client,
     // A malformed plugin and one changed outside Modbench still load and play; one that failed to read does not.
