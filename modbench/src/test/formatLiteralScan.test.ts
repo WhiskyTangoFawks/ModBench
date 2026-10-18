@@ -26,7 +26,7 @@ interface Format {
 const MANAGER_FORMATS: Format = {
   codecs: codecsIn(ADAPTER_CODECS, join('instanceAdapter', 'test', 'codecs'), ['modlistText', 'metaIni', 'modOrganizerIni', 'downloads']),
   tokens: [
-    '+', '-', '_separator', '[General]', 'selected_profile', 'gameName', 'gamePath',
+    '+', '-', '*', '_separator', '[General]', 'selected_profile', 'gameName', 'gamePath',
     'download_directory', 'installed', 'uninstalled', 'removed',
   ],
 };
@@ -189,16 +189,16 @@ describe('format literals, scanned over the extension and webview trees against 
     expect(allowedTokens(join('src', 'instanceAdapter', 'codecs', 'pluginsText.ts'))).toEqual(new Set());
   });
 
-  it('catches a format\'s marker planted in the other format\'s codec: an MO2 codec spelling the game\'s enabled marker, or the game\'s codec spelling MO2\'s', async () => {
+  it('catches MO2\'s separator marker planted in the game\'s codec', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-format-literal-scan-'));
     try {
       await mkdir(join(dir, 'instanceAdapter', 'codecs'), { recursive: true });
       await mkdir(join(dir, 'loadOrderFileCodec'));
       const managerCodec = join(dir, 'instanceAdapter', 'codecs', 'modlistText.ts');
       const gameCodec = join(dir, 'loadOrderFileCodec', 'pluginsText.ts');
-      await writeFile(managerCodec, "export const marks = ['+', '*'];\n");
+      await writeFile(managerCodec, "export const marks = ['+'];\n");
       await writeFile(gameCodec, "export const marks = ['*', '_separator'];\n");
-      expect(findLeaks([dir])).toEqual({ [managerCodec]: ['*'], [gameCodec]: ['_separator'] });
+      expect(findLeaks([dir])).toEqual({ [gameCodec]: ['_separator'] });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

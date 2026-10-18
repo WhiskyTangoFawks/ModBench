@@ -38,7 +38,7 @@ interface ModlistLine { readonly prefix: string; readonly name: string }
  *  enabled mod, and the name is trimmed. `#` and blank lines are no mod, and a `*` line is the
  *  unmanaged mod MO2 writes for a DLC or Creation Club, which is no row (mods.md). */
 function readLine(line: string): ModlistLine | undefined {
-  if (/^[#*]/.test(line)) return undefined;
+  if (line.startsWith('#') || line.startsWith('*')) return undefined;
   const prefix = '+-'.includes(line[0] ?? '#') ? line.slice(0, 1) : '';
   const name = line.slice(prefix.length).trim();
   return name === '' ? undefined : { prefix, name };
