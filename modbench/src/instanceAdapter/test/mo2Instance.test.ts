@@ -37,6 +37,7 @@ import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
 import type {
   ArchiveReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
 } from '../instanceAdapter';
+import { setIniValue } from '../codecs/qSettingsIni';
 import { tempWritePath } from '../layout';
 import { fakeArchiveReader } from '../../test/fakeArchiveReader';
 import { contextOver } from '../../test/mo2/adapterOver';
@@ -1886,7 +1887,7 @@ describe('the MO2 Instance adapter', () => {
 
       describe('installed from a file outside the downloads folder, which MO2 records by its whole path', () => {
         const recordingInstalledFrom = (path: string): Promise<void> =>
-          writeFile(join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\ninstallationFile=${path}\r\n`);
+          writeFile(join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), setIniValue('[General]\r\n', 'General', 'installationFile', path));
 
         it('answers that file while it is there', async () => {
           const elsewhere = join(root, 'elsewhere', 'Patch.7z');

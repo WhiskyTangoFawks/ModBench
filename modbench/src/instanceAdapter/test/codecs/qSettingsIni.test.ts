@@ -58,6 +58,7 @@ describe('decoded values', () => {
     ['reads a hex escape of any length as one UTF-16 unit, as Qt5 wrote', 'caf\\xe9 \\x20ac', 'caf\u00e9 \u20ac'],
     ['reads an octal escape', 'a\\0b\\101', 'a\0bA'],
     ['reads a leading @@ as one @', '@@Variant(x)', '@Variant(x)'],
+    ['reads a unit above 0xFF in a @ByteArray as ?, as toLatin1 does', '@ByteArray(a\\x20acb)', 'a?b'],
     ['reads the UTF-8 bytes of a @ByteArray as text', '@ByteArray(caf\\xc3\\xa9)', 'caf\u00e9'],
     ['reads an empty value as empty', '', ''],
   ])('%s', (_name, raw, expected) => {
@@ -156,6 +157,10 @@ describe('Qt escapes written', () => {
 });
 
 describe('setIniByteArray', () => {
+  it('escapes a hex digit after an escaped byte, as Qt does', () => {
+    expect(setIniByteArray('[A]\n', 'A', 'k', 'Pröfil')).toBe('[A]\nk=@ByteArray(Pr\\xc3\\xb6\\x66il)\n');
+  });
+
   it('writes the UTF-8 bytes at or above 0x7F as \\xNN, as Qt does for a QByteArray', () => {
     expect(setIniByteArray('[A]\n', 'A', 'k', 'caf\u00e9')).toBe('[A]\nk=@ByteArray(caf\\xc3\\xa9)\n');
   });

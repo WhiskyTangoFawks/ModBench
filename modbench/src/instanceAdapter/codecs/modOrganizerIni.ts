@@ -1,6 +1,3 @@
-// MO2 wraps special-character values as `@ByteArray(<value>)`; a profile name needs no
-// wrapping, but MO2 writes one, so we match it.
-
 import { GENERAL_SECTION, readIniValue, setIniByteArray } from './qSettingsIni';
 
 /** MO2's settings file, at the instance root. */

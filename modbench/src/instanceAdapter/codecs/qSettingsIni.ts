@@ -74,7 +74,7 @@ function decodeIniValue(raw: string): string {
   const quoted = trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"');
   const units = unescapeUnits(quoted ? trimmed.slice(1, -1) : trimmed);
   const bytes = /^@ByteArray\((.*)\)$/s.exec(units)?.[1];
-  if (bytes !== undefined) return Buffer.from(bytes, 'latin1').toString('utf8');
+  if (bytes !== undefined) return Buffer.from(bytes.replace(/[^\x00-\xff]/g, '?'), 'latin1').toString('utf8');
   return units.startsWith('@@') ? units.slice(1) : units;
 }
 
@@ -118,7 +118,7 @@ function encodeByteArray(value: string): string {
 export const setIniValue = (text: string, section: string, key: string, value: string | undefined): string =>
   setRawIniValue(text, section, key, value === undefined ? undefined : encodeIniValue(value));
 
-/** Sets one key to `value` as a QByteArray of its UTF-8 bytes, which is how MO2 stores a path or name. */
+/** Sets one key to a QByteArray of `value`'s UTF-8 bytes. */
 export const setIniByteArray = (text: string, section: string, key: string, value: string): string =>
   setRawIniValue(text, section, key, encodeByteArray(value));
 

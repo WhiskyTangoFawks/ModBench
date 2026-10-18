@@ -12,6 +12,7 @@ import type { CompareResult, PluginMetadata, PluginProblems } from '../../client
 import { present } from '../../ports/present';
 import type { ReferencesViewInput } from '../../editor/referencesView';
 import { PLUGIN_SOURCE_GLOB } from '../../instanceAdapter/instanceAdapter';
+import { setIniValue } from '../../instanceAdapter/codecs/qSettingsIni';
 import { comparisonOf, fieldOf } from '../comparison';
 import { isRecord, requires } from '../manifest';
 
@@ -1522,7 +1523,7 @@ describe('modbench.downloads tree', () => {
     const originalIni = readFileSync(iniPath, 'utf8');
     try {
       writeFileSync(path.join(external, 'external-preexisting.zip'), 'data');
-      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${external}\r\n`,
+      await repointDownloads(setIniValue(originalIni, 'Settings', 'download_directory', external),
         (rows) => rows.includes('external-preexisting.zip'));
 
       await probeUntilListed(external, 'external-new');
@@ -1542,7 +1543,7 @@ describe('modbench.downloads tree', () => {
     try {
       writeFileSync(path.join(downloadsDir, marker), 'data');
       await waitFor('the instance\'s own downloads folder to be listed', async () => listsMarker(await downloadsRows()));
-      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${notYetCreated}\r\n`, (rows) => rows.length === 0);
+      await repointDownloads(setIniValue(originalIni, 'Settings', 'download_directory', notYetCreated), (rows) => rows.length === 0);
 
       mkdirSync(notYetCreated);
       await probeUntilListed(notYetCreated, 'created');
