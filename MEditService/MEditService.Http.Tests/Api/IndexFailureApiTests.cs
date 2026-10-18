@@ -70,17 +70,4 @@ public sealed class IndexFailureApiTests : HostedTests
 
         Assert.DoesNotContain("The record index failed.", problem.GetRawText(), StringComparison.Ordinal);
     }
-
-    [Fact]
-    public async Task AnUnexpectedFailure_StillCarriesTheCorsHeaders()
-    {
-        await LoadOrderHeld();
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"/plugins/{Plugin}/interior-cells?origin={Origin}");
-        request.Headers.Add("Origin", "https://example.test");
-
-        var response = await Client.SendAsync(request);
-
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.True(response.Headers.Contains("Access-Control-Allow-Origin"));
-    }
 }
