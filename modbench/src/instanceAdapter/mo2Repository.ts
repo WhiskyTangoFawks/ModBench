@@ -34,8 +34,9 @@ function caseBlindFinder(dataFolder: string) {
 }
 
 export function mo2Repository(
-  { instanceRoot }: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>,
+  context: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>,
 ): Mo2Repository {
+  const { instanceRoot } = context;
   const gameFiles: InstanceAdapter['gameFiles'] = async (dataFolder, modFilePaths) => {
     const find = caseBlindFinder(dataFolder);
     const files = new Map<string, GameFile>();
@@ -61,7 +62,7 @@ export function mo2Repository(
     gameFiles,
 
     async gameFilesTakenBy(dataFolder, mod) {
-      const { files, notes } = await originFilesIn(instanceRoot, { kind: 'mod', name: mod });
+      const { files, notes } = await originFilesIn(context, { kind: 'mod', name: mod });
       const taken = await gameFiles(dataFolder, files.map((file) => file.relativePath));
       return taken.kind === 'read' ? { kind: 'read', answer: { gameFiles: taken.answer, notes } } : taken;
     },
