@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
-import { samePluginAddress } from '../wire/pluginAddress';
 import { argumentOfKind, registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import type { KindedRow } from '../drivingLib/gestureEntry';
 import { Refusal } from '../drivingLib/refusal';
@@ -23,7 +22,7 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { pinnedArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
-import { followReportedCopies } from './recordCopy';
+import { followChangedCopies } from './copyFollowers';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from '../textDocuments/childRecordDocument';
 import { holdOneTextPerFile } from '../textDocuments/oneTextPerFile';
@@ -97,12 +96,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     { dispose: meditClient.onLoadOrderSettled(() => { announceConflictsComputed(tabs); }) },
     vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, editorOptions),
     { dispose: meditClient.onNotification('load-order-status', () => { recordEditorProvider.readAgain(); }) },
-    // A report names the records that changed. A change to any of them can be in a child's file, and a move can move its carrier.
-    followReportedCopies(meditClient, (affects) => {
-      childRecordDocuments.changedWhere(affects);
-      void recordEditorProvider.followCarried(affects);
-    },
-      ({ plugin }) => (copy) => samePluginAddress(copy.plugin, plugin)),
+    followChangedCopies(meditClient, childRecordDocuments, recordEditorProvider),
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended-field documents.
     ...registerRecordPanelContextCommands({
