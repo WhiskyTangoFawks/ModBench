@@ -603,6 +603,7 @@ const executeOpen = (records: RecordToOpen | RecordToOpen[], pinned?: true) =>
   vscode.commands.executeCommand('modbench.record.open', Array.isArray(records) ? records.map(asArgument(pinned)) : asArgument(pinned)(records));
 const openRecord = (records: RecordToOpen | RecordToOpen[]) => executeOpen(records);
 const openPinnedRecord = (records: RecordToOpen | RecordToOpen[]) => executeOpen(records, true);
+const askedToRead = (formKey: string) => requestLog.includes(`GET /records/${encodeURIComponent(formKey)}/compare`);
 const inSecondGroup = () => vscode.commands.executeCommand(
   vscode.window.tabGroups.all.length < 2 ? 'workbench.action.newGroupRight' : 'workbench.action.focusSecondEditorGroup');
 
@@ -620,10 +621,11 @@ describe('modbench.record.open', () => {
 
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
 
-  it('opens the winning copy\'s document, titled with its file\'s name', async () => {
+  it('opens the winning copy\'s document, titled with its file\'s name, which asks for its record', async () => {
     await openRecord({ formKey: 'Fallout4.esm:000001' });
 
     await waitFor('the winning copy\'s tab', () => hasRenderedTab('Fallout4.esm:000001') || undefined);
+    await waitFor('the record\'s read', () => askedToRead('Fallout4.esm:000001'));
   });
 
   it('a second click replaces the preview tab instead of adding one', async () => {
