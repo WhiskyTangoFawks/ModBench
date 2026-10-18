@@ -49,8 +49,8 @@ internal static class GameAnnotations
             ],
             SiblingsInUse: new Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>>
             {
-            [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots,
-            [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
+                [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots,
+                [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
             },
             KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4KeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),

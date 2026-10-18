@@ -40,7 +40,7 @@ internal static class GameAnnotations
             KnownDefects: [],
             SiblingsInUse: new Dictionary<(string, string), IReadOnlyDictionary<string, IReadOnlyList<string>>>
             {
-            [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
+                [("IConditionDataGetter", "RunOnType")] = RunOnAnnotations.Reference,
             },
             KeyedArrays: StarfieldVmadAnnotations.KeyedArrays.Concat(StarfieldKeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
