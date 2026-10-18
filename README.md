@@ -78,6 +78,8 @@ Planned, on the [milestones](https://github.com/WhiskyTangoFawks/ModBench/milest
 
 You need VS Code, git and an MO2 instance. Installing a mod from a compressed file needs 7-Zip on `PATH`, as `7z`, `7za` or `7zz`. Scripts need `python3` (`python` on Windows).
 
+Close MO2 while you work in Modbench. MO2 rewrites the mod and plugin order when it launches a program and when it exits, and undoes changes it did not make.
+
 Download the `.vsix` for your platform from the latest [GitHub Release](https://github.com/WhiskyTangoFawks/ModBench/releases), then:
 
 ```bash

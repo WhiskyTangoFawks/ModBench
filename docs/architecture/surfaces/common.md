@@ -43,6 +43,8 @@ As a user, I want:
 4. With no folder open, or a folder that is not an instance of a mod manager Modbench recognizes, to be told so. Every view that shows the instance says it in place of its rows. The message says how to open an instance. It waits for the check, so a folder not yet checked never reads as not an instance. The view's title-bar gestures that need an instance are absent. An instance whose files cannot be read is story 2. Cites: commands.md, No dead entries
 5. When the instance's game folder cannot be found, to be told once, the same way everywhere. The Toolbox's Game row says where Modbench looked ([toolbox.md](toolbox.md)). Every view whose rows need the game folder says so in its message line. One line in the Output. No notification; this is the background tier. Rows that do not need the game folder still show, and the records mEdit shows stay as they were until the folder is found. A configuration that names no game is story 2; no configuration is story 4. Cites: ADR-0019
 6. When a later read fails, the rows I had to stay, and the view's message line to say "Showing the last good read:" and the reason, with one line in the Output. No notification. The next good read clears it. Cites: ADR-0019
+7. An instance whose game Modbench does not support refused when it opens, naming the game, and no file of it written. Cites: Never break the instance for its owner
+8. A warning, when the mod manager that made the instance is running, that it overwrites my changes when it launches a program or exits. Cites: Never break the instance for its owner; Never silently wrong
 
 ## A gesture that writes
 
