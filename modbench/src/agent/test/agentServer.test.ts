@@ -269,6 +269,14 @@ describe('the agent server, given an instance value', () => {
     expect(refusal.isError).toBe(true);
     expect(refusal.text).toContain('not been read');
   });
+
+  it('refuses a read whose first read failed with the failure, as the view\'s error row does', async () => {
+    const instance = new FakeInstance(VALUE, 0);
+    instance.readFailure = 'Modbench does not support Oblivion';
+    const client = await clientOf(instance);
+
+    expect(await call(client, 'list_profiles')).toEqual({ isError: true, text: 'Failed to load: Modbench does not support Oblivion' });
+  });
 });
 
 const providing = (relativePath: string, ...providers: ConflictEntry['providers']): ConflictEntry =>

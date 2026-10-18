@@ -27,7 +27,7 @@ const AGENT_PORT_SETTING = 'modbench.agent.port';
 
 export interface AgentServerOptions {
   port: number;
-  instance: Pick<InstanceView, 'value' | 'sequence'> | undefined;
+  instance: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'> | undefined;
   mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
   terminalEnvironment: TerminalEnvironment;
   readStatus: ReadModStatus | undefined;
@@ -44,7 +44,7 @@ type Instance = NonNullable<AgentServerOptions['instance']>;
 type OpenOptions = AgentServerOptions & { instance: Instance; readStatus: ReadModStatus };
 
 function currentValue(instance: Instance) {
-  if (instance.sequence === 0) throw new Refusal('The instance has not been read yet.');
+  if (instance.sequence === 0) throw new Refusal(instance.readFailure === undefined ? 'The instance has not been read yet.' : `Failed to load: ${instance.readFailure}`);
   return instance.value;
 }
 
