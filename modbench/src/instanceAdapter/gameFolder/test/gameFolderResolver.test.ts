@@ -85,7 +85,7 @@ describe('normalizeGamePath', () => {
   });
 });
 
-describe('the game directory resolver', () => {
+describe('the game folder resolver', () => {
   const dirs: string[] = [];
 
   afterEach(async () => {

@@ -9,8 +9,8 @@ import { parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
-import { creationClubListFile, gameReleaseForGame, loadedWithNoLineOf } from '../tables/gamePaths';
-import { dataFolderOf, listDataFolderPlugins, readCreationClubList } from './gameFolder/dataFolder';
+import { gameReleaseForGame, loadedWithNoLineOf } from '../tables/gamePaths';
+import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from './gameFolder/dataFolder';
 import { factsOf, get, isRepository, listDir, readOrAbsent, readOrReason, stampOf } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type GameFolder, type InstanceAdapter, type InstanceReading,
@@ -97,9 +97,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
         gameFolder: async () => {
           const gameFolder = await resolveGameFolder(iniText);
           watch.follow('gameFolderPlugins', dataFolderOf(gameFolder), DATA_FOLDER_PLUGINS_GLOB);
-          const creationClubList = gameFolder.kind === 'found'
-            ? creationClubListFile(gameFolder.root, game.gameRelease)
-            : undefined;
+          const creationClubList = creationClubFileOf(gameFolder, game.gameRelease);
           if (creationClubList === undefined) watch.follow('creationClubList', undefined, '');
           else watch.follow('creationClubList', dirname(creationClubList), basename(creationClubList));
           return gameFolder;
