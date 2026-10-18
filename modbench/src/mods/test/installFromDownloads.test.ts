@@ -34,7 +34,6 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
 const installOver = () => ({ ...modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), installMod });
 
-const ARCHIVE_PATH = downloadRowFixture('foo.7z').path;
 
 const fakeInstance = (rows: readonly DownloadFile[] = []): Pick<Instance, 'value' | 'refresh'> => ({
   value: instanceValueFixture({ downloads: { kind: 'listed', rows } }),
@@ -88,7 +87,7 @@ describe('modbench.mod.install over a downloaded file', () => {
 
     await vi.waitFor(() => {
       expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: undefined, fileID: undefined, version: undefined },
+        { kind: 'downloadedFile', name: 'foo.7z' },
         { kind: 'new', name: 'foo' }, true);
     });
   });
@@ -100,14 +99,14 @@ describe('modbench.mod.install over a downloaded file', () => {
 
     await vi.waitFor(() => {
       expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: '123', fileID: '456', version: '2.0' },
+        { kind: 'downloadedFile', name: 'foo.7z' },
         { kind: 'new', name: 'foo' }, true);
     });
   });
 
   it('install: a failed mark installed is one Output line, no failure notification, and the install stands', async () => {
     installMod.mockResolvedValueOnce({
-      applied: true, isFomod: false, downloadedFileRefusal: 'EISDIR: illegal operation on a directory',
+      applied: true, isFomod: false, downloadedFile: 'foo.7z', downloadedFileRefusal: 'EISDIR: illegal operation on a directory',
     });
     const report = recordingReporter();
 
@@ -119,7 +118,7 @@ describe('modbench.mod.install over a downloaded file', () => {
     expect(report.reports).toEqual([]);
     expect(report.shownFailures).toEqual([]);
     expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: undefined, fileID: undefined, version: undefined },
+        { kind: 'downloadedFile', name: 'foo.7z' },
         { kind: 'new', name: 'foo' }, true);
   });
 
@@ -210,7 +209,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
       (d) => d.accept({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } }));
 
     expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: '111', fileID: '999', version: undefined },
+        { kind: 'downloadedFile', name: 'foo.7z' },
         { kind: 'upgrade', name: 'Harder VATS' }, true);
     expect(showInputBox).not.toHaveBeenCalled();
   });
@@ -221,7 +220,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
     await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(NEW_MOD_ITEM));
 
     expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: '111', fileID: '999', version: undefined },
+        { kind: 'downloadedFile', name: 'foo.7z' },
         { kind: 'new', name: 'foo' }, true);
   });
 
@@ -247,7 +246,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
     await installRow(installDeps({ reporter: recordingReporter() }));
 
     expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z', path: ARCHIVE_PATH, modID: undefined, fileID: undefined, version: undefined },
+        { kind: 'downloadedFile', name: 'foo.7z' },
         { kind: 'new', name: 'foo' }, true);
     expect(createQuickPick).not.toHaveBeenCalled();
   });

@@ -134,7 +134,7 @@ export interface OwnedMetaKeys {
   installedFiles?: readonly InstalledFileId[];
 }
 
-/** What `install` is handed to write into a mod's meta: the adapter adds the game's name. */
+/** What the caller supplies for the record an install leaves with the mod; the adapter adds what it knows of the instance. */
 export type InstallKeys = Pick<OwnedMetaKeys, 'nexusId' | 'version' | 'archiveFilename' | 'installedFiles'>;
 
 export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
@@ -439,6 +439,13 @@ export interface InstanceReading extends InstanceGame {
   readonly watchNotes: readonly string[];
 }
 
+/** The names an entry may not take: the entries mod order lists and the folders mods are in. `modFolders` is undefined
+ *  when there is no folder for mods at all. */
+export interface TakenNames {
+  readonly mods: readonly EntryRef[];
+  readonly modFolders: readonly ModFolder[] | undefined;
+}
+
 export interface InstanceAdapter {
   /** The whole instance in one generation. A mod order that parses to no entries is read again
    *  after a settle before it is believed: another tool may be half-way through writing it. */
@@ -447,9 +454,10 @@ export interface InstanceAdapter {
   activeProfile(): Promise<string>;
   /** Every profile's name. */
   profiles(): Promise<readonly string[]>;
-  /** The active profile's mod order and the mod folders, without the rest of the instance; `modFolders` is undefined
-   *  when there is no folder for mods at all. */
-  modlist(): Promise<{ readonly mods: readonly ModlistEntry[]; readonly modFolders: readonly ModFolder[] | undefined }>;
+  /** The active profile's mod order and the mod folders, without the rest of the instance. */
+  modOrder(): Promise<TakenNames>;
+  /** The downloaded files now, without the rest of the instance. */
+  downloadedFiles(): Promise<DownloadedFiles>;
   /** Every source mod now. */
   sourceMods(): Promise<SourceMods>;
   readonly names: ManagerNames;

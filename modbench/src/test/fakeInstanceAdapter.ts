@@ -92,6 +92,8 @@ export interface InstanceAnswers {
   metadata?: ReadonlyMap<string, ModMetadata>;
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
+  /** The reads beside `reading()` that reject, with the message each rejects with. */
+  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceMods', string>>;
   installed?: InstallOutcome;
   /** Whether the instance folder holds a repository on disk now, whatever its reading said. */
   repositoryOnDisk?: boolean;
@@ -160,6 +162,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     const refusal = answers.refusals?.(call);
     return refusal === undefined ? Promise.resolve(result) : Promise.reject(new Error(refusal));
   };
+  const unreadable = <T>(read: keyof NonNullable<InstanceAnswers['unreadReads']>, found: T): Promise<T> => {
+    const why = answers.unreadReads?.[read];
+    return why === undefined ? Promise.resolve(found) : Promise.reject(new Error(why));
+  };
   const answer = <T>(found: T | undefined, path: string): Promise<FileRead<T>> =>
     Promise.resolve(found === undefined ? { kind: 'unreadable', reason: `no answer fixed for ${path}` } : { kind: 'read', answer: found });
 
@@ -169,9 +175,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return readingFailure === undefined ? Promise.resolve(current) : Promise.reject(new Error(readingFailure));
     },
     activeProfile: () => Promise.resolve(current.profile),
-    profiles: () => Promise.resolve(current.profiles),
-    modlist: () => Promise.resolve({ mods: current.mods, modFolders: current.modFolders?.all }),
-    sourceMods: () => Promise.resolve(current.sourceMods),
+    profiles: () => unreadable('profiles', current.profiles),
+    modOrder: () => unreadable('modOrder', { mods: current.mods, modFolders: current.modFolders?.all }),
+    downloadedFiles: () => unreadable('downloadedFiles', current.downloadedFiles),
+    sourceMods: () => unreadable('sourceMods', current.sourceMods),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
     modFolderPath: (mod) => Promise.resolve(answers.foldersAbsent?.has(mod) ? undefined : `/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),

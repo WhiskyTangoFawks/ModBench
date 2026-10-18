@@ -207,11 +207,13 @@ describe('deleteSeparators', () => {
 
 describe('uninstallMods', () => {
   const ARCHIVE = 'Unofficial Patch-4598-2-1-5.7z';
+  const installedFrom = (...pairs: readonly (readonly [string, string])[]): InstanceAnswers =>
+    ({ metadata: new Map(pairs.map(([mod, name]) => [mod, { installationFile: { name } }])) });
 
   it('trashes the folder, then the source folder, then removes the line, then marks the download uninstalled, in that order', async () => {
-    const { fake, commands } = over();
+    const { fake, commands } = over(FIXTURE_ORDER, installedFrom(['Unofficial Patch', ARCHIVE]));
 
-    const outcome = await commands.uninstallMods([{ name: 'Unofficial Patch', archiveFilename: ARCHIVE }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Unofficial Patch' }], refused: [] } });
     expect(fake.calls).toEqual([
@@ -222,10 +224,10 @@ describe('uninstallMods', () => {
     ]);
   });
 
-  it('removes every selected mod\'s line in one write, and marks no download for a mod handed none', async () => {
+  it('removes every selected mod\'s line in one write, and marks no download for a mod whose meta names none', async () => {
     const { fake, commands } = over();
 
-    const outcome = await commands.uninstallMods([{ name: 'Harder VATS' }, { name: 'ENBoost' }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Harder VATS', 'ENBoost'], NO_TRASH);
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Harder VATS' }, { name: 'ENBoost' }], refused: [] } });
     expect(fake.calls.filter((call) => call.verb === 'changeModOrder')).toEqual([
@@ -237,7 +239,7 @@ describe('uninstallMods', () => {
   it('lands the mod carrying the source\'s failure when the source folder cannot be trashed', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('trashSourceFolder', 'the trash refused it') });
 
-    const outcome = await commands.uninstallMods([{ name: 'Harder VATS' }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Harder VATS'], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true, outcome: { landed: [{ name: 'Harder VATS', sourceRefusal: 'the trash refused it' }], refused: [] },
@@ -246,9 +248,9 @@ describe('uninstallMods', () => {
   });
 
   it('refuses an unknown mod by name, trashing and marking nothing for it, while the rest land', async () => {
-    const { fake, commands } = over();
+    const { fake, commands } = over(FIXTURE_ORDER, installedFrom(['No Such Mod', 'Gone-1.7z']));
 
-    const outcome = await commands.uninstallMods([{ name: 'No Such Mod', archiveFilename: 'Gone-1.7z' }, { name: 'Harder VATS' }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['No Such Mod', 'Harder VATS'], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true,
@@ -262,11 +264,11 @@ describe('uninstallMods', () => {
 
   it('writes nothing for a mod whose folder the trash refuses, refusing it with the reason, while the others land and mark, leaving the refused mod\'s download unmarked', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, {
+      ...installedFrom(['Harder VATS', 'Harder VATS-1-0.7z'], ['Unofficial Patch', ARCHIVE]),
       refusals: (call) => (call.verb === 'trashEntryFolder' && call.entry.name === 'Harder VATS' ? 'trash unavailable' : undefined),
     });
 
-    const outcome = await commands.uninstallMods(
-      [{ name: 'Harder VATS', archiveFilename: 'Harder VATS-1-0.7z' }, { name: 'Unofficial Patch', archiveFilename: ARCHIVE }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Harder VATS', 'Unofficial Patch'], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true,
@@ -282,9 +284,9 @@ describe('uninstallMods', () => {
   });
 
   it('a mod whose line cannot go after its folder was trashed still lands, carrying the part that failed, and marks nothing for it', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, { refusals: refusing('changeModOrder', 'disk full') });
+    const { fake, commands } = over(FIXTURE_ORDER, { ...installedFrom(['Unofficial Patch', ARCHIVE]), refusals: refusing('changeModOrder', 'disk full') });
 
-    const outcome = await commands.uninstallMods([{ name: 'Unofficial Patch', archiveFilename: ARCHIVE }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true, outcome: { landed: [{ name: 'Unofficial Patch', lineRefusal: 'disk full' }], refused: [] },
@@ -293,9 +295,9 @@ describe('uninstallMods', () => {
   });
 
   it('carries the mark\'s refusal beside the landed mod, rather than leaving the download claiming a mod that is gone', async () => {
-    const { commands } = over(FIXTURE_ORDER, { refusals: refusing('markDownloadedFile', 'download_directory could not be resolved') });
+    const { commands } = over(FIXTURE_ORDER, { ...installedFrom(['Unofficial Patch', ARCHIVE]), refusals: refusing('markDownloadedFile', 'download_directory could not be resolved') });
 
-    const outcome = await commands.uninstallMods([{ name: 'Unofficial Patch', archiveFilename: ARCHIVE }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
 
     expect(outcome).toEqual({
       applied: true,
@@ -304,11 +306,39 @@ describe('uninstallMods', () => {
   });
 
   it('lands the mod whose download is gone from disk, with no refusal', async () => {
-    const { commands } = over(FIXTURE_ORDER, { goneDownloads: new Set(['Long Gone-1-0.7z']) });
+    const { commands } = over(FIXTURE_ORDER, { ...installedFrom(['Harder VATS', 'Long Gone-1-0.7z']), goneDownloads: new Set(['Long Gone-1-0.7z']) });
 
-    const outcome = await commands.uninstallMods([{ name: 'Harder VATS', archiveFilename: 'Long Gone-1-0.7z' }], NO_TRASH);
+    const outcome = await commands.uninstallMods(['Harder VATS'], NO_TRASH);
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Harder VATS' }], refused: [] } });
+  });
+
+  it('reads the installation file before the folder that records it goes', async () => {
+    const { fake, commands } = over(FIXTURE_ORDER, installedFrom(['Unofficial Patch', ARCHIVE]));
+    const writesBeforeRead: number[] = [];
+    const read = fake.adapter.modMetadata.bind(fake.adapter);
+    fake.adapter.modMetadata = (mod) => { writesBeforeRead.push(fake.calls.length); return read(mod); };
+
+    await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
+
+    expect(writesBeforeRead).toEqual([0]);
+    expect(verbs(fake.calls)[0]).toBe('trashEntryFolder');
+  });
+
+  it('lands the mod carrying why its installation file could not be read, marking no download', async () => {
+    const { fake, commands } = over(FIXTURE_ORDER, { unreadableMetadata: new Map([['Unofficial Patch', 'meta.ini is locked']]) });
+
+    const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
+
+    expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Unofficial Patch', markRefusal: 'meta.ini is locked' }], refused: [] } });
+    expect(verbs(fake.calls)).not.toContain('markDownloadedFile');
+  });
+
+  it('refuses the selection, trashing nothing, when mod order cannot be read', async () => {
+    const { fake, commands } = over(FIXTURE_ORDER, { unreadReads: { modOrder: 'modlist.txt is locked' } });
+
+    expect(await commands.uninstallMods(['Harder VATS'], NO_TRASH)).toEqual({ applied: false, refusal: 'modlist.txt is locked' });
+    expect(fake.calls).toEqual([]);
   });
 });
 
@@ -358,6 +388,13 @@ describe('renameMod', () => {
     const outcome = await commands.renameMod('Harder VATS', '  ');
 
     expect(outcome).toEqual({ applied: false, refusal: 'A mod name cannot be empty.' });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it.each([['profiles'], ['sourceMods']] as const)('refuses, renaming nothing, when %s cannot be read', async (read) => {
+    const { fake, commands } = over(FIXTURE_ORDER, { unreadReads: { [read]: 'the read failed' } });
+
+    expect(await rename(commands)).toEqual({ applied: false, refusal: 'the read failed' });
     expect(fake.calls).toEqual([]);
   });
 
@@ -467,6 +504,14 @@ describe('markFiles', () => {
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [inNoSource], refused: [{ item: inSource, reason: 'it holds no build configuration' }] } });
     expect(fake.calls).toEqual([markOf(inNoSource, 'Excluded')]);
+  });
+
+  it('refuses the whole selection, configuring and marking nothing, when the source mods cannot be read', async () => {
+    const { fake, mEdit, commands } = over(FIXTURE_ORDER, { unreadReads: { sourceMods: 'build.json is locked' } }, undefined, SOURCES);
+
+    expect(await commands.markFiles([fileOf('Harder VATS', 'a.dds')], 'Excluded')).toEqual({ applied: false, refusal: 'build.json is locked' });
+    expect(configuredBy(mEdit)).toEqual([]);
+    expect(fake.calls).toEqual([]);
   });
 
   it('refuses the whole selection once, marking no file, when mEdit cannot be reached', async () => {
@@ -654,6 +699,13 @@ describe('the names a separator or mod may take', () => {
     const { commands } = over([separator('Unassigned (Modlist Development)')]);
 
     expect(await commands.separatorNameRefusal('UNASSIGNED (modlist development)', 'Group B')).toBe('A separator with this name already exists');
+  });
+
+  it('rejects with why mod order cannot be read, rather than calling the name free', async () => {
+    const { commands } = over([], { unreadReads: { modOrder: 'modlist.txt is locked' } });
+
+    await expect(commands.newModNameRefusal('Anything')).rejects.toThrow('modlist.txt is locked');
+    await expect(commands.separatorNameRefusal('Anything')).rejects.toThrow('modlist.txt is locked');
   });
 
   it('refuses a name a mod folder holds, listed or not', async () => {

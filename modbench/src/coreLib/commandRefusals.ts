@@ -1,4 +1,6 @@
-import type { EntryRef, ModFolder } from '../instanceAdapter/instanceAdapter';
+import type { EntryRef, TakenNames } from '../instanceAdapter/instanceAdapter';
+
+export type { TakenNames };
 
 /** The refusal of a mod named by blanks. */
 export const EMPTY_MOD_NAME = 'A mod name cannot be empty.';
@@ -6,13 +8,6 @@ export const EMPTY_MOD_NAME = 'A mod name cannot be empty.';
 /** The refusal of a new mod whose name a folder already holds: one wording for create and install. */
 export const modNameTakenRefusal = (name: string): string =>
   `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
-
-/** The names a prompt checks, as the instance value reads them; the write stays the authority.
- *  `modFolders` is undefined when there is no folder for mods at all. */
-export interface TakenNames {
-  readonly mods: readonly EntryRef[];
-  readonly modFolders: readonly ModFolder[] | undefined;
-}
 
 /** How the manager matches an entry's name: two entries with one key are one name to it. */
 export type EntryKey = (entry: EntryRef) => string;

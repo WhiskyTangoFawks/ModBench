@@ -3,10 +3,10 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
-  entryNotFound, sameEntry, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
-  type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace, type SourceMods,
+  entryNotFound, sameEntry, type DecideModOrder, type EntryRef, type FileOrigin, type FileRead, type InstanceAdapter,
+  type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace, type SourceMods,
 } from '../instanceAdapter/instanceAdapter';
-import { EMPTY_MOD_NAME, entryNameRefusal, goneFromDisk, newModNameRefusal, type EntryKey, type TakenNames } from '../coreLib/commandRefusals';
+import { EMPTY_MOD_NAME, entryNameRefusal, goneFromDisk, newModNameRefusal as unclaimedModName, type EntryKey } from '../coreLib/commandRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { isRefused, type MEditClient, type ReadModStatus } from '../client';
@@ -15,20 +15,28 @@ export type { SelectionResult };
 export type { InstallTarget } from '../instanceAdapter/instanceAdapter';
 export type { ModPackage } from './install';
 
-async function changeModOrderLanding(
-  adapter: InstanceAdapter, decide: DecideModOrder, profile?: string,
-): Promise<CommandResult<Awaited<ReturnType<InstanceAdapter['changeModOrder']>>>> {
+type Landing = CommandResult<Awaited<ReturnType<InstanceAdapter['changeModOrder']>>>;
+
+async function landIn(adapter: InstanceAdapter, profile: string, decide: DecideModOrder): Promise<Landing> {
   try {
-    return { applied: true, ...await adapter.changeModOrder(profile ?? await adapter.activeProfile(), decide) };
+    return { applied: true, ...await adapter.changeModOrder(profile, decide) };
   } catch (err) {
     return refuse(err);
   }
 }
 
-async function changeModOrder(adapter: InstanceAdapter, decide: DecideModOrder, profile?: string): Promise<CommandResult> {
-  const result = await changeModOrderLanding(adapter, decide, profile);
-  return result.applied ? { applied: true, wrote: result.wrote } : result;
+async function changeModOrderLanding(adapter: InstanceAdapter, decide: DecideModOrder): Promise<Landing> {
+  try {
+    return await landIn(adapter, await adapter.activeProfile(), decide);
+  } catch (err) {
+    return refuse(err);
+  }
 }
+
+const wrote = (result: Landing): CommandResult => (result.applied ? { applied: true, wrote: result.wrote } : result);
+
+const changeModOrder = async (adapter: InstanceAdapter, decide: DecideModOrder): Promise<CommandResult> =>
+  wrote(await changeModOrderLanding(adapter, decide));
 
 // A separator written, and the name it was written under.
 type SeparatorResult = CommandResult<{ wrote: boolean; name: string }>;
@@ -44,7 +52,7 @@ async function changeSeparator(adapter: InstanceAdapter, decide: DecideModOrder)
 type EntryKind = EntryRef['kind'];
 
 // A command names an entry as the mod manager matches names.
-const isListed = (adapter: InstanceAdapter, order: readonly ModlistEntry[], entry: EntryRef): boolean =>
+const isListed = (adapter: InstanceAdapter, order: readonly EntryRef[], entry: EntryRef): boolean =>
   order.some((e) => sameEntry(adapter, e, entry));
 
 // Decided from mod order as it stands when the changes land, so an item gone since the view last
@@ -201,11 +209,6 @@ async function markFiles(
 
 const keyOf = (adapter: InstanceAdapter): EntryKey => (entry) => adapter.entryKey(entry);
 
-const takenNames = async (adapter: InstanceAdapter): Promise<TakenNames> => {
-  const { mods, modFolders } = await adapter.modlist();
-  return { mods, modFolders };
-};
-
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
 const MOD_NAME_CLASH = 'A mod with this name already exists';
 const MOD_NAME_WITH_PATH_SEPARATOR = 'A mod name cannot contain / or \\';
@@ -213,18 +216,18 @@ const MOD_NAME_WITH_PATH_SEPARATOR = 'A mod name cannot contain / or \\';
 // Why `requested` cannot name a separator, or `undefined` when it can: a separator of that name is
 // listed or has a folder, compared without case. `own`, the separator being renamed, is no clash.
 async function separatorNameRefusal(adapter: InstanceAdapter, requested: string, own?: string): Promise<string | undefined> {
-  return entryNameRefusal(keyOf(adapter), await takenNames(adapter), 'separator', requested, SEPARATOR_NAME_CLASH, own);
+  return entryNameRefusal(keyOf(adapter), await adapter.modOrder(), 'separator', requested, SEPARATOR_NAME_CLASH, own);
 }
 
 // Why `requested` cannot rename mod `own`, or `undefined` when it can: it holds a path separator, or
 // another mod of that name is listed or has a folder, compared without case.
 async function renameModNameRefusal(adapter: InstanceAdapter, requested: string, own: string): Promise<string | undefined> {
   return /[\\/]/.test(requested) ? MOD_NAME_WITH_PATH_SEPARATOR
-    : entryNameRefusal(keyOf(adapter), await takenNames(adapter), 'mod', requested, MOD_NAME_CLASH, own);
+    : entryNameRefusal(keyOf(adapter), await adapter.modOrder(), 'mod', requested, MOD_NAME_CLASH, own);
 }
 
-async function newModName(adapter: InstanceAdapter, name: string): Promise<string | undefined> {
-  return newModNameRefusal(keyOf(adapter), await takenNames(adapter), name);
+async function newModNameRefusal(adapter: InstanceAdapter, name: string): Promise<string | undefined> {
+  return unclaimedModName(keyOf(adapter), await adapter.modOrder(), name);
 }
 
 // Insert a new enabled separator next to the anchor (mods.md, Add separator); the adapter places it.
@@ -256,9 +259,9 @@ const dropOf = (entry: EntryRef): ModOrderChange =>
 async function trashThenUnlist(
   adapter: InstanceAdapter, kind: EntryKind, names: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<TrashedEntry>> {
-  let order: readonly ModlistEntry[];
+  let order: readonly EntryRef[];
   try {
-    ({ mods: order } = await adapter.modlist());
+    ({ mods: order } = await adapter.modOrder());
   } catch (err) {
     return refuse(err);
   }
@@ -309,12 +312,13 @@ function deleteSeparators(
   return trashThenUnlist(adapter, 'separator', names, trash);
 }
 
-// A mod handed to `uninstallMods`: its own name, and the downloaded file it was installed from,
-// when known. With none, no download is marked.
-interface ModToUninstall {
-  name: string;
-  archiveFilename?: string;
-}
+const readOrRefuse = async <T>(read: () => Promise<FileRead<T>>): Promise<FileRead<T>> => {
+  try {
+    return await read();
+  } catch (err) {
+    return { kind: 'unreadable', reason: errorMessage(err) };
+  }
+};
 
 // A landed mod. `markRefusal` is set when its downloaded file could not be marked uninstalled,
 // and the uninstall still stands. A line not truly gone marks nothing, so never beside
@@ -323,22 +327,28 @@ interface UninstalledMod extends TrashedEntry {
 }
 
 // `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
-// then its downloaded file marked unless that file is gone (mods.md, Reporting, story 4).
+// then the downloaded file it was installed from marked unless that file is gone (mods.md, Reporting, story 4).
+// The installation file is read before the folder goes, as the folder holds its record.
 async function uninstallMods(
-  adapter: InstanceAdapter, mods: readonly ModToUninstall[], trash: MoveToTrash,
+  adapter: InstanceAdapter, mods: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<UninstalledMod>> {
-  const archiveOf = new Map(mods.map((m) => [m.name, m.archiveFilename] as const));
-  const result = await trashThenUnlist(adapter, 'mod', mods.map((m) => m.name), trash);
+  const installedFrom = new Map(await Promise.all(mods.map(async (mod) => [mod, await readOrRefuse(() => adapter.modMetadata(mod))] as const)));
+  const result = await trashThenUnlist(adapter, 'mod', mods, trash);
   if (!result.applied) return result;
   const landed: UninstalledMod[] = [];
   for (const entry of result.outcome.landed) {
-    const archiveFilename = archiveOf.get(entry.name);
-    if (entry.lineRefusal !== undefined || archiveFilename === undefined) {
+    const read = installedFrom.get(entry.name);
+    const downloadedFile = read?.kind === 'read' ? read.answer.installationFile?.name : undefined;
+    if (read?.kind === 'unreadable') {
+      landed.push(entry.lineRefusal === undefined ? { ...entry, markRefusal: read.reason } : entry);
+      continue;
+    }
+    if (entry.lineRefusal !== undefined || downloadedFile === undefined) {
       landed.push(entry);
       continue;
     }
     try {
-      await adapter.markDownloadedFile(archiveFilename, 'Uninstalled');
+      await adapter.markDownloadedFile(downloadedFile, 'Uninstalled');
       landed.push(entry);
     } catch (err) {
       landed.push({ ...entry, markRefusal: errorMessage(err) });
@@ -401,7 +411,7 @@ async function renameMod({ adapter, mEdit }: SourceModWriters, from: string, to:
   const lineRefusals: { profile: string; refusal: string }[] = [];
   const ordered = [activeProfile, ...profiles.filter((profile) => profile !== activeProfile)];
   for (const profile of ordered) {
-    const line = await changeModOrder(adapter, () => [{ kind: 'renameMod', from, to }], profile);
+    const line = wrote(await landIn(adapter, profile, () => [{ kind: 'renameMod', from, to }]));
     if (!line.applied) lineRefusals.push({ profile, refusal: line.refusal });
   }
   return { applied: true, lineRefusals };
@@ -459,7 +469,8 @@ export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['m
     renameMod: (...args: TailOf<typeof renameMod>) => renameMod({ adapter, mEdit }, ...args),
     separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(adapter, ...args),
     renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
-    newModNameRefusal: (...args: TailOf<typeof newModName>) => newModName(adapter, ...args),
+    newModNameRefusal: (...args: TailOf<typeof newModNameRefusal>) => newModNameRefusal(adapter, ...args),
+    names: adapter.names,
     installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, readStatus }, ...args),
   };
 }

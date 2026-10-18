@@ -23,6 +23,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { Refusal } from '../drivingLib/refusal';
+import { promptRefusal, refuseAgentName } from './nameRefusals';
 
 // modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
 // Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
@@ -191,11 +192,6 @@ interface Rename {
 
 type Uninstalled = Extract<Awaited<ReturnType<ModCommands['uninstallMods']>>, { applied: true }>['outcome']['landed'][number];
 
-interface ModToUninstall {
-  readonly name: string;
-  readonly archiveFilename?: string;
-}
-
 function partialsOfUninstall(item: Uninstalled, modOrderFile: string): PartialFailure[] {
   const partial: PartialFailure[] = [];
   if (item.sourceRefusal !== undefined) {
@@ -224,12 +220,10 @@ export function registerModContextCommands(
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a mod carries one mod.');
       const oldName = modNameOf(only);
-      const refusal = await commands.renameModNameRefusal(name, oldName);
-      if (refusal !== undefined) throw new Refusal(refusal);
+      await refuseAgentName(commands.renameModNameRefusal(name, oldName));
       return { oldName, newName: name };
     },
     run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
-      const { managerNames } = instance.value;
       const result = await commands.renameMod(oldName, newName);
       if (!result.applied) return { applied: false, refusal: 'Failed to rename mod.', detail: result.refusal };
       if (result.unchanged) return { applied: true, outcome: { landed: [], refused: [] } };
@@ -237,7 +231,7 @@ export function registerModContextCommands(
         applied: true,
         outcome: { landed: [newName], refused: [] },
         partial: result.lineRefusals.map(({ profile, refusal }) => ({
-          message: `"${oldName}" was renamed, but its ${managerNames.modOrderFile} line in profile "${profile}" could not be renamed.`,
+          message: `"${oldName}" was renamed, but its ${commands.names.modOrderFile} line in profile "${profile}" could not be renamed.`,
           detail: refusal, severity: 'warning',
         })),
       };
@@ -248,22 +242,19 @@ export function registerModContextCommands(
     },
   };
 
-  const uninstall: AgentGesture<ModlistNode, readonly ModToUninstall[], GestureResult<Uninstalled>> = {
+  const uninstall: AgentGesture<ModlistNode, readonly string[], GestureResult<Uninstalled>> = {
     fromView: async (entry) => {
       const rows = pluralArgument(entry, 'mod');
-      const mods = rows.map((n) => ({ name: n.mod.name, archiveFilename: n.mod.archiveFilename }));
+      const mods = rows.map((n) => n.mod.name);
       if (mods.length === 0) return undefined;
       const sourceMods = rows.filter((n) => n.facts?.sourceMod === true).map((n) => n.mod.name);
-      return (await confirmUninstall(mods.map((m) => m.name), sourceMods, ask)) ? mods : undefined;
+      return (await confirmUninstall(mods, sourceMods, ask)) ? mods : undefined;
     },
-    fromAgent: ({ argument }) => argument.map(modNameOf).map((name) => ({
-      name, archiveFilename: instance.value.mods.flatMap((entry) => (entry.kind === 'mod' && entry.name === name ? [entry.archiveFilename] : []))[0],
-    })),
+    fromAgent: ({ argument }) => argument.map(modNameOf),
     run: (mods) => runModsWriting(instance, async (): Promise<GestureResult<Uninstalled>> => {
-      const { managerNames } = instance.value;
       const result = await commands.uninstallMods(mods, trash);
       if (!result.applied) return { applied: false, refusal: 'Failed to uninstall mods.', detail: result.refusal };
-      return { applied: true, outcome: result.outcome, partial: result.outcome.landed.flatMap((item) => partialsOfUninstall(item, managerNames.modOrderFile)) };
+      return { applied: true, outcome: result.outcome, partial: result.outcome.landed.flatMap((item) => partialsOfUninstall(item, commands.names.modOrderFile)) };
     }),
     report: (result, mods) => {
       if (!result.applied) {
@@ -284,13 +275,13 @@ export function registerModContextCommands(
 function separatorNamePrompt(
   commands: ModCommands, own?: string,
 ): (value: string) => Promise<string | undefined> | undefined {
-  return (value) => (value === '' ? undefined : commands.separatorNameRefusal(value, own));
+  return (value) => (value === '' ? undefined : promptRefusal(commands.separatorNameRefusal(value, own)));
 }
 
 function modNamePrompt(
   commands: ModCommands, own: string,
 ): (value: string) => Promise<string | undefined> | undefined {
-  return (value) => (value === '' ? undefined : commands.renameModNameRefusal(value, own));
+  return (value) => (value === '' ? undefined : promptRefusal(commands.renameModNameRefusal(value, own)));
 }
 
 async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion): Promise<boolean> {
@@ -327,8 +318,7 @@ function renameGesture(
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a separator carries one separator.');
       const oldName = separatorNameOf(only);
-      const refusal = await commands.separatorNameRefusal(name, oldName);
-      if (refusal !== undefined) throw new Refusal(refusal);
+      await refuseAgentName(commands.separatorNameRefusal(name, oldName));
       return { oldName, newName: name };
     },
     run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
@@ -359,8 +349,7 @@ function renameGesture(
     fromAgent: async ({ argument, options: { name } }) => {
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to add a separator carries one mod or separator, the anchor.');
-      const refusal = await commands.separatorNameRefusal(name);
-      if (refusal !== undefined) throw new Refusal(refusal);
+      await refuseAgentName(commands.separatorNameRefusal(name));
       return { name, anchor: entryRefOf(only) };
     },
     run: ({ name, anchor }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
@@ -385,14 +374,13 @@ function renameGesture(
     },
     fromAgent: ({ argument }) => argument.map(separatorNameOf),
     run: (names) => runModsWriting(instance, async (): Promise<GestureResult<DeletedSeparator>> => {
-      const { managerNames } = instance.value;
       const result = await commands.deleteSeparators(names, trash);
       if (!result.applied) return { applied: false, refusal: 'Failed to delete separators.', detail: result.refusal };
       return {
         applied: true,
         outcome: result.outcome,
         partial: result.outcome.landed.flatMap((item) => (item.lineRefusal === undefined ? [] : [{
-          message: `"${item.name}" was deleted, but its ${managerNames.modOrderFile} line could not be removed.`,
+          message: `"${item.name}" was deleted, but its ${commands.names.modOrderFile} line could not be removed.`,
           detail: item.lineRefusal, severity: 'warning' as const,
         }])),
       };
@@ -429,13 +417,12 @@ function renameGesture(
       fromView: async () => {
         const name = await vscode.window.showInputBox({
           prompt: 'New mod name', placeHolder: 'My New Mod',
-          validateInput: (value) => commands.newModNameRefusal(value),
+          validateInput: (value) => promptRefusal(commands.newModNameRefusal(value)),
         });
         return name || undefined;
       },
       fromAgent: async ({ options: { name } }) => {
-        const refusal = await commands.newModNameRefusal(name);
-        if (refusal !== undefined) throw new Refusal(refusal);
+        await refuseAgentName(commands.newModNameRefusal(name));
         return name;
       },
       run: (name) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
@@ -443,7 +430,7 @@ function renameGesture(
         try {
           const outcome = await commands.createEmptyMod(name);
           return outcome.applied
-            ? { applied: true, outcome: { landed: [name], refused: [] }, partial: createPartial(name, outcome.lineRefusal, instance.value.managerNames.modOrderFile) }
+            ? { applied: true, outcome: { landed: [name], refused: [] }, partial: createPartial(name, outcome.lineRefusal, commands.names.modOrderFile) }
             : { applied: false, refusal: failed, detail: outcome.refusal };
         } catch (err) {
           return { applied: false, refusal: failed, detail: errorMessage(err) };

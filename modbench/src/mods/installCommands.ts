@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { DownloadFile, Instance, InstanceValue } from '../instanceLoader/instance';
-import { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, samePath } from '../instanceAdapter/instanceAdapter';
+import type { DownloadFile, Instance } from '../instanceLoader/instance';
+import { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder } from '../instanceAdapter/instanceAdapter';
 import type { InstallTarget, ModCommands, ModPackage } from '../modCommands/modCommands';
 import { downloadArgumentOf, downloadedFileNamed } from '../drivingLib/argument';
 import {
@@ -12,6 +12,7 @@ import { Refusal } from '../drivingLib/refusal';
 import { errorMessage } from '../ports/errorMessage';
 import { chooseInstallTarget } from './installTarget';
 import { promptModName } from './promptModName';
+import { promptRefusal, refuseAgentName } from './nameRefusals';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Reporter } from '../ports/reporter';
 import { MODS_KEY_ARGS } from './gestureEntry';
@@ -50,30 +51,20 @@ interface PackageKindItem extends vscode.QuickPickItem {
   packageKind: 'archive' | 'folder';
 }
 
-const downloadedFilePackage = ({ name, path, modID, fileID, version }: DownloadFile): ModPackage =>
-  ({ kind: 'downloadedFile', name, path, modID, fileID, version });
+const downloadedFilePackage = ({ name }: DownloadFile): ModPackage => ({ kind: 'downloadedFile', name });
 
-const unmarked = (installed: ModPackage, downloadedFileRefusal: string | undefined): PartialFailure[] =>
-  installed.kind === 'downloadedFile' && downloadedFileRefusal !== undefined
-    ? [{ message: `"${installed.name}" was installed, but its Downloads status could not be updated`, detail: downloadedFileRefusal, severity: 'log' }]
+const unmarked = (downloadedFile: string | undefined, downloadedFileRefusal: string | undefined): PartialFailure[] =>
+  downloadedFile !== undefined && downloadedFileRefusal !== undefined
+    ? [{ message: `"${downloadedFile}" was installed, but its Downloads status could not be updated`, detail: downloadedFileRefusal, severity: 'log' }]
     : [];
 
-type Downloads = InstanceValue['downloads'];
-
-// An archive that is one of the instance's downloaded files installs as that file, so the
-// mod manager's own Downloads view sees it installed.
-const archivePackage = (downloads: Downloads, path: string): ModPackage => {
-  const downloaded = downloads.kind === 'listed' ? downloads.rows.find((row) => samePath(row.path, path)) : undefined;
-  return downloaded ? downloadedFilePackage(downloaded) : { kind: 'archive', path };
-};
-
-const packageOf = (downloads: Downloads, argument: readonly Argument[]): Pick<Install, 'package' | 'via'> => {
+const packageOf = (argument: readonly Argument[]): Pick<Install, 'package' | 'via'> => {
   const [only, ...more] = argument;
   if (only === undefined || more.length > 0) throw new Refusal('An agent call to install carries one package: a downloaded file, an archive or a folder.');
   const given = argumentOfKind(only, 'downloadedFile', 'archive', 'folder');
-  if (given.kind === 'downloadedFile') return { package: downloadedFilePackage(downloadedFileNamed(downloads, given.name)), via: 'downloadedFile' };
+  if (given.kind === 'downloadedFile') return { package: { kind: 'downloadedFile', name: given.name }, via: 'downloadedFile' };
   return given.kind === 'archive'
-    ? { package: archivePackage(downloads, given.path), via: 'installFromArchive' }
+    ? { package: { kind: 'archive', path: given.path }, via: 'installFromArchive' }
     : { package: { kind: 'folder', path: given.path }, via: 'installFromFolder' };
 };
 
@@ -81,8 +72,7 @@ const targetOf = async (
   { name, target }: InstallOptions, newModNameRefusal: (name: string) => Promise<string | undefined>,
 ): Promise<InstallTarget> => {
   if (name !== undefined && target === undefined) {
-    const refusal = await newModNameRefusal(name);
-    if (refusal !== undefined) throw new Refusal(refusal);
+    await refuseAgentName(newModNameRefusal(name));
     return { kind: 'new', name };
   }
   if (target !== undefined && name === undefined) return { kind: 'upgrade', name: target };
@@ -110,7 +100,7 @@ async function pickPackagePath(): Promise<{ kind: 'archive' | 'folder'; path: st
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { commands, instance, reporterFor, warnIfFomod, downloadInstall } = deps;
   const reporterOf = (via: InstallVia): Reporter => (via === 'downloadedFile' ? downloadInstall.reporter : reporterFor(via));
-  const newModNameRefusal = (name: string) => commands.newModNameRefusal(name);
+  const newModNameRefusal = (name: string) => promptRefusal(commands.newModNameRefusal(name));
   const failedMessage = ({ package: installed, target, via }: Install): string =>
     `Failed to install "${installed.kind === 'downloadedFile' && via === 'downloadedFile' ? installed.name : target.name}".`;
 
@@ -121,7 +111,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       return {
         applied: true,
         outcome: { landed: [{ name: install.target.name, isFomod: outcome.isFomod }], refused: [] },
-        partial: unmarked(install.package, outcome.downloadedFileRefusal),
+        partial: unmarked(outcome.downloadedFile, outcome.downloadedFileRefusal),
       };
     } catch (err) {
       return { applied: false, refusal: failedMessage(install), detail: errorMessage(err) };
@@ -137,7 +127,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     const picked = await pickPackagePath();
     if (!picked) return undefined;
     return picked.kind === 'archive'
-      ? newMod(archivePackage(instance.value.downloads, picked.path), defaultModName(picked.path), 'installFromArchive')
+      ? newMod({ kind: 'archive', path: picked.path }, defaultModName(picked.path), 'installFromArchive')
       : newMod({ kind: 'folder', path: picked.path }, defaultModNameForFolder(picked.path), 'installFromFolder');
   };
 
@@ -159,7 +149,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       }
     },
     fromAgent: async ({ argument, options }) =>
-      ({ ...packageOf(instance.value.downloads, argument), target: await targetOf(options, newModNameRefusal), force: options.force === true }),
+      ({ ...packageOf(argument), target: await targetOf(options, (name) => commands.newModNameRefusal(name)), force: options.force === true }),
     run: (install) => runWritingGesture(
       install.via === 'downloadedFile' ? downloadInstall.progressViewId : MODS_KEY_ARGS.view, instance, () => installedMod(install)),
     report: (result, install) => {

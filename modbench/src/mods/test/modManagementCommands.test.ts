@@ -35,6 +35,7 @@ const commands = {
   uninstallMods: vi.fn(), deleteSeparators: vi.fn(), renameMod: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
   createEmptyMod: vi.fn(), setModsEnabled: vi.fn(), moveMods: vi.fn(), moveSeparators: vi.fn(), markFiles: vi.fn(),
   newModNameRefusal: vi.fn(), separatorNameRefusal: vi.fn(), renameModNameRefusal: vi.fn(), installMod: vi.fn(),
+  names: { manager: 'MO2', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
 } satisfies Record<keyof ModCommands, unknown>;
 const {
   uninstallMods, deleteSeparators, renameMod, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators, markFiles,
@@ -85,7 +86,7 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
   });
 
   it('the prompt\'s validateInput asks the command whether the name is free', async () => {
-    newModNameRefusal.mockReturnValueOnce('"Harder VATS" already exists');
+    newModNameRefusal.mockResolvedValueOnce('"Harder VATS" already exists');
     registerCreateEmptyModCommand(commands, instance, recordingReporter());
     await invoke('modbench.mod.createEmpty');
 
@@ -126,9 +127,9 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     showInputBox.mockResolvedValueOnce('New Mod');
     createEmptyMod.mockResolvedValueOnce({ applied: true, wrote: false, lineRefusal: 'disk full' });
     const reporter = recordingReporter();
-    const another = { ...instanceThatReads, value: instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' } }) };
+    const another = { ...commands, names: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' } };
 
-    registerCreateEmptyModCommand(commands, another, reporter);
+    registerCreateEmptyModCommand(another, instance, reporter);
     await invoke('modbench.mod.createEmpty');
 
     expect(reporter.reports.map((r) => r.message)).toEqual(['"New Mod" was created, but its order.txt line could not be written.']);
@@ -253,7 +254,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
       buttons: ['Uninstall'],
     }]);
     expect(uninstallMods).toHaveBeenCalledWith(
-      [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
+      ['Mod A'], trash);
   });
 
   const facts = { holdsPlugin: true, sourceMod: true };
@@ -308,7 +309,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     assertAskedOnce(ask, { messageContains: '"Mod A", "Mod B"', buttons: ['Uninstall'] });
     expect(ask.asked[0]?.message).toContain('Their folders will be moved to the system trash.');
     expect(uninstallMods).toHaveBeenCalledWith(
-      [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }, { name: 'Mod B', archiveFilename: undefined }],
+      ['Mod A', 'Mod B'],
       trash,
     );
   });
@@ -329,7 +330,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     await invoke('modbench.mod.uninstall');
 
     expect(uninstallMods).toHaveBeenCalledWith(
-      [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
+      ['Mod A'], trash);
   });
 
   it('an empty selection asks nothing and uninstalls nothing', async () => {
@@ -568,7 +569,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
 
   it('asks the command in the prompt whether the name is free of the other separators, passing the separator\'s own name, and asks nothing of an empty name', async () => {
     showInputBox.mockResolvedValueOnce(undefined);
-    separatorNameRefusal.mockReturnValueOnce(CLASH);
+    separatorNameRefusal.mockResolvedValueOnce(CLASH);
 
     registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
     await invoke('modbench.separator.rename', groupB);
@@ -649,7 +650,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
 
   it('asks the command in the prompt whether the name is free of the other separators, and asks nothing of an empty name', async () => {
     showInputBox.mockResolvedValueOnce(undefined);
-    separatorNameRefusal.mockReturnValueOnce(CLASH);
+    separatorNameRefusal.mockResolvedValueOnce(CLASH);
 
     registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
     await invoke('modbench.separator.add', modA);
@@ -1503,7 +1504,7 @@ describe('rename mod refuses in its prompt', () => {
   }
 
   it('asks the command whether the name is free of the other mods, passing the mod\'s own name, and asks nothing of an empty name', async () => {
-    renameModNameRefusal.mockReturnValueOnce(MOD_CLASH);
+    renameModNameRefusal.mockResolvedValueOnce(MOD_CLASH);
     const validate = await validatorOver();
 
     expect(await validate('mod a')).toBe(MOD_CLASH);
@@ -1677,7 +1678,7 @@ describe('the mod gestures, called by the agent', () => {
     });
 
     it('refuses a name the command refuses as a Refusal, renaming nothing', async () => {
-      renameModNameRefusal.mockReturnValueOnce('A mod with this name already exists');
+      renameModNameRefusal.mockResolvedValueOnce('A mod with this name already exists');
       register();
 
       await expect(invoke('modbench.mod.rename', renameCall('Mod B'))).rejects.toEqual(new Refusal('A mod with this name already exists'));
@@ -1729,7 +1730,7 @@ describe('the mod gestures, called by the agent', () => {
   });
 
   describe('modbench.mod.uninstall', () => {
-    it('uninstalls the mods given, never the selection, with the download each was installed from, confirming nothing', async () => {
+    it('uninstalls the mods given, never the selection, confirming nothing', async () => {
       const outcome = { applied: true, outcome: { landed: [{ name: 'Mod A' }, { name: 'Mod B' }], refused: [] } };
       uninstallMods.mockResolvedValue(outcome);
       const ask = scriptedDialog();
@@ -1739,7 +1740,7 @@ describe('the mod gestures, called by the agent', () => {
       const answered = await invoke('modbench.mod.uninstall', ofMods('Mod A', 'Mod B'));
 
       expect(uninstallMods).toHaveBeenCalledWith(
-        [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }, { name: 'Mod B', archiveFilename: undefined }], trash);
+        ['Mod A', 'Mod B'], trash);
       expect(answered).toEqual({ ...outcome, partial: [] });
       expect(ask.asked).toEqual([]);
     });
@@ -1786,7 +1787,7 @@ describe('the mod gestures, called by the agent', () => {
     });
 
     it('refuses a name a folder holds as a Refusal, creating nothing', async () => {
-      newModNameRefusal.mockReturnValueOnce('"Mod A" already exists');
+      newModNameRefusal.mockResolvedValueOnce('"Mod A" already exists');
       registerCreateEmptyModCommand(commands, instance, recordingReporter());
 
       await expect(invoke('modbench.mod.createEmpty', createCall('Mod A'))).rejects.toEqual(new Refusal('"Mod A" already exists'));
@@ -1916,7 +1917,7 @@ describe('the separator gestures, called by the agent', () => {
     });
 
     it('refuses a name the command refuses as a Refusal, adding nothing', async () => {
-      separatorNameRefusal.mockReturnValueOnce('A separator with this name already exists');
+      separatorNameRefusal.mockResolvedValueOnce('A separator with this name already exists');
       register();
 
       await expect(invoke('modbench.separator.add', new AgentCall([group('Group A')], { name: 'Group B' })))
@@ -1966,7 +1967,7 @@ describe('the separator gestures, called by the agent', () => {
     });
 
     it('asks the command for the refusal with the separator\'s own name, and refuses what it refuses as a Refusal', async () => {
-      separatorNameRefusal.mockReturnValueOnce('A separator with this name already exists');
+      separatorNameRefusal.mockResolvedValueOnce('A separator with this name already exists');
       register();
 
       await expect(invoke('modbench.separator.rename', renameCall('Group B'))).rejects.toEqual(new Refusal('A separator with this name already exists'));
