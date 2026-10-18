@@ -119,6 +119,12 @@ describe('the agent server, given an instance value', () => {
     expect(untyped).toEqual([]);
   });
 
+  it('advertises the options of install as required, since a call needs the name of a new mod or the target to upgrade', async () => {
+    const { tools } = await (await clientOf(new FakeInstance(VALUE))).listTools();
+
+    expect(tools.find((tool) => tool.name === 'mod_install')?.inputSchema.required).toEqual(['argument', 'options']);
+  });
+
   it('hands the client its instructions on initialize', async () => {
     const client = await clientOf(new FakeInstance(VALUE));
 
@@ -648,7 +654,7 @@ describe('the agent server, running a gesture', () => {
     const answer = await call(client, 'mod_disable', { argument: [{ name: 'A' }, { name: 'Textures', kind: 'mod' }] });
 
     expect(fired.calls).toEqual([['modbench.mod.disable', new AgentCall([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'Textures' }], {})]]);
-    expect(answer).toEqual({ isError: false, text: JSON.stringify(fired.outcome) });
+    expect(answer).toEqual({ isError: false, text: JSON.stringify({ landed: ['A', 'Textures'], refused: [] }) });
   });
 
   it('refuses in part with the whole outcome, what landed and what was refused and why, in the Output and in no notification', async () => {
@@ -657,7 +663,7 @@ describe('the agent server, running a gesture', () => {
 
     const answer = await call(client, 'mod_enable', { argument: [{ name: 'A' }, { name: 'B' }] });
 
-    expect(answer).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
+    expect(answer).toEqual({ isError: true, text: JSON.stringify({ landed: ['A'], refused: [{ item: 'B', reason: 'Mod not found in modlist: B' }] }) });
     expect(lines.join('\n')).toContain('"B" (Mod not found in modlist: B)');
     expect(reporter.reports).toEqual([]);
   });
@@ -678,7 +684,7 @@ describe('the agent server, running a gesture', () => {
     fired.outcome = { applied: false, refusal: 'ENOENT: modlist.txt' };
     const { client, lines } = await served();
 
-    expect(await call(client, 'mod_enable', { argument: [{ name: 'A' }] })).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
+    expect(await call(client, 'mod_enable', { argument: [{ name: 'A' }] })).toEqual({ isError: true, text: JSON.stringify({ refusal: 'ENOENT: modlist.txt' }) });
     expect(lines.join('\n')).toContain('ENOENT: modlist.txt');
   });
 
@@ -758,7 +764,7 @@ describe('the agent server, running a gesture', () => {
 
       const answer = await call(client, 'plugin_decompile', { argument: [{ name: 'Solo.esp' }] });
 
-      expect(answer).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
+      expect(answer).toEqual({ isError: true, text: JSON.stringify({ refusal: 'Could not move plugins.', detail: 'A.esp is a master.' }) });
       expect(lines.join('\n')).toContain('Could not move plugins. A.esp is a master.');
     });
 

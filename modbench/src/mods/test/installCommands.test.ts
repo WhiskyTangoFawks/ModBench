@@ -348,6 +348,16 @@ describe('modbench.mod.install called by the agent', () => {
     expect(installMod).toHaveBeenCalledWith(outsideArchive, { kind: 'upgrade', name: 'Harder VATS' }, true);
   });
 
+  it.each([
+    ['neither the name of a new mod nor a target', {}],
+    ['both', { name: 'Foo', target: 'Harder VATS' }],
+  ])('refuses a call that carries %s, asking for exactly one', async (_, options) => {
+    registerModInstallCommands(deps());
+
+    await expect(install([outsideArchive], options)).rejects.toThrow('exactly one');
+    expect(installMod).not.toHaveBeenCalled();
+  });
+
   it('answers the refusal the install gives, as the failed install\'s detail', async () => {
     installMod.mockResolvedValueOnce({ applied: false, refusal: 'would lose files' });
 

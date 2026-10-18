@@ -116,8 +116,7 @@ const INSTALL_SOURCE = z.union([
 
 const INSTALL = gestureInput(
   'argument: the one source, { kind: \'downloadedFile\', name } as list_downloads names it, or { kind: \'archive\' | \'folder\', path } for one outside the downloads; '
-    + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, not both; '
-    + 'force?: true to upgrade a mod that differs from its manifest, has no manifest or has a file its package does not hold, which is otherwise refused',
+    + 'options (required): { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, exactly one of the two, and force?: true to upgrade a mod that differs from its manifest, has no manifest or has a file its package does not hold, which is otherwise refused',
   z.object({
     argument: z.array(INSTALL_SOURCE),
     options: z.object({ name: z.string().optional(), target: z.string().optional(), force: z.boolean().optional() }),
@@ -253,6 +252,13 @@ function refusalIn(outcome: GestureOutcome): string | undefined {
   return [...refusals, ...partials].join(' ') || undefined;
 }
 
+/** What the agent is told: what landed and what was refused, never the `applied` flag a view reads. */
+function answerOf(outcome: GestureOutcome) {
+  if (!outcome.applied) return outcome.detail === undefined ? { refusal: outcome.refusal } : { refusal: outcome.refusal, detail: outcome.detail };
+  const { landed, refused } = outcome.outcome;
+  return outcome.partial === undefined ? { landed, refused } : { landed, refused, partial: outcome.partial };
+}
+
 const toolName = (command: string): string =>
   command.replace(/^modbench\./, '').replaceAll('.', '_').replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 
@@ -264,7 +270,7 @@ export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, gesture]) => ({
   of: async (value: InstanceValue, mEdit: NameResolver, given: unknown) => {
     const outcome = await vscode.commands.executeCommand<GestureOutcome>(command, await gesture.callOf(value, given, mEdit));
     const refusal = refusalIn(outcome);
-    if (refusal !== undefined) throw new Refusal(refusal, outcome);
-    return outcome;
+    if (refusal !== undefined) throw new Refusal(refusal, answerOf(outcome));
+    return answerOf(outcome);
   },
 }));
