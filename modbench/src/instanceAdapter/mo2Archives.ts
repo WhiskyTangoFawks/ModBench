@@ -7,7 +7,7 @@ import { get, listDir, readOrAbsent, readOrReason } from './files';
 import { archivesListedIn } from './gameIni';
 import type { DataFolderArchives, GameFolder } from './instanceAdapter';
 import { anyCase, dataFolderArchivesGlob, fileInFolder, profileDir, profileSettingsFile } from './layout';
-import { type Mo2Context } from './mo2Context';
+import type { Mo2Context } from './mo2Context';
 
 // The one spelled as `name` first, then one Windows takes for it.
 async function fileNamedIn(folder: string, name: string): Promise<string | undefined> {

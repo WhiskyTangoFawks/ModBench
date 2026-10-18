@@ -7,7 +7,7 @@ import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePat
 import { get, listDir, readOrAbsent, rename, undoAll, type Undo, withLock, write } from './files';
 import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
 import { fileInFolder, originDir, pluginsFile, profilesDir } from './layout';
-import { type Mo2Context } from './mo2Context';
+import type { Mo2Context } from './mo2Context';
 
 type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin' | 'originHoldsPlugin'>;
 
