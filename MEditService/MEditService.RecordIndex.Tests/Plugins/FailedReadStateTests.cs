@@ -295,6 +295,18 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
+    public void ABinaryReadThatRanOutOfMemory_BesideAnUnreadableDocument_IsReadAgainAtTheNextSnapshot()
+    {
+        SourceMods.Init(Plugin);
+        File.WriteAllText(StrayDocument, "{}");
+        using var index = Reconciled(new PartwayAdapter(afterRecords: 0, () => throw Faults.Of(typeof(OutOfMemoryException))));
+        Assert.True(Failed(index));
+        var readsBefore = TreeReads();
+
+        index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the tree read again");
+    }
+
+    [Fact]
     public void ATreeReadAgainAtEverySnapshot_ReadsTheBinaryInItsPlaceOncePerChangeOfItsBytes()
     {
         SourceMods.Init(Plugin);

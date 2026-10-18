@@ -496,7 +496,7 @@ internal sealed class Indexer : IDisposable
     }
 
     private bool FailsOnePlugin(Exception ex, CancellationToken token) =>
-        ex is not OutOfMemoryException && !Store.IsInvalidation(ex) && !CancelledBy(ex, token);
+        !Store.IsInvalidation(ex) && !CancelledBy(ex, token);
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
     private CancellationToken BeginReconcile()
@@ -1122,7 +1122,7 @@ internal sealed class Indexer : IDisposable
         {
             outcome = scope.Store.Commit(_ => scope.Failed.Read(plugin.Registered, state => ReadWhole(scope, plugin, state)));
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex)
         {
             FailRead(scope, key, ReadFailure(PluginLoadFailure.ReasonFor(ex), scope.Store.DerivationOf(key)));
             throw;

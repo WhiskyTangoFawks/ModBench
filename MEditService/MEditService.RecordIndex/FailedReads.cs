@@ -78,11 +78,11 @@ internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger lo
             NoteProblems(plugin.Key, state.Stamps?.Problems ?? []);
             return outcome;
         }
-        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // A plugin file's own failure is an answer, so a throw is the store's or the tree's, and
-            // nothing the state holds observes it.
-            Settle(plugin.Key, FailureOf(plugin.Key, state, stands: false, treeStopped: null, why: null));
+            // A plugin file's own failure is an answer, so a throw is the store's or the tree's, save
+            // running out of memory: the reads run one at a time, so a read again would run out again.
+            Settle(plugin.Key, FailureOf(plugin.Key, state, stands: ex is OutOfMemoryException && state is { Vouches: true }, treeStopped: null, why: null));
             throw;
         }
     }

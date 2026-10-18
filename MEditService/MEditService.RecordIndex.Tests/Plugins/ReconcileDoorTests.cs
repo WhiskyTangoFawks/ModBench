@@ -3,6 +3,8 @@ using MEditService.Ports;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.Plugins;
 
@@ -76,24 +78,58 @@ public sealed class ReconcileDoorTests
     private static readonly PluginAddress B = new("B.esp", PluginOrigin.DataDirectory);
 
     [Fact]
-    public void RunningOutOfMemoryPartwayThroughAPlugin_FailsTheReconcile_AndThePluginsReadBeforeItKeepTheirRecords()
+    public void APluginWhoseReadRunsOutOfMemory_FailsToRead_AndTheRestLand()
     {
         using var data = AReadThenB();
         var thrown = Faults.Of(typeof(OutOfMemoryException));
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, () => throw thrown));
 
-        var version = index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
-        Assert.Equal(LoadOrderState.Failed, index.Status.State);
-        Assert.Equal(version, index.Status.Version);
-        Assert.Contains(thrown.Message, index.Status.Message, StringComparison.Ordinal);
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.Contains(thrown.Message, Assert.Single(index.Status.Failures, f => f.Name == "B.esp").Reason, StringComparison.Ordinal);
         Assert.NotEmpty(index.ListedIn(A));
-        Assert.DoesNotContain(index.Status.Failures, f => f.Name == "B.esp");
+    }
+
+    [Fact]
+    public void APluginWhoseReadRanOutOfMemory_IsNotReadAgain_WhileItsBytesHold()
+    {
+        using var data = AReadThenB();
+        var readsOfB = 0;
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, () =>
+        {
+            Interlocked.Increment(ref readsOfB);
+            throw Faults.Of(typeof(OutOfMemoryException));
+        }));
+        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+
+        var rewrittenA = new Fallout4Mod(ModKey.FromFileName(A.Name), Fallout4Release.Fallout4);
+        rewrittenA.Npcs.AddNew("FromARewritten");
+        rewrittenA.WriteToBinary(data.Plugins.Single(p => p.Name == A.Name).Path);
+        index.NextSnapshotUntil(() => index.ListedIn(A).Any(row => row.EditorId == "FromARewritten"), "A's rewritten record");
+
+        Assert.Equal(1, Volatile.Read(ref readsOfB));
+        Assert.Contains(index.Status.Failures, f => f.Name == B.Name);
+    }
+
+    [Fact]
+    public void APluginWhoseReadAgainRunsOutOfMemory_FailsToRead()
+    {
+        using var data = AReadThenB();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.InTurn(null, typeof(OutOfMemoryException))));
+        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+
+        PluginBinaries.Touch(data.Plugins.Single(p => p.Name == B.Name).Path);
+        index.NextSnapshotUntil(() => index.Status.Failures.Any(f => f.Name == B.Name), "B's failure");
+
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.StartsWith("Could not read this plugin", index.Status.Failures.Single(f => f.Name == B.Name).Reason, StringComparison.Ordinal);
     }
 
     [Theory]
-    [InlineData(typeof(OutOfMemoryException))]
     [InlineData(typeof(InvalidOperationException))]
     [InlineData(typeof(OperationCanceledException))]
     public void APluginWhoseReadWasCutShort_IsReadByTheNextSnapshot_AndListed(Type thrownType)
@@ -125,10 +161,13 @@ public sealed class ReconcileDoorTests
             })
             .Build();
         var holder = new LoadOrderHolder();
-        var readB = typeof(InvalidOperationException);
-        var readC = typeof(InvalidOperationException);
-        var readCAgain = typeof(OutOfMemoryException);
-        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.InTurn(readB, readC, null, readCAgain)));
+        var failReadsOfBThenC = Faults.InTurn(typeof(InvalidOperationException), typeof(InvalidOperationException));
+        var reads = 0;
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, () =>
+        {
+            if (++reads == 4) IndexFiles.AbortNextCheckpoint(data.InstanceRoot);
+            else failReadsOfBThenC();
+        }));
 
         index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 

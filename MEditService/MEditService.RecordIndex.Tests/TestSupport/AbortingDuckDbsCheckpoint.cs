@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
 /// <summary>Reads <paramref name="plugin"/> as the real adapter does, and on its <paramref name="nthRead"/>
-/// leaves DuckDB to abort its next checkpoint: a fatal error that invalidates the index file.</summary>
+/// leaves DuckDB to abort its next checkpoint.</summary>
 internal sealed class AbortingDuckDbsCheckpoint(string instanceRoot, string plugin, int nthRead) : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {
     private int _reads;
@@ -36,7 +36,7 @@ internal sealed class AbortingDuckDbsCheckpoint(string instanceRoot, string plug
             {
                 foreach (var document in read.Records) yield return document;
                 if (!aborting()) yield break;
-                IndexFiles.Execute(instanceRoot, "SET GLOBAL checkpoint_threshold = '1KB'; SET GLOBAL debug_checkpoint_abort = 'before_header'");
+                IndexFiles.AbortNextCheckpoint(instanceRoot);
             }
         }
 
