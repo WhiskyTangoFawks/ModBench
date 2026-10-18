@@ -15,6 +15,7 @@
     { "path": "../instanceCommands" },
     { "path": "../pluginCommands" },
     { "path": "../ports" },
+    { "path": "../textDocuments" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],

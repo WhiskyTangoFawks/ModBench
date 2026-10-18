@@ -6,8 +6,8 @@ import { registerGesture, singularArgument, type GestureEntry, type RowOf } from
 import type { PluginsTreeNode } from './pluginRows';
 import type { CreatedRecordWatch, RecordPlace } from './createdRecordSelection';
 import type { RecordWrite } from '../drivingLib/writingGesture';
-import type { SourceEditing } from '../drivingLib/sourceEditing';
-import { applyAnswered } from '../drivingLib/applyAnswered';
+import type { SourceEditing } from '../textDocuments/sourceEditing';
+import { applyAnswered } from '../textDocuments/applyAnswered';
 import { CREATE_ROW_KINDS, isContainerRow } from './gestureEntry';
 import { CELL_RECORD_TYPE } from './RecordBrowser';
 import { pluginAddressOf } from '../wire/pluginAddress';

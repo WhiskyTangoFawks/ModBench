@@ -29,7 +29,7 @@ import { recordSummaryFixture } from '../../client/test/fixtures';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { registerRecordCreateCommand } from '../createRecordCommand';
-import type { SourceEditing } from '../../drivingLib/sourceEditing';
+import type { SourceEditing } from '../../textDocuments/sourceEditing';
 import type { RecordPlace } from '../createdRecordSelection';
 import { PluginNode, type PluginsTreeNode } from '../pluginRows';
 import type { RecordBrowserNode } from '../RecordBrowser';

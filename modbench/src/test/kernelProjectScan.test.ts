@@ -43,6 +43,8 @@ const productionFilesOnDisk = (): string[] =>
   tsFiles(join(MODBENCH, 'src'), { tsx: false, includeTests: false, exclude: ['test'] })
     .map((f) => relative(MODBENCH, f));
 
+const TEXT_DOCUMENTS = 'textDocuments';
+
 describe('one composite project per box', () => {
   it('reads a real body of boxes off the zoom-out', () => {
     expect(BOXES.length).toBeGreaterThan(10);
@@ -56,8 +58,12 @@ describe('one composite project per box', () => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 
-  it.each(READ_MODEL_AND_REPOSITORY_BOXES)('%s sees the Node types and no others', (box) => {
+  it.each(READ_MODEL_AND_REPOSITORY_BOXES.filter((box) => box !== TEXT_DOCUMENTS))('%s sees the Node types and no others', (box) => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
+  });
+
+  it(`${TEXT_DOCUMENTS} sees the Node and VS Code types, as the one box that holds VS Code's documents`, () => {
+    expect(parsed(boxProject(TEXT_DOCUMENTS)).options.types).toEqual(['node', 'vscode']);
   });
 
   it.each(CORE_BOXES)('%s sees the Node types and no others', (box) => {

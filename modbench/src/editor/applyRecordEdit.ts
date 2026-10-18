@@ -3,9 +3,9 @@ import type { MEditClient, RecordEditEnvelope, SourceChanges } from '../client';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { PathHop } from '../wire/messages';
 import type { RecordDocument } from '../drivingLib/recordDocument';
-import { applyWorkspaceChanges, type FileMove, type WorkspaceChanges } from '../drivingLib/applyWorkspaceChanges';
-import { applyAnswered } from '../drivingLib/applyAnswered';
-import type { OneAtATime } from '../drivingLib/oneAtATime';
+import { applyWorkspaceChanges, type FileMove, type WorkspaceChanges } from '../textDocuments/applyWorkspaceChanges';
+import { applyAnswered } from '../textDocuments/applyAnswered';
+import type { OneAtATime } from '../textDocuments/oneAtATime';
 import { errorMessage } from '../ports/errorMessage';
 import type { EditAddress } from './recordTab';
 

@@ -12,6 +12,7 @@
     { "path": "../drivingLib" },
     { "path": "../instanceLoader" },
     { "path": "../ports" },
+    { "path": "../textDocuments" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],

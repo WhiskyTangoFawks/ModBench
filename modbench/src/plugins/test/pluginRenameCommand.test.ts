@@ -26,8 +26,8 @@ vi.mock('vscode', async () => {
 });
 
 import { AgentCall } from '../../drivingLib/agentGesture';
-import { oneAtATime } from '../../drivingLib/oneAtATime';
-import type { SourceEditing } from '../../drivingLib/sourceEditing';
+import { oneAtATime } from '../../textDocuments/oneAtATime';
+import type { SourceEditing } from '../../textDocuments/sourceEditing';
 import { progressSteps } from '../../test/recordedProgress';
 import { registerRenamePluginCommand } from '../pluginRenameCommand';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';

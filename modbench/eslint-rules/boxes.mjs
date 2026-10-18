@@ -3,5 +3,5 @@ export const BOXES = [
     ...DRIVING_BOXES,
     'modCommands', 'pluginCommands', 'sourceCommands', 'instanceCommands', 'downloadedFileCommands', 'coreLib',
     'loadOrderFileCodec', 'wire', 'tables', 'ports',
-    'instanceLoader', 'instanceAdapter', 'client',
+    'instanceLoader', 'instanceAdapter', 'textDocuments', 'client',
 ];
