@@ -59,7 +59,6 @@ vi.mock('vscode', () => ({
 }));
 
 import { ChildRecordDocuments } from '../childRecordDocument';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 interface FileSystem {
   stat(uri: unknown): Promise<{ size: number }>;
@@ -72,18 +71,16 @@ const isFileSystem = (value: unknown): value is FileSystem =>
   typeof value === 'object' && value !== null && 'readFile' in value && 'writeFile' in value && 'onDidChangeFile' in value;
 
 const CELL_FILE = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
-const modA = { name: 'A.esp', origin: 'ModA' };
-const placed = { formKey: '000803:A.esp', plugin: modA };
 const childUri = (path: string, query: string) => h.uri('modbench-child-record', path, query);
 const PLACED_URI = childUri(CELL_FILE, 'formKey=000803%3AA.esp&name=A.esp&origin=ModA');
 
-function childDocuments(client = new InMemoryMEditClient()) {
-  const documents = new ChildRecordDocuments(client);
+function childDocuments() {
+  const documents = new ChildRecordDocuments();
   const [files] = h.providers.values();
   if (!isFileSystem(files)) throw new Error('no file system registered');
   const changed: unknown[] = [];
   files.onDidChangeFile((events) => changed.push(...events.map(({ uri }) => uri)));
-  return { documents, files, changed, client };
+  return { documents, files, changed };
 }
 
 beforeEach(() => {
@@ -213,44 +210,34 @@ describe('a child record\'s document', () => {
   });
 });
 
-describe('an open child record\'s document, when mEdit reports a change', () => {
+describe('an open child record\'s document, when copies change', () => {
   const open = (...uris: TestUri[]) => { h.textDocuments.push(...uris.map((uri) => ({ uri }))); };
+  const inModA = (copy: { plugin: { origin: string } }) => copy.plugin.origin === 'ModA';
 
-  it('changes when any record of its plugin changed, as a sibling\'s change changes its container\'s file', () => {
-    const { client, changed } = childDocuments();
-    const uri = PLACED_URI;
-    open(uri, h.uri('file', CELL_FILE));
+  it('changes when its copy is one that changed, as a sibling\'s change changes its container\'s file', () => {
+    const { documents, changed } = childDocuments();
+    open(PLACED_URI, h.uri('file', CELL_FILE));
 
-    client.emit({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: ['000804:A.esp'], sequence: 1 });
+    documents.changedWhere(inModA);
 
-    expect(changed).toEqual([uri]);
+    expect(changed).toEqual([PLACED_URI]);
   });
 
-  it('stays as it is when another plugin\'s records changed', () => {
-    const { client, changed } = childDocuments();
+  it('stays as it is when its copy is not one that changed', () => {
+    const { documents, changed } = childDocuments();
     open(PLACED_URI);
 
-    client.emit({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModB', keys: [placed.formKey], sequence: 1 });
+    documents.changedWhere((copy) => copy.plugin.origin === 'ModB');
 
     expect(changed).toEqual([]);
   });
 
-  it('changes when mEdit read its plugin again whole', () => {
-    const { client, changed } = childDocuments();
-    const uri = PLACED_URI;
-    open(uri);
-
-    client.emit({ kind: 'plugin-changed', plugin: 'A.esp', origin: 'ModA', keys: [], sequence: 1 });
-
-    expect(changed).toEqual([uri]);
-  });
-
-  it('changes, every one, when the stream of mEdit\'s reports opens again', () => {
-    const { client, changed } = childDocuments();
+  it('changes every one whose copy changed', () => {
+    const { documents, changed } = childDocuments();
     const [a, b] = [PLACED_URI, childUri('/b.json', 'formKey=000901%3AB.esp&name=B.esp&origin=ModB')];
     open(a, b);
 
-    client.reconnected();
+    documents.changedWhere(() => true);
 
     expect(changed).toEqual([a, b]);
   });

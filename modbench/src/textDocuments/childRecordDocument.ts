@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
-import type { MEditClient } from '../client';
-import { samePluginAddress } from '../wire/pluginAddress';
-import { followReportedCopies, type CopyChanged } from './recordCopy';
-import { CHILD_RECORD_SCHEME, CONTAINER_SCHEMES, copyOf } from '../textDocuments/recordDocument';
+import type { CopyChanged } from '../wire/recordCopy';
+import { CHILD_RECORD_SCHEME, CONTAINER_SCHEMES, copyOf } from './recordDocument';
 import { fileText } from './fileText';
 import { takeText } from './oneTextPerFile';
 
@@ -17,12 +15,9 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
   // What each child's document last read of the file: its size, and the mtime Modbench's last write gave it.
   private readonly reads = new Map<string, { size: number; ownWrite?: Promise<number | undefined> }>();
 
-  constructor(client: Pick<MEditClient, 'onNotification' | 'onReconnected'>) {
+  constructor() {
     this.registrations = [
       vscode.workspace.registerFileSystemProvider(CHILD_RECORD_SCHEME, this),
-      // A report names the records that changed, and a change to any of them can be in the file.
-      followReportedCopies(client, (affects) => { this.changedWhere(affects); },
-        ({ plugin }) => (copy) => samePluginAddress(copy.plugin, plugin)),
       vscode.workspace.onDidSaveTextDocument((document) => {
         if (CONTAINER_SCHEMES.has(document.uri.scheme)) this.wrote(vscode.Uri.file(document.uri.fsPath), () => new TextEncoder().encode(document.getText()).byteLength);
       }),
@@ -80,7 +75,7 @@ export class ChildRecordDocuments implements vscode.FileSystemProvider, vscode.D
     for (const read of reads) read.ownWrite = ownWrite;
   }
 
-  private changedWhere(affects: CopyChanged): void {
+  changedWhere(affects: CopyChanged): void {
     const changed = vscode.workspace.textDocuments
       .filter(({ uri }) => uri.scheme === CHILD_RECORD_SCHEME && affects(copyOf(uri)))
       .map(({ uri }) => ({ type: vscode.FileChangeType.Changed, uri }));
