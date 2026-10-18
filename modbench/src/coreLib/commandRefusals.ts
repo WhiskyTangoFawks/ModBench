@@ -7,7 +7,7 @@ export const EMPTY_MOD_NAME = 'A mod name cannot be empty.';
 
 /** The refusal of a new mod whose name a folder already holds: one wording for create and install. */
 export const modNameTakenRefusal = (name: string): string =>
-  `A mod named "${name}" already exists. Uninstall it to install anew.`;
+  `A mod named "${name}" already exists. Install its next release from Downloads, or uninstall it to install anew.`;
 
 /** How the manager matches an entry's name: two entries with one key are one name to it. */
 export type EntryKey = (entry: EntryRef) => string;

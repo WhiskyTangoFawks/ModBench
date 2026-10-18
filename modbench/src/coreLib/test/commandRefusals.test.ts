@@ -16,7 +16,7 @@ const taken: TakenNames = {
 describe('newModNameRefusal', () => {
   it('names the collision and the way out when a folder holds a mod of that name', () => {
     expect(newModNameRefusal(key, taken, 'Harder VATS')).toBe(
-      'A mod named "Harder VATS" already exists. Uninstall it to install anew.');
+      'A mod named "Harder VATS" already exists. Install its next release from Downloads, or uninstall it to install anew.');
   });
 
   it('names the collision for a mod of that name in another case, in the name as given, so the prompt does not accept a name the create or the install then refuses', () => {

@@ -105,7 +105,7 @@ describe('installMod', () => {
   });
 
   it.each([
-    ['a new mod whose name a folder holds, in the words create empty mod uses', { kind: 'new', name: 'Harder VATS' }, 'A mod named "Harder VATS" already exists. Uninstall it to install anew.'],
+    ['a new mod whose name a folder holds, in the words create empty mod uses', { kind: 'new', name: 'Harder VATS' }, 'A mod named "Harder VATS" already exists. Install its next release from Downloads, or uninstall it to install anew.'],
     ['an upgrade of a mod no folder holds', { kind: 'upgrade', name: 'Vanished Mod' }, 'Cannot upgrade "Vanished Mod": there is no folder by that name under mods/.'],
   ] as const)('refuses %s when the adapter lands nothing', async (_, target, refusal) => {
     const { result } = await install(ARCHIVE, target, { installed: { landed: false } });

@@ -95,8 +95,8 @@ export const upgradeExtractionPrefix = (modFolder: string): string => ownTempPre
 
 /** The id of the process that named `tempName`, when it carries one. */
 export function tempOwner(tempName: string): number | undefined {
-  const id = Number(tempName.slice(TEMP_PREFIX.length).split('_')[0]);
-  return Number.isInteger(id) ? id : undefined;
+  const id = Number(tempName.slice(TEMP_PREFIX.length).split('_')[0] || Number.NaN);
+  return Number.isInteger(id) && id > 0 ? id : undefined;
 }
 
 export const overwriteDir = (instanceRoot: string): string => join(instanceRoot, OVERWRITE_DIR_NAME);
