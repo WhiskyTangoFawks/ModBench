@@ -29,7 +29,14 @@ internal static class ItemWrite
     {
         if (source.WhyGitCannotRun() is { } gitMissing)
             return SelectionResult<TItem, TRefusal, TOutcome>.WholeSelectionRefused(gitUnavailable, gitMissing.Reason);
+        return await EachAsync(items, sameItem, write);
+    }
 
+    /// <summary>Each distinct item lands or is refused on its own, as its caller has already checked what no item
+    /// escapes.</summary>
+    internal static async Task<SelectionResult<TItem, TRefusal, TOutcome>> EachAsync<TItem, TRefusal, TOutcome>(
+        IEnumerable<TItem> items, IEqualityComparer<TItem> sameItem, Func<TItem, Task<ItemAnswer<TRefusal, TOutcome>>> write)
+    {
         var landed = new List<ItemLanded<TItem, TOutcome>>();
         var refused = new List<ItemRefused<TItem, TRefusal>>();
         foreach (var item in items.Distinct(sameItem))

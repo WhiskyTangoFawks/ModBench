@@ -22,25 +22,31 @@ public sealed class CompilePluginHandler
         Over(plugins, _compileService.CompileAsync);
 
     /// <summary>Each plugin a build places, compiled to its path whether or not the load order holds its file. No two
-    /// differ in case alone.</summary>
+    /// differ in case alone. The build asks <see cref="WhyNoPluginCompiles"/> before its first write, so this never
+    /// refuses the whole selection.</summary>
     internal Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileAsync(
         IReadOnlyList<RegisteredPlugin> placed)
     {
         var byKey = placed.ToDictionary(plugin => plugin.Key, PluginAddress.Comparer);
-        return Over([.. byKey.Keys], plugin => _compileService.CompileAsync(byKey[plugin]));
+        return Each([.. byKey.Keys], plugin => _compileService.CompileAsync(byKey[plugin]));
+    }
+
+    /// <summary>The cause no plugin of a selection escapes: no load order held, or git unable to run.</summary>
+    internal SelectionRefusal<CompileRefusal>? WhyNoPluginCompiles()
+    {
+        if (_loadOrder.Held is null) return new(CompileRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
+        return _source.WhyGitCannotRun() is { } gitMissing ? new(CompileRefusal.GitUnavailable, gitMissing.Reason) : null;
     }
 
     private Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> Over(
-        IReadOnlyList<PluginAddress> plugins, Func<PluginAddress, Task<CompileResult>> compile)
-    {
-        if (_loadOrder.Held is null)
-        {
-            return Task.FromResult(SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>.WholeSelectionRefused(
-                CompileRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage));
-        }
+        IReadOnlyList<PluginAddress> plugins, Func<PluginAddress, Task<CompileResult>> compile) =>
+        WhyNoPluginCompiles() is { } none
+            ? Task.FromResult(SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>.WholeSelectionRefused(none.Refusal, none.Message))
+            : Each(plugins, compile);
 
-        return ItemWrite.OverAsync(_source, plugins, PluginAddress.Comparer, CompileRefusal.GitUnavailable, async plugin => Answered(await compile(plugin)));
-    }
+    private static Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> Each(
+        IReadOnlyList<PluginAddress> plugins, Func<PluginAddress, Task<CompileResult>> compile) =>
+        ItemWrite.EachAsync(plugins, PluginAddress.Comparer, async plugin => Answered(await compile(plugin)));
 
     private static ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>> Answered(CompileResult result) =>
         result.Succeeded

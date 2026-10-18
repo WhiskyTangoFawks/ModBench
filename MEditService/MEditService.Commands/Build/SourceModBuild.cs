@@ -31,6 +31,7 @@ internal sealed class SourceModBuild
     // Everything that refuses the mod is checked before its first write (mods.md, Build, story 4).
     private async Task<ItemAnswer<BuildRefusal, BuiltMod>> BuildModAsync(LoadOrderSnapshot loadOrder, ModToBuild mod, InstanceToBuild instance)
     {
+        if (_compile.WhyNoPluginCompiles() is { } none) return Refused(WholeCompileRefused(none.Refusal), none.Message);
         if (!_source.SourceToBuild(mod.SourceFolder).Holds(out var source, out var unread))
             return Refused(BuildRefusal.SourceUnreadable, unread.Reason);
         var folderName = _modFolders.FolderName(mod.Folder);
@@ -216,6 +217,13 @@ internal sealed class SourceModBuild
 
         return refused;
     }
+
+    private static BuildRefusal WholeCompileRefused(CompileRefusal refusal) => refusal switch
+    {
+        CompileRefusal.NoLoadOrder => BuildRefusal.NoLoadOrder,
+        CompileRefusal.GitUnavailable => BuildRefusal.GitUnavailable,
+        _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A compile refuses a whole selection only for want of a load order or of git."),
+    };
 
     private static ItemAnswer<BuildRefusal, BuiltMod> Refused(BuildRefusal refusal, string why) =>
         ItemAnswer<BuildRefusal, BuiltMod>.Refused(refusal, $"was not built: {why}");
