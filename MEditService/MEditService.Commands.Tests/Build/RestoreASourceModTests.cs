@@ -194,6 +194,19 @@ public sealed class RestoreASourceModTests : IDisposable
     }
 
     [Fact]
+    public async Task ASubmoduleWhosePluginsCannotCompile_AsGitCannotRun_IsNotBuilt_NamingWhy_AndNothingIsWritten()
+    {
+        Manifested();
+
+        var skipped = Assert.Single((await Restore(_first, source: new GitGoneSourceAdapter())).Refused);
+
+        Assert.Equal((RestoreRefusal.NotBuilt, BuildRefusal.GitUnavailable), (skipped.Refusal.Kind, skipped.Refusal.Build));
+        Assert.StartsWith("was not built: ", skipped.Message, StringComparison.Ordinal);
+        Assert.Contains("PATH", skipped.Message, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(ModFolder, "meshes", "c.nif")));
+    }
+
+    [Fact]
     public async Task ARestoreCancelledWhileItClonesASubmodule_StopsTheClone_AndSkipsTheMod()
     {
         Manifested();
@@ -229,14 +242,14 @@ public sealed class RestoreASourceModTests : IDisposable
         return TestAdapters.Source().CommitAtHead(new Submodule(SourceFolder, pin, null), CancellationToken.None).Value().Commit;
     }
 
-    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(string? pin, string? branch = null) =>
-        Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None, branch);
+    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(string? pin, string? branch = null, ISourceAdapter? source = null) =>
+        Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None, branch, source);
 
     private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(
-        string? pin, InMemoryNotificationPublisher notifications, CancellationToken cancel, string? branch = null)
+        string? pin, InMemoryNotificationPublisher notifications, CancellationToken cancel, string? branch = null, ISourceAdapter? source = null)
     {
         if (pin is not null) _submodule.Pin(pin);
-        return TestEditService.RestoreHandler(_holder, notifications, TestAdapters.Source(), _folders).RestoreAsync(
+        return TestEditService.RestoreHandler(_holder, notifications, source ?? TestAdapters.Source(), _folders).RestoreAsync(
             [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch))],
             new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".mohidden", Archives: null), cancel: cancel);
     }
