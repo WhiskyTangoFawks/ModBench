@@ -44,7 +44,7 @@ describe('readGamePath', () => {
   });
 
   it('reads a plain (non-@ByteArray) value', () => {
-    const text = '[General]\r\ngamePath=' + String.raw`C:\Games\Fallout4` + '\r\n';
+    const text = '[General]\r\ngamePath=' + String.raw`C:\\Games\\Fallout4` + '\r\n';
     expect(readGamePath(text)).toBe(String.raw`C:\Games\Fallout4`);
   });
 
@@ -63,7 +63,7 @@ describe('readDownloadDirectory', () => {
     expect(readDownloadDirectory(`[Settings]\r\n${onDisk}\r\n`)).toBe(String.raw`C:\Games\MO2\downloads`);
   });
 
-  it('unwraps an @ByteArray(...) value with no unescaping, matching gamePath\'s own raw bytes', () => {
+  it('unwraps an @ByteArray(...) value holding no escapes', () => {
     expect(readDownloadDirectory('[Settings]\r\ndownload_directory=@ByteArray(%BASE_DIR%/downloads)\r\n'))
       .toBe('%BASE_DIR%/downloads');
   });

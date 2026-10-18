@@ -1,3 +1,4 @@
+import { setIniValue } from '../codecs/qSettingsIni';
 import { fixedGameFolderSetting } from '../../test/gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
@@ -24,7 +25,7 @@ describe('the MO2 adapter\'s hashes', () => {
     root = await mkdtemp(join(tmpdir(), 'modbench-mo2-hashes-'));
     await mkdir(join(root, 'mods', 'Mod'), { recursive: true });
     await writeFile(join(root, 'Mod.7z'), 'aaaa');
-    await writeFile(join(root, 'mods', 'Mod', 'meta.ini'), `[General]\r\ninstallationFile=${join(root, 'Mod.7z')}\r\n`);
+    await writeFile(join(root, 'mods', 'Mod', 'meta.ini'), setIniValue('[General]\r\n', 'General', 'installationFile', join(root, 'Mod.7z')));
     const adapter = mo2InstanceAdapter({
       instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS,
       archives: fakeArchiveReader([]),

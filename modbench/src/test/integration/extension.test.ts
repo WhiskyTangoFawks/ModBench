@@ -31,6 +31,8 @@ function extensionId(): string {
 }
 const EXTENSION_ID = extensionId();
 
+const forwardSlashed = (nativePath: string): string => nativePath.replaceAll('\\', '/');
+
 function copyValueKeyArgs(view: string): unknown {
   const key = contributed('keybindings').find((k) =>
     isRecord(k) && k.command === 'modbench.copyValue' && typeof k.when === 'string' && requires(k.when, `focusedView == ${view}`));
@@ -1522,7 +1524,7 @@ describe('modbench.downloads tree', () => {
     const originalIni = readFileSync(iniPath, 'utf8');
     try {
       writeFileSync(path.join(external, 'external-preexisting.zip'), 'data');
-      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${external}\r\n`,
+      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${forwardSlashed(external)}\r\n`,
         (rows) => rows.includes('external-preexisting.zip'));
 
       await probeUntilListed(external, 'external-new');
@@ -1542,7 +1544,7 @@ describe('modbench.downloads tree', () => {
     try {
       writeFileSync(path.join(downloadsDir, marker), 'data');
       await waitFor('the instance\'s own downloads folder to be listed', async () => listsMarker(await downloadsRows()));
-      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${notYetCreated}\r\n`, (rows) => rows.length === 0);
+      await repointDownloads(`${originalIni}[Settings]\r\ndownload_directory=${forwardSlashed(notYetCreated)}\r\n`, (rows) => rows.length === 0);
 
       mkdirSync(notYetCreated);
       await probeUntilListed(notYetCreated, 'created');
