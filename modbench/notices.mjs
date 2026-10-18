@@ -12,12 +12,13 @@ function licenseTexts(dir) {
 
 function npmPackages() {
   const found = new Map();
-  const visit = (name, fromDir) => {
+  const visit = (name, fromDir, optional = false) => {
     for (let dir = fromDir; ; dir = join(dir, '..')) {
       const manifestPath = join(dir, 'node_modules', name, 'package.json');
       if (!existsSync(manifestPath)) {
-        if (dir === join(dir, '..')) return;
-        continue;
+        if (dir !== join(dir, '..')) continue;
+        if (optional) return;
+        throw new Error(`${name} is a dependency of ${fromDir} and is not installed`);
       }
       const packageDir = join(dir, 'node_modules', name);
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
@@ -25,6 +26,7 @@ function npmPackages() {
       if (found.has(id)) return;
       found.set(id, { id, license: manifest.license, texts: licenseTexts(packageDir) });
       for (const dependency of Object.keys(manifest.dependencies ?? {})) visit(dependency, packageDir);
+      for (const dependency of Object.keys(manifest.optionalDependencies ?? {})) visit(dependency, packageDir, true);
       return;
     }
   };
