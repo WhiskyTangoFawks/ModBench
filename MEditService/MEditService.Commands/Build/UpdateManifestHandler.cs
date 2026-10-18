@@ -18,7 +18,7 @@ public sealed class UpdateManifestHandler
         IReadOnlyList<ModToUpdate> mods, InstanceToUpdate instance, string? gesture = null, CancellationToken cancel = default) =>
         ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new UpdateManifestProgressNotification(progress)),
-            mod => Task.FromResult(UpdateMod(mod, instance)), gesture, cancel);
+            (mod, _) => Task.FromResult(UpdateMod(mod, instance)), gesture, cancel);
 
     private ItemAnswer<UpdateManifestRefusal, UpdatedMod> UpdateMod(ModToUpdate mod, InstanceToUpdate instance)
     {

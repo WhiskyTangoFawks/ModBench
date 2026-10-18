@@ -44,9 +44,9 @@ async function decompileAndCommitMods(
   if (firstMod === undefined) return { applied: true, outcome: { landed: [], refused: [] } };
   return runWritingGesture(invokedFrom, instance, async (): Promise<DecompiledAndCommitted> => {
     try {
-      progress.say(decompileAndCommitProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
+      progress.say(decompileAndCommitProgressMessage(firstMod, undefined));
       const result = await commands.decompileAndCommit(mods, {
-        onProgress: (status) => { progress.say(decompileAndCommitProgressMessage(status.mod ?? firstMod, status)); },
+        onProgress: (status) => { progress.say(decompileAndCommitProgressMessage(status.mod ?? firstMod, status.phase)); },
       });
       if (isRefused(result)) return { applied: false, refusal: result.message };
       if (result.landed.length > 0) await onCommitted();

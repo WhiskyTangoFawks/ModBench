@@ -29,6 +29,6 @@ public sealed class BuildModHandler
 
         return await ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new BuildProgressNotification(progress)),
-            mod => _build.BuildAsync(mod, instance), gesture: null, CancellationToken.None);
+            (mod, _) => _build.BuildAsync(mod, instance), gesture: null, CancellationToken.None);
     }
 }

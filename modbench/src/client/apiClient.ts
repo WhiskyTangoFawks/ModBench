@@ -23,9 +23,6 @@ export type CompareRecordsResponse = Schemas['CompareRecordsResponse'];
 
 export type CopyText = Schemas['CopyText'];
 
-/** The `init-progress` notification's payload, subscribed alongside the in-flight
- *  `POST /init`. Counts are of *plugins*, not records. */
-export type InitStatus = Schemas['InitProgress'];
 export type ChangedPlugin = Schemas['ChangedPlugin'];
 
 /** A plugin a build compiled, with the diagnostics the reference check left. */

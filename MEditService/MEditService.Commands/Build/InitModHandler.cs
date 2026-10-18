@@ -36,24 +36,11 @@ public sealed class InitModHandler
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
             return SelectionResult<string, InitRefusal, InitializedMod>.WholeSelectionRefused(InitRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
-        var byName = mods.DistinctBy(mod => mod.Name, StringComparer.OrdinalIgnoreCase).ToDictionary(mod => mod.Name, StringComparer.OrdinalIgnoreCase);
-        var total = byName.Keys.Sum(mod => ProvidedBy(loadOrder, mod).Count);
-        var done = 0;
-        try
-        {
-            return await ItemWrite.OverAsync(_source, mods.Select(mod => mod.Name), StringComparer.OrdinalIgnoreCase, InitRefusal.GitUnavailable, async name =>
-            {
-                var plugins = ProvidedBy(loadOrder, name);
-                var answer = await InitModAsync(loadOrder, byName[name], plugins, done, total, cancel);
-                done += plugins.Count;
-                return answer;
-            });
-        }
-        finally
-        {
-            // Idle at rest, success or failure alike: a client must never keep showing an init that has finished.
-            SetProgress(null, InitPhase.Idle, 0, 0);
-        }
+        if (_source.WhyGitCannotRun() is { } gitMissing)
+            return SelectionResult<string, InitRefusal, InitializedMod>.WholeSelectionRefused(InitRefusal.GitUnavailable, gitMissing.Reason);
+        return await ModByMod.OverAsync(
+            mods, mod => mod.Name, progress => _notifications.Publish(new DecompileAndCommitProgressNotification(progress, Phase: null)),
+            (mod, at) => InitModAsync(loadOrder, mod, ProvidedBy(loadOrder, mod.Name), at, cancel), gesture: null, cancel);
     }
 
     private static List<RegisteredPlugin> ProvidedBy(LoadOrderSnapshot loadOrder, string modName) =>
@@ -61,7 +48,7 @@ public sealed class InitModHandler
             && string.Equals(mod.Name, modName, StringComparison.OrdinalIgnoreCase))];
 
     private async Task<ItemAnswer<InitRefusal, InitializedMod>> InitModAsync(
-        LoadOrderSnapshot loadOrder, ModToInit toInit, List<RegisteredPlugin> plugins, int done, int total, CancellationToken cancel)
+        LoadOrderSnapshot loadOrder, ModToInit toInit, List<RegisteredPlugin> plugins, ModlistProgress at, CancellationToken cancel)
     {
         if (plugins.Count == 0)
         {
@@ -89,9 +76,9 @@ public sealed class InitModHandler
         foreach (var plugin in plugins)
         {
             cancel.ThrowIfCancellationRequested();
-            SetProgress(mod.Name, InitPhase.Parsing, done, total);
+            SetPhase(at, DecompileAndCommitPhase.Parsing);
             var decompiled = await _decompiler.DecompileAsync(
-                loadOrder, plugin, mod.Folder, onParsed: () => SetProgress(mod.Name, InitPhase.Serializing, done, total), cancel);
+                loadOrder, plugin, mod.Folder, onParsed: () => SetPhase(at, DecompileAndCommitPhase.Serializing), cancel);
             if (decompiled.Source is { } source)
             {
                 verified.Add((plugin, source));
@@ -106,8 +93,6 @@ public sealed class InitModHandler
                     decompiled.Message));
             }
 
-            done++;
-            SetProgress(mod.Name, InitPhase.Serializing, done, total);
         }
 
         if (refused.Count > 0)
@@ -116,7 +101,7 @@ public sealed class InitModHandler
             return ItemAnswer<InitRefusal, InitializedMod>.Refused(cause, string.Join('\n', refused.Select(r => r.Message)));
         }
 
-        SetProgress(mod.Name, InitPhase.ReadingFiles, total, total);
+        SetPhase(at, DecompileAndCommitPhase.ReadingFiles);
         List<Asset> assets;
         try
         {
@@ -128,7 +113,7 @@ public sealed class InitModHandler
                 $"'{mod.Name}' was not initialized: a file of its folder could not be read: {ex.Message}");
         }
 
-        SetProgress(mod.Name, InitPhase.Committing, total, total);
+        SetPhase(at, DecompileAndCommitPhase.Committing);
         if (Commit(mod, toInit.SourceFolder, verified, assets) is { } failure)
         {
             _logger.LogWarning("Refused to init {Mod}: {Reason}", mod.Name, failure.Reason);
@@ -167,6 +152,6 @@ public sealed class InitModHandler
             [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))], assets);
     }
 
-    private void SetProgress(string? mod, InitPhase phase, int pluginsDone, int pluginsTotal) =>
-        _notifications.Publish(new InitProgressNotification(new InitProgress(mod, phase, pluginsDone, pluginsTotal)));
+    private void SetPhase(ModlistProgress at, DecompileAndCommitPhase phase) =>
+        _notifications.Publish(new DecompileAndCommitProgressNotification(at, phase));
 }

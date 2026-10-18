@@ -7,7 +7,7 @@ import { handlers, showQuickPick, createQuickPick, instanceThatReads, PluginRowS
 
 import { registerDecompileAndCommitCommand } from '../decompileAndCommitCommand';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
-import { type InitOutcome, type InitStatus, type PluginAddress, type WriteRefused } from '../../client';
+import { type InitOutcome, type DecompileAndCommitProgress, type PluginAddress, type WriteRefused } from '../../client';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -32,7 +32,7 @@ describe('modbench.mod.decompileAndCommit', () => {
 
   function decompileAndCommitCommands() {
     let answer: InitOutcome | WriteRefused = { landed: [], refused: [] };
-    const decompileAndCommit = vi.fn((_mods: readonly string[], _options?: { onProgress?: (status: InitStatus) => void }) => Promise.resolve(answer));
+    const decompileAndCommit = vi.fn((_mods: readonly string[], _options?: { onProgress?: (status: DecompileAndCommitProgress) => void }) => Promise.resolve(answer));
     return {
       decompileAndCommit,
       answers: (next: InitOutcome | WriteRefused) => { answer = next; },
@@ -234,7 +234,7 @@ describe('modbench.mod.decompileAndCommit', () => {
 
     const [, options] = present(commands.decompileAndCommit.mock.calls[0], 'the decompile and commit call');
     said.length = 0;
-    present(options, 'the decompile and commit options').onProgress?.({ mod: 'ModB', phase: 'Committing', pluginsDone: 2, pluginsTotal: 2 });
+    present(options, 'the decompile and commit options').onProgress?.({ mod: 'ModB', phase: 'Committing', modsDone: 0, modsTotal: 1 });
 
     expect(said).toEqual(['Decompiling and committing "ModB" — committing to git…']);
   });

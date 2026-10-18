@@ -3,13 +3,13 @@ using MEditService.Ports;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A modlist gesture over a selection: each distinct mod lands or is refused on its own. Progress goes before
-/// each mod, and at rest at the end. A cancel stops it after the mod in hand.</summary>
+/// <summary>A modlist gesture over a selection: each distinct mod lands or is refused on its own.
+/// Progress goes before each mod and at rest at the end. A cancel stops it after the mod in hand.</summary>
 internal static class ModByMod
 {
     public static async Task<SelectionResult<string, TRefusal, TOutcome>> OverAsync<TMod, TRefusal, TOutcome>(
         IReadOnlyList<TMod> mods, Func<TMod, string> nameOf, Action<ModlistProgress> publish,
-        Func<TMod, Task<ItemAnswer<TRefusal, TOutcome>>> each, string? gesture, CancellationToken cancel)
+        Func<TMod, ModlistProgress, Task<ItemAnswer<TRefusal, TOutcome>>> each, string? gesture, CancellationToken cancel)
     {
         var distinct = mods.DistinctBy(nameOf, StringComparer.OrdinalIgnoreCase).ToList();
         List<ItemLanded<string, TOutcome>> landed = [];
@@ -19,8 +19,9 @@ internal static class ModByMod
             foreach (var (done, mod) in distinct.Index())
             {
                 if (cancel.IsCancellationRequested) break;
-                publish(new ModlistProgress(gesture, nameOf(mod), done, distinct.Count));
-                switch (await each(mod))
+                var at = new ModlistProgress(gesture, nameOf(mod), done, distinct.Count);
+                publish(at);
+                switch (await each(mod, at))
                 {
                     case ItemAnswer<TRefusal, TOutcome>.Wrote wrote:
                         landed.Add(new ItemLanded<string, TOutcome>(nameOf(mod), wrote.Outcome));

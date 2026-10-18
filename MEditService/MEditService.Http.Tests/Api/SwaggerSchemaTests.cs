@@ -211,7 +211,7 @@ public sealed class SwaggerSchemaTests
 
     [Theory]
     [InlineData("WorkingTreeState", new[] { "None", "Modified", "Added" })]
-    [InlineData("InitPhase", new[] { "Idle", "Parsing", "Serializing", "ReadingFiles", "Committing" })]
+    [InlineData("DecompileAndCommitPhase", new[] { "Parsing", "Serializing", "ReadingFiles", "Committing" })]
     [InlineData("LoadOrderState", new[] { "None", "Reconciling", "Ready", "HeldElsewhere", "Failed" })]
     public async Task WireEnum_SerializesAsStringUnion_BecauseSwashbuckleHonoursOnlyAPerEnumConverter(string schemaName, string[] expectedMembers)
     {
