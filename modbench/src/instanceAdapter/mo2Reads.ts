@@ -19,7 +19,7 @@ import {
   type ManagerRunning, type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided, type SourceMods,
 } from './instanceAdapter';
 import {
-  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadSidecarFile, isTempWrite, modlistFile,
+  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadSidecarFile, isOwnTemp, modlistFile,
   modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile,
 } from './layout';
 import { type ArchiveReads, mo2Archives } from './mo2Archives';
@@ -70,7 +70,7 @@ async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLin
   const dirents = await readOrAbsent(() => listEntries(downloadsDir, skippedLink), undefined);
   if (dirents === undefined) return undefined;
   const names = dirents
-    .filter((d) => d.isFile && isArchiveName(d.name) && !isTempWrite(d.name))
+    .filter((d) => d.isFile && isArchiveName(d.name) && !isOwnTemp(d.name))
     .map((d) => d.name);
   return Promise.all(names.map(async (name) => {
     const path = downloadFile(downloadsDir, name);

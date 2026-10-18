@@ -8,7 +8,7 @@ import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from './codecs/modlistText';
 import { factsOf, listDir } from './files';
 import type { FileOrigin, OriginFile, OriginFiles, OriginFolder } from './instanceAdapter';
-import { isExcludedName, isExtraction, isTempWrite, overwriteDir } from './layout';
+import { isExcludedName, isOwnTemp, overwriteDir } from './layout';
 import { originFolder, type Mo2Context } from './mo2Context';
 
 // The mod's metadata is MO2's, not the mod's content: nearly every mod has one.
@@ -88,7 +88,7 @@ async function walkLink(walk: Walk, path: string, ancestors: ReadonlySet<string>
 
 async function walkDir(walk: Walk, dir: string, ancestors: ReadonlySet<string>): Promise<void> {
   for (const dirent of await listDir(dir)) {
-    if (isTempWrite(dirent.name) || (dir === walk.root && isExtraction(dirent.name))) continue;
+    if (isOwnTemp(dirent.name)) continue;
     const path = childOf(dir, dirent.name);
     if (dirent.isDirectory()) {
       if (!walk.rootOnly) await descend(walk, path, ancestors);
@@ -115,7 +115,7 @@ async function walkMod(folder: string, rootOnly: boolean): Promise<Walk> {
 
 async function listWhole(walk: Walk, dir: string): Promise<void> {
   for (const dirent of await listDir(dir)) {
-    if (isTempWrite(dirent.name)) continue;
+    if (isOwnTemp(dirent.name)) continue;
     const path = childOf(dir, dirent.name);
     if (dirent.isDirectory()) {
       if (walk.rootOnly) continue;
