@@ -222,7 +222,6 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
         if (errnoCode(err) !== 'EEXIST') throw err;
         if (!(await isOwnHook(hook))) throw hookExists(hook);
       });
-      await git(instanceRoot, 'config', 'push.recurseSubmodules', 'check');
     },
   };
 }
