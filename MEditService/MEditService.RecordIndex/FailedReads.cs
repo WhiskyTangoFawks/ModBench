@@ -93,9 +93,8 @@ internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger lo
         return state.Stamps is { StoppedOnlyByUnsavedText: true } ? RowsStandOver(key, state) : null;
     }
 
-    // A stopped read stands on what the state holds: a tree's document stamps, a binary's hash. A
-    // failure of git, or not of the plugin's bytes, is read again at the next reconcile. Reads run one
-    // at a time, so one that ran out of memory would run out again.
+    // A stopped read stands on its state: a tree's document stamps, a binary's hash. A failure of git,
+    // or not of the plugin's bytes, is read again. One that ran out of memory would run out again.
     private static bool StateObserves(ReadOutcome outcome) =>
         outcome is { Failure: null or { OfItsBytes: true }, StoppedBy: null or OutOfMemoryException, TreeStopped: null or SourceFailure.Unreadable or SourceFailure.Ambiguous };
 
