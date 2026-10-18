@@ -65,10 +65,10 @@ async function editDocuments(
     }),
     refreshSourceControlFor: deps.refreshSourceControlFor,
   };
-  const applied = await applyAnswered(
-    applying, deps.reporter, [outcome], [address.plugin],
-    `Could not edit ${field}.`);
-  return applied ? outcome.newFormKey : undefined;
+  const failure = await applyAnswered(applying, [outcome], [address.plugin]);
+  if (failure === undefined) return outcome.newFormKey;
+  deps.reporter.report('error', `Could not edit ${field}.`, failure);
+  return undefined;
 }
 
 const isNoChange = ({ moves, deletions, documents }: SourceChanges) =>

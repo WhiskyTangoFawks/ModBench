@@ -100,10 +100,9 @@ export function registerRecordLifecycleCommands(
         const outcome = (landed: readonly RecordAddress[]) => reporter.selectionOutcome(
           `Could not delete ${refused.length} of ${records.length + unreadable.length} records.`, { landed, refused }, label);
         const touched = answer.applied.map(({ record }) => record);
-        const applied = await applyAnswered(
-          source, reporter, answer.applied, touched.map(pluginAddressOf),
-          'Could not delete the records.');
-        outcome(applied ? touched : []);
+        const failure = await applyAnswered(source, answer.applied, touched.map(pluginAddressOf));
+        if (failure !== undefined) reporter.report('error', 'Could not delete the records.', failure);
+        outcome(failure === undefined ? touched : []);
       });
       await (records.length > 0 ? write(reportOutcome) : reportOutcome());
     }),
@@ -219,10 +218,9 @@ export function registerRecordCopyCommands(
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
         const answered = answer.applied.map(({ record, destination }) => ({ record, destination }));
         const attempted = copiesWritten(answered, mode).length + answer.refused.length;
-        const applied = await applyAnswered(
-          source, reporter, answer.applied, answered.map(({ destination }) => destination),
-          'Could not copy the records.');
-        const landed = applied ? answered : [];
+        const failure = await applyAnswered(source, answer.applied, answered.map(({ destination }) => destination));
+        if (failure !== undefined) reporter.report('error', 'Could not copy the records.', failure);
+        const landed = failure === undefined ? answered : [];
         const written = copiesWritten(landed, mode);
         if (written.length > 0) reporter.landed(landedMessage(written, labels));
         const into = (item: CopyItem) =>
