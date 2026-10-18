@@ -20,7 +20,7 @@ vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
 }));
 
-const { installMod } = vi.hoisted(() => ({ installMod: vi.fn() }));
+const { installMod, upgradeLoss, ask } = vi.hoisted(() => ({ installMod: vi.fn(), upgradeLoss: vi.fn(() => Promise.resolve(undefined)), ask: vi.fn() }));
 
 import { registerModInstallCommands } from '../installCommands';
 import type { DownloadFile, DownloadRow, Instance } from '../../instanceLoader/instance';
@@ -32,7 +32,7 @@ import { modCommands } from '../../modCommands/modCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
-const installOver = () => ({ ...modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), installMod });
+const installOver = () => ({ ...modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), installMod, upgradeLoss });
 
 
 const fakeInstance = (rows: readonly DownloadFile[] = []): Pick<Instance, 'value' | 'refresh'> => ({
@@ -57,7 +57,7 @@ const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDe
 
 const installDownloaded = async (file: DownloadFile, listed: readonly DownloadFile[], deps: DownloadInstallDeps): Promise<void> => {
   registerModInstallCommands({
-    commands: installOver(), instance: fakeInstance(listed), reporterFor: () => recordingReporter(),
+    commands: installOver(), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), ask,
     warnIfFomod: deps.warnIfFomod, downloadInstall: deps,
   });
   const handler = registerCommand.mock.calls.findLast((call) => call[0] === 'modbench.mod.install')?.[1];
@@ -157,6 +157,9 @@ interface FakeUpgradeItem { label: string; description?: string; choice: unknown
 
 const NEW_MOD_ITEM = { label: 'Install as a new mod…', choice: { kind: 'new' } };
 
+const UPGRADE_ITEM = { label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } };
+const LOSS = 'The upgrade would lose, in "Harder VATS": files its package does not hold: a.esp.';
+
 describe('modbench.mod.install over a downloaded file: the pick among the upgrades the Instance value lists', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -212,6 +215,36 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
         { kind: 'downloadedFile', name: 'foo.7z' },
         { kind: 'upgrade', name: 'Harder VATS' }, true);
     expect(showInputBox).not.toHaveBeenCalled();
+  });
+
+  it('an upgrade that would lose files asks once, listing them, and installs forced on the yes', async () => {
+    installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
+    upgradeLoss.mockResolvedValueOnce(LOSS);
+    ask.mockResolvedValueOnce('Upgrade');
+
+    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM));
+
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask).toHaveBeenCalledWith('Upgrade "Harder VATS"?', { modal: true, detail: LOSS }, 'Upgrade');
+    expect(installMod).toHaveBeenCalledWith({ kind: 'downloadedFile', name: 'foo.7z' }, { kind: 'upgrade', name: 'Harder VATS' }, true);
+  });
+
+  it('Esc at the question installs nothing', async () => {
+    upgradeLoss.mockResolvedValueOnce(LOSS);
+    ask.mockResolvedValueOnce(undefined);
+
+    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM));
+
+    expect(installMod).not.toHaveBeenCalled();
+  });
+
+  it('an upgrade that loses nothing asks nothing', async () => {
+    installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
+
+    await pickAmong([{ modName: 'Harder VATS', version: '1.0' }], (d) => d.accept(UPGRADE_ITEM));
+
+    expect(ask).not.toHaveBeenCalled();
+    expect(installMod).toHaveBeenCalled();
   });
 
   it('choosing "Install as a new mod…" calls install with the new-mod shape', async () => {

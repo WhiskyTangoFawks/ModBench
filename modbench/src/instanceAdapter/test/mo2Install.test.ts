@@ -200,6 +200,15 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       expect(await snapshotTree(repository)).toEqual(before);
     });
 
+    it('keeps the mod\'s manifest, which the release does not replace', async () => {
+      const manifest = `${UPGRADED}.manifest.json`;
+      await writeFile(join(folder(UPGRADED), manifest), '{"kept":true}');
+
+      await holding(['New.esp']).install(ARCHIVE, { kind: 'upgrade', name: UPGRADED }, KEYS);
+
+      expect(await readFile(join(folder(UPGRADED), manifest), 'utf8')).toBe('{"kept":true}');
+    });
+
     it('unwraps a release nested in a wrapper folder', async () => {
       const outcome = await holding(['Wrapper/Nested.esp']).install(ARCHIVE, { kind: 'upgrade', name: UPGRADED }, KEYS);
 

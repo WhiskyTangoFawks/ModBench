@@ -5,7 +5,7 @@ import { parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni
 import type { ArchiveReader } from './archiveReader';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from './files';
 import type { InstallPackage, InstanceAdapter, ModMeta, OwnedMetaKeys } from './instanceAdapter';
-import { fileInFolder, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix } from './layout';
+import { fileInFolder, manifestFileIn, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix } from './layout';
 import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
@@ -54,22 +54,22 @@ async function extractNewMod(context: Mo2Context, mod: string): Promise<Extracti
   };
 }
 
-async function upgradeLanding(folder: string, extraction: string, root: string, keys: OwnedMetaKeys): Promise<void> {
+async function upgradeLanding(folder: string, extraction: string, root: string, keys: OwnedMetaKeys, manifest: string): Promise<void> {
   const carried = await get(modMetaFileIn(folder), '');
   for (const { name } of await listDir(folder)) {
     const entry = fileInFolder(folder, name);
-    if (entry !== extraction) await remove(entry);
+    if (entry !== extraction && entry !== manifest) await remove(entry);
   }
   await settleInto(folder, extraction, root, setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried))));
 }
 
-async function extractUpgrade(mod: string, folder: string): Promise<Extraction> {
+async function extractUpgrade(mod: string, folder: string, manifest: string): Promise<Extraction> {
   const path = await makeTempDir(upgradeExtractionPrefix(folder));
   return {
     path,
     async land(root, keys) {
       try {
-        await upgradeLanding(folder, path, root, keys);
+        await upgradeLanding(folder, path, root, keys, manifest);
       } catch (err) {
         throw new Error(`Upgrading "${mod}" failed partway and was not rolled back: ${errorMessage(err)}`, { cause: err });
       }
@@ -97,7 +97,7 @@ export function mo2Landing(context: Mo2Context, archives: ArchiveReader, { setti
       const { gameName } = await settings();
       const holding = await folderHolding(context, { kind: 'mod', name: target.name });
       if ((target.kind === 'new') !== (holding === undefined)) return { landed: false };
-      const extraction = holding === undefined ? await extractNewMod(context, target.name) : await extractUpgrade(target.name, holding.path);
+      const extraction = holding === undefined ? await extractNewMod(context, target.name) : await extractUpgrade(target.name, holding.path, manifestFileIn(holding.path, holding.modName));
       try {
         await fill(installed, extraction.path);
         const { root, isFomod } = await releaseRoot(extraction.path);

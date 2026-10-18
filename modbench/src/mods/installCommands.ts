@@ -6,6 +6,7 @@ import { downloadArgumentOf, downloadedFileNamed } from '../drivingLib/argument'
 import {
   argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure,
 } from '../drivingLib/agentGesture';
+import type { AskQuestion } from '../ports/dialog';
 import type { Argument } from '../wire/argument';
 import type { KindedRow } from '../drivingLib/gestureEntry';
 import { Refusal } from '../drivingLib/refusal';
@@ -40,9 +41,10 @@ interface InstallOptions {
 }
 
 interface ModInstallDeps {
-  commands: Pick<ModCommands, 'installMod' | 'newModNameRefusal'>;
+  commands: Pick<ModCommands, 'installMod' | 'newModNameRefusal' | 'upgradeLoss'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;
+  ask: AskQuestion;
   warnIfFomod: (name: string, isFomod: boolean) => void;
   downloadInstall: { reporter: Reporter; log: (line: string) => void; progressViewId: string };
 }
@@ -50,6 +52,8 @@ interface ModInstallDeps {
 interface PackageKindItem extends vscode.QuickPickItem {
   packageKind: 'archive' | 'folder';
 }
+
+const UPGRADE = 'Upgrade';
 
 const downloadedFilePackage = ({ name }: DownloadFile): ModPackage => ({ kind: 'downloadedFile', name });
 
@@ -98,7 +102,7 @@ async function pickPackagePath(): Promise<{ kind: 'archive' | 'folder'; path: st
 // modbench.mod.install: with no package, as from the Mods menu, it asks archive-or-folder first,
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { commands, instance, reporterFor, warnIfFomod, downloadInstall } = deps;
+  const { commands, instance, reporterFor, ask, warnIfFomod, downloadInstall } = deps;
   const reporterOf = (via: InstallVia): Reporter => (via === 'downloadedFile' ? downloadInstall.reporter : reporterFor(via));
   const newModNameRefusal = (name: string) => promptRefusal(commands.newModNameRefusal(name));
   const failedMessage = ({ package: installed, target, via }: Install): string =>
@@ -131,10 +135,16 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       : newMod({ kind: 'folder', path: picked.path }, defaultModNameForFolder(picked.path), 'installFromFolder');
   };
 
+  const upgradeConfirmed = async (target: InstallTarget): Promise<boolean> => {
+    const loss = await commands.upgradeLoss(target);
+    return loss === undefined || await ask(`Upgrade "${target.name}"?`, { modal: true, detail: loss }, UPGRADE) === UPGRADE;
+  };
+
   const downloadedFileInstall = async (name: string): Promise<Install | undefined> => {
     const row = downloadedFileNamed(instance.value.downloads, name);
     const target = await chooseInstallTarget(row, (defaultName) => promptModName(defaultName, newModNameRefusal));
-    return target ? { package: downloadedFilePackage(row), target, via: 'downloadedFile', force: true } : undefined;
+    if (!target || !(await upgradeConfirmed(target))) return undefined;
+    return { package: downloadedFilePackage(row), target, via: 'downloadedFile', force: true };
   };
 
   const gesture: AgentGesture<KindedRow, Install, InstallResult, InstallOptions> = {

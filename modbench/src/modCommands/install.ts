@@ -49,7 +49,7 @@ const claimRefusal = (target: InstallTarget): string => (target.kind === 'new'
 const listed = (what: string, files: readonly string[]): string | undefined =>
   (files.length > 0 ? `${what}: ${files.join(', ')}` : undefined);
 
-const upgradeLoss = (status: ModStatus): string | undefined => {
+const lossOf = (status: ModStatus): string | undefined => {
   const parts = [
     status.noManifest ? 'it has no manifest' : undefined,
     listed('files whose bytes differ from its manifest', status.differing),
@@ -60,27 +60,24 @@ const upgradeLoss = (status: ModStatus): string | undefined => {
   return parts.length === 0 ? undefined : parts.join('; ');
 };
 
-const FORCE_TO_REPLACE = 'Request it again with force to replace its files.';
+const statusUnread = (mod: string, why: string): string => `"${mod}" status could not be read: ${why.replace(/\.$/, '')}.`;
 
-const statusUnread = (mod: string, why: string): string =>
-  `"${mod}" status could not be read: ${why.replace(/\.$/, '')}. ${FORCE_TO_REPLACE}`;
-
-// What an upgrade over the mod would lose, or why mEdit could not say (agent.md, Any agent, story 7).
-async function upgradeRefusal(
-  { adapter, readStatus }: { adapter: InstanceAdapter; readStatus: ReadModStatus }, target: InstallTarget, force: boolean,
+/** What an upgrade over the mod would lose, or why mEdit could not say (agent.md, Any agent, story 7). Nothing for a
+ *  new mod and for an upgrade that loses nothing. */
+export async function upgradeLoss(
+  { adapter, readStatus }: { adapter: InstanceAdapter; readStatus: ReadModStatus }, target: InstallTarget,
 ): Promise<string | undefined> {
-  if (force || target.kind !== 'upgrade') return undefined;
+  if (target.kind !== 'upgrade') return undefined;
   const mod = target.name;
   const answer = await readStatus([mod]);
   if (isReadFailed(answer)) return statusUnread(mod, failureReason(answer));
   const status = answer.find((read) => read.mod === mod);
   if (status === undefined) {
-    return await adapter.modFolderPath(mod) === undefined ? undefined
-      : `"${mod}" has no status in the answer. ${FORCE_TO_REPLACE}`;
+    return await adapter.modFolderPath(mod) === undefined ? undefined : `"${mod}" has no status in the answer.`;
   }
   if (status.unreadable) return statusUnread(mod, status.unreadable.why);
-  const loss = upgradeLoss(status);
-  return loss === undefined ? undefined : `The upgrade would lose, in "${mod}": ${loss}. ${FORCE_TO_REPLACE}`;
+  const loss = lossOf(status);
+  return loss === undefined ? undefined : `The upgrade would lose, in "${mod}": ${loss}.`;
 }
 
 async function markInstalled(adapter: InstanceAdapter, name: string): Promise<string | undefined> {
@@ -99,8 +96,8 @@ export async function installMod(
   installed: ModPackage, target: InstallTarget, force: boolean,
 ): Promise<CommandResult<{ isFomod: boolean; downloadedFile?: string; downloadedFileRefusal?: string }>> {
   if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
-  const refusal = await upgradeRefusal(deps, target, force);
-  if (refusal !== undefined) return { applied: false, refusal };
+  const loss = force ? undefined : await upgradeLoss(deps, target);
+  if (loss !== undefined) return { applied: false, refusal: `${loss} Request it again with force to replace its files.` };
   let outcome: InstallOutcome;
   let file: DownloadedFile | undefined;
   try {
