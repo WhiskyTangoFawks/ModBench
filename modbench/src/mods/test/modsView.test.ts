@@ -126,7 +126,7 @@ const otherDeps = () => ({
     registerRepositories: () => Promise.resolve(),
   },
   manifestGestures: {
-    commands: { updateManifest: vi.fn(), restoreFromManifest: vi.fn(), whatRestoreDestroys: vi.fn() }, say: () => undefined,
+    toolboxView: 'modbench.toolbox', commands: { updateManifest: vi.fn(), restoreFromManifest: vi.fn(), whatRestoreDestroys: vi.fn() }, say: () => undefined,
     focusedView: { id: () => undefined, selection: () => [] },
   },
 });

@@ -5,7 +5,7 @@ import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
 import type { ModlistRepositoryCommands } from '../sourceCommands/modlistRepositoryCommands';
 
-const TOOLBOX_VIEW = 'modbench.toolbox';
+import { TOOLBOX_VIEW } from './toolboxCommands';
 
 interface ModlistGestureDeps {
   commands: Pick<ModlistRepositoryCommands, 'gitInit'>;

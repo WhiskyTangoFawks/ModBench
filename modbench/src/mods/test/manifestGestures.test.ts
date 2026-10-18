@@ -75,7 +75,7 @@ function register(over: Partial<Parameters<typeof registerManifestGestures>[0]> 
   const reporter = recordingReporter();
   const said: (string | undefined)[] = [];
   registerManifestGestures({
-    commands: { updateManifest, restoreFromManifest, whatRestoreDestroys }, ask,
+    toolboxView: 'modbench.toolbox', commands: { updateManifest, restoreFromManifest, whatRestoreDestroys }, ask,
     instance: { value, refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
     reporter, say: (message) => { said.push(message); },
     focusedView: { id: () => undefined, selection: () => [] }, ...over,

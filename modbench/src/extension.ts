@@ -33,7 +33,7 @@ import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { initRepositoryIn } from './instanceRepository';
 import { registerModlistCommands } from './toolbox/modlistGestures';
 import { publishRepository } from './toolbox/repositoryContext';
-import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
+import { registerRefreshCommand, registerToolboxCommands, TOOLBOX_VIEW } from './toolbox/toolboxCommands';
 import { openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
@@ -157,7 +157,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
       registerRepositories: deps.registerRepositories,
     },
-    manifestGestures: { commands: modlist, say: (message) => { toolboxProvider.say(message); }, focusedView: deps.focusedView },
+    manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: (message) => { toolboxProvider.say(message); }, focusedView: deps.focusedView },
     modStatus: { push: client, readStatus },
   }));
   const { editing } = plugins;

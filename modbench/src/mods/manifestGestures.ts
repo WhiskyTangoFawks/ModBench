@@ -15,11 +15,12 @@ import type {
   ModlistRepositoryCommands, ModNote, RestoreResult, RestoreStatus, UpdateManifestResult, UpdateManifestStatus,
 } from '../sourceCommands/modlistRepositoryCommands';
 
-const TOOLBOX_VIEW = 'modbench.toolbox';
 const NEITHER = 'it is not a mod or a separator';
 const RESTORE = 'Restore';
 
 export interface ManifestGestureDeps {
+  /** The Toolbox's id, whose bar a gesture with no Argument runs under. */
+  toolboxView: string;
   commands: Pick<ModlistRepositoryCommands, 'updateManifest' | 'restoreFromManifest' | 'whatRestoreDestroys'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
@@ -108,7 +109,7 @@ function modsOfAgent(argument: readonly Argument[], value: InstanceValue): strin
 function modsToRun(deps: ManifestGestureDeps, clicked: unknown, selected: readonly unknown[] | undefined): ModsToRun {
   const { value } = deps.instance;
   const rows = rowsOf(deps, clicked, selected);
-  if (rows.length === 0) return { mods: everyMod(value), refused: [], everyMod: true, view: TOOLBOX_VIEW };
+  if (rows.length === 0) return { mods: everyMod(value), refused: [], everyMod: true, view: deps.toolboxView };
   const refused: ItemRefusal<string>[] = [];
   const mods = rows.flatMap((row) => {
     const held = modsOf(row, value);
