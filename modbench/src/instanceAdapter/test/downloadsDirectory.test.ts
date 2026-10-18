@@ -6,7 +6,7 @@ import type { GameDetectors } from '../gameFolder/gameFolderResolver';
 
 const iniOf = (downloadDirectory?: string): string =>
   `[General]\r\ngameName=Fallout 4\r\n[Settings]\r\n${
-    downloadDirectory === undefined ? '' : `download_directory=@ByteArray(${downloadDirectory})\r\n`}`;
+    downloadDirectory === undefined ? '' : `download_directory=@ByteArray(${downloadDirectory.replaceAll('\\', '\\\\')})\r\n`}`;
 
 const resolvedDir = async (
   instanceRoot: string, ini: string, detectors: GameDetectors = NO_DETECTORS,

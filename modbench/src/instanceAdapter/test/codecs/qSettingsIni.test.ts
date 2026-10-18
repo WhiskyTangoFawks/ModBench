@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readIniSection, readIniValue, replaceIniSection, setIniValue } from '../../codecs/qSettingsIni';
+import { readIniSection, readIniValue, replaceIniSection, setIniByteArray, setIniValue } from '../../codecs/qSettingsIni';
 
 describe('readIniValue', () => {
   it('reads the key in the named section, not the same key in another', () => {
@@ -53,7 +53,13 @@ describe('decoded values', () => {
     ['unwraps @ByteArray and un-escapes inside it, as Qt writes a path there', '@ByteArray(C:\\\\Mod\\\\x)', 'C:\\Mod\\x'],
     ['un-escapes doubled backslashes', 'C:\\\\Games', 'C:\\Games'],
     ['strips the quote wrapper and un-escapes', '"C:\\\\Games;New"', 'C:\\Games;New'],
-    ['leaves an unknown escape as written', 'C:\\Games', 'C:\\Games'],
+    ['drops an unknown escape with its character, as Qt does', 'C:\\Games', 'C:ames'],
+    ['reads the named control escapes', 'a\\ab\\bc\\fd\\ve', 'a\x07b\x08c\x0cd\x0be'],
+    ['reads a hex escape of any length as one UTF-16 unit, as Qt5 wrote', 'caf\\xe9 \\x20ac', 'caf\u00e9 \u20ac'],
+    ['reads an octal escape', 'a\\0b\\101', 'a\0bA'],
+    ['reads a leading @@ as one @', '@@Variant(x)', '@Variant(x)'],
+    ['reads a unit above 0xFF in a @ByteArray as ?, as toLatin1 does', '@ByteArray(a\\x20acz)', 'a?z'],
+    ['reads the UTF-8 bytes of a @ByteArray as text', '@ByteArray(caf\\xc3\\xa9)', 'caf\u00e9'],
     ['reads an empty value as empty', '', ''],
   ])('%s', (_name, raw, expected) => {
     expect(readIniValue(`[A]\nk=${raw}\n`, 'A', 'k')).toBe(expected);
@@ -134,5 +140,33 @@ describe('replaceIniSection', () => {
 
   it('leaves text without the section alone when no lines remain', () => {
     expect(replaceIniSection('[A]\nx=1\n', 'B', [])).toBe('[A]\nx=1\n');
+  });
+});
+
+describe('Qt escapes written', () => {
+  it.each([
+    ['a control character as \\x with the next hex digit escaped too', 'a\x015', 'a\\x1\\x35'],
+    ['a NUL as \\0', '\0', '\\0'],
+    ['a named control', 'a\nb\tc', 'a\\nb\\tc'],
+    ['a leading @ doubled', '@x', '@@x'],
+    ['non-ASCII as UTF-8', 'caf\u00e9', 'caf\u00e9'],
+  ])('%s', (_name, value, raw) => {
+    expect(setIniValue('[A]\n', 'A', 'k', value)).toBe(`[A]\nk=${raw}\n`);
+    expect(readIniValue(`[A]\nk=${raw}\n`, 'A', 'k')).toBe(value);
+  });
+});
+
+describe('setIniByteArray', () => {
+  it('escapes a hex digit after an escaped byte, as Qt does', () => {
+    expect(setIniByteArray('[A]\n', 'A', 'k', 'Pröfil')).toBe('[A]\nk=@ByteArray(Pr\\xc3\\xb6\\x66il)\n');
+  });
+
+  it('writes the UTF-8 bytes at or above 0x7F as \\xNN, as Qt does for a QByteArray', () => {
+    expect(setIniByteArray('[A]\n', 'A', 'k', 'caf\u00e9')).toBe('[A]\nk=@ByteArray(caf\\xc3\\xa9)\n');
+  });
+
+  it('reads back as written', () => {
+    const text = setIniByteArray('[A]\n', 'A', 'k', 'Pr\u00f6fil, \\x "q"');
+    expect(readIniValue(text, 'A', 'k')).toBe('Pr\u00f6fil, \\x "q"');
   });
 });

@@ -1,7 +1,4 @@
-// MO2 wraps special-character values as `@ByteArray(<value>)`; a profile name needs no
-// wrapping, but MO2 writes one, so we match it.
-
-import { GENERAL_SECTION, readIniValue, setIniValue } from './qSettingsIni';
+import { GENERAL_SECTION, readIniValue, setIniByteArray } from './qSettingsIni';
 
 /** MO2's settings file, at the instance root. */
 export const SETTINGS_FILE_NAME = 'ModOrganizer.ini';
@@ -30,5 +27,5 @@ export function readDownloadDirectory(text: string): string | undefined {
 
 export function setSelectedProfileInText(text: string, profile: string): string {
   if (readIniValue(text, GENERAL_SECTION, SELECTED_PROFILE_KEY) === undefined) throw missingKey(SELECTED_PROFILE_KEY);
-  return setIniValue(text, GENERAL_SECTION, SELECTED_PROFILE_KEY, `@ByteArray(${profile})`);
+  return setIniByteArray(text, GENERAL_SECTION, SELECTED_PROFILE_KEY, profile);
 }
