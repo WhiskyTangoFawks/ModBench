@@ -1451,7 +1451,6 @@ export interface components {
             modsDone: number;
             /** Format: int32 */
             modsTotal: number;
-            phase?: components["schemas"]["DecompileAndCommitPhase"] | null;
         };
         MoveLastWrittenRequest: {
             origin: string;
@@ -1480,6 +1479,7 @@ export interface components {
             pluginWithUnreadableSources?: components["schemas"]["PluginWithUnreadableSource"][] | null;
             recordFilterCleared?: components["schemas"]["RecordFilterClearedNotification"] | null;
             modlistProgress?: components["schemas"]["ModlistProgress"] | null;
+            decompileAndCommitPhase?: components["schemas"]["DecompileAndCommitPhase"] | null;
             mods?: string[] | null;
         };
         PathHop: {

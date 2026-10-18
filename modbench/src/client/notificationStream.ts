@@ -37,6 +37,8 @@ class NotificationListenerRegistry {
         if (event.loadOrderStatus) this.deliver('load-order-status', toLoadOrderStatus(event.loadOrderStatus));
         break;
       case 'decompile-and-commit-progress':
+        if (event.modlistProgress) this.deliver(kind, { ...event.modlistProgress, phase: event.decompileAndCommitPhase });
+        break;
       case 'update-manifest-progress':
       case 'restore-from-manifest-progress':
         if (event.modlistProgress) this.deliver(kind, event.modlistProgress);
@@ -114,6 +116,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
     kind?: unknown; plugin?: unknown; origin?: unknown; keys?: unknown; sequence?: unknown;
     loadOrderStatus?: NotificationEvent['loadOrderStatus'];
     modlistProgress?: NotificationEvent['modlistProgress'];
+    decompileAndCommitPhase?: NotificationEvent['decompileAndCommitPhase'];
     changedPlugins?: NotificationEvent['changedPlugins'];
     pluginWithUnreadableSources?: NotificationEvent['pluginWithUnreadableSources'];
     recordFilterCleared?: NotificationEvent['recordFilterCleared'];
@@ -126,7 +129,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
   if (typeof w.sequence !== 'number') throw new Error('Expected a notification event to carry a numeric sequence.');
   return {
     kind: w.kind, plugin: w.plugin, origin: w.origin, keys: w.keys, sequence: w.sequence,
-    loadOrderStatus: w.loadOrderStatus, modlistProgress: w.modlistProgress, changedPlugins: w.changedPlugins,
+    loadOrderStatus: w.loadOrderStatus, modlistProgress: w.modlistProgress, decompileAndCommitPhase: w.decompileAndCommitPhase, changedPlugins: w.changedPlugins,
     pluginWithUnreadableSources: w.pluginWithUnreadableSources, recordFilterCleared: w.recordFilterCleared, mods: w.mods,
   };
 }

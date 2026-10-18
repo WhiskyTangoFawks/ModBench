@@ -22,7 +22,7 @@ public sealed class RestoreFromManifestHandler
         IReadOnlyList<ModToRestore> mods, InstanceToRestore instance, string? gesture = null, CancellationToken cancel = default) =>
         ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new RestoreFromManifestProgressNotification(progress)),
-            mod => RestoreModAsync(mod, instance, cancel), gesture, cancel);
+            (mod, _) => RestoreModAsync(mod, instance, cancel), gesture, cancel);
 
     private async Task<ItemAnswer<RestoreSkip, RestoredMod>> RestoreModAsync(ModToRestore mod, InstanceToRestore instance, CancellationToken cancel)
     {

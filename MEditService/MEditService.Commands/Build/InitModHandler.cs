@@ -38,21 +38,9 @@ public sealed class InitModHandler
             return SelectionResult<string, InitRefusal, InitializedMod>.WholeSelectionRefused(InitRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
         if (_source.WhyGitCannotRun() is { } gitMissing)
             return SelectionResult<string, InitRefusal, InitializedMod>.WholeSelectionRefused(InitRefusal.GitUnavailable, gitMissing.Reason);
-        var byName = mods.DistinctBy(mod => mod.Name, StringComparer.OrdinalIgnoreCase).ToDictionary(mod => mod.Name, StringComparer.OrdinalIgnoreCase);
-        var done = 0;
         return await ModByMod.OverAsync(
-            mods, mod => mod.Name, progress => _notifications.Publish(new DecompileAndCommitProgressNotification(progress)),
-            async mod =>
-            {
-                try
-                {
-                    return await InitModAsync(loadOrder, byName[mod.Name], ProvidedBy(loadOrder, mod.Name), done, byName.Count, cancel);
-                }
-                finally
-                {
-                    done++;
-                }
-            }, gesture: null, cancel);
+            mods, mod => mod.Name, progress => _notifications.Publish(new DecompileAndCommitProgressNotification(progress, Phase: null)),
+            (mod, at) => InitModAsync(loadOrder, mod, ProvidedBy(loadOrder, mod.Name), at, cancel), gesture: null, cancel);
     }
 
     private static List<RegisteredPlugin> ProvidedBy(LoadOrderSnapshot loadOrder, string modName) =>
@@ -60,7 +48,7 @@ public sealed class InitModHandler
             && string.Equals(mod.Name, modName, StringComparison.OrdinalIgnoreCase))];
 
     private async Task<ItemAnswer<InitRefusal, InitializedMod>> InitModAsync(
-        LoadOrderSnapshot loadOrder, ModToInit toInit, List<RegisteredPlugin> plugins, int modsDone, int modsTotal, CancellationToken cancel)
+        LoadOrderSnapshot loadOrder, ModToInit toInit, List<RegisteredPlugin> plugins, ModlistProgress at, CancellationToken cancel)
     {
         if (plugins.Count == 0)
         {
@@ -88,9 +76,9 @@ public sealed class InitModHandler
         foreach (var plugin in plugins)
         {
             cancel.ThrowIfCancellationRequested();
-            SetPhase(mod.Name, DecompileAndCommitPhase.Parsing, modsDone, modsTotal);
+            SetPhase(at, DecompileAndCommitPhase.Parsing);
             var decompiled = await _decompiler.DecompileAsync(
-                loadOrder, plugin, mod.Folder, onParsed: () => SetPhase(mod.Name, DecompileAndCommitPhase.Serializing, modsDone, modsTotal), cancel);
+                loadOrder, plugin, mod.Folder, onParsed: () => SetPhase(at, DecompileAndCommitPhase.Serializing), cancel);
             if (decompiled.Source is { } source)
             {
                 verified.Add((plugin, source));
@@ -113,7 +101,7 @@ public sealed class InitModHandler
             return ItemAnswer<InitRefusal, InitializedMod>.Refused(cause, string.Join('\n', refused.Select(r => r.Message)));
         }
 
-        SetPhase(mod.Name, DecompileAndCommitPhase.ReadingFiles, modsDone, modsTotal);
+        SetPhase(at, DecompileAndCommitPhase.ReadingFiles);
         List<Asset> assets;
         try
         {
@@ -125,7 +113,7 @@ public sealed class InitModHandler
                 $"'{mod.Name}' was not initialized: a file of its folder could not be read: {ex.Message}");
         }
 
-        SetPhase(mod.Name, DecompileAndCommitPhase.Committing, modsDone, modsTotal);
+        SetPhase(at, DecompileAndCommitPhase.Committing);
         if (Commit(mod, toInit.SourceFolder, verified, assets) is { } failure)
         {
             _logger.LogWarning("Refused to init {Mod}: {Reason}", mod.Name, failure.Reason);
@@ -164,6 +152,6 @@ public sealed class InitModHandler
             [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))], assets);
     }
 
-    private void SetPhase(string mod, DecompileAndCommitPhase phase, int modsDone, int modsTotal) =>
-        _notifications.Publish(new DecompileAndCommitProgressNotification(new ModlistProgress(Gesture: null, mod, modsDone, modsTotal, phase)));
+    private void SetPhase(ModlistProgress at, DecompileAndCommitPhase phase) =>
+        _notifications.Publish(new DecompileAndCommitProgressNotification(at, phase));
 }

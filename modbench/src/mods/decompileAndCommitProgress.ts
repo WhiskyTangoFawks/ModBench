@@ -1,7 +1,7 @@
-import type { ModlistProgress } from '../client';
+import type { DecompileAndCommitProgress } from '../client';
 
-/** Pure, so it is testable without a VS Code harness. A progress with no phase is the gesture between steps. */
-export function decompileAndCommitProgressMessage(mod: string, phase: ModlistProgress['phase']): string {
+/** A progress with no phase is the gesture between steps. */
+export function decompileAndCommitProgressMessage(mod: string, phase: DecompileAndCommitProgress['phase']): string {
   const doing = `Decompiling and committing "${mod}"`;
   switch (phase) {
     case 'Parsing':

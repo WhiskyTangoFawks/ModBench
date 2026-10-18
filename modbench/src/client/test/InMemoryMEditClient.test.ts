@@ -157,14 +157,14 @@ describe('InMemoryMEditClient — emit', () => {
 });
 
 describe('InMemoryMEditClient — onNotification', () => {
-  it('skips a init-progress emit missing its payload, and unsubscribe stops delivery', () => {
+  it('skips a decompile-and-commit-progress emit missing its payload, and unsubscribe stops delivery', () => {
     const client = new InMemoryMEditClient();
     const listener = vi.fn();
     const off = client.onNotification('decompile-and-commit-progress', listener);
     client.emit(notificationEventFixture({ kind: 'decompile-and-commit-progress' }));
     off();
     client.emit(notificationEventFixture({
-      kind: 'decompile-and-commit-progress', modlistProgress: { mod: 'M', phase: 'Parsing', modsDone: 0, modsTotal: 1 },
+      kind: 'decompile-and-commit-progress', modlistProgress: { mod: 'M', modsDone: 0, modsTotal: 1 }, decompileAndCommitPhase: 'Parsing',
     }));
     expect(listener).not.toHaveBeenCalled();
   });

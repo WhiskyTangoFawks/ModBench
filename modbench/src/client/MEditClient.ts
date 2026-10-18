@@ -51,7 +51,7 @@ const NOTIFICATION_KINDS = [
   'plugin-source-unreadable', 'record-filter-cleared', 'mod-status-changed',
 ] as const;
 
-/** The wire's kinds, narrowed from the schema's honest `string` for a typed `onNotification` call
+/** The kinds a client subscribes to, narrowed from the schema's honest `string` for a typed `onNotification` call
  *  — not a mirror of `NotificationEvent`, which keeps every field as the schema reports it. */
 export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 
@@ -59,7 +59,7 @@ export type NotificationKind = typeof NOTIFICATION_KINDS[number];
  *  `NotificationEvent`, carrying only the fields its kind uses. */
 export interface NotificationPayloads {
   'load-order-status': LoadOrderStatus;
-  'decompile-and-commit-progress': ModlistProgress;
+  'decompile-and-commit-progress': DecompileAndCommitProgress;
   'update-manifest-progress': ModlistProgress;
   'restore-from-manifest-progress': ModlistProgress;
   'external-change': { origin: string; changedPlugins: ChangedPlugin[] };
@@ -208,6 +208,9 @@ export type UpdateManifestFacts = Omit<components['schemas']['UpdateManifestRequ
  *  mod is none once it ends. */
 export type ModlistProgress = components['schemas']['ModlistProgress'];
 
+/** A mod's progress through decompile and commit: its place in the selection and the step it is at. */
+export type DecompileAndCommitProgress = ModlistProgress & { phase?: components['schemas']['DecompileAndCommitPhase'] | null };
+
 /** An abort stops mEdit after the mod in hand, and the mods done stay done. */
 export interface ModlistCallOptions<P = ModlistProgress> {
   readonly onProgress?: (progress: P) => void;
@@ -325,7 +328,7 @@ export interface MEditClient {
   // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
   moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
-  init(mods: readonly InitMod[], options?: { onProgress?: (status: ModlistProgress) => void }): Promise<InitOutcome | WriteRefused>;
+  init(mods: readonly InitMod[], options?: { onProgress?: (status: DecompileAndCommitProgress) => void }): Promise<InitOutcome | WriteRefused>;
   // Over the unsaved documents mEdit holds. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getCreateChanges(
     plugin: PluginAddress, recordType: string,

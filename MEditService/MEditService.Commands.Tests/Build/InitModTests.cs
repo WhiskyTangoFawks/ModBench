@@ -191,13 +191,13 @@ public sealed class InitModTests
         var notifications = new InMemoryNotificationPublisher();
         await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", notifications: notifications);
 
-        var observed = notifications.Notifications.OfType<DecompileAndCommitProgressNotification>().Select(n => n.Progress).ToList();
+        var observed = notifications.Notifications.OfType<DecompileAndCommitProgressNotification>().ToList();
         Assert.Equal(
             [DecompileAndCommitPhase.Parsing, DecompileAndCommitPhase.Serializing, DecompileAndCommitPhase.Parsing, DecompileAndCommitPhase.Serializing,
              DecompileAndCommitPhase.ReadingFiles, DecompileAndCommitPhase.Committing],
-            observed.Select(p => p.Phase).OfType<DecompileAndCommitPhase>());
-        Assert.All(observed.Where(p => p.Phase is not null), p => Assert.Equal("FixtureMod", p.Mod));
-        Assert.Equal(new ModlistProgress(null, null, 0, 0), observed[^1]);
+            observed.Select(n => n.Phase).OfType<DecompileAndCommitPhase>());
+        Assert.All(observed.Where(n => n.Phase is not null), n => Assert.Equal("FixtureMod", n.Progress.Mod));
+        Assert.Equal(new ModlistProgress(null, null, 0, 0), observed[^1].Progress);
     }
 
     [Fact]

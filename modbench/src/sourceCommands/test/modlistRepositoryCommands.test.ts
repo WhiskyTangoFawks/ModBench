@@ -271,19 +271,6 @@ describe('modlistRepositoryCommands update manifest', () => {
     ]);
   });
 
-  it('keeps its own phase when the wire progress carries a null phase', async () => {
-    const { commands, client } = commandsOver();
-    client.setCommandHandler('updateManifest', (_mods, _facts, options) => {
-      options?.onProgress?.({ mod: 'ModA', modsDone: 0, modsTotal: 1, phase: null });
-      return Promise.resolve(UPDATED);
-    });
-    const heard: unknown[] = [];
-
-    await commands.updateManifest(['ModA'], instanceOf(), { onProgress: (status) => heard.push(status) });
-
-    expect(heard).toContainEqual({ phase: 'Updating', mod: 'ModA', modsDone: 0, modsTotal: 1 });
-  });
-
   describe('refuses a mod, naming why, and updates the rest', () => {
     const adapterOf = fakeInstanceAdapter().adapter;
     const refusedFor: [string, Partial<InstanceAdapter>, string][] = [
@@ -479,19 +466,6 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     await commands.restoreFromManifest(['ModA'], instanceOf(), { onProgress: (status) => heard.push(status) });
 
     expect(heard).toEqual([{ phase: 'ReadingFiles', mod: 'ModA' }, { phase: 'Restoring', mod: 'ModA', modsDone: 0, modsTotal: 1 }]);
-  });
-
-  it('keeps its own phase when the wire progress carries a null phase', async () => {
-    const { commands, client } = commandsOver();
-    client.setCommandHandler('restoreFromManifest', (_mods, _facts, options) => {
-      options?.onProgress?.({ mod: 'ModA', modsDone: 0, modsTotal: 1, phase: null });
-      return Promise.resolve(RESTORED);
-    });
-    const heard: unknown[] = [];
-
-    await commands.restoreFromManifest(['ModA'], instanceOf(), { onProgress: (status) => heard.push(status) });
-
-    expect(heard).toContainEqual({ phase: 'Restoring', mod: 'ModA', modsDone: 0, modsTotal: 1 });
   });
 
   it('sends a mod skipped for an installation file the call did not hand again, with the downloaded file of that name, and answers both sends as one', async () => {

@@ -37,7 +37,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         Assert.Empty(body.GetProperty("refused").EnumerateArray());
 
         var progress = await stream.EventsUntil(
-            "decompile-and-commit-progress", e => e.GetProperty("modlistProgress").TryGetProperty("phase", out var phase) && phase.GetString() == "Committing");
+            "decompile-and-commit-progress", e => e.TryGetProperty("decompileAndCommitPhase", out var phase) && phase.GetString() == "Committing");
         Assert.Contains(progress, e => e.GetProperty("modlistProgress").GetProperty("mod").GetString() == Origin);
 
         var edit = await Client.Edit(await Client.FirstFormKey(Plugin, Origin), Plugin, Origin, "HeightMax", 0.75);

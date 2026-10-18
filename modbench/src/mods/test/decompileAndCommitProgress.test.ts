@@ -3,17 +3,13 @@ import { decompileAndCommitProgressMessage } from '../decompileAndCommitProgress
 
 describe('decompileAndCommitProgressMessage', () => {
   it.each([
-    ['Parsing', 'parsing'],
-    ['Serializing', 'serializing'],
-    ['ReadingFiles', 'reading its files'],
-    ['Committing', 'committing'],
-  ] as const)('names the %s phase', (phase, words) => {
-    expect(decompileAndCommitProgressMessage('ModA', phase)).toContain(words);
-  });
-
-  it('names the mod in every phase, and when it has none', () => {
-    for (const phase of ['Parsing', 'Serializing', 'ReadingFiles', 'Committing', undefined] as const) {
-      expect(decompileAndCommitProgressMessage('MyMod', phase)).toContain('MyMod');
-    }
+    ['Parsing', 'Decompiling and committing "MyMod" — parsing…'],
+    ['Serializing', 'Decompiling and committing "MyMod" — serializing…'],
+    ['ReadingFiles', 'Decompiling and committing "MyMod" — reading its files…'],
+    ['Committing', 'Decompiling and committing "MyMod" — committing to git…'],
+    [undefined, 'Decompiling and committing "MyMod"…'],
+    [null, 'Decompiling and committing "MyMod"…'],
+  ] as const)('says %s as %s', (phase, message) => {
+    expect(decompileAndCommitProgressMessage('MyMod', phase)).toBe(message);
   });
 });

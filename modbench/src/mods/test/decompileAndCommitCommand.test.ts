@@ -7,7 +7,7 @@ import { handlers, showQuickPick, createQuickPick, instanceThatReads, PluginRowS
 
 import { registerDecompileAndCommitCommand } from '../decompileAndCommitCommand';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
-import { type InitOutcome, type ModlistProgress, type PluginAddress, type WriteRefused } from '../../client';
+import { type InitOutcome, type DecompileAndCommitProgress, type PluginAddress, type WriteRefused } from '../../client';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -32,7 +32,7 @@ describe('modbench.mod.decompileAndCommit', () => {
 
   function decompileAndCommitCommands() {
     let answer: InitOutcome | WriteRefused = { landed: [], refused: [] };
-    const decompileAndCommit = vi.fn((_mods: readonly string[], _options?: { onProgress?: (status: ModlistProgress) => void }) => Promise.resolve(answer));
+    const decompileAndCommit = vi.fn((_mods: readonly string[], _options?: { onProgress?: (status: DecompileAndCommitProgress) => void }) => Promise.resolve(answer));
     return {
       decompileAndCommit,
       answers: (next: InitOutcome | WriteRefused) => { answer = next; },

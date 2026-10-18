@@ -261,7 +261,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
 
   const cases: [NotificationKind, NotificationEvent, unknown][] = [
     ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), toLoadOrderStatus(loadOrderStatus)],
-    ['decompile-and-commit-progress', rowsChanged([], { kind: 'decompile-and-commit-progress', modlistProgress }), modlistProgress],
+    ['decompile-and-commit-progress', rowsChanged([], { kind: 'decompile-and-commit-progress', modlistProgress, decompileAndCommitPhase: 'Parsing' }), { ...modlistProgress, phase: 'Parsing' }],
     ['update-manifest-progress', rowsChanged([], { kind: 'update-manifest-progress', modlistProgress }), modlistProgress],
     ['restore-from-manifest-progress', rowsChanged([], { kind: 'restore-from-manifest-progress', modlistProgress }), modlistProgress],
     ['external-change', rowsChanged([], { kind: 'external-change', changedPlugins }), { origin: 'ModA', changedPlugins }],
