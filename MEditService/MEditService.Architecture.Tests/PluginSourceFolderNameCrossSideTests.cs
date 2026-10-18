@@ -15,7 +15,7 @@ public sealed class PluginSourceFolderNameCrossSideTests
     {
         var root = ServiceProjects.SolutionDirectory();
         var backendFile = Path.Combine(root, "MEditService.SourceAdapter", "SourceRepositoryLayout.cs");
-        var frontendFile = Path.Combine(root, "..", "modbench", "src", "instanceAdapter", "layout.ts");
+        var frontendFile = Path.Combine(root, "..", "modbench", "src", "wire", "sourceMod.ts");
 
         Assert.Equal(ValueIn(backendFile, BackendValue), ValueIn(frontendFile, FrontendValue));
     }
@@ -25,7 +25,7 @@ public sealed class PluginSourceFolderNameCrossSideTests
     {
         using var dir = new ScratchDirectory("medit-plugin-source-cross-side-");
         var backendFile = Path.Combine(dir, "SourceRepositoryLayout.cs");
-        var frontendFile = Path.Combine(dir, "layout.ts");
+        var frontendFile = Path.Combine(dir, "sourceMod.ts");
         File.WriteAllText(backendFile, "internal const string RootFolderName = \"plugin-source\";");
         File.WriteAllText(frontendFile, "const PLUGIN_SOURCE_FOLDER = 'source';");
 

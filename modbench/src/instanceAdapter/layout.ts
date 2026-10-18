@@ -12,6 +12,7 @@ import { PROFILE_SETTINGS_FILE_NAME } from './codecs/profileSettings';
 import { PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
 import type { EntryRef, FileOrigin } from './instanceAdapter';
 import { PLUGIN_EXTENSIONS } from '../tables/pluginFile';
+import { BUILD_CONFIGURATION_FILE, PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 
 const PROFILES = 'profiles';
 const MODS = 'mods';
@@ -131,7 +132,6 @@ export const downloadSidecarFile = (downloadsDir: string, name: string): string 
 export const fileInFolder = (folder: string, relativePath: string): string => join(folder, relativePath);
 
 const GIT_DIR = '.git';
-const PLUGIN_SOURCE_FOLDER = 'plugin-source';
 
 /** A mod's source folder, its repository, beside `mods/` (ADR-0007); `undefined` when its name
  *  gives it none. */
@@ -158,11 +158,6 @@ export const submodulesFile = (instanceRoot: string): string => join(instanceRoo
 
 /** A source mod's path in the instance repository, which is its submodule's path. */
 export const sourceModPath = (folderName: string): string => `${SOURCE}/${folderName}`;
-
-const BUILD_CONFIGURATION_FILE = 'build.json';
-
-/** The key of the build configuration that names the mod folder its build writes. */
-export const BUILD_OUTPUT_KEY = 'output';
 
 /** The file in a source folder that says what its build makes (ADR-0007). */
 export const buildConfigurationFile = (sourceFolder: string): string => join(sourceFolder, BUILD_CONFIGURATION_FILE);
