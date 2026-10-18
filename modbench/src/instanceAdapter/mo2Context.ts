@@ -64,9 +64,8 @@ export async function folderHolding(context: Mo2Context, entry: EntryRef): Promi
   return (await modFoldersAmong(context))?.holding(entry);
 }
 
-/** The folder of the mod `name`, in the spelling it has on disk, found among `folders` or else among a fresh listing: a folder of
- *  exactly that name wins, else one MO2 finds without case. Where no folder is there, the folder the name would give it;
- *  `undefined` when the name gives none. A read that resolves many mods lists once and passes the listing. */
+/** The folder of the mod `name` in its on-disk spelling, found among `folders` or a fresh listing; a read of many mods passes
+ *  its listing. Where none is there, the folder the name would give it; `undefined` when the name gives none. */
 export async function modFolderNamed(context: Mo2Context, name: string, folders?: ModFolders): Promise<string | undefined> {
   const exact = entryDir(context.instanceRoot, { kind: 'mod', name });
   if (exact === undefined) return undefined;
