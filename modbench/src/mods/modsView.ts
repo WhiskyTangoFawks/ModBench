@@ -10,9 +10,8 @@ import type { MoveToTrash } from '../ports/trash';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { errorMessage } from '../ports/errorMessage';
-import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
+import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
-import type { Sync } from '../drivingLib/syncFailureReport';
 import { modsKeyContext } from './gestureEntry';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
@@ -62,7 +61,7 @@ interface ModsViewDeps {
   /** The one selected mod row with a Nexus id in the focused Mods or Downloads view, for the palette. */
   nexusRow: () => NexusModRow | undefined;
   /** Mod sync, whose failure the view's message line says. */
-  modSync: Sync;
+  modSync: SyncMessage;
   sourceGestures: SourceGestureDeps;
   manifestGestures: ManifestDeps;
   /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
@@ -143,7 +142,6 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     }),
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
     ...registerConflictTable(instance, deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
-    vscode.commands.registerCommand('modbench.mod.sync', () => modSync.run()),
     ...registerModInstallCommands({
       commands, instance, reporterFor, warnIfFomod: deps.warnIfFomod, downloadInstall: deps.downloadInstall,
     }),

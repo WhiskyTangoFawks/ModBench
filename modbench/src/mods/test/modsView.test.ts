@@ -213,7 +213,7 @@ describe('the Mods view\'s description counts the mods', () => {
 describe('the Mods view registers its own gestures', () => {
   it.each([
     'modbench.mod.rename', 'modbench.mod.uninstall', 'modbench.mod.enable', 'modbench.mod.move', 'modbench.mod.createEmpty',
-    'modbench.mod.openFolder', 'modbench.mod.goToMod', 'modbench.mod.compareFile', 'modbench.mod.openConflicts', 'modbench.mod.sync',
+    'modbench.mod.openFolder', 'modbench.mod.goToMod', 'modbench.mod.compareFile', 'modbench.mod.openConflicts',
     'modbench.mod.install', 'modbench.mod.viewOnNexus', 'modbench.mod.decompileAndCommit', 'modbench.mod.build',
     'modbench.mod.updateManifest', 'modbench.mod.restoreFromManifest', 'modbench.modList.updateManifestHere', 'modbench.modList.restoreFromManifestHere',
   ])('registers %s with the view', (command) => {
@@ -236,15 +236,6 @@ describe('the Mods view registers its own gestures', () => {
     const value = instanceValueFixture({ sourceMods: new Set(['Source']) });
     createModsView({ ...otherDeps(), instance: new FakeInstance(value), log: () => undefined, ...noSync() });
     expect(h.state.contextKeys.get('modbench.mod.anySource')).toBe(true);
-  });
-
-  it('runs mod sync when modbench.mod.sync fires', async () => {
-    const sync = vi.fn(() => Promise.resolve({ applied: true as const, added: [], dropped: [] }));
-    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...modSyncAnswering(sync) });
-
-    await present(h.state.commands.get('modbench.mod.sync'), 'the modbench.mod.sync handler')();
-
-    expect(sync).toHaveBeenCalledOnce();
   });
 
   it('hears its copy value in the Mods view\'s key, and defers for any other', () => {

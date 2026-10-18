@@ -1,3 +1,4 @@
+import type * as vscode from 'vscode';
 import { createSync, type Sync, type SyncChannel } from './drivingLib/syncFailureReport';
 import type { Instance, InstanceValue } from './instanceLoader/instance';
 import type { ModSyncRun } from './modCommands/modCommands';
@@ -39,6 +40,15 @@ export function instanceSyncs({ instance, syncMods, syncPlugins, channel }: Inst
     void pluginSync.run();
   });
   return { modSync, pluginSync, dispose: () => { subscription.dispose(); } };
+}
+
+export function registerSyncCommands(
+  register: (command: string, handler: () => unknown) => vscode.Disposable, { modSync, pluginSync }: Pick<InstanceSyncs, 'modSync' | 'pluginSync'>,
+): vscode.Disposable[] {
+  return [
+    register('modbench.mod.sync', () => modSync.run()),
+    register('modbench.plugin.sync', () => pluginSync.run()),
+  ];
 }
 
 type LoadOrderPut = (value: InstanceValue) => void;
