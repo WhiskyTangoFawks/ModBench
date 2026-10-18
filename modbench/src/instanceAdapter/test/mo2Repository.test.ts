@@ -2,7 +2,7 @@ import { fixedGameFolderSetting } from '../../test/gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -627,6 +627,19 @@ describe('the MO2 adapter\'s game files', () => {
     await put('game/Data/b.dds', 'bbbb');
 
     const found = await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif', 'mine.nif', 'MESHES']);
+
+    expect(found).toEqual({ kind: 'read', answer: [{ path: 'Meshes/A.nif', hash: HASH_OF_AAAA }] });
+  });
+
+  it('reads through a link to a folder in the Data folder, and finds no folder where a link to a file stands', async () => {
+    const adapter = await instance();
+    await put('elsewhere/A.nif', 'aaaa');
+    await put('elsewhere/file.txt');
+    await mkdir(join(root, 'game', 'Data'), { recursive: true });
+    await symlink(join(root, 'elsewhere'), join(root, 'game', 'Data', 'Meshes'));
+    await symlink(join(root, 'elsewhere', 'file.txt'), join(root, 'game', 'Data', 'Linked.txt'));
+
+    const found = await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif', 'linked.txt/a.nif']);
 
     expect(found).toEqual({ kind: 'read', answer: [{ path: 'Meshes/A.nif', hash: HASH_OF_AAAA }] });
   });

@@ -191,15 +191,15 @@ describe('Instance — the value', () => {
     expect(told()).toBe(2);
   });
 
-  it('tells once rather than on every watched change that a link in mods/ cannot be followed, without failing the recompute', async () => {
-    const { instance, logs, errorLines } = loader({ modFolders: modFoldersOf('Real Mod'), skippedLinks: new Map([['Loop', 'too many levels']]) });
+  it('tells once rather than on every watched change that a link cannot be followed, without failing the recompute', async () => {
+    const { instance, logs, errorLines } = loader({ modFolders: modFoldersOf('Real Mod'), skippedLinks: new Map([['/inst/mods/Loop', 'too many levels']]) });
 
     await instance.refresh();
     await instance.refresh();
 
     expect(errorLines).toEqual([]);
     expect(instance.sequence).toBe(2);
-    expect(logs.filter((line) => line.includes('Loop'))).toEqual(['[instance] mods/Loop is a link Modbench cannot follow, so it is not a mod folder: too many levels']);
+    expect(logs.filter((line) => line.includes('Loop'))).toEqual(['[instance] /inst/mods/Loop is a link Modbench cannot follow, so it is not read: too many levels']);
   });
 
   it('carries the winner of a path two enabled mods provide, and each listed mod\'s own files and folders, a disabled mod\'s too', async () => {

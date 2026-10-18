@@ -1,6 +1,7 @@
 import { fixedGameFolderSetting } from '../../test/gameFolderSetting';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../ports/trash';
+import { ignoreSkippedLink } from '../files';
 import {
   access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, writeFile,
 } from 'node:fs/promises';
@@ -363,10 +364,18 @@ describe('the MO2 Instance adapter', () => {
         expect((await adapter.reading()).gameName).toBe('Rewritten');
       });
 
-      it('hands over a link in mods/ it cannot follow, by name', async () => {
+      it('hands over a link it cannot follow, by path', async () => {
         await symlink(join(root, 'nowhere'), join(root, 'mods', 'Dangling'));
 
-        expect([...(await adapter.reading()).skippedLinks.keys()]).toEqual(['Dangling']);
+        expect([...(await adapter.reading()).skippedLinks.keys()]).toEqual([join(root, 'mods', 'Dangling')]);
+      });
+
+      it('hands over, with the mods\' link, a link in profiles/ or downloads/ it cannot follow', async () => {
+        await symlink(join(root, 'nowhere'), join(root, 'profiles', 'Gone'));
+        await symlink(join(root, 'nowhere.7z'), join(root, 'downloads', 'Gone-1-0.7z'));
+
+        expect([...(await adapter.reading()).skippedLinks.keys()].sort())
+          .toEqual([join(root, 'downloads', 'Gone-1-0.7z'), join(root, 'profiles', 'Gone')]);
       });
 
       it('reads each listed mod\'s meta once, so one reading holds one answer for it', async () => {
@@ -492,7 +501,7 @@ describe('the MO2 Instance adapter', () => {
       await writeFile(join(root, 'downloads', 'big.rar.unfinished'), 'half');
       await writeFile(join(root, 'downloads', 'gone.zip.meta'), '[General]\r\n');
 
-      const downloads = await (await source.settings()).downloadedFiles();
+      const downloads = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
 
       if (downloads.kind !== 'listed') throw new Error(`expected listed, got ${downloads.reason}`);
       expect(downloads.downloadsDir).toBe(join(root, 'downloads'));
@@ -509,7 +518,7 @@ describe('the MO2 Instance adapter', () => {
       await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
       await writeFile(join(root, 'downloads', 'manual.zip.meta'), '');
 
-      const downloads = await (await source.settings()).downloadedFiles();
+      const downloads = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
 
       if (downloads.kind !== 'listed') throw new Error(`expected listed, got ${downloads.reason}`);
       expect(downloads.files?.find((file) => file.name === 'manual.zip')?.meta).toMatchObject({ status: 'Downloaded' });
@@ -518,7 +527,7 @@ describe('the MO2 Instance adapter', () => {
     it('answers no files, rather than none, when the downloads folder is not there', async () => {
       await rm(join(root, 'downloads'), { recursive: true });
 
-      expect(await (await source.settings()).downloadedFiles())
+      expect(await (await source.settings()).downloadedFiles(ignoreSkippedLink))
         .toEqual({ kind: 'listed', downloadsDir: join(root, 'downloads'), files: undefined });
     });
 
@@ -527,7 +536,7 @@ describe('the MO2 Instance adapter', () => {
       await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n'
         + '[Settings]\r\ndownload_directory=@ByteArray(elsewhere)\r\n');
 
-      const downloads = await settings.downloadedFiles();
+      const downloads = await settings.downloadedFiles(ignoreSkippedLink);
 
       expect(downloads).toMatchObject({ kind: 'listed', downloadsDir: join(root, 'downloads') });
     });
@@ -535,13 +544,38 @@ describe('the MO2 Instance adapter', () => {
     it('answers every profile, and no stray file beside them', async () => {
       await writeFile(join(root, 'profiles', 'stray.txt'), '');
 
-      expect((await source.profiles()).sort()).toEqual(['Default', 'Secondary']);
+      expect((await source.profiles(ignoreSkippedLink)).sort()).toEqual(['Default', 'Secondary']);
+    });
+
+    it('answers a profile folder that is a link to a folder, and no link to a file or to nothing', async () => {
+      await mkdir(join(root, 'elsewhere', 'Linked'), { recursive: true });
+      await symlink(join(root, 'elsewhere', 'Linked'), join(root, 'profiles', 'Linked'));
+      await writeFile(join(root, 'elsewhere', 'file'), '');
+      await symlink(join(root, 'elsewhere', 'file'), join(root, 'profiles', 'FileLink'));
+      await symlink(join(root, 'nowhere'), join(root, 'profiles', 'Broken'));
+
+      const skipped: string[] = [];
+
+      expect((await source.profiles((link) => skipped.push(link))).sort()).toEqual(['Default', 'Linked', 'Secondary']);
+      expect(skipped).toEqual([join(root, 'profiles', 'Broken')]);
+    });
+
+    it('answers a downloaded archive that is a link to a file, and hands over one that links to nothing', async () => {
+      await writeFile(join(root, 'elsewhere.7z'), '');
+      await symlink(join(root, 'elsewhere.7z'), join(root, 'downloads', 'Linked-1-0.7z'));
+      await symlink(join(root, 'nowhere.7z'), join(root, 'downloads', 'Broken-1-0.7z'));
+      const skipped: string[] = [];
+
+      const downloads = await (await source.settings()).downloadedFiles((link) => skipped.push(link));
+
+      expect(downloads.kind === 'listed' && downloads.files?.map(({ name }) => name)).toContain('Linked-1-0.7z');
+      expect(skipped).toEqual([join(root, 'downloads', 'Broken-1-0.7z')]);
     });
 
     it('answers no profiles when the instance has none', async () => {
       await rm(join(root, 'profiles'), { recursive: true });
 
-      expect(await source.profiles()).toEqual([]);
+      expect(await source.profiles(ignoreSkippedLink)).toEqual([]);
     });
 
     it('answers the mods and separators in mod order, winning end first', async () => {
@@ -587,7 +621,7 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('answers every mod folder as the entry it holds, with its path and the name MO2 knows its mod by', async () => {
-      const folders = (await source.modFolders())?.all;
+      const folders = (await source.modFolders(ignoreSkippedLink))?.all;
 
       expect(folders).toContainEqual({
         kind: 'mod', name: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'), modName: 'Unofficial Fallout 4 Patch',
@@ -603,11 +637,11 @@ describe('the MO2 Instance adapter', () => {
     it('answers no entry for a folder named as the reserved overwrite folder, which mod sync would otherwise list as a mod', async () => {
       await mkdir(join(root, 'mods', 'Overwrite'));
 
-      expect((await source.modFolders())?.all.map((f) => f.name)).not.toContain('Overwrite');
+      expect((await source.modFolders(ignoreSkippedLink))?.all.map((f) => f.name)).not.toContain('Overwrite');
     });
 
     describe('a folder an install is extracting into', () => {
-      const listed = async (): Promise<string[]> => present(await source.modFolders(), 'the mod folders').all.map((f) => f.name);
+      const listed = async (): Promise<string[]> => present(await source.modFolders(ignoreSkippedLink), 'the mod folders').all.map((f) => f.name);
 
       it('is not listed while only its extraction is in it', async () => {
         const { settle } = await installHeld(root, { kind: 'new', name: 'New Mod' });
@@ -657,11 +691,11 @@ describe('the MO2 Instance adapter', () => {
         return actualReaddir(path, options);
       });
 
-      await expect(source.modFolders()).rejects.toThrow(/permission denied/);
+      await expect(source.modFolders(ignoreSkippedLink)).rejects.toThrow(/permission denied/);
     });
 
     it('answers which mod folder holds an entry, matched as MO2 matches names, from the one listing', async () => {
-      const folders = present(await source.modFolders(), 'the mod folders');
+      const folders = present(await source.modFolders(ignoreSkippedLink), 'the mod folders');
 
       expect(folders.holding({ kind: 'mod', name: 'harder vats' })?.path).toBe(join(root, 'mods', 'Harder VATS'));
       expect(folders.holding({ kind: 'mod', name: 'No Such Mod' })).toBeUndefined();
@@ -670,7 +704,7 @@ describe('the MO2 Instance adapter', () => {
     it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) answers each of two folders whose names differ only in case for the entry spelled as its own', async () => {
       await mkdir(join(root, 'mods', 'ModA'));
       await mkdir(join(root, 'mods', 'moda'));
-      const folders = present(await source.modFolders(), 'the mod folders');
+      const folders = present(await source.modFolders(ignoreSkippedLink), 'the mod folders');
 
       expect(folders.holding({ kind: 'mod', name: 'moda' })?.path).toBe(join(root, 'mods', 'moda'));
       expect(folders.holding({ kind: 'mod', name: 'ModA' })?.path).toBe(join(root, 'mods', 'ModA'));
@@ -683,20 +717,20 @@ describe('the MO2 Instance adapter', () => {
       const folders = await source.modFolders((name) => skipped.push(name));
 
       expect(folders?.all.map((f) => f.name)).not.toContain('Loop');
-      expect(skipped).toEqual(['Loop']);
+      expect(skipped).toEqual([join(root, 'mods', 'Loop')]);
     });
 
     it('answers undefined when there is no folder for mods at all', async () => {
       await rm(join(root, 'mods'), { recursive: true });
 
-      expect(await source.modFolders()).toBeUndefined();
+      expect(await source.modFolders(ignoreSkippedLink)).toBeUndefined();
     });
 
     it('rejects when mods/ is there but cannot be listed, only its absence meaning there is no folder for mods', async () => {
       await rm(join(root, 'mods'), { recursive: true });
       await writeFile(join(root, 'mods'), 'not a directory');
 
-      await expect(source.modFolders()).rejects.toThrow();
+      await expect(source.modFolders(ignoreSkippedLink)).rejects.toThrow();
     });
 
     it('answers the plugins in plugin order, with their enabled state', async () => {
@@ -729,7 +763,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(data, 'Patch.esp'), '');
         await writeFile(join(data, 'readme.txt'), '');
 
-        const plugins = await source.gameFolderPlugins(found(data));
+        const plugins = await source.gameFolderPlugins(found(data), ignoreSkippedLink);
 
         expect(plugins).toEqual({ kind: 'listed', names: new Set(['Fallout4.ESM', 'Patch.esp']) });
       });
@@ -740,17 +774,30 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(data, 'Foo.esp'), '');
         await writeFile(join(data, 'foo.esp'), '');
 
-        expect(await source.gameFolderPlugins(found(data))).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
+        expect(await source.gameFolderPlugins(found(data), ignoreSkippedLink)).toEqual({ kind: 'listed', names: new Set(['Foo.esp', 'foo.esp']) });
+      });
+
+      it('answers a plugin that is a link to a file, and no link to nothing', async () => {
+        const data = join(game, 'Data');
+        await mkdir(data, { recursive: true });
+        await writeFile(join(game, 'Real.esp'), '');
+        await symlink(join(game, 'Real.esp'), join(data, 'Linked.esp'));
+        await symlink(join(game, 'nowhere.esp'), join(data, 'Broken.esp'));
+
+        const skipped: string[] = [];
+
+        expect(await source.gameFolderPlugins(found(data), (link) => skipped.push(link))).toEqual({ kind: 'listed', names: new Set(['Linked.esp']) });
+        expect(skipped).toEqual([join(data, 'Broken.esp')]);
       });
 
       it('answers unresolved when the game folder was not found', async () => {
         const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
 
-        expect(await source.gameFolderPlugins(notFound)).toEqual({ kind: 'unresolved' });
+        expect(await source.gameFolderPlugins(notFound, ignoreSkippedLink)).toEqual({ kind: 'unresolved' });
       });
 
       it('answers unreadable, with why, when the Data folder cannot be listed', async () => {
-        const plugins = await source.gameFolderPlugins(found(join(game, 'Missing')));
+        const plugins = await source.gameFolderPlugins(found(join(game, 'Missing')), ignoreSkippedLink);
 
         if (plugins.kind !== 'unreadable') throw new Error(`expected unreadable, got ${plugins.kind}`);
         expect(plugins.reason).toMatch(/ENOENT/);
@@ -908,17 +955,36 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(data, 'STRINGS', 'Fallout4_en.STRINGS'), '');
         await writeFile(join(data, 'STRINGS', 'readme.txt'), '');
 
-        expect(await source.gameFolderArchives(found(), 'Fallout4')).toEqual({
+        expect(await source.gameFolderArchives(found(), 'Fallout4', ignoreSkippedLink)).toEqual({
           kind: 'listed', archives: ['Fallout4 - Interface.BA2'], stringsFiles: ['STRINGS/Fallout4_en.STRINGS'],
         });
       });
 
+      it('answers an archive that is a link to a file, and a strings folder that is a link to a folder', async () => {
+        const data = join(game, 'Data');
+        await mkdir(join(game, 'Real', 'strings'), { recursive: true });
+        await mkdir(data, { recursive: true });
+        await writeFile(join(game, 'Real.ba2'), '');
+        await writeFile(join(game, 'Real', 'strings', 'Fallout4_en.STRINGS'), '');
+        await symlink(join(game, 'Real.ba2'), join(data, 'Fallout4 - Linked.ba2'));
+        await symlink(join(game, 'Real', 'strings'), join(data, 'Strings'));
+        await symlink(join(game, 'Real', 'strings', 'Fallout4_en.STRINGS'), join(game, 'Real', 'strings', 'Fallout4_de.STRINGS'));
+
+        await symlink(join(game, 'nowhere.ba2'), join(data, 'Fallout4 - Broken.ba2'));
+        const skipped: string[] = [];
+
+        expect(await source.gameFolderArchives(found(), 'Fallout4', (link) => skipped.push(link))).toEqual({
+          kind: 'listed', archives: ['Fallout4 - Linked.ba2'], stringsFiles: ['Strings/Fallout4_de.STRINGS', 'Strings/Fallout4_en.STRINGS'],
+        });
+        expect(skipped).toEqual([join(data, 'Fallout4 - Broken.ba2')]);
+      });
+
       it('answers unresolved when the game folder was not found', async () => {
-        expect(await source.gameFolderArchives({ kind: 'notFound', looked: [], setting: 'setting' }, 'Fallout4')).toEqual({ kind: 'unresolved' });
+        expect(await source.gameFolderArchives({ kind: 'notFound', looked: [], setting: 'setting' }, 'Fallout4', ignoreSkippedLink)).toEqual({ kind: 'unresolved' });
       });
 
       it('answers unreadable, with why, when its Data folder cannot be listed', async () => {
-        expect(await source.gameFolderArchives(found(), 'Fallout4'))
+        expect(await source.gameFolderArchives(found(), 'Fallout4', ignoreSkippedLink))
           .toEqual({ kind: 'unreadable', reason: expect.stringMatching(/ENOENT/) as unknown });
       });
     });
@@ -1212,14 +1278,14 @@ describe('the MO2 Instance adapter', () => {
       let signals = 0;
       const watched = watchedOver(contextOver(root));
       watched.subscribe(() => { signals++; });
-      await (await watched.settings()).downloadedFiles();
+      await (await watched.settings()).downloadedFiles(ignoreSkippedLink);
       expect(fire(join(root, 'downloads'), 'new.7z')).toBe(true);
       signals = 0;
 
       await writeFile(join(root, INI), `${await text(root, INI)}download_directory=@ByteArray(Elsewhere)\r\n`);
-      await (await watched.settings()).downloadedFiles();
+      await (await watched.settings()).downloadedFiles(ignoreSkippedLink);
       expect(signals).toBe(1);
-      await (await watched.settings()).downloadedFiles();
+      await (await watched.settings()).downloadedFiles(ignoreSkippedLink);
       expect(signals).toBe(1);
 
       expect(fire(join(root, 'downloads'), 'old.7z')).toBe(false);
@@ -1267,7 +1333,7 @@ describe('the MO2 Instance adapter', () => {
         watched.subscribe(() => undefined);
 
         await watched.archiveList('Default', found, 'Fallout4');
-        await watched.gameFolderArchives(found, 'Fallout4');
+        await watched.gameFolderArchives(found, 'Fallout4', ignoreSkippedLink);
 
         expect(fire(game, 'fallout4_default.INI')).toBe(true);
         expect(fire(game, 'Fallout4Prefs.ini')).toBe(false);
@@ -2247,7 +2313,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       expect(seen).toEqual([modNames(await source.modOrder('Default'))]);
-      expect(folders).toEqual((await source.modFolders())?.all);
+      expect(folders).toEqual((await source.modFolders(ignoreSkippedLink))?.all);
       expect(holding?.path).toBe(join(root, 'mods', 'Harder VATS'));
     });
 
@@ -2727,7 +2793,7 @@ describe('the MO2 Instance adapter', () => {
     it('marks a downloaded file installed, creating its metadata when it has none', async () => {
       expect(await adapter.markDownloadedFile('manual.zip', 'Installed')).toEqual({ gone: false, wrote: true });
 
-      const listed = await (await source.settings()).downloadedFiles();
+      const listed = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
       if (listed.kind !== 'listed') throw new Error(`expected listed, got ${listed.reason}`);
       expect(listed.files?.find((file) => file.name === 'manual.zip')?.meta?.status).toBe('Installed');
     });
