@@ -2748,6 +2748,15 @@ describe('the MO2 Instance adapter', () => {
       expect((await text(root, DEFAULT_PLUGINS)).startsWith('﻿')).toBe(true);
     });
 
+    it('refuses a plugins.txt holding a name that is not UTF-8, as MO2 writes one in the system\'s code page, and writes neither file', async () => {
+      await writeFile(join(root, DEFAULT_PLUGINS), Buffer.concat([await readFile(join(root, DEFAULT_PLUGINS)), Buffer.from([0x2a, 0x43, 0xe9, 0x2e, 0x65, 0x73, 0x70])]));
+      const before = await snapshotTree(root);
+
+      await expect(change([{ kind: 'enable', plugin: 'Patch Mod.esp', enabled: false }])).rejects.toThrow(/plugins\.txt line 6 is not UTF-8/);
+
+      assertOnlyChanged(before, await snapshotTree(root), new Set());
+    });
+
     it('writes no loadorder.txt when plugin order is unchanged', async () => {
       await change([{ kind: 'enable', plugin: 'Patch Mod.esp', enabled: true }]);
 
