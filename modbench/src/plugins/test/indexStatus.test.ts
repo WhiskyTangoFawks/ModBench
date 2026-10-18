@@ -46,7 +46,7 @@ function followed() {
     },
     recordBrowser: { refresh: vi.fn() },
     progress: { while: vi.fn((work: () => Promise<void>) => work()), say: vi.fn() },
-    statusBar: createStatusBar(client),
+    statusBar: createStatusBar(client, () => recordingReporter()),
     showRecordFilter: vi.fn(),
     registerRepositories: vi.fn(),
     log: vi.fn(),
