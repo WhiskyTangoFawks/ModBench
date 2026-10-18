@@ -16,8 +16,7 @@ import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
-import { DATA_DIRECTORY_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
-import { pluginOrderOf } from '../instanceLoader/pluginOrder';
+import { pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 
 export type PluginsInstance = InstanceView & Pick<Instance, 'refresh'>;
 
@@ -55,10 +54,6 @@ interface PluginsTreeProviderOptions {
   /** This provider states the severity (ADR-0019), so a background blip and a failed
    *  read land on different channel levels. */
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
-  /** The Instance adapter's path of a file at the root of the Data folder, read fresh at each
-   *  call: the game folder setting is editable while Modbench runs. `undefined` while the folder
-   *  is not found. */
-  dataFolderFile: (name: string) => string | undefined;
 }
 
 
@@ -103,7 +98,6 @@ export class PluginsTreeProvider
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginsTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private readonly dataFolderFile: (name: string) => string | undefined;
   private readonly instance: PluginsInstance;
   private readonly records: RecordBrowserFacet;
   private instanceValue: InstanceValue;
@@ -121,7 +115,6 @@ export class PluginsTreeProvider
   private lastLockedRowUris: ReadonlySet<string> = new Set();
 
   constructor(options: PluginsTreeProviderOptions) {
-    this.dataFolderFile = options.dataFolderFile;
     this.instance = options.instance;
     this.records = options.records;
     this.facts = new PluginFactsFeed({
@@ -204,11 +197,9 @@ export class PluginsTreeProvider
     return Promise.resolve(this.pluginFile(addressOfRow(row)));
   }
 
-  /** The plugin's own file (ADR-0012), or the game folder's copy for a game-folder plugin the
-   *  Instance value lists no file for. */
   pluginFile(address: PluginAddress): string | undefined {
-    const listed = this.instanceValue.plugins.find((p) => samePluginAddress(p, address))?.path;
-    return listed ?? (address.origin === DATA_DIRECTORY_ORIGIN ? this.dataFolderFile(address.name) : undefined);
+    const { plugins, pluginsLoadedWithNoLine = [] } = this.instanceValue;
+    return [...plugins, ...pluginsLoadedWithNoLine].find((p) => samePluginAddress(p, address))?.path;
   }
 
   /** Whether the row's line is enabled now: a row the view still holds may predate the value. */
@@ -348,7 +339,7 @@ export class PluginsTreeProvider
   private buildRows(): PluginListNode[] {
     const { loadedWithNoLine, fromLines } = pluginOrderOf(
       { plugins: this.instanceValue.plugins, pluginsLoadedWithNoLine: this.instanceValue.pluginsLoadedWithNoLine ?? [] },
-      (address) => ({ ...address, path: '', line: null, enabled: true, winning: true }),
+      unplaced,
     );
     const lockedRows = loadedWithNoLine.map(({ name, origin }) => new ImplicitMasterNode(name, origin));
     this.lastLockedRowUris = new Set(lockedRows.map((row) => row.resourceUri.toString()));

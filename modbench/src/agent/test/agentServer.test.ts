@@ -172,7 +172,7 @@ describe('the agent server, given an instance value', () => {
   });
 
   it('reads the plugins the game loads with no line first, with no line', async () => {
-    const client = await clientOf(new FakeInstance({ ...VALUE, pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN }] }));
+    const client = await clientOf(new FakeInstance({ ...VALUE, pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/game/Data/Fallout4.esm' }] }));
 
     expect(await read(client, 'list_plugins')).toEqual({ plugins: [
       { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, line: null, enabled: true, winning: true },

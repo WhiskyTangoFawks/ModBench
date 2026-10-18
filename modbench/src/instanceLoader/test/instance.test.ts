@@ -773,7 +773,7 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
     await instance.refresh();
 
     expect(instance.value.pluginsLoadedWithNoLine).toEqual(
-      ['Fallout4.esm', 'DLCRobot.esm', 'ccListed.esl'].map((name) => ({ name, origin: 'Data/' })));
+      ['Fallout4.esm', 'DLCRobot.esm', 'ccListed.esl'].map((name) => ({ name, origin: 'Data/', path: join('/game/Data', name) })));
   });
 
   it('carries a game master an enabled mod provides where the game folder holds none, at its file\'s spelling, in the snapshot too', async () => {
@@ -785,7 +785,7 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
     await instance.refresh();
 
     const provided = { name: 'dlccoast.esm', origin: 'Consumer' };
-    expect(instance.value.pluginsLoadedWithNoLine).toEqual([provided]);
+    expect(instance.value.pluginsLoadedWithNoLine).toEqual([{ ...provided, path: join('/mods/Consumer', 'dlccoast.esm') }]);
     expect(instance.value.loadOrderSnapshot).toMatchObject({ loadedWithNoLine: [provided] });
   });
 

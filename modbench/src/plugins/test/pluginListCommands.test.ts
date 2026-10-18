@@ -373,13 +373,13 @@ describe('registerRevealInExplorerCommand', () => {
     expect(executeCommand).toHaveBeenCalledWith('revealFileInOS', { fsPath: '/game/Data/Fallout4.esm' });
   });
 
-  it('says the game folder was not found when a locked row resolves to no file', async () => {
+  it('says the instance does not list the file when a locked row resolves to no file', async () => {
     const { run, reporter } = invoke(() => Promise.resolve(undefined));
 
     await run(new ImplicitMasterNode('Fallout4.esm', 'Data/'));
 
     expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not resolve a file location for "Fallout4.esm" — the game folder was not found.', detail: undefined,
+      severity: 'error', message: 'Could not resolve a file location for "Fallout4.esm" — the instance does not list this file.', detail: undefined,
     }]);
   });
 
