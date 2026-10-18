@@ -625,3 +625,27 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(snapshot?.active).toEqual([address(a)]);
   });
 });
+
+describe('the snapshot of a plugins.txt line whose only providing mod is disabled', () => {
+  const plugin = modFile('MB-DEV Conditions', 'MBDevConditions.esp');
+  const disabledIndex = buildFileConflictIndex(
+    [{ kind: 'mod', name: 'MB-DEV Conditions', enabled: false }],
+    [],
+    new Map([['MB-DEV Conditions', { origin: 'MB-DEV Conditions', folder: undefined, files: [plugin], folders: [], notes: [] }]]),
+    () => undefined,
+  );
+  const inData = inDataFolder('Fallout4.esm');
+  const rows = buildLoadOrderRows(lines(['MBDevConditions.esp']), disabledIndex, [], GAME_FOLDER, inData);
+  const modFolders: ModFolders = { all: [], holding: (entry) => ({ kind: 'mod', name: entry.name, path: `/mods/${entry.name}`, modName: entry.name }) };
+  const snapshot = loadOrderSnapshotOf({
+    plugins: rows, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: pluginsLoadedWithNoLineOf([], inData, rows, GAME_FOLDER), modFolders,
+    sourceDirs: new Map(), places: [],
+    archives: { gameRelease: 'Fallout4', listed: [], inData: { kind: 'listed', archives: [], stringsFiles: [] }, files: disabledIndex.files, filesByOrigin: new Map() },
+    modlist: { mods: [], metadataFiles: [], statCache: '/stat-cache' },
+  });
+
+  it('sends the plugin from its mod, and none from a game folder that does not hold it', () => {
+    expect(snapshot !== undefined && 'plugins' in snapshot ? snapshot.plugins.map((p) => [p.origin, p.path]) : snapshot)
+      .toEqual([['MB-DEV Conditions', '/mods/MB-DEV Conditions/MBDevConditions.esp']]);
+  });
+});
