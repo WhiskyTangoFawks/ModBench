@@ -98,6 +98,16 @@ describe('modbench.mod.build', () => {
     expect(progressSteps).toContain('progress opens on modbench.pluginListTree');
   });
 
+  it('on a record tab\'s column header, builds the plugin\'s mod', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', { landed: [built('ModB', [OTHER])], refused: [] });
+    const { handler } = registered(client, { selection: [row(PATCH)] });
+
+    await handler({ webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Other.esp', plugin: OTHER } });
+
+    expect(buildCalls()).toEqual([[['ModB']]]);
+  });
+
   it('builds the mods of a selection once each, in one call', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', { landed: [built('ModA', [PATCH]), built('ModB', [OTHER])], refused: [] });

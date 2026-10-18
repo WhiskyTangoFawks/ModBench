@@ -141,6 +141,16 @@ describe('modbench.mod.decompileAndCommit', () => {
     expect(reporter.landings).toEqual(['Decompiled and committed "ModB".']);
   });
 
+  it('on an Editor column header, decompiles and commits the column plugin\'s mod', async () => {
+    const commands = decompileAndCommitCommands();
+    commands.answers({ landed: [modA([FIRST, SECOND])], refused: [] });
+    const { handler } = invokeDecompileAndCommit(commands);
+
+    await handler({ webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Other.esp', plugin: SECOND } });
+
+    expect(commands.sent()).toEqual([['ModA']]);
+  });
+
   it('names a mod mEdit refused while the rest land', async () => {
     const commands = decompileAndCommitCommands();
     commands.answers({
