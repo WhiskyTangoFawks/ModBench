@@ -21,6 +21,7 @@
     { "path": "./downloadedFileCommands" },
     { "path": "./client" },
     { "path": "./drivingLib" },
+    { "path": "./textDocuments" },
     { "path": "./toolbox" },
     { "path": "./mods" },
     { "path": "./downloads" },

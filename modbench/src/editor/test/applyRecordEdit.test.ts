@@ -22,7 +22,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { applyRecordEdit, type RecordWriteDeps } from '../applyRecordEdit';
-import { oneAtATime } from '../../drivingLib/oneAtATime';
+import { oneAtATime } from '../../textDocuments/oneAtATime';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { RecordEditEnvelope } from '../../wire/messages';

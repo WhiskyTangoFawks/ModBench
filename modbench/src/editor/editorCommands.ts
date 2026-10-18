@@ -18,7 +18,7 @@ import {
 } from './recordLifecycleCommands';
 import { announceConflictsComputed, subscribeRecordTabsToNotifications } from './notificationWiring';
 import type { RecordWrite } from '../drivingLib/writingGesture';
-import type { SourceEditing } from '../drivingLib/sourceEditing';
+import type { SourceEditing } from '../textDocuments/sourceEditing';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { pinnedArgument, recordOpenPlan, type RecordOpenPlan, type RecordToOpen } from './recordOpenPlan';
