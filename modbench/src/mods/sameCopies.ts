@@ -1,4 +1,5 @@
-import type { FileOrigin, FileRead, FileStamp, HashedFile } from '../instanceLoader/instance';
+import type { FileOrigin } from '../instanceLoader/instance';
+import type { FileRead, FileStamp, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
 /** One provider's copy of a file. Two copies of one file with the same `sameAs` hold the same
  *  bytes. */
@@ -12,15 +13,9 @@ export interface FileCopies {
   readonly copies: readonly Copy[];
 }
 
-interface CopyToRead {
-  readonly origin: FileOrigin;
-  readonly path: string;
-}
-
 export interface FileToCompare {
   readonly relativePath: string;
-  /** Each provider's copy, winning-most first. */
-  readonly providers: readonly CopyToRead[];
+  readonly providers: readonly { readonly origin: FileOrigin; readonly path: string }[];
 }
 
 type Contents = FileRead<string> | { readonly kind: 'ownSize' };
@@ -46,10 +41,7 @@ function numbered(copies: readonly Stamped[]): Copy[] {
   });
 }
 
-export interface CopyReads {
-  fileStamp(path: string): Promise<FileRead<FileStamp>>;
-  originFileHash(path: string): Promise<FileRead<HashedFile>>;
-}
+export type CopyReads = Pick<InstanceAdapter, 'fileStamp' | 'originFileHash'>;
 
 async function contentsOf(adapter: CopyReads, path: string, stamp: FileRead<FileStamp>, sizes: readonly bigint[]): Promise<Contents> {
   if (stamp.kind === 'unreadable') return stamp;
@@ -59,7 +51,6 @@ async function contentsOf(adapter: CopyReads, path: string, stamp: FileRead<File
   return hashed.kind === 'read' ? { kind: 'read', answer: hashed.answer.hash } : hashed;
 }
 
-/** For each of `files`, which of its providers' copies hold the same bytes, sizes first. */
 export function sameCopies(adapter: CopyReads, files: readonly FileToCompare[]): Promise<FileCopies[]> {
   return Promise.all(files.map(async ({ relativePath, providers }) => {
     const stamped = await Promise.all(providers.map(async ({ origin, path }) => ({ origin, path, stamp: await adapter.fileStamp(path) })));

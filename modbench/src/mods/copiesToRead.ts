@@ -5,13 +5,12 @@ import { present } from '../ports/present';
 
 type CopyFile = Pick<OriginFile, 'relativePath' | 'sourcePath'>;
 
-export interface CopiesIn {
+interface CopiesIn {
   readonly files: { get(relativePath: string): { readonly providers: readonly FileOrigin[] } | undefined };
   readonly filesByMod: ReadonlyMap<string, readonly CopyFile[]>;
   readonly overwriteFiles: readonly CopyFile[];
 }
 
-/** Each of `relativePaths` with its providers' copies, each at the path the value holds it at. */
 export function copiesToRead(value: CopiesIn, relativePaths: readonly string[]): FileToCompare[] {
   const byOrigin = new Map<string, ReadonlyMap<string, string>>();
   const copyPath = (origin: FileOrigin, relativePath: string): string => {

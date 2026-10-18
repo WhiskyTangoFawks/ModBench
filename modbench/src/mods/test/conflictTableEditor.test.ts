@@ -23,7 +23,8 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { file, indexedValueOf, mod } from './indexedValue';
 import { CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN, parseConflictTableShown } from '../../wire/conflictTable';
 import type { FileOrigin } from '../../instanceLoader/instance';
-import type { FileCopies } from '../sameCopies';
+import { sameCopies, type FileCopies } from '../sameCopies';
+import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const conflictTableUri = (mod: string) => vscode.Uri.from({ scheme: 'modbench-conflicts', path: `/${mod}.modbench-conflicts` });
@@ -40,22 +41,27 @@ const settings: WorkspaceSettings = {
   },
 };
 
-const copiesDouble = {
+const recordingCopies = () => ({
   asked: [] as (readonly string[])[],
   answer: (_relativePaths: readonly string[]): Promise<FileCopies[]> => Promise.resolve([]),
-};
+});
+let copiesDouble = recordingCopies();
 
 beforeEach(() => {
-  copiesDouble.asked = [];
-  copiesDouble.answer = () => Promise.resolve([]);
+  copiesDouble = recordingCopies();
 });
 
-function setup(instance = new FakeInstance(instanceValueFixture()), selection: readonly ModlistNode[] = [], reporter = recordingReporter()) {
-  registerConflictTable(instance, (files) => {
+type CopiesOf = Parameters<typeof registerConflictTable>[1];
+
+function setup(
+  instance = new FakeInstance(instanceValueFixture()), selection: readonly ModlistNode[] = [], reporter = recordingReporter(),
+  copiesOf: CopiesOf = (files) => {
     const paths = files.map(({ relativePath }) => relativePath);
     copiesDouble.asked.push(paths);
     return copiesDouble.answer(paths);
-  }, vscode.Uri.file('/extension'), () => selection, reporter, settings);
+  },
+) {
+  registerConflictTable(instance, copiesOf, vscode.Uri.file('/extension'), () => selection, reporter, settings);
   const openConflicts = (...args: unknown[]) =>
     registerCommand.mock.calls.find(([id]) => id === 'modbench.mod.openConflicts')?.[1](...args);
   const opened = () => executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith');
@@ -143,8 +149,8 @@ function isResolvingProvider(value: unknown): value is ResolvingProvider {
   return typeof value === 'object' && value !== null && 'openCustomDocument' in value && 'resolveCustomEditor' in value;
 }
 
-function openTable(instance: FakeInstance, modName: string, reporter = recordingReporter()): FakePanel {
-  setup(instance, [], reporter);
+function openTable(instance: FakeInstance, modName: string, reporter = recordingReporter(), copiesOf?: CopiesOf): FakePanel {
+  setup(instance, [], reporter, copiesOf);
   const [viewType, provider, options] = registerCustomEditorProvider.mock.calls.at(-1) ?? [];
   expect(viewType).toBe('modbench.conflicts');
   expect(options).toEqual({ webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true } });
@@ -178,6 +184,20 @@ describe('a mod\'s conflict table, open in a tab', () => {
         { origin: { kind: 'mod' as const, name: 'Low' }, kind: 'read' as const, sameAs: 0, size: 1n, modifiedNs: 0n },
       ],
     })));
+
+  it('reads each copy at the path its mod holds it at, and shows what the adapter stamps', async () => {
+    const stamp = (size: bigint) => ({ size, modifiedNs: 0n, changedNs: 0n });
+    const { adapter } = fakeInstanceAdapter(readingFixture(), {
+      stamps: new Map([['/instance/High/a.dds', stamp(2048n)], ['/instance/Low/a.dds', stamp(512n)]]),
+    });
+    const panel = openTable(new FakeInstance(await shared()), 'High', recordingReporter(), (files) => sameCopies(adapter, files));
+    panel.webview.receive?.(ready);
+    await posted(panel, 1);
+
+    const [table] = shownTables(panel);
+    const row = table?.kind === 'table' ? table.rows[0] : undefined;
+    expect(row?.kind === 'file' ? row.cells.map((cell) => cell?.value) : []).toEqual(['512 B', '2 KB']);
+  });
 
   it('is titled with the mod\'s name, and loads the conflict table\'s page and its icons', async () => {
     const panel = openTable(new FakeInstance(await shared()), 'High');

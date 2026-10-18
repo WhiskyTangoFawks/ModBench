@@ -32,8 +32,7 @@ const modOfUri = (uri: vscode.Uri): string => decodeURIComponent(uri.path.slice(
 
 type TableInstance = Pick<InstanceView, 'value' | 'sequence' | 'subscribe'>;
 
-/** Which copies of each file hold the same bytes. */
-export type CopiesOf = (files: readonly FileToCompare[]) => Promise<FileCopies[]>;
+type CopiesOf = (files: readonly FileToCompare[]) => Promise<FileCopies[]>;
 
 class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider {
   constructor(
