@@ -28,3 +28,6 @@ export const pluginAddressOf = ({ plugin, origin }: { plugin: string; origin: st
 
 export const samePluginAddress = (a: PluginAddress, b: PluginAddress): boolean =>
   pluginAddressKey(a) === pluginAddressKey(b);
+
+// ADR-0012.
+export const pluginRowName = ({ name, origin }: PluginAddress): string => `${name} (${origin})`;

@@ -127,7 +127,6 @@ import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
-import { sourceCommands } from '../../sourceCommands/sourceCommands';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { settled } from '../../test/settled';
@@ -179,7 +178,7 @@ function pluginsView(
   const recordBrowser = new RecordBrowser(client);
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
-    instance, commands: pluginCommandsWith(fakeInstanceAdapter().adapter), sourceCommands: sourceCommands({ client, adapter: fakeInstanceAdapter().adapter }), recordBrowser, client,
+    instance, commands: pluginCommandsWith(fakeInstanceAdapter().adapter), recordBrowser, client,
     pluginSync,
     channel: silentChannel,
     dataFolderFile: () => undefined, log: () => undefined,
@@ -187,8 +186,6 @@ function pluginsView(
     statusBar: { ready: vi.fn(), showMEditState: vi.fn(), dispose: vi.fn() }, registerRepositories: () => Promise.resolve(),
     ask: scriptedDialog(), recordWrite: (command) => command(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
-    saveUnsavedPluginSource: () => Promise.resolve([]),
-    sourceGestureRows: () => [], modsView: 'modbench.modList',
   });
   const provider = () => present(h.providers[0], 'the Plugins tree data provider');
   const rows = async () => (await provider().getChildren()) ?? [];
@@ -213,19 +210,11 @@ beforeEach(() => {
 
 describe('the Plugins view registers its own gestures', () => {
   it.each([
-    'modbench.plugin.move', 'modbench.mod.decompileAndCommit', 'modbench.plugin.decompile', 'modbench.mod.build', 'modbench.record.create',
+    'modbench.plugin.move', 'modbench.plugin.decompile', 'modbench.record.create',
     'modbench.plugin.rename', 'modbench.plugin.create', 'modbench.plugin.sync',
   ])('registers %s with the view', (command) => {
     pluginsView();
     expect(h.commands.has(command)).toBe(true);
-  });
-
-  it('offers modbench.mod.build from the palette every source in the source folder, the modlist listing it or not', async () => {
-    pluginsView(instanceValueFixture({ paths: { ...instanceValueFixture().paths, sourceDirs: new Map([['Cloned And Unlisted', '/source/Cloned And Unlisted']]) } }));
-
-    await present(h.commands.get('modbench.mod.build'), 'the modbench.mod.build handler')();
-
-    expect(h.picked).toEqual([['Cloned And Unlisted']]);
   });
 
   it('runs plugin sync when modbench.plugin.sync fires', async () => {
@@ -289,9 +278,7 @@ describe('the Plugins view says what it knows of whether a plugin is a compiled 
       });
       const onInstance = () => plugins.onInstance({
         instance: new FakeInstance(value), instanceRoot: '/instance', commands: pluginCommandsWith(fakeInstanceAdapter().adapter),
-        sourceCommands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter }),
-        pluginSync: syncRefusing().pluginSync, saveUnsavedPluginSource: () => Promise.resolve([]), sourceGestureRows: () => [],
-        modsView: 'modbench.modList', dataFolderFile: () => undefined,
+        pluginSync: syncRefusing().pluginSync, dataFolderFile: () => undefined,
       });
       return { plugins, onInstance };
     }

@@ -26,12 +26,14 @@ const h = vi.hoisted(() => ({
   decorationProviders: [] as vscode.FileDecorationProvider[],
   expandListeners: [] as ((e: { element: unknown }) => void)[],
   collapseListeners: [] as ((e: { element: unknown }) => void)[],
+  picked: [] as string[][],
 }));
 
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
   Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
+  languages: { createDiagnosticCollection: () => ({ dispose: () => undefined }) },
   workspace: {
     ...fakeVscodeModule().workspace,
     getConfiguration: () => ({ get: () => undefined }),
@@ -71,6 +73,10 @@ vi.mock('vscode', () => ({
       h.providers.set(id, options.treeDataProvider);
       return view;
     },
+    showQuickPick: (items: { label: string }[]) => {
+      h.picked.push(items.map((item) => item.label));
+      return Promise.resolve(undefined);
+    },
     registerCustomEditorProvider: () => ({ dispose: () => undefined }),
     registerFileDecorationProvider: (provider: vscode.FileDecorationProvider) => {
       h.decorationProviders.push(provider);
@@ -96,6 +102,7 @@ import type { ModSyncRun } from '../../modCommands/modCommands';
 import { rowLabelOf } from '../../drivingLib/argument';
 import { present } from '../../ports/present';
 import { modCommands } from '../../modCommands/modCommands';
+import { sourceCommands } from '../../sourceCommands/sourceCommands';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -113,6 +120,11 @@ const otherDeps = () => ({
   commands: modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
   extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadInstall: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
   modStatus: { push: new InMemoryMEditClient(), readStatus: () => Promise.resolve([]) },
+  sourceGestures: {
+    commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter }), rows: () => [],
+    pluginsView: 'modbench.pluginListTree', say: () => undefined, saveUnsavedPluginSource: () => Promise.resolve([]),
+    registerRepositories: () => Promise.resolve(),
+  },
 });
 
 const silentChannel = { error: () => undefined, info: () => undefined };
@@ -148,6 +160,7 @@ beforeEach(() => {
   h.decorationProviders.length = 0;
   h.expandListeners.length = 0;
   h.collapseListeners.length = 0;
+  h.picked.length = 0;
 });
 
 describe('the Mods filter follows a row change with no keystroke', () => {
@@ -197,10 +210,27 @@ describe('the Mods view registers its own gestures', () => {
   it.each([
     'modbench.mod.rename', 'modbench.mod.uninstall', 'modbench.mod.enable', 'modbench.mod.move', 'modbench.mod.createEmpty',
     'modbench.mod.openFolder', 'modbench.mod.goToMod', 'modbench.mod.compareFile', 'modbench.mod.openConflicts', 'modbench.mod.sync',
-    'modbench.mod.install', 'modbench.mod.viewOnNexus',
+    'modbench.mod.install', 'modbench.mod.viewOnNexus', 'modbench.mod.decompileAndCommit', 'modbench.mod.build',
   ])('registers %s with the view', (command) => {
     createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
     expect(h.state.commands.has(command)).toBe(true);
+  });
+
+  it('offers modbench.mod.build from the palette every source in the source folder, the modlist listing it or not', async () => {
+    const value = instanceValueFixture({
+      paths: { ...instanceValueFixture().paths, sourceDirs: new Map([['Cloned And Unlisted', '/source/Cloned And Unlisted']]) },
+    });
+    createModsView({ ...otherDeps(), instance: new FakeInstance(value), log: () => undefined, ...noSync() });
+
+    await present(h.state.commands.get('modbench.mod.build'), 'the modbench.mod.build handler')();
+
+    expect(h.picked).toEqual([['Cloned And Unlisted']]);
+  });
+
+  it('says whether any mod is a source mod, for the palette to offer build', () => {
+    const value = instanceValueFixture({ sourceMods: new Set(['Source']) });
+    createModsView({ ...otherDeps(), instance: new FakeInstance(value), log: () => undefined, ...noSync() });
+    expect(h.state.contextKeys.get('modbench.mod.anySource')).toBe(true);
   });
 
   it('runs mod sync when modbench.mod.sync fires', async () => {
