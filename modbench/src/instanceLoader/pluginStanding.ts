@@ -14,11 +14,11 @@ export function pluginStanding(value: StandingFacts, plugin: PluginAddress): Plu
   if (isDisabledOrInDisabledMod(value, plugin)) return { kind: 'disabled' };
   const winner = value.plugins.find((row) => row.winning && row.enabled && foldPath(row.name) === foldPath(plugin.name));
   if (winner === undefined || samePluginAddress(winner, plugin)) return { kind: 'enabled' };
-  return { kind: 'overridden', by: originName(winner.origin) };
+  return { kind: 'overridden', by: pluginOriginName(winner.origin) };
 }
 
-// A winning enabled file's origin is the exact name of its mod, Overwrite or the Data folder (plugins.md, A row, Tooltip).
-function originName(origin: string): string {
+/** A plugin's origin as the user reads it: its mod's name, Overwrite or the game folder (plugins.md, A row, Tooltip). */
+export function pluginOriginName(origin: string): string {
   if (origin === OVERWRITE_ORIGIN) return OVERWRITE_LABEL;
   return origin === DATA_DIRECTORY_ORIGIN ? GAME_FOLDER_LABEL : origin;
 }
