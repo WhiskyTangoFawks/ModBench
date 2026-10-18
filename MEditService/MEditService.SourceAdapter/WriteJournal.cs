@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.SourceAdapter;
 
@@ -364,7 +365,7 @@ internal sealed class WriteJournal(string sourceFolder)
         new(reason, Path.GetRelativePath(sourceFolder, path), Detail: detail);
 
     private static string TempPathFor(string path) =>
-        Path.Combine(PathShape.DirectoryOf(path), ".medit_tmp_" + Path.GetRandomFileName() + ".tmp");
+        TempName.In(PathShape.DirectoryOf(path), ".tmp");
 
     private static void WriteAtomic(string path, byte[] content, string? tempPath = null)
     {

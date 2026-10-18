@@ -34,6 +34,41 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void ALeftoverOfAKilledWrite_IsNoFileOfTheMod()
+    {
+        Write("a.txt", "hello");
+        Write(".medit_tmp_abc.tmp", "half");
+        Write(Path.Combine(".medit_tmp_dir", "mod.esp"), "half");
+
+        Assert.Equal(["a.txt"], _repository.Files(_root, "mod", new HashSet<string>(), statCache: null).Files.Select(f => f.Path));
+        Assert.Equal(["a.txt"], _repository.FilePaths(_root));
+        Assert.Equal(["a.txt"], _repository.NamedByNoLine(_root, "mod", NoLines, new HashSet<string>()));
+    }
+
+    [Fact]
+    public void AStaleLeftover_IsRemovedWhenTheFolderIsRead()
+    {
+        Write("a.txt", "hello");
+        Write(".medit_tmp_abc.tmp", "half");
+        Write(Path.Combine(".medit_tmp_dir", "mod.esp"), "half");
+
+        Files();
+
+        Assert.Equal(["a.txt"], Directory.GetFileSystemEntries(_root).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void AFreshTempFile_IsLeftForTheWriteHoldingIt()
+    {
+        var now = new ModFolderRepository(TimeProvider.System);
+        Write(".medit_tmp_abc.tmp", "half");
+
+        now.Files(_root, "mod", new HashSet<string>(), statCache: null);
+
+        Assert.True(File.Exists(Path.Combine(_root, ".medit_tmp_abc.tmp")));
+    }
+
+    [Fact]
     public void AFileWhoseStampMatchesTheLastRead_IsNotOpenedAgain()
     {
         Write("a.txt", "hello");
