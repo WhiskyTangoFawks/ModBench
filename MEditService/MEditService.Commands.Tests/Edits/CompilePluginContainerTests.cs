@@ -127,9 +127,9 @@ public sealed class CompilePluginContainerTests : IDisposable
 
     private async Task<(IFallout4ModGetter Mod, IDisposable Handle)> CompileAndReimport()
     {
-        var answer = await CompileService().CompileAsync([_plugin]);
+        var answer = (await CompileService().CompileAsync([_plugin])).Value();
         Assert.Empty(answer.Refused);
-        Assert.Single(answer.Landed);
+        Assert.Single(answer.Applied);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);
         var overlay = ModFactory.ImportGetter(
@@ -208,9 +208,9 @@ public sealed class CompilePluginContainerTests : IDisposable
     [Fact]
     public async Task Compile_ForAnEmbeddedChildWithASemanticError_NamesTheContainersOwnDocument()
     {
-        var answer = await CompileService().CompileAsync([_plugin]);
+        var answer = (await CompileService().CompileAsync([_plugin])).Value();
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
 
         var diagnostic = Assert.Single(
             diagnostics.Where(d => d.FormKey == _cellATemporaryRef.ToString()).Take(1));
@@ -231,10 +231,10 @@ public sealed class CompilePluginContainerTests : IDisposable
         var renamed = Path.Combine(Path.GetDirectoryName(directory) ?? string.Empty, "ByHand");
         Directory.Move(directory, renamed);
 
-        var answer = await CompileService().CompileAsync([_plugin]);
+        var answer = (await CompileService().CompileAsync([_plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         var diagnostic = Assert.Single(diagnostics, d => d.Message.Contains("belongs at", StringComparison.Ordinal));
         Assert.Equal(cell.FormKey, diagnostic.FormKey);
         Assert.Equal(
@@ -250,10 +250,10 @@ public sealed class CompilePluginContainerTests : IDisposable
         var directory = TreeTampering.DirectoryOf(_modFolder, _plugin, new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId));
         Directory.Move(directory, Path.Combine(Path.GetDirectoryName(directory) ?? string.Empty, Path.GetFileName(directory).Replace("CellA", "CellB", StringComparison.Ordinal)));
 
-        var answer = await CompileService().CompileAsync([_plugin]);
+        var answer = (await CompileService().CompileAsync([_plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Landed).Outcome;
+        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
         Assert.Single(diagnostics, d => d.Message.Contains("belongs at", StringComparison.Ordinal));
     }
 

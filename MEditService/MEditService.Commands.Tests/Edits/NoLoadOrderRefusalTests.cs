@@ -18,13 +18,13 @@ public sealed class NoLoadOrderRefusalTests
     public static TheoryData<string, Func<Task<object?>>> Gestures => new()
     {
         { "Decompile", async () => (await Handler<DecompilePluginHandler>().DecompileAsync([Plugin], force: false)).WholeSelectionRefusal().Refusal },
-        { "Compile", async () => (await Handler<CompilePluginHandler>().CompileAsync([Plugin])).SelectionRefusal?.Refusal },
+        { "Compile", async () => (await Handler<CompilePluginHandler>().CompileAsync([Plugin])).WholeSelectionRefusal().Refusal },
         { "Copy", async () => (await Handler<CopyRecordChangesHandler>().CopyRecords([Record], CopyMode.Override, [Plugin], replace: false)).SelectionRefusal?.Refusal },
         { "Delete", async () => (await Handler<DeleteRecordChangesHandler>().DeleteRecords([Record])).SelectionRefusal?.Refusal },
         {
             "RenameSource",
             () => Task.FromResult<object?>(Handler<RenameSourceChangesHandler>().RenameSource(Plugin, "Renamed.esp")
-                .Match((_, _) => RenameSourceRefusal.NotAPluginFile, (why, _) => why))
+                .Match(_ => RenameSourceRefusal.NotAPluginFile, (why, _) => why))
         },
         { "MoveLastWritten", () => Task.FromResult<object?>(Handler<MoveLastWrittenHandler>().MoveLastWritten(Plugin, Plugin.Name, "Renamed.esp").Refusal) },
     };

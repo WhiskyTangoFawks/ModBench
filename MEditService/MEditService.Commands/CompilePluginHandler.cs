@@ -1,5 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
@@ -17,9 +18,16 @@ public sealed class CompilePluginHandler
 
     /// <summary>Refuses with <see cref="CompileRefusal.NoLoadOrder"/>, writing nothing, when none is held: no
     /// plugin of the selection escapes it (commands.md, A selection is one gesture).</summary>
-    public Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> CompileAsync(
-        IReadOnlyList<PluginAddress> plugins) =>
-        Over(plugins, _compileService.CompileAsync);
+    public async Task<Answer<CompileResult, SelectionRefusal<CompileRefusal>>> CompileAsync(
+        IReadOnlyList<PluginAddress> plugins)
+    {
+        if (WhyNoPluginCompiles() is { } none) return none;
+        var (landed, refused) = await Each(plugins, _compileService.CompileAsync);
+        return SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>.PerItem(landed, refused).ToAnswer(
+            compiled => new CompiledPlugin(compiled.Item.Name, compiled.Item.Origin, compiled.Outcome),
+            refusedItem => new CompileRefused(refusedItem.Item, refusedItem.Refusal, refusedItem.Message),
+            (applied, refusedItems) => new CompileResult(applied, refusedItems));
+    }
 
     /// <summary>Each plugin a build places, compiled to its path whether or not the load order holds it. No two differ
     /// in case alone. The build has asked <see cref="WhyNoPluginCompiles"/>.</summary>
@@ -37,20 +45,11 @@ public sealed class CompilePluginHandler
         return _source.WhyGitCannotRun() is { } gitMissing ? new(CompileRefusal.GitUnavailable, gitMissing.Reason) : null;
     }
 
-    private async Task<SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>> Over(
-        IReadOnlyList<PluginAddress> plugins, Func<PluginAddress, Task<CompileResult>> compile)
-    {
-        if (WhyNoPluginCompiles() is { } none)
-            return SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>.WholeSelectionRefused(none.Refusal, none.Message);
-        var (landed, refused) = await Each(plugins, compile);
-        return SelectionResult<PluginAddress, CompileRefusal, IReadOnlyList<CompileDiagnostic>>.PerItem(landed, refused);
-    }
-
     private static Task<(IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Landed, IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused)> Each(
-        IReadOnlyList<PluginAddress> plugins, Func<PluginAddress, Task<CompileResult>> compile) =>
+        IReadOnlyList<PluginAddress> plugins, Func<PluginAddress, Task<PluginCompileOutcome>> compile) =>
         ItemWrite.EachAsync(plugins, PluginAddress.Comparer, async plugin => Answered(await compile(plugin)));
 
-    private static ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>> Answered(CompileResult result) =>
+    private static ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>> Answered(PluginCompileOutcome result) =>
         result.Succeeded
             ? ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>.Landed(result.Diagnostics)
             : ItemAnswer<CompileRefusal, IReadOnlyList<CompileDiagnostic>>.Refused(

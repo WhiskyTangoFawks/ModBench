@@ -83,10 +83,10 @@ public sealed class CompileEmbeddedListOrderTests : TestInstance
             RepositoryOf(_plugin).Require(), _plugin, new RecordIdentity(_quest.ToString(), "qust", QuestEditorId),
             GameRelease.Fallout4, editTheSource);
 
-        var answer = await CompileHandler.CompileAsync([_plugin]);
+        var answer = (await CompileHandler.CompileAsync([_plugin])).Value();
 
         Assert.Empty(answer.Refused);
-        Assert.Single(answer.Landed);
+        Assert.Single(answer.Applied);
     }
 
     private IReadOnlyList<string> ChildrenOf(string list)

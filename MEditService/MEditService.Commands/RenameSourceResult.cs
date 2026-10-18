@@ -9,25 +9,33 @@ public abstract record RenameSourceResult
     {
     }
 
-    internal static RenameSourceResult Landed(SourceChanges changes, string treeName) => new LandedResult(changes, treeName);
+    internal static RenameSourceResult Landed(SourceChanges changes, string treeName)
+    {
+        var (moves, deletions, documents) = changes;
+        return new LandedResult(new RenameSourceChanges(treeName, moves, deletions, documents));
+    }
 
     internal static RenameSourceResult Refused(RenameSourceRefusal refusal, string message) => new RefusedResult(refusal, message);
 
     /// <summary>What <paramref name="landed"/> or <paramref name="refused"/> makes of this result.</summary>
-    public abstract T Match<T>(Func<SourceChanges, string, T> landed, Func<RenameSourceRefusal, string, T> refused);
+    public abstract T Match<T>(Func<RenameSourceChanges, T> landed, Func<RenameSourceRefusal, string, T> refused);
 
-    private sealed record LandedResult(SourceChanges Made, string Tree) : RenameSourceResult
+    private sealed record LandedResult(RenameSourceChanges Made) : RenameSourceResult
     {
-        public override T Match<T>(Func<SourceChanges, string, T> landed, Func<RenameSourceRefusal, string, T> refused) =>
-            landed(Made, Tree);
+        public override T Match<T>(Func<RenameSourceChanges, T> landed, Func<RenameSourceRefusal, string, T> refused) =>
+            landed(Made);
     }
 
     private sealed record RefusedResult(RenameSourceRefusal Why, string Reason) : RenameSourceResult
     {
-        public override T Match<T>(Func<SourceChanges, string, T> landed, Func<RenameSourceRefusal, string, T> refused) =>
+        public override T Match<T>(Func<RenameSourceChanges, T> landed, Func<RenameSourceRefusal, string, T> refused) =>
             refused(Why, Reason);
     }
 }
+
+/// <summary>The changes renaming a plugin's source makes, and the name its tree was filed under.</summary>
+public sealed record RenameSourceChanges(
+    string TreeName, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents);
 
 /// <summary>Whether what Modbench last wrote moved, or why it did not.</summary>
 public sealed record MoveLastWrittenResult(RenameSourceRefusal? Refusal = null, string? Message = null);

@@ -16,7 +16,7 @@ public sealed class CompilePluginDiagnosisTests : IDisposable
         Corrupt();
 
         var compileService = _mod.CompileService();
-        var answer = await compileService.CompileAsync([_mod.Plugin]);
+        var answer = (await compileService.CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains($"{Path.GetRelativePath(_mod.ModFolder, file)}: Race", refused.Message, StringComparison.Ordinal);
@@ -28,7 +28,7 @@ public sealed class CompilePluginDiagnosisTests : IDisposable
         var file = TreeTampering.FileOf(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
         Corrupt();
 
-        var answer = await _mod.CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await _mod.CompileService().CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolder, file), refused.Message, StringComparison.Ordinal);
@@ -39,7 +39,7 @@ public sealed class CompilePluginDiagnosisTests : IDisposable
     {
         File.WriteAllText(Path.Combine(_mod.ModFolder, PluginSourceRoot.HeaderDocument(_mod.Plugin.Name)), "{ \"ModKey\": \"Compile.esp\", \"ModHeader\": { \"Stats\": { \"Version\": \"x\" } } }");
 
-        var answer = await _mod.CompileService().CompileAsync([_mod.Plugin]);
+        var answer = (await _mod.CompileService().CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Contains(PluginSourceRoot.HeaderDocument(_mod.Plugin.Name), refused.Message, StringComparison.Ordinal);

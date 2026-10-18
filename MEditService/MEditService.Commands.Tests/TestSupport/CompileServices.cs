@@ -18,7 +18,7 @@ public static class CompileServices
     public static async Task CompileLandedAsync(this CompilePluginHandler handler, PluginAddress plugin)
     {
         var answer = await handler.CompileAsync([plugin]);
-        var refusal = answer.SelectionRefusal?.Message ?? answer.Refused.SingleOrDefault()?.Message;
-        Assert.True(refusal is null && answer.Landed.Count == 1, refusal);
+        var refusal = answer.Holds(out var result, out var whole) ? result.Refused.SingleOrDefault()?.Message : whole.Message;
+        Assert.True(refusal is null && answer.Holds(out result, out _) && result.Applied.Count == 1, refusal);
     }
 }

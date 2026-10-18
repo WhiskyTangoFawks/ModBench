@@ -1,6 +1,5 @@
 using MEditService.Codec.Schema;
 using MEditService.Commands;
-using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
@@ -143,7 +142,7 @@ internal static class PluginEndpoints
                 "Writes an empty plugin (a header whose flags its extension sets, no records and no " +
                 "masters) into the given folder, in the release of the held load order. Changes " +
                 "nothing else: no init, no load order change and no plugins.txt line.")
-            .Produces<PluginCreatedResponse>()
+            .Produces<PluginAddress>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
@@ -157,7 +156,7 @@ internal static class PluginEndpoints
                 "Writes an empty plugin into the folder of an enabled mod or Overwrite the held load order " +
                 "names as a place, by its origin, with plugin source only in a mod that is already a source " +
                 "mod. Refuses any other origin.")
-            .Produces<PluginCreatedResponse>()
+            .Produces<PluginAddress>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
@@ -181,7 +180,7 @@ internal static class PluginEndpoints
                 "moves and the text each document it changes holds afterwards: every FormKey of the plugin follows. " +
                 "Moves come first, then deletions, then documents, and every path is absolute. The plugin file, its " +
                 "plugins.txt lines and what Modbench last wrote stay as they are.")
-            .Produces<RenameSourceChangesResponse>()
+            .Produces<RenameSourceChanges>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
@@ -206,7 +205,7 @@ internal static class PluginEndpoints
         app.MapPost("/plugins/compile", Compile)
             .WithName("CompilePlugin")
             .WithTags(Tag)
-            .Produces<CompileResponse>()
+            .Produces<CompileResult>()
             .ProducesProblem(400)
             .ProducesProblem(500)
             .ProducesProblem(503);
@@ -285,7 +284,7 @@ internal static class PluginEndpoints
 
     private static IResult Created(ILogger logger, string gesture, PluginAddress plugin, PluginCreateResult result)
     {
-        if (result.Refusal is not { } refusal) return Results.Ok(new PluginCreatedResponse((result.Created ?? plugin).Name, (result.Created ?? plugin).Origin));
+        if (result.Refusal is not { } refusal) return Results.Ok(result.Created ?? plugin);
 
         EndpointMapping.LogRefusal(logger, gesture, refusal, result.Message, plugin);
         return EndpointMapping.Refusal(refusal, result.Message);
@@ -309,7 +308,7 @@ internal static class PluginEndpoints
 
         var result = rename.RenameSource(plugin, req.NewName ?? string.Empty);
         return result.Match(
-            (changes, treeName) => Results.Ok(RenameSourceChangesResponse.Of(treeName, changes)),
+            Results.Ok,
             (refusal, message) => Refused(loggerFactory, "Rename source", refusal, message, plugin));
     }
 
@@ -351,10 +350,7 @@ internal static class PluginEndpoints
         return OverPlugins(req.Plugins, plugins => EndpointMapping.Answered(
             "Compile", logger,
             compileHandler.CompileAsync(plugins),
-            EndpointMapping.Refusal,
-            landed => new CompiledPlugin(landed.Item.Name, landed.Item.Origin, landed.Outcome),
-            refused => new PluginCompileRefusal(refused.Item, refused.Refusal, refused.Message),
-            (applied, refused) => new CompileResponse(applied, refused)));
+            EndpointMapping.Refusal));
     }
 
     // The routes over a selection of plugins share their request's shape.
@@ -411,10 +407,6 @@ internal sealed record CreatePluginInModRequest(string Origin, string Name);
 /// <summary>The plugins that list the plugin as a master, and those whose masters could not be read.</summary>
 internal sealed record PluginDependantsResponse(IReadOnlyList<PluginAddress> Dependants, IReadOnlyList<PluginAddress> Unreadable);
 
-/// <summary>The plugin the create gesture wrote. Not a plugin row: the Index has not seen
-/// it, and nothing registers it.</summary>
-internal sealed record PluginCreatedResponse(string Name, string Origin);
-
 /// <summary>The plugin by its origin and file name (ADR-0012), and the file name its source takes.</summary>
 internal sealed record RenameSourceChangesRequest(string Origin, string Name, string NewName);
 
@@ -424,13 +416,3 @@ internal sealed record MoveLastWrittenRequest(string Origin, string Name, string
 internal sealed record DecompileRequest(IReadOnlyList<PluginAddress> Plugins, bool Force);
 
 internal sealed record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
-
-/// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
-internal sealed record CompileResponse(IReadOnlyList<CompiledPlugin> Applied, IReadOnlyList<PluginCompileRefusal> Refused);
-
-/// <summary>A plugin of the selection whose binary was written, with its diagnostics (ADR-0007).</summary>
-internal sealed record CompiledPlugin(string Name, string Origin, IReadOnlyList<CompileDiagnostic> Diagnostics);
-
-/// <summary>A plugin of the selection that wrote nothing, with the typed refusal and the message naming
-/// the way out.</summary>
-internal sealed record PluginCompileRefusal(PluginAddress Item, CompileRefusal Refusal, string Message);
