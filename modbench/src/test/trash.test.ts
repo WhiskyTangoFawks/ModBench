@@ -16,7 +16,7 @@ describe('moveToTrash', () => {
 
     await moveToTrash('/instance/downloads/foo.7z');
 
-    expect(fsDelete).toHaveBeenCalledWith({ fsPath: '/instance/downloads/foo.7z' }, { useTrash: true });
+    expect(fsDelete).toHaveBeenCalledWith({ fsPath: '/instance/downloads/foo.7z' }, { recursive: true, useTrash: true });
   });
 
   it('rejects with the host’s own reason when the trash fails', async () => {
