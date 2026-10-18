@@ -84,7 +84,7 @@ const TEMP_PREFIX = '.medit_tmp_';
 /** Whether `name` is a temp that Modbench or mEdit left in an instance folder: never a mod's file. */
 export const isOwnTemp = (name: string): boolean => name.startsWith(TEMP_PREFIX);
 
-/** The prefix of a temp this process names, `.medit_tmp_<pid>_`: the process id lets any writer tell a leftover from a live temp. */
+// The prefix of a temp this process names, `.medit_tmp_<pid>_`: the process id lets any writer tell a leftover from a live temp.
 const ownTempPrefix = (folder: string, kind: string): string => join(folder, `${TEMP_PREFIX}${process.pid}_${kind}`);
 
 /** The prefix a new mod's extraction folder, inside the mod's folder, is named from. */
