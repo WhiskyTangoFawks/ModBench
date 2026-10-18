@@ -11,9 +11,9 @@ import { loadOrderTextOf } from './codecs/loadOrderText';
 import { parseDownloadMeta, setHiddenInText, setInstalledInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadMeta, trashDownloadMeta } from './downloadMeta';
-import { ensureDir, exists, putIfChanged } from './files';
+import { ensureDir, exists, putIfChanged, withLock, write } from './files';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from './instanceAdapter';
-import { downloadFile, loadOrderFile, pluginsFile, settingsFile } from './layout';
+import { downloadFile, pluginOrderFiles, settingsFile } from './layout';
 import { sourceModsIn } from './sourceMods';
 import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from './mo2Reads';
@@ -68,11 +68,12 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
   // MO2 takes the order from loadorder.txt and only the enabled state from plugins.txt, so a
   // changed plugins.txt brings loadorder.txt with it.
   function putPluginOrder(profile: string, edit: (before: string) => string | Promise<string>): Promise<{ wrote: boolean }> {
-    return putIfChanged(pluginsFile(instanceRoot, profile), async (before) => {
+    const [loadOrder, plugins] = pluginOrderFiles(instanceRoot, profile);
+    return withLock(loadOrder, () => putIfChanged(plugins, async (before) => {
       const after = await edit(before);
-      if (after !== before) await putIfChanged(loadOrderFile(instanceRoot, profile), () => loadOrderTextOf(after), { ifMissing: '' });
+      if (after !== before) await write(loadOrder, loadOrderTextOf(after));
       return after;
-    });
+    }));
   }
 
   return {

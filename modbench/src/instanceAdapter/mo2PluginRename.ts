@@ -6,7 +6,7 @@ import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCod
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
 import { get, listDir, readOrAbsent, rename, undoAll, type Undo, withLock, write } from './files';
 import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
-import { fileInFolder, loadOrderFile, originDir, pluginsFile, profilesDir } from './layout';
+import { fileInFolder, originDir, pluginOrderFiles, profilesDir } from './layout';
 import type { Mo2Context } from './mo2Context';
 
 type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin' | 'originHoldsPlugin'>;
@@ -92,7 +92,7 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
 
   async function orderFiles(): Promise<string[]> {
     const profiles = (await readOrAbsent(() => listDir(profilesDir(instanceRoot)), [])).filter((d) => d.isDirectory());
-    return profiles.flatMap((d) => [pluginsFile(instanceRoot, d.name), loadOrderFile(instanceRoot, d.name)]).sort();
+    return profiles.map((d) => d.name).sort().flatMap((name) => pluginOrderFiles(instanceRoot, name));
   }
 
   // Everything the rename refuses, read before any write.
