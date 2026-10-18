@@ -274,6 +274,10 @@ describe('pluginsLoadedWithNoLineOf', () => {
     expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('Master.esm'), [provided], GAME_FOLDER))
       .toEqual([{ name: 'Master.esm', origin: 'A', path: '/mods/A/Master.esm' }]);
   });
+
+  it('names none while the game folder is not found', () => {
+    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('Master.esm'), [], GAME_FOLDER_NOT_FOUND)).toBeUndefined();
+  });
 });
 
 describe('buildLoadOrderRows, a name neither a mod winner nor a game folder found can resolve', () => {
