@@ -14,6 +14,12 @@ eslint.config.*
 esbuild.mjs
 buildWebview.mjs
 package.mjs
+notices.mjs
+knip.jsonc
+eslint-rules/**
+backend/**/*.pdb
+backend/**/*.xml
+backend/appsettings.Development.json
 integration.mjs
 vitest.config.*
 **/*.test.*
@@ -25,6 +31,5 @@ out/**
 # under out/, including the **/*.map and **/*.test.* exclusions above,
 # regardless of line order. Whitelist exactly the runtime output instead of
 # re-including the whole tree.
-!backend/**
 !out/extension.js
 !out/webview/**

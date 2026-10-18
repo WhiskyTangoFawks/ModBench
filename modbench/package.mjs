@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 copyFileSync('../LICENSE', 'LICENSE');
+copyFileSync('../README.md', 'README.md');
 const vscePackage = createRequire(import.meta.url).resolve('@vscode/vsce/package.json');
 const vsceBin = join(dirname(vscePackage), 'vsce');
 const target = `${process.platform}-${process.arch}`;
