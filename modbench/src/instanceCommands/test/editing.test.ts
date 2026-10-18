@@ -3,8 +3,6 @@ import type { LoadOrderOutcome, LoadOrderProgress } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
-import type { Reporter } from '../../ports/reporter';
-import { recordingReporter } from '../../test/surfacingDoubles';
 import type { LoadOrderSource } from '../loadOrder';
 
 const STATUS: LoadOrderProgress = {
@@ -23,11 +21,7 @@ function valueWith(name: string): LoadOrderSource {
   };
 }
 
-type Told =
-  | { kind: 'put'; put: PutLoadOrderResult }
-  | { kind: 'report'; tag: string; severity: string; message: string; detail: string | undefined };
-
-const STOPPED = 'mEdit stopped. Reload the window to start it again.';
+type Told = { kind: 'put'; put: PutLoadOrderResult };
 
 function wired(status: 'running' | 'stopped' = 'running') {
   const client = new InMemoryMEditClient();
@@ -43,10 +37,6 @@ function wired(status: 'running' | 'stopped' = 'running') {
     tellFailure = undefined;
     if (failure) throw failure;
   };
-  const reporterFor = (tag: string): Reporter => ({
-    ...recordingReporter(),
-    report: (severity, message, detail) => { tell({ kind: 'report', tag, severity, message, detail }); },
-  });
   const logged: string[] = [];
   const toldCount = (count: number): Promise<void> => new Promise((resolve) => {
     const check = (): void => { if (told.length >= count) resolve(); else tellListeners.push(check); };
@@ -54,7 +44,7 @@ function wired(status: 'running' | 'stopped' = 'running') {
   });
   const around: { entered: number; settled: boolean; told: number[] } = { entered: 0, settled: false, told: [] };
   const flow = editingFlow({
-    client, instanceRoot: '/instance', reporterFor, onPut: (put) => { tell({ kind: 'put', put }); return Promise.resolve(); }, log: (line) => { logged.push(line); },
+    client, instanceRoot: '/instance', onPut: (put) => { tell({ kind: 'put', put }); return Promise.resolve(); }, log: (line) => { logged.push(line); },
     around: async (entry) => { around.entered++; await entry(); around.settled = true; around.told.push(told.length); },
   });
   const putPluginNames = (): string[] => client.puts().map((put) => put.plugins.map((p) => p.name).join());
@@ -94,30 +84,6 @@ describe('the load order is put at every recompute', () => {
 
     expect(told).toEqual([{ kind: 'put', put: { sent: false, refusal: 'a.esp has no mod folder' } }]);
     expect(putPluginNames()).toEqual([]);
-  });
-
-  it('reports mEdit not coming up to take the snapshot as stopped under the entry report, once', async () => {
-    const { client, told, land } = wired('stopped');
-    client.answerStart(() => Promise.resolve());
-
-    void client.start();
-    land(valueWith('A.esp'));
-    await client.latestLoadOrder();
-    await settle();
-
-    expect(told).toEqual([{ kind: 'report', tag: 'enterEditing', severity: 'error', message: STOPPED, detail: undefined }]);
-  });
-
-  it('reports a launch that threw as stopped under the launch report with its reason, once', async () => {
-    const { client, told, land } = wired('stopped');
-    client.answerStart(() => Promise.reject(new Error('no port')));
-
-    void client.start();
-    land(valueWith('A.esp'));
-    await client.latestLoadOrder();
-    await settle();
-
-    expect(told).toEqual([{ kind: 'report', tag: 'launch', severity: 'error', message: STOPPED, detail: 'no port' }]);
   });
 });
 
@@ -195,31 +161,6 @@ const until = async (check: () => boolean): Promise<void> => {
   while (!check()) await settle();
 };
 
-describe('mEdit exiting', () => {
-  it('is reported as stopped under its own report, once, and shows nothing', async () => {
-    const { client, around, told, toldCount, land } = wired();
-    land(valueWith('A.esp'));
-    await toldCount(1);
-
-    client.crashed();
-    await toldCount(2);
-    await settle();
-
-    expect(told.slice(1)).toEqual([{ kind: 'report', tag: 'mEditExit', severity: 'error', message: STOPPED, detail: undefined }]);
-    expect(around.entered).toBe(0);
-  });
-
-  it('is not told for a failed launch twice: the launch tells it', async () => {
-    const { client, told } = wired('stopped');
-    client.answerStart(() => Promise.reject(new Error('no port')));
-
-    await client.start();
-    await settle();
-
-    expect(told).toEqual([{ kind: 'report', tag: 'launch', severity: 'error', message: STOPPED, detail: 'no port' }]);
-  });
-});
-
 describe('a tell that threw', () => {
   it('reaches the Output once, and the entries after it still end', async () => {
     const { flow, toldCount, land, logged, failNextTell, around } = wired();
@@ -231,20 +172,6 @@ describe('a tell that threw', () => {
 
     expect(logged).toEqual(['[loadOrder] handing mEdit the load order threw: boom']);
     expect(around.settled).toBe(true);
-  });
-});
-
-describe('telling a launch that threw', () => {
-  it('reaches the Output once, naming the launch', async () => {
-    const { client, land, logged, failNextTell } = wired('stopped');
-    client.answerStart(() => Promise.reject(new Error('no port')));
-    failNextTell(new Error('boom'));
-
-    void client.start();
-    land(valueWith('A.esp'));
-    await until(() => logged.length > 0);
-
-    expect(logged).toEqual(['[loadOrder] telling the launch of mEdit threw: boom']);
   });
 });
 

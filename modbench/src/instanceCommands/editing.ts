@@ -1,22 +1,17 @@
 // Put load order (ADR-0013) at every recompute. The client owns the process the snapshot goes to;
-// what came of each put comes back through `onPut`, and a launch or an exit that leaves mEdit stopped
-// is reported here.
+// what came of each put comes back through `onPut`.
 
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
-import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import { putLoadOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
-const STOPPED = 'mEdit stopped. Reload the window to start it again.';
-
 export interface EditingDeps {
-  client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'onExit' | 'latestLoadOrder'>;
+  client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'latestLoadOrder'>;
   instanceRoot: string;
   /** Shows a launch, from its start until the snapshot it was for is told (plugins.md, States 2). */
   around: (entry: () => Promise<void>) => Promise<void>;
   /** What came of a put: the snapshot sent and mEdit's outcome, or why nothing was sent. */
   onPut: (put: PutLoadOrderResult) => Promise<void>;
-  reporterFor: (tag: string) => Reporter;
   /** The Output, for a tell that threw: no caller is left to hear it. */
   log: (line: string) => void;
 }
@@ -43,8 +38,7 @@ function pending(logThrown: (reason: string) => void) {
 }
 
 export function editingFlow(deps: EditingDeps): EditingFlow {
-  const { client, instanceRoot, around, onPut, reporterFor, log } = deps;
-  const reportStopped = (tag: string, detail?: string): void => { reporterFor(tag).report('error', STOPPED, detail); };
+  const { client, instanceRoot, around, onPut, log } = deps;
   const tells = pending((reason) => { log(`[loadOrder] handing mEdit the load order threw: ${reason}`); });
   const launches = pending((reason) => { log(`[loadOrder] telling the launch of mEdit threw: ${reason}`); });
   let entering = false;
@@ -59,12 +53,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
 
   const tellLaunch = async (launched: Promise<LaunchOutcome>): Promise<void> => {
     const outcome = await launched;
-    if (outcome.outcome === 'failed') {
-      if (outcome.error === undefined) reportStopped('enterEditing');
-      else reportStopped('launch', outcome.error);
-      return;
-    }
-    if (outcome.outcome === 'stopped') return;
+    if (outcome.outcome !== 'running') return;
     await client.latestLoadOrder();
     await tells.settled();
   };
@@ -73,7 +62,6 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
     client.onLoadOrderResent((snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => {
       tellPut(Promise.resolve({ sent: true, snapshot, outcome }));
     }),
-    client.onExit(() => { void tells.track(Promise.resolve().then(() => { reportStopped('mEditExit'); })); }),
     client.onLaunch((launched) => {
       const shown = launches.track(tellLaunch(launched));
       if (!entering) void around(() => shown);
