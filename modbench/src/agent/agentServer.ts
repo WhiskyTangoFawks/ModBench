@@ -41,8 +41,10 @@ export interface AgentServer {
   readonly listening: Promise<AddressInfo | undefined>;
 }
 
-function currentValue(instance: AgentServerOptions['instance']) {
-  if (instance === undefined) throw new Refusal('There is no Modbench instance open in this window.');
+type Instance = NonNullable<AgentServerOptions['instance']>;
+type OpenOptions = AgentServerOptions & { instance: Instance };
+
+function currentValue(instance: Instance) {
   if (instance.sequence === 0) throw new Refusal('The instance has not been read yet.');
   return instance.value;
 }
@@ -87,7 +89,7 @@ A SELECT reads only the views: select_rows says which.
 
 Ask Modbench what the files cannot answer.`;
 
-function mcpServerOf({ instance, mEdit, terminalEnvironment, readStatus, log }: AgentServerOptions): McpServer {
+function mcpServerOf({ instance, mEdit, terminalEnvironment, readStatus, log }: OpenOptions): McpServer {
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   for (const read of INSTANCE_READS) register(server, log, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance)));
   register(server, log, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), readStatus));
@@ -117,7 +119,7 @@ async function bodyOf(request: IncomingMessage): Promise<{ parsed: unknown } | u
   }
 }
 
-async function handle(options: AgentServerOptions, request: IncomingMessage, response: ServerResponse): Promise<void> {
+async function handle(options: OpenOptions, request: IncomingMessage, response: ServerResponse): Promise<void> {
   if (!isOwnHost(request) || request.headers.origin !== undefined) {
     response.writeHead(403).end();
     return;
@@ -138,10 +140,14 @@ async function handle(options: AgentServerOptions, request: IncomingMessage, res
   await transport.handleRequest(request, response, body.parsed);
 }
 
+const NOT_SERVING: AgentServer = { listening: Promise.resolve(undefined), dispose: () => undefined };
+
 export function serveAgent(options: AgentServerOptions): AgentServer {
-  const { port, reporter, log } = options;
+  const { instance, port, reporter, log } = options;
+  if (instance === undefined) return NOT_SERVING;
+  const open = { ...options, instance };
   const http = createServer((request, response) => {
-    handle(options, request, response).catch((error: unknown) => {
+    handle(open, request, response).catch((error: unknown) => {
       log.error(`[agent] ${errorMessage(error)}`);
       if (!response.headersSent) response.writeHead(500);
       response.end();
