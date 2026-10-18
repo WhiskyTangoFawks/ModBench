@@ -11,6 +11,7 @@ import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codec
 import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { gameOfSettings } from './mo2Game';
+import type { ManagerGamePath } from './gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from './gameFolder/dataFolder';
 import { factsOf, get, isRepository, listDir, readOrAbsent, readOrReason, stampOf } from './files';
 import {
@@ -103,7 +104,8 @@ export function readingSource(context: Mo2Context): ReadingSource {
         ...game,
         // What the settings resolve is what the watch follows.
         gameFolder: async () => {
-          const gameFolder = await resolveGameFolder({ path: gamePathOf(iniText), place: GAME_PATH_PLACE, release: game.gameRelease });
+          const managed: ManagerGamePath = { path: gamePathOf(iniText), place: GAME_PATH_PLACE, release: game.gameRelease };
+          const gameFolder = await resolveGameFolder(managed);
           watch.follow('gameFolderPlugins', dataFolderOf(gameFolder), DATA_FOLDER_PLUGINS_GLOB);
           const creationClubList = creationClubFileOf(gameFolder, game.gameRelease);
           if (creationClubList === undefined) watch.follow('creationClubList', undefined, '');
