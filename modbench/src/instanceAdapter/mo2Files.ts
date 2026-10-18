@@ -7,7 +7,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from './codecs/modlistText';
 import { factsOf, listDir } from './files';
-import type { FileOrigin, OriginFile, OriginFiles, OriginFolder } from './instanceAdapter';
+import type { FileOrigin, ModFolders, OriginFile, OriginFiles, OriginFolder } from './instanceAdapter';
 import { isExcludedName, isOwnTemp, overwriteDir } from './layout';
 import { originFolder, type Mo2Context } from './mo2Context';
 
@@ -141,12 +141,12 @@ async function listOverwrite(folder: string, rootOnly: boolean): Promise<Walk> {
   return walk;
 }
 
-export async function originFilesIn(context: Mo2Context, origin: FileOrigin, rootOnly = false): Promise<OriginFiles> {
+export async function originFilesIn(context: Mo2Context, origin: FileOrigin, rootOnly: boolean, modFolders: ModFolders | undefined | 'list'): Promise<OriginFiles> {
   if (origin.kind === 'runtimeOutput') {
     const { root, files, folders, notes } = await listOverwrite(overwriteDir(context.instanceRoot), rootOnly);
     return { origin: OVERWRITE_ORIGIN, folder: root, files, folders, notes };
   }
-  const folder = await originFolder(context, origin);
+  const folder = await originFolder(context, origin, modFolders);
   if (folder === undefined) return { origin: origin.name, folder: undefined, files: [], folders: [], notes: [] };
   const { files, folders, notes } = await walkMod(folder, rootOnly);
   return { origin: origin.name, folder, files, folders, notes };

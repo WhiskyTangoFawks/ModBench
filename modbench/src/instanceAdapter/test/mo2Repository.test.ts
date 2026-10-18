@@ -716,7 +716,7 @@ describe('the MO2 adapter\'s game files', () => {
   });
 });
 
-it.skipIf(process.platform === 'win32')('(Windows folds case itself) answers the game files taken by a mod whose folder differs from its name only in case', async () => {
+it('answers the game files taken by a mod whose folder differs from its name only in case', async () => {
   const adapter = await instance();
   await put('game/Data/a.nif', 'aaaa');
   await put('mods/MOD/a.nif', 'aaaa');

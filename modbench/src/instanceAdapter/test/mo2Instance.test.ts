@@ -33,7 +33,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, matchesGlob, sep } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import type { Mo2Context } from '../mo2Context';
-import { readingSource, readInstance, type ReadingSource } from '../mo2Reads';
+import { readingSource, readInstance, readPluginsProvided, type ReadingSource } from '../mo2Reads';
 import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
 import type {
   ArchiveReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
@@ -399,7 +399,7 @@ describe('the MO2 Instance adapter', () => {
 
       it('reads each listed mod\'s meta once, so one reading holds one answer for it', async () => {
         const reads: string[] = [];
-        const counting = { ...source, modMeta: (mod: string) => { reads.push(mod); return source.modMeta(mod); } };
+        const counting = { ...source, modMeta: (mod: string) => { reads.push(mod); return source.modMeta(mod, 'list'); } };
 
         const reading = await readInstance(counting);
 
@@ -415,7 +415,7 @@ describe('the MO2 Instance adapter', () => {
             ...(await source.settings()),
             downloadedFiles: () => Promise.resolve({ kind: 'unresolved' as const, reason: 'no downloads' }),
           }),
-          modMeta: (mod: string) => (mod === 'Unlisted' ? Promise.reject(new Error('EACCES')) : source.modMeta(mod)),
+          modMeta: (mod: string) => (mod === 'Unlisted' ? Promise.reject(new Error('EACCES')) : source.modMeta(mod, 'list')),
         };
 
         await expect(readInstance(unreadable)).resolves.toMatchObject({ downloadedFiles: { kind: 'unresolved' } });
@@ -620,30 +620,30 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('answers a mod\'s meta', async () => {
-      expect(await source.modMeta('Unofficial Fallout 4 Patch')).toMatchObject({
+      expect(await source.modMeta('Unofficial Fallout 4 Patch', 'list')).toMatchObject({
         version: '2.1.5.0',
         nexusId: '4598',
         archiveFilename: DOWNLOAD,
       });
     });
 
-    it.skipIf(process.platform === 'win32')('(Windows folds case itself) answers the meta and the files of a mod whose folder differs from its name only in case', async () => {
+    it('answers the meta and the files of a mod whose folder differs from its name only in case', async () => {
       await mkdir(join(root, 'mods', 'FOO'));
       await writeFile(join(root, 'mods', 'FOO', 'meta.ini'), '[General]\r\nversion=3.0\r\n');
       await writeFile(join(root, 'mods', 'FOO', 'Foo.esp'), '');
 
-      expect(await source.modMeta('foo')).toMatchObject({ version: '3.0' });
-      expect((await source.originFiles({ kind: 'mod', name: 'foo' })).files.map((f) => f.relativePath)).toEqual(['Foo.esp']);
+      expect(await source.modMeta('foo', 'list')).toMatchObject({ version: '3.0' });
+      expect((await source.originFiles({ kind: 'mod', name: 'foo' }, 'list')).files.map((f) => f.relativePath)).toEqual(['Foo.esp']);
     });
 
     it('answers an empty meta for a mod with none', async () => {
-      expect(await source.modMeta('DragIn Manual Extract')).toEqual({});
+      expect(await source.modMeta('DragIn Manual Extract', 'list')).toEqual({});
     });
 
     it('rejects a meta that is there but cannot be read, not publishing an unreadable meta as an empty one', async () => {
       await mkdir(join(root, 'mods', 'DragIn Manual Extract', 'meta.ini'));
 
-      await expect(source.modMeta('DragIn Manual Extract')).rejects.toThrow(/EISDIR/);
+      await expect(source.modMeta('DragIn Manual Extract', 'list')).rejects.toThrow(/EISDIR/);
     });
 
     it('answers every mod folder as the entry it holds, with its path and the name MO2 knows its mod by', async () => {
@@ -1381,6 +1381,26 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.modFolderPath('Mods/Cloned Mod')).toBeUndefined();
     });
 
+    describe('listing mods/ for a read of every mod', () => {
+      const listingsOfMods = (): number => vi.mocked(readdir).mock.calls.filter(([path]) => String(path) === join(root, 'mods')).length;
+
+      it('lists it once to read the instance whole', async () => {
+        vi.mocked(readdir).mockClear();
+
+        await readInstance(source);
+
+        expect(listingsOfMods()).toBe(1);
+      });
+
+      it('lists it once to read the plugins the mod order provides', async () => {
+        vi.mocked(readdir).mockClear();
+
+        await readPluginsProvided(source, 'Default');
+
+        expect(listingsOfMods()).toBe(1);
+      });
+    });
+
     it('answers a mod named as a separator\'s folder with that separator\'s folder, MO2 knowing a mod by its folder\'s name and a folder named for a separator holding that separator', async () => {
       expect((await adapter.reading()).modFolders?.holding({ kind: 'mod', name: 'unassigned (modlist development)_SEPARATOR' })).toMatchObject({
         kind: 'separator', name: 'Unassigned (Modlist Development)',
@@ -1439,7 +1459,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'Textures', 'Source', 'kept.psc'), '');
         await writeFile(tempWritePath(join(folder, 'Textures', 'b.dds')), '');
 
-        const files = await source.originFiles(mod('Harder VATS'));
+        const files = await source.originFiles(mod('Harder VATS'), 'list');
 
         expect(files.origin).toBe('Harder VATS');
         expect(files.folder).toBe(folder);
@@ -1461,7 +1481,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'Meshes', 'kept.nif'), '');
         await writeFile(join(folder, temp), '');
 
-        const { files, folders } = await source.originFiles(mod('Harder VATS'));
+        const { files, folders } = await source.originFiles(mod('Harder VATS'), 'list');
 
         expect([...relativePaths(files), ...folders.map((f) => f.relativePath)].filter((path) => path.includes(temp))).toEqual([]);
         expect(relativePaths(files)).toContain('Meshes/kept.nif');
@@ -1476,7 +1496,7 @@ describe('the MO2 Instance adapter', () => {
         await symlink(join(root, folder, 'Optional'), join(root, folder, 'Linked'));
         await writeFile(join(root, folder, 'Root.esp'), '');
 
-        const { files, folders } = await source.originRootFiles(origin);
+        const { files, folders } = await source.originRootFiles(origin, 'list');
 
         expect([relativePaths(files), folders]).toEqual([['Root.esp'], []]);
       });
@@ -1488,7 +1508,7 @@ describe('the MO2 Instance adapter', () => {
         await symlink(target, join(folder, 'Linked.esp'));
         await symlink(join(root, 'nowhere.esp'), join(folder, 'Broken.esp'));
 
-        const files = await source.originFiles(mod('Harder VATS'));
+        const files = await source.originFiles(mod('Harder VATS'), 'list');
 
         expect(files.files.find((f) => f.relativePath === 'Linked.esp'))
           .toEqual({ relativePath: 'Linked.esp', path: join(folder, 'Linked.esp'), sourcePath: await realpath(target), excluded: false, excludedByName: false });
@@ -1504,7 +1524,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(folder, 'plugin-source'), { recursive: true });
         await writeFile(join(folder, 'plugin-source', 'shipped.json'), '');
 
-        const paths = relativePaths((await source.originFiles(mod('Harder VATS'))).files);
+        const paths = relativePaths((await source.originFiles(mod('Harder VATS'), 'list')).files);
 
         expect(paths).toEqual(expect.arrayContaining(['.git/HEAD', '.gitignore', 'plugin-source/shipped.json']));
       });
@@ -1515,7 +1535,7 @@ describe('the MO2 Instance adapter', () => {
       ] as const)('leaves out the extraction of %s in flight', async (_, target) => {
         const { settle } = await installHeld(root, target);
 
-        const paths = relativePaths((await source.originFiles(mod(target.name))).files);
+        const paths = relativePaths((await source.originFiles(mod(target.name), 'list')).files);
 
         expect(paths.filter((path) => path.endsWith('New.esp'))).toEqual([]);
         await settle();
@@ -1530,7 +1550,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, folder, 'Hidden.esp.MOHIDDEN'), '');
         await writeFile(join(root, folder, 'Kept.esp'), '');
 
-        const files = await source.originFiles(origin);
+        const files = await source.originFiles(origin, 'list');
         const excludedOf = (entries: readonly { relativePath: string; excluded: boolean }[], relativePath: string) =>
           entries.find((entry) => entry.relativePath === relativePath)?.excluded;
 
@@ -1546,7 +1566,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, 'mods', 'Harder VATS', 'Hidden.esp.MOHIDDEN'), '');
         await writeFile(join(root, 'mods', 'Harder VATS', 'Kept.esp'), '');
 
-        const { files } = await source.originFiles(mod('Harder VATS'));
+        const { files } = await source.originFiles(mod('Harder VATS'), 'list');
         const byNameOf = (relativePath: string) => files.find((file) => file.relativePath === relativePath)?.excludedByName;
 
         expect(['Textures.mohidden/a.dds', 'Textures.mohidden/b.dds.mohidden', 'Hidden.esp.MOHIDDEN', 'Kept.esp'].map(byNameOf))
@@ -1559,7 +1579,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(shared, 'foo.dds'), '');
         await symlink(shared, join(root, 'mods', 'Harder VATS', 'linked'));
 
-        const files = await source.originFiles(mod('Harder VATS'));
+        const files = await source.originFiles(mod('Harder VATS'), 'list');
 
         expect(files.files.find((f) => f.relativePath === 'linked/foo.dds')?.path).toBe(join(root, 'mods', 'Harder VATS', 'linked', 'foo.dds'));
         expect(files.folders).toContainEqual({ relativePath: 'linked', path: join(root, 'mods', 'Harder VATS', 'linked'), excluded: false });
@@ -1571,7 +1591,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'sibling.dds'), '');
         await symlink(folder, join(folder, 'loop'));
 
-        const files = await source.originFiles(mod('Cycle'));
+        const files = await source.originFiles(mod('Cycle'), 'list');
 
         expect(relativePaths(files.files)).toEqual(['sibling.dds']);
         expect(files.notes.join('\n')).toMatch(/cycle.*loop/);
@@ -1585,7 +1605,7 @@ describe('the MO2 Instance adapter', () => {
           return actualReaddir(path, options);
         });
 
-        await expect(source.originFiles({ kind: 'runtimeOutput' })).rejects.toThrow(/permission denied/);
+        await expect(source.originFiles({ kind: 'runtimeOutput' }, 'list')).rejects.toThrow(/permission denied/);
       });
 
       it('rejects when a link\'s target cannot be checked for a reason other than its absence, simulated through a mocked stat as chmod denies nothing when the runner is root', async () => {
@@ -1596,7 +1616,7 @@ describe('the MO2 Instance adapter', () => {
           return actualStat(path, ...rest);
         });
 
-        await expect(source.originFiles(mod('Harder VATS'))).rejects.toThrow(/permission denied/);
+        await expect(source.originFiles(mod('Harder VATS'), 'list')).rejects.toThrow(/permission denied/);
       });
 
       it.skipIf(process.platform === 'win32')('notes a FIFO and a link to one, and answers neither as a file, built with the POSIX mkfifo that Windows lacks', async () => {
@@ -1606,7 +1626,7 @@ describe('the MO2 Instance adapter', () => {
         execFileSync('mkfifo', [join(root, 'real-pipe')]);
         await symlink(join(root, 'real-pipe'), join(folder, 'linked-pipe'));
 
-        const files = await source.originFiles(mod('Pipes'));
+        const files = await source.originFiles(mod('Pipes'), 'list');
 
         expect(files.files).toEqual([]);
         expect(files.notes.join('\n')).toMatch(/pipe/);
@@ -1615,8 +1635,8 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('answers no files for a mod with no folder, or a name that gives it none', async () => {
-        expect((await source.originFiles(mod('No Such Mod'))).files).toEqual([]);
-        expect(await source.originFiles(mod('../profiles'))).toEqual({ origin: '../profiles', folder: undefined, files: [], folders: [], notes: [] });
+        expect((await source.originFiles(mod('No Such Mod'), 'list')).files).toEqual([]);
+        expect(await source.originFiles(mod('../profiles'), 'list')).toEqual({ origin: '../profiles', folder: undefined, files: [], folders: [], notes: [] });
       });
 
       it('lists everything the game wrote at run time, under the reserved origin, without writes in flight', async () => {
@@ -1624,7 +1644,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(folder, 'Stray.esp'), '');
         await writeFile(tempWritePath(join(folder, 'Stray.esp')), '');
 
-        const files = await source.originFiles({ kind: 'runtimeOutput' });
+        const files = await source.originFiles({ kind: 'runtimeOutput' }, 'list');
 
         expect(files.origin).toBe(OVERWRITE_ORIGIN);
         expect(files.folder).toBe(folder);
@@ -1646,7 +1666,7 @@ describe('the MO2 Instance adapter', () => {
           return actualReaddir(path, options);
         });
 
-        const files = await source.originFiles(origin);
+        const files = await source.originFiles(origin, 'list');
 
         expect(relativePaths(files.files)).toContain(kept);
         expect(relativePaths(files.files)).not.toContain('Gone/Lost.esp');
@@ -1658,7 +1678,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(target, '');
         await symlink(target, join(root, 'overwrite', 'Linked.esp'));
 
-        const files = await source.originFiles({ kind: 'runtimeOutput' });
+        const files = await source.originFiles({ kind: 'runtimeOutput' }, 'list');
 
         expect(relativePaths(files.files)).not.toContain('Linked.esp');
         expect(files.notes).toEqual([expect.stringMatching(/Linked\.esp/)]);
@@ -1667,7 +1687,7 @@ describe('the MO2 Instance adapter', () => {
       it('answers no files when there is no overwrite folder', async () => {
         await rm(join(root, 'overwrite'), { recursive: true });
 
-        expect((await source.originFiles({ kind: 'runtimeOutput' })).files).toEqual([]);
+        expect((await source.originFiles({ kind: 'runtimeOutput' }, 'list')).files).toEqual([]);
       });
     });
 

@@ -485,16 +485,19 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void WriteManifest_ReplacingAManifest_LeavesAReaderOfTheOldOneItsWholeText()
+    public void WriteFile_FailingPartWay_LeavesTheOldFileWholeAndNoTempBehind()
     {
         _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("a.txt", new PackageEntry.NotHeld())]));
         var path = Path.Combine(_root, "mod.manifest.json");
-        var before = File.ReadAllText(path);
-        using var reader = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
+        var before = File.ReadAllBytes(path);
 
-        _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("b.txt", new PackageEntry.NotHeld())]));
+        Assert.Throws<IOException>(() => _repository.WriteFile(_root, "mod.manifest.json", stream =>
+        {
+            stream.Write("{\"files\": ["u8);
+            throw new IOException("killed mid-write");
+        }));
 
-        Assert.Equal(before, reader.ReadToEnd());
+        Assert.Equal(before, File.ReadAllBytes(path));
         Assert.Equal(["mod.manifest.json"], Directory.GetFiles(_root).Select(Path.GetFileName));
     }
 

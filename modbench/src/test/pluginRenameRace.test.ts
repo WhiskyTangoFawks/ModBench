@@ -61,8 +61,8 @@ describe('a rename while a recompute is reading', () => {
     const filesReadBeforeRename = new Promise<void>((resolve) => { filesRead = resolve; });
     const holdingSource: ReadingSource = {
       ...reader,
-      originFiles: async (origin: Parameters<typeof reader.originFiles>[0]) => {
-        const files = await reader.originFiles(origin);
+      originFiles: async (origin: Parameters<typeof reader.originFiles>[0], folders: Parameters<typeof reader.originFiles>[1]) => {
+        const files = await reader.originFiles(origin, folders);
         if (holding && origin.kind === 'mod' && origin.name === PLUGIN.origin) filesRead();
         return files;
       },
