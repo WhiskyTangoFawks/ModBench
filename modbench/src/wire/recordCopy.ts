@@ -1,7 +1,6 @@
-import type { components } from './generated/api';
 import { pluginRowName } from './pluginAddress';
+import type { RecordCopy } from './messages';
 
-/** A plugin's copy of a record. */
-export type RecordCopy = Omit<components['schemas']['RecordCopy'], 'documentText'>;
+export type { RecordCopy };
 
 export const holdsNoCopy = ({ formKey, plugin }: RecordCopy): string => `${pluginRowName(plugin)} holds no ${formKey}.`;

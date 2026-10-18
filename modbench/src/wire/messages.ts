@@ -1,6 +1,5 @@
 import type { components } from './generated/api';
 import type { PluginAddress } from './pluginAddress';
-import type { RecordCopy } from './recordCopy';
 import type { ArgumentOf } from './argument';
 import type { ColumnKey } from './columnKey';
 import type { ReadFailed } from './readFailed';
@@ -74,6 +73,9 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string; columns: RecordCopy[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_COLUMNS; records: RecordCopy[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.VIEW_STATE; state: ViewState };
+
+/** A plugin's copy of a record. */
+export type RecordCopy = Omit<components['schemas']['RecordCopy'], 'documentText'>;
 
 /** The rows collapsed, the columns collapsed, the focused cell and the scroll of a grid. */
 export interface ViewState {
