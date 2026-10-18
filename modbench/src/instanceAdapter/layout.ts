@@ -123,7 +123,7 @@ export const modlistFile = (instanceRoot: string, profile: string): string =>
 export const pluginsFile = (instanceRoot: string, profile: string): string =>
   join(profileDir(instanceRoot, profile), PLUGINS_FILE_NAME);
 
-export const loadOrderFile = (instanceRoot: string, profile: string): string =>
+const loadOrderFile = (instanceRoot: string, profile: string): string =>
   join(profileDir(instanceRoot, profile), PLUGIN_ORDER_FILE);
 
 /** A profile's plugin order files in the one order every writer takes their locks. */
