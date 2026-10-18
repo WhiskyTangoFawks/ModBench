@@ -30,7 +30,6 @@ export interface AgentServerOptions {
   instance: Pick<InstanceView, 'value' | 'sequence'> | undefined;
   mEdit: Pick<MEditClient, 'resolveNames' | 'selectRows' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument' | 'getReferences'>;
   terminalEnvironment: TerminalEnvironment;
-  /** Absent with the instance. */
   readStatus: ReadModStatus | undefined;
   reporter: Reporter;
   log: Log;
@@ -42,7 +41,7 @@ export interface AgentServer {
 }
 
 type Instance = NonNullable<AgentServerOptions['instance']>;
-type OpenOptions = AgentServerOptions & { instance: Instance };
+type OpenOptions = AgentServerOptions & { instance: Instance; readStatus: ReadModStatus };
 
 function currentValue(instance: Instance) {
   if (instance.sequence === 0) throw new Refusal('The instance has not been read yet.');
@@ -143,9 +142,9 @@ async function handle(options: OpenOptions, request: IncomingMessage, response: 
 const NOT_SERVING: AgentServer = { listening: Promise.resolve(undefined), dispose: () => undefined };
 
 export function serveAgent(options: AgentServerOptions): AgentServer {
-  const { instance, port, reporter, log } = options;
-  if (instance === undefined) return NOT_SERVING;
-  const open = { ...options, instance };
+  const { instance, readStatus, port, reporter, log } = options;
+  if (instance === undefined || readStatus === undefined) return NOT_SERVING;
+  const open = { ...options, instance, readStatus };
   const http = createServer((request, response) => {
     handle(open, request, response).catch((error: unknown) => {
       log.error(`[agent] ${errorMessage(error)}`);
