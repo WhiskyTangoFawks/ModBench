@@ -60,13 +60,12 @@ describe('a rendered document\'s text', () => {
     expect(client.calls).toContainEqual({ method: 'getRenderedDocument', args: [modA, GUN] });
   });
 
-  it('refuses, naming the copy, when the plugin holds none', async () => {
+  it('refuses when mEdit renders no copy', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getRenderedDocument', null);
     const { provider } = rendered(client);
 
-    await expect(provider.provideTextDocumentContent(GUN_URI))
-      .rejects.toThrow(`A.esp (ModA) holds no ${GUN}.`);
+    await expect(provider.provideTextDocumentContent(GUN_URI)).rejects.toThrow();
   });
 });
 

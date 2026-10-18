@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { isPluginSourcePath, PLUGIN_SOURCE_GLOB } from '../instanceAdapter/instanceAdapter';
-import type { RecordDocumentClient } from '../drivingLib/recordDocument';
+import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { hoverAt } from './formKeyHover';
 import { definitionsOf } from './formKeyDefinition';
 import { referencesOf } from './formKeyReferences';

@@ -15,7 +15,8 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { copyDocument, copyOf, type RecordCopy, type RecordDocumentClient } from '../recordDocument';
+import { copyDocument, copyOf, type RecordDocumentClient } from '../recordDocument';
+import type { RecordCopy } from '../../wire/recordCopy';
 
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };

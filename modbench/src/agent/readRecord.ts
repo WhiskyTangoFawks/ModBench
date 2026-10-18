@@ -1,9 +1,11 @@
 import { z } from 'zod';
-import type { MEditClient } from '../client/MEditClient';
-import { pluginAddressOf, type PluginAddress } from '../wire/pluginAddress';
+import type { CopyDocument, MEditClient } from '../client/MEditClient';
+import { pluginAddressOf } from '../wire/pluginAddress';
+import { holdsNoCopy, type RecordCopy } from '../wire/recordCopy';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 import { Refusal } from '../drivingLib/refusal';
+import { renderedCopy } from '../drivingLib/renderedCopy';
 import { pluginsNamed } from './names';
 import { formKeysNamed } from './recordNames';
 
@@ -14,16 +16,15 @@ const RECORD = {
 
 type RecordReads = Pick<MEditClient, 'resolveNames' | 'getComparison' | 'getCopyDocument' | 'getRenderedDocument'>;
 
-const copyOf = async (mEdit: RecordReads, address: PluginAddress, formKey: string) => {
-  const holdsNone = new Refusal(`${address.name} in ${address.origin} holds no ${formKey}.`);
-  const document = await mEdit.getCopyDocument(address, formKey);
-  if (isReadFailed(document)) throw new Refusal(failureReason(document));
-  if (document === null) throw holdsNone;
+const copyOf = async (
+  mEdit: RecordReads, copy: RecordCopy,
+): Promise<CopyDocument | { kind: 'Rendered'; text: string } | { refused: string }> => {
+  const document = await mEdit.getCopyDocument(copy.plugin, copy.formKey);
+  if (isReadFailed(document)) return { refused: failureReason(document) };
+  if (document === null) return { refused: holdsNoCopy(copy) };
   if (document.kind !== 'Rendered') return document;
-  const rendered = await mEdit.getRenderedDocument(address, formKey);
-  if (isReadFailed(rendered)) throw new Refusal(failureReason(rendered));
-  if (rendered === null) throw holdsNone;
-  return { kind: document.kind, text: rendered.text };
+  const rendered = await renderedCopy(mEdit, copy);
+  return 'refused' in rendered ? rendered : { kind: document.kind, text: rendered.text };
 };
 
 export const READ_RECORD = {
@@ -39,18 +40,18 @@ export const READ_RECORD = {
   ) => {
     const [formKey = ''] = await formKeysNamed(mEdit, [name]);
     const [address] = plugin === undefined ? [] : pluginsNamed(value, [plugin]);
-    if (address !== undefined) return copyOf(mEdit, address, formKey);
+    if (address !== undefined) {
+      const copy = await copyOf(mEdit, { formKey, plugin: address });
+      if ('refused' in copy) throw new Refusal(copy.refused);
+      return copy;
+    }
     const comparison = await mEdit.getComparison(formKey);
     if (isReadFailed(comparison)) throw new Refusal(failureReason(comparison));
     if (comparison === null) throw new Refusal(`No active plugin holds ${formKey}.`);
     const entries = await Promise.all(comparison.overrides.map(async ({ plugin: copyName, origin, isWinner }) => {
       const copyAddress = pluginAddressOf({ plugin: copyName, origin });
-      try {
-        return { plugin: copyAddress, isWinner, ...await copyOf(mEdit, copyAddress, formKey) };
-      } catch (error) {
-        if (error instanceof Refusal) return { plugin: copyAddress, isWinner, reason: error.message };
-        throw error;
-      }
+      const copy = await copyOf(mEdit, { formKey, plugin: copyAddress });
+      return 'refused' in copy ? { plugin: copyAddress, isWinner, reason: copy.refused } : { plugin: copyAddress, isWinner, ...copy };
     }));
     const reasons = entries.flatMap((entry) => ('reason' in entry ? [entry.reason] : []));
     if (reasons.length > 0) throw new Refusal(reasons.join(' '), entries);

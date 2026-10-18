@@ -1,9 +1,10 @@
 import { vscode } from './vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseExtensionToWebview,
-  type ArrayParentContext, type ColumnCopy, type EnumChoice, type ExtensionToWebview, type FocusedCellContext, type RecordEditEnvelope, type RecordLoadAnswer, type ViewState,
+  type ArrayParentContext, type EnumChoice, type ExtensionToWebview, type FocusedCellContext, type RecordEditEnvelope, type RecordLoadAnswer, type ViewState,
   type WebviewToExtension,
 } from '../../src/wire/messages';
+import type { RecordCopy } from '../../src/wire/recordCopy';
 import { readRecordPageGlobals, type RecordPageGlobals } from '../../src/wire/recordPage';
 
 /** What the host set on this page before its script ran. */
@@ -80,7 +81,7 @@ export function pickEnumValue(choices: EnumChoice[], current: string): Promise<s
 
 // RecordPanelClient's own read: the host's mEdit client answers with the
 // comparison, the plugin list and conflictsComputed, untransformed.
-export function requestRecordLoad(formKey: string, columns: ColumnCopy[]): Promise<RecordLoadAnswer> {
+export function requestRecordLoad(formKey: string, columns: RecordCopy[]): Promise<RecordLoadAnswer> {
   return requestReply(
     EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED,
     (msg): RecordLoadAnswer => {
@@ -103,7 +104,7 @@ export function editField(formKey: string, plugin: string, origin: string, envel
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, envelope });
 }
 
-export function openColumns(records: ColumnCopy[]): void {
+export function openColumns(records: RecordCopy[]): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_COLUMNS, records });
 }
 

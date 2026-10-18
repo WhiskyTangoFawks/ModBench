@@ -15,7 +15,8 @@ import { addElement, editField, focusCell, keepViewState, listen, openColumns, p
 import { openEditor } from './DiskCell';
 import { EditorMounted } from './cellEditor';
 import { pastedValue } from './modelValue';
-import { EXTENSION_TO_WEBVIEW, type ColumnCopy, type ModRepository, type ViewState } from '../../src/wire/messages';
+import { EXTENSION_TO_WEBVIEW, type ModRepository, type ViewState } from '../../src/wire/messages';
+import type { RecordCopy } from '../../src/wire/recordCopy';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
@@ -289,7 +290,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const incompleteMessage = severalRecords || fileCopyAlone ? undefined : recordPanelIncompleteMessage(conflictsComputed);
 
   function openColumn(opened: CompareOverride) {
-    const copyOf = (o: CompareOverride): ColumnCopy => ({ formKey: o.formKey, plugin: pluginAddressOf(o) });
+    const copyOf = (o: CompareOverride): RecordCopy => ({ formKey: o.formKey, plugin: pluginAddressOf(o) });
     openColumns([opened, ...(severalRecords ? overrides.filter(o => o !== opened) : [])].map(copyOf));
   }
 

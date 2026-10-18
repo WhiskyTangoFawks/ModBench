@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { CONTAINER_SCHEMES } from '../drivingLib/recordDocument';
+import { CONTAINER_SCHEMES } from '../textDocuments/recordDocument';
 import { errorMessage } from '../ports/errorMessage';
 
 const othersOverItsFile = (document: vscode.TextDocument): vscode.TextDocument[] =>

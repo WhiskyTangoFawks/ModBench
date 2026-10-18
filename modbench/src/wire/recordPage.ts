@@ -1,4 +1,5 @@
-import type { ColumnCopy, ViewState } from './messages';
+import type { ViewState } from './messages';
+import type { RecordCopy } from './recordCopy';
 import { isColumnCopies, isString, isViewState } from './messages';
 import { isReadFailed, type ReadFailed } from './readFailed';
 
@@ -6,7 +7,7 @@ import { isReadFailed, type ReadFailed } from './readFailed';
  *  record, columns and place; a page whose read failed carries the failure. */
 export type RecordPageGlobals = {
   mEditFormKey?: string;
-  mEditColumns?: ColumnCopy[];
+  mEditColumns?: RecordCopy[];
   mEditViewState?: ViewState;
   mEditLoadError?: ReadFailed;
 };
