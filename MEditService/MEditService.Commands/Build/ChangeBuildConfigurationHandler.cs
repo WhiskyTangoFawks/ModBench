@@ -4,12 +4,12 @@ namespace MEditService.Commands.Build;
 
 /// <summary>The build configuration's half of rename and of exclude or include: Modbench writes the mod folder, and
 /// this the configuration, so the folder already equals the next build's output (mods.md, A source mod, story 2).</summary>
-public sealed class BuildConfigurationHandler
+public sealed class ChangeBuildConfigurationHandler
 {
     private readonly ISourceAdapter _source;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal BuildConfigurationHandler(ISourceAdapter source) => _source = source;
+    internal ChangeBuildConfigurationHandler(ISourceAdapter source) => _source = source;
 
     public BuildConfigurationResult Change(string sourceFolder, BuildConfigurationChange change) =>
         _source.ChangeBuildConfiguration(sourceFolder, change) switch

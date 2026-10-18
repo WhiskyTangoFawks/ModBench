@@ -22,35 +22,22 @@ public sealed class WriteRouteSeamTests
         ("POST /plugins/move-last-written", "MoveLastWritten"),
         ("POST /plugins/{plugin}/create-record-changes", "CreateRecordChanges"),
         ("PUT /load-order", "PutLoadOrder"),
+        ("POST /build", "Build"),
+        ("POST /init", "Init"),
+        ("POST /build-configuration", "ChangeBuildConfiguration"),
+        ("POST /update-manifest", "UpdateManifest"),
+        ("POST /restore-from-manifest", "RestoreFromManifest"),
     ];
 
-    private static readonly string[] EndpointFiles = ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs"];
+    private static readonly string[] EndpointFiles = ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs", "ModEndpoints.cs", "ManifestEndpoints.cs"];
 
     private static readonly Regex CallSite = new(@"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.Compiled);
-    private static readonly Regex ProblemCall = new(@"Results\.Problem\(", RegexOptions.Compiled);
-    private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
+    private static readonly Regex ProblemCall = new(@"Results\.Problem\(|EndpointMapping\.BadRequest\(", RegexOptions.Compiled);
+    private static readonly Regex LiteralOrNamedConstant = new(
+        @"^(?:""(?:[^""\\]|\\.)*""|[A-Z]\w*(?:\.[A-Z]\w*)+)$", RegexOptions.Compiled);
+    private const string BadRequestCall = "EndpointMapping.BadRequest(";
 
-    private static readonly string[] HandRolledRequestShapeValidation400s =
-    [
-        """Results.Problem("Plugin name and origin are required.", statusCode: 400)""",
-        """Results.Problem("An operation and a path are required.", statusCode: 400)""",
-        """Results.Problem("The text of the document carrying the record is required.", statusCode: 400)""",
-        """Results.Problem("At least one record is required.", statusCode: 400)""",
-        """Results.Problem("Every record needs a FormKey, a plugin name and an origin.", statusCode: 400)""",
-        """Results.Problem("At least one destination is required.", statusCode: 400)""",
-        """Results.Problem("Every destination needs a name and an origin.", statusCode: 400)""",
-        """Results.Problem("Plugin name is required.", statusCode: 400)""",
-        """Results.Problem("Plugin name, origin and tree name are required.", statusCode: 400)""",
-        """Results.Problem("The folder and the origin are required.", statusCode: 400)""",
-        """Results.Problem("Origin is required.", statusCode: 400)""",
-        """Results.Problem("At least one plugin is required.", statusCode: 400)""",
-        """Results.Problem("Every plugin needs a name and an origin.", statusCode: 400)""",
-        """Results.Problem("At least one mod is required.", statusCode: 400)""",
-        """Results.Problem("Every mod needs a name.", statusCode: 400)""",
-        """Results.Problem("A record type is required.", statusCode: 400)""",
-        """Results.Problem("Each plugin entry must have a non-empty Name, Path, Origin and Provider, and its archives and strings files.", statusCode: 400)""",
-        """Results.Problem("The snapshot must state its active plugins, those loaded with no line, its archives, its strings files, its places, its mods and the stat cache's folder.", statusCode: 400)""",
-    ];
+    private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
 
     public static IEnumerable<object[]> EveryNamedMethodRoute =>
         Routes.Select(r => new object[] { r.Route, r.Method });
@@ -82,7 +69,6 @@ public sealed class WriteRouteSeamTests
     {
         var offenders = ReachInFollowingEachHelperOnce(EndpointFiles.Select(EndpointFile), method)
             .SelectMany(ExtractProblemCalls)
-            .Where(call => !HandRolledRequestShapeValidation400s.Contains(call, StringComparer.Ordinal))
             .ToArray();
 
         Assert.True(
@@ -102,8 +88,8 @@ public sealed class WriteRouteSeamTests
             + "        return EndpointMapping.Refusal(null!);\n    }\n}\n",
             file =>
             {
-                Assert.Null(BlockBodyOfStaticDeclarationIn(file, "NoSuchMethod"));
-                var body = BlockBodyOfStaticDeclarationIn(file, "DirectHit");
+                Assert.Null(BodyOfStaticDeclarationIn(file, "NoSuchMethod"));
+                var body = BodyOfStaticDeclarationIn(file, "DirectHit");
                 Assert.NotNull(body);
                 Assert.Contains("EndpointMapping.", body, StringComparison.Ordinal);
                 Assert.DoesNotContain("Caller", body, StringComparison.Ordinal);
@@ -136,10 +122,69 @@ public sealed class WriteRouteSeamTests
                 Assert.False(MapsThroughSeamIn([file], "ThroughAHandRolledSibling"));
                 var offenders = ReachInFollowingEachHelperOnce([file], "ThroughAHandRolledSibling")
                     .SelectMany(ExtractProblemCalls)
-                    .Where(call => !HandRolledRequestShapeValidation400s.Contains(call, StringComparer.Ordinal))
                     .ToArray();
                 Assert.Single(offenders);
             });
+    }
+
+    [Fact]
+    public void TheScan_ReadsAnExpressionBodiedRoute()
+    {
+        WithPlantedFile(
+            "internal static class PlantedEndpoints\n{\n"
+            + "    internal static IResult HandRolled(int x) =>\n"
+            + "        Results.Problem(\"not found\", statusCode: 404);\n}\n",
+            file =>
+            {
+                Assert.Single(ReachInFollowingEachHelperOnce([file], "HandRolled").SelectMany(ExtractProblemCalls));
+            });
+    }
+
+    [Fact]
+    public void TheScan_FollowsAnExpressionBodiedRouteIntoTheSeam()
+    {
+        WithPlantedFile(
+            "internal static class PlantedEndpoints\n{\n"
+            + "    internal static IResult Mapped(int x) => EndpointMapping.Refusal(null!);\n}\n",
+            file => Assert.True(MapsThroughSeamIn([file], "Mapped")));
+    }
+
+    [Fact]
+    public void TheScan_FollowsACalleeInTheCallersOwnFileFirst()
+    {
+        using var root = new ScratchDirectory("medit-write-route-seam-scan-");
+        var other = Path.Combine(root, "OtherEndpoints.cs");
+        var own = Path.Combine(root, "OwnEndpoints.cs");
+        File.WriteAllText(other,
+            "internal static class Other\n{\n    internal static IResult Shared() { return EndpointMapping.Refusal(null!); }\n}\n");
+        File.WriteAllText(own,
+            "internal static class Own\n{\n    internal static IResult Route() { return Shared(); }\n"
+            + "    private static IResult Shared() { return Results.Problem(\"x\", statusCode: 404); }\n}\n");
+
+        Assert.False(MapsThroughSeamIn([other, own], "Route"));
+        Assert.Single(ReachInFollowingEachHelperOnce([other, own], "Route").SelectMany(ExtractProblemCalls));
+    }
+
+    [Fact]
+    public void TheScan_DoesNotCountABadRequestAsTheSeam()
+    {
+        WithPlantedFile(
+            "internal static class PlantedEndpoints\n{\n"
+            + "    internal static IResult Route() => EndpointMapping.BadRequest(\"x\");\n}\n",
+            file => Assert.False(MapsThroughSeamIn([file], "Route")));
+    }
+
+    [Theory]
+    [InlineData("\"At least one mod is required.\"", 0)]
+    [InlineData("ArchiveVariantsRequest.NotOneEach", 0)]
+    [InlineData("refused.Message", 1)]
+    [InlineData("$\"Unknown {x}\"", 1)]
+    public void TheScan_FlagsABadRequestUnlessItsDetailIsALiteralOrANamedConstant(string detail, int flagged)
+    {
+        WithPlantedFile(
+            "internal static class PlantedEndpoints\n{\n"
+            + $"    internal static IResult Route(int x) => EndpointMapping.BadRequest({detail});\n}}\n",
+            file => Assert.Equal(flagged, ReachInFollowingEachHelperOnce([file], "Route").SelectMany(ExtractProblemCalls).Count()));
     }
 
     private static void WithPlantedFile(string source, Action<string> assert)
@@ -154,25 +199,27 @@ public sealed class WriteRouteSeamTests
         Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.Http", "Endpoints", name);
 
     private static bool MapsThroughSeamIn(IEnumerable<string> files, string methodName) =>
-        ReachInFollowingEachHelperOnce(files, methodName).Any(body => body.Contains("EndpointMapping.", StringComparison.Ordinal));
+        ReachInFollowingEachHelperOnce(files, methodName).Any(body => body.Replace(BadRequestCall, "", StringComparison.Ordinal).Contains("EndpointMapping.", StringComparison.Ordinal));
 
     private static IReadOnlyList<string> ReachInFollowingEachHelperOnce(IEnumerable<string> files, string methodName)
     {
         var fileList = files.ToArray();
-        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var visited = new HashSet<(string? File, string Method)>();
         var bodies = new List<string>();
-        Collect(methodName);
+        Collect(methodName, null);
         return bodies;
 
-        void Collect(string method)
+        void Collect(string method, string? callerFile)
         {
-            if (!visited.Add(method)) return;
-            var body = fileList.Select(file => BlockBodyOfStaticDeclarationIn(file, method)).FirstOrDefault(b => b is not null);
-            if (body is null) return;
+            var (file, body) = fileList
+                .OrderBy(candidate => candidate == callerFile ? 0 : 1)
+                .Select(candidate => (File: candidate, Body: BodyOfStaticDeclarationIn(candidate, method)))
+                .FirstOrDefault(found => found.Body is not null);
+            if (body is null || !visited.Add((file, method))) return;
             bodies.Add(body);
 
             foreach (var candidate in CallSite.Matches(body).Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal))
-                Collect(candidate);
+                Collect(candidate, file);
         }
     }
 
@@ -182,16 +229,19 @@ public sealed class WriteRouteSeamTests
         {
             var openIndex = m.Index + m.Length - 1;
             var closeIndex = MatchingDelimiter(body, openIndex, '(', ')');
-            yield return Normalize(body[m.Index..(closeIndex + 1)]);
+            var call = Normalize(body[m.Index..(closeIndex + 1)]);
+            var detail = Normalize(body[(openIndex + 1)..closeIndex]);
+            if (!call.StartsWith(BadRequestCall, StringComparison.Ordinal) || !LiteralOrNamedConstant.IsMatch(detail))
+                yield return call;
         }
     }
 
     private static string Normalize(string text) => WhitespaceRun.Replace(text, " ").Trim();
 
     private static string? MethodBody(string methodName) =>
-        EndpointFiles.Select(file => BlockBodyOfStaticDeclarationIn(EndpointFile(file), methodName)).FirstOrDefault(body => body is not null);
+        EndpointFiles.Select(file => BodyOfStaticDeclarationIn(EndpointFile(file), methodName)).FirstOrDefault(body => body is not null);
 
-    private static string? BlockBodyOfStaticDeclarationIn(string file, string methodName)
+    private static string? BodyOfStaticDeclarationIn(string file, string methodName)
     {
         var text = File.ReadAllText(file);
         var declaration = new Regex(
@@ -204,10 +254,24 @@ public sealed class WriteRouteSeamTests
         var parametersClose = MatchingDelimiter(text, parametersOpen, '(', ')');
         var bodyOpen = parametersClose + 1;
         while (bodyOpen < text.Length && char.IsWhiteSpace(text[bodyOpen])) bodyOpen++;
+        if (text.AsSpan(bodyOpen).StartsWith("=>"))
+            return text[bodyOpen..(EndOfExpression(text, bodyOpen) + 1)];
         if (bodyOpen >= text.Length || text[bodyOpen] != '{') return null;
 
         var bodyClose = MatchingDelimiter(text, bodyOpen, '{', '}');
         return text[bodyOpen..(bodyClose + 1)];
+    }
+
+    private static int EndOfExpression(string text, int start)
+    {
+        var depth = 0;
+        for (var i = start; i < text.Length; i++)
+        {
+            if (text[i] is '(' or '{' or '[') depth++;
+            else if (text[i] is ')' or '}' or ']') depth--;
+            else if (text[i] == ';' && depth == 0) return i;
+        }
+        throw new InvalidOperationException($"No ';' ends the expression at {start}.");
     }
 
     private static int MatchingDelimiter(string text, int openIndex, char open, char close)

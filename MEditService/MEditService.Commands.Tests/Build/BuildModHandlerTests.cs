@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Build;
 
-public sealed class BuildHandlerTests : IDisposable
+public sealed class BuildModHandlerTests : IDisposable
 {
     private const string ModName = "Mod";
     private const string Suffix = ".mohidden";
@@ -25,7 +25,7 @@ public sealed class BuildHandlerTests : IDisposable
     private readonly ScratchDirectory _root = new("medit-build-handler-");
     private readonly LoadOrderHolder _holder = new();
 
-    public BuildHandlerTests() => _noArchives = new(Suffix, Archives: null, StatCache);
+    public BuildModHandlerTests() => _noArchives = new(Suffix, Archives: null, StatCache);
 
     public void Dispose() => _root.Dispose();
 
@@ -249,7 +249,7 @@ public sealed class BuildHandlerTests : IDisposable
         File.AppendAllText(Path.Combine(ModFolder, "Fixture.esp"), "changed outside Modbench");
         File.WriteAllText(stringsFiles[0], "changed outside Modbench");
 
-        var built = Assert.Single((await TestEditService.BuildHandler(_holder)
+        var built = Assert.Single((await TestEditService.BuildModHandler(_holder)
             .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null)], _noArchives)).Landed).Outcome;
 
         Assert.Equal(["Fixture.esp", $"Strings/{Path.GetFileName(stringsFiles[0])}"], built.Overwritten);
@@ -261,7 +261,7 @@ public sealed class BuildHandlerTests : IDisposable
         await InitializedWithALocalizedPlugin();
         GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "remote", "add", "origin", Remote);
 
-        Assert.Single((await TestEditService.BuildHandler(_holder)
+        Assert.Single((await TestEditService.BuildModHandler(_holder)
             .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, IsSubmodule: true)], _noArchives)).Landed);
 
         var stringsFiles = Directory.GetFiles(Path.Combine(ModFolder, "Strings")).Select(file => $"Strings/{Path.GetFileName(file)}");
@@ -281,7 +281,7 @@ public sealed class BuildHandlerTests : IDisposable
         WriteInFolder(MetaIni, "[General]");
         _holder.Apply(SnapshotPlugins.Snapshot(Path.Combine(_root, "game"), _root, GameRelease.Fallout4, []));
 
-        var built = Assert.Single((await TestEditService.BuildHandler(_holder)
+        var built = Assert.Single((await TestEditService.BuildModHandler(_holder)
             .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null)], _noArchives)).Landed).Outcome;
 
         Assert.Equal(["Fixture.esp"], built.Compiled.Select(plugin => plugin.Item.Name));
@@ -295,7 +295,7 @@ public sealed class BuildHandlerTests : IDisposable
         WriteInFolder(MetaIni, "[General]");
 
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
-        var built = await TestEditService.BuildHandler(_holder)
+        var built = await TestEditService.BuildModHandler(_holder)
             .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], "1.2.3")], _noArchives);
 
         Assert.Empty(built.Refused);
@@ -314,7 +314,7 @@ public sealed class BuildHandlerTests : IDisposable
         var provider = new PluginProvider.FromMod(ModName, ModFolder, SourceFolder);
         _holder.Apply(SnapshotPlugins.Snapshot(Directory.CreateDirectory(Path.Combine(_root, "game")).FullName, _root, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: provider)]));
-        Assert.Single((await TestEditService.InitHandler(_holder).InitAsync([new ModToInit(ModName, SourceFolder, [])])).Landed);
+        Assert.Single((await TestEditService.InitModHandler(_holder).InitAsync([new ModToInit(ModName, SourceFolder, [])])).Landed);
     }
 
     private async Task<BuiltMod> Landed() => await Landed(_noArchives);
@@ -329,7 +329,7 @@ public sealed class BuildHandlerTests : IDisposable
     private Task<SelectionResult<string, BuildRefusal, BuiltMod>> Build(InstanceToBuild instance, bool isSubmodule = false)
     {
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
-        return TestEditService.BuildHandler(_holder).BuildAsync(
+        return TestEditService.BuildModHandler(_holder).BuildAsync(
             [new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, isSubmodule)], instance);
     }
 

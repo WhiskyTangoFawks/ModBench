@@ -28,6 +28,9 @@ internal static class EndpointMapping
         return true;
     }
 
+    /// <summary>A request that is malformed in itself: the protocol's 400, before any handler is reached.</summary>
+    internal static IResult BadRequest(string detail) => Results.Problem(detail, statusCode: StatusCodes.Status400BadRequest);
+
     /// <summary>The release a request names, or the 400 that says which names are known.</summary>
     internal static IResult? ParseGameRelease(string? raw, out GameRelease release) =>
         Enum.TryParse(raw, out release)

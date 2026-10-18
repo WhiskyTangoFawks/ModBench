@@ -56,14 +56,14 @@ internal static class TestEditService
     internal static CompilePluginHandler CompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<CompilePluginHandler>();
 
-    internal static InitHandler InitHandler(
+    internal static InitModHandler InitModHandler(
         LoadOrderHolder holder, IPluginAdapter? adapter = null, INotificationPublisher? notifications = null,
         ISourceAdapter? source = null) =>
-        Over(holder, adapter: adapter, notifications: notifications, source: source).GetRequiredService<InitHandler>();
+        Over(holder, adapter: adapter, notifications: notifications, source: source).GetRequiredService<InitModHandler>();
 
-    internal static BuildHandler BuildHandler(
+    internal static BuildModHandler BuildModHandler(
         LoadOrderHolder holder, INotificationPublisher? notifications = null, ISourceAdapter? source = null, IModFolderRepository? modFolders = null) =>
-        Over(holder, notifications: notifications, source: source, modFolders: modFolders).GetRequiredService<BuildHandler>();
+        Over(holder, notifications: notifications, source: source, modFolders: modFolders).GetRequiredService<BuildModHandler>();
 
     internal static UpdateManifestHandler UpdateManifestHandler(IModFolderRepository modFolders, INotificationPublisher notifications) =>
         Over(new LoadOrderHolder(), notifications: notifications, modFolders: modFolders).GetRequiredService<UpdateManifestHandler>();

@@ -51,23 +51,21 @@ internal static class ModEndpoints
     }
 
     // decompile-and-commit: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
-    internal static async Task<IResult> Init(InitRequest req, InitHandler initHandler, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> Init(InitRequest req, InitModHandler initModHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
         var mods = req.Mods ?? [];
         if (mods.Count == 0)
-            return Results.Problem("At least one mod is required.", statusCode: 400);
+            return EndpointMapping.BadRequest("At least one mod is required.");
         if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.SourceFolder)
             || (mod.MetadataFiles ?? []).Any(string.IsNullOrWhiteSpace)))
         {
-            return Results.Problem(
-                "Every mod needs a name and a source folder.",
-                statusCode: 400);
+            return EndpointMapping.BadRequest("Every mod needs a name and a source folder.");
         }
 
         return await EndpointMapping.Answered(
             "Init", logger,
-            initHandler.InitAsync([.. mods.Select(mod => new ModToInit(mod.Name, mod.SourceFolder, mod.MetadataFiles ?? []))]),
+            initModHandler.InitAsync([.. mods.Select(mod => new ModToInit(mod.Name, mod.SourceFolder, mod.MetadataFiles ?? []))]),
             EndpointMapping.Refusal,
             landed => new InitializedModResponse(landed.Item, landed.Outcome.Plugins),
             refused => new ModInitRefusal(refused.Item, refused.Refusal, refused.Message),
@@ -75,15 +73,13 @@ internal static class ModEndpoints
     }
 
     internal static IResult ChangeBuildConfiguration(
-        BuildConfigurationRequest req, BuildConfigurationHandler handler, ILoggerFactory loggerFactory)
+        BuildConfigurationRequest req, ChangeBuildConfigurationHandler handler, ILoggerFactory loggerFactory)
     {
         IReadOnlyList<string> exclude = req.Exclude ?? [], include = req.Include ?? [];
         if (string.IsNullOrWhiteSpace(req.SourceFolder) || (req.Output is null && exclude.Count + include.Count == 0)
             || exclude.Concat(include).Any(path => path is null))
         {
-            return Results.Problem(
-                "A source folder is required, with an output, or paths to exclude or include.",
-                statusCode: 400);
+            return EndpointMapping.BadRequest("A source folder is required, with an output, or paths to exclude or include.");
         }
 
         var result = handler.Change(req.SourceFolder, new BuildConfigurationChange(req.Output, exclude, include));
@@ -93,27 +89,25 @@ internal static class ModEndpoints
     }
 
     // build-mod: the selection (commands.md, A selection is one gesture).
-    internal static async Task<IResult> Build(BuildRequest req, BuildHandler buildHandler, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> Build(BuildRequest req, BuildModHandler buildModHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
         var mods = req.Mods ?? [];
         if (mods.Count == 0)
-            return Results.Problem("At least one mod is required.", statusCode: 400);
+            return EndpointMapping.BadRequest("At least one mod is required.");
         if (mods.Any(mod => string.IsNullOrWhiteSpace(mod.Name) || string.IsNullOrWhiteSpace(mod.SourceFolder) || string.IsNullOrWhiteSpace(mod.Folder)))
         {
-            return Results.Problem(
-                "Every mod needs a name, a source folder and a folder.",
-                statusCode: 400);
+            return EndpointMapping.BadRequest("Every mod needs a name, a source folder and a folder.");
         }
         if (string.IsNullOrWhiteSpace(req.ExcludedSuffix))
-            return Results.Problem("The suffix the mod manager gives an excluded file's name is required.", statusCode: 400);
-        if (string.IsNullOrWhiteSpace(req.StatCache)) return Results.Problem("The folder of the stat cache is required.", statusCode: 400);
+            return EndpointMapping.BadRequest("The suffix the mod manager gives an excluded file's name is required.");
+        if (string.IsNullOrWhiteSpace(req.StatCache)) return EndpointMapping.BadRequest("The folder of the stat cache is required.");
         var variants = req.Archives?.Variants();
-        if (req.Archives is not null && variants is null) return Results.Problem(ArchiveVariantsRequest.NotOneEach, statusCode: 400);
+        if (req.Archives is not null && variants is null) return EndpointMapping.BadRequest(ArchiveVariantsRequest.NotOneEach);
 
         return await EndpointMapping.Answered(
             "Build", logger,
-            buildHandler.BuildAsync(
+            buildModHandler.BuildAsync(
                 [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, mod.MetadataFiles ?? [], mod.Version, mod.IsSubmodule))],
                 new InstanceToBuild(req.ExcludedSuffix, variants, req.StatCache)),
             EndpointMapping.Refusal,
