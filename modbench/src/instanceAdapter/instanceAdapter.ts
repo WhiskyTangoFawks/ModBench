@@ -6,7 +6,6 @@ import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
-export { fileExtension, isPluginFile, isRootLevel } from './pluginFile';
 export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 export { filesWinningFirst } from './pluginsProvided';
 

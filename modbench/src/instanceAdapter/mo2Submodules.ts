@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { errnoCode } from '../ports/errno';
+import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
 import { exists, get, isRepository, remove, write } from './files';
 import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote } from './instanceAdapter';

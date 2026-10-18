@@ -1,4 +1,4 @@
-import { fileExtension } from '../instanceAdapter/instanceAdapter';
+import { fileExtension } from '../tables/pluginFile';
 
 const listed = new Intl.ListFormat('en-US', { type: 'disjunction' });
 

@@ -1,4 +1,4 @@
-// Which filenames are plugins. Nothing here opens one (ADR-0016).
+// Which filenames are plugins.
 
 import { extname } from 'node:path';
 

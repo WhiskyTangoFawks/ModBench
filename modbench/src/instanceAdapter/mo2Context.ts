@@ -1,11 +1,10 @@
 // What every part of MO2's implementation shares: the instance root, the two resolvers over one
 // read of ModOrganizer.ini, the watch, and the reads and name rules more than one part uses.
 
-import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
-import { exists, get, listDir, listFolders, rename, type Undo } from './files';
+import { exists, get, listDir, listFolders, readOrAbsent, rename, type Undo } from './files';
 import type { GameDirectoryResolver } from './gameDirectory';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from './instanceAdapter';
 import { entryDir, isNewModExtraction, manifestFileIn, mo2FolderName, modDir, modsDir, settingsFile } from './layout';
@@ -18,16 +17,6 @@ export interface Mo2Context {
   readonly resolveDownloadsFolder: DownloadsDirectoryResolver;
   readonly resolveMyGames: MyGamesResolver;
   readonly watch: Mo2Watch;
-}
-
-/** A missing file answers `absent`; any other failure rejects. */
-export async function readOrAbsent<T>(read: () => Promise<T>, absent: T): Promise<T> {
-  try {
-    return await read();
-  } catch (err) {
-    if (errnoCode(err) !== 'ENOENT') throw err;
-    return absent;
-  }
 }
 
 /** How MO2 matches an entry: by the name of its folder, without case, a separator's folder named

@@ -10,7 +10,7 @@ import { basename, dirname, join } from 'node:path';
 import {
   isTempWriteOf, repositoryGitDir, tempWritePath,
 } from './layout';
-import { errnoCode } from '../ports/errno';
+import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead, FileStamp } from './instanceAdapter';
 
@@ -272,5 +272,15 @@ export async function readOrReason<T>(read: () => Promise<T>): Promise<FileRead<
     return { kind: 'read', answer: await read() };
   } catch (err) {
     return { kind: 'unreadable', reason: errorMessage(err) };
+  }
+}
+
+/** A missing file answers `absent`; any other failure rejects. */
+export async function readOrAbsent<T>(read: () => Promise<T>, absent: T): Promise<T> {
+  try {
+    return await read();
+  } catch (err) {
+    if (errnoCode(err) !== 'ENOENT') throw err;
+    return absent;
   }
 }

@@ -10,7 +10,7 @@ import { parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
 import { creationClubListFile, dataFolderOf, gameReleaseForGame, loadedWithNoLineOf } from '../tables/gamePaths';
-import { factsOf, get, isRepository, listDir, readOrReason, stampOf } from './files';
+import { factsOf, get, isRepository, listDir, readOrAbsent, readOrReason, stampOf } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type FileOrigin, type GameFolder, type InstanceAdapter, type InstanceReading,
   type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided, type SourceMods,
@@ -21,10 +21,10 @@ import {
 } from './layout';
 import { type ArchiveReads, mo2Archives } from './mo2Archives';
 import { groupModOrder } from './modGroups';
-import { entryKey, folderHolding, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
+import { entryKey, folderHolding, listModFolders, modFoldersOf, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 import { sourceModsIn } from './sourceMods';
-import { isPluginFile } from './pluginFile';
+import { isPluginFile } from '../tables/pluginFile';
 import { filesWinningFirst, pluginsProvidedOf } from './pluginsProvided';
 
 interface InstanceSettings {
