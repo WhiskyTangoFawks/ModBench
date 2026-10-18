@@ -147,7 +147,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const modlist = modlistRepositoryCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot), trash });
   const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
   const mods = own(createModsView({
-    instance, adapter, commands: modCommands(adapter, client, readStatus), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
+    instance, commands: modCommands(adapter, client, readStatus), log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
     downloadInstall: {
       reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),

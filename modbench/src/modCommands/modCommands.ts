@@ -11,6 +11,7 @@ import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { isRefused, type MEditClient, type ReadModStatus } from '../client';
 import { installMod } from './install';
+import { sameCopies } from './sameCopies';
 export type { SelectionResult };
 export type { InstallTarget } from '../instanceAdapter/instanceAdapter';
 export type { ModPackage } from './install';
@@ -470,6 +471,7 @@ export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['m
     renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
     newModNameRefusal: (...args: TailOf<typeof newModNameRefusal>) => newModNameRefusal(adapter, ...args),
     names: adapter.names,
+    sameCopies: (...args: TailOf<typeof sameCopies>) => sameCopies(adapter, ...args),
     installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, readStatus }, ...args),
   };
 }

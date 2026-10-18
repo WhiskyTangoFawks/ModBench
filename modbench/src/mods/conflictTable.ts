@@ -1,7 +1,7 @@
 // mods-conflicts.md: one mod's file order conflicts, as a table.
 
 import type { FileOrigin, InstanceValue, InstanceView, Mod, OriginFile } from '../instanceLoader/instance';
-import type { FileCopies } from './sameCopies';
+import type { FileCopies } from '../modCommands/sameCopies';
 import { inFileOrderConflict, modOrigin, originLabel, sameOrigin } from '../instanceLoader/fileConflictIndex';
 import type { ConflictCell, ConflictCellValue, ConflictColumn, ConflictRow, ConflictTable } from '../wire/conflictTable';
 import { byLevel, byName } from './fileTree';
