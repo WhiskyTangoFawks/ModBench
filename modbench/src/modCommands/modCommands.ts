@@ -10,7 +10,7 @@ import { EMPTY_MOD_NAME, entryNameRefusal, goneFromDisk, newModNameRefusal as un
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { isRefused, type MEditClient, type ReadModStatus } from '../client';
-import { installMod } from './install';
+import { installMod, upgradeLoss } from './install';
 export type { SelectionResult };
 export type { InstallTarget } from '../instanceAdapter/instanceAdapter';
 export type { ModPackage } from './install';
@@ -471,6 +471,7 @@ export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['m
     newModNameRefusal: (...args: TailOf<typeof newModNameRefusal>) => newModNameRefusal(adapter, ...args),
     names: adapter.names,
     installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, readStatus }, ...args),
+    upgradeLoss: (...args: TailOf<typeof upgradeLoss>) => upgradeLoss({ adapter, readStatus }, ...args),
   };
 }
 

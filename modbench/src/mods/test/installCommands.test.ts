@@ -58,6 +58,7 @@ function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
     commands: COMMANDS,
     instance: { value: instanceValueFixture({ downloads: { kind: 'listed', rows: [downloadRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
+    ask: vi.fn(),
     warnIfFomod: vi.fn(),
     downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     ...over,
