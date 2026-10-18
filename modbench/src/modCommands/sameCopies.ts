@@ -13,7 +13,7 @@ export interface FileCopies {
 }
 
 /** One provider's copy of a file, and the path it is read at. */
-export interface CopyToRead {
+interface CopyToRead {
   readonly origin: FileOrigin;
   readonly path: string;
 }
