@@ -7,7 +7,8 @@ import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
 import { get, isRepository, listFolders, readOrAbsent } from './files';
 import type { SourceMods } from './instanceAdapter';
-import { BUILD_OUTPUT_KEY, buildConfigurationFile, modFolderName, sourceRootDir } from './layout';
+import { BUILD_OUTPUT_KEY } from '../wire/sourceMod';
+import { buildConfigurationFile, modFolderName, sourceRootDir } from './layout';
 import { modNameKey } from './codecs/modlistText';
 
 async function outputOf(sourceFolder: string): Promise<{ output: string } | { reason: string }> {
