@@ -134,6 +134,9 @@ export interface OwnedMetaKeys {
   installedFiles?: readonly InstalledFileId[];
 }
 
+/** What `install` is handed to write into a mod's meta: the adapter adds the game's name. */
+export type InstallKeys = Pick<OwnedMetaKeys, 'nexusId' | 'version' | 'archiveFilename' | 'installedFiles'>;
+
 export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 
 /** What a downloaded file's metadata says. `status` is the metadata's own claim, never
@@ -442,6 +445,13 @@ export interface InstanceAdapter {
   reading(): Promise<InstanceReading>;
   /** The profile the mod manager's configuration selects now. */
   activeProfile(): Promise<string>;
+  /** Every profile's name. */
+  profiles(): Promise<readonly string[]>;
+  /** The active profile's mod order and the mod folders, without the rest of the instance; `modFolders` is undefined
+   *  when there is no folder for mods at all. */
+  modlist(): Promise<{ readonly mods: readonly ModlistEntry[]; readonly modFolders: readonly ModFolder[] | undefined }>;
+  /** Every source mod now. */
+  sourceMods(): Promise<SourceMods>;
   readonly names: ManagerNames;
 
   // Answers about a mod or a file.
@@ -553,7 +563,7 @@ export interface InstanceAdapter {
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
   /** Puts the package's files in a new folder, or in place of the mod's own. Rejects with why; a
    *  new mod's folder goes, and an upgrade that failed part way is not rolled back. */
-  install(installed: InstallPackage, target: InstallTarget, keys: OwnedMetaKeys): Promise<InstallOutcome>;
+  install(installed: InstallPackage, target: InstallTarget, keys: InstallKeys): Promise<InstallOutcome>;
 
   // Subscribe: the instance changed.
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's

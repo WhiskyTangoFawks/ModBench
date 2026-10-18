@@ -53,9 +53,9 @@ interface PackageKindItem extends vscode.QuickPickItem {
 const downloadedFilePackage = ({ name, path, modID, fileID, version }: DownloadFile): ModPackage =>
   ({ kind: 'downloadedFile', name, path, modID, fileID, version });
 
-const unmarked = (installed: ModPackage, downloadRefusal: string | undefined): PartialFailure[] =>
-  installed.kind === 'downloadedFile' && downloadRefusal !== undefined
-    ? [{ message: `"${installed.name}" was installed, but its Downloads status could not be updated`, detail: downloadRefusal, severity: 'log' }]
+const unmarked = (installed: ModPackage, downloadedFileRefusal: string | undefined): PartialFailure[] =>
+  installed.kind === 'downloadedFile' && downloadedFileRefusal !== undefined
+    ? [{ message: `"${installed.name}" was installed, but its Downloads status could not be updated`, detail: downloadedFileRefusal, severity: 'log' }]
     : [];
 
 type Downloads = InstanceValue['downloads'];
@@ -77,9 +77,11 @@ const packageOf = (downloads: Downloads, argument: readonly Argument[]): Pick<In
     : { package: { kind: 'folder', path: given.path }, via: 'installFromFolder' };
 };
 
-const targetOf = ({ name, target }: InstallOptions, newModNameRefusal: (name: string) => string | undefined): InstallTarget => {
+const targetOf = async (
+  { name, target }: InstallOptions, newModNameRefusal: (name: string) => Promise<string | undefined>,
+): Promise<InstallTarget> => {
   if (name !== undefined && target === undefined) {
-    const refusal = newModNameRefusal(name);
+    const refusal = await newModNameRefusal(name);
     if (refusal !== undefined) throw new Refusal(refusal);
     return { kind: 'new', name };
   }
@@ -108,18 +110,18 @@ async function pickPackagePath(): Promise<{ kind: 'archive' | 'folder'; path: st
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { commands, instance, reporterFor, warnIfFomod, downloadInstall } = deps;
   const reporterOf = (via: InstallVia): Reporter => (via === 'downloadedFile' ? downloadInstall.reporter : reporterFor(via));
-  const newModNameRefusal = (name: string) => commands.newModNameRefusal(instance.value, name);
+  const newModNameRefusal = (name: string) => commands.newModNameRefusal(name);
   const failedMessage = ({ package: installed, target, via }: Install): string =>
     `Failed to install "${installed.kind === 'downloadedFile' && via === 'downloadedFile' ? installed.name : target.name}".`;
 
   const installedMod = async (install: Install): Promise<InstallResult> => {
     try {
-      const outcome = await commands.installMod(install.package, install.target, instance.value.gameName, install.force);
+      const outcome = await commands.installMod(install.package, install.target, install.force);
       if (!outcome.applied) return { applied: false, refusal: failedMessage(install), detail: outcome.refusal };
       return {
         applied: true,
         outcome: { landed: [{ name: install.target.name, isFomod: outcome.isFomod }], refused: [] },
-        partial: unmarked(install.package, outcome.downloadRefusal),
+        partial: unmarked(install.package, outcome.downloadedFileRefusal),
       };
     } catch (err) {
       return { applied: false, refusal: failedMessage(install), detail: errorMessage(err) };
@@ -156,8 +158,8 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         return undefined;
       }
     },
-    fromAgent: ({ argument, options }) =>
-      ({ ...packageOf(instance.value.downloads, argument), target: targetOf(options, newModNameRefusal), force: options.force === true }),
+    fromAgent: async ({ argument, options }) =>
+      ({ ...packageOf(instance.value.downloads, argument), target: await targetOf(options, newModNameRefusal), force: options.force === true }),
     run: (install) => runWritingGesture(
       install.via === 'downloadedFile' ? downloadInstall.progressViewId : MODS_KEY_ARGS.view, instance, () => installedMod(install)),
     report: (result, install) => {

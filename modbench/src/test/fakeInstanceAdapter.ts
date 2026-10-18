@@ -2,7 +2,7 @@ import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type {
   DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, GameFile, HashedFile, InstallationFile,
   InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
-  ModFolder, ModFolders, ModMetadata, OriginFile, OwnedMetaKeys, PluginOrderChange, Subscription } from '../instanceAdapter/instanceAdapter';
+  ModFolder, ModFolders, ModMetadata, OriginFile, InstallKeys, PluginOrderChange, Subscription } from '../instanceAdapter/instanceAdapter';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { filesWinningFirst, pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
@@ -63,7 +63,7 @@ export type AdapterCall =
   | { readonly verb: 'checkPushRefusalFree' }
   | { readonly verb: 'writeSubmodules' }
   | { readonly verb: 'refuseUnpublishedPins' }
-  | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly keys: OwnedMetaKeys };
+  | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly keys: InstallKeys };
 
 export type WriteVerb = AdapterCall['verb'];
 
@@ -169,6 +169,9 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return readingFailure === undefined ? Promise.resolve(current) : Promise.reject(new Error(readingFailure));
     },
     activeProfile: () => Promise.resolve(current.profile),
+    profiles: () => Promise.resolve(current.profiles),
+    modlist: () => Promise.resolve({ mods: current.mods, modFolders: current.modFolders?.all }),
+    sourceMods: () => Promise.resolve(current.sourceMods),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
     modFolderPath: (mod) => Promise.resolve(answers.foldersAbsent?.has(mod) ? undefined : `/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),

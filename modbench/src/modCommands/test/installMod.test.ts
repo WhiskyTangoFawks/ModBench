@@ -9,7 +9,6 @@ import { unreadStatus } from '../../test/unreadStatus';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const MOD = 'Freshly Installed Mod';
-const GAME_NAME = 'Fallout 4';
 const ARCHIVE: InstallPackage = { kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' };
 const NEW_MOD: InstallTarget = { kind: 'new', name: MOD };
 const UPGRADED = { kind: 'upgrade', name: 'Harder VATS' } as const;
@@ -17,7 +16,7 @@ const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z', path: '/dow
 
 function install(installed: ModPackage, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadModStatus = unreadStatus) {
   const fake = fakeInstanceAdapter(undefined, answers);
-  const outcome = modCommands(fake.adapter, new InMemoryMEditClient(), readStatus).installMod(installed, target, GAME_NAME, force);
+  const outcome = modCommands(fake.adapter, new InMemoryMEditClient(), readStatus).installMod(installed, target, force);
   return outcome.then((result) => ({ result, calls: fake.calls }));
 }
 
@@ -127,11 +126,11 @@ describe('installMod', () => {
   });
 
   it.each([
-    ['a folder', { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'folder', path: '/elsewhere/Loose' }, { gameName: GAME_NAME }],
-    ['an archive, recording its file name', ARCHIVE, ARCHIVE, { gameName: GAME_NAME, archiveFilename: 'Freshly-1-0.7z' }],
+    ['a folder', { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'folder', path: '/elsewhere/Loose' }, {}],
+    ['an archive, recording its file name', ARCHIVE, ARCHIVE, { archiveFilename: 'Freshly-1-0.7z' }],
     ['a downloaded file, recording its name, Nexus ids and version', { ...DOWNLOADED, modID: '111', fileID: '222', version: '3.0.0' },
       { kind: 'archive', path: DOWNLOADED.path },
-      { gameName: GAME_NAME, archiveFilename: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFiles: [{ nexusId: '111', fileId: '222' }] }],
+      { archiveFilename: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFiles: [{ nexusId: '111', fileId: '222' }] }],
   ] as const)('hands the adapter %s with the keys its meta is to hold', async (_, installed, handed, keys) => {
     const { calls } = await install(installed);
 
@@ -157,6 +156,6 @@ describe('installMod', () => {
     const { result } = await install(DOWNLOADED, NEW_MOD, answers);
 
     expect(result).toMatchObject({ applied: true, isFomod: false });
-    expect(result.applied && result.downloadRefusal).toMatch(why);
+    expect(result.applied && result.downloadedFileRefusal).toMatch(why);
   });
 });

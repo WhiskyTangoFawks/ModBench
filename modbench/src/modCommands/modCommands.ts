@@ -4,7 +4,7 @@ import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
   entryNotFound, sameEntry, type DecideModOrder, type EntryRef, type FileOrigin, type InstanceAdapter,
-  type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace,
+  type ModlistEntry, type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace, type SourceMods,
 } from '../instanceAdapter/instanceAdapter';
 import { EMPTY_MOD_NAME, entryNameRefusal, goneFromDisk, newModNameRefusal, type EntryKey, type TakenNames } from '../coreLib/commandRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
@@ -16,25 +16,25 @@ export type { InstallTarget } from '../instanceAdapter/instanceAdapter';
 export type { ModPackage } from './install';
 
 async function changeModOrderLanding(
-  adapter: InstanceAdapter, profile: string, decide: DecideModOrder,
+  adapter: InstanceAdapter, decide: DecideModOrder, profile?: string,
 ): Promise<CommandResult<Awaited<ReturnType<InstanceAdapter['changeModOrder']>>>> {
   try {
-    return { applied: true, ...await adapter.changeModOrder(profile, decide) };
+    return { applied: true, ...await adapter.changeModOrder(profile ?? await adapter.activeProfile(), decide) };
   } catch (err) {
     return refuse(err);
   }
 }
 
-async function changeModOrder(adapter: InstanceAdapter, profile: string, decide: DecideModOrder): Promise<CommandResult> {
-  const result = await changeModOrderLanding(adapter, profile, decide);
+async function changeModOrder(adapter: InstanceAdapter, decide: DecideModOrder, profile?: string): Promise<CommandResult> {
+  const result = await changeModOrderLanding(adapter, decide, profile);
   return result.applied ? { applied: true, wrote: result.wrote } : result;
 }
 
 // A separator written, and the name it was written under.
 type SeparatorResult = CommandResult<{ wrote: boolean; name: string }>;
 
-async function changeSeparator(adapter: InstanceAdapter, profile: string, decide: DecideModOrder): Promise<SeparatorResult> {
-  const result = await changeModOrderLanding(adapter, profile, decide);
+async function changeSeparator(adapter: InstanceAdapter, decide: DecideModOrder): Promise<SeparatorResult> {
+  const result = await changeModOrderLanding(adapter, decide);
   if (!result.applied) return result;
   const name = result.landed.flatMap((change) => (change.kind === 'addSeparator' ? [change.separator] : change.kind === 'renameSeparator' ? [change.to] : []))[0];
   if (name === undefined) throw new Error('The adapter landed no separator.');
@@ -50,11 +50,11 @@ const isListed = (adapter: InstanceAdapter, order: readonly ModlistEntry[], entr
 // Decided from mod order as it stands when the changes land, so an item gone since the view last
 // rendered is refused by name while the rest land in the same write.
 async function changeSelection(
-  adapter: InstanceAdapter, profile: string, kind: EntryKind, names: readonly string[],
+  adapter: InstanceAdapter, kind: EntryKind, names: readonly string[],
   changesFor: (found: readonly string[]) => readonly ModOrderChange[],
 ): Promise<SelectionResult<string>> {
   let outcome: SelectionOutcome<string> = { landed: [], refused: [] };
-  const result = await changeModOrder(adapter, profile, (order) => {
+  const result = await changeModOrder(adapter, (order) => {
     const landed = names.filter((name) => isListed(adapter, order, { kind, name }));
     const refused = names.filter((name) => !landed.includes(name)).map((name) => ({ item: name, reason: entryNotFound({ kind, name }) }));
     outcome = { landed, refused };
@@ -65,9 +65,9 @@ async function changeSelection(
 
 // `modbench.mod.enable` / `modbench.mod.disable`, over the whole selection in one write.
 function setModsEnabled(
-  adapter: InstanceAdapter, profile: string, modNames: readonly string[], enabled: boolean,
+  adapter: InstanceAdapter, modNames: readonly string[], enabled: boolean,
 ): Promise<SelectionResult<string>> {
-  return changeSelection(adapter, profile, 'mod', modNames, (found) =>
+  return changeSelection(adapter, 'mod', modNames, (found) =>
     found.map((mod) => ({ kind: 'enable', mod, enabled })));
 }
 
@@ -76,17 +76,17 @@ export type { EntryRef, MovePlace, OrderEnd, OriginFileMark, SeparatorsPlace } f
 // `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
 // order, at the `end` of the place. A separator or mod that has gone refuses the whole move.
 function moveMods(
-  adapter: InstanceAdapter, profile: string, modNames: readonly string[], place: MovePlace, end: OrderEnd,
+  adapter: InstanceAdapter, modNames: readonly string[], place: MovePlace, end: OrderEnd,
 ): Promise<SelectionResult<string>> {
-  return changeSelection(adapter, profile, 'mod', modNames, (found) => [{ kind: 'moveMods', mods: found, place, end }]);
+  return changeSelection(adapter, 'mod', modNames, (found) => [{ kind: 'moveMods', mods: found, place, end }]);
 }
 
 // `modbench.mod.move` over separators (mods.md, Pickers, Move): each brings every mod it holds,
 // and they land on the `end` side of the place. A target that has gone refuses the whole move.
 function moveSeparators(
-  adapter: InstanceAdapter, profile: string, separatorNames: readonly string[], place: SeparatorsPlace, end: OrderEnd,
+  adapter: InstanceAdapter, separatorNames: readonly string[], place: SeparatorsPlace, end: OrderEnd,
 ): Promise<SelectionResult<string>> {
-  return changeSelection(adapter, profile, 'separator', separatorNames, (found) =>
+  return changeSelection(adapter, 'separator', separatorNames, (found) =>
     [{ kind: 'moveSeparators', separators: found, place, end }]);
 }
 
@@ -120,10 +120,10 @@ function markEach(adapter: InstanceAdapter, files: readonly OriginFileRef[], mar
 
 type SourceGroups = ReadonlyMap<string | undefined, readonly OriginFileRef[]>;
 
-function bySourceFolder(files: readonly OriginFileRef[], sourceFolders: ReadonlyMap<string, string>): SourceGroups {
+function bySourceFolder(files: readonly OriginFileRef[], sourceMods: SourceMods): SourceGroups {
   const groups = new Map<string | undefined, OriginFileRef[]>();
   for (const file of files) {
-    const sourceFolder = file.origin.kind === 'mod' ? sourceFolders.get(file.origin.name) : undefined;
+    const sourceFolder = file.origin.kind === 'mod' ? sourceMods.folderOf(file.origin.name) : undefined;
     groups.set(sourceFolder, [...(groups.get(sourceFolder) ?? []), file]);
   }
   return groups;
@@ -173,11 +173,17 @@ async function markInSourceMod(
 // `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own, a source mod's build
 // configuration first, so a refusal all its files share writes none of them (commands.md, A selection is one gesture).
 async function markFiles(
-  { adapter, mEdit }: SourceModWriters, files: readonly OriginFileRef[], mark: OriginFileMark, sourceFolders: ReadonlyMap<string, string>,
+  { adapter, mEdit }: SourceModWriters, files: readonly OriginFileRef[], mark: OriginFileMark,
 ): Promise<SelectionResult<OriginFileRef>> {
+  let sourceMods: SourceMods;
+  try {
+    sourceMods = await adapter.sourceMods();
+  } catch (err) {
+    return refuse(err);
+  }
   const change: ExclusionChange = (sourceFolder, of, to) =>
     mEdit.changeBuildConfiguration(sourceFolder, exclusionChange(to, of.map((file) => adapter.includedPath(file.relativePath))));
-  const groups = bySourceFolder(files, sourceFolders);
+  const groups = bySourceFolder(files, sourceMods);
   const configured = await configureEach(change, groups, mark);
   if ('unreachable' in configured) return { applied: false, refusal: configured.unreachable };
   const landed: OriginFileRef[] = [];
@@ -193,32 +199,46 @@ async function markFiles(
   return { applied: true, outcome: { landed, refused } };
 }
 
+const keyOf = (adapter: InstanceAdapter): EntryKey => (entry) => adapter.entryKey(entry);
+
+const takenNames = async (adapter: InstanceAdapter): Promise<TakenNames> => {
+  const { mods, modFolders } = await adapter.modlist();
+  return { mods, modFolders };
+};
+
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
 const MOD_NAME_CLASH = 'A mod with this name already exists';
 const MOD_NAME_WITH_PATH_SEPARATOR = 'A mod name cannot contain / or \\';
 
 // Why `requested` cannot name a separator, or `undefined` when it can: a separator of that name is
 // listed or has a folder, compared without case. `own`, the separator being renamed, is no clash.
-const separatorNameRefusal = (key: EntryKey, taken: TakenNames, requested: string, own?: string): string | undefined =>
-  entryNameRefusal(key, taken, 'separator', requested, SEPARATOR_NAME_CLASH, own);
+async function separatorNameRefusal(adapter: InstanceAdapter, requested: string, own?: string): Promise<string | undefined> {
+  return entryNameRefusal(keyOf(adapter), await takenNames(adapter), 'separator', requested, SEPARATOR_NAME_CLASH, own);
+}
 
 // Why `requested` cannot rename mod `own`, or `undefined` when it can: it holds a path separator, or
 // another mod of that name is listed or has a folder, compared without case.
-const renameModNameRefusal = (key: EntryKey, taken: TakenNames, requested: string, own: string): string | undefined =>
-  (/[\\/]/.test(requested) ? MOD_NAME_WITH_PATH_SEPARATOR : entryNameRefusal(key, taken, 'mod', requested, MOD_NAME_CLASH, own));
+async function renameModNameRefusal(adapter: InstanceAdapter, requested: string, own: string): Promise<string | undefined> {
+  return /[\\/]/.test(requested) ? MOD_NAME_WITH_PATH_SEPARATOR
+    : entryNameRefusal(keyOf(adapter), await takenNames(adapter), 'mod', requested, MOD_NAME_CLASH, own);
+}
+
+async function newModName(adapter: InstanceAdapter, name: string): Promise<string | undefined> {
+  return newModNameRefusal(keyOf(adapter), await takenNames(adapter), name);
+}
 
 // Insert a new enabled separator next to the anchor (mods.md, Add separator); the adapter places it.
 function insertSeparator(
-  adapter: InstanceAdapter, profile: string, requested: string, anchor: EntryRef,
+  adapter: InstanceAdapter, requested: string, anchor: EntryRef,
 ): Promise<SeparatorResult> {
-  return changeSeparator(adapter, profile, () => [{ kind: 'addSeparator', separator: requested, anchor }]);
+  return changeSeparator(adapter, () => [{ kind: 'addSeparator', separator: requested, anchor }]);
 }
 
 // Rename a separator in place, and its folder with it.
 function renameSeparator(
-  adapter: InstanceAdapter, profile: string, oldName: string, requested: string,
+  adapter: InstanceAdapter, oldName: string, requested: string,
 ): Promise<SeparatorResult> {
-  return changeSeparator(adapter, profile, () => [{ kind: 'renameSeparator', from: oldName, to: requested }]);
+  return changeSeparator(adapter, () => [{ kind: 'renameSeparator', from: oldName, to: requested }]);
 }
 
 interface TrashedEntry {
@@ -234,8 +254,14 @@ const dropOf = (entry: EntryRef): ModOrderChange =>
 // line. An entry never trashed refuses outright on a line failure; a trashed one still lands,
 // carrying the failure rather than folding it into a refusal.
 async function trashThenUnlist(
-  adapter: InstanceAdapter, profile: string, order: readonly ModlistEntry[], kind: EntryKind, names: readonly string[], trash: MoveToTrash,
+  adapter: InstanceAdapter, kind: EntryKind, names: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<TrashedEntry>> {
+  let order: readonly ModlistEntry[];
+  try {
+    ({ mods: order } = await adapter.modlist());
+  } catch (err) {
+    return refuse(err);
+  }
   const refused: ItemRefusal<TrashedEntry>[] = names.filter((name) => !isListed(adapter, order, { kind, name }))
     .map((name) => ({ item: { name }, reason: entryNotFound({ kind, name }) }));
   const toUnlist: string[] = [];
@@ -257,7 +283,7 @@ async function trashThenUnlist(
       }
     }
   }
-  const lines = await changeModOrder(adapter, profile, () => toUnlist.map((name) => dropOf({ kind, name })));
+  const lines = await changeModOrder(adapter, () => toUnlist.map((name) => dropOf({ kind, name })));
   const landedEntry = (name: string, lineRefusal?: string): TrashedEntry => ({
     name, ...(lineRefusal !== undefined && { lineRefusal }), ...(sourceRefusals.has(name) && { sourceRefusal: sourceRefusals.get(name) }),
   });
@@ -278,9 +304,9 @@ async function trashThenUnlist(
 // before its line: a refused trash writes nothing for that separator (commands.md, *A failed
 // gesture writes nothing*).
 function deleteSeparators(
-  adapter: InstanceAdapter, profile: string, order: readonly ModlistEntry[], names: readonly string[], trash: MoveToTrash,
+  adapter: InstanceAdapter, names: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<TrashedEntry>> {
-  return trashThenUnlist(adapter, profile, order, 'separator', names, trash);
+  return trashThenUnlist(adapter, 'separator', names, trash);
 }
 
 // A mod handed to `uninstallMods`: its own name, and the downloaded file it was installed from,
@@ -299,10 +325,10 @@ interface UninstalledMod extends TrashedEntry {
 // `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
 // then its downloaded file marked unless that file is gone (mods.md, Reporting, story 4).
 async function uninstallMods(
-  adapter: InstanceAdapter, profile: string, order: readonly ModlistEntry[], mods: readonly ModToUninstall[], trash: MoveToTrash,
+  adapter: InstanceAdapter, mods: readonly ModToUninstall[], trash: MoveToTrash,
 ): Promise<SelectionResult<UninstalledMod>> {
   const archiveOf = new Map(mods.map((m) => [m.name, m.archiveFilename] as const));
-  const result = await trashThenUnlist(adapter, profile, order, 'mod', mods.map((m) => m.name), trash);
+  const result = await trashThenUnlist(adapter, 'mod', mods.map((m) => m.name), trash);
   if (!result.applied) return result;
   const landed: UninstalledMod[] = [];
   for (const entry of result.outcome.landed) {
@@ -329,14 +355,14 @@ export type CreateEmptyModResult =
 
 // A mod's folder plus a disabled line at the winning end of mod order — nothing else. A name a
 // folder already holds is refused.
-async function createEmptyMod(adapter: InstanceAdapter, profile: string, name: string): Promise<CreateEmptyModResult> {
+async function createEmptyMod(adapter: InstanceAdapter, name: string): Promise<CreateEmptyModResult> {
   if (name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
   try {
     await adapter.createModFolder(name);
   } catch (err) {
     return refuse(err);
   }
-  const line = await changeModOrder(adapter, profile, () => [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name } }]);
+  const line = await changeModOrder(adapter, () => [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name } }]);
   if (!line.applied) return { applied: true, wrote: false, lineRefusal: line.refusal };
   return line;
 }
@@ -347,15 +373,18 @@ export type RenameModResult =
   | { applied: true; lineRefusals: { profile: string; refusal: string }[]; unchanged?: true }
   | { applied: false; refusal: string };
 
-// The folder, then a source mod's build configuration in `sourceFolder`, then the line in each of `profiles`, the
-// active one first. A profile that does not list the mod is left as it was.
-async function renameMod(
-  { adapter, mEdit }: SourceModWriters,
-  activeProfile: string, profiles: readonly string[], from: string, to: string, sourceFolder?: string,
-): Promise<RenameModResult> {
+// The folder, then a source mod's build configuration, then the line in each profile, the active one first. A
+// profile that does not list the mod is left as it was.
+async function renameMod({ adapter, mEdit }: SourceModWriters, from: string, to: string): Promise<RenameModResult> {
   if (to.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
   if (from === to) return { applied: true, lineRefusals: [], unchanged: true };
+  let activeProfile: string;
+  let profiles: readonly string[];
+  let sourceFolder: string | undefined;
   try {
+    [activeProfile, profiles, sourceFolder] = await Promise.all([
+      adapter.activeProfile(), adapter.profiles(), adapter.sourceMods().then((sourceMods) => sourceMods.folderOf(from)),
+    ]);
     await adapter.renameModFolder(from, to);
   } catch (err) {
     return refuse(err);
@@ -372,7 +401,7 @@ async function renameMod(
   const lineRefusals: { profile: string; refusal: string }[] = [];
   const ordered = [activeProfile, ...profiles.filter((profile) => profile !== activeProfile)];
   for (const profile of ordered) {
-    const line = await changeModOrder(adapter, profile, () => [{ kind: 'renameMod', from, to }]);
+    const line = await changeModOrder(adapter, () => [{ kind: 'renameMod', from, to }], profile);
     if (!line.applied) lineRefusals.push({ profile, refusal: line.refusal });
   }
   return { applied: true, lineRefusals };
@@ -387,10 +416,9 @@ const NO_MOD_FOLDERS = 'there is no folder for mods';
 const describeEntry = (entry: EntryRef): string => (entry.kind === 'mod' ? entry.name : `${entry.name} (separator)`);
 
 async function syncMods(adapter: InstanceAdapter): Promise<ModSyncResult> {
-  const profile = await adapter.activeProfile();
   let added: string[] = [];
   let dropped: string[] = [];
-  const outcome = await changeModOrder(adapter, profile, (order, folders) => {
+  const outcome = await changeModOrder(adapter, (order, folders) => {
     if (folders === undefined) throw new Error(NO_MOD_FOLDERS);
     const gone = order.filter((entry) => folders.holding(entry) === undefined);
     const held = new Set(order.flatMap((entry) => folders.holding(entry)?.path ?? []));
@@ -418,7 +446,6 @@ export function modSyncOver(adapter: InstanceAdapter): ModSyncRun {
 
 /** The modlist's commands, bound to one instance: each takes the gesture's arguments only. */
 export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['mEdit'], readStatus: ReadModStatus) {
-  const entryKey: EntryKey = (entry) => adapter.entryKey(entry);
   return {
     setModsEnabled: (...args: TailOf<typeof setModsEnabled>) => setModsEnabled(adapter, ...args),
     moveMods: (...args: TailOf<typeof moveMods>) => moveMods(adapter, ...args),
@@ -430,9 +457,9 @@ export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['m
     uninstallMods: (...args: TailOf<typeof uninstallMods>) => uninstallMods(adapter, ...args),
     createEmptyMod: (...args: TailOf<typeof createEmptyMod>) => createEmptyMod(adapter, ...args),
     renameMod: (...args: TailOf<typeof renameMod>) => renameMod({ adapter, mEdit }, ...args),
-    separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(entryKey, ...args),
-    renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(entryKey, ...args),
-    newModNameRefusal: (...args: TailOf<typeof newModNameRefusal>) => newModNameRefusal(entryKey, ...args),
+    separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(adapter, ...args),
+    renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
+    newModNameRefusal: (...args: TailOf<typeof newModName>) => newModName(adapter, ...args),
     installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, readStatus }, ...args),
   };
 }

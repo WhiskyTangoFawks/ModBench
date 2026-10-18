@@ -5,9 +5,10 @@ import { parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni
 import type { ArchiveReader } from './archiveReader';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from './files';
 import type { InstallPackage, InstanceAdapter, ModMeta, OwnedMetaKeys } from './instanceAdapter';
-import { fileInFolder, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix } from './layout';
+import { fileInFolder, modMetaFileIn, modsDir, newModExtractionPrefix, settingsFile, upgradeExtractionPrefix } from './layout';
 import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
+import { readGameName } from './codecs/modOrganizerIni';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 import { releaseRoot } from './releaseRoot';
 
@@ -99,7 +100,7 @@ export function mo2Landing(context: Mo2Context, archives: ArchiveReader): Pick<I
       try {
         await fill(installed, extraction.path);
         const { root, isFomod } = await releaseRoot(extraction.path);
-        await extraction.land(root, keys);
+        await extraction.land(root, { ...keys, gameName: readGameName(await get(settingsFile(context.instanceRoot))) });
         return { landed: true, isFomod };
       } catch (err) {
         return abandonAfter(extraction, err);

@@ -92,7 +92,7 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     const [options] = present(showInputBox.mock.calls[0], 'the one showInputBox call');
     const validateInput = present(options?.validateInput, 'validateInput on the input box options');
     expect(await validateInput('Harder VATS')).toBe('"Harder VATS" already exists');
-    expect(newModNameRefusal).toHaveBeenCalledWith(instance.value, 'Harder VATS');
+    expect(newModNameRefusal).toHaveBeenCalledWith('Harder VATS');
   });
 
   it('creates the folder and its line, and reports nothing when both land', async () => {
@@ -103,7 +103,7 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     registerCreateEmptyModCommand(commands, instance, reporter);
     await invoke('modbench.mod.createEmpty');
 
-    expect(createEmptyMod).toHaveBeenCalledWith('Default', 'New Mod');
+    expect(createEmptyMod).toHaveBeenCalledWith('New Mod');
     expect(reporter.reports).toEqual([]);
   });
 
@@ -175,7 +175,7 @@ describe('registerModContextCommands: modbench.mod.rename', () => {
     await invoke('modbench.mod.rename', modB, [modA, modB]);
 
     expect(showInputBox.mock.calls[0]?.[0]).toMatchObject({ prompt: 'Rename mod', value: 'Mod B' });
-    expect(renameMod.mock.calls).toEqual([['Default', ['Default', 'Secondary'], 'Mod B', 'Renamed', undefined]]);
+    expect(renameMod.mock.calls).toEqual([['Mod B', 'Renamed']]);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -195,21 +195,7 @@ describe('registerModContextCommands: modbench.mod.rename', () => {
     register(recordingReporter(), [modA]);
     await invoke('modbench.mod.rename', MODS_KEY_ARGS);
 
-    expect(renameMod).toHaveBeenCalledWith('Default', ['Default', 'Secondary'], 'Mod A', 'Renamed', undefined);
-  });
-
-  it('renames a source mod with the source folder that builds it, so its build configuration is written with it', async () => {
-    renameMod.mockResolvedValue({ applied: true, lineRefusals: [] });
-    showInputBox.mockResolvedValueOnce('Renamed');
-    const sourceInstance = {
-      ...instance,
-      value: { ...instance.value, listedSourceMods: new Set(['Mod A']), paths: { ...instance.value.paths, sourceDirs: new Map([['Mod A', '/instance/source/Old A']]) } },
-    };
-
-    registerModContextCommands({ commands, instance: sourceInstance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(), trash: vi.fn(), log: vi.fn() });
-    await invoke('modbench.mod.rename', modA);
-
-    expect(renameMod).toHaveBeenCalledWith('Default', ['Default', 'Secondary'], 'Mod A', 'Renamed', '/instance/source/Old A');
+    expect(renameMod).toHaveBeenCalledWith('Mod A', 'Renamed');
   });
 
   it('reports a refusal, the folder not having moved, as a failed rename', async () => {
@@ -267,7 +253,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
       buttons: ['Uninstall'],
     }]);
     expect(uninstallMods).toHaveBeenCalledWith(
-      'Default', instance.value.mods, [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
+      [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
   });
 
   const facts = { holdsPlugin: true, sourceMod: true };
@@ -322,8 +308,6 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     assertAskedOnce(ask, { messageContains: '"Mod A", "Mod B"', buttons: ['Uninstall'] });
     expect(ask.asked[0]?.message).toContain('Their folders will be moved to the system trash.');
     expect(uninstallMods).toHaveBeenCalledWith(
-      'Default',
-      instance.value.mods,
       [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }, { name: 'Mod B', archiveFilename: undefined }],
       trash,
     );
@@ -345,7 +329,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     await invoke('modbench.mod.uninstall');
 
     expect(uninstallMods).toHaveBeenCalledWith(
-      'Default', instance.value.mods, [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
+      [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
   });
 
   it('an empty selection asks nothing and uninstalls nothing', async () => {
@@ -448,7 +432,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked on
     registerSeparatorCommands(commands, instance, reporter, scriptedDialog('Delete'), trash, () => []);
     await invoke('modbench.separator.delete', groupB, [groupA, groupB]);
 
-    expect(deleteSeparators.mock.calls).toEqual([['Default', instance.value.mods, ['Group A', 'Group B'], trash]]);
+    expect(deleteSeparators.mock.calls).toEqual([[['Group A', 'Group B'], trash]]);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -490,7 +474,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked on
     registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog('Delete'), trash, () => []);
     await invoke('modbench.separator.delete', groupA, [modA, groupA]);
 
-    expect(deleteSeparators.mock.calls).toEqual([['Default', instance.value.mods, ['Group A'], trash]]);
+    expect(deleteSeparators.mock.calls).toEqual([[['Group A'], trash]]);
   });
 
   it('calls nothing and reports nothing for a selection with no separator', async () => {
@@ -579,7 +563,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
     await invoke('modbench.separator.rename', groupB, [groupA, groupB]);
 
     expect(optionsOfTheOneShowInputBoxCall()).toMatchObject({ prompt: 'Rename separator', value: 'Group B' });
-    expect(renameSeparator.mock.calls).toEqual([['Default', 'Group B', 'Renamed']]);
+    expect(renameSeparator.mock.calls).toEqual([['Group B', 'Renamed']]);
   });
 
   it('asks the command in the prompt whether the name is free of the other separators, passing the separator\'s own name, and asks nothing of an empty name', async () => {
@@ -591,7 +575,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
 
     const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
     expect(await validate('group a')).toBe(CLASH);
-    expect(separatorNameRefusal).toHaveBeenCalledWith(instance.value, 'group a', 'Group B');
+    expect(separatorNameRefusal).toHaveBeenCalledWith('group a', 'Group B');
     expect(await validate('')).toBeUndefined();
     expect(separatorNameRefusal).toHaveBeenCalledTimes(1);
   });
@@ -634,7 +618,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
     await invoke('modbench.separator.rename', ...args);
 
     expect(optionsOfTheOneShowInputBoxCall()).toMatchObject({ value: 'Group B' });
-    expect(renameSeparator.mock.calls).toEqual([['Default', 'Group B', 'Renamed']]);
+    expect(renameSeparator.mock.calls).toEqual([['Group B', 'Renamed']]);
   });
 });
 
@@ -660,7 +644,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     await invoke('modbench.separator.add', modA, [otherMod, modA]);
 
     expect(optionsOfTheOneShowInputBoxCall()).toMatchObject({ prompt: 'Separator name', placeHolder: 'My Group' });
-    expect(insertSeparator.mock.calls).toEqual([['Default', 'New Section', { kind: 'mod', name: 'Mod A' }]]);
+    expect(insertSeparator.mock.calls).toEqual([['New Section', { kind: 'mod', name: 'Mod A' }]]);
   });
 
   it('asks the command in the prompt whether the name is free of the other separators, and asks nothing of an empty name', async () => {
@@ -672,7 +656,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
 
     const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the add prompt\'s validateInput');
     expect(await validate('Group A')).toBe(CLASH);
-    expect(separatorNameRefusal).toHaveBeenCalledWith(instance.value, 'Group A', undefined);
+    expect(separatorNameRefusal).toHaveBeenCalledWith('Group A', undefined);
     expect(await validate('')).toBeUndefined();
     expect(separatorNameRefusal).toHaveBeenCalledTimes(1);
   });
@@ -696,7 +680,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [otherGroup, groupA]);
     await invoke('modbench.separator.add', groupA, [otherGroup, groupA]);
 
-    expect(insertSeparator.mock.calls).toEqual([['Default', 'New Section', { kind: 'separator', name: 'Group A' }]]);
+    expect(insertSeparator.mock.calls).toEqual([['New Section', { kind: 'separator', name: 'Group A' }]]);
   });
 
   it('adds nothing when the prompt is cancelled (Esc)', async () => {
@@ -724,7 +708,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [modA]);
     await invoke('modbench.separator.add');
 
-    expect(insertSeparator.mock.calls).toEqual([['Default', 'New Section', { kind: 'mod', name: 'Mod A' }]]);
+    expect(insertSeparator.mock.calls).toEqual([['New Section', { kind: 'mod', name: 'Mod A' }]]);
   });
 
 });
@@ -742,7 +726,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     registerModEnableCommands(commands, instance, () => [], recordingReporter());
     await invoke('modbench.mod.enable', modA, [modA, modB]);
 
-    expect(setModsEnabled).toHaveBeenCalledWith('Default', ['Mod A', 'Mod B'], true);
+    expect(setModsEnabled).toHaveBeenCalledWith(['Mod A', 'Mod B'], true);
   });
 
   it('disable applies to every selected mod, whatever its own current state', async () => {
@@ -751,7 +735,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     registerModEnableCommands(commands, instance, () => [], recordingReporter());
     await invoke('modbench.mod.disable', modB, [modA, modB]);
 
-    expect(setModsEnabled).toHaveBeenCalledWith('Default', ['Mod A', 'Mod B'], false);
+    expect(setModsEnabled).toHaveBeenCalledWith(['Mod A', 'Mod B'], false);
   });
 
   it('falls back to the view selection from the palette, where no row is right-clicked', async () => {
@@ -760,7 +744,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     registerModEnableCommands(commands, instance, () => [modA], recordingReporter());
     await invoke('modbench.mod.enable');
 
-    expect(setModsEnabled).toHaveBeenCalledWith('Default', ['Mod A'], true);
+    expect(setModsEnabled).toHaveBeenCalledWith(['Mod A'], true);
   });
 
   it('calls nothing and reports nothing for an empty selection', async () => {
@@ -830,7 +814,7 @@ describe('modbench.mod.enable / modbench.mod.disable, called by the agent', () =
 
     const answered = await invoke(command, new AgentCall([{ kind: 'mod', name: 'Mod B' }, { kind: 'mod', name: 'Gone' }], {}));
 
-    expect(setModsEnabled).toHaveBeenCalledWith('Default', ['Mod B', 'Gone'], enabled);
+    expect(setModsEnabled).toHaveBeenCalledWith(['Mod B', 'Gone'], enabled);
     expect(answered).toEqual(outcome);
     expect(reporter.reports).toEqual([]);
   });
@@ -894,7 +878,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
 
     expect(pickedLabels()).toEqual(['Ungrouped', 'Group B', 'Group A']);
     expect(moveMods).toHaveBeenCalledWith(
-      'Default', ['Mod A', 'Mod C'], { kind: 'separator', name: 'Group B' }, 'losing');
+      ['Mod A', 'Mod C'], { kind: 'separator', name: 'Group B' }, 'losing');
     expect(moveSeparators).not.toHaveBeenCalled();
   });
 
@@ -906,7 +890,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     await invoke('modbench.mod.move', groupB, [modA, groupB]);
 
     expect(pickedLabels()).toEqual(['Group A']);
-    expect(moveSeparators).toHaveBeenCalledWith('Default', ['Group B'], { kind: 'separator', name: 'Group A' }, 'losing');
+    expect(moveSeparators).toHaveBeenCalledWith(['Group B'], { kind: 'separator', name: 'Group A' }, 'losing');
     expect(moveMods).not.toHaveBeenCalled();
   });
 
@@ -921,8 +905,8 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     pickLabelled('Group A');
     await invoke('modbench.mod.move', groupB);
 
-    expect(moveMods).toHaveBeenCalledWith('Default', ['Mod C'], { kind: 'separator', name: 'Group A' }, 'winning');
-    expect(moveSeparators).toHaveBeenCalledWith('Default', ['Group B'], { kind: 'separator', name: 'Group A' }, 'winning');
+    expect(moveMods).toHaveBeenCalledWith(['Mod C'], { kind: 'separator', name: 'Group A' }, 'winning');
+    expect(moveSeparators).toHaveBeenCalledWith(['Group B'], { kind: 'separator', name: 'Group A' }, 'winning');
   });
 
   it('handed a target, as a drop hands one, moves there without a pick', async () => {
@@ -934,8 +918,8 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     await invoke('modbench.mod.move', groupB, [groupB], { place: { kind: 'modOrder' }, end: 'winning' });
 
     expect(createQuickPick).not.toHaveBeenCalled();
-    expect(moveMods).toHaveBeenCalledWith('Default', ['Mod C'], { kind: 'mod', name: 'Mod A' }, 'winning');
-    expect(moveSeparators).toHaveBeenCalledWith('Default', ['Group B'], { kind: 'modOrder' }, 'winning');
+    expect(moveMods).toHaveBeenCalledWith(['Mod C'], { kind: 'mod', name: 'Mod A' }, 'winning');
+    expect(moveSeparators).toHaveBeenCalledWith(['Group B'], { kind: 'modOrder' }, 'winning');
   });
 
   it('handed a target no separator can take, refuses it once, saying why, and moves nothing', async () => {
@@ -1332,7 +1316,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     registerFileExclusionCommands(commands, instance, () => [], reporter);
     await invoke('modbench.mod.excludeFile', included, [included, excluded, modRow]);
 
-    expect(markFiles).toHaveBeenCalledWith([refOf(included), refOf(excluded)], 'Excluded', new Map([['M', '/instance/source/M']]));
+    expect(markFiles).toHaveBeenCalledWith([refOf(included), refOf(excluded)], 'Excluded');
     expect(reporter.reports).toEqual([]);
   });
 
@@ -1342,7 +1326,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     registerFileExclusionCommands(commands, instance, () => [excluded], recordingReporter());
     await invoke('modbench.mod.includeFile');
 
-    expect(markFiles).toHaveBeenCalledWith([refOf(excluded)], 'Included', new Map([['M', '/instance/source/M']]));
+    expect(markFiles).toHaveBeenCalledWith([refOf(excluded)], 'Included');
   });
 
   it('reports each refused file by its mod and path, once, out of the files selected, while the rest land', async () => {
@@ -1384,7 +1368,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
 
     expect(markFiles).toHaveBeenCalledWith([
       refOf(clicked), { origin, relativePath: 'x.mohidden/c.dds' }, { origin, relativePath: 'x.mohidden/d.dds.mohidden' },
-    ], mark, expect.anything());
+    ], mark);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -1523,7 +1507,7 @@ describe('rename mod refuses in its prompt', () => {
     const validate = await validatorOver();
 
     expect(await validate('mod a')).toBe(MOD_CLASH);
-    expect(renameModNameRefusal).toHaveBeenCalledWith(instance.value, 'mod a', 'Mod B');
+    expect(renameModNameRefusal).toHaveBeenCalledWith('mod a', 'Mod B');
     expect(await validate('')).toBeUndefined();
     expect(renameModNameRefusal).toHaveBeenCalledTimes(1);
   });
@@ -1613,7 +1597,7 @@ describe('the mod gestures, called by the agent', () => {
 
       const answered = await invoke('modbench.mod.move', moveCall(group));
 
-      expect(moveMods).toHaveBeenCalledWith('Default', ['Mod A', 'Mod B'], group, 'winning');
+      expect(moveMods).toHaveBeenCalledWith(['Mod A', 'Mod B'], group, 'winning');
       expect(answered).toEqual(outcome);
       expect(reporter.reports).toEqual([]);
       nothingOpened();
@@ -1638,7 +1622,7 @@ describe('the mod gestures, called by the agent', () => {
 
       const answered = await invoke('modbench.mod.move', new AgentCall([{ kind: 'separator', name: 'Group' }], { place: above, end: 'winning' }));
 
-      expect(moveSeparators).toHaveBeenCalledWith('Default', ['Group'], above, 'winning');
+      expect(moveSeparators).toHaveBeenCalledWith(['Group'], above, 'winning');
       expect(moveMods).not.toHaveBeenCalled();
       expect(answered).toEqual(outcome);
       nothingOpened();
@@ -1686,7 +1670,7 @@ describe('the mod gestures, called by the agent', () => {
 
       const answered = await invoke('modbench.mod.rename', renameCall('Renamed'));
 
-      expect(renameMod).toHaveBeenCalledWith('Default', ['Default', 'Secondary'], 'Mod A', 'Renamed', undefined);
+      expect(renameMod).toHaveBeenCalledWith('Mod A', 'Renamed');
       expect(answered).toEqual({ applied: true, outcome: { landed: ['Renamed'], refused: [] }, partial: [] });
       expect(reporter.reports).toEqual([]);
       nothingOpened();
@@ -1732,7 +1716,7 @@ describe('the mod gestures, called by the agent', () => {
 
       await invoke('modbench.mod.rename', renameCall('Renamed'));
 
-      expect(renameModNameRefusal).toHaveBeenCalledWith(instance.value, 'Renamed', 'Mod A');
+      expect(renameModNameRefusal).toHaveBeenCalledWith('Renamed', 'Mod A');
     });
 
     it('refuses an Argument of more than one mod', async () => {
@@ -1755,7 +1739,7 @@ describe('the mod gestures, called by the agent', () => {
       const answered = await invoke('modbench.mod.uninstall', ofMods('Mod A', 'Mod B'));
 
       expect(uninstallMods).toHaveBeenCalledWith(
-        'Default', instance.value.mods, [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }, { name: 'Mod B', archiveFilename: undefined }], trash);
+        [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }, { name: 'Mod B', archiveFilename: undefined }], trash);
       expect(answered).toEqual({ ...outcome, partial: [] });
       expect(ask.asked).toEqual([]);
     });
@@ -1795,7 +1779,7 @@ describe('the mod gestures, called by the agent', () => {
 
       const answered = await invoke('modbench.mod.createEmpty', createCall('New Mod'));
 
-      expect(createEmptyMod).toHaveBeenCalledWith('Default', 'New Mod');
+      expect(createEmptyMod).toHaveBeenCalledWith('New Mod');
       expect(answered).toEqual({ applied: true, outcome: { landed: ['New Mod'], refused: [] }, partial: [] });
       expect(reporter.reports).toEqual([]);
       nothingOpened();
@@ -1819,7 +1803,7 @@ describe('the mod gestures, called by the agent', () => {
       showInputBox.mockResolvedValueOnce('  ');
       await invoke('modbench.mod.createEmpty');
 
-      expect(createEmptyMod.mock.calls).toEqual([['Default', '  '], ['Default', '  ']]);
+      expect(createEmptyMod.mock.calls).toEqual([['  '], ['  ']]);
       expect(answered).toEqual({ applied: false, refusal: 'Failed to create "  ".', detail: 'A mod name cannot be empty.' });
       expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to create "  ".', detail: 'A mod name cannot be empty.' }]);
     });
@@ -1862,7 +1846,7 @@ describe('the mod gestures, called by the agent', () => {
 
       const answered = await invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'a.dds' }], {}));
 
-      expect(markFiles).toHaveBeenCalledWith([{ origin, relativePath: 'a.dds' }], mark, instance.value.paths.sourceDirs);
+      expect(markFiles).toHaveBeenCalledWith([{ origin, relativePath: 'a.dds' }], mark);
       expect(answered).toEqual(outcome);
       expect(reporter.reports).toEqual([]);
       nothingOpened();
@@ -1925,7 +1909,7 @@ describe('the separator gestures, called by the agent', () => {
 
       const answered = await invoke('modbench.separator.add', new AgentCall([anchor], { name: 'New Section' }));
 
-      expect(insertSeparator.mock.calls).toEqual([['Default', 'New Section', anchor]]);
+      expect(insertSeparator.mock.calls).toEqual([['New Section', anchor]]);
       expect(answered).toEqual({ applied: true, outcome: { landed: ['Written Name'], refused: [] } });
       expect(reporter.reports).toEqual([]);
       nothingOpened(ask);
@@ -1975,7 +1959,7 @@ describe('the separator gestures, called by the agent', () => {
 
       const answered = await invoke('modbench.separator.rename', renameCall('Renamed'));
 
-      expect(renameSeparator.mock.calls).toEqual([['Default', 'Group A', 'Renamed']]);
+      expect(renameSeparator.mock.calls).toEqual([['Group A', 'Renamed']]);
       expect(answered).toEqual({ applied: true, outcome: { landed: ['Written Name'], refused: [] } });
       expect(reporter.reports).toEqual([]);
       nothingOpened(ask);
@@ -1987,7 +1971,7 @@ describe('the separator gestures, called by the agent', () => {
 
       await expect(invoke('modbench.separator.rename', renameCall('Group B'))).rejects.toEqual(new Refusal('A separator with this name already exists'));
 
-      expect(separatorNameRefusal).toHaveBeenCalledWith(instance.value, 'Group B', 'Group A');
+      expect(separatorNameRefusal).toHaveBeenCalledWith('Group B', 'Group A');
       expect(renameSeparator).not.toHaveBeenCalled();
     });
 
@@ -2033,7 +2017,7 @@ describe('the separator gestures, called by the agent', () => {
 
       const answered = await invoke('modbench.separator.delete', deleteCall);
 
-      expect(deleteSeparators).toHaveBeenCalledWith('Default', instance.value.mods, ['Group A', 'Group B'], expect.any(Function));
+      expect(deleteSeparators).toHaveBeenCalledWith(['Group A', 'Group B'], expect.any(Function));
       expect(answered).toEqual({ ...outcome, partial: [] });
       expect(reporter.reports).toEqual([]);
       nothingOpened(ask);

@@ -80,7 +80,7 @@ async function installHeld(root: string, target: InstallTarget): Promise<{ extra
       await held;
     },
   };
-  const installing = adapterAt(root, undefined, undefined, archives).install({ kind: 'archive', path: '/elsewhere/New.7z' }, target, { gameName: 'Fallout4' });
+  const installing = adapterAt(root, undefined, undefined, archives).install({ kind: 'archive', path: '/elsewhere/New.7z' }, target, {});
   return {
     extraction: await extraction,
     settle: () => {
@@ -139,6 +139,24 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, INI), (await text(root, INI)).replace('selected_profile=@ByteArray(Default)', 'selected_profile=@ByteArray(Other)'));
 
         expect([before, await adapter.activeProfile()]).toEqual(['Default', 'Other']);
+      });
+
+      it('answers every profile', async () => {
+        expect([...await adapter.profiles()].sort()).toEqual([...(await source.profiles())].sort());
+        expect(await adapter.profiles()).toContain('Default');
+      });
+
+      it('answers the active profile\'s mod order and the folders the mods are in, as the reading does', async () => {
+        const [{ mods, modFolders }, reading] = await Promise.all([adapter.modlist(), adapter.reading()]);
+
+        expect(mods.map(({ kind, name }) => ({ kind, name }))).toEqual(reading.mods.map(({ kind, name }) => ({ kind, name })));
+        expect(modFolders?.map(({ path }) => path)).toEqual(reading.modFolders?.all.map(({ path }) => path));
+      });
+
+      it('answers the source mods as the reading does', async () => {
+        const [sourceMods, reading] = await Promise.all([adapter.sourceMods(), adapter.reading()]);
+
+        expect(sourceMods.folders).toEqual(reading.sourceMods.folders);
       });
     });
 

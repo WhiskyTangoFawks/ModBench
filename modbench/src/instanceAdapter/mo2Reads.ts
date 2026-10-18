@@ -168,9 +168,14 @@ export function readingSource(context: Mo2Context): ReadingSource {
   };
 }
 
-export function mo2Reads(context: Mo2Context): Pick<InstanceAdapter, 'modFolderPath' | 'sourceFolder' | 'fileStamp' | 'entryKey'> {
+export function mo2Reads(
+  context: Mo2Context, source: ReadingSource,
+): Pick<InstanceAdapter, 'modFolderPath' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modlist' | 'sourceMods'> {
   const { instanceRoot } = context;
   return {
+    profiles: () => source.profiles(),
+    modlist: async () => ({ mods: await source.modOrder((await source.settings()).profile), modFolders: await listModFolders(context) }),
+    sourceMods: () => source.sourceMods(),
     modFolderPath: async (name) => (await folderHolding(context, { kind: 'mod', name }))?.path ?? entryDir(instanceRoot, { kind: 'mod', name }),
     sourceFolder: (mod) => modSourceDir(instanceRoot, mod),
     entryKey,
