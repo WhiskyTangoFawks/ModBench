@@ -34,9 +34,8 @@ export const entryNamed = (modName: string): EntryRef => (modName.endsWith(SEPAR
 
 interface ModlistLine { readonly prefix: string; readonly name: string }
 
-/** A line as MO2 reads it (profile.cpp): `-` disables, `+` enables, a line with no prefix is an
- *  enabled mod, and the name is trimmed. `#` and blank lines are no mod, and a `*` line is the
- *  unmanaged mod MO2 writes for a DLC or Creation Club, which is no row (mods.md). */
+// A line as MO2 reads it (profile.cpp): no prefix is an enabled mod, and the name is trimmed.
+// A `*` line is MO2's unmanaged mod, which is no row (mods.md); `#` and blank lines are no mod.
 function readLine(line: string): ModlistLine | undefined {
   if (line.startsWith('#') || line.startsWith('*')) return undefined;
   const prefix = '+-'.includes(line[0] ?? '#') ? line.slice(0, 1) : '';
@@ -48,9 +47,8 @@ const nameOfLine = (line: string): string | undefined => readLine(line)?.name;
 
 const matchesModLine = (line: string, name: string): boolean => nameOfLine(line) === name;
 
-/** File order, so the winning end comes first. A name MO2 reads twice keeps the state of the last
- *  line that differs from the others in case; a line repeating an earlier one exactly is not read.
- *  Comment and blank lines carry no meaning here and are preserved on write. */
+/** File order, so the winning end comes first. A name MO2 reads twice takes the state of the last line
+ *  that differs from the others in case; an exact repeat of an earlier line is not read. */
 export function parseModlist(text: string): ModlistEntry[] {
   const lines = stripBom(text).split(/\r\n|\r|\n/).flatMap((raw) => readLine(raw) ?? []);
   const seen = new Set<string>();
