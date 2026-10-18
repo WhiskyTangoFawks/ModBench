@@ -30,8 +30,7 @@ export const entryKey = (entry: EntryRef): string =>
 export const listedAs = (order: readonly ModlistEntry[], entry: EntryRef): ModlistEntry | undefined =>
   order.find((e) => e.kind === entry.kind && entryKey(e) === entryKey(entry));
 
-/** The mod folders as entries; the reserved overwrite name holds none. A folder an install was
- *  interrupted in is listed like any other, with the state its files give it. */
+/** The mod folders as entries; the reserved overwrite name holds none. */
 export async function listModFolders(
   { instanceRoot }: Mo2Context, skippedLink: SkippedLink,
 ): Promise<ModFolder[] | undefined> {

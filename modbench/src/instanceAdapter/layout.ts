@@ -3,7 +3,7 @@
 // `formatLiteralScan.test.ts` refuses a second speller.
 
 import { randomBytes } from 'node:crypto';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
@@ -79,20 +79,25 @@ export const excludedName = (name: string): string => name + EXCLUDED_SUFFIX;
 
 export const includedName = (name: string): string => name.slice(0, -EXCLUDED_SUFFIX.length);
 
-const NEW_MOD_EXTRACTION_PREFIX = '.medit-extract-new-';
-const UPGRADE_EXTRACTION_PREFIX = '.medit-extract-upgrade-';
+const TEMP_PREFIX = '.medit_tmp_';
+
+/** Whether `name` is a temp that Modbench or mEdit left in an instance folder: never a mod's file. */
+export const isOwnTemp = (name: string): boolean => name.startsWith(TEMP_PREFIX);
+
+/** The prefix of a temp this process names, `.medit_tmp_<pid>_`: the process id lets any writer tell a leftover from a live temp. */
+const ownTempPrefix = (folder: string, kind: string): string => join(folder, `${TEMP_PREFIX}${process.pid}_${kind}`);
 
 /** The prefix a new mod's extraction folder, inside the mod's folder, is named from. */
-export const newModExtractionPrefix = (modFolder: string): string => join(modFolder, NEW_MOD_EXTRACTION_PREFIX);
+export const newModExtractionPrefix = (modFolder: string): string => ownTempPrefix(modFolder, 'new-');
 
 /** The prefix an upgrade's extraction folder, inside the mod's folder, is named from. */
-export const upgradeExtractionPrefix = (modFolder: string): string => join(modFolder, UPGRADE_EXTRACTION_PREFIX);
+export const upgradeExtractionPrefix = (modFolder: string): string => ownTempPrefix(modFolder, 'upgrade-');
 
-const MEDIT_TEMP_PREFIX = '.medit_tmp_';
-
-/** Whether `name` is a temp that Modbench, mEdit or an install's extraction left in an instance folder: never a mod's file. */
-export const isOwnTemp = (name: string): boolean =>
-  isTempWrite(name) || [NEW_MOD_EXTRACTION_PREFIX, UPGRADE_EXTRACTION_PREFIX, MEDIT_TEMP_PREFIX].some((prefix) => name.startsWith(prefix));
+/** The id of the process that named `tempName`, when it carries one. */
+export function tempOwner(tempName: string): number | undefined {
+  const id = Number(tempName.slice(TEMP_PREFIX.length).split('_')[0]);
+  return Number.isInteger(id) ? id : undefined;
+}
 
 export const overwriteDir = (instanceRoot: string): string => join(instanceRoot, OVERWRITE_DIR_NAME);
 
@@ -240,28 +245,8 @@ export const WHITELIST_IGNORE_LIST = `${[
 /** The archives at the root of the Data folder and the files of its strings folder, the Data folder its base. */
 export const dataFolderArchivesGlob = (archiveExtension: string, stringsFolder: string): string =>
   `{*${anyCase(archiveExtension)},${anyCase(stringsFolder)}/*}`;
-// The one spelling of files.ts's own temp suffix, so a sibling target's temp — whose name only
-// starts the same way — can never pass a check built for one exact target.
-const TEMP_WRITE_SUFFIX = String.raw`[0-9a-f]{12}\.tmp`;
-const TEMP_WRITE_PATTERN = new RegExp(String.raw`\.${TEMP_WRITE_SUFFIX}$`);
-
-function escapeForRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-}
 
 /** The temp path files.ts writes to beside `path`, before its one rename onto it. */
 export function tempWritePath(path: string): string {
-  return `${path}.${randomBytes(6).toString('hex')}.tmp`;
-}
-
-/** Whether `name` is one of files.ts's own temp files, for any target. Every scan that lists an
- *  instance folder's own contents excludes it. */
-export function isTempWrite(name: string): boolean {
-  return TEMP_WRITE_PATTERN.test(name);
-}
-
-/** Whether `name` is exactly the temp file `tempWritePath` gives the file named `base` — not a
- *  sibling target's own temp, whose name only starts with `base`. */
-export function isTempWriteOf(base: string, name: string): boolean {
-  return new RegExp(String.raw`^${escapeForRegExp(base)}\.${TEMP_WRITE_SUFFIX}$`).test(name);
+  return `${ownTempPrefix(dirname(path), '')}${randomBytes(6).toString('hex')}.tmp`;
 }

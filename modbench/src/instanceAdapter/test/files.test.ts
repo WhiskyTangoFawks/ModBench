@@ -102,9 +102,9 @@ describe('write', () => {
     expect(await realpath(link)).toBe(real);
   });
 
-  it('removes a stale temp file left by an earlier crash before writing again, its random suffix differing from the current call\'s own temp', async () => {
+  it('removes a temp file left by a writer that is gone before writing again', async () => {
     await writeFile(path, 'original');
-    await writeFile(`${path}.deadbeef0000.tmp`, 'crash leftover');
+    await writeFile(join(root, '.medit_tmp_2147483646_deadbeef0000.tmp'), 'crash leftover');
 
     await write(path, 'new');
 
@@ -112,9 +112,9 @@ describe('write', () => {
     expect(await readdir(root)).toEqual(['meta.ini']);
   });
 
-  it('leaves a sibling target\'s own in-flight temp alone, even though its name starts with the path and ends in the temp suffix', async () => {
+  it('leaves alone the in-flight temp of a writer still running', async () => {
     await writeFile(path, 'original');
-    const siblingTemp = `${path}.zip.meta.aaaaaaaaaaaa.tmp`;
+    const siblingTemp = join(root, `.medit_tmp_${process.pid}_aaaaaaaaaaaa.tmp`);
     await writeFile(siblingTemp, 'a sibling target\'s own in-flight write');
 
     await write(path, 'new');

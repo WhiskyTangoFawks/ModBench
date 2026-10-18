@@ -672,7 +672,7 @@ describe('the MO2 Instance adapter', () => {
       it.each([
         ['a new mod', { kind: 'new', name: 'New Mod' }],
         ['an upgrade', { kind: 'upgrade', name: 'Harder VATS' }],
-      ] as const)('is listed for %s, holding only its extraction or with some entries moved up', async (_, target) => {
+      ] as const)('is listed for %s, with some of its entries moved up beside the extraction', async (_, target) => {
         const { settle } = await installHeld(root, target);
         await writeFile(join(root, 'mods', target.name, 'readme.txt'), '');
 
@@ -681,7 +681,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('is listed when an interrupted install left only its extraction', async () => {
-        await mkdir(join(root, 'mods', 'Left Over', '.medit-extract-new-abc123'), { recursive: true });
+        await mkdir(join(root, 'mods', 'Left Over', '.medit_tmp_2147483646_new-abc123'), { recursive: true });
 
         expect(await listed()).toContain('Left Over');
       });
@@ -1453,8 +1453,8 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it.each([
-        ['.medit_tmp_12_ab.tmp'], ['.medit_tmp_12_ab'], ['.medit-extract-new-abc'], ['.medit-extract-upgrade-abc'],
-      ])('leaves out %s, a temp Modbench or mEdit left, at any depth', async (temp) => {
+        ['.medit_tmp_12_ab.tmp'], ['.medit_tmp_12_ab'],
+      ])('leaves out %s, a temp left by a dead writer, at any depth', async (temp) => {
         const folder = join(root, 'mods', 'Harder VATS');
         await mkdir(join(folder, 'Meshes', temp), { recursive: true });
         await writeFile(join(folder, 'Meshes', temp, 'inside.nif'), '');
@@ -2842,8 +2842,8 @@ describe('the MO2 Instance adapter', () => {
       expect(await isThere(join(downloads(), 'gone.zip.meta'))).toBe(false);
     });
 
-    it('sweeps its own leftover temp write when it trashes a file, even one with no metadata, as a crash during a first write leaves its temp beside no metadata at all', async () => {
-      const leftover = join(downloads(), 'manual.zip.meta.0123456789ab.tmp');
+    it('sweeps the leftover temp of a dead writer when it trashes a file, even one with no metadata, as a crash during a first write leaves its temp beside no metadata at all', async () => {
+      const leftover = join(downloads(), '.medit_tmp_2147483646_0123456789ab.tmp');
       await writeFile(leftover, 'half written');
 
       expect(await adapter.trashDownloadedFile('manual.zip', () => Promise.resolve())).toEqual({ gone: false });
