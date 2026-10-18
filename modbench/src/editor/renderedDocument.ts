@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
 import { samePluginAddress } from '../wire/pluginAddress';
 import { followReportedCopies, type CopyChanged } from './recordCopy';
-import { RENDERED_DOCUMENT_SCHEME, copyOf, holdsNoCopy } from '../drivingLib/recordDocument';
-import { answerOf } from '../wire/readFailed';
+import { RENDERED_DOCUMENT_SCHEME, copyOf } from '../textDocuments/recordDocument';
+import { renderedCopy } from '../drivingLib/renderedCopy';
 
 /** The read-only documents a non-compiled plugin's copies open as: mEdit's rendering, read again
  *  when mEdit reports the copy changed, and when its reports resume, since one may have been missed. */
@@ -22,10 +22,9 @@ export class RenderedDocuments implements vscode.TextDocumentContentProvider, vs
   }
 
   async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
-    const copy = copyOf(uri);
-    const document = answerOf(await this.client.getRenderedDocument(copy.plugin, copy.formKey));
-    if (document === null) throw new Error(holdsNoCopy(copy));
-    return document.text;
+    const rendered = await renderedCopy(this.client, copyOf(uri));
+    if ('refused' in rendered) throw new Error(rendered.refused);
+    return rendered.text;
   }
 
   dispose(): void {

@@ -1,18 +1,15 @@
 import * as vscode from 'vscode';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
+import type { PluginAddress } from '../wire/pluginAddress';
+import { holdsNoCopy, type RecordCopy } from '../wire/recordCopy';
 
-// What this lib reads of mEdit's answers, by shape: a lib references only boxes every box using it
-// references (target-architecture.md, The rule is the reference list).
-interface CopyPlugin { name: string; origin: string }
-
+// What Text documents reads of mEdit's answers, by shape: a box never references a box of its own
+// band (layers.d2), and the mEdit client is a repository too.
 export interface RecordDocumentClient {
-  getRecordOwner(formKey: string): Promise<CopyPlugin | undefined | ReadFailed>;
-  getCopyDocument(plugin: CopyPlugin, formKey: string): Promise<
+  getRecordOwner(formKey: string): Promise<PluginAddress | undefined | ReadFailed>;
+  getCopyDocument(plugin: PluginAddress, formKey: string): Promise<
     { kind: 'OwnFile' | 'ContainersFile' | 'Rendered'; location: string } | null | ReadFailed>;
 }
-
-/** A plugin's copy of a record, as a document of that one copy states it. */
-export interface RecordCopy { formKey: string; plugin: CopyPlugin }
 
 export type RecordDocument = { uri: vscode.Uri } | { refused: string };
 
@@ -34,9 +31,6 @@ export function copyOf(uri: vscode.Uri): RecordCopy {
   };
   return { formKey: stated('formKey'), plugin: { name: stated('name'), origin: stated('origin') } };
 }
-
-export const holdsNoCopy = ({ formKey, plugin }: RecordCopy): string =>
-  `${plugin.name} (${plugin.origin}) holds no ${formKey}.`;
 
 // The path is what VS Code shows: its last segment titles the tab, and the plugin's segments
 // before it tell apart two copies of one name.

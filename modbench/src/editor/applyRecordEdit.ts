@@ -2,7 +2,7 @@ import type { Reporter } from '../ports/reporter';
 import type { MEditClient, RecordEditEnvelope, SourceChanges } from '../client';
 import type { PluginAddress } from '../wire/pluginAddress';
 import type { PathHop } from '../wire/messages';
-import type { RecordDocument } from '../drivingLib/recordDocument';
+import type { RecordDocument } from '../textDocuments/recordDocument';
 import { applyWorkspaceChanges, type FileMove, type WorkspaceChanges } from '../textDocuments/applyWorkspaceChanges';
 import { applyAnswered } from '../textDocuments/applyAnswered';
 import type { OneAtATime } from '../textDocuments/oneAtATime';

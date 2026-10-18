@@ -27,7 +27,8 @@ import { followReportedCopies } from './recordCopy';
 import { RenderedDocuments } from './renderedDocument';
 import { ChildRecordDocuments } from './childRecordDocument';
 import { holdOneTextPerFile } from './oneTextPerFile';
-import { copyDocument, type RecordCopy } from '../drivingLib/recordDocument';
+import { copyDocument } from '../textDocuments/recordDocument';
+import type { RecordCopy } from '../wire/recordCopy';
 import type { ModFacts } from './modsByOrigin';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 

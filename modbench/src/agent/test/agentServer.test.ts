@@ -525,10 +525,10 @@ describe('the agent server, reading a record through mEdit', () => {
     expect({ isError, answer: JSON.parse(text) as unknown, warned }).toEqual({
       isError: true,
       answer: [
-        { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, reason: 'A.esp in Big Rocks holds no 000800:A.esp.' },
+        { plugin: { name: 'A.esp', origin: 'Big Rocks' }, isWinner: false, reason: 'A.esp (Big Rocks) holds no 000800:A.esp.' },
         { plugin: { name: 'B.esp', origin: 'Big Rocks' }, isWinner: true, kind: 'OwnFile', location: '/s/B.esp/000800.json' },
       ],
-      warned: ['[agent] read_record: A.esp in Big Rocks holds no 000800:A.esp.'],
+      warned: ['[agent] read_record: A.esp (Big Rocks) holds no 000800:A.esp.'],
     });
   });
 
@@ -565,7 +565,7 @@ describe('the agent server, reading a record through mEdit', () => {
     const client = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } }))
-      .toEqual({ isError: true, text: 'A.esp in Big Rocks holds no 000800:A.esp.' });
+      .toEqual({ isError: true, text: 'A.esp (Big Rocks) holds no 000800:A.esp.' });
   });
 
   it('refuses a name that is not a record', async () => {
@@ -592,7 +592,7 @@ describe('the agent server, reading a record through mEdit', () => {
     const client = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } }))
-      .toEqual({ isError: true, text: 'A.esp in Big Rocks holds no 000800:A.esp.' });
+      .toEqual({ isError: true, text: 'A.esp (Big Rocks) holds no 000800:A.esp.' });
   });
 
   it('lists the records that reference the record named', async () => {

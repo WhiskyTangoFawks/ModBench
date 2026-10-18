@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { relative, isAbsolute } from 'node:path';
-import { CONTAINER_SCHEMES } from '../drivingLib/recordDocument';
+import { CONTAINER_SCHEMES } from '../textDocuments/recordDocument';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 
