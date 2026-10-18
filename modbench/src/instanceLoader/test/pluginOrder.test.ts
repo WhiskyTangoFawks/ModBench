@@ -5,7 +5,7 @@ interface Row { name: string; origin: string; line: number | null; enabled: bool
 const row = (name: string, origin: string, line: number | null, enabled = true, winning = true): Row => ({ name, origin, line, enabled, winning });
 const absent = ({ name, origin }: { name: string; origin: string }): Row => row(name, origin, null);
 const orderOf = (plugins: Row[], noLine: { name: string; origin: string }[]) =>
-  pluginOrderOf({ plugins, pluginsLoadedWithNoLine: noLine.map((p) => ({ ...p, path: '' })) }, absent);
+  pluginOrderOf({ plugins, pluginsLoadedWithNoLine: noLine }, absent);
 
 describe('pluginOrderOf', () => {
   it('places the plugins the game loads with no line before every line, and the lines by line number', () => {

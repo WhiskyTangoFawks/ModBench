@@ -16,7 +16,7 @@ import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup, RecordPlace } from './createdRecordSelection';
 import { isPluginAddress } from '../wire/messages';
-import { pluginOrderOf } from '../instanceLoader/pluginOrder';
+import { pluginOrderOf, unplaced } from '../instanceLoader/pluginOrder';
 
 export type PluginsInstance = InstanceView & Pick<Instance, 'refresh'>;
 
@@ -197,7 +197,6 @@ export class PluginsTreeProvider
     return Promise.resolve(this.pluginFile(addressOfRow(row)));
   }
 
-  /** The plugin's own file (ADR-0012), whether a line names it or the game loads it with none. */
   pluginFile(address: PluginAddress): string | undefined {
     const { plugins, pluginsLoadedWithNoLine = [] } = this.instanceValue;
     return [...plugins, ...pluginsLoadedWithNoLine].find((p) => samePluginAddress(p, address))?.path;
@@ -340,7 +339,7 @@ export class PluginsTreeProvider
   private buildRows(): PluginListNode[] {
     const { loadedWithNoLine, fromLines } = pluginOrderOf(
       { plugins: this.instanceValue.plugins, pluginsLoadedWithNoLine: this.instanceValue.pluginsLoadedWithNoLine ?? [] },
-      (address) => ({ ...address, line: null, enabled: true, winning: true }),
+      unplaced,
     );
     const lockedRows = loadedWithNoLine.map(({ name, origin }) => new ImplicitMasterNode(name, origin));
     this.lastLockedRowUris = new Set(lockedRows.map((row) => row.resourceUri.toString()));

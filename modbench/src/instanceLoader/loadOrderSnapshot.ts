@@ -130,15 +130,16 @@ export function pluginsLoadedWithNoLineOf(
   loadedWithNoLine: readonly string[], inData: DataFolderPlugins,
   plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[], gameFolder: GameFolder,
 ): PluginWithNoLine[] | undefined {
-  if (inData.kind !== 'listed' || gameFolder.kind !== 'found') return undefined;
+  if (inData.kind !== 'listed') return undefined;
   const providedBy = new Map(plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined && p.winning && p.origin !== DATA_DIRECTORY_ORIGIN).map((p) => [foldPath(p.name), p] as const));
   const seen = new Set<string>();
   return loadedWithNoLine.flatMap((name) => {
     const provided = providedBy.get(foldPath(name));
     const found = provided === undefined
-      ? dataSpellings(inData, name).map((spelled) => ({ name: spelled, origin: DATA_DIRECTORY_ORIGIN, path: fileInFolder(gameFolder.dataFolder, spelled) }))
+      ? dataSpellings(inData, name).map((spelled) => ({ name: spelled, origin: DATA_DIRECTORY_ORIGIN, path: dataFolderFile(gameFolder, spelled) }))
       : [provided];
     return found.flatMap(({ name: spelled, origin, path }) => {
+      if (path === undefined) return [];
       const key = exactPluginAddressKey({ name: spelled, origin });
       if (seen.has(key)) return [];
       seen.add(key);

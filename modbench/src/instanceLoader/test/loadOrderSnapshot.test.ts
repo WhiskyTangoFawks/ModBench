@@ -274,10 +274,6 @@ describe('pluginsLoadedWithNoLineOf', () => {
     expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('Master.esm'), [provided], GAME_FOLDER))
       .toEqual([{ name: 'Master.esm', origin: 'A', path: '/mods/A/Master.esm' }]);
   });
-
-  it('names none while the game folder is not found', () => {
-    expect(pluginsLoadedWithNoLineOf(['Master.esm'], inDataFolder('Master.esm'), [], GAME_FOLDER_NOT_FOUND)).toBeUndefined();
-  });
 });
 
 describe('buildLoadOrderRows, a name neither a mod winner nor a game folder found can resolve', () => {
@@ -533,7 +529,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(snapshot?.active).toEqual([
       { name: 'Master.esm', origin: 'Data/' }, { name: 'cc.esl', origin: 'Data/' }, address(a),
     ]);
-    expect(snapshot?.plugins).toContainEqual({ name: 'Master.esm', origin: 'Data/', path: join('/game/Data', 'Master.esm'), provider: { kind: 'Game' }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] });
+    expect(snapshot?.plugins).toContainEqual({ name: 'Master.esm', origin: 'Data/', path: '/game/Data/Master.esm', provider: { kind: 'Game' }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] });
     expect(snapshot?.loadedWithNoLine).toEqual([{ name: 'Master.esm', origin: 'Data/' }, { name: 'cc.esl', origin: 'Data/' }]);
   });
 
