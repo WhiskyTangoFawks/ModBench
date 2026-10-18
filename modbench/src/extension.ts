@@ -42,10 +42,11 @@ import { sourceCommands } from './sourceCommands/sourceCommands';
 import { modSyncOver, modCommands } from './modCommands/modCommands';
 import { warnIfFomod } from './mods/fomodWarning';
 import { downloadedFileCommands } from './downloadedFileCommands/downloads';
+import { editingFlow } from './instanceCommands/editing';
 import { instanceCommands } from './instanceCommands/instanceCommands';
 import { reachMEditFromTerminals } from './terminalEnvironment';
 import { openWalkthroughOnce } from './walkthrough';
-import { instanceSyncs, loadOrderPutHandler, loadOrderPutOnEachLanguageChange, loadOrderPutOnEachValue } from './syncWiring';
+import { instanceSyncs, registerSyncCommands, loadOrderPutHandler, loadOrderPutOnEachLanguageChange, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
@@ -129,10 +130,11 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const { modSync, pluginSync } = own(instanceSyncs({
     instance, syncMods: modSyncOver(adapter), syncPlugins: pluginSyncOver(adapter), channel: outputChannel,
   }));
+  ownAll(own, registerSyncCommands((command, handler) => vscode.commands.registerCommand(command, handler), { modSync, pluginSync }));
   const sourceGestureRows = selectionInFocusedView(
     own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.sourceGestureRowsIn');
   const plugins = own(pluginsBox.onInstance({
-    instance, instanceRoot, commands: pluginCommands({ adapter, client }), pluginSync,
+    instance, commands: pluginCommands({ adapter, client }), pluginSync,
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
@@ -160,7 +162,9 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: (message) => { toolboxProvider.say(message); }, focusedView: deps.focusedView },
     modStatus: { push: client, readStatus },
   }));
-  const { editing } = plugins;
+  const editing = own(editingFlow({
+    client, instanceRoot, ...plugins.editingInPluginsView, reporterFor, log: (line) => outputChannel.error(line),
+  }));
   void editing.enter(instance.landed());
   void client.start();
   const putLoadOrder = loadOrderPutHandler(editing, stringsLanguage);

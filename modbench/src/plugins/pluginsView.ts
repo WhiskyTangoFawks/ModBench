@@ -8,7 +8,7 @@ import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
 import type { SourceEditing } from '../drivingLib/sourceEditing';
 import type { Instance } from '../instanceLoader/instance';
-import { reportSyncFailures, type Sync, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
+import { reportSyncFailures, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
 import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';
 import { type PluginsTreeNode } from './pluginRows';
 import type { PluginFactsClient } from './pluginFactsFeed';
@@ -55,7 +55,7 @@ export interface PluginsViewDeps {
   recordWrite: RecordWrite;
   sourceEditing: SourceEditing;
   /** Plugin sync, whose failure the view's message line says. */
-  pluginSync: Sync;
+  pluginSync: SyncMessage;
   channel: SyncChannel;
   /** The path of a file at the root of the Data folder, answered by a box this view does not
    *  reference. */
@@ -166,7 +166,7 @@ function publishKeyContext(selection: readonly PluginsTreeNode[], tree: PluginsT
 }
 
 function registerPluginGestures(
-  { instance, commands, client, ask, pluginSync, reporterFor, recordWrite, sourceEditing }: PluginsViewDeps,
+  { instance, commands, client, ask, reporterFor, recordWrite, sourceEditing }: PluginsViewDeps,
   { tree, view, selection }: {
     tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; selection: () => readonly PluginsTreeNode[];
   },
@@ -179,7 +179,6 @@ function registerPluginGestures(
     }, selection),
     registerRenamePluginCommand({ client, commands, ask, instance, reporter: reporterFor('plugin.rename'), source: sourceEditing }, selection),
     registerCreatePluginCommand(client, instance, reporterFor('newPlugin')),
-    vscode.commands.registerCommand('modbench.plugin.sync', () => pluginSync.run()),
   ];
 }
 
