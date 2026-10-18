@@ -6,7 +6,7 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
 import type { RecordWrite } from '../drivingLib/writingGesture';
-import type { SourceEditing } from '../drivingLib/sourceEditing';
+import type { SourceEditing } from '../textDocuments/sourceEditing';
 import type { Instance } from '../instanceLoader/instance';
 import { reportSyncFailures, type SyncChannel, type SyncFailureReport } from '../drivingLib/syncFailureReport';
 import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';

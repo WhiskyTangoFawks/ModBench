@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/textDocuments",
+    "types": ["node", "vscode"]
+  },
+  "references": [
+    { "path": "../ports" },
+    { "path": "../wire" }
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

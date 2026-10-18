@@ -15,6 +15,7 @@
     { "path": "./src/downloadedFileCommands" },
     { "path": "./src/client" },
     { "path": "./src/drivingLib" },
+    { "path": "./src/textDocuments" },
     { "path": "./src/toolbox" },
     { "path": "./src/mods" },
     { "path": "./src/downloads" },

@@ -5,7 +5,7 @@ import { showWebviewPage } from '../drivingLib/webviewPage';
 import { routeRecordPanelMessage, routerDepsForTab, type SharedRecordPanelDeps, type TabDocument } from './recordPanelMessageRouter';
 import type { EditAddress, RecordTab } from './recordTab';
 import type { RecordTabs } from './recordTabs';
-import type { FileMove } from '../drivingLib/applyWorkspaceChanges';
+import type { FileMove } from '../textDocuments/applyWorkspaceChanges';
 import { recordTitle } from './recordTitle';
 import { inTabsStead, type TabShowOptions } from './inTabsStead';
 import type { CopyChanged } from './recordCopy';
