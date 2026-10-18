@@ -98,7 +98,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     toggle: { icon: 'list-tree', label: 'Group by separator' },
     termPlacement: 'afterBase',
     viewMessage: () => messageLine(provider.viewMessage(), modSync.message(), statusMessage()),
-    standingMessage: () => provider.lastGoodReadMessage(),
+    standingMessage: () => provider.standingMessage(),
     onRowsChanged: provider.onDidChangeTreeData,
     onViewMessageChanged: (listener) => joinSyncMessages(modSync, statuses).onMessageChanged(listener),
   });

@@ -2,9 +2,10 @@ import * as vscode from 'vscode';
 import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
-import { lastGoodReadMessage, type InstanceValue, type InstanceView, type ModGroup, type ModGroups } from '../instanceLoader/instance';
+import { instanceMessages, type InstanceValue, type InstanceView, type ModGroup, type ModGroups } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
+import { messageLine } from '../drivingLib/nameFilter';
 import { dropMove, type DraggedRows } from './moveDrop';
 import {
   anyNamed, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode,
@@ -244,11 +245,11 @@ export class ModListProvider
    *  list says so here, above it. */
   viewMessage(): string | undefined {
     const empty = this.instance.sequence !== 0 && this.instanceValue.mods.length === 0 ? NO_MODS_MESSAGE : undefined;
-    return [empty, this.lastGoodReadMessage()].filter((part) => part !== undefined).join(' ') || undefined;
+    return messageLine(empty, this.standingMessage());
   }
 
-  lastGoodReadMessage(): string | undefined {
-    return lastGoodReadMessage(this.instance);
+  standingMessage(): string | undefined {
+    return messageLine(...instanceMessages(this.instance));
   }
 
   // No stable API names the focused row. VS Code appends the row a click selects to the selection
