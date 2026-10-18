@@ -43,7 +43,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
   const launches = pending((reason) => { log(`[loadOrder] telling the launch of mEdit threw: ${reason}`); });
   let entering = false;
 
-  // A launch that failed is told by the launch, not again by the snapshot it was for.
+  // A put the backend failed is not told: the status bar reports the stop.
   const tellPut = (put: Promise<PutLoadOrderResult>): void => {
     void tells.track(put.then((result) => {
       if (result.sent && result.outcome.outcome === 'backendFailed') return;

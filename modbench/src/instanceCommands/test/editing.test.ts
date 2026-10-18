@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import type { LoadOrderOutcome, LoadOrderProgress } from '../../client';
+import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { settled } from '../../test/settled';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
 import type { LoadOrderSource } from '../loadOrder';
@@ -21,7 +22,7 @@ function valueWith(name: string): LoadOrderSource {
   };
 }
 
-type Told = { kind: 'put'; put: PutLoadOrderResult };
+type Told = PutLoadOrderResult;
 
 function wired(status: 'running' | 'stopped' = 'running') {
   const client = new InMemoryMEditClient();
@@ -44,7 +45,7 @@ function wired(status: 'running' | 'stopped' = 'running') {
   });
   const around: { entered: number; settled: boolean; told: number[] } = { entered: 0, settled: false, told: [] };
   const flow = editingFlow({
-    client, instanceRoot: '/instance', onPut: (put) => { tell({ kind: 'put', put }); return Promise.resolve(); }, log: (line) => { logged.push(line); },
+    client, instanceRoot: '/instance', onPut: (put) => { tell(put); return Promise.resolve(); }, log: (line) => { logged.push(line); },
     around: async (entry) => { around.entered++; await entry(); around.settled = true; around.told.push(told.length); },
   });
   const putPluginNames = (): string[] => client.puts().map((put) => put.plugins.map((p) => p.name).join());
@@ -63,7 +64,7 @@ describe('the load order is put at every recompute', () => {
     await toldCount(2);
 
     expect(putPluginNames()).toEqual(['A.esp', 'A.esp']);
-    expect(told[1]).toMatchObject({ kind: 'put', put: { sent: true, outcome: APPLIED } });
+    expect(told[1]).toMatchObject({ sent: true, outcome: APPLIED });
   });
 
   it('tells a value without a snapshot as nothing sent, and hands the client nothing', async () => {
@@ -72,7 +73,7 @@ describe('the load order is put at every recompute', () => {
     land(NO_SNAPSHOT);
     await toldCount(1);
 
-    expect(told).toEqual([{ kind: 'put', put: { sent: false } }]);
+    expect(told).toEqual([{ sent: false }]);
     expect(client.calls).toEqual([]);
   });
 
@@ -82,7 +83,7 @@ describe('the load order is put at every recompute', () => {
     land(REFUSED);
     await toldCount(1);
 
-    expect(told).toEqual([{ kind: 'put', put: { sent: false, refusal: 'a.esp has no mod folder' } }]);
+    expect(told).toEqual([{ sent: false, refusal: 'a.esp has no mod folder' }]);
     expect(putPluginNames()).toEqual([]);
   });
 });
@@ -96,7 +97,7 @@ describe('a put the client makes again on its own', () => {
     client.reconnected();
     await toldCount(2);
 
-    expect(told[1]).toMatchObject({ kind: 'put', put: { sent: true, snapshot: { gameDirectory: '/game/Data' }, outcome: APPLIED } });
+    expect(told[1]).toMatchObject({ sent: true, snapshot: { gameDirectory: '/game/Data' }, outcome: APPLIED });
   });
 
   it('is told no more once the flow is disposed', async () => {
@@ -155,10 +156,8 @@ function pending() {
   return { promise, resolve };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
 const until = async (check: () => boolean): Promise<void> => {
-  while (!check()) await settle();
+  while (!check()) await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
 describe('a tell that threw', () => {
@@ -175,17 +174,24 @@ describe('a tell that threw', () => {
   });
 });
 
+class ClientWhoseLaunchIsHeld extends InMemoryMEditClient {
+  heard: (launched: Promise<LaunchOutcome>) => void = () => undefined;
+  override onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void {
+    this.heard = listener;
+    return () => undefined;
+  }
+}
+
 describe('telling a launch that threw', () => {
   it('reaches the Output once, naming the launch', async () => {
-    const { client, land, logged } = wired('stopped');
-    client.answerStart(() => Promise.resolve().then(() => { client.setStatus('running'); }));
-    client.latestLoadOrder = () => Promise.reject(new Error('boom'));
+    const client = new ClientWhoseLaunchIsHeld();
+    const logged: string[] = [];
+    editingFlow({ client, instanceRoot: '/instance', onPut: () => Promise.resolve(), log: (line) => { logged.push(line); }, around: (entry) => entry() });
 
-    void client.start();
-    land(valueWith('A.esp'));
-    await until(() => logged.length > 0);
+    client.heard(Promise.reject(new Error('no kill')));
+    await settled();
 
-    expect(logged).toEqual(['[loadOrder] telling the launch of mEdit threw: boom']);
+    expect(logged).toEqual(['[loadOrder] telling the launch of mEdit threw: no kill']);
   });
 });
 
@@ -199,7 +205,7 @@ describe('a recompute after a failed launch', () => {
 
     land(valueWith('A.esp'));
     await client.latestLoadOrder();
-    await settle();
+    await settled();
 
     expect(told.slice(toldBefore)).toEqual([]);
     expect(around.entered).toBe(1);

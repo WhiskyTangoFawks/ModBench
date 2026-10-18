@@ -21,6 +21,7 @@ vi.mock('vscode', () => ({
 
 import { createStatusBar } from '../statusBar';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { settled } from '../../test/settled';
 import { present } from '../../ports/present';
 import type { Reporter } from '../../ports/reporter';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -35,7 +36,6 @@ const reporterFor = (tag: string): Reporter => ({
   ...recordingReporter(),
   report: (severity, message, detail) => { reports.push({ tag, severity, message, detail }); },
 });
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => { h.items.length = 0; reports = []; });
 
@@ -106,28 +106,20 @@ describe('the status bar, one item saying what mEdit is doing', () => {
 });
 
 describe('mEdit stopping', () => {
-  it('is reported as stopped under the entry report, once, when a launch leaves it stopped', async () => {
+  it.each([
+    ['a launch that left it stopped', () => Promise.resolve(), [{ tag: 'enterEditing', severity: 'error', message: STOPPED, detail: undefined }]],
+    ['a launch that threw, with its reason', () => Promise.reject(new Error('no port')), [{ tag: 'launch', severity: 'error', message: STOPPED, detail: 'no port' }]],
+    ['a launch that came up, not at all', undefined, []],
+  ] as const)('reports %s, once', async (_case, start, expected) => {
     const client = new InMemoryMEditClient();
     client.setStatus('stopped');
-    client.answerStart(() => Promise.resolve());
+    if (start) client.answerStart(start);
     createStatusBar(client, reporterFor);
 
     await client.start();
-    await settle();
+    await settled();
 
-    expect(reports).toEqual([{ tag: 'enterEditing', severity: 'error', message: STOPPED, detail: undefined }]);
-  });
-
-  it('is reported as stopped under the launch report with its reason, once, when a launch threw', async () => {
-    const client = new InMemoryMEditClient();
-    client.setStatus('stopped');
-    client.answerStart(() => Promise.reject(new Error('no port')));
-    createStatusBar(client, reporterFor);
-
-    await client.start();
-    await settle();
-
-    expect(reports).toEqual([{ tag: 'launch', severity: 'error', message: STOPPED, detail: 'no port' }]);
+    expect(reports).toEqual(expected);
   });
 
   it('is reported as stopped under its own report when mEdit exits', async () => {
@@ -136,7 +128,7 @@ describe('mEdit stopping', () => {
     createStatusBar(client, reporterFor);
 
     client.crashed();
-    await settle();
+    await settled();
 
     expect(reports).toEqual([{ tag: 'mEditExit', severity: 'error', message: STOPPED, detail: undefined }]);
   });
@@ -147,7 +139,7 @@ describe('mEdit stopping', () => {
     createStatusBar(client, reporterFor);
 
     await client.start();
-    await settle();
+    await settled();
 
     expect(reports).toEqual([]);
   });
@@ -158,7 +150,7 @@ describe('mEdit stopping', () => {
     createStatusBar(client, reporterFor).dispose();
 
     client.crashed();
-    await settle();
+    await settled();
 
     expect(reports).toEqual([]);
   });
