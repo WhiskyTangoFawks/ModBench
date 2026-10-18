@@ -156,7 +156,7 @@ describe('modbench.plugin.move', () => {
 
   it('does not count the line of a plugin the game loads with no line', async () => {
     const masters = { getPlugins: () => Promise.resolve([held('DLCRobot.esm', []), held('A.esp', []), held('X.esp', ['DLCRobot.esm'])]) };
-    const value = instanceValueFixture({ activeProfile: 'Default', pluginsLoadedWithNoLine: [{ name: 'DLCRobot.esm', origin: 'Data/' }] });
+    const value = instanceValueFixture({ activeProfile: 'Default', pluginsLoadedWithNoLine: [{ name: 'DLCRobot.esm', origin: 'Data/', path: '/game/Data/DLCRobot.esm' }] });
     const { reporter, fake } = registered([], masters, undefined, fakeOver('DLCRobot.esm', 'A.esp', 'X.esp'), value);
 
     await invoke(...rowsOf({ name: 'X.esp', origin: 'ModX' }), LOSING_END);

@@ -551,7 +551,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     const named = row('Master.esm', 'ModM', null, { enabled: false });
     const twin = row('master.esm', 'ModM', null, { enabled: false, winning: false });
 
-    expect(snapshotOf([named, twin], [address(named)])?.active).toEqual([address(named)]);
+    expect(snapshotOf([named, twin], [{ ...address(named), path: named.path }])?.active).toEqual([address(named)]);
   });
 
   it('names what provides each plugin: its mod with the mod\'s own folder, not the plugin\'s directory, and its source folder, the game for Data, no mod for overwrite', () => {
