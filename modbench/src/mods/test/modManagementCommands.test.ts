@@ -1174,10 +1174,10 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
 
   it('takes the domain from the game the mod\'s metadata names, not the instance\'s', async () => {
     registerViewOnNexusCommand(instance, recordingReporter(), () => undefined);
-    await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42', gameName: 'FalloutNV' }));
+    await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42', gameName: 'Starfield' }));
     await invoke('modbench.mod.viewOnNexus', { nexusModId: '123', nexusGame: 'Fallout 4' });
 
-    expect(opened()).toEqual(['https://www.nexusmods.com/newvegas/mods/42', 'https://www.nexusmods.com/fallout4/mods/123']);
+    expect(opened()).toEqual(['https://www.nexusmods.com/starfield/mods/42', 'https://www.nexusmods.com/fallout4/mods/123']);
   });
 
   it.each([
