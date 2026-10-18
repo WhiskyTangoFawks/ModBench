@@ -12,7 +12,6 @@ export interface FileCopies {
   readonly copies: readonly Copy[];
 }
 
-/** One provider's copy of a file, and the path it is read at. */
 interface CopyToRead {
   readonly origin: FileOrigin;
   readonly path: string;
