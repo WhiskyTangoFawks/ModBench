@@ -362,6 +362,9 @@ export type CreateEmptyModResult =
   | { applied: true; wrote: boolean; lineRefusal?: string }
   | { applied: false; refusal: string };
 
+const listMod = (adapter: InstanceAdapter, name: string): Promise<CommandResult> =>
+  changeModOrder(adapter, () => [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name } }]);
+
 // A mod's folder plus a disabled line at the winning end of mod order — nothing else. A name a
 // folder already holds is refused.
 async function createEmptyMod(adapter: InstanceAdapter, name: string): Promise<CreateEmptyModResult> {
@@ -371,7 +374,7 @@ async function createEmptyMod(adapter: InstanceAdapter, name: string): Promise<C
   } catch (err) {
     return refuse(err);
   }
-  const line = await changeModOrder(adapter, () => [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name } }]);
+  const line = await listMod(adapter, name);
   if (!line.applied) return { applied: true, wrote: false, lineRefusal: line.refusal };
   return line;
 }
@@ -470,7 +473,7 @@ export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['m
     renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
     newModNameRefusal: (...args: TailOf<typeof newModNameRefusal>) => newModNameRefusal(adapter, ...args),
     names: adapter.names,
-    installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, readStatus, listMod: (name) => changeModOrder(adapter, () => [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name } }]) }, ...args),
+    installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, readStatus, listMod: (name) => listMod(adapter, name) }, ...args),
     upgradeLoss: (...args: TailOf<typeof upgradeLoss>) => upgradeLoss({ adapter, readStatus }, ...args),
   };
 }
