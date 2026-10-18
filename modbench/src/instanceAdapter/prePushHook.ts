@@ -1,6 +1,6 @@
 export const PRE_PUSH_HOOK_NAME = 'pre-push';
 
-// A clone fetches each source mod from the URL its .gitmodules names, so the hook asks that URL, as it answers now.
+// modlist-repository.md, The repository, story 6: a clone fetches each source mod from the URL its .gitmodules names.
 export const PRE_PUSH_HOOK = String.raw`#!/bin/sh
 tab=$(printf '\t')
 unpinned=0
@@ -9,12 +9,11 @@ refuse() {
   unpinned=1
 }
 url_of() {
-  git config --blob "$1:.gitmodules" --name-only --get-regexp '^submodule\..*\.path$' 2>/dev/null | while read -r key; do
-    if [ "$(git config --blob "$1:.gitmodules" --get "$key")" = "$2" ]; then
-      git config --blob "$1:.gitmodules" --get "$(echo "$key" | sed 's/path$/url/')"
-      break
-    fi
-  done
+  git config --blob "$1:.gitmodules" --null --get-regexp '^submodule\..*\.(path|url)$' 2>/dev/null | tr '\0' '\n' | PIN_PATH="$2" awk '
+    NR % 2 { key = $0; next }
+    key ~ /\.path$/ && $0 == ENVIRON["PIN_PATH"] { wanted = substr(key, 1, length(key) - 5) ".url" }
+    key ~ /\.url$/ { urls[key] = $0 }
+    END { if (wanted in urls) print urls[wanted] }'
 }
 url_holds() {
   heads=$(git -C "$1" ls-remote --heads "$2") || return 2
@@ -35,10 +34,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   [ -z "$pins" ] && continue
   while IFS="$tab" read -r sha path; do
     prefix=$(git -C "$path" rev-parse --show-prefix 2>/dev/null) || prefix=missing
-    url=$(url_of "$local_sha" "$path")
     if [ -n "$prefix" ]; then
       refuse "$path pins $sha, and has no checkout to verify it against."
-    elif [ -z "$url" ]; then
+    elif url=$(url_of "$local_sha" "$path"); [ -z "$url" ]; then
       refuse "$path pins $sha, and .gitmodules names no remote for it."
     else
       url_holds "$path" "$url" "$sha"
