@@ -12,10 +12,10 @@ public sealed class RestoreFromManifestHandler
     private readonly IModFolderRepository _repository;
     private readonly INotificationPublisher _notifications;
     private readonly ISourceAdapter _source;
-    private readonly BuildHandler _build;
+    private readonly SourceModBuild _build;
 
     internal RestoreFromManifestHandler(
-        IModFolderRepository repository, INotificationPublisher notifications, ISourceAdapter source, BuildHandler build) =>
+        IModFolderRepository repository, INotificationPublisher notifications, ISourceAdapter source, SourceModBuild build) =>
         (_repository, _notifications, _source, _build) = (repository, notifications, source, build);
 
     public Task<SelectionResult<string, RestoreSkip, RestoredMod>> RestoreAsync(
@@ -105,7 +105,7 @@ public sealed class RestoreFromManifestHandler
             return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
         }
 
-        var answer = await _build.BuildOneAsync(
+        var answer = await _build.BuildAsync(
             new ModToBuild(mod.Name, submodule.Folder, mod.Folder, mod.MetadataFiles, version, IsSubmodule: true),
             new InstanceToBuild(instance.ExcludedSuffix, instance.Archives, instance.StatCache));
         if (answer is ItemAnswer<BuildRefusal, BuiltMod>.Refusing refusing)

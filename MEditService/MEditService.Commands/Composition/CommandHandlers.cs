@@ -133,12 +133,17 @@ public static class CommandHandlers
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ISourceAdapter>()));
 
-        services.AddSingleton(sp => new BuildHandler(
+        services.AddSingleton(sp => new SourceModBuild(
             sp.GetRequiredService<CompilePluginHandler>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<IModFolderRepository>(),
-            sp.GetRequiredService<IPluginAdapter>(),
+            sp.GetRequiredService<IPluginAdapter>()));
+
+        services.AddSingleton(sp => new BuildHandler(
+            sp.GetRequiredService<SourceModBuild>(),
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<ISourceAdapter>(),
             sp.GetRequiredService<INotificationPublisher>()));
 
         services.AddSingleton(sp => new UpdateManifestHandler(
@@ -149,7 +154,7 @@ public static class CommandHandlers
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<INotificationPublisher>(),
             sp.GetRequiredService<ISourceAdapter>(),
-            sp.GetRequiredService<BuildHandler>()));
+            sp.GetRequiredService<SourceModBuild>()));
 
         services.AddSingleton(sp => new BuildConfigurationHandler(sp.GetRequiredService<ISourceAdapter>()));
 

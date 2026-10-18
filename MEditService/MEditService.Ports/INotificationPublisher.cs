@@ -29,9 +29,6 @@ public sealed record LoadOrderStatusNotification(LoadOrderStatus Status) : INoti
 /// <summary>Init's own progress (<see cref="InitProgress"/>) as it advances through its phases.</summary>
 public sealed record InitProgressNotification(InitProgress Progress) : INotification;
 
-/// <summary>A build's own progress (<see cref="BuildProgress"/>), per mod.</summary>
-public sealed record BuildProgressNotification(BuildProgress Progress) : INotification;
-
 /// <summary>At a snapshot: each compiled plugin whose bytes differ from what Modbench last wrote
 /// (ADR-0003). The mod's whole answer, so a plugin it leaves out matches; a mod whose
 /// repository went names none.</summary>
