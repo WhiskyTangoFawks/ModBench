@@ -316,7 +316,7 @@ describe('sourceFiles', () => {
 
 describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from the value rather than a fresh walk', () => {
   const GAME_FOLDER = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
-  const NOT_FOUND = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameDirectory' } as const;
+  const NOT_FOUND = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameFolder' } as const;
   const row = (name: string, origin: string, line: number | null, facts: Partial<LoadOrderPlugin> = {}): LoadOrderPlugin =>
     ({ name, path: `/mods/${origin}/${name}`, origin, line, enabled: true, winning: true, ...facts });
   const folderOf = (mod: string) => `/mo2/mod-folders/${mod}`;

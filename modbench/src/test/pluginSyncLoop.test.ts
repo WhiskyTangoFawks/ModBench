@@ -1,3 +1,4 @@
+import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -65,7 +66,7 @@ async function wiredInstance(): Promise<{
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
 
   const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } });
-  const instance = new Instance({ window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} } });
+  const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter, log: { info: () => {}, warn: () => {}, error: () => {} } });
   instances.push(instance);
 
   const syncs: ReturnType<PluginSyncRun>[] = [];
@@ -136,7 +137,7 @@ const pluginChanges = (fake: ReturnType<typeof fakeInstanceAdapter>) =>
 async function settledFakeInstance(overrides: Partial<InstanceReading> = withProvider()) {
   const fake = fakeInstanceAdapter(readingFixture(overrides));
   const instance = new Instance({
-    window: STEADY_WINDOW, adapter: fake.adapter, log: { info: () => {}, warn: () => {}, error: () => {} },
+    gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter: fake.adapter, log: { info: () => {}, warn: () => {}, error: () => {} },
   });
   instances.push(instance);
   const syncs: ReturnType<PluginSyncRun>[] = [];
@@ -204,7 +205,7 @@ describe('the game folder not found, across the whole instance', () => {
     const output: string[] = [];
     const write = (line: string): void => { output.push(line); };
     const channel = { error: write, warn: write, info: write };
-    const instance = new Instance({ window: STEADY_WINDOW, adapter: fake.adapter, log: channel });
+    const instance = new Instance({ gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter: fake.adapter, log: channel });
     instances.push(instance);
     toolboxes.push(new ToolboxProvider({ instance, channel }));
     const { pluginSync, modSync } = instanceSyncs({
@@ -218,9 +219,9 @@ describe('the game folder not found, across the whole instance', () => {
     await modSync.settled();
 
     expect(output).toEqual([
-      '[instance] Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameDirectory: not set; ' +
+      '[instance] Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameFolder: not set; ' +
         "ModOrganizer.ini's gamePath: not set; the Steam install: the game is in no Steam library. " +
-        'Set modbench.mods.gameDirectory to the game folder to fix it.',
+        'Set modbench.mods.gameFolder to the game folder to fix it.',
     ]);
     expect(pluginSync.message()).toBeUndefined();
   });

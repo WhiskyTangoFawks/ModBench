@@ -14,19 +14,19 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { inheritedPythonPath, onGameDirectoryChange, onStringsLanguageChange, onTerminalEnvChange } from '../workspaceConfig';
+import { inheritedPythonPath, gameFolderSetting, onStringsLanguageChange, onTerminalEnvChange } from '../workspaceConfig';
 
 const changeTo = (key: string): void => configListener?.({ affectsConfiguration: (section) => section === key });
 
-describe('onGameDirectoryChange', () => {
+describe('the game folder setting', () => {
   it('signals for the game-folder setting and for no other key', () => {
     const listener = vi.fn();
-    onGameDirectoryChange(listener);
+    gameFolderSetting.changed(listener);
 
     changeTo('modbench.mods.somethingElse');
     expect(listener).not.toHaveBeenCalled();
 
-    changeTo('modbench.mods.gameDirectory');
+    changeTo('modbench.mods.gameFolder');
     expect(listener).toHaveBeenCalledTimes(1);
   });
 });
