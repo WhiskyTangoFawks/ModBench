@@ -9,7 +9,8 @@ import {
 } from '../wire/conflictTable';
 import { originLabel } from '../instanceLoader/fileConflictIndex';
 import { conflictPaths, conflictTable } from './conflictTable';
-import type { FileCopies } from '../modCommands/sameCopies';
+import type { FileCopies, FileToCompare } from '../modCommands/sameCopies';
+import { copiesToRead } from './copiesToRead';
 import { gestureEntry, singularArgument } from '../drivingLib/gestureEntry';
 import type { ModlistNode } from './ModListProvider';
 import type { Reporter } from '../ports/reporter';
@@ -31,8 +32,8 @@ const modOfUri = (uri: vscode.Uri): string => decodeURIComponent(uri.path.slice(
 
 type TableInstance = Pick<InstanceView, 'value' | 'sequence' | 'subscribe'>;
 
-/** Which copies of each file hold the same bytes, over the value the table is drawn from. */
-export type CopiesOf = (value: InstanceView['value'], relativePaths: readonly string[]) => Promise<FileCopies[]>;
+/** Which copies of each file hold the same bytes. */
+export type CopiesOf = (files: readonly FileToCompare[]) => Promise<FileCopies[]>;
 
 class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider {
   constructor(
@@ -63,7 +64,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
     const show = async (view: Pick<InstanceView, 'value' | 'sequence'>) => {
       const mine = ++newest;
       try {
-        const copies = await this.copiesOf(view.value, conflictPaths(view, mod));
+        const copies = await this.copiesOf(copiesToRead(view.value, conflictPaths(view, mod)));
         if (mine !== newest) return;
         const unreadable = copies.flatMap(({ relativePath, copies: each }) => each.flatMap((copy) =>
           (copy.kind === 'unreadable' ? [{ key: JSON.stringify([copy.origin, relativePath, copy.reason]), relativePath, copy }] : [])));

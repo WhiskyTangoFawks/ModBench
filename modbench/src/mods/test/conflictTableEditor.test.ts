@@ -51,7 +51,11 @@ beforeEach(() => {
 });
 
 function setup(instance = new FakeInstance(instanceValueFixture()), selection: readonly ModlistNode[] = [], reporter = recordingReporter()) {
-  registerConflictTable(instance, (_value, paths) => { copiesDouble.asked.push(paths); return copiesDouble.answer(paths); }, vscode.Uri.file('/extension'), () => selection, reporter, settings);
+  registerConflictTable(instance, (files) => {
+    const paths = files.map(({ relativePath }) => relativePath);
+    copiesDouble.asked.push(paths);
+    return copiesDouble.answer(paths);
+  }, vscode.Uri.file('/extension'), () => selection, reporter, settings);
   const openConflicts = (...args: unknown[]) =>
     registerCommand.mock.calls.find(([id]) => id === 'modbench.mod.openConflicts')?.[1](...args);
   const opened = () => executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith');
