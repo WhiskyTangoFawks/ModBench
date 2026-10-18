@@ -7,7 +7,7 @@ namespace MEditService.Commands.Build;
 
 /// <summary>The Build gesture's handler (ADR-0014), the Build engine's way in. The mod is the item of the selection:
 /// its folder is written from its source as the build configuration says, or it is refused.</summary>
-public sealed class BuildHandler
+public sealed class BuildModHandler
 {
     private readonly SourceModBuild _build;
     private readonly LoadOrderHolder _loadOrder;
@@ -15,7 +15,7 @@ public sealed class BuildHandler
     private readonly INotificationPublisher _notifications;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal BuildHandler(SourceModBuild build, LoadOrderHolder loadOrder, ISourceAdapter source, INotificationPublisher notifications) =>
+    internal BuildModHandler(SourceModBuild build, LoadOrderHolder loadOrder, ISourceAdapter source, INotificationPublisher notifications) =>
         (_build, _loadOrder, _source, _notifications) = (build, loadOrder, source, notifications);
 
     /// <summary>Each mod's plugins are its source's, compiled into its folder against the held load order. Refuses the

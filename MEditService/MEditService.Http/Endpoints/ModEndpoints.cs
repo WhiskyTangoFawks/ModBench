@@ -51,7 +51,7 @@ internal static class ModEndpoints
     }
 
     // decompile-and-commit: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
-    internal static async Task<IResult> Init(InitRequest req, InitHandler initHandler, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> Init(InitRequest req, InitModHandler initHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
         var mods = req.Mods ?? [];
@@ -75,7 +75,7 @@ internal static class ModEndpoints
     }
 
     internal static IResult ChangeBuildConfiguration(
-        BuildConfigurationRequest req, BuildConfigurationHandler handler, ILoggerFactory loggerFactory)
+        BuildConfigurationRequest req, ChangeBuildConfigurationHandler handler, ILoggerFactory loggerFactory)
     {
         IReadOnlyList<string> exclude = req.Exclude ?? [], include = req.Include ?? [];
         if (string.IsNullOrWhiteSpace(req.SourceFolder) || (req.Output is null && exclude.Count + include.Count == 0)
@@ -93,7 +93,7 @@ internal static class ModEndpoints
     }
 
     // build-mod: the selection (commands.md, A selection is one gesture).
-    internal static async Task<IResult> Build(BuildRequest req, BuildHandler buildHandler, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> Build(BuildRequest req, BuildModHandler buildHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
         var mods = req.Mods ?? [];

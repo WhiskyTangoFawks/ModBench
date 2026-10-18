@@ -22,9 +22,14 @@ public sealed class WriteRouteSeamTests
         ("POST /plugins/move-last-written", "MoveLastWritten"),
         ("POST /plugins/{plugin}/create-record-changes", "CreateRecordChanges"),
         ("PUT /load-order", "PutLoadOrder"),
+        ("POST /build", "Build"),
+        ("POST /init", "Init"),
+        ("POST /build-configuration", "ChangeBuildConfiguration"),
+        ("POST /update-manifest", "UpdateManifest"),
+        ("POST /restore-from-manifest", "RestoreFromManifest"),
     ];
 
-    private static readonly string[] EndpointFiles = ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs"];
+    private static readonly string[] EndpointFiles = ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs", "ModEndpoints.cs", "ManifestEndpoints.cs"];
 
     private static readonly Regex CallSite = new(@"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.Compiled);
     private static readonly Regex ProblemCall = new(@"Results\.Problem\(", RegexOptions.Compiled);
@@ -44,6 +49,13 @@ public sealed class WriteRouteSeamTests
         """Results.Problem("The folder and the origin are required.", statusCode: 400)""",
         """Results.Problem("Origin is required.", statusCode: 400)""",
         """Results.Problem("At least one plugin is required.", statusCode: 400)""",
+        """Results.Problem( "Every mod needs a name and a source folder.", statusCode: 400)""",
+        """Results.Problem( "Every mod needs a name, a source folder and a folder.", statusCode: 400)""",
+        """Results.Problem("The suffix the mod manager gives an excluded file's name is required.", statusCode: 400)""",
+        """Results.Problem("The folder of the stat cache is required.", statusCode: 400)""",
+        """Results.Problem(ArchiveVariantsRequest.NotOneEach, statusCode: 400)""",
+        """Results.Problem("Every submodule needs the folder git checks it out in and the commit the instance repository pins.", statusCode: 400)""",
+        """Results.Problem( "A source folder is required, with an output, or paths to exclude or include.", statusCode: 400)""",
         """Results.Problem("Every plugin needs a name and an origin.", statusCode: 400)""",
         """Results.Problem("At least one mod is required.", statusCode: 400)""",
         """Results.Problem("Every mod needs a name.", statusCode: 400)""",
@@ -102,8 +114,8 @@ public sealed class WriteRouteSeamTests
             + "        return EndpointMapping.Refusal(null!);\n    }\n}\n",
             file =>
             {
-                Assert.Null(BlockBodyOfStaticDeclarationIn(file, "NoSuchMethod"));
-                var body = BlockBodyOfStaticDeclarationIn(file, "DirectHit");
+                Assert.Null(BodyOfStaticDeclarationIn(file, "NoSuchMethod"));
+                var body = BodyOfStaticDeclarationIn(file, "DirectHit");
                 Assert.NotNull(body);
                 Assert.Contains("EndpointMapping.", body, StringComparison.Ordinal);
                 Assert.DoesNotContain("Caller", body, StringComparison.Ordinal);
@@ -142,6 +154,29 @@ public sealed class WriteRouteSeamTests
             });
     }
 
+    [Fact]
+    public void TheScan_ReadsAnExpressionBodiedRoute()
+    {
+        WithPlantedFile(
+            "internal static class PlantedEndpoints\n{\n"
+            + "    internal static IResult HandRolled(int x) =>\n"
+            + "        Results.Problem(\"not found\", statusCode: 404);\n}\n",
+            file =>
+            {
+                Assert.False(MapsThroughSeamIn([file], "HandRolled"));
+                Assert.Single(ReachInFollowingEachHelperOnce([file], "HandRolled").SelectMany(ExtractProblemCalls));
+            });
+    }
+
+    [Fact]
+    public void TheScan_FollowsAnExpressionBodiedRouteIntoTheSeam()
+    {
+        WithPlantedFile(
+            "internal static class PlantedEndpoints\n{\n"
+            + "    internal static IResult Mapped(int x) => EndpointMapping.Refusal(null!);\n}\n",
+            file => Assert.True(MapsThroughSeamIn([file], "Mapped")));
+    }
+
     private static void WithPlantedFile(string source, Action<string> assert)
     {
         using var root = new ScratchDirectory("medit-write-route-seam-scan-");
@@ -167,7 +202,7 @@ public sealed class WriteRouteSeamTests
         void Collect(string method)
         {
             if (!visited.Add(method)) return;
-            var body = fileList.Select(file => BlockBodyOfStaticDeclarationIn(file, method)).FirstOrDefault(b => b is not null);
+            var body = fileList.Select(file => BodyOfStaticDeclarationIn(file, method)).FirstOrDefault(b => b is not null);
             if (body is null) return;
             bodies.Add(body);
 
@@ -189,9 +224,9 @@ public sealed class WriteRouteSeamTests
     private static string Normalize(string text) => WhitespaceRun.Replace(text, " ").Trim();
 
     private static string? MethodBody(string methodName) =>
-        EndpointFiles.Select(file => BlockBodyOfStaticDeclarationIn(EndpointFile(file), methodName)).FirstOrDefault(body => body is not null);
+        EndpointFiles.Select(file => BodyOfStaticDeclarationIn(EndpointFile(file), methodName)).FirstOrDefault(body => body is not null);
 
-    private static string? BlockBodyOfStaticDeclarationIn(string file, string methodName)
+    private static string? BodyOfStaticDeclarationIn(string file, string methodName)
     {
         var text = File.ReadAllText(file);
         var declaration = new Regex(
@@ -204,10 +239,24 @@ public sealed class WriteRouteSeamTests
         var parametersClose = MatchingDelimiter(text, parametersOpen, '(', ')');
         var bodyOpen = parametersClose + 1;
         while (bodyOpen < text.Length && char.IsWhiteSpace(text[bodyOpen])) bodyOpen++;
+        if (text.AsSpan(bodyOpen).StartsWith("=>"))
+            return text[bodyOpen..(EndOfExpression(text, bodyOpen) + 1)];
         if (bodyOpen >= text.Length || text[bodyOpen] != '{') return null;
 
         var bodyClose = MatchingDelimiter(text, bodyOpen, '{', '}');
         return text[bodyOpen..(bodyClose + 1)];
+    }
+
+    private static int EndOfExpression(string text, int start)
+    {
+        var depth = 0;
+        for (var i = start; i < text.Length; i++)
+        {
+            if (text[i] is '(' or '{' or '[') depth++;
+            else if (text[i] is ')' or '}' or ']') depth--;
+            else if (text[i] == ';' && depth == 0) return i;
+        }
+        throw new InvalidOperationException($"No ';' ends the expression at {start}.");
     }
 
     private static int MatchingDelimiter(string text, int openIndex, char open, char close)
