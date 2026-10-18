@@ -446,7 +446,7 @@ describe('the MO2 adapter\'s repository', () => {
         runGit('config', 'user.name', 't');
         runGit('config', 'user.email', 't@t');
         await adapter.writeIgnoreList();
-        const hosted = (name: string): string => `https://example.test/${name.toLowerCase().replace(' ', '-')}.git`;
+        const hosted = (name: string): string => `https://example.test/${encodeURIComponent(name)}.git`;
         const mods = await Promise.all(names.map((name) => sourceMod(name, name, hosted(name))));
         await adapter.writeSubmodules();
         const pinned = await Promise.all(mods.map(async (mod) => ({ mod, modRemote: await bareRepository() })));
@@ -472,7 +472,7 @@ describe('the MO2 adapter\'s repository', () => {
         return status === 0 ? undefined : stderr;
       };
 
-      const REMOTE_LACKS = /Push refused: source\/Mod A pins \w+, which https:\/\/example\.test\/mod-a\.git lacks\./;
+      const REMOTE_LACKS = /Push refused: source\/Mod A pins \w+, which https:\/\/example\.test\/Mod%20A\.git lacks\./;
 
       it('is refused, naming the remote, while the source mod was never pushed', async () => {
         const { adapter } = await pinnedSourceMod();
@@ -540,10 +540,10 @@ describe('the MO2 adapter\'s repository', () => {
         const { adapter, pinned: [first, second] } = await pinnedSourceMods(['Mod A', 'Mod B']);
         await adapter.refuseUnpublishedPins();
         git(first?.mod ?? '', 'push', '--quiet', 'origin', 'main');
-        git(second?.mod ?? '', 'push', '--quiet', first?.modRemote ?? '', 'main:refs/heads/mod-b');
+        git(second?.mod ?? '', 'push', '--quiet', first?.modRemote ?? '', 'main:refs/heads/second');
         pin();
 
-        expect(pushRefusal()).toMatch(/Push refused: source\/Mod B pins \w+, which https:\/\/example\.test\/mod-b\.git lacks\./);
+        expect(pushRefusal()).toMatch(/Push refused: source\/Mod B pins \w+, which https:\/\/example\.test\/Mod%20B\.git lacks\./);
       });
 
       it('is refused, saying so, while the source mod\'s remote cannot be reached', async () => {
@@ -553,7 +553,7 @@ describe('the MO2 adapter\'s repository', () => {
         await rm(modRemote, { recursive: true, force: true });
         pin();
 
-        expect(pushRefusal()).toMatch(/Push refused: source\/Mod A pins \w+, and https:\/\/example\.test\/mod-a\.git could not be reached to verify it\./);
+        expect(pushRefusal()).toMatch(/Push refused: source\/Mod A pins \w+, and https:\/\/example\.test\/Mod%20A\.git could not be reached to verify it\./);
       });
 
       it('writes no hook outside the repository, whatever core.hooksPath points at, and says so', async () => {
