@@ -4,9 +4,10 @@ import {
   foldPath, type FileConflictIndex, type FileWinners,
 } from './fileConflictIndex';
 import {
-  fileInFolder, isRootLevel, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
+  fileInFolder, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
   type ModFolders, type ModlistEntry, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
+import { isRootLevel } from '../tables/pluginFile';
 import { modOfOrigin } from './modOfOrigin';
 import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';

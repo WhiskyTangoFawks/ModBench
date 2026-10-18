@@ -2,7 +2,8 @@
 // disabled mod, or one no line names. The snapshot names them too (ADR-0013).
 
 import { exactPluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
-import { isPluginFile, isRootLevel, type OriginFile } from '../instanceAdapter/instanceAdapter';
+import { type OriginFile } from '../instanceAdapter/instanceAdapter';
+import { isPluginFile, isRootLevel } from '../tables/pluginFile';
 
 interface PluginOutsideLoadOrder {
   name: string;
