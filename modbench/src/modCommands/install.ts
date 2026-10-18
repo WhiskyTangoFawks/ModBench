@@ -88,9 +88,8 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
   }
 }
 
-/** `modbench.mod.install`, then a new mod's line in mod order, then the downloaded file it installed from marked installed.
- *  `lineRefusal` and `downloadedFileRefusal` say why a step after the landing failed, so a landed install is not reported as
- *  failed (downloads.md, Reporting, story 1). */
+/** `modbench.mod.install`, then a new mod's line, then its downloaded file marked installed. A refusal after the landing
+ *  says why that step failed, and the install is not reported as failed (downloads.md, Reporting, story 1). */
 export async function installMod(
   deps: { adapter: InstanceAdapter; readStatus: ReadModStatus; listMod: (name: string) => Promise<CommandResult> },
   installed: ModPackage, target: InstallTarget, force: boolean,
