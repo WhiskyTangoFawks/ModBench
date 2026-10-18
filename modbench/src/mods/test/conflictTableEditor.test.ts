@@ -22,7 +22,9 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { file, indexedValueOf, mod } from './indexedValue';
 import { CONFLICT_TABLE_READY, CONFLICT_TABLE_SHOWN, parseConflictTableShown } from '../../wire/conflictTable';
-import type { FileCopies, FileOrigin } from '../../instanceLoader/instance';
+import type { FileOrigin } from '../../instanceLoader/instance';
+import { sameCopies, type FileCopies } from '../sameCopies';
+import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const conflictTableUri = (mod: string) => vscode.Uri.from({ scheme: 'modbench-conflicts', path: `/${mod}.modbench-conflicts` });
@@ -39,8 +41,27 @@ const settings: WorkspaceSettings = {
   },
 };
 
-function setup(instance = new FakeInstance(instanceValueFixture()), selection: readonly ModlistNode[] = [], reporter = recordingReporter()) {
-  registerConflictTable(instance, vscode.Uri.file('/extension'), () => selection, reporter, settings);
+const recordingCopies = () => ({
+  asked: [] as (readonly string[])[],
+  answer: (_relativePaths: readonly string[]): Promise<FileCopies[]> => Promise.resolve([]),
+});
+let copiesDouble = recordingCopies();
+
+beforeEach(() => {
+  copiesDouble = recordingCopies();
+});
+
+type CopiesOf = Parameters<typeof registerConflictTable>[1];
+
+function setup(
+  instance = new FakeInstance(instanceValueFixture()), selection: readonly ModlistNode[] = [], reporter = recordingReporter(),
+  copiesOf: CopiesOf = (files) => {
+    const paths = files.map(({ relativePath }) => relativePath);
+    copiesDouble.asked.push(paths);
+    return copiesDouble.answer(paths);
+  },
+) {
+  registerConflictTable(instance, copiesOf, vscode.Uri.file('/extension'), () => selection, reporter, settings);
   const openConflicts = (...args: unknown[]) =>
     registerCommand.mock.calls.find(([id]) => id === 'modbench.mod.openConflicts')?.[1](...args);
   const opened = () => executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith');
@@ -128,8 +149,8 @@ function isResolvingProvider(value: unknown): value is ResolvingProvider {
   return typeof value === 'object' && value !== null && 'openCustomDocument' in value && 'resolveCustomEditor' in value;
 }
 
-function openTable(instance: FakeInstance, modName: string, reporter = recordingReporter()): FakePanel {
-  setup(instance, [], reporter);
+function openTable(instance: FakeInstance, modName: string, reporter = recordingReporter(), copiesOf?: CopiesOf): FakePanel {
+  setup(instance, [], reporter, copiesOf);
   const [viewType, provider, options] = registerCustomEditorProvider.mock.calls.at(-1) ?? [];
   expect(viewType).toBe('modbench.conflicts');
   expect(options).toEqual({ webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true } });
@@ -164,6 +185,20 @@ describe('a mod\'s conflict table, open in a tab', () => {
       ],
     })));
 
+  it('reads each copy at the path its mod holds it at, and shows what the adapter stamps', async () => {
+    const stamp = (size: bigint) => ({ size, modifiedNs: 0n, changedNs: 0n });
+    const { adapter } = fakeInstanceAdapter(readingFixture(), {
+      stamps: new Map([['/instance/High/a.dds', stamp(2048n)], ['/instance/Low/a.dds', stamp(512n)]]),
+    });
+    const panel = openTable(new FakeInstance(await shared()), 'High', recordingReporter(), (files) => sameCopies(adapter, files));
+    panel.webview.receive?.(ready);
+    await posted(panel, 1);
+
+    const [table] = shownTables(panel);
+    const row = table?.kind === 'table' ? table.rows[0] : undefined;
+    expect(row?.kind === 'file' ? row.cells.map((cell) => cell?.value) : []).toEqual(['512 B', '2 KB']);
+  });
+
   it('is titled with the mod\'s name, and loads the conflict table\'s page and its icons', async () => {
     const panel = openTable(new FakeInstance(await shared()), 'High');
 
@@ -174,7 +209,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
   it('shows the table, each cell and header in the state the which-copies answer gives, once the page is ready to hear it', async () => {
     const instance = new FakeInstance(await shared());
-    instance.copies = (paths) => Promise.resolve(paths.map((relativePath) => ({
+    copiesDouble.answer = (paths) => Promise.resolve(paths.map((relativePath) => ({
       relativePath,
       copies: [
         { origin: { kind: 'mod', name: 'High' }, kind: 'read', sameAs: 1, size: 2048n, modifiedNs: 0n },
@@ -186,7 +221,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
     panel.webview.receive?.(ready);
     await posted(panel, 1);
 
-    expect(instance.askedForCopies).toEqual([['a.dds']]);
+    expect(copiesDouble.asked).toEqual([['a.dds']]);
     expect(shownTables(panel)).toEqual([{
       kind: 'table',
       columns: [
@@ -201,8 +236,8 @@ describe('a mod\'s conflict table, open in a tab', () => {
   });
 
   describe('the cell value setting', () => {
-    const stamped = (instance: FakeInstance) => {
-      instance.copies = (paths) => Promise.resolve(paths.map((relativePath) => ({
+    const stamped = () => {
+      copiesDouble.answer = (paths) => Promise.resolve(paths.map((relativePath) => ({
         relativePath,
         copies: [
           { origin: { kind: 'mod', name: 'High' }, kind: 'read', sameAs: 1, size: 2048n, modifiedNs: 0n },
@@ -218,7 +253,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
     it.each([['unset', undefined], ['not a value it offers', 'colour']])('shows the size when the setting is %s', async (_, setting) => {
       const instance = new FakeInstance(await shared());
-      stamped(instance);
+      stamped();
       cellValueSetting = setting;
       const panel = openTable(instance, 'High');
       panel.webview.receive?.(ready);
@@ -229,7 +264,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
     it('shows the value it names, and shows again when it changes, until the tab closes', async () => {
       const instance = new FakeInstance(await shared());
-      stamped(instance);
+      stamped();
       cellValueSetting = 'contents';
       const panel = openTable(instance, 'High');
       panel.webview.receive?.(ready);
@@ -246,7 +281,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
     it('shows again for this setting only, not for another', async () => {
       const instance = new FakeInstance(await shared());
-      stamped(instance);
+      stamped();
       const panel = openTable(instance, 'High');
       panel.webview.receive?.(ready);
       await posted(panel, 1);
@@ -269,7 +304,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
     await posted(panel, 1);
 
     expect(shownTables(panel)).toEqual([{ kind: 'table', columns: [], rows: [] }]);
-    expect(instance.askedForCopies.flat()).toEqual([]);
+    expect(copiesDouble.asked.flat()).toEqual([]);
   });
 
   it('follows the disk: each new instance value shows, until the tab closes', async () => {
@@ -282,14 +317,14 @@ describe('a mod\'s conflict table, open in a tab', () => {
     instance.publish(await indexedValueOf([mod('Low')], {}));
 
     expect(shownTables(panel)).toEqual([{ kind: 'message', text: 'No file order conflicts.' }]);
-    expect(instance.askedForCopies).toHaveLength(1);
+    expect(copiesDouble.asked).toHaveLength(1);
   });
 
   it('shows the answer of the newest value only, though an older one answers last', async () => {
     const instance = new FakeInstance(await shared());
     const answers: (() => void)[] = [];
     const asked: Promise<unknown>[] = [];
-    instance.copies = (paths) => {
+    copiesDouble.answer = (paths) => {
       const answer = new Promise<FileCopies[]>((resolve) => {
         answers.push(() => resolve(paths.map((relativePath) => ({ relativePath, copies: [] }))));
       });
@@ -313,7 +348,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
   describe('a copy that cannot be read', () => {
     it('is one line in the Output, naming the copy and why, however often the disk changes', async () => {
       const instance = new FakeInstance(await shared());
-      instance.copies = unreadableHigh('in use');
+      copiesDouble.answer = unreadableHigh('in use');
       const reporter = recordingReporter();
       const panel = openTable(instance, 'High', reporter);
       panel.webview.receive?.(ready);
@@ -332,8 +367,8 @@ describe('a mod\'s conflict table, open in a tab', () => {
       const instance = new FakeInstance(await shared());
       const reporter = recordingReporter();
       const panel = openTable(instance, 'High', reporter);
-      const publishAs = async (copies: typeof instance.copies, count: number) => {
-        instance.copies = copies;
+      const publishAs = async (copies: typeof copiesDouble.answer, count: number) => {
+        copiesDouble.answer = copies;
         instance.publish(await shared());
         await posted(panel, count);
       };
@@ -353,10 +388,10 @@ describe('a mod\'s conflict table, open in a tab', () => {
       const unreadable = (...origins: FileOrigin[]) => (paths: readonly string[]) => Promise.resolve(paths.map((relativePath) => ({
         relativePath, copies: origins.map((origin) => ({ origin, kind: 'unreadable' as const, reason: 'in use' })),
       })));
-      instance.copies = unreadable({ kind: 'mod', name: 'Overwrite' });
+      copiesDouble.answer = unreadable({ kind: 'mod', name: 'Overwrite' });
       panel.webview.receive?.(ready);
       await posted(panel, 1);
-      instance.copies = unreadable({ kind: 'mod', name: 'Overwrite' }, { kind: 'runtimeOutput' });
+      copiesDouble.answer = unreadable({ kind: 'mod', name: 'Overwrite' }, { kind: 'runtimeOutput' });
 
       instance.publish(await shared());
       await posted(panel, 2);
@@ -368,7 +403,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
   describe('a which-copies request that failed', () => {
     it('is, before any table, the error row in place of it and a line in the Output, with no notification', async () => {
       const instance = new FakeInstance(await shared());
-      instance.copies = () => Promise.reject(new Error('disk gone'));
+      copiesDouble.answer = () => Promise.reject(new Error('disk gone'));
       const reporter = recordingReporter();
       const panel = openTable(instance, 'High', reporter);
 
@@ -386,11 +421,11 @@ describe('a mod\'s conflict table, open in a tab', () => {
       const panel = openTable(instance, 'High', reporter);
       panel.webview.receive?.(ready);
       await posted(panel, 1);
-      instance.copies = () => Promise.reject(new Error('disk gone'));
+      copiesDouble.answer = () => Promise.reject(new Error('disk gone'));
 
       instance.publish(await shared());
       await posted(panel, 2);
-      instance.copies = () => Promise.resolve([]);
+      copiesDouble.answer = () => Promise.resolve([]);
       instance.publish(await shared());
       await posted(panel, 3);
 
@@ -405,7 +440,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
       const instance = new FakeInstance(await shared());
       const rejections: ((reason: Error) => void)[] = [];
       const asked: Promise<unknown>[] = [];
-      instance.copies = (paths) => {
+      copiesDouble.answer = (paths) => {
         if (asked.length === 0) {
           const late = new Promise<FileCopies[]>((_, reject) => { rejections.push(reject); });
           asked.push(late);

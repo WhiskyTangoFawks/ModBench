@@ -6,6 +6,7 @@ import { reportFailure } from '../drivingLib/reportFailure';
 import { copyOfConflictCell } from '../wire/conflictTable';
 import { gestureEntry, singularArgument } from '../drivingLib/gestureEntry';
 import type { ModlistNode } from './ModListProvider';
+import { copyPathsOf } from './copiesToRead';
 
 function copyOf(
   clicked: unknown, selected: readonly ModlistNode[] | undefined, viewSelection: () => readonly ModlistNode[],
@@ -24,7 +25,7 @@ export function registerCompareFileCommand(
     if (copy === undefined) return;
     const { value } = instance;
     const winning = value.files.get(copy.path);
-    const own = value.filesByMod.get(copy.origin.name)?.find((listed) => foldPath(listed.relativePath) === foldPath(copy.path));
+    const own = copyPathsOf(value, copy.origin).get(foldPath(copy.path));
     const label = copy.origin.name;
     const message = `Failed to compare "${copy.path}".`;
     if (own === undefined) {
@@ -37,7 +38,7 @@ export function registerCompareFileCommand(
     }
     const title = `${copy.path}: ${label} ↔ ${originLabel(winning.winnerOrigin)}`;
     await reportFailure(reporter, message, async () => {
-      await vscode.commands.executeCommand('vscode.diff', vscode.Uri.file(own.sourcePath), vscode.Uri.file(winning.winner), title);
+      await vscode.commands.executeCommand('vscode.diff', vscode.Uri.file(own), vscode.Uri.file(winning.winner), title);
     });
   });
 }

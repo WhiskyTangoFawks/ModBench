@@ -107,11 +107,11 @@ const BOUND_COMMAND_BOXES = {
     toolbox: ['instanceCommands/instanceCommands', 'sourceCommands/modlistRepositoryCommands'],
     plugins: ['pluginCommands/plugins', 'pluginCommands/renamePlugin', 'sourceCommands/sourceCommands'],
 };
-/** A view reaches the Instance adapter for a rule over file names and paths alone: Mods and
- *  Downloads for an archive's, and Mods for which downloaded file a picked path is. */
+/** A view reaches the Instance adapter for a rule over file names and paths, and Mods for the
+ *  file reads open-conflicts draws it asking for. */
 /** @type {Record<string, string[]>} */
 const ADAPTER_NAMES_A_VIEW_MAY_IMPORT = {
-    mods: ['ARCHIVE_EXTENSIONS', 'defaultModName', 'defaultModNameForFolder', 'samePath'],
+    mods: ['ARCHIVE_EXTENSIONS', 'defaultModName', 'defaultModNameForFolder', 'samePath', 'FileRead', 'FileStamp', 'HashedFile', 'InstanceAdapter'],
     downloads: ['isArchiveName'],
 };
 /** @param {string} view */
@@ -125,7 +125,7 @@ const boundCommandImports = (view) => ['error', {
         {
             group: ['**/instanceAdapter/**'],
             ...(ADAPTER_NAMES_A_VIEW_MAY_IMPORT[view] ? { allowImportNames: ADAPTER_NAMES_A_VIEW_MAY_IMPORT[view] } : {}),
-            message: 'A view holds bound commands and reaches the Instance adapter for nothing but a rule over file names and paths.',
+            message: 'A view holds bound commands and reaches the Instance adapter for nothing but a rule over file names and paths, and Mods for the file reads of a conflict table.',
         },
     ],
 }];
