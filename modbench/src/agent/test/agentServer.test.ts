@@ -1099,14 +1099,20 @@ describe('the agent server, given an input its tool does not take', () => {
 });
 
 describe('the agent server, given no instance', () => {
-  it('refuses each request, saying so', async () => {
-    const client = await clientOf(undefined);
+  it('takes no port', async () => {
+    const blocker = createServer();
+    blockers.push(blocker);
+    const taken = await new Promise<number>((done) => {
+      blocker.listen(0, '127.0.0.1', () => {
+        const address = blocker.address();
+        done(typeof address === 'object' && address !== null ? address.port : 0);
+      });
+    });
 
-    for (const name of ['list_profiles', 'list_mods', 'list_plugins', 'list_downloads']) {
-      const refusal = await call(client, name);
-      expect(refusal.isError).toBe(true);
-      expect(refusal.text).toContain('no Modbench instance');
-    }
+    const { address, reporter } = await serve(undefined, taken);
+
+    expect(address).toBeUndefined();
+    expect(reporter.reports).toEqual([]);
   });
 });
 
