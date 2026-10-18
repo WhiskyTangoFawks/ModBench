@@ -1,3 +1,4 @@
+import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -46,7 +47,7 @@ async function settledWiredInstance(): Promise<{
   const root = cloneCorpusFixture();
   roots.push(root);
   const instance = new Instance({
-    window: STEADY_WINDOW,
+    gameFolderSetting: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW,
     adapter: adapterOver(root, { gameFolder: DATA_FOLDER_FOUND }),
     log: { info: () => {}, warn: () => {}, error: () => {} },
   });
@@ -86,7 +87,7 @@ describe('mod sync and the Instance, over a real mods/ folder', () => {
 async function settledFakeInstance(overrides: Partial<InstanceReading>) {
   const fake = fakeInstanceAdapter(readingFixture(overrides));
   const instance = new Instance({
-    window: STEADY_WINDOW, adapter: fake.adapter, log: { info: () => {}, warn: () => {}, error: () => {} },
+    gameFolderSetting: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, adapter: fake.adapter, log: { info: () => {}, warn: () => {}, error: () => {} },
   });
   instances.push(instance);
   const channel = channelDouble();

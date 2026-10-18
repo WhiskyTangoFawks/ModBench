@@ -3,9 +3,10 @@
 // instance.
 
 import { isAbsolute, join } from 'node:path';
-import { readDownloadDirectory } from './codecs/modOrganizerIni';
+import { readDownloadDirectory, readGameName } from './codecs/modOrganizerIni';
 import { defaultDownloadsDir } from './layout';
 import { normalizeGamePath, winePrefixDetectorFor, type GameDetectors } from './gameFolder/gameFolderResolver';
+import { gameReleaseForGame } from '../tables/gamePaths';
 import { errorMessage } from '../ports/errorMessage';
 
 const BASE_DIR_VARIABLE = '%BASE_DIR%';
@@ -28,7 +29,7 @@ export function downloadsDirectoryResolver(detectors?: GameDetectors): Downloads
     const substituted = raw.replaceAll(BASE_DIR_VARIABLE, instanceRoot);
     let normalized: string;
     try {
-      normalized = await normalizeGamePath(substituted, process.platform, winePrefixDetectorFor(iniText, detectors));
+      normalized = await normalizeGamePath(substituted, process.platform, winePrefixDetectorFor(gameReleaseForGame(readGameName(iniText)), detectors));
     } catch (err) {
       return { kind: 'unresolved', reason: `download_directory "${raw}" could not be resolved: ${errorMessage(err)}` };
     }

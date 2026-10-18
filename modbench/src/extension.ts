@@ -22,7 +22,7 @@ import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoad
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
-import { agentPort, attachPort, gameDirectoryOverrides, inheritedPythonPath, onGameDirectoryChange, onStringsLanguageChange, onTerminalEnvChange, stringsLanguage } from './workspaceConfig';
+import { agentPort, attachPort, gameFolderSetting, inheritedPythonPath, onStringsLanguageChange, onTerminalEnvChange, stringsLanguage } from './workspaceConfig';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { createModsView } from './mods/modsView';
 import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
@@ -111,10 +111,10 @@ function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened 
   return whenOpened<Opened>(openedFolder(isMo2Instance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = mo2InstanceAdapter({
-        instanceRoot, gameDirectoryOverrides, gameDirectoryChanged: onGameDirectoryChange, archives: sevenZip,
+        instanceRoot, gameFolderSetting, archives: sevenZip,
       });
       const instance = own(new Instance({
-        adapter, window: vscode.window, log: outputChannel,
+        adapter, gameFolderSetting: gameFolderSetting.id, window: vscode.window, log: outputChannel,
       }));
       return { facts: factsOf(instance), side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },

@@ -13,7 +13,7 @@ import { present } from '../ports/present';
 import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
 import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
-  GAME_FOLDER_SETTING, type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
+  type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type EntryRef, type ManagerNames, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
@@ -139,6 +139,8 @@ interface FocusWindow {
 interface InstanceOptions {
   /** The one reader of the instance; each recompute reads its settings once. */
   adapter: InstanceAdapter;
+  /** The id of the setting that names the game folder, for a game folder not yet read. */
+  gameFolderSetting: string;
   window: FocusWindow;
   log: Log;
 }
@@ -169,7 +171,7 @@ function pathsOf(
   };
 }
 
-const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>): InstanceValue => ({
+const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>, gameFolderSetting: string): InstanceValue => ({
   mods: [],
   modGroups: { ungrouped: [], groups: [] },
   modFolders: [],
@@ -190,7 +192,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>): Insta
   gameRelease: undefined,
   nexusDomainOf: nexusDomainForMetaGame,
   // Not read yet reads as not found, so a view that says not found waits for sequence 1.
-  gameFolder: { kind: 'notFound', looked: [], setting: GAME_FOLDER_SETTING },
+  gameFolder: { kind: 'notFound', looked: [], setting: gameFolderSetting },
   dataFolderPlugins: { kind: 'unresolved' },
   pluginsLoadedWithNoLine: undefined,
   loadOrderSnapshot: undefined,
@@ -227,7 +229,7 @@ export class Instance implements Subscription {
   private readonly told = new Map<NoteKind, ReadonlySet<string>>();
 
   constructor(private readonly options: InstanceOptions) {
-    this.current = emptyValue(options.adapter);
+    this.current = emptyValue(options.adapter, options.gameFolderSetting);
     this.changes = options.adapter.subscribe(() => this.schedule());
     let focused = options.window.state.focused;
     this.focus = options.window.onDidChangeWindowState((state) => {

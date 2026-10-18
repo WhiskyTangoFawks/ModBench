@@ -834,7 +834,7 @@ describe('the Plugins view\'s message line and name filter', () => {
   const notFound = (...names: string[]): InstanceValue =>
     instanceValueFixture({ plugins: names.map(loadOrderPlugin), gameFolder: GAME_FOLDER_NOT_FOUND });
   const GAME_FOLDER_MESSAGE =
-    "Game folder not found: set modbench.mods.gameDirectory. The Toolbox's Game row names each place Modbench looked.";
+    "Game folder not found: set modbench.mods.gameFolder. The Toolbox's Game row names each place Modbench looked.";
   const heldPlugin = (name: string, hasMatchingRecords: boolean): PluginMetadata => ({
     name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0,
     isImmutable: false, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, hasMatchingRecords, isCompiledPlugin: false,

@@ -44,17 +44,17 @@ const LOGS = present(process.env.MODBENCH_TEST_LOGS, 'the logs folder .vscode-te
 const root = present(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath, 'the workspace folder');
 const pluginsTxtPath = path.join(root, 'profiles', 'Default', 'plugins.txt');
 const modlistPath = path.join(root, 'profiles', 'Default', 'modlist.txt');
-function fixtureGameDirectory(): string {
-  const dir = vscode.workspace.getConfiguration('modbench').get<string>('mods.gameDirectory') ?? '';
+function fixtureGameFolder(): string {
+  const dir = vscode.workspace.getConfiguration('modbench').get<string>('mods.gameFolder') ?? '';
   if (dir === '') throw new Error('expected .vscode-test.mjs to name a game folder, so that no test reads this machine\'s own install');
   return dir;
 }
-const FIXTURE_GAME_DIRECTORY = fixtureGameDirectory();
+const FIXTURE_GAME_FOLDER = fixtureGameFolder();
 let mockBackend: http.Server;
 
-async function setGameDirectory(dir: string): Promise<void> {
+async function setGameFolder(dir: string): Promise<void> {
   await vscode.workspace.getConfiguration('modbench').update(
-    'mods.gameDirectory', dir, vscode.ConfigurationTarget.Workspace);
+    'mods.gameFolder', dir, vscode.ConfigurationTarget.Workspace);
 }
 
 function gameFolderHolding(prefix: string, plugins: readonly string[]): string {
@@ -1713,12 +1713,12 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
   before(async () => {
     original = readFileSync(pluginsTxtPath, 'utf8');
     gameDir = gameFolderHolding('medit-keys-', ['TestMod.esp', 'Other.esp']);
-    await setGameDirectory(gameDir);
+    await setGameFolder(gameDir);
   });
 
   after(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    await setGameDirectory(FIXTURE_GAME_DIRECTORY);
+    await setGameFolder(FIXTURE_GAME_FOLDER);
     writeFileSync(pluginsTxtPath, original);
     rmSync(gameDir, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
   });
@@ -1745,17 +1745,17 @@ describe('The game-directory setting reaches the Instance as a recompute', () =>
   });
 
   after(async () => {
-    await setGameDirectory(FIXTURE_GAME_DIRECTORY);
+    await setGameFolder(FIXTURE_GAME_FOLDER);
     writeFileSync(pluginsTxtPath, '');
     rmSync(providing, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
     rmSync(empty, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
   });
 
   it('lands a value plugin sync reads, with no file of the instance touched: the line the Data folder it now names does not provide goes', async () => {
-    await setGameDirectory(providing);
+    await setGameFolder(providing);
     await holdPluginsTxt('*TestMod.esp\n');
 
-    await setGameDirectory(empty);
+    await setGameFolder(empty);
 
     await waitFor('plugin sync to drop the line', () => !readFileSync(pluginsTxtPath, 'utf8').includes('TestMod.esp'));
   });
@@ -1790,12 +1790,12 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 
   before(async () => {
     gameDir = gameFolderHolding('medit-reconcile-', ['TestMod.esp', 'Second.esp']);
-    await setGameDirectory(gameDir);
+    await setGameFolder(gameDir);
     await holdPluginsTxt('*TestMod.esp\n*Second.esp\n');
   });
 
   after(async () => {
-    await setGameDirectory(FIXTURE_GAME_DIRECTORY);
+    await setGameFolder(FIXTURE_GAME_FOLDER);
     writeFileSync(pluginsTxtPath, '');
     rmSync(gameDir, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
   });

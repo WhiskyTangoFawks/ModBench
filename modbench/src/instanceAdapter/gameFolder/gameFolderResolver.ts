@@ -1,21 +1,30 @@
-// Where the game is: the setting first, then the instance's own ini, then Steam and Wine detection.
-// The user's overrides arrive from the composition root as values; nothing here reads a setting itself.
+// Where the game is: the setting first, then the game path the mod manager names, then Steam and Wine detection.
+// The setting and the manager's game path arrive as values; nothing here reads a setting or a file of the manager's.
 
 import { exec } from 'node:child_process';
 import { dirname, join, posix, win32 } from 'node:path';
 import { promisify } from 'node:util';
-import { readGameName, readGamePath, SETTINGS_FILE_NAME } from '../codecs/modOrganizerIni';
-import { gamePathInfoForRelease, gameReleaseForGame } from '../../tables/gamePaths';
+import { gamePathInfoForRelease } from '../../tables/gamePaths';
 import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths } from './gamePathDetector';
 import { documentsFolder } from './documentsFolder';
 import { factsOf } from '../files';
 import { present } from '../../ports/present';
 import { errorMessage } from '../../ports/errorMessage';
-import { GAME_FOLDER_SETTING, type GameDirectoryOverrides, type GameFolder, type GameFolderLook } from '../instanceAdapter';
+import type { GameFolder, GameFolderLook, GameFolderSetting } from '../instanceAdapter';
 
-/** Answers where the game is for one generation of ModOrganizer.ini's text — the Instance's own
+/** What the mod manager says about where the game is, read by the manager from its own configuration. */
+export interface ManagerGamePath {
+  /** The game path as the manager spells it, a Windows path under Wine; undefined when it names none. */
+  readonly path: string | undefined;
+  /** How a look names the manager's answer. */
+  readonly place: string;
+  /** The Mutagen release of the game the manager is for; undefined when it names none the tables know. */
+  readonly release: string | undefined;
+}
+
+/** Answers where the game is for one generation of the manager's configuration — the Instance's own
  *  read, so a resolution can never come from a different generation than the value it lands in. */
-export type GameFolderResolver = (iniText: string) => Promise<GameFolder>;
+export type GameFolderResolver = (managed: ManagerGamePath) => Promise<GameFolder>;
 
 type DetectWinePrefix = () => Promise<string | null>;
 
@@ -75,26 +84,19 @@ async function hasDataFolder(root: string): Promise<boolean> {
   }
 }
 
-// `undefined` when the ini names no game, names no release the tables know, or the tables hold
-// no Steam facts for it — any of which leaves autodetection nothing to go on.
-function autodetectFacts(iniText: string): GameAutodetect | undefined {
-  let release: string | undefined;
-  try {
-    release = gameReleaseForGame(readGameName(iniText));
-  } catch {
-    return undefined;
-  }
-  if (!release) return undefined;
-  const paths = gamePathInfoForRelease(release);
+// `undefined` when no release is named, or the tables hold no Steam facts for it — either leaves
+// autodetection nothing to go on.
+function autodetectFacts(release: string | undefined): GameAutodetect | undefined {
+  const paths = release === undefined ? undefined : gamePathInfoForRelease(release);
   if (!paths?.steamAppId || !paths.steamFolderName) return undefined;
   return { steamAppId: paths.steamAppId, steamFolderName: paths.steamFolderName };
 }
 
-/** The Wine prefix detector for the game the ini names — `normalizeGamePath`'s own translation,
- *  shared so a path other than `gamePath` (`download_directory`, set through the same native
+/** The Wine prefix detector for a release — `normalizeGamePath`'s own translation, shared so a
+ *  path other than the game path (the manager's downloads folder, set through the same native
  *  dialog under Wine) translates a `C:` drive the same way. */
-export function winePrefixDetectorFor(iniText: string, detectors: GameDetectors = STEAM): DetectWinePrefix {
-  const facts = autodetectFacts(iniText);
+export function winePrefixDetectorFor(release: string | undefined, detectors: GameDetectors = STEAM): DetectWinePrefix {
+  const facts = autodetectFacts(release);
   return () => (facts ? detectors.winePrefix(facts.steamAppId) : Promise.resolve(null));
 }
 
@@ -104,8 +106,6 @@ function set(value: string | undefined): string | undefined {
   return trimmed === '' ? undefined : trimmed;
 }
 
-const SETTING_PLACE = `the game folder setting, ${GAME_FOLDER_SETTING}`;
-const GAME_PATH_PLACE = `${SETTINGS_FILE_NAME}'s gamePath`;
 const STEAM_PLACE = 'the Steam install';
 const NOT_SET = 'not set';
 
@@ -115,47 +115,41 @@ const noDataFolder = (place: string, root: string): Looked =>
   ({ look: { place, answer: `${root} has no Data folder` }, fallThrough: false });
 
 // A configured folder that cannot be used refuses to fall through to Steam: resolving a different
-// game folder entirely would hide the real problem. Only an ini naming no folder falls through.
-async function iniGamePath(iniText: string, detectors: GameDetectors): Promise<Looked> {
-  let raw: string;
-  try {
-    raw = readGamePath(iniText);
-  } catch {
-    return { look: { place: GAME_PATH_PLACE, answer: NOT_SET }, fallThrough: true };
-  }
+// game folder entirely would hide the real problem. Only a manager naming no folder falls through.
+async function managerGamePath(managed: ManagerGamePath, detectors: GameDetectors): Promise<Looked> {
+  const { path: raw, place, release } = managed;
+  if (raw === undefined) return { look: { place, answer: NOT_SET }, fallThrough: true };
   let root: string;
   try {
-    root = await normalizeGamePath(raw, process.platform, winePrefixDetectorFor(iniText, detectors));
+    root = await normalizeGamePath(raw, process.platform, winePrefixDetectorFor(release, detectors));
   } catch (err) {
-    return { look: { place: GAME_PATH_PLACE, answer: errorMessage(err) }, fallThrough: false };
+    return { look: { place, answer: errorMessage(err) }, fallThrough: false };
   }
-  return (await hasDataFolder(root)) ? { found: root } : noDataFolder(GAME_PATH_PLACE, root);
+  return (await hasDataFolder(root)) ? { found: root } : noDataFolder(place, root);
 }
 
-/** The setting, then MO2's `gamePath`, then autodetect. A folder the setting or `gamePath` names
- *  that has no Data folder refuses to fall through: the user chose that folder. */
-export function gameFolderResolver(
-  overridesOf: () => GameDirectoryOverrides, detectors: GameDetectors = STEAM,
-): GameFolderResolver {
-  return async (iniText: string): Promise<GameFolder> => {
-    const facts = autodetectFacts(iniText);
+/** The setting, then the manager's game path, then autodetect. A folder the setting or the manager
+ *  names that has no Data folder refuses to fall through: the user chose that folder. */
+export function gameFolderResolver(setting: GameFolderSetting, detectors: GameDetectors = STEAM): GameFolderResolver {
+  const settingPlace = `the game folder setting, ${setting.id}`;
+  return async (managed: ManagerGamePath): Promise<GameFolder> => {
+    const facts = autodetectFacts(managed.release);
     const at = (root: string): GameFolder => ({ kind: 'found', root, dataFolder: join(root, 'Data') });
     const looked: GameFolderLook[] = [];
-    const notFound = (): GameFolder => ({ kind: 'notFound', looked, setting: GAME_FOLDER_SETTING });
+    const notFound = (): GameFolder => ({ kind: 'notFound', looked, setting: setting.id });
 
-    const explicit = set(overridesOf().gameDirectory);
+    const explicit = set(setting.value());
     if (explicit !== undefined) {
       if (await hasDataFolder(explicit)) return at(explicit);
-      looked.push({ place: SETTING_PLACE, answer: `${explicit} has no Data folder` });
+      looked.push({ place: settingPlace, answer: `${explicit} has no Data folder` });
       return notFound();
     }
-    looked.push({ place: SETTING_PLACE, answer: NOT_SET });
+    looked.push({ place: settingPlace, answer: NOT_SET });
 
-    const fromIni = await iniGamePath(iniText, detectors);
-    if ('found' in fromIni) return at(fromIni.found);
-    looked.push(fromIni.look);
-    if (!fromIni.fallThrough) return notFound();
-
+    const fromManager = await managerGamePath(managed, detectors);
+    if ('found' in fromManager) return at(fromManager.found);
+    looked.push(fromManager.look);
+    if (!fromManager.fallThrough) return notFound();
     if (!facts) {
       looked.push({ place: STEAM_PLACE, answer: 'not asked: Modbench has no Steam entry for this game' });
       return notFound();

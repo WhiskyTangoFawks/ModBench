@@ -1,3 +1,4 @@
+import { fixedGameFolderSetting } from '../../test/gameFolderSetting';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../ports/trash';
 import {
@@ -55,16 +56,16 @@ const INI = 'ModOrganizer.ini';
 const DOWNLOAD = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
 const adapterAt = (
-  instanceRoot: string, gameDirectory?: string, gameDirectoryChanged: (listener: () => void) => Subscription = () => ({ dispose: () => {} }),
+  instanceRoot: string, gameFolderSetting?: string, gameFolderSettingChanged?: (listener: () => void) => Subscription,
   archives: ArchiveReader = fakeArchiveReader([]),
 ): InstanceAdapter => mo2InstanceAdapter({
-  instanceRoot, gameDirectoryOverrides: () => ({ gameDirectory }), gameDirectoryChanged, detectors: NO_DETECTORS, archives,
+  instanceRoot, gameFolderSetting: fixedGameFolderSetting(gameFolderSetting, gameFolderSettingChanged), detectors: NO_DETECTORS, archives,
 });
 
 const watchedOver = (context: Mo2Context): ReadingSource & Pick<InstanceAdapter, 'subscribe'> =>
   ({ ...readingSource(context), subscribe: (listener) => context.watch.subscribe(listener) });
 
-const sourceAt = (instanceRoot: string, gameDirectory?: string): ReadingSource => readingSource(contextOver(instanceRoot, { gameDirectory }));
+const sourceAt = (instanceRoot: string, gameFolderSetting?: string): ReadingSource => readingSource(contextOver(instanceRoot, { gameFolderSetting }));
 
 async function installHeld(root: string, target: InstallTarget): Promise<{ extraction: string; settle: () => Promise<void> }> {
   const release = fakeArchiveReader(['New.esp']);
@@ -1214,7 +1215,7 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-game-'));
       try {
         await mkdir(join(game, 'Data'));
-        const watched = watchedOver(contextOver(root, { gameDirectory: game }));
+        const watched = watchedOver(contextOver(root, { gameFolderSetting: game }));
         watched.subscribe(() => undefined);
 
         await (await watched.settings()).gameFolder();
@@ -1231,7 +1232,7 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-ccc-'));
       try {
         await mkdir(join(game, 'Data'));
-        const watched = watchedOver(contextOver(root, { gameDirectory: game }));
+        const watched = watchedOver(contextOver(root, { gameFolderSetting: game }));
         watched.subscribe(() => undefined);
 
         await (await watched.settings()).gameFolder();

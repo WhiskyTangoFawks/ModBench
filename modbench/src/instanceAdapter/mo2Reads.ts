@@ -8,7 +8,7 @@ import { isArchiveName } from './archiveNames';
 import { parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
-import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
+import { readGameName, readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { gameReleaseForGame, loadedWithNoLineOf } from '../tables/gamePaths';
 import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from './gameFolder/dataFolder';
 import { factsOf, get, isRepository, listDir, readOrAbsent, readOrReason, stampOf } from './files';
@@ -83,6 +83,17 @@ async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile
 // The tables key each release on the game's name as `gameName=` spells it.
 const gameOf = (gameName: string) => ({ gameName, gameRelease: gameReleaseForGame(gameName) });
 
+const GAME_PATH_PLACE = `${SETTINGS_FILE_NAME}'s gamePath`;
+
+// A configuration that names no gamePath names no folder; the resolver reads that as the manager having no answer.
+function gamePathOf(iniText: string): string | undefined {
+  try {
+    return readGamePath(iniText);
+  } catch {
+    return undefined;
+  }
+}
+
 export function readingSource(context: Mo2Context): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch } = context;
   return {
@@ -95,7 +106,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
         ...game,
         // What the settings resolve is what the watch follows.
         gameFolder: async () => {
-          const gameFolder = await resolveGameFolder(iniText);
+          const gameFolder = await resolveGameFolder({ path: gamePathOf(iniText), place: GAME_PATH_PLACE, release: game.gameRelease });
           watch.follow('gameFolderPlugins', dataFolderOf(gameFolder), DATA_FOLDER_PLUGINS_GLOB);
           const creationClubList = creationClubFileOf(gameFolder, game.gameRelease);
           if (creationClubList === undefined) watch.follow('creationClubList', undefined, '');

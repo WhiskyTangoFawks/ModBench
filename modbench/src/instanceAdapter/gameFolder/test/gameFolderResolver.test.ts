@@ -3,24 +3,27 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import {
-  gameFolderResolver, normalizeGamePath, type GameDetectors,
+  gameFolderResolver, normalizeGamePath, type GameDetectors, type ManagerGamePath,
 } from '../gameFolderResolver';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import { documentsFolder } from '../documentsFolder';
-import type { GameDirectoryOverrides } from '../../instanceAdapter';
+import { fixedGameFolderSetting, GAME_FOLDER_SETTING_ID } from '../../../test/gameFolderSetting';
 
 const noDetectPrefix = () => Promise.resolve(null);
 
-const iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts = (gamePath?: string): string =>
-  `[General]\r\ngameName=Fallout 4\r\n${gamePath === undefined ? '' : `gamePath=@ByteArray(${gamePath.replaceAll('\\', '\\\\')})\r\n`}`;
+const FALLOUT_4 = 'Fallout4';
+const GAME_PATH_PLACE = "the manager's game path";
 
-const SETTING_PLACE = 'the game folder setting, modbench.mods.gameDirectory';
-const GAME_PATH_PLACE = "ModOrganizer.ini's gamePath";
+// The release is one the tables hold real Steam facts for.
+const managerNaming = (path?: string, release: string | undefined = FALLOUT_4): ManagerGamePath => ({ path, place: GAME_PATH_PLACE, release });
+const managerNamingNoRelease = (): ManagerGamePath => ({ path: undefined, place: GAME_PATH_PLACE, release: undefined });
+
+const SETTING_PLACE = `the game folder setting, ${GAME_FOLDER_SETTING_ID}`;
 const STEAM_PLACE = 'the Steam install';
 
 const resolverWith = (
-  overrides: GameDirectoryOverrides = {}, detectors: GameDetectors = NO_DETECTORS,
-) => gameFolderResolver(() => overrides, detectors);
+  settingValue?: string, detectors: GameDetectors = NO_DETECTORS,
+) => gameFolderResolver(fixedGameFolderSetting(settingValue), detectors);
 
 describe('documentsFolder', () => {
   it('reads a non-ASCII Documents path as UTF-8, having told PowerShell to write it so', async () => {
@@ -100,10 +103,10 @@ describe('the game folder resolver', () => {
     return root;
   }
 
-  it('resolves an explicit modbench.mods.gameDirectory setting directly', async () => {
+  it('resolves an explicit game folder setting directly', async () => {
     const gameRoot = await gameFolder();
 
-    const resolved = await resolverWith({ gameDirectory: gameRoot })(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts());
+    const resolved = await resolverWith(gameRoot)(managerNaming());
 
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
@@ -111,7 +114,7 @@ describe('the game folder resolver', () => {
   it('trims whitespace accidentally pasted around an explicit setting value', async () => {
     const gameRoot = await gameFolder();
 
-    const resolved = await resolverWith({ gameDirectory: `  ${gameRoot}  ` })(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts());
+    const resolved = await resolverWith(`  ${gameRoot}  `)(managerNaming());
 
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
@@ -119,64 +122,64 @@ describe('the game folder resolver', () => {
   it('reads a setting left at its empty default as unset, not as an empty path', async () => {
     const gameRoot = await gameFolder();
 
-    const resolved = await resolverWith({ gameDirectory: '   ' })(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(gameRoot));
+    const resolved = await resolverWith('   ')(managerNaming(gameRoot));
 
     expect(resolved).toMatchObject({ root: gameRoot });
   });
 
-  it('answers not found, naming only the setting, when the explicit setting has no Data/ subfolder, not falling through to the ini gamePath, which would resolve a folder the user did not name', async () => {
+  it('answers not found, naming only the setting, when the explicit setting has no Data/ subfolder, not falling through to the game path the manager names, which would resolve a folder the user did not name', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
     dirs.push(dir);
     const gameRoot = join(dir, 'Stock Game Folder');
     await mkdir(gameRoot, { recursive: true });
     const iniGameRoot = await gameFolder();
 
-    const resolved = await resolverWith({ gameDirectory: gameRoot })(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(iniGameRoot));
+    const resolved = await resolverWith(gameRoot)(managerNaming(iniGameRoot));
 
     expect(resolved).toEqual({
       kind: 'notFound',
-      setting: 'modbench.mods.gameDirectory',
+      setting: GAME_FOLDER_SETTING_ID,
       looked: [{ place: SETTING_PLACE, answer: `${gameRoot} has no Data folder` }],
     });
   });
 
-  it('falls back to the ini gamePath of the text it was handed when the setting is unset', async () => {
+  it('falls back to the game path the manager names when the setting is unset', async () => {
     const gameRoot = await gameFolder();
 
-    const resolved = await resolverWith()(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(gameRoot));
+    const resolved = await resolverWith()(managerNaming(gameRoot));
 
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) normalizes a Z:-drive ini gamePath, as MO2 under Proton writes it, to its POSIX path', async () => {
+  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) normalizes a Z:-drive game path, as a Windows manager under Proton writes it, to its POSIX path', async () => {
     const gameRoot = await gameFolder();
     const winePath = 'Z:' + gameRoot.replaceAll('/', '\\');
 
-    const resolved = await resolverWith()(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(winePath));
+    const resolved = await resolverWith()(managerNaming(winePath));
 
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  it.skipIf(process.platform === 'win32')("(Wine translates a drive letter only on Linux) normalizes a C: drive-mapped ini gamePath into the Proton prefix's drive_c", async () => {
+  it.skipIf(process.platform === 'win32')("(Wine translates a drive letter only on Linux) normalizes a C: drive-mapped game path into the Proton prefix's drive_c", async () => {
     const prefixDir = await mkdtemp(join(tmpdir(), 'medit-prefix-'));
     dirs.push(prefixDir);
     const gameRoot = join(prefixDir, 'drive_c', 'Games', 'Fallout4');
     await mkdir(join(gameRoot, 'Data'), { recursive: true });
     const detectors: GameDetectors = { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefixDir) };
 
-    const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts('C:\\Games\\Fallout4'));
+    const resolved = await resolverWith(undefined, detectors)(managerNaming('C:\\Games\\Fallout4'));
 
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) answers not found, with the reason, and does not answer with the detected folder when a C: ini path has no determinable prefix', async () => {
+  it.skipIf(process.platform === 'win32')('(Wine translates a drive letter only on Linux) answers not found, with the reason, and does not answer with the detected folder when a C: game path has no determinable prefix', async () => {
     const detectors: GameDetectors = {
       ...NO_DETECTORS,
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: () => Promise.resolve(null),
     };
 
-    const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts('C:\\Games\\Fallout4'));
+    const resolved = await resolverWith(undefined, detectors)(managerNaming('C:\\Games\\Fallout4'));
 
     expect(resolved).toMatchObject({
       kind: 'notFound',
@@ -187,22 +190,22 @@ describe('the game folder resolver', () => {
     });
   });
 
-  it('falls back to Steam autodetection when the setting and the ini gamePath are both absent', async () => {
+  it('falls back to Steam autodetection when the setting and the game path the manager names are both absent', async () => {
     const detectors: GameDetectors = {
       ...NO_DETECTORS,
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: noDetectPrefix,
     };
 
-    const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts());
+    const resolved = await resolverWith(undefined, detectors)(managerNaming());
 
     expect(resolved).toEqual({ kind: 'found', root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data' });
   });
 
   it('answers not found, naming each place looked, when nothing resolves — setting unset, no gamePath, autodetect finds nothing', async () => {
-    expect(await resolverWith()(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts())).toEqual({
+    expect(await resolverWith()(managerNaming())).toEqual({
       kind: 'notFound',
-      setting: 'modbench.mods.gameDirectory',
+      setting: GAME_FOLDER_SETTING_ID,
       looked: [
         { place: SETTING_PLACE, answer: 'not set' },
         { place: GAME_PATH_PLACE, answer: 'not set' },
@@ -211,7 +214,7 @@ describe('the game folder resolver', () => {
     });
   });
 
-  it('refuses, naming the folder, when the ini names a game folder with no Data/, rather than falling through to a Steam install', async () => {
+  it('refuses, naming the folder, when the manager names a game folder with no Data/, rather than falling through to a Steam install', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
     dirs.push(dir);
     const staleGameRoot = join(dir, 'Stale Game Folder');
@@ -222,11 +225,11 @@ describe('the game folder resolver', () => {
       winePrefix: noDetectPrefix,
     };
 
-    const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(staleGameRoot));
+    const resolved = await resolverWith(undefined, detectors)(managerNaming(staleGameRoot));
 
     expect(resolved).toEqual({
       kind: 'notFound',
-      setting: 'modbench.mods.gameDirectory',
+      setting: GAME_FOLDER_SETTING_ID,
       looked: [
         { place: SETTING_PLACE, answer: 'not set' },
         { place: GAME_PATH_PLACE, answer: `${staleGameRoot} has no Data folder` },
@@ -235,7 +238,7 @@ describe('the game folder resolver', () => {
   });
 
   it('answers not found for a game the tables hold no Steam facts for, rather than guessing a folder', async () => {
-    const unknownGame = `[General]\r\ngameName=Morrowind\r\n`;
+    const unknownGame = managerNamingNoRelease();
     let asked = false;
     const detectors: GameDetectors = {
       ...NO_DETECTORS,
@@ -243,7 +246,7 @@ describe('the game folder resolver', () => {
       winePrefix: noDetectPrefix,
     };
 
-    expect(await resolverWith({}, detectors)(unknownGame)).toMatchObject({
+    expect(await resolverWith(undefined, detectors)(unknownGame)).toMatchObject({
       kind: 'notFound',
       looked: [
         { place: SETTING_PLACE, answer: 'not set' },
@@ -263,13 +266,13 @@ describe('the game folder resolver', () => {
       winePrefix: noDetectPrefix,
     };
 
-    const resolved = await resolverWith({ gameDirectory: gameRoot }, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts());
+    const resolved = await resolverWith(gameRoot, detectors)(managerNaming());
 
     expect(resolved).toEqual({ kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') });
     expect(asked).toBe(0);
   });
 
-  it('asks Steam nothing when the ini gamePath answers the root', async () => {
+  it('asks Steam nothing when the game path the manager names answers the root', async () => {
     const gameRoot = await gameFolder();
     let asked = 0;
     const detectors: GameDetectors = {
@@ -278,7 +281,7 @@ describe('the game folder resolver', () => {
       winePrefix: noDetectPrefix,
     };
 
-    const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(gameRoot));
+    const resolved = await resolverWith(undefined, detectors)(managerNaming(gameRoot));
 
     expect(resolved).toEqual({ kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') });
     expect(asked).toBe(0);

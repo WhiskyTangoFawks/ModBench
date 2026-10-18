@@ -1,3 +1,4 @@
+import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -71,7 +72,7 @@ describe('a rename while a recompute is reading', () => {
       },
     };
     instance = new Instance({
-      window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} },
+      gameFolderSetting: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} },
       adapter: { ...writer, reading: () => readInstance(holdingSource) },
     });
     const { pluginSync } = instanceSyncs({
