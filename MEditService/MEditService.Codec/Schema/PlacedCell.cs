@@ -47,7 +47,7 @@ public static class PlacedCell
     /// <summary>The grid cell a placed record's position falls in, or null when it has no position.</summary>
     public static (int X, int Y)? GridHolding(Document placed, GameRelease release)
     {
-        var width = SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth;
+        var width = GameCodecs.For(release).Annotations.ExteriorCellWidth;
         return Components(placed.StringAt(PositionPath(release))) is [var x, var y, _]
             ? ((int)Math.Floor(x / width), (int)Math.Floor(y / width))
             : null;
@@ -59,7 +59,7 @@ public static class PlacedCell
     {
         if (group == PersistentFlag.PersistentGroup) return placed.With(PersistentFlag.Bit, RecordHeaderFlags.Member);
         if (group != PersistentFlag.TemporaryGroup || cell.Grid is not (int x, int y)) return placed;
-        var width = SchemaAnnotations.For(release.ToCategory()).ExteriorCellWidth;
+        var width = GameCodecs.For(release).Annotations.ExteriorCellWidth;
         var position = ReflectedTypes.VectorText(new { X = (x + 0.5f) * width, Y = (y + 0.5f) * width, Z = 0f });
         return placed.Edited(root => PositionHolding(root, release)[PositionMember] = position);
     }

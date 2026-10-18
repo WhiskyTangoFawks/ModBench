@@ -1,5 +1,6 @@
 using System.IO.Abstractions;
 using System.Reflection;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
@@ -26,8 +27,9 @@ internal sealed class GameCodec : IGameCodec
 
     public Assembly GeneratedSerializers => typeof(GameCodec).Assembly;
 
-    public SiblingsInUseRows SiblingsInUse =>
-        GameSpecifics.SiblingsInUse;
+    public SchemaAnnotations Annotations => GameAnnotations.Table;
+
+    public int BlueprintFlag => GameSpecifics.BlueprintFlag;
 
     public CreationKitShapes CreationKitShapes => GameSpecifics.CreationKitShapes;
 
