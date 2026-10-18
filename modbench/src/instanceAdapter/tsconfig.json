@@ -7,7 +7,8 @@
   "references": [
     { "path": "../loadOrderFileCodec" },
     { "path": "../ports" },
-    { "path": "../tables" }
+    { "path": "../tables" },
+    { "path": "../wire" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

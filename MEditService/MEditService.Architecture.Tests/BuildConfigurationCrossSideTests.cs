@@ -15,7 +15,7 @@ public sealed class BuildConfigurationCrossSideTests
         new(@"(?:export )?const BUILD_OUTPUT_KEY = '([^']+)';", RegexOptions.Compiled);
 
     private static readonly string Root = ServiceProjects.SolutionDirectory();
-    private static readonly string FrontendLayout = Path.Combine(Root, "..", "modbench", "src", "instanceAdapter", "layout.ts");
+    private static readonly string FrontendLayout = Path.Combine(Root, "..", "modbench", "src", "wire", "sourceMod.ts");
 
     [Fact]
     public void TheBackendAndFrontendFileNames_Agree() =>
@@ -34,7 +34,7 @@ public sealed class BuildConfigurationCrossSideTests
     {
         using var dir = new ScratchDirectory("medit-build-configuration-cross-side-");
         var backendFile = Path.Combine(dir, "BuildConfiguration.cs");
-        var frontendFile = Path.Combine(dir, "layout.ts");
+        var frontendFile = Path.Combine(dir, "sourceMod.ts");
         File.WriteAllText(backendFile, "private const string OutputKey = \"output\";");
         File.WriteAllText(frontendFile, "export const BUILD_OUTPUT_KEY = 'outputFolder';");
 
