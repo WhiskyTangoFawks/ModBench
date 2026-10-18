@@ -65,14 +65,14 @@ export async function folderHolding(context: Mo2Context, entry: EntryRef): Promi
   return all === undefined ? undefined : modFoldersOf(all).holding(entry);
 }
 
-/** The folder of the mod `name`, found as MO2 finds it, without case; a folder of exactly that name wins. Where no folder
- *  is there, the folder the name would give it; `undefined` when the name gives none. */
+/** The folder of the mod `name`, in the spelling it has on disk: a folder of exactly that name wins, else one MO2 finds
+ *  without case. Where no folder is there, the folder the name would give it; `undefined` when the name gives none. */
 export async function modFolderNamed({ instanceRoot }: Mo2Context, name: string): Promise<string | undefined> {
   const exact = entryDir(instanceRoot, { kind: 'mod', name });
-  if (exact === undefined || await exists(exact)) return exact;
+  if (exact === undefined) return undefined;
   const key = entryKey({ kind: 'mod', name });
   const folders = await readOrAbsent(() => listFolders(modsDir(instanceRoot), ignoreSkippedLink), []);
-  const found = folders.find((folder) => entryKey({ kind: 'mod', name: folder }) === key);
+  const found = folders.find((folder) => folder === name) ?? folders.find((folder) => entryKey({ kind: 'mod', name: folder }) === key);
   return found === undefined ? exact : modDir(instanceRoot, found);
 }
 

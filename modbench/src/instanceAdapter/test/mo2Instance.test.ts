@@ -627,7 +627,7 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    it.skipIf(process.platform === 'win32')('(Windows folds case itself) answers the meta and the files of a mod whose folder differs from its name only in case', async () => {
+    it('answers the meta and the files of a mod whose folder differs from its name only in case', async () => {
       await mkdir(join(root, 'mods', 'FOO'));
       await writeFile(join(root, 'mods', 'FOO', 'meta.ini'), '[General]\r\nversion=3.0\r\n');
       await writeFile(join(root, 'mods', 'FOO', 'Foo.esp'), '');

@@ -93,7 +93,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       expect(await adapter.originHoldsPlugin(ORIGIN, 'Renamed Patch.esp')).toBe(false);
     });
 
-    it.skipIf(process.platform === 'win32')('(Windows folds case itself) finds the folder of a mod named in another case', async () => {
+    it('finds the folder of a mod named in another case', async () => {
       expect(await adapter.originHoldsPlugin({ kind: 'mod', name: 'patch mod' }, 'Patch Mod.esp')).toBe(true);
     });
 
