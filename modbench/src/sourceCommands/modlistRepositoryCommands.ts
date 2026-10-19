@@ -370,8 +370,8 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
 
   return {
     /** Makes the repository and its ignore list, and writes no manifest. Refused when the instance folder holds one already. */
-    gitInit: async ({ holdsRepository }: { readonly holdsRepository: boolean }): Promise<CommandResult<object>> => {
-      if (holdsRepository || await adapter.repositoryOnDisk()) return { applied: false, refusal: `${instanceRoot} already holds a repository.` };
+    gitInit: async (): Promise<CommandResult<object>> => {
+      if (await adapter.repositoryOnDisk()) return { applied: false, refusal: `${instanceRoot} already holds a repository.` };
       try {
         await adapter.checkPushRefusalFree();
         await adapter.writeIgnoreList();

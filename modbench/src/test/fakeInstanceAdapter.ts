@@ -176,6 +176,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return readingFailure === undefined ? Promise.resolve(current) : Promise.reject(new Error(readingFailure));
     },
     activeProfile: () => Promise.resolve(current.profile),
+    gameRelease: () => Promise.resolve(current.gameRelease),
     profiles: () => unreadable('profiles', current.profiles),
     modOrder: () => unreadable('modOrder', { mods: current.mods, modFolders: current.modFolders?.all }),
     downloadedFiles: () => unreadable('downloadedFiles', current.downloadedFiles),

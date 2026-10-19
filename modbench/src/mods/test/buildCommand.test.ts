@@ -33,7 +33,7 @@ describe('modbench.mod.build', () => {
   const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
     ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [], overwritten: [] });
-  const builds: [readonly string[], string | undefined][] = [];
+  const builds: (readonly string[])[] = [];
   beforeEach(() => { builds.length = 0; });
 
   function row(plugin: { name: string; origin: string }): PluginRowStandIn {
@@ -45,16 +45,15 @@ describe('modbench.mod.build', () => {
     const diagnostics = new FakeDiagnosticCollection();
     registerBuildCommand({
       commands: {
-        build: (mods, gameRelease, sourceDirs) => {
+        build: (mods) => {
           progressSteps.push('build');
-          builds.push([mods, gameRelease]);
-          expect(sourceDirs).toBe(SOURCE_DIRS);
+          builds.push(mods);
           return client.build([], { excludedSuffix: '', archives: null, statCache: '' });
         },
       },
-      instance: instanceThatReads, gameRelease: () => 'Fallout4',
+      instance: instanceThatReads,
       reporter, problems: new BuildProblems(diagnostics),
-      modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()), sourceDirs: () => SOURCE_DIRS, pluginsView: 'modbench.pluginListTree',
+      modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()), sourceModNames: () => SOURCE_DIRS.keys(), pluginsView: 'modbench.pluginListTree',
       sourceFiles: (origin) => sourceFiles(FILES, origin),
       saveUnsaved: (mod) => {
         const files = sourceFiles(FILES, mod);
@@ -70,7 +69,7 @@ describe('modbench.mod.build', () => {
     };
   }
 
-  const buildCalls = () => builds.map(([mods]) => [mods]);
+  const buildCalls = () => builds.map((mods) => [mods]);
 
   it('on a Mods row, builds the mod, and the Mods view\'s progress bar closes once the Instance loader has read again, and lands once', async () => {
     const client = new InMemoryMEditClient();
@@ -79,7 +78,7 @@ describe('modbench.mod.build', () => {
 
     await handler(new ModsRowStandIn('ModA'));
 
-    expect(builds).toEqual([[['ModA'], 'Fallout4']]);
+    expect(builds).toEqual([['ModA']]);
     expect(progressSteps).toEqual([
       `save ${normalize('/instance/source/ModA')}`, 'progress opens on modbench.modList', 'build', 'Instance loader: read every file again', 'progress closes',
     ]);
@@ -430,7 +429,7 @@ describe('modbench.mod.build', () => {
 
       const answered = await handler(calling('ModA'));
 
-      expect(builds).toEqual([[['ModA'], 'Fallout4']]);
+      expect(builds).toEqual([['ModA']]);
       expect(answered).toEqual({ applied: true, outcome, partial: [] });
       expect(progressSteps).toContain('progress opens on modbench.modList');
       expect(showQuickPick).not.toHaveBeenCalled();
@@ -446,7 +445,7 @@ describe('modbench.mod.build', () => {
 
       const answered = await handler(calling('ModA', 'ModC'));
 
-      expect(builds).toEqual([[['ModA', 'ModC'], 'Fallout4']]);
+      expect(builds).toEqual([['ModA', 'ModC']]);
       expect(answered).toMatchObject({ applied: true, outcome: { refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] } });
     });
 
