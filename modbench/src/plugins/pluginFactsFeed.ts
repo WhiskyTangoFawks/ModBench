@@ -87,7 +87,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     const generation = ++this.generation;
     const plugins = await this.readPlugins();
     if (generation !== this.generation) return undefined;
-    if ('failure' in plugins) return this.metadataFailed(plugins.failure);
+    if ('failure' in plugins) return this.factsFailed(plugins.failure);
     this.facts.reconciled(plugins, failures);
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer.
@@ -105,7 +105,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     const refresh = ++this.refreshes;
     const plugins = await this.readPlugins();
     if (generation !== this.generation || refresh !== this.refreshes) return;
-    if ('failure' in plugins) return this.metadataFailed(plugins.failure);
+    if ('failure' in plugins) return this.factsFailed(plugins.failure);
     this.facts.refreshed(plugins);
     this.changed.fire();
   }
@@ -128,8 +128,8 @@ export class PluginFactsFeed implements vscode.Disposable {
     }
   }
 
-  private metadataFailed(reason: string): undefined {
-    this.facts.metadataFailed(reason);
+  private factsFailed(reason: string): undefined {
+    this.facts.factsFailed(reason);
     this.changed.fire();
     return undefined;
   }

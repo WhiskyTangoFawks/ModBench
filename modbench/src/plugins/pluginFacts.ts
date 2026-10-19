@@ -116,7 +116,7 @@ export class PluginFacts {
   private indexFailure?: string;
   private noMatchAnywhere = false;
   private laterFailures = new Map<string, string>();
-  private readonly metadataRead: FactsRead = { what: "mEdit's facts about each plugin", answered: false };
+  private readonly factsRead: FactsRead = { what: "mEdit's facts about each plugin", answered: false };
   private readonly scanRead: FactsRead = { what: 'the malformed-plugin scan', answered: false };
 
   /** A progressive reconcile's tick. */
@@ -156,7 +156,7 @@ export class PluginFacts {
   /** The facts alone, leaving which plugins are held as they are. No `missingMasters` means not
    *  yet checked, so the last answer stays until one lands. */
   refreshed(plugins: readonly PluginMetadata[]): void {
-    answered(this.metadataRead);
+    answered(this.factsRead);
     const reads = new ByPluginAddress<PluginRead>();
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
@@ -179,9 +179,9 @@ export class PluginFacts {
 
   /** mEdit's facts about each plugin could not be read: a row not held expands to the error row
    *  naming why, and the last answer stays. */
-  metadataFailed(reason: string): void {
+  factsFailed(reason: string): void {
     this.unreachable(reason);
-    this.metadataRead.failure = reason;
+    this.factsRead.failure = reason;
   }
 
   /** The malformed-plugin scan's answer, replacing the last. */
@@ -234,7 +234,7 @@ export class PluginFacts {
   /** The message line's part for every read that failed, the instance's own among them
    *  (common.md, States, stories 2 and 6). */
   readFailureMessage(instanceReadFailure?: string): string | undefined {
-    const failed = [this.metadataRead, this.scanRead].filter((read) => read.failure !== undefined);
+    const failed = [this.factsRead, this.scanRead].filter((read) => read.failure !== undefined);
     const said = (read: FactsRead) => `${read.what}: ${read.failure}`;
     const lastGood = [instanceReadFailure, ...this.laterFailures.values(), ...failed.filter((read) => read.answered).map(said)]
       .filter((reason) => reason !== undefined);

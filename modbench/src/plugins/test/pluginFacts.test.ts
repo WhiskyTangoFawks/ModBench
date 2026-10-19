@@ -452,7 +452,7 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
 
   describe.each([
     ['the malformed-plugin scan', (facts: PluginFacts) => facts.diagnosed([]), (facts: PluginFacts) => facts.scanFailed('503')],
-    ["mEdit's facts about each plugin", (facts: PluginFacts) => facts.refreshed([]), (facts: PluginFacts) => facts.metadataFailed('503')],
+    ["mEdit's facts about each plugin", (facts: PluginFacts) => facts.refreshed([]), (facts: PluginFacts) => facts.factsFailed('503')],
   ] as const)('%s', (read, answer, fail) => {
     it('says it failed to load when it failed before any answered', () => {
       const facts = new PluginFacts();
