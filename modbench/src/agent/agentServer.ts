@@ -102,7 +102,7 @@ function mcpServerOf({ instance, mEdit, terminalEnvironment, readStatus, log }: 
   register(server, log, standing, READ_RECORD, (args) => READ_RECORD.of(mEdit, currentValue(instance), args));
   register(server, log, standing, LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
   register(server, log, standing, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
-  for (const gesture of GESTURE_TOOLS) register(server, log, standing, gesture, (args) => gesture.of(currentValue(instance), mEdit, args));
+  for (const gesture of GESTURE_TOOLS) register(server, log, standing, gesture, (args) => gesture.of(currentValue(instance), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
   register(server, log, standing, { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
   register(server, log, standing, { ...SOURCE_PROBLEMS, input: NO_INPUT }, SOURCE_PROBLEMS.of);
   return server;

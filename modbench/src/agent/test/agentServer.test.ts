@@ -119,12 +119,6 @@ describe('the agent server, given an instance value', () => {
     expect(untyped).toEqual([]);
   });
 
-  it('advertises the options of install as required, since a call needs the name of a new mod or the target to upgrade', async () => {
-    const { tools } = await (await clientOf(new FakeInstance(VALUE))).listTools();
-
-    expect(tools.find((tool) => tool.name === 'mod_install')?.inputSchema.required).toEqual(['argument', 'options']);
-  });
-
   it('hands the client its instructions on initialize', async () => {
     const client = await clientOf(new FakeInstance(VALUE));
 
@@ -657,7 +651,7 @@ describe('the agent server, running a gesture', () => {
     expect(answer).toEqual({ isError: false, text: JSON.stringify({ landed: ['A', 'Textures'], refused: [] }) });
   });
 
-  it('refuses in part with the whole outcome, what landed and what was refused and why, in the Output and in no notification', async () => {
+  it('refuses in part, answering what landed and what was refused and why, in the Output and in no notification', async () => {
     fired.outcome = { applied: true, outcome: { landed: ['A'], refused: [{ item: 'B', reason: 'Mod not found in modlist: B' }] } };
     const { client, lines, reporter } = await served();
 
@@ -680,7 +674,7 @@ describe('the agent server, running a gesture', () => {
     expect(errored).toEqual(['[agent] mod_enable: disk gone']);
   });
 
-  it('refuses in whole with the outcome, which holds the command\'s refusal', async () => {
+  it('refuses in whole, answering the command\'s refusal', async () => {
     fired.outcome = { applied: false, refusal: 'ENOENT: modlist.txt' };
     const { client, lines } = await served();
 
@@ -873,13 +867,13 @@ describe('the agent server, running a gesture', () => {
       expect(fired.calls).toEqual([]);
     });
 
-    it('logs the parts of a landed gesture that failed, though it landed', async () => {
+    it('logs the parts of a landed gesture that failed in the Output, and answers it as landed', async () => {
       fired.outcome = { applied: true, outcome: { landed: ['Bee'], refused: [] }, partial: [{ message: '"B" was renamed, but a line could not be renamed.', detail: 'disk full', severity: 'warning' }] };
       const { client, lines } = await served();
 
       const answer = await call(client, 'mod_rename', { argument: [{ name: 'B' }], options: { name: 'Bee' } });
 
-      expect(answer.isError).toBe(true);
+      expect(answer.isError).toBe(false);
       expect(lines.join('\n')).toContain('"B" was renamed, but a line could not be renamed. disk full');
     });
 
@@ -1006,6 +1000,12 @@ describe('the agent server, running a gesture', () => {
       await fire('mod_install', { argument: [outside], options: { target: 'B' } });
 
       expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], { target: 'B' })]]);
+    });
+
+    it('fires install with no Options when the call leaves out options, for the command to refuse naming them', async () => {
+      await fire('mod_install', { argument: [outside] });
+
+      expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], {})]]);
     });
 
     it('fires install with force as an Option', async () => {
