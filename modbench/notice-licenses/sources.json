@@ -1,7 +1,7 @@
 {
   "Apache-2.0-Serilog.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/serilog/serilog/v4.3.0/LICENSE"
+      "https://raw.githubusercontent.com/serilog/serilog/726e29c5b172aa8813285be1ad8cc728fd531eab/LICENSE"
     ],
     "packages": {
       "Serilog": "4.3.0",
@@ -17,9 +17,9 @@
   },
   "GPL-3.0-Mutagen.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/Mutagen-Modding/Mutagen/main/LICENSE.txt",
-      "https://raw.githubusercontent.com/Noggog/Loqui/master/LICENSE.txt",
-      "https://raw.githubusercontent.com/Noggog/CSharpExt/master/LICENSE.txt"
+      "https://raw.githubusercontent.com/Mutagen-Modding/Mutagen/414371eedc94a3e0c28f082180e0492df67ab8ca/LICENSE.txt",
+      "https://raw.githubusercontent.com/Noggog/Loqui/da23e9867105c91e855edf791a35386ef038f063/LICENSE.txt",
+      "https://raw.githubusercontent.com/Noggog/CSharpExt/dc1558f85e7595bdbae20a18a57905c3a07add9d/LICENSE.txt"
     ],
     "packages": {
       "Loqui": "3.7.0",
@@ -33,8 +33,8 @@
   },
   "GPL-3.0-GameFinder.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/erri120/GameFinder/master/LICENSE",
-      "https://raw.githubusercontent.com/Mutagen-Modding/Mutagen.Bethesda.Serialization/main/LICENSE.txt"
+      "https://raw.githubusercontent.com/erri120/GameFinder/efa23bd6d02ec07aa9fb1abe1025efafe3190d9f/LICENSE",
+      "https://raw.githubusercontent.com/Mutagen-Modding/Mutagen.Bethesda.Serialization/427a683037bdbb9e3c607bf29257b809703833e6/LICENSE.txt"
     ],
     "packages": {
       "GameFinder.Common": "4.9.0",
@@ -49,7 +49,7 @@
   },
   "GPL-3.0-NexusMods.Paths.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/Nexus-Mods/NexusMods.Paths/master/LICENSE.md"
+      "https://raw.githubusercontent.com/Nexus-Mods/NexusMods.Paths/99b62efd5af88b83a0bc9eba8b3607afe802bbed/LICENSE.md"
     ],
     "packages": {
       "NexusMods.Paths": "0.19.1"
@@ -57,7 +57,7 @@
   },
   "MIT-FluentResults.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/altmann/FluentResults/master/LICENSE"
+      "https://raw.githubusercontent.com/altmann/FluentResults/8b675de7e8b6e4c0921e95138c99e15fd52cde40/LICENSE"
     ],
     "packages": {
       "FluentResults": "3.15.2"
@@ -65,32 +65,15 @@
   },
   "MIT-ini-parser.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/rickyah/ini-parser/master/LICENSE"
+      "https://raw.githubusercontent.com/rickyah/ini-parser/c4dbf0eed984b0d57841bd6288040a2d5250e66e/LICENSE"
     ],
     "packages": {
       "ini-parser-netstandard": "2.5.3"
     }
   },
-  "MIT-K4os.Compression.LZ4.txt": {
-    "sources": [
-      "https://raw.githubusercontent.com/MiloszKrajewski/K4os.Compression.LZ4/master/LICENSE"
-    ],
-    "packages": {
-      "K4os.Compression.LZ4": "1.3.8",
-      "K4os.Compression.LZ4.Streams": "1.3.8"
-    }
-  },
-  "MIT-K4os.Hash.xxHash.txt": {
-    "sources": [
-      "https://raw.githubusercontent.com/MiloszKrajewski/K4os.Hash.xxHash/master/LICENSE"
-    ],
-    "packages": {
-      "K4os.Hash.xxHash": "1.0.8"
-    }
-  },
   "MIT-Microsoft.OpenApi.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/microsoft/OpenAPI.NET/main/LICENSE"
+      "https://raw.githubusercontent.com/microsoft/OpenAPI.NET/99fc3f830ca7a8e95f9db48babdf06118ecfa50f/LICENSE"
     ],
     "packages": {
       "Microsoft.OpenApi": "2.7.5"
@@ -98,7 +81,7 @@
   },
   "MIT-OneOf.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/mcintyre321/OneOf/master/licence.md"
+      "https://raw.githubusercontent.com/mcintyre321/OneOf/6e02dbe75d0f20f198c640d4c04190a85c5ac9e6/licence.md"
     ],
     "packages": {
       "OneOf": "3.0.271"
@@ -106,7 +89,7 @@
   },
   "MIT-SharpCompress.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/adamhathcock/sharpcompress/0.50.5/LICENSE.txt"
+      "https://raw.githubusercontent.com/adamhathcock/sharpcompress/e4193af83b6ec8bdd5fb4f6ebffc2315dd3fc626/LICENSE.txt"
     ],
     "packages": {
       "SharpCompress": "0.50.5"
@@ -114,7 +97,7 @@
   },
   "MIT-SharpZipLib.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/icsharpcode/SharpZipLib/v1.4.2/LICENSE.txt"
+      "https://raw.githubusercontent.com/icsharpcode/SharpZipLib/33f64eb0f28cdd2b084cb822fcc224c7c5aba553/LICENSE.txt"
     ],
     "packages": {
       "SharpZipLib": "1.4.2"
@@ -122,7 +105,7 @@
   },
   "MIT-StrongInject.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/YairHalberstadt/stronginject/master/LICENSE"
+      "https://raw.githubusercontent.com/YairHalberstadt/stronginject/6f3077c68b1ebd9c56663456efb67ef90886942e/LICENSE"
     ],
     "packages": {
       "StrongInject": "1.4.4"
@@ -130,7 +113,7 @@
   },
   "MIT-Swashbuckle.AspNetCore.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/domaindrivendev/Swashbuckle.AspNetCore/v10.2.3/LICENSE"
+      "https://raw.githubusercontent.com/domaindrivendev/Swashbuckle.AspNetCore/adec6ea0e77aaa31a8dcc1e8574865ad3ee8626b/LICENSE"
     ],
     "packages": {
       "Swashbuckle.AspNetCore": "10.2.3",
@@ -141,7 +124,7 @@
   },
   "MIT-System.Data.HashFunction.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/brandondahler/Data.HashFunction/master/LICENSE"
+      "https://raw.githubusercontent.com/brandondahler/Data.HashFunction/v2.0/LICENSE"
     ],
     "packages": {
       "System.Data.HashFunction.Core": "2.0.0",
@@ -151,7 +134,7 @@
   },
   "MIT-System.IO.Abstractions.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/TestableIO/System.IO.Abstractions/main/LICENSE"
+      "https://raw.githubusercontent.com/TestableIO/System.IO.Abstractions/a091ac7f9655f61aeaeb28baf452c1a96c546ba8/LICENSE"
     ],
     "packages": {
       "System.IO.Abstractions": "22.1.1",
@@ -161,7 +144,7 @@
   },
   "MIT-System.Reactive.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/dotnet/reactive/main/LICENSE"
+      "https://raw.githubusercontent.com/dotnet/reactive/f4da16f15a3cde97f178396ea6e3489cc893651f/LICENSE"
     ],
     "packages": {
       "System.Reactive": "6.1.0"
@@ -169,7 +152,7 @@
   },
   "MIT-Testably.Abstractions.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/Testably/Testably.Abstractions/main/LICENSE"
+      "https://raw.githubusercontent.com/Testably/Testably.Abstractions/1253c6bd6309cb15623fac09bd841e782bbca626/LICENSE"
     ],
     "packages": {
       "Testably.Abstractions.FileSystem.Interface": "10.1.0"
@@ -177,7 +160,7 @@
   },
   "MIT-TransparentValueObjects.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/erri120/TransparentValueObjects/master/LICENSE"
+      "https://raw.githubusercontent.com/erri120/TransparentValueObjects/ff32127019b0f53480f5e9c1867924b14138999c/LICENSE"
     ],
     "packages": {
       "TransparentValueObjects.Abstractions": "1.1.0"
@@ -185,10 +168,21 @@
   },
   "MIT-ValveKeyValue.txt": {
     "sources": [
-      "https://raw.githubusercontent.com/ValveResourceFormat/ValveKeyValue/master/LICENSE"
+      "https://raw.githubusercontent.com/ValveResourceFormat/ValveKeyValue/c7d0dcce45a32123e376c30c6fb9a016d6ebf294/LICENSE"
     ],
     "packages": {
       "ValveKeyValue": "0.13.1.398"
+    }
+  },
+  "MIT-K4os.txt": {
+    "sources": [
+      "https://raw.githubusercontent.com/MiloszKrajewski/K4os.Compression.LZ4/1.3.8/LICENSE",
+      "https://raw.githubusercontent.com/MiloszKrajewski/K4os.Hash.xxHash/1.0.8/LICENSE"
+    ],
+    "packages": {
+      "K4os.Compression.LZ4": "1.3.8",
+      "K4os.Compression.LZ4.Streams": "1.3.8",
+      "K4os.Hash.xxHash": "1.0.8"
     }
   }
 }
