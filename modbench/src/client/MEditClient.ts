@@ -101,7 +101,7 @@ export interface UnsavedDocument { path: string; text: string }
 
 /** What a gesture changes in plugin source, by absolute path: each move, then each deletion of a file or folder, then
  *  each document's text once moved. */
-export type SourceChanges = Pick<components['schemas']['RecordEditChangesResponse'], 'moves' | 'deletions' | 'documents'>;
+export type SourceChanges = Pick<components['schemas']['EditRecordChanges'], 'moves' | 'deletions' | 'documents'>;
 
 // What deleting one record changes in plugin source.
 type RecordDeleteChanges = SourceChanges & { record: RecordAddress };
@@ -297,7 +297,7 @@ export type GridPosition = components['schemas']['GridPosition'];
 export type RecordAddress = components['schemas']['RecordAddress'];
 /** Copy's mode Option (commands.md, Record, `copy`). */
 export type CopyMode = components['schemas']['CopyMode'];
-type CopyChanges = components['schemas']['RecordCopyChanges'];
+type CopyChanges = components['schemas']['RecordCopied'];
 /** One record into one destination: the unit a copy lands or is refused by. */
 export type CopyItem = Pick<CopyChanges, 'record' | 'destination'>;
 
