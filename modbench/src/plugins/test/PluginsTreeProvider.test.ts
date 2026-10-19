@@ -97,7 +97,7 @@ function held(name: string, overrides: Partial<PluginMetadata> = {}): PluginMeta
     recordCount: 0,
     isImmutable: false,
     origin: 'SomeMod',
-    masterIssues: [],
+    missingMasters: [],
     inLoadOrder: true,
     hasMatchingRecords: true,
     isCompiledPlugin: false,
@@ -1396,7 +1396,7 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
 
   it('leaves the row set and each row\'s status alone — the tree does not change shape', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
-    await reconcile(h, [held('A.esp'), held('B.esp', { masterIssues: ['C.esp'] })]);
+    await reconcile(h, [held('A.esp'), held('B.esp', { missingMasters: ['C.esp'] })]);
     const before = await h.tree.getChildren();
     const statusBefore = h.tree.getTreeItem(present(before[1], "B.esp's row")).description;
 
@@ -1562,7 +1562,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp', {
       hasMatchingRecords: false,
-      masterIssues: ['Ghost.esm'],
+      missingMasters: ['Ghost.esm'],
     })]);
 
     expect(await h.tree.getChildren()).toEqual([]);
@@ -1978,7 +1978,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
 });
 
 describe('PluginsTreeProvider — master-issue decoration', () => {
-  const withIssues = (h: Harness, issues: string[] | null) => reconcile(h, [held('A.esp', { masterIssues: issues })]);
+  const withIssues = (h: Harness, issues: string[] | null) => reconcile(h, [held('A.esp', { missingMasters: issues })]);
 
   it('flags a row with a master that is not active, in the Problems panel\'s red', async () => {
     const h = makeTree([A_ROW()]);
@@ -2152,8 +2152,8 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
   it('badges the row from its own plugin master issues, not the other plugin', async () => {
     const h = makeTree([SHARED_ROW()]);
     await reconcile(h, [
-      held('Shared.esp', { origin: 'ModA', masterIssues: ['AMaster.esm'] }),
-      held('Shared.esp', { origin: 'ModB', masterIssues: ['BMaster.esm'] }),
+      held('Shared.esp', { origin: 'ModA', missingMasters: ['AMaster.esm'] }),
+      held('Shared.esp', { origin: 'ModB', missingMasters: ['BMaster.esm'] }),
     ]);
 
     const tooltip = tooltipAsString((await rowItem(h)).tooltip);
