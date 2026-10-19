@@ -6,8 +6,18 @@ const LICENSE_FILE = /^(licen[cs]e|third-party-notices|notice)/i;
 
 function licenseTexts(dir) {
   return readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && LICENSE_FILE.test(entry.name))
-    .map((entry) => readFileSync(join(dir, entry.name), 'utf8').trim());
+    .filter((entry) => LICENSE_FILE.test(entry.name))
+    .flatMap((entry) => (entry.isDirectory() ? licenseTexts(join(dir, entry.name)) : [readFileSync(join(dir, entry.name), 'utf8').trim()]));
+}
+
+function suppliedTexts() {
+  const sources = JSON.parse(readFileSync(join('notice-licenses', 'sources.json'), 'utf8'));
+  const byId = new Map();
+  for (const [file, { packages }] of Object.entries(sources)) {
+    const text = readFileSync(join('notice-licenses', file), 'utf8').trim();
+    for (const [name, version] of Object.entries(packages)) byId.set(`${name}@${version}`, text);
+  }
+  return byId;
 }
 
 function npmPackages() {
@@ -37,6 +47,7 @@ function npmPackages() {
 
 function nugetPackages() {
   const cache = process.env.NUGET_PACKAGES ?? join(homedir(), '.nuget', 'packages');
+  const supplied = suppliedTexts();
   const deps = JSON.parse(readFileSync('backend/MEditService.Http.deps.json', 'utf8'));
   return Object.entries(deps.libraries)
     .filter(([, library]) => library.type === 'package' || library.type === 'runtimepack')
@@ -46,12 +57,17 @@ function nugetPackages() {
       const dir = join(cache, name.toLowerCase(), version);
       const nuspec = readFileSync(join(dir, `${name.toLowerCase()}.nuspec`), 'utf8');
       const license = /<license [^>]*>([^<]+)<\/license>/.exec(nuspec)?.[1] ?? /<licenseUrl>([^<]+)<\/licenseUrl>/.exec(nuspec)?.[1];
-      return { id: `${name}@${version}`, license, texts: licenseTexts(dir) };
+      const id = `${name}@${version}`;
+      const shipped = licenseTexts(dir);
+      return { id, license, texts: shipped.length > 0 ? shipped : [supplied.get(id)].filter(Boolean) };
     });
 }
 
-const sections = [...npmPackages(), ...nugetPackages()]
-  .sort((a, b) => a.id.localeCompare(b.id))
-  .map(({ id, license, texts }) => [`${id} (${license ?? 'license not declared'})`, ...texts].join('\n\n'));
+const packages = [...npmPackages(), ...nugetPackages()].sort((a, b) => a.id.localeCompare(b.id));
+const textless = packages.filter(({ texts }) => texts.length === 0).map(({ id }) => id);
+if (textless.length > 0) {
+  throw new Error(`No license text for ${textless.join(', ')}. Add each to notice-licenses/sources.json with its upstream source.`);
+}
+const sections = packages.map(({ id, license, texts }) => [`${id} (${license ?? 'see license text'})`, ...texts].join('\n\n'));
 
 writeFileSync('THIRD-PARTY-NOTICES.txt', `Modbench bundles the following third-party software.\n\n${sections.join('\n\n----------------------------------------\n\n')}\n`);
