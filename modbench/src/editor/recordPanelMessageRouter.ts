@@ -149,7 +149,7 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
 
 function written(msg: unknown): string {
   try {
-    return JSON.stringify(msg) ?? String(msg);
+    return JSON.stringify(msg);
   } catch {
     return String(msg);
   }

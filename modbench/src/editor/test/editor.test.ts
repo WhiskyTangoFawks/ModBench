@@ -1146,7 +1146,7 @@ describe('what a record tab\'s webview posts', () => {
 
       expect([h.executed.length, mEdit.calls.length]).toEqual([executed, asked]);
       expect(tab.webview.postMessage).not.toHaveBeenCalled();
-      const [logged] = outputChannel.warn.mock.calls.at(-1) ?? [];
+      const logged: unknown = outputChannel.warn.mock.calls.at(-1)?.[0];
       expect(logged).toMatch(/^Dropped a message from a record tab's page: /);
       expect(logged).toContain(JSON.stringify(message));
     });
