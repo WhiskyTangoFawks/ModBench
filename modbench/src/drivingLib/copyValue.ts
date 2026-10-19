@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
+import { STATUS_MESSAGE_MS } from './statusMessage';
 import { gestureEntry, kindGuard, selectionArgument, type GestureEntry, type KindedRow, type RowOf } from './gestureEntry';
 
 /** One surface's contribution to the catalog's one copy value id (commands.md, Every view): its
@@ -35,11 +36,13 @@ export function viewCopyValueText<Row extends KindedRow, K extends Row['kind']>(
   };
 }
 
+const NOTHING_TO_COPY = 'Focus a list or a cell to copy its value.';
+
 // Adapters are tried in order, so no surface needs to know another exists. A palette call has no
 // argument, so the focused view stands for the key its own Ctrl+C passes.
 export function registerCopyValueCommand(
   adapters: readonly CopyValueAdapter[], reporterFor: (tag: string) => Reporter,
-  focusedViewId: () => string | undefined, nothingToCopy: () => void,
+  focusedViewId: () => string | undefined,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.copyValue',
     async (clicked?: unknown, allSelected?: unknown[]) => {
@@ -56,6 +59,6 @@ export function registerCopyValueCommand(
         }
         return;
       }
-      nothingToCopy();
+      vscode.window.setStatusBarMessage(NOTHING_TO_COPY, STATUS_MESSAGE_MS);
     });
 }

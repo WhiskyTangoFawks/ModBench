@@ -22,13 +22,15 @@ import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoad
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
-import { agentPort, attachPort, gameFolderSetting, onStringsLanguageChange, stringsLanguage } from './workspaceConfig';
+import { agentPort } from './agent/agentPort';
+import { attachPort, gameFolderSetting, onStringsLanguageChange, stringsLanguage } from './workspaceConfig';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
+import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
 import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
-import { ToolboxProvider } from './toolbox/ToolboxProvider';
+import { createToolboxView, type ToolboxView } from './toolbox/toolboxView';
 import { initRepositoryIn } from './instanceRepository';
 import { registerModlistCommands } from './toolbox/modlistGestures';
 import { publishRepository } from './toolbox/repositoryContext';
@@ -76,7 +78,7 @@ interface InstanceSide {
   /** Absent together, on the path with no instance to read. */
   instance?: Instance;
   readStatus?: ReadModStatus;
-  toolboxProvider: ToolboxProvider;
+  toolbox: ToolboxView;
   sourceFiles: SourceFilesOf;
   copyValue: CopyValueAdapter[];
   downloadsSelection: () => readonly DownloadsTreeNode[];
@@ -90,7 +92,7 @@ const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
 
 function buildBareSide(own: Own): InstanceSide {
   return {
-    toolboxProvider: own(new ToolboxProvider({ instance: undefined })),
+    toolbox: own(createToolboxView({ instance: undefined })),
     sourceFiles: NO_SOURCE_FILES,
     copyValue: [], downloadsSelection: () => [],
   };
@@ -132,7 +134,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   ownAll(own, registerSyncCommands((command, handler) => vscode.commands.registerCommand(command, handler), { modSync, pluginSync }));
   const sourceGestureRows = selectionInFocusedView(
-    own, deps.focusedView, ['modbench.modList', 'modbench.pluginListTree'], 'modbench.mod.sourceGestureRowsIn');
+    own, deps.focusedView, [MODS_KEY_ARGS.view, PLUGINS_KEY_ARGS.view], 'modbench.mod.sourceGestureRowsIn');
   const plugins = own(pluginsBox.onInstance({
     instance, commands: pluginCommands({ adapter, client }), pluginSync,
   }));
@@ -142,7 +144,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
-  const toolboxProvider = own(new ToolboxProvider({ instance, channel: outputChannel }));
+  const toolbox = own(createToolboxView({ instance, channel: outputChannel }));
   const modlist = modlistRepositoryCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot), trash });
   const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
   const mods = own(createModsView({
@@ -152,13 +154,13 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),
       progressViewId: DOWNLOADS_KEY_ARGS.view,
     },
-    nexusRow: nexusRowInFocusedView(own, deps.focusedView, ['modbench.modList', 'modbench.downloads'], 'modbench.mod.nexusRowIn'),
+    nexusRow: nexusRowInFocusedView(own, deps.focusedView, [MODS_KEY_ARGS.view, DOWNLOADS_KEY_ARGS.view], 'modbench.mod.nexusRowIn'),
     sourceGestures: {
       commands: sourceCommands({ client, adapter }), rows: sourceGestureRows, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
       saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
       registerRepositories: deps.registerRepositories,
     },
-    manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: (message) => { toolboxProvider.say(message); }, focusedView: deps.focusedView },
+    manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: toolbox.say, focusedView: deps.focusedView },
     modStatus: { push: client, readStatus },
   }));
   const editing = own(editingFlow({
@@ -173,20 +175,20 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
   own(publishRepository(instance, instanceRoot));
   ownAll(own, registerModlistCommands({ commands: modlist, instance, reporter: reporterFor('modlist') }));
-  own(deps.focusedView.follow('modbench.modList', mods.view));
-  own(deps.focusedView.follow('modbench.pluginListTree', plugins.followed));
-  own(deps.focusedView.follow('modbench.downloads', downloadsView));
+  own(deps.focusedView.follow(MODS_KEY_ARGS.view, mods.view));
+  own(deps.focusedView.follow(PLUGINS_KEY_ARGS.view, plugins.followed));
+  own(deps.focusedView.follow(DOWNLOADS_KEY_ARGS.view, downloadsView));
   ownAll(own, registerNameFilterCommands(
     () => deps.focusedView.id(),
     new Map([
-      ['modbench.modList', mods.nameFilter], ['modbench.pluginListTree', plugins.nameFilter], ['modbench.downloads', downloadsFilter],
+      [MODS_KEY_ARGS.view, mods.nameFilter], [PLUGINS_KEY_ARGS.view, plugins.nameFilter], [DOWNLOADS_KEY_ARGS.view, downloadsFilter],
     ]),
-    () => vscode.window.setStatusBarMessage('Focus a list to filter it.', 5000)));
+  ));
   own(registerRefreshCommand({
     commands, nextRefill: plugins.nextRefill, instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
-    instance, toolboxProvider, readStatus,
+    instance, toolbox, readStatus,
     sourceFiles: (origin) => sourceFiles(instance.value, origin),
     copyValue: [mods.copyValue, plugins.copyValue],
     downloadsSelection: () => downloadsView.selection,
@@ -207,10 +209,6 @@ function buildViews(opened: Opened, { own, dispose }: ReturnType<typeof ownershi
 
   const side = opened.side(own, deps);
 
-  const toolboxView = own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: side.toolboxProvider }));
-  const showMessage = () => { toolboxView.message = side.toolboxProvider.viewMessage(); };
-  showMessage();
-  own(side.toolboxProvider.onDidChangeTreeData(showMessage));
   own(registerCopyValueCommand(
     [
       ...side.copyValue,
@@ -219,7 +217,6 @@ function buildViews(opened: Opened, { own, dispose }: ReturnType<typeof ownershi
     ],
     reporterFor,
     () => deps.focusedView.id(),
-    () => vscode.window.setStatusBarMessage('Focus a list or a record cell to copy its value.', 5000),
   ));
 
   return {
@@ -256,7 +253,7 @@ export function activate(context: vscode.ExtensionContext): void {
     reporterFor,
     ask: askQuestion,
     focusedView,
-    recordViewIds: ['modbench.pluginListTree'],
+    recordViewIds: [PLUGINS_KEY_ARGS.view],
     recordWrite: plugins.recordWrite,
     sourceEditing,
     modFacts: opened.facts,

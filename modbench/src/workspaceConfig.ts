@@ -18,17 +18,15 @@ export const gameFolderSetting: GameFolderSetting = {
 const STRINGS_LANGUAGE_SETTING = 'stringsLanguage';
 
 export function stringsLanguage(): string {
-  return meditConfig().get<string>(STRINGS_LANGUAGE_SETTING, 'English');
+  const language = meditConfig().get<string>(STRINGS_LANGUAGE_SETTING);
+  if (language === undefined) throw new Error(`modbench.${STRINGS_LANGUAGE_SETTING} has no value: package.json declares its default.`);
+  return language;
 }
 
 export function onStringsLanguageChange(listener: () => void): vscode.Disposable {
   return vscode.workspace.onDidChangeConfiguration((change) => {
     if (change.affectsConfiguration(`modbench.${STRINGS_LANGUAGE_SETTING}`)) listener();
   });
-}
-
-export function agentPort(): number {
-  return meditConfig().get<number>('agent.port', 47200);
 }
 
 export function attachPort(): number | undefined {
