@@ -8,8 +8,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>Opens <paramref name="plugin"/> as NPCs made up rather than read, each carrying the links
-/// <paramref name="records"/> gives it: as many as a test needs, at no cost of building a plugin.</summary>
+/// <summary>Opens every plugin as <paramref name="plugin"/>, holding NPCs made up rather than read, each
+/// carrying the links <paramref name="records"/> gives it: as many as a test needs, at no cost of building a plugin.</summary>
 internal sealed class LinkingAdapter(string plugin, Func<IEnumerable<(string FormKey, IEnumerable<string> Links)>> records)
     : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {

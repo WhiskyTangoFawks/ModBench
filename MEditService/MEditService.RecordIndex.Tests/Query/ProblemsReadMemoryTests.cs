@@ -3,7 +3,7 @@ using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.RecordIndex.Tests.Indexing;
+namespace MEditService.RecordIndex.Tests.Query;
 
 public sealed class ProblemsReadMemoryTests : IDisposable
 {
@@ -11,7 +11,6 @@ public sealed class ProblemsReadMemoryTests : IDisposable
     private const int RecordCount = 20_000;
     private const int LinksPerRecord = 50;
     private const string MemoryLimit = "32MB";
-    private const int PinnedThreadsSinceDuckDbsMemoryGrowsWithThem = 4;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("problems-read-memory").WithPlugin(Plugin).Build();
     private readonly LoadOrderHolder _holder = new();
@@ -23,7 +22,7 @@ public sealed class ProblemsReadMemoryTests : IDisposable
     {
         using var index = Indexes.Open(_holder, new LinkingAdapter(Plugin, LinksToMissingRecords));
         index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        IndexFiles.Execute(_fixture.InstanceRoot, $"SET GLOBAL memory_limit = '{MemoryLimit}'; SET GLOBAL threads = {PinnedThreadsSinceDuckDbsMemoryGrowsWithThem}");
+        IndexFiles.LimitMemory(_fixture.InstanceRoot, MemoryLimit);
 
         Assert.Empty(index.Queries.GetProblems().Value());
     }

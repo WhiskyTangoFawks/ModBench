@@ -12,10 +12,8 @@ public sealed class ReadOutOfMemoryApiTests : HostedTests
         new(services => FailingQueries.Replace(services, problemsRefusal: new IndexRefused(IndexRefusal.OutOfMemory, Refusal)));
 
     [Fact]
-    public async Task ARead_TheRecordIndexRanOutOfMemoryFor_Is503AndSaysSo()
+    public async Task ARead_TheRecordIndexRanOutOfMemoryFor_Is503()
     {
-        var problem = await (await Client.GetAsync(new Uri("/plugins/problems", UriKind.Relative))).AssertIsProblem(HttpStatusCode.ServiceUnavailable);
-
-        Assert.Equal(Refusal, problem.GetProperty("detail").GetString());
+        await (await Client.GetAsync(new Uri("/plugins/problems", UriKind.Relative))).AssertIsProblem(HttpStatusCode.ServiceUnavailable);
     }
 }

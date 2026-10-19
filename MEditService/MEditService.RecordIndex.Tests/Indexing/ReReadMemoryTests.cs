@@ -14,7 +14,6 @@ public sealed class ReReadMemoryTests : IDisposable
     private const int RecordCount = 40_000;
     private const int ReferencesPerRecord = 50;
     private const string MemoryLimit = "64MB";
-    private const int PinnedThreadsSinceDuckDbsMemoryGrowsWithThem = 4;
 
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("re-read-memory").WithPlugin(Plugin).Build();
     private readonly LoadOrderHolder _holder = new();
@@ -46,7 +45,7 @@ public sealed class ReReadMemoryTests : IDisposable
 
     private IEnumerable<(string, IEnumerable<string>)> Records()
     {
-        IndexFiles.Execute(_fixture.InstanceRoot, $"SET GLOBAL memory_limit = '{MemoryLimit}'; SET GLOBAL threads = {PinnedThreadsSinceDuckDbsMemoryGrowsWithThem}");
+        IndexFiles.LimitMemory(_fixture.InstanceRoot, MemoryLimit);
         for (var i = 0; i < RecordCount; i++)
             yield return ($"{0x800 + RecordCount + i:X6}:{Plugin}", Enumerable.Range(0, ReferencesPerRecord).Select(j => Target((i + j * 7919) % RecordCount)));
     }

@@ -21,6 +21,6 @@ public sealed class ReadOutOfMemoryTests : IDisposable
         var refused = index.Queries.GetProblems().Refused();
 
         Assert.Equal(IndexRefusal.OutOfMemory, refused.Refusal);
-        Assert.StartsWith("mEdit's record index ran out of memory for this read: Out of Memory Error:", refused.Message, StringComparison.Ordinal);
+        Assert.Matches(@"\AmEdit's record index ran out of memory for this read: Out of Memory Error: [^\n]*\z", refused.Message);
     }
 }

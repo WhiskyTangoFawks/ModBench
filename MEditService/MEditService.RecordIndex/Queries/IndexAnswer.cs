@@ -6,8 +6,8 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.RecordIndex.Queries;
 
-/// <summary>Builds the answers the Index's face gives. Inside the Index a read that finds nothing held
-/// or not ready throws; here it becomes the answer.</summary>
+/// <summary>Builds the answers the Index's face gives. Inside the Index a read that finds nothing held,
+/// not ready or out of memory throws; here it becomes the answer.</summary>
 internal static class IndexAnswer
 {
     public static Answer<T, IndexRefused> Of<T>(Func<T> read) => Flat<T>(() => read());
