@@ -1,5 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -20,7 +21,7 @@ public sealed class CopyRecordHandler
         ILogger<CopyRecordHandler> logger) =>
         (_changes, _source, _unsaved, _loadOrder, _logger) = (changes, source, unsaved, loadOrder, logger);
 
-    public async Task<RecordEditResult> Copy(RecordAt record, CopyMode mode, PluginAddress destination, bool replace)
+    public async Task<Answer<RecordWritten, RecordEditRefused>> Copy(RecordAt record, CopyMode mode, PluginAddress destination, bool replace)
     {
         var sessions = new WriteSessions(_source, _unsaved.Current);
         var selection = await _changes.CopyRecords([record], mode, [destination], replace, sessions);
@@ -28,6 +29,7 @@ public sealed class CopyRecordHandler
             mode == CopyMode.New
                 ? landed.Outcome.NewFormKey ?? throw new InvalidOperationException("Expected a copy as new to carry the new FormKey.")
                 : record.FormKey));
-        return sessions.Written(outcome, $"Could not write the copy of {record.FormKey} into {destination.Name}", _loadOrder, _logger);
+        return sessions.Written(outcome, $"Could not write the copy of {record.FormKey} into {destination.Name}", _loadOrder, _logger)
+            .AsWritten();
     }
 }

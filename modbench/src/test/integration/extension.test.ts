@@ -325,7 +325,7 @@ function createMockBackend(): http.Server {
       const holds = fsPath === COMPILED_PLUGIN_FS_PATH ? COMPILED_PLUGIN_FORM_KEY : fsPath && heldIn.get(fsPath);
       res.writeHead(holds ? 200 : 422, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(holds
-        ? { formKey: holds, plugin: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN }
+        ? { formKey: holds, plugin: { name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN } }
         : { detail: `${filePath} declares no FormKey, so it is no record's document.` }));
       return;
     }
@@ -1352,7 +1352,7 @@ describe('deleting a record in a compiled plugin copy', () => {
     assert.ok(document.isDirty, 'the plugin source should be unsaved before the delete');
     const unsavedText = document.getText();
     answerDelete = { status: 200, body: { applied: [{
-      record: { formKey: COMPILED_PLUGIN_FORM_KEY, plugin: plugin.name, origin: plugin.origin },
+      record: { formKey: COMPILED_PLUGIN_FORM_KEY, plugin },
       moves: [], deletions: [folder], documents: [{ path: COMPILED_PLUGIN_FILE, text: 'rewritten' }],
     }], refused: [] } };
     (vscode.window as { showWarningMessage: unknown }).showWarningMessage = () => Promise.resolve('Delete');

@@ -10,10 +10,13 @@ public sealed class TestEditor(EditRecordChangesHandler edits)
 {
     public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
-        var (outcome, changes) = edits.Changes(plugin, formKey, envelope);
-        EditSaving.Save(
-            changes.Moves.Select(move => (move.From, move.To)), changes.Deletions,
-            changes.Documents.Select(document => (document.Path, document.Text)));
-        return outcome;
+        var answer = edits.Changes(plugin, formKey, envelope);
+        if (answer.Holds(out var changes, out _))
+        {
+            EditSaving.Save(
+                changes.Moves.Select(move => (move.From, move.To)), changes.Deletions,
+                changes.Documents.Select(document => (document.Path, document.Text)));
+        }
+        return answer.AsResult();
     }
 }

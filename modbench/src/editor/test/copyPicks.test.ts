@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { copyModeItems, copiesWritten, copyDestinationItems, heldCopies } from '../copyPicks';
-import type { PluginMetadata, RecordAddress } from '../../client';
+import type { PluginMetadata, RecordAt } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 function plugin(name: string, origin: string, loadOrderIndex: number | null, facts: Partial<PluginMetadata> = {}): PluginMetadata {
   return pluginMetadataFixture({ name, origin, loadOrderIndex, isCompiledPlugin: true, isImmutable: false, ...facts });
 }
 
-const npc: RecordAddress = { formKey: '000801:Source.esp', plugin: 'Source.esp', origin: 'SourceMod' };
-const faction: RecordAddress = { formKey: '000802:Source.esp', plugin: 'Source.esp', origin: 'SourceMod' };
-const elsewhere: RecordAddress = { formKey: '000803:Other.esp', plugin: 'Other.esp', origin: 'OtherMod' };
+const npc: RecordAt = { formKey: '000801:Source.esp', plugin: { name: 'Source.esp', origin: 'SourceMod' } };
+const faction: RecordAt = { formKey: '000802:Source.esp', plugin: { name: 'Source.esp', origin: 'SourceMod' } };
+const elsewhere: RecordAt = { formKey: '000803:Other.esp', plugin: { name: 'Other.esp', origin: 'OtherMod' } };
 
 describe('the mode pick', () => {
   it('offers override and new, override first as xEdit\'s navigator does', () => {

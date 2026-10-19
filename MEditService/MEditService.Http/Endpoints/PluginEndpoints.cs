@@ -222,7 +222,7 @@ internal static class PluginEndpoints
                 "deletions, then documents, and every path is absolute. The answer names the new FormKey. " +
                 "Git-native: the record answers at Effective only until committed and compiled.")
             .WithTags(Tag)
-            .Produces<RecordCreateChangesResponse>()
+            .Produces<CreateRecordChanges>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
@@ -237,7 +237,7 @@ internal static class PluginEndpoints
                 "of its file. Answers the new FormKey. A creation that would write a file held unsaved is refused " +
                 "naming it, and nothing is written.")
             .WithTags(Tag)
-            .Produces<RecordWrittenResponse>()
+            .Produces<RecordWritten>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
@@ -247,19 +247,17 @@ internal static class PluginEndpoints
         return app;
     }
 
-    internal static Task<IResult> CreateRecord(
+    internal static IResult CreateRecord(
         string plugin, RecordCreateChangesRequest req, CreateRecordHandler creates, ILoggerFactory loggerFactory)
     {
-        if (!EndpointMapping.PluginAt(plugin, req.Origin, out var address, out var refused)) return Task.FromResult(refused);
-        return EndpointMapping.ExecuteWriting(
+        if (!EndpointMapping.PluginAt(plugin, req.Origin, out var address, out var refused)) return refused;
+        return RecordTypeProblem(req) ?? EndpointMapping.Answered(
             "CreateRecord", loggerFactory.CreateLogger(nameof(PluginEndpoints)),
-            logReceived: null,
-            validate: () => string.IsNullOrWhiteSpace(req.RecordType)
-                ? EndpointMapping.BadRequest("A record type is required.")
-                : null,
-            execute: () => Task.FromResult(creates.Create(address, req.RecordType, req.Container, req.Position)),
-            onApplied: result => Results.Ok(new RecordWrittenResponse(EndpointMapping.RequireNewFormKey(result))));
+            creates.Create(address, req.RecordType, req.Container, req.Position), Results.Ok);
     }
+
+    private static IResult? RecordTypeProblem(RecordCreateChangesRequest req) =>
+        string.IsNullOrWhiteSpace(req.RecordType) ? EndpointMapping.BadRequest("A record type is required.") : null;
 
     internal static async Task<IResult> CreatePlugin(
         CreatePluginRequest req, CreatePluginHandler create, ILoggerFactory loggerFactory)
@@ -374,16 +372,8 @@ internal static class PluginEndpoints
     {
         if (!EndpointMapping.PluginAt(plugin, req.Origin, out var address, out var refused)) return refused;
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        return EndpointMapping.Execute(
-            "Create record", logger,
-            logReceived: null,
-            validate: () => string.IsNullOrWhiteSpace(req.RecordType)
-                ? EndpointMapping.BadRequest("A record type is required.")
-                : null,
-            execute: () => edits.CreateRecord(
-                address, req.RecordType, req.Container, req.Position),
-            outcome: answer => answer.Outcome,
-            onApplied: answer => Results.Ok(RecordCreateChangesResponse.Of(EndpointMapping.RequireNewFormKey(answer.Outcome), answer)));
+        return RecordTypeProblem(req) ?? EndpointMapping.Answered(
+            "Create record", logger, edits.CreateRecord(address, req.RecordType, req.Container, req.Position), Results.Ok);
     }
 
     // A source tree that cannot say where the copy is answers why.

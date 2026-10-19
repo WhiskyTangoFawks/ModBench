@@ -162,7 +162,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "init" => await client.Init("NoLoadOrderMod"),
             "deleteRecordChanges" => await client.PostAsJsonAsync("/records/delete-changes", new
             {
-                records = new[] { new { formKey = "000800:New.esp", plugin = "New.esp", origin = "NoLoadOrderMod" } }
+                records = new[] { new { formKey = "000800:New.esp", plugin = new { name = "New.esp", origin = "NoLoadOrderMod" } } }
             }),
             _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown operation"),
         };
@@ -200,7 +200,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "copyRecord" => await client.Copy("000800:New.esp", ("New.esp", "NoLoadOrderMod"), "Override", ("Dest.esp", "DestMod")),
             "deleteRecordChanges" => await client.PostAsJsonAsync("/records/delete-changes", new
             {
-                records = new[] { new { formKey = "000800:New.esp", plugin = "New.esp", origin = "NoLoadOrderMod" } }
+                records = new[] { new { formKey = "000800:New.esp", plugin = new { name = "New.esp", origin = "NoLoadOrderMod" } } }
             }),
             "renameSourceChanges" => await client.PostAsJsonAsync("/plugins/rename-source-changes", new { plugin.origin, plugin.name, newName = "Renamed.esp" }),
             "moveLastWritten" => await client.PostAsJsonAsync("/plugins/move-last-written", new { plugin.origin, plugin.name, treeName = plugin.name, newName = "Renamed.esp" }),

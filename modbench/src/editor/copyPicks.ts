@@ -1,7 +1,7 @@
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import type * as vscode from 'vscode';
-import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
-import type { CopyItem, CopyMode, PluginAddress, PluginMetadata, RecordAddress } from '../client';
+import { samePluginAddress } from '../wire/pluginAddress';
+import type { CopyItem, CopyMode, PluginAddress, PluginMetadata, RecordAt } from '../client';
 
 export interface CopyModeItem extends vscode.QuickPickItem {
   readonly mode: CopyMode;
@@ -22,9 +22,9 @@ export interface CopyDestinationItem extends vscode.QuickPickItem {
 /** The plugins I can edit, each with its load position or `(not active)` (plugins.md, Pickers, Copy). An override
  *  is not offered the one plugin every record already lives in: it is that copy. */
 export function copyDestinationItems(
-  plugins: readonly PluginMetadata[], mode: CopyMode, records: readonly RecordAddress[],
+  plugins: readonly PluginMetadata[], mode: CopyMode, records: readonly RecordAt[],
 ): CopyDestinationItem[] {
-  const livesInEveryRecord = (p: PluginMetadata) => records.every((r) => samePluginAddress(pluginAddressOf(r), p));
+  const livesInEveryRecord = (p: PluginMetadata) => records.every((r) => samePluginAddress(r.plugin, p));
   return plugins
     .filter(pluginCanBeEdited)
     .filter((p) => mode !== 'Override' || !livesInEveryRecord(p))
@@ -37,7 +37,7 @@ export function copyDestinationItems(
 }
 
 // An override into the record's own plugin: that plugin already is the copy.
-const intoItsOwnPlugin = ({ record, destination }: CopyItem): boolean => samePluginAddress(pluginAddressOf(record), destination);
+const intoItsOwnPlugin = ({ record, destination }: CopyItem): boolean => samePluginAddress(record.plugin, destination);
 
 /** The landed items that wrote a copy: mEdit writes nothing for an override into the record's own
  *  plugin, and nothing is said of it (commands.md, Doing nothing is not an error). */
@@ -48,7 +48,7 @@ export function copiesWritten(landed: readonly CopyItem[], mode: CopyMode): Copy
 /** Each record and picked destination where the destination already holds a copy of the record:
  *  what an override would replace. A record's own plugin holds the record, not a copy of it. */
 export function heldCopies(
-  records: readonly RecordAddress[], destinations: readonly PluginAddress[],
+  records: readonly RecordAt[], destinations: readonly PluginAddress[],
   holders: ReadonlyMap<string, readonly PluginAddress[]>,
 ): CopyItem[] {
   return records.flatMap((record) => destinations

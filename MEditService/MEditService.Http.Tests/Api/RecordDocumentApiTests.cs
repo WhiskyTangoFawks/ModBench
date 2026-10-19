@@ -67,7 +67,7 @@ public sealed class RecordDocumentApiTests : HostedTests
         var held = await record.Body();
         Assert.Equal(
             (await Npc(), Plugin, Origin),
-            (held.GetProperty("formKey").GetString(), held.GetProperty("plugin").GetString(), held.GetProperty("origin").GetString()));
+            (held.GetProperty("formKey").GetString(), held.GetProperty("plugin").GetProperty("name").GetString(), held.GetProperty("plugin").GetProperty("origin").GetString()));
     }
 
     [Fact]
