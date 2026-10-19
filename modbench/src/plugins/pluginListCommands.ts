@@ -10,11 +10,10 @@ import {
 import type { RowOf } from '../drivingLib/gestureEntry';
 import { viewCopyValueText } from '../drivingLib/copyValue';
 import { placeFolder, pluginPlaces } from './pluginPlaces';
-import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
+import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
 import { OVERWRITE_LABEL } from '../instanceLoader/fileConflictIndex';
 import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
-import type { PluginAddress } from '../wire/pluginAddress';
 import type { SelectionResult } from '../pluginCommands/plugins';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from '../drivingLib/refusal';
