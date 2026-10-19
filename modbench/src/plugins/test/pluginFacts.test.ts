@@ -90,6 +90,31 @@ describe('PluginFacts — the status table (plugins.md, A row, Plugin)', () => {
     expect(facts.description(A)).toBe('failed to read, 1 master issue, unreadable records, plugin source unreadable, changed outside Modbench, malformed');
   });
 
+  it('counts a master that loads after the plugin as a master issue, and names it', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ masterIssues: ['Ghost.esm'], lateMasters: ['Late.esm'] })], []);
+
+    expect(facts.description(A)).toBe('2 master issues');
+    expect(facts.tooltipLines(A)).toContain('Missing masters: Ghost.esm; Masters loading after it: Late.esm');
+  });
+
+  it('flags a lone late master', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ lateMasters: ['Late.esm'] })], []);
+
+    expect(facts.description(A)).toBe('1 master issue');
+    expect(facts.tooltipLines(A)).toContain('Masters loading after it: Late.esm');
+  });
+
+  it('keeps the last late masters while mEdit has not checked', () => {
+    const facts = new PluginFacts();
+    facts.reconciled([held({ lateMasters: ['Late.esm'] })], []);
+
+    facts.refreshed([held({ masterIssues: null, lateMasters: null })]);
+
+    expect(facts.description(A)).toBe('1 master issue');
+  });
+
   it('carries the read-only line between the origin and the status lines', () => {
     const facts = new PluginFacts();
     facts.reconciled([held({ isImmutable: true, masterIssues: ['Ghost.esm'] })], []);

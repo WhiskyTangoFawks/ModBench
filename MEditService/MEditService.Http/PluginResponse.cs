@@ -21,6 +21,8 @@ internal sealed record PluginResponse(
     // MasterIssues (ADR-0012): the masters in this plugin's header that are not active.
     // Null while the snapshot is not indexed: not yet checked, which is not no issues.
     IReadOnlyList<string>? MasterIssues,
+    // LateMasters: the active masters in this plugin's header that load after it. Null as MasterIssues is.
+    IReadOnlyList<string>? LateMasters,
     // InLoadOrder (ADR-0013).
     bool InLoadOrder,
     // HasMatchingRecords (plugins.md): a record filter prunes records, never a
@@ -45,7 +47,7 @@ internal sealed record PluginResponse(
         var plugin = row.Plugin;
         return new(plugin.Name, plugin.Path, row.LoadOrderIndex, row.Content.IsLight, row.Content.IsMaster,
             row.Content.IsBlueprint, row.Content.Masters, row.Content.RecordCount, row.IsImmutable,
-            plugin.Origin, row.MasterIssues, row.LoadOrderIndex is not null,
+            plugin.Origin, row.MasterIssues, row.LateMasters, row.LoadOrderIndex is not null,
             row.HasMatchingRecords, row.IsCompiledPlugin,
             row.HasParseFailure, row.PluginSourceUnreadable, row.LaterReadFailure);
     }

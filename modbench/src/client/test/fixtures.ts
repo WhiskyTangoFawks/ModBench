@@ -18,6 +18,7 @@ export function pluginMetadataFixture(overrides: Partial<PluginMetadata> & { nam
     isImmutable: false,
     origin: 'SomeMod',
     masterIssues: [],
+    lateMasters: [],
     inLoadOrder: true,
     hasMatchingRecords: true,
     isCompiledPlugin: false,

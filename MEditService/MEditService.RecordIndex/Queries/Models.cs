@@ -29,6 +29,8 @@ public sealed record PluginRow(
     // MasterIssues (ADR-0012): the masters in this plugin's header that are not active.
     // Null while the snapshot is not indexed: not yet checked, which is not no issues.
     IReadOnlyList<string>? MasterIssues,
+    // LateMasters: the active masters in this plugin's header that load after it. Null as MasterIssues is.
+    IReadOnlyList<string>? LateMasters,
     // HasMatchingRecords (plugins.md): a record filter prunes records, never a plugin row, so this
     // is what a caller uses to decide whether to offer a chevron.
     bool HasMatchingRecords,

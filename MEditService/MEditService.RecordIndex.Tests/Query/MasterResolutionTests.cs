@@ -93,6 +93,68 @@ public class MasterResolutionTests
         Assert.Equal([], rows.Single(r => r.Plugin.Origin == "LosingMod").MasterIssues);
     }
 
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> LateMasters(PluginFixtureBuilder builder) =>
+        GetPlugins(builder)
+            .Select(row => (row.Plugin.Name, Late: Assert.IsAssignableFrom<IReadOnlyList<string>>(row.LateMasters)))
+            .Where(row => row.Late.Count > 0)
+            .ToDictionary(row => row.Name, row => row.Late, StringComparer.OrdinalIgnoreCase);
+
+    [Fact]
+    public void MasterLoadingAfterItsDependant_IsALateMaster_ForTheGameCrashesOnIt()
+    {
+        var result = LateMasters(Plugins(Plugin("Patch.esp", "Base.esm"), Plugin("Base.esm")));
+
+        Assert.Equal(["Base.esm"], result["Patch.esp"]);
+    }
+
+    [Fact]
+    public void MasterLoadingBeforeItsDependant_IsNoLateMaster()
+    {
+        var result = LateMasters(Plugins(Plugin("Base.esm"), Plugin("Patch.esp", "Base.esm")));
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void LateMasterNamesMatchIgnoringCase()
+    {
+        var result = LateMasters(Plugins(Plugin("Patch.esp", "base.esm"), Plugin("Base.ESM")));
+
+        Assert.Equal(["base.esm"], result["Patch.esp"]);
+    }
+
+    [Fact]
+    public void InactiveMaster_IsNotAlsoALateMaster()
+    {
+        var result = LateMasters(Plugins(Plugin("Patch.esp", "Base.esm"), Disabled("Base.esm")));
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task WhileTheLoadOrderIsStillIndexing_LateMastersAreNull()
+    {
+        using var fixture = Plugins(Plugin("A.esp", "B.esp"), Plugin("B.esp")).Build();
+        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, gate);
+        var load = Task.Run(() => index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4));
+        await gate.WaitUntilParkedAsync();
+
+        IReadOnlyList<PluginRow> rows;
+        try
+        {
+            rows = index.Queries.GetPlugins().Value();
+        }
+        finally
+        {
+            gate.Release();
+        }
+        await load;
+
+        Assert.Null(rows.Single(r => r.Plugin.Name == "A.esp").LateMasters);
+    }
+
     [Fact]
     public void MasterActive_IsNoIssue()
     {

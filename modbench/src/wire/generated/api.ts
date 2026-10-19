@@ -1553,6 +1553,7 @@ export interface components {
             isImmutable: boolean;
             origin: string;
             masterIssues?: string[] | null;
+            lateMasters?: string[] | null;
             inLoadOrder: boolean;
             hasMatchingRecords: boolean;
             isCompiledPlugin: boolean;
