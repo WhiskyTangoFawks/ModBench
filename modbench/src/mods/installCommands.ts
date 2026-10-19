@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { DownloadFile, Instance } from '../instanceLoader/instance';
-import { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder } from '../instanceAdapter/instanceAdapter';
+import { ARCHIVE_EXTENSIONS } from '../instanceAdapter/instanceAdapter';
 import type { InstallTarget, ModCommands, ModPackage } from '../modCommands/modCommands';
 import { downloadArgumentOf, downloadedFileNamed } from '../drivingLib/argument';
 import {
@@ -11,7 +11,7 @@ import type { Argument } from '../wire/argument';
 import type { KindedRow } from '../drivingLib/gestureEntry';
 import { Refusal } from '../drivingLib/refusal';
 import { errorMessage } from '../ports/errorMessage';
-import { chooseInstallTarget } from './installTarget';
+import { chooseInstallTarget, defaultModName } from './installTarget';
 import { promptModName } from './promptModName';
 import { promptRefusal, refuseAgentName } from './nameRefusals';
 import { runWritingGesture } from '../drivingLib/writingGesture';
@@ -86,7 +86,7 @@ const targetOf = async (
   throw new Refusal('An agent call to install carries exactly one of the name of a new mod and the target mod to upgrade.');
 };
 
-async function pickPackagePath(): Promise<{ kind: 'archive' | 'folder'; path: string } | undefined> {
+async function pickPackage(): Promise<{ kind: 'archive' | 'folder'; path: string; name: string } | undefined> {
   const picked = await vscode.window.showQuickPick<PackageKindItem>(
     [
       { label: 'Archive…', description: 'A .zip, .7z or .rar file', packageKind: 'archive' },
@@ -98,8 +98,9 @@ async function pickPackagePath(): Promise<{ kind: 'archive' | 'folder'; path: st
   const dialog = picked.packageKind === 'archive'
     ? { canSelectMany: false, filters: { 'Mod archives': [...ARCHIVE_EXTENSIONS] }, openLabel: 'Install' }
     : { canSelectFiles: false, canSelectFolders: true, canSelectMany: false, openLabel: 'Install' };
-  const path = (await vscode.window.showOpenDialog(dialog))?.[0]?.fsPath;
-  return path ? { kind: picked.packageKind, path } : undefined;
+  const uri = (await vscode.window.showOpenDialog(dialog))?.[0];
+  // A Uri's path is '/'-separated on every platform.
+  return uri ? { kind: picked.packageKind, path: uri.fsPath, name: uri.path.slice(uri.path.lastIndexOf('/') + 1) } : undefined;
 }
 
 // modbench.mod.install: with no package, as from the Mods menu, it asks archive-or-folder first,
@@ -134,11 +135,11 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
   };
 
   const pickedPackage = async (): Promise<Install | undefined> => {
-    const picked = await pickPackagePath();
+    const picked = await pickPackage();
     if (!picked) return undefined;
     return picked.kind === 'archive'
-      ? newMod({ kind: 'archive', path: picked.path }, defaultModName(picked.path), 'installFromArchive')
-      : newMod({ kind: 'folder', path: picked.path }, defaultModNameForFolder(picked.path), 'installFromFolder');
+      ? newMod({ kind: 'archive', path: picked.path }, defaultModName(picked.name), 'installFromArchive')
+      : newMod({ kind: 'folder', path: picked.path }, picked.name, 'installFromFolder');
   };
 
   const upgradeConfirmed = async (target: InstallTarget): Promise<boolean> => {
