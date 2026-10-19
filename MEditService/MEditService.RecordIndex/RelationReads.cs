@@ -298,6 +298,8 @@ internal sealed class RelationReads(
                    fr.target_form_key, fr.field_path
             FROM {TableDdlBuilder.MirrorSchema}.form_references fr
             {TableDdlBuilder.RegisteredJoin("fr", "source_plugin", "source_origin")}
+            JOIN {TableDdlBuilder.MirrorSchema}.{TableDdlBuilder.PluginDerivationTable} d
+              ON d.plugin = fr.source_plugin AND d.origin = fr.source_origin AND d.derived_from = '{DerivedFrom.SourceTree}'
             WHERE NOT EXISTS (SELECT 1 FROM form_lookup l WHERE l.form_key = fr.target_form_key)
               AND NOT EXISTS (
                   SELECT 1 FROM {TableDdlBuilder.MirrorSchema}.records own
@@ -311,9 +313,9 @@ internal sealed class RelationReads(
             .ToList();
     }
 
-    /// <summary>Every link an active plugin's record carries to a FormKey no active plugin holds
-    /// (engine-defined FormIds exempt), with its referrer's file in the source
-    /// <paramref name="sourceOf"/> answers.</summary>
+    /// <summary>Every link a plugin read from its source tree carries to a FormKey no active plugin
+    /// holds (engine-defined FormIds exempt), with its referrer's file in the source
+    /// <paramref name="sourceOf"/> answers. A binary's links are not its tree's, whose files place them.</summary>
     public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(
         Func<PluginAddress, ISourceRepositoryReads?> sourceOf)
     {

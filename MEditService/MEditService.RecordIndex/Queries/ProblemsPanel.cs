@@ -28,8 +28,7 @@ internal static class ProblemsPanel
                 .Select(plugin => ProblemsOf(
                     plugin.Key, snapshot.GameRelease, index.LaterReadFailure(plugin.Key),
                     [.. stopped[plugin.Key].Select(SourceProblem.StoppedAt), .. Found(found[plugin.Key].Select(held => held.Problem), stopped[plugin.Key])],
-                    // A binary's links are not its tree's, whose files the panel shows them on.
-                    derivations.TryGetValue(plugin.Key, out var derivedFrom) && derivedFrom == DerivedFrom.SourceTree ? [.. missing[plugin.Key]] : [])),
+                    [.. missing[plugin.Key]])),
         ];
     }
 
