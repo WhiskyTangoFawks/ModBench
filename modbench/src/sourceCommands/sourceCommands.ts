@@ -6,7 +6,7 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'init'>;
+  client: Pick<MEditClient, 'build' | 'init' | 'latestLoadOrder'>;
   adapter: Pick<InstanceAdapter,
     'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder' | 'sourceHost'>;
 }
@@ -57,6 +57,8 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
         else sent.push({ name: mod, sourceFolder, metadataFiles: [...adapter.metadataFilesInModFolder] });
       }
       if (sent.length === 0) return { landed: [], refused };
+      // mEdit finds each mod's plugins in the load order it holds, which a snapshot still waiting to be put lacks.
+      await client.latestLoadOrder();
       const outcome = await client.init(sent, options);
       return isRefused(outcome) ? outcome : { landed: outcome.landed, refused: [...outcome.refused, ...refused] };
     },
