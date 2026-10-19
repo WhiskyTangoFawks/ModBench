@@ -12,10 +12,10 @@ export interface RecordPickerDeps {
 
 type PickItem = vscode.QuickPickItem & { formKey?: string };
 
-// FormKeyLink and FormKeyCell show a resolved reference in this label, so a record is chosen and
-// read back in the same words.
+// VS Code filters items by label against the typed text, which would drop a record the backend
+// found by FormID or by a stale label. The label is the one FormKeyLink and FormKeyCell show.
 function toPickItem(r: RecordSummary): PickItem {
-  return { label: recordLabel(r.editorId, r.formKey), formKey: r.formKey };
+  return { label: recordLabel(r.editorId, r.formKey), formKey: r.formKey, alwaysShow: true };
 }
 
 function failureItem(err: unknown): PickItem {
@@ -41,6 +41,7 @@ export async function pickRecord(
   quickPick.value = seed;
 
   const show = (items: PickItem[]) => { quickPick.items = items; };
+  let answeredValue = '';
 
   let seq = 0;
   const runSearch = async (query: string) => {
@@ -52,6 +53,7 @@ export async function pickRecord(
       if (mySeq !== seq) return;
       const qpItems = items.map(toPickItem);
       show(qpItems);
+      answeredValue = query;
       // Normalized, because the seed is the composite the cell displays — comparing
       // the raw seed against a bare formKey would match only when the reference is unresolved.
       const seeded = qpItems.find(i => i.formKey === normalizeFormKeyQuery(seed));
@@ -78,7 +80,7 @@ export async function pickRecord(
     let accepted = false;
     quickPick.onDidAccept(() => {
       const formKey = quickPick.selectedItems[0]?.formKey;
-      if (!formKey) return;
+      if (!formKey || answeredValue !== quickPick.value) return;
       accepted = true;
       quickPick.hide();
       resolve(formKey);

@@ -6,6 +6,7 @@ vi.mock('vscode', () => ({
   window: { createQuickPick: (...args: unknown[]) => createQuickPick(...args) },
 }));
 
+import type * as vscode from 'vscode';
 import { pickRecord, type RecordPickerDeps } from '../recordPicker';
 import type { RecordSummary } from '../../client';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
@@ -30,10 +31,14 @@ function makeFakeQuickPick() {
     value: '',
     placeholder: undefined as string | undefined,
     title: undefined as string | undefined,
-    items: [] as unknown[],
+    items: [] as Array<vscode.QuickPickItem & { formKey?: string }>,
     activeItems: [] as unknown[],
     selectedItems: [] as unknown[],
     busy: false,
+    get visibleItems() {
+      const typed = this.value.toLowerCase();
+      return this.items.filter(i => i.alwaysShow || i.label.toLowerCase().includes(typed));
+    },
     show: vi.fn(),
     hide: vi.fn(() => { hideListeners.forEach(cb => cb()); }),
     dispose: vi.fn(),
@@ -73,8 +78,8 @@ describe('pickRecord', () => {
 
     expect(qp.value).toBe(record.formKey);
     expect(searchRecords).toHaveBeenCalledWith(record.formKey, ['npc_']);
-    expect(qp.items).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey }]);
-    expect(qp.activeItems).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey }]);
+    expect(qp.items).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey, alwaysShow: true }]);
+    expect(qp.activeItems).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey, alwaysShow: true }]);
 
     qp.hide();
     await dispatchPromise;
@@ -97,6 +102,24 @@ describe('pickRecord', () => {
 
     const dispatchPromise = openPicker(seed, [], deps);
     await vi.waitFor(() => expect(searchRecords).toHaveBeenCalledWith(searched, []));
+
+    qp.hide();
+    await dispatchPromise;
+  });
+
+  it.each([
+    ['a typed FormID', '0001F4AB', 'X'],
+    ['a pasted label whose EditorID has gone stale', 'OldName [Fallout4.esm:000001]', 'NewName'],
+  ])('shows the record found by %s, though its label does not contain the typed text', async (_n, typed, editorId) => {
+    const record = makeRecord(1, editorId);
+    const { deps } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
+    const { qp } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const dispatchPromise = openPicker(typed, [], deps);
+    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+
+    expect(qp.visibleItems).toHaveLength(1);
 
     qp.hide();
     await dispatchPromise;
@@ -129,7 +152,7 @@ describe('pickRecord', () => {
 
     expect(qp.value).toBe(composite);
     expect(searchRecords).toHaveBeenCalledWith(record.formKey, ['npc_']);
-    expect(qp.activeItems).toEqual([{ label: composite, formKey: record.formKey }]);
+    expect(qp.activeItems).toEqual([{ label: composite, formKey: record.formKey, alwaysShow: true }]);
 
     qp.hide();
     await dispatchPromise;
@@ -230,7 +253,7 @@ describe('pickRecord', () => {
     resolveFirst({ items: [makeRecord(1, 'First')], total: 1 });
     await Promise.resolve();
 
-    expect(qp.items).toEqual([{ label: `Second [${secondRecord.formKey}]`, formKey: secondRecord.formKey }]);
+    expect(qp.items).toEqual([{ label: `Second [${secondRecord.formKey}]`, formKey: secondRecord.formKey, alwaysShow: true }]);
 
     qp.hide();
     await dispatchPromise;
@@ -248,6 +271,25 @@ describe('pickRecord', () => {
     await expect(dispatchPromise).resolves.toBe('X');
     expect(qp.hide).toHaveBeenCalled();
     expect(qp.dispose).toHaveBeenCalled();
+  });
+
+  it('takes no pick while the shown items answer an earlier query', async () => {
+    vi.useFakeTimers();
+    const record = makeRecord(1, 'Old');
+    const { deps } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
+    const { qp, typeValue, accept } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const dispatchPromise = openPicker('old', [], deps);
+    await vi.advanceTimersByTimeAsync(0);
+    typeValue('new');
+    qp.selectedItems = qp.items;
+    accept();
+
+    expect(qp.hide).not.toHaveBeenCalled();
+
+    qp.hide();
+    await expect(dispatchPromise).resolves.toBeNull();
   });
 
   it('resolves to null and disposes the picker when dismissed without a selection', async () => {
@@ -309,7 +351,7 @@ describe('pickRecord', () => {
     typeValue('swo');
     await vi.advanceTimersByTimeAsync(200);
 
-    expect(qp.items).toEqual([{ label: `Sword [${record.formKey}]`, formKey: record.formKey }]);
+    expect(qp.items).toEqual([{ label: `Sword [${record.formKey}]`, formKey: record.formKey, alwaysShow: true }]);
 
     qp.hide();
     await result;
