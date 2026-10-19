@@ -29,7 +29,7 @@ public sealed class DeleteRecordChangesHandler
     public async Task<Answer<DeleteRecordResult, SelectionRefusal<RecordEditRefusal>>> DeleteRecords(IReadOnlyList<RecordAt> records) =>
         (await DeleteRecords(records, new WriteSessions(_source, _unsaved.Current))).ToAnswer(
             landed => new RecordDeleted(landed.Item, landed.Outcome.Moves, landed.Outcome.Deletions, landed.Outcome.Documents),
-            refused => new DeleteRefused(refused.Item, refused.Refusal, refused.Message),
+            refused => new DeleteRecordRefused(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new DeleteRecordResult(applied, refused));
 
     /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>

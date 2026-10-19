@@ -110,7 +110,7 @@ public sealed class CreateCellInWorldspaceTests : IDisposable
         var (outcome, changes) = _plugins.CreateHandler.CreateRecord(Edited, "cell", World.ToString(), new GridPosition(5, 6));
 
         Assert.True(outcome.Applied, outcome.Message);
-        Assert.Contains(changes.Documents, document => document.Text.Contains(outcome.NewFormKey.Require(), StringComparison.Ordinal));
+        Assert.Contains(changes.Require().Documents, document => document.Text.Contains(outcome.NewFormKey.Require(), StringComparison.Ordinal));
         Assert.Equal(before, Tree);
     }
 

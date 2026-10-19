@@ -35,11 +35,11 @@ public sealed class EditRecordChangesTests : IDisposable
     private static string TextOf(TestInstance instance, PluginAddress plugin, string formKey) =>
         File.ReadAllText(Path.Combine(instance.ModFolderOf(plugin), SourceModTree.DocumentFile(instance.ModFolderOf(plugin), plugin, formKey).Require()));
 
-    private static (RecordEditResult Outcome, EditRecordChanges Changes) Changes(
+    private static (RecordEditResult Outcome, EditRecordChanges? Changes) Changes(
         TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
         instance.EditChangesHandler.Changes(plugin, formKey, envelope).Seen();
 
-    private static (RecordEditResult Outcome, EditRecordChanges Changes) ChangesOver(
+    private static (RecordEditResult Outcome, EditRecordChanges? Changes) ChangesOver(
         TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string unsaved)
     {
         var file = Path.Combine(instance.ModFolderOf(plugin), SourceModTree.DocumentFile(instance.ModFolderOf(plugin), plugin, formKey).Require());
@@ -52,8 +52,8 @@ public sealed class EditRecordChangesTests : IDisposable
     {
         var answer = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"));
 
-        Assert.Equal(_mod.Npc.ToString(), answer.Changes.FormKey);
-        Assert.Equal("HeightMax", answer.Changes.Path);
+        Assert.Equal(_mod.Npc.ToString(), answer.Changes.Require().FormKey);
+        Assert.Equal("HeightMax", answer.Changes.Require().Path);
     }
 
     [Fact]
@@ -64,8 +64,8 @@ public sealed class EditRecordChangesTests : IDisposable
         var answer = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"));
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        Assert.Empty(answer.Changes.Moves);
-        var document = Assert.Single(answer.Changes.Documents);
+        Assert.Empty(answer.Changes.Require().Moves);
+        var document = Assert.Single(answer.Changes.Require().Documents);
         Assert.Equal(Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require()), document.Path);
         Assert.Contains("0.75", document.Text, StringComparison.Ordinal);
         Assert.Equal(before, TreeSnapshot.Of(_mod.ModFolder));
@@ -80,7 +80,7 @@ public sealed class EditRecordChangesTests : IDisposable
 
         var answer = ChangesOver(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"), unsaved);
 
-        var document = Assert.Single(answer.Changes.Documents);
+        var document = Assert.Single(answer.Changes.Require().Documents);
         Assert.Contains("TypedButUnsaved", document.Text, StringComparison.Ordinal);
         Assert.Contains("0.75", document.Text, StringComparison.Ordinal);
     }
@@ -96,7 +96,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75")).Seen();
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        var document = Assert.Single(answer.Changes.Documents);
+        var document = Assert.Single(answer.Changes.Require().Documents);
         Assert.Equal(file, document.Path);
         Assert.Contains("0.75", document.Text, StringComparison.Ordinal);
         Assert.Equal("not a document", File.ReadAllText(file));
@@ -106,7 +106,7 @@ public sealed class EditRecordChangesTests : IDisposable
     [InlineData("npc")]
     [InlineData("quest")]
     [InlineData("cell")]
-    public void AFieldEdit_OfARecordWhoseDirtyFileWasRemoved_IsRefusedAsRecordNotFound_AndAnswersNoChanges(string record)
+    public void AFieldEdit_OfARecordWhoseDirtyFileWasRemoved_IsRefusedAsRecordNotFound(string record)
     {
         var formKey = (record switch { "npc" => _mod.Npc, "quest" => _mod.Quest, _ => _mod.Cell }).ToString();
         var given = TextOf(_mod, _mod.Plugin, formKey);
@@ -117,7 +117,6 @@ public sealed class EditRecordChangesTests : IDisposable
         var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, formKey, Set("EditorID", "\"Edited\"")).Seen();
 
         Assert.Equal(RecordEditRefusal.RecordNotFound, answer.Outcome.Refusal);
-        Assert.Empty(answer.Changes.Documents);
     }
 
     [Fact]
@@ -129,7 +128,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var answer = ChangesOver(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("FormKey", "\"000F00:Fixture.esp\""), unsaved);
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        var document = answer.Changes.Documents.Single(change => change.Text.Contains("000F00:Fixture.esp", StringComparison.Ordinal));
+        var document = answer.Changes.Require().Documents.Single(change => change.Text.Contains("000F00:Fixture.esp", StringComparison.Ordinal));
         Assert.Contains("TypedButUnsaved", document.Text, StringComparison.Ordinal);
     }
 
@@ -148,7 +147,7 @@ public sealed class EditRecordChangesTests : IDisposable
     [Theory]
     [InlineData("FormKey", "\"000F00:Fixture.esp\"")]
     [InlineData("HeightMin", "0.75")]
-    public void AnEdit_UnsavedTextTheCodecCannotRead_IsRefusedAsRecordParseFailed_AndAnswersNoChanges(string member, string value)
+    public void AnEdit_UnsavedTextTheCodecCannotRead_IsRefusedAsRecordParseFailed(string member, string value)
     {
         var unreadable = TextOf(_mod, _mod.Plugin, _mod.Npc.ToString())
             .Replace($"\"{SourceEditFixture.NpcEditorId}\"", $"\"{SourceEditFixture.NpcEditorId}\", \"HeightMax\": {{ \"x\": 1 }}", StringComparison.Ordinal);
@@ -156,8 +155,6 @@ public sealed class EditRecordChangesTests : IDisposable
         var answer = ChangesOver(_mod, _mod.Plugin, _mod.Npc.ToString(), Set(member, value), unreadable);
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, answer.Outcome.Refusal);
-        Assert.Empty(answer.Changes.Moves);
-        Assert.Empty(answer.Changes.Documents);
     }
 
     [Fact]
@@ -172,7 +169,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var answer = ChangesOver(world, world.Plugin, keys["Mover"].ToString(), Flags(Persistent), unsaved);
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        var left = Assert.Single(answer.Changes.Documents, document => document.Path == leaving);
+        var left = Assert.Single(answer.Changes.Require().Documents, document => document.Path == leaving);
         Assert.Contains("TypedButUnsaved", left.Text, StringComparison.Ordinal);
         Assert.DoesNotContain("Mover", left.Text, StringComparison.Ordinal);
     }
@@ -183,17 +180,16 @@ public sealed class EditRecordChangesTests : IDisposable
         var unchanged = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("EditorID", $"\"{SourceEditFixture.NpcEditorId}\""));
 
         Assert.True(unchanged.Outcome.Applied, unchanged.Outcome.Message);
-        Assert.Empty(unchanged.Changes.Moves);
-        Assert.Empty(unchanged.Changes.Documents);
+        Assert.Empty(unchanged.Changes.Require().Moves);
+        Assert.Empty(unchanged.Changes.Require().Documents);
     }
 
     [Fact]
-    public void ARefusedEdit_AnswersItsRefusal_AndNoChanges()
+    public void ARefusedEdit_AnswersItsRefusal()
     {
         var answer = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("NoSuchField", "1"));
 
         Assert.Equal(RecordEditRefusal.FieldNotFound, answer.Outcome.Refusal);
-        Assert.Empty(answer.Changes.Documents);
     }
 
     [Fact]
@@ -201,10 +197,10 @@ public sealed class EditRecordChangesTests : IDisposable
     {
         var answer = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("EditorID", "\"RenamedNpc\""));
 
-        var move = Assert.Single(answer.Changes.Moves);
+        var move = Assert.Single(answer.Changes.Require().Moves);
         Assert.Equal(Path.Combine(_mod.ModFolder, _mod.DocumentFile(_mod.Npc.ToString()).Require()), move.From);
         Assert.Contains("RenamedNpc", move.To, StringComparison.Ordinal);
-        Assert.Equal(move.To, Assert.Single(answer.Changes.Documents).Path);
+        Assert.Equal(move.To, Assert.Single(answer.Changes.Require().Documents).Path);
     }
 
     [Fact]
@@ -215,7 +211,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var answer = Changes(world, world.Plugin, keys["Wanderer"].ToString(), Flags(0));
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        var arrived = Assert.Single(answer.Changes.Documents, document => document.Text.Contains("\"Wanderer\"", StringComparison.Ordinal));
+        var arrived = Assert.Single(answer.Changes.Require().Documents, document => document.Text.Contains("\"Wanderer\"", StringComparison.Ordinal));
         Assert.DoesNotContain("\"Mover\"", arrived.Text, StringComparison.Ordinal);
     }
 
@@ -231,7 +227,7 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         Assert.Equal(
             given.Replace("\"EditorID\": \"Mover\"", "\"EditorID\": \"Renamed\"", StringComparison.Ordinal),
-            Assert.Single(answer.Changes.Documents).Text);
+            Assert.Single(answer.Changes.Require().Documents).Text);
     }
 
     [Fact]
@@ -246,7 +242,7 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         Assert.Equal(
             given.Replace("\"EditorID\": \"Mover\"", "\"EditorID\": \"Renamed\"", StringComparison.Ordinal),
-            Assert.Single(answer.Changes.Documents).Text);
+            Assert.Single(answer.Changes.Require().Documents).Text);
     }
 
     [Fact]
@@ -262,7 +258,7 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         Assert.Equal(
             given.Replace($"\"FormKey\": \"{keys["Mover"]}\"", "\"FormKey\": \"000F00:World.esp\"", StringComparison.Ordinal),
-            Assert.Single(answer.Changes.Documents, document => document.Path == leaving).Text);
+            Assert.Single(answer.Changes.Require().Documents, document => document.Path == leaving).Text);
     }
 
     [Fact]
@@ -280,7 +276,7 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         Assert.Equal(
             HandFormatted(RecordTextCodec.RoundTrip(withoutWanderer.ToJsonString(), GameRelease.Fallout4, "cell"), "Here"),
-            Assert.Single(answer.Changes.Documents, document => document.Path == leaving).Text);
+            Assert.Single(answer.Changes.Require().Documents, document => document.Path == leaving).Text);
     }
 
     [Fact]
@@ -300,7 +296,7 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         Assert.Equal(
             HandFormatted(RecordTextCodec.RoundTrip(withMover.ToJsonString(), GameRelease.Fallout4, "wrld"), "World"),
-            Assert.Single(answer.Changes.Documents, document => document.Path == worldspace).Text);
+            Assert.Single(answer.Changes.Require().Documents, document => document.Path == worldspace).Text);
     }
 
     private static string HandFormatted(string text, string editorId) =>
@@ -319,7 +315,7 @@ public sealed class EditRecordChangesTests : IDisposable
         var answer = ChangesOver(world, world.Plugin, keys["Mover"].ToString(), Flags(0), cell.ToJsonString());
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
-        var written = JsonNode.Parse(Assert.Single(answer.Changes.Documents).Text).Require();
+        var written = JsonNode.Parse(Assert.Single(answer.Changes.Require().Documents).Text).Require();
         Assert.Equal(["Mover"], EditorIdsIn(written, "Temporary"));
         Assert.Equal(["Wanderer"], EditorIdsIn(written, "Persistent"));
     }

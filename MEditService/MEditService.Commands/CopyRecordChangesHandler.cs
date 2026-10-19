@@ -35,8 +35,9 @@ public sealed class CopyRecordChangesHandler
         (await CopyRecords(records, mode, destinations, replace, new WriteSessions(_source, _unsaved.Current))).ToAnswer(
             landed => new RecordCopied(
                 landed.Item.Record, landed.Item.Destination,
-                landed.Outcome.Changes.Moves, landed.Outcome.Changes.Deletions, landed.Outcome.Changes.Documents),
-            refused => new CopyRefused(refused.Item, refused.Refusal, refused.Message),
+                landed.Outcome.Changes.Moves, landed.Outcome.Changes.Deletions, landed.Outcome.Changes.Documents,
+                landed.Outcome.Outcome.NewFormKey),
+            refused => new CopyRecordRefused(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new CopyRecordResult(applied, refused));
 
     /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>

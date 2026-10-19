@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -13,8 +14,9 @@ public sealed class CopyAsNewTests
         using var mod = CopyFixture.Create();
         var sourceBefore = mod.SourcePluginBytes();
 
-        var newFormKey = mod.ScriptCopyHandler.CopyAsNew(new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString()), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
 
+        var newFormKey = result.OnlyLanded().Require();
         Assert.NotEqual(mod.SourceNpc.ToString(), newFormKey);
         Assert.EndsWith(":" + CopyFixture.DestinationPluginName, newFormKey, StringComparison.Ordinal);
 
@@ -30,8 +32,9 @@ public sealed class CopyAsNewTests
     {
         using var mod = CopyFixture.Create();
 
-        var newFormKey = mod.ScriptCopyHandler.CopyAsNew(new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString()), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
 
+        var newFormKey = result.OnlyLanded().Require();
         var document = mod.Document(mod.DestinationPlugin, newFormKey);
         Assert.NotNull(document);
         Assert.NotEqual(CopyFixture.SourceNpcEditorId, document.EditorId);
@@ -43,11 +46,11 @@ public sealed class CopyAsNewTests
     {
         using var mod = CopyFixture.Create();
 
-        var first = mod.ScriptCopyHandler.CopyAsNew(new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString()), mod.DestinationPlugin);
-        var second = mod.ScriptCopyHandler.CopyAsNew(new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString()), mod.DestinationPlugin);
+        var first = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
+        var second = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
 
-        var firstFormKey = first;
-        var secondFormKey = second;
+        var firstFormKey = first.OnlyLanded().Require();
+        var secondFormKey = second.OnlyLanded().Require();
         var firstDocument = mod.Document(mod.DestinationPlugin, firstFormKey);
         var secondDocument = mod.Document(mod.DestinationPlugin, secondFormKey);
         Assert.NotNull(firstDocument);
@@ -65,8 +68,9 @@ public sealed class CopyAsNewTests
             mod.DestinationPlugin, mod.DestinationNpc.ToString(), "EditorID",
             JsonDocument.Parse("\"SourceNpcDUPLICATE001\"").RootElement).Applied);
 
-        var newFormKey = mod.ScriptCopyHandler.CopyAsNew(new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString()), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
 
+        var newFormKey = result.OnlyLanded().Require();
         var document = mod.Document(mod.DestinationPlugin, newFormKey);
         Assert.NotNull(document);
         Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", document.EditorId);
@@ -80,8 +84,9 @@ public sealed class CopyAsNewTests
             mod.DestinationPlugin, mod.DestinationNpc.ToString(), "EditorID",
             JsonDocument.Parse("\"SOURCENPCDUPLICATE001\"").RootElement).Applied);
 
-        var newFormKey = mod.ScriptCopyHandler.CopyAsNew(new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString()), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
 
+        var newFormKey = result.OnlyLanded().Require();
         var document = mod.Document(mod.DestinationPlugin, newFormKey);
         Assert.NotNull(document);
         Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", document.EditorId);
@@ -92,8 +97,9 @@ public sealed class CopyAsNewTests
     {
         using var mod = CopyFixture.Create();
 
-        var newFormKey = mod.ScriptCopyHandler.CopyAsNew(new RecordAt(mod.SourcePlugin, mod.SourceNpcWithNoEditorId.ToString()), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpcWithNoEditorId.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
 
+        var newFormKey = result.OnlyLanded().Require();
         var document = mod.Document(mod.DestinationPlugin, newFormKey);
         Assert.NotNull(document);
         Assert.Null(document.EditorId);
@@ -104,8 +110,9 @@ public sealed class CopyAsNewTests
     {
         using var mod = CopyFixture.Create();
 
-        var newFormKey = mod.ScriptCopyHandler.CopyAsNew(new RecordAt(mod.SourcePlugin, mod.SelfLinkingFaction.ToString()), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SelfLinkingFaction.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
 
+        var newFormKey = result.OnlyLanded().Require();
         var document = mod.Document(mod.DestinationPlugin, newFormKey);
         Assert.NotNull(document);
         Assert.Contains(newFormKey, document.Body, StringComparison.Ordinal);
@@ -153,8 +160,9 @@ public sealed class CopyAsNewTests
     {
         using var fixture = ContainerCopyFixture.CreateWithCompiledPluginSource();
 
-        var newFormKey = fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(fixture.SourcePlugin, fixture.Quest.ToString()), fixture.DestinationPlugin);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Quest.ToString())], CopyMode.New, [fixture.DestinationPlugin], replace: false);
 
+        var newFormKey = result.OnlyLanded().Require();
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, newFormKey));
     }
 
@@ -174,9 +182,9 @@ public sealed class CopyAsNewTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.ScriptCopyHandler.CopyAsNew(new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString()), mod.DestinationPlugin);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
 
-        Assert.Equal("000801:Destination.esp", result);
+        Assert.Equal("000801:Destination.esp", result.OnlyLanded());
         Assert.Equal(0x802u, mod.NextObjectId(mod.DestinationPlugin));
     }
 }

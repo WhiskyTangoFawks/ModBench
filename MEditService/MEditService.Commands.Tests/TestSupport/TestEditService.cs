@@ -53,9 +53,6 @@ internal static class TestEditService
     internal static CopyRecordChangesHandler CopyHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<CopyRecordChangesHandler>();
 
-    internal static CopyRecordHandler ScriptCopyHandler(LoadOrderHolder holder) =>
-        Over(holder).GetRequiredService<CopyRecordHandler>();
-
     internal static CompilePluginHandler CompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<CompilePluginHandler>();
 

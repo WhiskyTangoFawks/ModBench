@@ -35,7 +35,7 @@ public sealed class WriteGatesOverAFakeSourceTests
         return TestEditService.Over(disk.Holder, source: source);
     }
 
-    private static (RecordEditResult Outcome, EditRecordChanges Changes) SetHeight(IServiceProvider services, string formKey) =>
+    private static (RecordEditResult Outcome, EditRecordChanges? Changes) SetHeight(IServiceProvider services, string formKey) =>
         services.GetRequiredService<EditRecordChangesHandler>()
             .Changes(Plugin, formKey, SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).Seen();
 
@@ -105,7 +105,7 @@ public sealed class WriteGatesOverAFakeSourceTests
         var answered = SetHeight(Over(source), Npc);
 
         Assert.True(answered.Outcome.Applied, answered.Outcome.Message);
-        var written = Assert.Single(answered.Changes.Documents);
+        var written = Assert.Single(answered.Changes.Require().Documents);
         Assert.StartsWith(ModFolder, written.Path, StringComparison.Ordinal);
         Assert.Contains("0.75", written.Text, StringComparison.Ordinal);
     }

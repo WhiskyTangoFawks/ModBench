@@ -84,7 +84,7 @@ def copy(plugin: Name, form_key: str, destination: Name, mode: CopyMode = 'overr
     name, origin = _plugin(plugin)
     into_name, into_origin = _plugin(destination)
     return _call('POST', '/records/copy', {
-        'record': {'formKey': form_key, 'plugin': name, 'origin': origin},
+        'record': {'formKey': form_key, 'plugin': {'name': name, 'origin': origin}},
         'mode': mode, 'destination': {'name': into_name, 'origin': into_origin}, 'replace': replace})['formKey']
 
 
@@ -109,7 +109,7 @@ def create_record(
 def delete(plugin: Name, form_key: str) -> None:
     """Deletes the plugin's copy of a record from its plugin source."""
     name, origin = _plugin(plugin)
-    _call('POST', '/records/delete', {'formKey': form_key, 'plugin': name, 'origin': origin})
+    _call('POST', '/records/delete', {'formKey': form_key, 'plugin': {'name': name, 'origin': origin}})
 
 
 def _named(named: JsonRecord) -> Plugin | RecordName:

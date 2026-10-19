@@ -27,14 +27,14 @@ internal static class SingleRecordAnswers
         new(false, refused.Refusal, refused.Message, Path: refused.Path);
 
     /// <summary>The outcome, and the changes it made: none when it was refused.</summary>
-    internal static (RecordEditResult Outcome, EditRecordChanges Changes) Seen(this Answer<EditRecordChanges, RecordEditRefused> answer) =>
-        (answer.AsResult(), answer.Holds(out var changes, out _) ? changes : new EditRecordChanges("", "", [], [], []));
+    internal static (RecordEditResult Outcome, EditRecordChanges? Changes) Seen(this Answer<EditRecordChanges, RecordEditRefused> answer) =>
+        (answer.AsResult(), answer.Holds(out var changes, out _) ? changes : null);
 
     internal static void Deconstruct(
-        this Answer<EditRecordChanges, RecordEditRefused> answer, out RecordEditResult outcome, out EditRecordChanges changes) =>
+        this Answer<EditRecordChanges, RecordEditRefused> answer, out RecordEditResult outcome, out EditRecordChanges? changes) =>
         (outcome, changes) = answer.Seen();
 
     internal static void Deconstruct(
-        this Answer<CreateRecordChanges, RecordEditRefused> answer, out RecordEditResult outcome, out CreateRecordChanges changes) =>
-        (outcome, changes) = (answer.AsResult(), answer.Holds(out var made, out _) ? made : new CreateRecordChanges("", [], [], []));
+        this Answer<CreateRecordChanges, RecordEditRefused> answer, out RecordEditResult outcome, out CreateRecordChanges? changes) =>
+        (outcome, changes) = (answer.AsResult(), answer.Holds(out var made, out _) ? made : null);
 }

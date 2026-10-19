@@ -1,11 +1,8 @@
-using System.Text;
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -142,11 +139,7 @@ public sealed class CopyRecordChangesHandlerTests
 
         var result = mod.CopyHandler.CopyChangesSync(records, CopyMode.New, [mod.DestinationPlugin], replace: false);
 
-        var drawn = result.Applied.Select(applied => Assert.Single(applied.Documents.SelectMany(document => RootFormKeys(document.Text)))).ToList();
+        var drawn = result.Applied.Select(applied => applied.NewFormKey).ToList();
         Assert.Equal(2, drawn.Distinct().Count());
     }
-
-    private static IEnumerable<string> RootFormKeys(string documentText) =>
-        DocumentTokens.FormKeysIn(Encoding.UTF8.GetBytes(documentText), GameRelease.Fallout4)
-            .Where(key => key.Position == FormKeyPosition.Root).Select(key => key.FormKey);
 }
