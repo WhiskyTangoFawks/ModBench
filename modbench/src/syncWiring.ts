@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import { createSync, type Sync, type SyncChannel } from './drivingLib/syncFailureReport';
+import { createModSync, createPluginSync, type Sync, type SyncChannel } from './drivingLib/syncFailureReport';
 import type { Instance, InstanceValue } from './instanceLoader/instance';
 import type { ModSyncRun } from './modCommands/modCommands';
 import type { PluginSyncRun } from './pluginCommands/plugins';
@@ -21,20 +21,8 @@ interface InstanceSyncsDeps {
 // disk, so the sync writes nothing and the loop stops; a sync that wrote unconditionally never would.
 export function instanceSyncs({ instance, syncMods, syncPlugins, channel }: InstanceSyncsDeps): InstanceSyncs {
   const { modOrderFile } = instance.value.managerNames;
-  const modSync = createSync(syncMods, channel, {
-    command: 'mod sync',
-    prefix: '[modCommands]',
-    unsynced: `${modOrderFile} is not synced`,
-    added: `${modOrderFile} line(s) for folder(s) in mods/ with no line`,
-    dropped: `${modOrderFile} line(s) whose folder is gone from mods/`,
-  });
-  const pluginSync = createSync(syncPlugins, channel, {
-    command: 'plugin sync',
-    prefix: '[pluginCommands]',
-    unsynced: 'plugins.txt is not synced',
-    added: 'disabled plugins.txt line(s) for plugin(s) on disk with no line',
-    dropped: 'plugins.txt line(s) with no plugin on disk',
-  });
+  const modSync = createModSync(syncMods, channel, modOrderFile);
+  const pluginSync = createPluginSync(syncPlugins, channel);
   const subscription = instance.subscribe(() => {
     void modSync.run();
     void pluginSync.run();
