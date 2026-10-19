@@ -1135,9 +1135,9 @@ describe('what a record tab\'s webview posts', () => {
       ['a type this build does not know', { type: 'somethingElse' }],
       ['a string', 'not an object'],
       ['null', null],
-    ])('is ignored, as %s', async (_, message) => {
+    ])('is dropped, as %s, saying in the Output what the page sent', async (_, message) => {
       const mEdit = client();
-      const { open } = makeEditor(mEdit);
+      const { open, outputChannel } = makeEditor(mEdit);
       const tab = open(GUN);
       const [executed, asked] = [h.executed.length, mEdit.calls.length];
 
@@ -1146,6 +1146,19 @@ describe('what a record tab\'s webview posts', () => {
 
       expect([h.executed.length, mEdit.calls.length]).toEqual([executed, asked]);
       expect(tab.webview.postMessage).not.toHaveBeenCalled();
+      const logged: unknown = outputChannel.warn.mock.calls.at(-1)?.[0];
+      expect(logged).toMatch(/^Dropped a message from a record tab's page: /);
+      expect(logged).toContain(JSON.stringify(message));
+    });
+
+    it('is dropped, saying so in the Output, as a value JSON cannot write', async () => {
+      const { open, outputChannel } = makeEditor(client());
+      const tab = open(GUN);
+
+      tab.receive({ type: 'sentByAnotherExtension', count: BigInt(1) });
+      await settle();
+
+      expect(outputChannel.warn).toHaveBeenCalledWith(expect.stringMatching(/^Dropped a message from a record tab's page: /));
     });
   });
 
