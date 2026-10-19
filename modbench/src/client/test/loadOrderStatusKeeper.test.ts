@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { NotificationEvent } from '../apiClient';
 import type { PluginLoadFailure } from '../MEditClient';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
+import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
 function tick(conflictsComputed: boolean, failures: PluginLoadFailure[] = [], version = 1): NotificationEvent {
   return {
@@ -122,5 +123,41 @@ describe('the client\'s load-order status', () => {
 
       expect(settled).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('whether mEdit was ever handed a load order', () => {
+  function kept() {
+    let hear: (status: unknown) => void = () => undefined;
+    let reconnect: () => void = () => undefined;
+    const keeper = keepLoadOrderStatus({
+      onNotification: (_kind, listener) => { hear = listener as typeof hear; return () => undefined; },
+      onStatusChanged: () => () => undefined,
+      onReconnected: (listener) => { reconnect = listener; return () => undefined; },
+    });
+    const heard = (state: 'None' | 'Ready') => {
+      hear({ totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1, holdsNone: state === 'None' });
+    };
+    return { keeper, heard, reconnect: () => { reconnect(); } };
+  }
+
+  it('is no before a status that holds one, and stays yes when a rebuild drops the index', () => {
+    const { keeper, heard } = kept();
+    heard('None');
+    expect(keeper.everHeld()).toBe(false);
+
+    heard('Ready');
+    heard('None');
+
+    expect(keeper.everHeld()).toBe(true);
+  });
+
+  it('is no again once the stream reopens onto a process that may be another', () => {
+    const { keeper, heard, reconnect } = kept();
+    heard('Ready');
+
+    reconnect();
+
+    expect(keeper.everHeld()).toBe(false);
   });
 });

@@ -191,6 +191,7 @@ async function answerRecordLoad(
   const [settled] = await Promise.allSettled([readRecord(deps, m, pluginActive)]);
   const read = settled.status === 'rejected' ? localFailure(errorMessage(settled.reason)) : settled.value;
   if (isReadFailed(read)) {
+    if (read.failed === 'no-load-order') return;
     deps.channel.warn(`Failed to read ${m.formKey}: ${failureReason(read)}`);
     deps.reply({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: false, failure: read });
     return;

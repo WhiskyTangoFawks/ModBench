@@ -41,7 +41,7 @@ function pushableStreamResponse(): { response: Response; push: (chunk: Uint8Arra
 }
 
 function loadOrderStatusTick(loadOrderStatus: {
-  totalPlugins: number; indexedPlugins: { name: string; origin: string }[]; conflictsComputed: boolean; failures: unknown[]; version: number;
+  totalPlugins: number; indexedPlugins: { name: string; origin: string }[]; conflictsComputed: boolean; failures: unknown[]; version: number; state?: string;
 }): Uint8Array {
   const tick = { kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0, loadOrderStatus };
   return new TextEncoder().encode(`data: ${JSON.stringify(tick)}\n\n`);
@@ -504,25 +504,25 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   describe('a read mEdit refuses', () => {
     const cannotAnswer = 'No load order has been loaded.';
     const notIndexed = 'mEdit has not finished indexing the plugins.';
-    const refusedReads: { what: string; verb: Verb; status: number; detail: string }[] = [
+    const refusedReads: { what: string; verb: Verb; status: number; detail: string; failed?: 'no-load-order' }[] = [
       { what: 'getComparison(000801:Broken.esp)', verb: (c) => c.getComparison('000801:Broken.esp'), status: 500, detail: 'boom' },
       { what: 'getRecordsComparison', verb: (c) => c.getRecordsComparison([]), status: 400, detail: 'No records.' },
       { what: 'resolveNames', verb: (c) => c.resolveNames([{ name: 'Gone' }]), status: 400, detail: 'Nothing is named "Gone".' },
       { what: 'selectRows', verb: (c) => c.selectRows('DROP TABLE x'), status: 400, detail: 'Only a SELECT runs.' },
-      { what: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(), status: 503, detail: cannotAnswer },
-      { what: 'getChildRecordTypes(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getChildRecordTypes(shared, sharedKey), status: 503, detail: cannotAnswer },
-      { what: 'getRenderedDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getRenderedDocument(shared, sharedKey), status: 503, detail: cannotAnswer },
-      { what: 'getCopyDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getCopyDocument(shared, sharedKey), status: 503, detail: cannotAnswer },
+      { what: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(), status: 503, failed: 'no-load-order', detail: cannotAnswer },
+      { what: 'getChildRecordTypes(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getChildRecordTypes(shared, sharedKey), status: 503, failed: 'no-load-order', detail: cannotAnswer },
+      { what: 'getRenderedDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getRenderedDocument(shared, sharedKey), status: 503, failed: 'no-load-order', detail: cannotAnswer },
+      { what: 'getCopyDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getCopyDocument(shared, sharedKey), status: 503, failed: 'no-load-order', detail: cannotAnswer },
       { what: `getRecordOfFile(${sourcePath})`, verb: (c) => c.getRecordOfFile(sourcePath), status: 422, detail: `${sourcePath} declares no FormKey, so it is no record's document.` },
-      { what: 'getCreatablePluginExtensions', verb: (c) => c.getCreatablePluginExtensions(), status: 503, detail: cannotAnswer },
-      { what: 'getPluginDependants(Base.esm)', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }), status: 503, detail: notIndexed },
-      { what: 'getPluginProblems', verb: (c) => c.getPluginProblems(), status: 503, detail: notIndexed },
+      { what: 'getCreatablePluginExtensions', verb: (c) => c.getCreatablePluginExtensions(), status: 503, failed: 'no-load-order', detail: cannotAnswer },
+      { what: 'getPluginDependants(Base.esm)', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }), status: 503, failed: 'no-load-order', detail: notIndexed },
+      { what: 'getPluginProblems', verb: (c) => c.getPluginProblems(), status: 503, failed: 'no-load-order', detail: notIndexed },
     ];
 
-    it.each(refusedReads)('$what fails with mEdit\'s reason alone, and files the verb and status in the log', async ({ what, verb, status, detail }) => {
+    it.each(refusedReads)('$what fails with mEdit\'s reason alone, and files the verb and status in the log', async ({ what, verb, status, detail, failed = 'refused' }) => {
       const { result, log } = await exchange(verb, answers(status, { detail }));
 
-      expect(result).toEqual({ failed: 'refused', refusal: detail });
+      expect(result).toEqual({ failed, refusal: detail });
       expect(log.lines.error).toEqual([`[HttpMEditClient] ${what} failed (${status}): ${detail}`]);
     });
 
@@ -543,6 +543,38 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       const { result } = await exchange(verb, answers(200));
 
       expect(result).toEqual({ failed: 'no-answer' });
+    });
+  });
+
+  describe('a read refused for want of a load order', () => {
+    const detail = 'No load order has been received.';
+    const heldTick = loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1, state: 'Reconciling' });
+    const droppedTick = loadOrderStatusTick({ totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 2, state: 'None' });
+
+    async function refusedAfter(...ticks: Uint8Array[]) {
+      const { response, push } = pushableStreamResponse();
+      const client = makeClient(routedFetch([
+        ['/notifications/stream', () => Promise.resolve(response)],
+        ['/records/', answers(503, { detail })],
+      ]));
+      await client.start();
+      for (const tick of ticks) {
+        push(tick);
+        await vi.waitFor(() => expect(client.loadOrderStatus).toBeDefined());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      return client.getComparison('000801:A.esp');
+    }
+
+    it('is told apart while mEdit has been handed none', async () => {
+      expect(await refusedAfter()).toEqual({ failed: 'no-load-order', refusal: detail });
+    });
+
+    it.each([
+      ['a load order was held', [heldTick]],
+      ['a rebuild dropped the index a load order filled', [heldTick, droppedTick]],
+    ])('is a plain refusal once %s', async (_when, ticks) => {
+      expect(await refusedAfter(...ticks)).toEqual({ failed: 'refused', refusal: detail });
     });
   });
 

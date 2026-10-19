@@ -742,6 +742,23 @@ describe('a record file\'s tab', () => {
     expect(outputChannel.warn).toHaveBeenCalledWith(`Failed to read ${FILE}: ${why}`);
   });
 
+  it('shows the empty panel, and no line in the Output, when mEdit refuses before it holds any load order, then the record once it does', async () => {
+    const client = fileClient();
+    client.setQueryFailureOnce('getRecordOfFile', { failed: 'no-load-order', refusal: 'No load order has been received.' });
+    client.setQueryAnswer('getRecordOfFile', holding(GUN));
+    const { openFile, outputChannel } = makeEditor(client);
+
+    const tab = await openFile(FILE);
+
+    expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
+    expect(outputChannel.warn).not.toHaveBeenCalled();
+
+    client.emit(statusTick(false, 1));
+    await settle();
+
+    expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
+  });
+
   it('asks again on mEdit\'s next load-order status, and shows the record once mEdit answers', async () => {
     const client = fileClient();
     client.setQueryFailureOnce('getRecordOfFile', { failed: 'unreachable' });
@@ -1078,6 +1095,28 @@ describe('what a record tab\'s webview posts', () => {
     client.setQueryAnswer('getPlugins', activeA);
     return client;
   }
+
+  describe('a read mEdit refuses for want of a load order', () => {
+    const refusal = { failed: 'no-load-order', refusal: 'No load order has been received.' } as const;
+    const childTab = async () => {
+      const mEdit = client();
+      mEdit.setQueryFailure('getComparison', refusal);
+      const { openDocument, outputChannel } = makeEditor(mEdit);
+      const tab = await openDocument({
+        scheme: 'modbench-child-record', path: '/source/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000801%3AA.esp&name=A.esp&origin=ModA',
+      });
+      tab.receive(loadRequest);
+      await settle();
+      return { tab, outputChannel };
+    };
+
+    it('answers nothing and writes no line in the Output', async () => {
+      const { tab, outputChannel } = await childTab();
+
+      expect(loadAnswered(tab)).toEqual([]);
+      expect(outputChannel.warn).not.toHaveBeenCalled();
+    });
+  });
 
   describe('an edit of a field', () => {
     const [FORM_KEY, MODDED] = ['000800:A.esp', '000900:A.esp'];

@@ -586,7 +586,8 @@ class HttpMEditClient implements MEditClient {
       if (!response.ok) {
         const text = errorText(error);
         this.log.error(`[HttpMEditClient] ${what} failed (${response.status})${text ? `: ${text}` : ''}`);
-        return text ? { failed: 'refused', refusal: text } : NO_ANSWER;
+        if (!text) return NO_ANSWER;
+        return response.status === 503 && !this.loadOrderStatusKept.everHeld() ? { failed: 'no-load-order', refusal: text } : { failed: 'refused', refusal: text };
       }
       const answered = answer(data);
       if (isReadFailed(answered)) this.log.error(`[HttpMEditClient] ${what}: mEdit answered with no body`);

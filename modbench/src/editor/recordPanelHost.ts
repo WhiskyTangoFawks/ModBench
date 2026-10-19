@@ -183,6 +183,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     let shownReason: string | undefined;
     const read = async (): Promise<void> => {
       const fail = (failure: ReadFailed): void => {
+        if (failure.failed === 'no-load-order') return;
         const reason = failureReason(failure);
         if (reason === shownReason || !tab.awaitsRecord) return;
         shownReason = reason;
