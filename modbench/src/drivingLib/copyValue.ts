@@ -36,7 +36,7 @@ export function viewCopyValueText<Row extends KindedRow, K extends Row['kind']>(
   };
 }
 
-const NOTHING_TO_COPY = 'Focus a list or a record cell to copy its value.';
+const NOTHING_TO_COPY = 'Focus a list or a cell to copy its value.';
 
 // Adapters are tried in order, so no surface needs to know another exists. A palette call has no
 // argument, so the focused view stands for the key its own Ctrl+C passes.

@@ -17,12 +17,13 @@ vi.mock('vscode', () => ({
   },
 }));
 
+import { present } from '../../ports/present';
 import { createToolboxView } from '../toolboxView';
 
 describe('the Toolbox view', () => {
   it('is modbench.toolbox, and shows a gesture\'s phase on its message line until the gesture gives it back', () => {
     const toolbox = createToolboxView({ instance: undefined });
-    const { id, view } = h.created[0]!;
+    const { id, view } = present(h.created[0], 'the created tree view');
 
     toolbox.say('Update manifest — reading…');
     const during = view.message;

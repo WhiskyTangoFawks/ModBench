@@ -61,7 +61,7 @@ describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched
     await invokeCommand();
 
     expect(writeText).not.toHaveBeenCalled();
-    expect(setStatusBarMessage.mock.calls).toEqual([['Focus a list or a record cell to copy its value.', 5000]]);
+    expect(setStatusBarMessage.mock.calls).toEqual([['Focus a list or a cell to copy its value.', 5000]]);
   });
 
   it('says nothing when an adapter owns the invocation with empty text', async () => {
