@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { copyValueVscode, invokeCommand, nothingToCopy, register, writeText } from './copyValueHarness';
+import { copyValueVscode, invokeCommand, register, setStatusBarMessage, writeText } from './copyValueHarness';
 
 vi.mock('vscode', () => copyValueVscode);
 
@@ -61,7 +61,7 @@ describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched
     await invokeCommand();
 
     expect(writeText).not.toHaveBeenCalled();
-    expect(nothingToCopy).toHaveBeenCalledOnce();
+    expect(setStatusBarMessage.mock.calls).toEqual([['Focus a list or a cell to copy its value.', 5000]]);
   });
 
   it('says nothing when an adapter owns the invocation with empty text', async () => {
@@ -69,7 +69,7 @@ describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched
 
     await invokeCommand();
 
-    expect(nothingToCopy).not.toHaveBeenCalled();
+    expect(setStatusBarMessage).not.toHaveBeenCalled();
   });
 
   it('reports a failed clipboard write under the owning adapter\'s own tag', async () => {

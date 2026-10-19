@@ -61,7 +61,8 @@ function commandVerbs(source: string): string[] {
 }
 
 describe('the createTreeView sites', () => {
-  const sites = sourceFiles().flatMap((f) => treeViewOptions(read(f)));
+  const ids = viewIdConstants();
+  const sites = sourceFiles().flatMap((f) => treeViewOptions(read(f))).map((s) => ({ ...s, id: ids.get(s.id) ?? s.id }));
 
   it('reads every createTreeView site', () => {
     expect(sites.map((s) => s.id).sort()).toEqual([
@@ -89,9 +90,19 @@ function sourceFiles(): string[] {
   return productionFiles(SRC).map((f) => relative(SRC, f).split(sep).join('/'));
 }
 
+function viewIdConstants(): Map<string, string> {
+  const ids = new Map<string, string>();
+  for (const file of sourceFiles()) {
+    for (const m of read(file).matchAll(/\b(\w+)\s*=\s*(?:\{\s*view:\s*)?'(modbench\.\w+)'/g)) {
+      ids.set(`${m[1]}${m[0].includes('view:') ? '.view' : ''}`, present(m[2], 'the view id'));
+    }
+  }
+  return ids;
+}
+
 function treeViewOptions(source: string): { id: string; options: string }[] {
   const out: { id: string; options: string }[] = [];
-  for (const m of source.matchAll(/createTreeView\('([\w.]+)',\s*\{/g)) {
+  for (const m of source.matchAll(/createTreeView\(([\w.']+),\s*\{/g)) {
     const start = m.index + m[0].length;
     let depth = 1;
     let end = start;
@@ -100,7 +111,7 @@ function treeViewOptions(source: string): { id: string; options: string }[] {
       else if (source[end] === '}') depth--;
       end++;
     }
-    out.push({ id: present(m[1], "the createTreeView call's id argument"), options: source.slice(start, end - 1) });
+    out.push({ id: present(m[1], "the createTreeView call's id argument").replaceAll("'", ''), options: source.slice(start, end - 1) });
   }
   return out;
 }

@@ -12,7 +12,7 @@ import type { NexusModRow } from '../drivingLib/inFocusedView';
 import { errorMessage } from '../ports/errorMessage';
 import { joinSyncMessages, messageLine, registerNameFilter, type NameFilter, type SyncMessage } from '../drivingLib/nameFilter';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
-import { modsKeyContext } from './gestureEntry';
+import { MODS_KEY_ARGS, modsKeyContext } from './gestureEntry';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
 import { modNameOf } from '../instanceLoader/modName';
@@ -83,7 +83,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
   const { instance, commands, log, modSync, reporterFor, ask, trash } = deps;
   const { statuses, statusMessage } = modStatusesOf(deps);
   const provider = new ModListProvider({ instance, statuses });
-  const view = vscode.window.createTreeView('modbench.modList', {
+  const view = vscode.window.createTreeView(MODS_KEY_ARGS.view, {
     treeDataProvider: provider,
     canSelectMany: true,
     showCollapseAll: true,

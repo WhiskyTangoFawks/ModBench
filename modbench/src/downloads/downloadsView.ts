@@ -13,7 +13,7 @@ import { DownloadsProvider, type DownloadsTreeNode } from './DownloadsProvider';
 import { ExcludedDownloadDecorationProvider } from './ExcludedDownloadDecorationProvider';
 import { downloadsFolderUnresolvedLine } from './downloadsFolderUnresolvedLog';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
-import { downloadsKeyContext } from './keyContext';
+import { DOWNLOADS_KEY_ARGS, downloadsKeyContext } from './keyContext';
 
 interface DownloadsViewDeps {
   commands: DownloadedFileCommands;
@@ -36,7 +36,7 @@ export function createDownloadsView(
   { commands, instance, reporter, ask, trash, log, logUnresolved }: DownloadsViewDeps,
 ): DownloadsView {
   const provider = new DownloadsProvider({ instance }); // disposes its Instance subscriptions
-  const view = vscode.window.createTreeView('modbench.downloads', {
+  const view = vscode.window.createTreeView(DOWNLOADS_KEY_ARGS.view, {
     treeDataProvider: provider,
     canSelectMany: true,
   });

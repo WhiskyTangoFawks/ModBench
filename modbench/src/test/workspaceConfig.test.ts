@@ -13,7 +13,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { gameFolderSetting, onStringsLanguageChange } from '../workspaceConfig';
+import { gameFolderSetting, onStringsLanguageChange, stringsLanguage } from '../workspaceConfig';
 
 const changeTo = (key: string): void => configListener?.({ affectsConfiguration: (section) => section === key });
 
@@ -40,5 +40,11 @@ describe('onStringsLanguageChange', () => {
 
     changeTo('modbench.stringsLanguage');
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('stringsLanguage', () => {
+  it('fails loudly when the setting has no value, rather than inventing a default the manifest owns', () => {
+    expect(() => stringsLanguage()).toThrow('modbench.stringsLanguage has no value');
   });
 });
