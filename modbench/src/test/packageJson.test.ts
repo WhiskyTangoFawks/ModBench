@@ -5,7 +5,7 @@ import { present } from '../ports/present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
 } from './vscodeMock';
-import { FOLDER_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
+import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import { WALKTHROUGH_ID } from '../walkthrough';
 import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN } from './commandsCatalog';
 
@@ -202,7 +202,7 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
   const OWNERS: Record<string, (subject: string) => boolean> = {
     onCommand: isCommand,
     onView: (subject) => views.has(subject) || isVsCodes(subject),
-    onContext: (subject) => [FOLDER_KEY, INSTANCE_READ_KEY].some((key) => subject.startsWith(`${key} `)),
+    onContext: (subject) => [FOLDER_KEY, INSTANCE_READ_KEY, ANY_SOURCE_MOD_KEY, HAS_REPOSITORY_KEY].some((key) => subject.startsWith(`${key} `)),
     onLink: (subject) => subject.startsWith(`${REPOSITORY}/blob/main/docs/wiki/`),
   };
   const owned = (event: string): boolean => {
@@ -217,6 +217,14 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
 
   it('ticks each step on a command, view or context of Modbench or VS Code, or a link into the repository (story 3)', () => {
     expect(steps.filter((step) => step.completionEvents.length === 0 || !step.completionEvents.every(owned)).map(({ id }) => id)).toEqual([]);
+  });
+
+  it('ticks the git init step when the instance holds a repository (story 3)', () => {
+    expect(steps.find(({ id }) => id === 'gitInit')?.completionEvents).toEqual([`onContext:${HAS_REPOSITORY_KEY} == true`]);
+  });
+
+  it('ticks the decompile step when a source mod exists (story 3)', () => {
+    expect(steps.find(({ id }) => id === 'decompile')?.completionEvents).toEqual([`onContext:${ANY_SOURCE_MOD_KEY} == true`]);
   });
 
   it('links each step only to commands that exist', () => {
@@ -998,9 +1006,9 @@ describe('package.json record tab menus', () => {
 
 describe('package.json build\'s palette entry', () => {
   it('is in the palette in an instance while any mod is a source mod', () => {
-    expect(paletteOffers('modbench.mod.build', { ...inInstance, 'modbench.mod.anySource': true })).toBe(true);
+    expect(paletteOffers('modbench.mod.build', { ...inInstance, [ANY_SOURCE_MOD_KEY]: true })).toBe(true);
     expect(paletteOffers('modbench.mod.build', inInstance)).toBe(false);
-    expect(paletteOffers('modbench.mod.build', { 'modbench.mod.anySource': true })).toBe(false);
+    expect(paletteOffers('modbench.mod.build', { [ANY_SOURCE_MOD_KEY]: true })).toBe(false);
   });
 });
 
