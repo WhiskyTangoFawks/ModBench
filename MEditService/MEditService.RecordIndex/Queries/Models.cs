@@ -292,6 +292,7 @@ public enum IndexRefusal
     SelectRejected,
     NameRefused,
     SourceStopped,
+    OutOfMemory,
 }
 
 public record IndexRefused(IndexRefusal Refusal, string Message);
