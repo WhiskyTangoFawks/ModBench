@@ -1362,42 +1362,42 @@
         {
           "command": "modbench.mod.install",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
-          "group": "downloadActions@1"
+          "group": "downloadedFileActions@1"
         },
         {
           "command": "modbench.mod.viewOnNexus",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bhasModID\\b/",
-          "group": "downloadActions@2"
+          "group": "downloadedFileActions@2"
         },
         {
           "command": "modbench.downloadedFile.open",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
-          "group": "downloadActions@3"
+          "group": "downloadedFileActions@3"
         },
         {
           "command": "modbench.downloadedFile.openMeta",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bhasMeta\\b/",
-          "group": "downloadActions@4"
+          "group": "downloadedFileActions@4"
         },
         {
           "command": "modbench.downloadedFile.exclude",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && !(viewItem =~ /\\bexcluded\\b/)",
-          "group": "downloadActions@5"
+          "group": "downloadedFileActions@5"
         },
         {
           "command": "modbench.downloadedFile.include",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bexcluded\\b/",
-          "group": "downloadActions@5"
+          "group": "downloadedFileActions@5"
         },
         {
           "command": "modbench.copyValue",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
-          "group": "downloadActions@6"
+          "group": "downloadedFileActions@6"
         },
         {
           "command": "modbench.downloadedFile.delete",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
-          "group": "downloadActions@7"
+          "group": "downloadedFileActions@7"
         },
         {
           "command": "modbench.plugin.reveal",

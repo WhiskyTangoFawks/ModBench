@@ -756,10 +756,10 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
 });
 
 describe('package.json Downloads row menu order', () => {
-  const DOWNLOAD_ROW = String.raw`viewItem =~ /\bdownload\b/`;
+  const DOWNLOADED_FILE_ROW = String.raw`viewItem =~ /\bdownloadedFile\b/`;
   const downloadRowMenu = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
-      .filter((e) => requires(e.when, 'view == modbench.downloads') && requires(e.when, DOWNLOAD_ROW));
+      .filter((e) => requires(e.when, 'view == modbench.downloads') && requires(e.when, DOWNLOADED_FILE_ROW));
 
   const [INSTALL, VIEW_ON_NEXUS, OPEN, OPEN_META, EXCLUDE, INCLUDE, COPY_VALUE, DELETE] = [
     'modbench.mod.install', 'modbench.mod.viewOnNexus', 'modbench.downloadedFile.open', 'modbench.downloadedFile.openMeta',
@@ -767,11 +767,11 @@ describe('package.json Downloads row menu order', () => {
   ];
 
   it.each([
-    ['download', [INSTALL, OPEN, EXCLUDE, COPY_VALUE, DELETE]],
-    ['download hasModID', [INSTALL, VIEW_ON_NEXUS, OPEN, EXCLUDE, COPY_VALUE, DELETE]],
-    ['download hasMeta', [INSTALL, OPEN, OPEN_META, EXCLUDE, COPY_VALUE, DELETE]],
-    ['download excluded', [INSTALL, OPEN, INCLUDE, COPY_VALUE, DELETE]],
-    ['download hasModID hasMeta excluded', [INSTALL, VIEW_ON_NEXUS, OPEN, OPEN_META, INCLUDE, COPY_VALUE, DELETE]],
+    ['downloadedFile', [INSTALL, OPEN, EXCLUDE, COPY_VALUE, DELETE]],
+    ['downloadedFile hasModID', [INSTALL, VIEW_ON_NEXUS, OPEN, EXCLUDE, COPY_VALUE, DELETE]],
+    ['downloadedFile hasMeta', [INSTALL, OPEN, OPEN_META, EXCLUDE, COPY_VALUE, DELETE]],
+    ['downloadedFile excluded', [INSTALL, OPEN, INCLUDE, COPY_VALUE, DELETE]],
+    ['downloadedFile hasModID hasMeta excluded', [INSTALL, VIEW_ON_NEXUS, OPEN, OPEN_META, INCLUDE, COPY_VALUE, DELETE]],
   ])('the menu on a %s row', (viewItem, commands) => {
     expect(offeredIn(downloadRowMenu(), { view: 'modbench.downloads', viewItem })).toEqual(commands);
   });

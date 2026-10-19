@@ -241,7 +241,7 @@ describe('modbench.mod.install: a downloaded file is its package', () => {
     const row = downloadRowFixture('foo.7z');
 
     registerModInstallCommands(deps());
-    await invoke('modbench.mod.install', { argument: { kind: 'download', row } });
+    await invoke('modbench.mod.install', { argument: { kind: 'downloadedFile', row } });
 
     expect(installMod).toHaveBeenCalledWith(
       { kind: 'downloadedFile', name: 'foo.7z' }, { kind: 'new', name: 'Foo' }, true);
@@ -255,7 +255,7 @@ describe('modbench.mod.install: a downloaded file is its package', () => {
     showInputBox.mockResolvedValue('Foo');
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false, downloadedFile: 'foo.7z', downloadedFileRefusal: 'locked' });
     installMod.mockResolvedValueOnce({ applied: false, refusal: 'disk full' });
-    const argument = { argument: { kind: 'download', row: downloadRowFixture('foo.7z') } };
+    const argument = { argument: { kind: 'downloadedFile', row: downloadRowFixture('foo.7z') } };
 
     registerModInstallCommands(deps({ downloadInstall: { reporter, log, progressViewId: 'modbench.downloads' }, reporterFor: () => recordingReporter() }));
     await invoke('modbench.mod.install', argument);

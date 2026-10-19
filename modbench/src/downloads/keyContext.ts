@@ -12,8 +12,8 @@ interface DownloadsKeyContext {
 
 export function downloadsKeyContext(selection: readonly DownloadsTreeNode[]): DownloadsKeyContext {
   const entry = gestureEntry<DownloadsTreeNode>(undefined, undefined, () => selection);
-  const files = selectionArgument(entry, 'download');
-  const single = singularArgument(entry, 'download');
+  const files = selectionArgument(entry, 'downloadedFile');
+  const single = singularArgument(entry, 'downloadedFile');
   return {
     singleFile: single !== undefined,
     singleFileWithMeta: single?.argument.row.hasMeta === true,
@@ -30,4 +30,4 @@ export const DOWNLOADS_KEY_ARGS = { view: 'modbench.downloads' } as const;
 /** Downloads' own text for the catalog's one copy value id: each file's file name, or `undefined`
  *  unless the invocation is a download row or the Downloads key's args. */
 export const downloadsCopyValueText = (viewSelection: () => readonly DownloadsTreeNode[]) =>
-  viewCopyValueText<DownloadsTreeNode, 'download'>(DOWNLOADS_KEY_ARGS.view, ['download'], (node) => node.argument.row.name, viewSelection);
+  viewCopyValueText<DownloadsTreeNode, 'downloadedFile'>(DOWNLOADS_KEY_ARGS.view, ['downloadedFile'], (node) => node.argument.row.name, viewSelection);
