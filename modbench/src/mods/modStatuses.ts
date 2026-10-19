@@ -3,7 +3,8 @@
 
 import * as vscode from 'vscode';
 import type { MEditClient, ModStatus, ReadModStatus } from '../client';
-import { messageLine, type SyncMessage } from '../drivingLib/nameFilter';
+import { messageLine } from '../drivingLib/messageLine';
+import type { SyncMessage } from '../drivingLib/syncFailureReport';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 
 /** Each mod's status as mEdit last answered it. A read that fails keeps the last good one, and says so on the view's
