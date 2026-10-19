@@ -7,7 +7,7 @@ import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, T
 import { adapterOver, readPluginLines, sourceOver } from './mo2/adapterOver';
 import { pluginCommandsWith } from './pluginCommandsWith';
 import { STEADY_WINDOW } from './steadyWindow';
-import { readInstance, type ReadingSource } from '../instanceAdapter/mo2Reads';
+import { readInstance, type ReadingSource } from '../instanceAdapter/instanceReading';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
 
 const { handlers, showInputBox } = vi.hoisted(() => ({

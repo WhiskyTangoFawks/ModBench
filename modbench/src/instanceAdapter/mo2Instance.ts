@@ -2,12 +2,10 @@
 // over one instance root.
 
 import { existsSync } from 'node:fs';
-import { MODLIST_FILE_NAME } from './codecs/modlistText';
-import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { gameFolderResolver, STEAM, type GameDetectors } from './gameFolder/gameFolderResolver';
 import { myGamesResolver } from './gameFolder/myGames';
-import type { ArchiveReader, GameFolderSetting, InstanceAdapter, ManagerNames } from './instanceAdapter';
+import type { ArchiveReader, GameFolderSetting, InstanceAdapter } from './instanceAdapter';
 import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
@@ -17,7 +15,8 @@ import { mo2Repository } from './mo2Repository';
 import { mo2Submodules } from './mo2Submodules';
 import { mo2PluginRename } from './mo2PluginRename';
 import { mo2Installation } from './mo2Installation';
-import { mo2Reads, readingSource, readInstance } from './mo2Reads';
+import { readInstance } from './instanceReading';
+import { mo2Reads, readingSource } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { programRunning } from './processes';
 import { hashIndex } from './hashIndex';
@@ -54,10 +53,9 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
     mo2Running: () => programRunning(MO2_PROGRAM),
   };
   const hashes = hashIndex(hashIndexDir(instanceRoot), archives);
-  const names: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };
   const source = readingSource(context);
   return {
-    names,
+    names: source.names,
     reading: () => readInstance(source),
     activeProfile: async () => (await source.settings()).profile,
     ...mo2Reads(context, source), ...mo2Installation(context, hashes, source), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context), ...mo2Landing(context, archives, source), ...mo2Repository(context, hashes), ...mo2Submodules(context),
