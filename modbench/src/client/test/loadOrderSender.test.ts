@@ -317,46 +317,20 @@ describe('each launch, announced as it begins', () => {
     expect(launches).toHaveLength(1);
   });
 
-  it('carries the launch\'s own error when it threw', async () => {
+  it.each([
+    ['the launch threw', () => Promise.reject(new Error('no port')), undefined, { outcome: 'failed', error: 'no port' }],
+    ['mEdit did not come up', 'disconnected', undefined, { outcome: 'failed' }],
+    ['taking the half-started mEdit down threw', 'disconnected', 'would not die', { outcome: 'failed', error: 'would not die' }],
+    ['the launch and taking it down both threw', () => Promise.reject(new Error('no port')), 'would not die', { outcome: 'failed', error: 'no port; would not die' }],
+  ] as const)('comes to failed carrying what went wrong when %s', async (_name, start, stopThrows, expected) => {
     const client = new InMemoryMEditClient();
-    client.answerStart(() => Promise.reject(new Error('no port')));
+    client.answerStart(typeof start === 'string' ? () => { client.setStatus(start); return Promise.resolve(); } : start);
+    if (stopThrows) client.answerStop(() => { throw new Error(stopThrows); });
     const launches = launchesOf(client);
 
     await client.start();
 
-    await expect(launches[0]).resolves.toEqual({ outcome: 'failed', error: 'no port' });
-  });
-
-  it('comes to failed with no error when mEdit did not come up', async () => {
-    const client = new InMemoryMEditClient();
-    client.answerStart(() => { client.setStatus('disconnected'); return Promise.resolve(); });
-    const launches = launchesOf(client);
-
-    await client.start();
-
-    await expect(launches[0]).resolves.toEqual({ outcome: 'failed' });
-  });
-
-  it('comes to failed with the error when taking the half-started mEdit down threw', async () => {
-    const client = new InMemoryMEditClient();
-    client.answerStart(() => { client.setStatus('disconnected'); return Promise.resolve(); });
-    client.answerStop(() => { throw new Error('would not die'); });
-    const launches = launchesOf(client);
-
-    await client.start();
-
-    await expect(launches[0]).resolves.toEqual({ outcome: 'failed', error: 'would not die' });
-  });
-
-  it('carries both errors when the launch threw and taking it down threw', async () => {
-    const client = new InMemoryMEditClient();
-    client.answerStart(() => Promise.reject(new Error('no port')));
-    client.answerStop(() => { throw new Error('would not die'); });
-    const launches = launchesOf(client);
-
-    await client.start();
-
-    await expect(launches[0]).resolves.toEqual({ outcome: 'failed', error: 'no port; would not die' });
+    await expect(launches[0]).resolves.toEqual(expected);
   });
 
   it('comes to stopped when a stop cut it short', async () => {

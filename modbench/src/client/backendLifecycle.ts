@@ -49,7 +49,6 @@ export interface BackendLifecycleOptions {
   checkHealth?: () => Promise<boolean>;
 }
 
-/** What the launch policy needs of the process: where it stands, and bringing it up or down. */
 export interface LauncherWire {
   status(): BackendStatus;
   start(): Promise<void>;
@@ -59,8 +58,6 @@ export interface LauncherWire {
 const RUNNING: LaunchOutcome = { outcome: 'running' };
 const STOPPED: LaunchOutcome = { outcome: 'stopped' };
 
-// One launch at a time; a launch asked for while one runs shares it. A stop is the end: it cuts a
-// launch short, it and not the launch answers the snapshot, and nothing launches after it.
 export function createLauncher(wire: LauncherWire, announce: (launched: Promise<LaunchOutcome>) => void) {
   let launching: Promise<LaunchOutcome> | undefined;
   let stopped = false;
@@ -207,10 +204,11 @@ export class BackendLifecycle {
     this.generation++; // cancels an in-flight doStart()/connect()
     const child = this.child;
     this.child = undefined;
-    if (child) {
-      await this.killAndConfirmExit(child);
+    try {
+      if (child) await this.killAndConfirmExit(child);
+    } finally {
+      if (this._status !== 'stopped') this.setStatus('stopped');
     }
-    if (this._status !== 'stopped') this.setStatus('stopped');
   }
 
   // A backend mid a long synchronous request won't notice SIGTERM, so this escalates to SIGKILL
