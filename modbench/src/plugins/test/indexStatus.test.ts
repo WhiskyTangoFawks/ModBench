@@ -78,17 +78,16 @@ describe('the Plugins view following the record index status and mEdit\'s own', 
     expect(deps.log).toHaveBeenCalledWith('info', expect.stringContaining('3 in the load order, 0 failed'));
   });
 
-  it('logs the error and warns that rows will not expand when the tree could not read the plugin list', async () => {
-    const { client, deps } = followed();
+  it('reports nothing when the hand-off did not land', async () => {
+    const { client, deps, followed: following } = followed();
     deps.facts.reconciled.mockResolvedValue(undefined);
 
-    client.emit(statusEvent({ activePlugins: 2 }));
-    await flushed();
+    client.emit(statusEvent());
+    await following.narrator.settled(1);
+    following.dispose();
 
-    expect(deps.log).toHaveBeenCalledWith('error', expect.stringContaining('did not reach the tree'));
-    expect(deps.reporter.reports.map((report) => report.severity)).toEqual(['warning']);
-    expect(deps.reporter.reports[0]?.message).toContain('plugin list could not be read');
-    expect(deps.log).not.toHaveBeenCalledWith('info', expect.stringContaining('in the load order'));
+    expect(deps.log).not.toHaveBeenCalledWith('error', expect.anything());
+    expect(deps.reporter.reports).toEqual([]);
   });
 
   it.each([

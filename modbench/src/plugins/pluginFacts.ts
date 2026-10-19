@@ -28,6 +28,13 @@ export interface PlaceFacts {
   readonly listedSourceMods: ReadonlySet<string>;
 }
 
+// A read of mEdit's facts beside the load order's own: its failure, and whether it ever answered.
+interface FactsRead {
+  readonly what: string;
+  failure?: string;
+  answered: boolean;
+}
+
 /** What a plugin row expands into: its records, the error row naming why not, or the still-indexing row. */
 export type Expansion = { kind: 'records' } | { kind: 'error'; message: string } | { kind: 'indexing' };
 
@@ -109,8 +116,8 @@ export class PluginFacts {
   private indexFailure?: string;
   private noMatchAnywhere = false;
   private laterFailures = new Map<string, string>();
-  private scanFailure?: string;
-  private scanAnswered = false;
+  private readonly factsRead: FactsRead = { what: "mEdit's facts about each plugin", answered: false };
+  private readonly scanRead: FactsRead = { what: 'the malformed-plugin scan', answered: false };
 
   /** A progressive reconcile's tick. */
   indexed(plugins: readonly PluginAddress[], failures: readonly PluginLoadFailure[]): void {
@@ -149,6 +156,7 @@ export class PluginFacts {
   /** The facts alone, leaving which plugins are held as they are. No `missingMasters` means not
    *  yet checked, so the last answer stays until one lands. */
   refreshed(plugins: readonly PluginMetadata[]): void {
+    answered(this.factsRead);
     const reads = new ByPluginAddress<PluginRead>();
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
@@ -169,10 +177,16 @@ export class PluginFacts {
     this.noMatchAnywhere = plugins.length > 0 && plugins.every((p) => !p.hasMatchingRecords);
   }
 
+  /** mEdit's facts about each plugin could not be read: a row not held expands to the error row
+   *  naming why, and the last answer stays. */
+  factsFailed(reason: string): void {
+    this.unreachable(reason);
+    this.factsRead.failure = reason;
+  }
+
   /** The malformed-plugin scan's answer, replacing the last. */
   diagnosed(reports: readonly PluginDiagnosisReport[]): void {
-    this.scanFailure = undefined;
-    this.scanAnswered = true;
+    answered(this.scanRead);
     this.diagnosisReports = [...reports];
     this.diagnosisTexts = new ByPluginAddress<string[]>();
     for (const r of reports) this.diagnosisTexts.append({ name: r.plugin, origin: r.origin }, r.text);
@@ -180,7 +194,7 @@ export class PluginFacts {
 
   /** The malformed-plugin scan could not be read; the last answer stays. */
   scanFailed(reason: string): void {
-    this.scanFailure = reason;
+    this.scanRead.failure = reason;
   }
 
   /** Each settle of a source mod names every plugin of it that changed outside Modbench, so it
@@ -217,15 +231,17 @@ export class PluginFacts {
     return this.laterFailures;
   }
 
-  /** The message line's part for the reads that failed after rows landed, joined with the
-   *  instance's own read failure, and for a scan that failed before any answered. */
-  laterReadFailureMessage(instanceReadFailure?: string): string | undefined {
-    const scan = this.scanFailure === undefined ? undefined : `the malformed-plugin scan: ${this.scanFailure}`;
-    const lastGood = [instanceReadFailure, ...this.laterFailures.values(), this.scanAnswered ? scan : undefined]
+  /** The message line's part for every read that failed, the instance's own among them
+   *  (common.md, States, stories 2 and 6). */
+  readFailureMessage(instanceReadFailure?: string): string | undefined {
+    const failed = [this.factsRead, this.scanRead].filter((read) => read.failure !== undefined);
+    const said = (read: FactsRead) => `${read.what}: ${read.failure}`;
+    const lastGood = [instanceReadFailure, ...this.laterFailures.values(), ...failed.filter((read) => read.answered).map(said)]
       .filter((reason) => reason !== undefined);
+    const neverAnswered = failed.filter((read) => !read.answered).map(said);
     const lines = [
       lastGood.length === 0 ? undefined : `Showing the last good read: ${lastGood.join('; ')}`,
-      this.scanAnswered || scan === undefined ? undefined : `Failed to load: ${scan}`,
+      neverAnswered.length === 0 ? undefined : `Failed to load: ${neverAnswered.join('; ')}`,
     ].filter((line) => line !== undefined);
     return lines.length === 0 ? undefined : lines.join(' ');
   }
@@ -303,6 +319,11 @@ export class PluginFacts {
         .map(({ name, origin }) => ({ plugin: name, origin, text: CHANGED_OUTSIDE_TEXT })),
     };
   }
+}
+
+function answered(read: FactsRead): void {
+  read.failure = undefined;
+  read.answered = true;
 }
 
 function heldSet(plugins: readonly PluginAddress[]): ByPluginAddress<true> {

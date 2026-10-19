@@ -2212,7 +2212,7 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
 
     await h.tree.facts.reconciled([]);
 
-    const failures = h.logged.filter((l) => l.msg.includes('plugin list failed'));
+    const failures = h.logged.filter((l) => l.msg.includes('about each plugin failed'));
     expect(failures).toHaveLength(1);
     expect(present(failures[0], 'the sole logged failure').level).toBe('error');
     expect(present(failures[0], 'the sole logged failure').msg).toContain('No load order has been received.');

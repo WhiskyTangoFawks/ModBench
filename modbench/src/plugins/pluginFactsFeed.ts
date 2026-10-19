@@ -25,7 +25,7 @@ export interface PluginFactsFeedDeps {
 }
 
 export type PluginRowFacts = Pick<PluginFacts,
-  'expansion' | 'indexFailureMessage' | 'laterReadFailureMessage' | 'noRecordMatchMessage' | 'hiddenByRecordFilter'
+  'expansion' | 'indexFailureMessage' | 'readFailureMessage' | 'noRecordMatchMessage' | 'hiddenByRecordFilter'
   | 'icon' | 'description' | 'tooltipLines' | 'contextFlags' | 'conditions'>;
 
 /** mEdit's answers about each plugin, ordered into the facts the Plugins tree's rows read: the
@@ -86,7 +86,8 @@ export class PluginFactsFeed implements vscode.Disposable {
   async reconciled(failures: readonly PluginLoadFailure[]): Promise<number | undefined> {
     const generation = ++this.generation;
     const plugins = await this.readPlugins();
-    if (plugins === undefined || generation !== this.generation) return undefined;
+    if (generation !== this.generation) return undefined;
+    if ('failure' in plugins) return this.factsFailed(plugins.failure);
     this.facts.reconciled(plugins, failures);
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer.
@@ -103,7 +104,8 @@ export class PluginFactsFeed implements vscode.Disposable {
     const generation = this.generation;
     const refresh = ++this.refreshes;
     const plugins = await this.readPlugins();
-    if (plugins === undefined || generation !== this.generation || refresh !== this.refreshes) return;
+    if (generation !== this.generation || refresh !== this.refreshes) return;
+    if ('failure' in plugins) return this.factsFailed(plugins.failure);
     this.facts.refreshed(plugins);
     this.changed.fire();
   }
@@ -115,17 +117,21 @@ export class PluginFactsFeed implements vscode.Disposable {
 
   // The plugins of the rows the tree shows, joined by (origin, filename). A failed read is never
   // swallowed into an empty list, which would read as "nothing held".
-  private async readPlugins(): Promise<PluginMetadata[] | undefined> {
+  private async readPlugins(): Promise<PluginMetadata[] | { failure: string }> {
     try {
       const shown = new Set(this.deps.shownPlugins().map(pluginAddressKey));
       return answerOf(await this.deps.client.getPlugins()).filter((p) => shown.has(pluginAddressKey(p)));
     } catch (err) {
-      const message = errorMessage(err);
-      this.deps.log('error', `[PluginFactsFeed] reading the backend's plugin list failed: ${message}`);
-      this.facts.unreachable(message);
-      this.changed.fire();
-      return undefined;
+      const failure = errorMessage(err);
+      this.deps.log('error', `[PluginFactsFeed] reading mEdit's facts about each plugin failed: ${failure}`);
+      return { failure };
     }
+  }
+
+  private factsFailed(reason: string): undefined {
+    this.facts.factsFailed(reason);
+    this.changed.fire();
+    return undefined;
   }
 
   private async scanDiagnoses(generation: number): Promise<void> {

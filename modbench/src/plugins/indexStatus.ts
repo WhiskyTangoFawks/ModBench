@@ -110,7 +110,7 @@ export function followIndexStatus(deps: IndexStatusDeps): { narrator: ReconcileN
 }
 
 async function applyReconciled(
-  { facts, log, reporter }: IndexStatusDeps,
+  { facts, log }: IndexStatusDeps,
   failures: PluginLoadFailure[],
   // Carried in only to be logged next to what reached the tree. Deliberately not the snapshot's
   // plugin count: that omits the implicit masters the backend prepends, so every healthy
@@ -118,16 +118,8 @@ async function applyReconciled(
   totalPlugins: number,
 ): Promise<void> {
   const held = await facts.reconciled(failures);
-  if (held === undefined) {
-    // Leaving every row a leaf is a safe render but not an honest one: the reconcile did land,
-    // so the tree would claim editing is unavailable with nothing on screen to say why (ADR-0019).
-    log('error', '[loadOrder] the reconciled load order did not reach the tree; plugin rows will not expand');
-    reporter.report(
-      'warning',
-      'The load order was reconciled, but the plugin list could not be read — plugin rows will not expand into records.',
-    );
-    return;
-  }
+  // Superseded by a newer step, which shows its own state, or a failed read the feed reported.
+  if (held === undefined) return;
   // Do not remove as logging noise: `held + failures.length` landing close to
   // `totalPlugins` is what tells a stuck-tail reconcile here from one broken upstream.
   log('info', `[loadOrder] applying reconciled load order to tree: ${held} in the load order, ${failures.length} failed, of ${totalPlugins} plugins`);
