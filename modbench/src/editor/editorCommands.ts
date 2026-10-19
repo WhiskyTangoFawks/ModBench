@@ -29,9 +29,11 @@ import { holdOneTextPerFile } from '../textDocuments/oneTextPerFile';
 import { copyDocument } from '../textDocuments/recordDocument';
 import type { RecordCopy } from '../wire/recordCopy';
 import type { ModFacts } from './modsByOrigin';
+import type { LoadOrderComing } from './loadOrderComing';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 
 export interface EditorCommandDeps {
+  loadOrderComing: LoadOrderComing;
   context: Pick<vscode.ExtensionContext, 'extensionUri'>;
   // The open record tabs and the one in focus, whose record the Referenced By view retargets from,
   // not from a command argument.
@@ -63,6 +65,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   const routerDeps: SharedRecordPanelDeps = {
     meditClient, channel: outputChannel, reporter: deps.reporterFor('recordPanel'),
     conflictsComputed: () => meditClient.loadOrderStatus?.conflictsComputed ?? false,
+    loadOrderComing: () => deps.loadOrderComing.now(),
     loadFailures: () => meditClient.loadOrderStatus?.failures ?? [],
     modFacts: deps.modFacts,
   };
@@ -96,6 +99,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     { dispose: meditClient.onLoadOrderSettled(() => { announceConflictsComputed(tabs); }) },
     vscode.window.registerCustomEditorProvider(RECORD_VIEW_TYPE, recordEditorProvider, editorOptions),
     { dispose: meditClient.onNotification('load-order-status', () => { recordEditorProvider.readAgain(); }) },
+    deps.loadOrderComing.onChanged(() => { recordEditorProvider.readAgain(); }),
     followCopiesIntoDocuments(meditClient, childRecordDocuments, recordEditorProvider),
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended-field documents.

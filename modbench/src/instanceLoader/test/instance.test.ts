@@ -859,5 +859,18 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
     expect(instance.value.gameFolder.kind).toBe('notFound');
     expect(instance.value.pluginsLoadedWithNoLine).toBeUndefined();
     expect(instance.value.loadOrderSnapshot).toBeUndefined();
+    expect(instance.hasLoadOrderToHand).toBe(false);
+  });
+
+  it('has a load order to hand before the first read lands, and once it carries a snapshot', async () => {
+    const { instance } = loader({
+      ...GAME_FOUND, gameRelease: 'Fallout4', mods: [mod('Consumer')], modFolders: modFoldersOf('Consumer'),
+      modFiles: new Map([['Consumer', filesOfMod('Consumer', 'DLCCoast.esm')]]),
+    });
+    expect(instance.hasLoadOrderToHand).toBe(true);
+
+    await instance.refresh();
+
+    expect(instance.hasLoadOrderToHand).toBe(true);
   });
 });

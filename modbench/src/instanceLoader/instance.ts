@@ -264,6 +264,12 @@ export class Instance implements Subscription {
     return this.seq;
   }
 
+  /** Whether a load order is, or may yet be, handed to mEdit: the first read has not landed, or it found a snapshot to send. */
+  get hasLoadOrderToHand(): boolean {
+    const { loadOrderSnapshot } = this.value;
+    return this.seq === 0 || (loadOrderSnapshot !== undefined && !('refusal' in loadOrderSnapshot));
+  }
+
   /** The latest recompute's failure reason, undefined once a recompute lands. Held, not just
    *  fired, so a tree subscribing after the failure still hears it. */
   get readFailure(): string | undefined {

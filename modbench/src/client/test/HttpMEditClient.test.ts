@@ -504,25 +504,25 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   describe('a read mEdit refuses', () => {
     const cannotAnswer = 'No load order has been loaded.';
     const notIndexed = 'mEdit has not finished indexing the plugins.';
-    const refusedReads: { what: string; verb: Verb; status: number; detail: string }[] = [
+    const refusedReads: { what: string; verb: Verb; status: number; detail: string; refusal?: string; failed?: 'no-load-order' }[] = [
       { what: 'getComparison(000801:Broken.esp)', verb: (c) => c.getComparison('000801:Broken.esp'), status: 500, detail: 'boom' },
       { what: 'getRecordsComparison', verb: (c) => c.getRecordsComparison([]), status: 400, detail: 'No records.' },
       { what: 'resolveNames', verb: (c) => c.resolveNames([{ name: 'Gone' }]), status: 400, detail: 'Nothing is named "Gone".' },
       { what: 'selectRows', verb: (c) => c.selectRows('DROP TABLE x'), status: 400, detail: 'Only a SELECT runs.' },
-      { what: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(), status: 503, detail: cannotAnswer },
-      { what: 'getChildRecordTypes(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getChildRecordTypes(shared, sharedKey), status: 503, detail: cannotAnswer },
-      { what: 'getRenderedDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getRenderedDocument(shared, sharedKey), status: 503, detail: cannotAnswer },
-      { what: 'getCopyDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getCopyDocument(shared, sharedKey), status: 503, detail: cannotAnswer },
+      { what: 'getCreatableRecordTypes', verb: (c) => c.getCreatableRecordTypes(), status: 503, detail: cannotAnswer, refusal: 'NoLoadOrder', failed: 'no-load-order' },
+      { what: 'getChildRecordTypes(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getChildRecordTypes(shared, sharedKey), status: 503, detail: cannotAnswer, refusal: 'NoLoadOrder', failed: 'no-load-order' },
+      { what: 'getRenderedDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getRenderedDocument(shared, sharedKey), status: 503, detail: cannotAnswer, refusal: 'NoLoadOrder', failed: 'no-load-order' },
+      { what: 'getCopyDocument(Shared.esp, 000800:Shared.esp)', verb: (c) => c.getCopyDocument(shared, sharedKey), status: 503, detail: cannotAnswer, refusal: 'NoLoadOrder', failed: 'no-load-order' },
       { what: `getRecordOfFile(${sourcePath})`, verb: (c) => c.getRecordOfFile(sourcePath), status: 422, detail: `${sourcePath} declares no FormKey, so it is no record's document.` },
-      { what: 'getCreatablePluginExtensions', verb: (c) => c.getCreatablePluginExtensions(), status: 503, detail: cannotAnswer },
-      { what: 'getPluginDependants(Base.esm)', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }), status: 503, detail: notIndexed },
-      { what: 'getPluginProblems', verb: (c) => c.getPluginProblems(), status: 503, detail: notIndexed },
+      { what: 'getCreatablePluginExtensions', verb: (c) => c.getCreatablePluginExtensions(), status: 503, detail: cannotAnswer, refusal: 'NoLoadOrder', failed: 'no-load-order' },
+      { what: 'getPluginDependants(Base.esm)', verb: (c) => c.getPluginDependants({ name: 'Base.esm', origin: 'BaseMod' }), status: 503, detail: notIndexed, refusal: 'IndexNotReady' },
+      { what: 'getPluginProblems', verb: (c) => c.getPluginProblems(), status: 503, detail: notIndexed, refusal: 'IndexNotReady' },
     ];
 
-    it.each(refusedReads)('$what fails with mEdit\'s reason alone, and files the verb and status in the log', async ({ what, verb, status, detail }) => {
-      const { result, log } = await exchange(verb, answers(status, { detail }));
+    it.each(refusedReads)('$what fails with mEdit\'s reason alone, and files the verb and status in the log', async ({ what, verb, status, detail, refusal, failed = 'refused' }) => {
+      const { result, log } = await exchange(verb, answers(status, { detail, refusal }));
 
-      expect(result).toEqual({ failed: 'refused', refusal: detail });
+      expect(result).toEqual({ failed, refusal: detail });
       expect(log.lines.error).toEqual([`[HttpMEditClient] ${what} failed (${status}): ${detail}`]);
     });
 
@@ -530,7 +530,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       ['NoLoadOrder', 'no-load-order'],
       ['IndexNotReady', 'refused'],
       ['OutOfMemory', 'refused'],
-    ])('names a %s refusal %s', async (refusal, failed) => {
+    ])('reads a 503 naming %s as a %s failure', async (refusal, failed) => {
       const detail = 'mEdit cannot answer.';
       const { result } = await exchange((c) => c.getComparison('000801:A.esp'), answers(503, { detail, refusal }));
 
@@ -564,7 +564,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       [409, { refusal: 'PluginNotCompiledPlugin', detail: notCompiledPlugin }, 'PluginNotCompiledPlugin', notCompiledPlugin],
       [422, { refusal: 'PluginNotCompiledPlugin', detail: notCompiledPlugin }, 'PluginNotCompiledPlugin', notCompiledPlugin],
       [422, { refusal: 'SourceAccessFailed', detail: 'Could not write the source file for 000800:MyPatch.esp: Access denied.' }, 'SourceAccessFailed', 'Could not write the source file for 000800:MyPatch.esp: Access denied.'],
-      [503, { detail }, 'Unknown', detail],
+      [503, { detail, refusal: 'NoLoadOrder' }, 'NoLoadOrder', detail],
     ] as const;
 
     it.each(refusals)('answers a %s as its cause in the backend\'s words, a warning and no error', async (status, body, refusal, message) => {
