@@ -17,16 +17,13 @@ import { givenByAgent, targetsOf, viewOf, type ModsGiven } from './sourceGesture
 export interface BuildDeps {
   commands: Pick<SourceCommands, 'build'>;
   instance: Pick<Instance, 'refresh'>;
-  /** The instance's release, which says what its archives pack as. */
-  gameRelease: () => string | undefined;
   reporter: Reporter;
   problems: BuildProblems;
   sourceFiles: SourceFilesOf;
   /** Saves the mod's unsaved plugin source; answers the paths VS Code left unsaved. */
   saveUnsaved: (mod: string) => Promise<string[]>;
   modOfOrigin: (origin: string) => string | undefined;
-  /** The source folder of each mod that holds a repository, by mod name. */
-  sourceDirs: () => ReadonlyMap<string, string>;
+  sourceModNames: () => Iterable<string>;
   /** The Plugins view's id, whose bar a gesture from a plugin row runs under. */
   pluginsView: string;
 }
@@ -41,7 +38,7 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
       const targets = targetsOf(entry.selection, deps.modOfOrigin);
       const named = entry.clicked !== undefined || targets.mods.length > 0 || targets.refusedRows.length > 0;
       if (named) return { ...targets, invokedFrom: viewOf(entry.selection, deps.pluginsView) };
-      const mods = await pickSourceMods(deps.sourceDirs());
+      const mods = await pickSourceMods(deps.sourceModNames());
       return mods === undefined ? undefined : { mods, refusedRows: [], invokedFrom: MODS_KEY_ARGS.view };
     },
     fromAgent: ({ argument }) => givenByAgent(argument),
@@ -52,8 +49,8 @@ export function registerBuildCommand(deps: BuildDeps, paletteSelection: () => re
 }
 
 // mods.md, Build, story 7: from the palette with no source mod selected, a pick of every source.
-async function pickSourceMods(sourceDirs: ReadonlyMap<string, string>): Promise<string[] | undefined> {
-  const items = [...sourceDirs.keys()].sort().map((label) => ({ label }));
+async function pickSourceMods(sourceModNames: Iterable<string>): Promise<string[] | undefined> {
+  const items = [...sourceModNames].sort().map((label) => ({ label }));
   const picked = await vscode.window.showQuickPick(items, { canPickMany: true, placeHolder: 'Build which mods?' });
   return picked?.map((item) => item.label);
 }
@@ -64,7 +61,7 @@ async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom }: Mo
   const unsaved = await savedFirst(deps, mods);
   if (unsaved !== undefined) return unsaved;
   return runWritingGesture(invokedFrom, instance, async (): Promise<Built> => {
-    const outcome = await commands.build(mods, deps.gameRelease(), deps.sourceDirs());
+    const outcome = await commands.build(mods);
     if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
     for (const { compiled } of outcome.landed) {
       for (const plugin of compiled) deps.problems.publish(plugin, deps.sourceFiles(plugin.origin), plugin.diagnostics);

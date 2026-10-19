@@ -8,7 +8,7 @@ import { ba2VersionsOf } from '../tables/gamePaths';
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'init' | 'latestLoadOrder'>;
   adapter: Pick<InstanceAdapter,
-    'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder' | 'sourceHost'>;
+    'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder' | 'sourceHost'>;
 }
 
 export const metadataUnreadable = (reason: string): string => `its metadata could not be read: ${reason}`;
@@ -19,13 +19,12 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
   return {
     /** A mod no repository builds, or whose folder or metadata the Instance adapter cannot answer, is
      *  refused here, naming why, and mEdit builds the rest with the release's archive variants. */
-    build: async (
-      mods: readonly string[], gameRelease: string | undefined, sourceDirs: ReadonlyMap<string, string>,
-    ): Promise<BuildOutcome | WriteRefused> => {
+    build: async (mods: readonly string[]): Promise<BuildOutcome | WriteRefused> => {
+      const sourceMods = await adapter.sourceMods();
       const sent: BuildMod[] = [];
       const refused: ItemRefusal<string>[] = [];
       for (const mod of mods) {
-        const sourceFolder = sourceDirs.get(mod);
+        const sourceFolder = sourceMods.folderOf(mod);
         const folder = await adapter.modFolderPath(mod);
         const metadata = await adapter.modMetadata(mod);
         const host = sourceFolder === undefined ? undefined : await adapter.sourceHost(sourceFolder);
@@ -43,7 +42,7 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
       if (sent.length === 0) return { landed: [], refused };
       await client.latestLoadOrder();
       const outcome = await client.build(
-        sent, { excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(gameRelease), statCache: adapter.statCacheFolder });
+        sent, { excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(await adapter.gameRelease()), statCache: adapter.statCacheFolder });
       return isRefused(outcome) ? outcome : { landed: outcome.landed, refused: [...outcome.refused, ...refused] };
     },
 

@@ -2,7 +2,7 @@ import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type {
   DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, GameFile, HashedFile, InstallationFile,
   InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
-  ModFolder, ModFolders, ModMetadata, OriginFile, InstallKeys, PluginOrderChange, Subscription } from '../instanceAdapter/instanceAdapter';
+  ModFolder, ModFolders, ModMetadata, SourceMods, OriginFile, InstallKeys, PluginOrderChange, Subscription } from '../instanceAdapter/instanceAdapter';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { filesWinningFirst, pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
@@ -13,6 +13,13 @@ function noFilesFor(mods: readonly ModlistEntry[]): ReadonlyMap<string, OriginFi
     ? [[entry.name, { origin: entry.name, folder: `/mods/${entry.name}`, files: [], folders: [], notes: [] }] as const]
     : [])));
 }
+
+/** The source mods whose repositories write the named output folders. */
+export const sourceModsOf = (folders: Record<string, string>, notes: string[] = []): SourceMods => ({
+  folders: new Map(Object.entries(folders)),
+  folderOf: (name) => Object.entries(folders).find(([output]) => output.toLowerCase() === name.toLowerCase())?.[1],
+  notes,
+});
 
 export function readingFixture(overrides: Partial<InstanceReading> = {}): InstanceReading {
   return {
@@ -176,6 +183,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return readingFailure === undefined ? Promise.resolve(current) : Promise.reject(new Error(readingFailure));
     },
     activeProfile: () => Promise.resolve(current.profile),
+    gameRelease: () => Promise.resolve(current.gameRelease),
     profiles: () => unreadable('profiles', current.profiles),
     modOrder: () => unreadable('modOrder', { mods: current.mods, modFolders: current.modFolders?.all }),
     downloadedFiles: () => unreadable('downloadedFiles', current.downloadedFiles),

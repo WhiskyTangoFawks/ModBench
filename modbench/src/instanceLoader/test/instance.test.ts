@@ -3,9 +3,9 @@ import { join } from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type {
   DataFolderArchives, DataFolderPlugins, DownloadedFile, DownloadedFiles, GameFolder, InstanceAdapter, InstanceReading, Mod,
-  OriginFiles, Separator, SourceMods,
+  OriginFiles, Separator,
 } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { Instance, instanceMessages, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
@@ -25,12 +25,6 @@ const separator = (name: string): Separator => ({ kind: 'separator', name, enabl
 
 const filesOfMod = (name: string, ...relativePaths: string[]): OriginFiles =>
   ({ origin: name, folder: `/mods/${name}`, files: relativePaths.map((path) => fileIn(`/mods/${name}`, path)), folders: [], notes: [] });
-
-const sourceModsOf = (folders: Record<string, string>, notes: string[] = []): SourceMods => ({
-  folders: new Map(Object.entries(folders)),
-  folderOf: (name) => Object.entries(folders).find(([output]) => output.toLowerCase() === name.toLowerCase())?.[1],
-  notes,
-});
 
 const GAME_FOLDER: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const inDataFolder = (...names: string[]): DataFolderPlugins => ({ kind: 'listed', names: new Set(names) });
