@@ -37,7 +37,7 @@ public sealed class BuildModHandler
             (applied, refused) => new BuildResult(applied, refused));
     }
 
-    private static ModBuilt ModBuiltOf(string mod, BuiltMod built) => new(
+    private static ModBuilt ModBuiltOf(string mod, ModBuildOutcome built) => new(
         mod,
         [.. built.Compiled.Select(compiled => new CompiledPlugin(compiled.Item.Name, compiled.Item.Origin, compiled.Outcome))],
         [.. built.Refused.Select(refused => new CompileRefused(refused.Item, refused.Refusal, refused.Message))],

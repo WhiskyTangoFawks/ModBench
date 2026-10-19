@@ -70,8 +70,8 @@ public sealed class PluginDiagnosisRoundTripGateTests
             _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, Origin, _gameDirectory);
         }
 
-        public async Task<PluginInit> InitAsync() =>
-            (await InitEveryPluginOf.ModAsync(_loadOrder, Origin)).Only();
+        public async Task<PluginDecompiledAndCommitted> InitAsync() =>
+            (await DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, Origin)).Only();
 
         public void Dispose()
         {

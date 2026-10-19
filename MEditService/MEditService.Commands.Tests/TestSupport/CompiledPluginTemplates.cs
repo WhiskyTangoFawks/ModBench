@@ -58,7 +58,7 @@ internal static class CompiledPluginTemplates
         using var gameDirectory = new ScratchDirectory("medit-compiled-plugin-template-game-");
         var loadOrder = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, release,
             [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Line: 0, Enabled: true, Winning: true)]);
-        var result = InitEveryPluginOf.ModAsync(loadOrder, origin)
+        var result = DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, origin)
             .GetAwaiter().GetResult();
         if (!result.Only().Applied)
             throw new InvalidOperationException($"Expected {pluginName} to init: {string.Join("; ", result.RefusalMessages())}");

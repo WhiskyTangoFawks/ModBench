@@ -2,11 +2,11 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to init, by name, with the source folder its repository goes in and the mod manager's own files in
+/// <summary>A mod to decompile and commit, by name, with the source folder its repository goes in and the mod manager's own files in
 /// its folder, which no build makes.</summary>
 public sealed record ModToDecompileAndCommit(string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles);
 
-/// <summary>Why init refused (ADR-0019): each value is a different way out, and the
+/// <summary>Why decompile and commit refused (ADR-0019): each value is a different way out, and the
 /// endpoint's status is one switch over them.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum DecompileAndCommitRefusal

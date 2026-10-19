@@ -48,8 +48,8 @@ public sealed class MasterPruningRoundTripGateTests
             return [.. overlay.ModHeader.MasterReferences.Select(m => m.Master.FileName.String)];
         }
 
-        public async Task<PluginInit> InitAsync() =>
-            (await InitEveryPluginOf.ModAsync(_loadOrder, _origin)).Only();
+        public async Task<PluginDecompiledAndCommitted> InitAsync() =>
+            (await DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, _origin)).Only();
 
         public void Dispose()
         {

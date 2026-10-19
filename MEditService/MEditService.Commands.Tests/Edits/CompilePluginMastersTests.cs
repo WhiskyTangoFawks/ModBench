@@ -67,7 +67,7 @@ public sealed class CompilePluginMastersTests : IDisposable
         ];
         _loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, _entries);
 
-        InitEveryPluginOf.ModAsync(_loadOrder, _plugin.Origin)
+        DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, _plugin.Origin)
             .GetAwaiter().GetResult();
     }
 

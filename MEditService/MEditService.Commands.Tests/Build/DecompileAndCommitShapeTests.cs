@@ -15,14 +15,14 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Build;
 
-public sealed class InitCommitShapeTests : IDisposable
+public sealed class DecompileAndCommitShapeTests : IDisposable
 {
     private const string ModName = "TwoPluginMod";
     private readonly ScratchDirectory _root = new("medit-init-shape-");
     private readonly string _modFolder;
     private readonly string _gameDir;
 
-    public InitCommitShapeTests()
+    public DecompileAndCommitShapeTests()
     {
         _modFolder = Directory.CreateDirectory(Path.Combine(_root, ModName)).FullName;
         _gameDir = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
@@ -219,7 +219,7 @@ public sealed class InitCommitShapeTests : IDisposable
     private Task<DecompileAndCommitResult> Init() => Init(TestAdapters.Mutagen());
 
     private async Task<DecompileAndCommitResult> Init(IPluginAdapter adapter, ISourceAdapter? source = null) =>
-        (await InitEveryPluginOf.ModAsync(LoadOrder(), ModName, adapter, source: source)).Value();
+        (await DecompileAndCommitEveryPluginOf.ModAsync(LoadOrder(), ModName, adapter, source: source)).Value();
 
     private LoadOrderSnapshot LoadOrder()
     {

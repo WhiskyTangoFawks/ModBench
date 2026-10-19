@@ -69,7 +69,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
             .. _data.Plugins,
             new LoadOrderEntry(existing, Path.Combine(folder, existing), name, Line: 1, Enabled: true, Winning: true),
         ]));
-        var committed = (await TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync(ToInit.In(_holder.Held?.Snapshot, name))).Value();
+        var committed = (await TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync(ToDecompileAndCommit.In(_holder.Held?.Snapshot, name))).Value();
         Assert.Single(committed.Applied);
         return folder;
     }

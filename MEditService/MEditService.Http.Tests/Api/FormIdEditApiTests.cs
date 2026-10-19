@@ -38,7 +38,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
             stringsLanguage = "English",
         });
         load.EnsureSuccessStatusCode();
-        (await _client.Init(Origin)).EnsureSuccessStatusCode();
+        (await _client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
         await _client.NextSnapshot(fx, Origin);
         await _client.PluginReportsCompiledPlugin(Plugin);
     }

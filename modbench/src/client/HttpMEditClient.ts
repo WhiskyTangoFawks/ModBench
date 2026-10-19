@@ -399,10 +399,7 @@ class HttpMEditClient implements MEditClient {
         verb: 'decompile and commit', noun: 'mod', items: mods.map((mod) => mod.name),
         op: (counted) => `decompileAndCommit(${counted})`,
         post: () => this.apiClient.POST('/decompile-and-commit', { body: { mods: [...mods] } }),
-        outcome: (answer) => selectionOutcome({
-          applied: answer.applied.map((m) => ({ mod: m.mod, plugins: m.plugins })),
-          refused: answer.refused,
-        }),
+        outcome: selectionOutcome,
       });
     } finally {
       unsubscribe();

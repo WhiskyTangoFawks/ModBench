@@ -51,7 +51,7 @@ internal static class ModEndpoints
     }
 
     // decompile-and-commit: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
-    internal static async Task<IResult> DecompileAndCommit(DecompileAndCommitRequest req, DecompileAndCommitModHandler handler, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> DecompileAndCommit(DecompileAndCommitRequest req, DecompileAndCommitModHandler decompileAndCommitModHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
         var mods = req.Mods ?? [];
@@ -65,7 +65,7 @@ internal static class ModEndpoints
 
         return await EndpointMapping.Answered(
             "Decompile and commit", logger,
-            handler.DecompileAndCommitAsync([.. mods.Select(mod => new ModToDecompileAndCommit(mod.Name, mod.SourceFolder, mod.MetadataFiles ?? []))]),
+            decompileAndCommitModHandler.DecompileAndCommitAsync([.. mods.Select(mod => new ModToDecompileAndCommit(mod.Name, mod.SourceFolder, mod.MetadataFiles ?? []))]),
             EndpointMapping.Refusal);
     }
 

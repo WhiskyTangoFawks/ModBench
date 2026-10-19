@@ -36,7 +36,7 @@ public sealed class ClearFieldApiTests(LoadedApiFixture<TestPluginFixture> loade
             gameRelease = "Fallout4",
             stringsLanguage = "English",
         })).EnsureSuccessStatusCode();
-        (await _client.Init(Origin)).EnsureSuccessStatusCode();
+        (await _client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
         await _client.NextSnapshot(fx, Origin);
         await _client.PluginReportsCompiledPlugin(Plugin);
         var created = await _client.CreateRecord(Plugin, Origin, "npc_");

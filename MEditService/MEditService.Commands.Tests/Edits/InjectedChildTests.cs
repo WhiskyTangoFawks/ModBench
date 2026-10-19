@@ -82,7 +82,7 @@ public sealed class InjectedChildTests : IDisposable
                 new LoadOrderEntry(InjectorPluginName, injectorPath, InjectorOrigin, Line: 1, Enabled: true, Winning: true),
             ]);
         foreach (var origin in new[] { BaseOrigin, InjectorOrigin })
-            InitEveryPluginOf.ModAsync(_loadOrder, origin).GetAwaiter().GetResult();
+            DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, origin).GetAwaiter().GetResult();
     }
 
     private (FormKey Container, FormKey Child) Case(string injection) => injection switch

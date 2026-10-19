@@ -152,14 +152,11 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 
 export type { PluginAddress };
 
-interface InitializedMod {
-  mod: string;
-  plugins: readonly PluginAddress[];
-}
+type DecompiledAndCommittedMod = components['schemas']['DecompiledAndCommittedMod'];
 
 /** Decompile and commit's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
 export interface DecompileAndCommitOutcome {
-  landed: readonly InitializedMod[];
+  landed: readonly DecompiledAndCommittedMod[];
   refused: readonly ItemRefusal<string>[];
 }
 

@@ -48,7 +48,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         var handler = TestEditService.DecompileAndCommitModHandler(_holder);
         var modFolderBefore = TreeSnapshot.Of(_mod.Folder);
 
-        var result = (await handler.DecompileAndCommitAsync(ToInit.In(Snapshot, Origin))).Value();
+        var result = (await handler.DecompileAndCommitAsync(ToDecompileAndCommit.In(Snapshot, Origin))).Value();
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Applied).Plugins);
         Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", _mod, Line: null, PluginStrings.None)));
@@ -61,7 +61,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
         _holder.Apply(Snapshot);
         var handler = TestEditService.DecompileAndCommitModHandler(_holder);
 
-        var result = (await handler.DecompileAndCommitAsync(ToInit.In(Snapshot, Origin, "NoSuchMod", Origin.ToUpperInvariant()))).Value();
+        var result = (await handler.DecompileAndCommitAsync(ToDecompileAndCommit.In(Snapshot, Origin, "NoSuchMod", Origin.ToUpperInvariant()))).Value();
 
         Assert.Equal([Origin], result.Applied.Select(mod => mod.Mod));
         var refused = Assert.Single(result.Refused);

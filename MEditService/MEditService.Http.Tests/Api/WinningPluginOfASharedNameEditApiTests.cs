@@ -17,7 +17,7 @@ public sealed class WinningPluginOfASharedNameEditApiTests : HostedTests
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("WinningNpc"), origin: WinningOrigin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Init([WinningOrigin, OverriddenOrigin])).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit([WinningOrigin, OverriddenOrigin])).EnsureSuccessStatusCode();
         return fx;
     }
 

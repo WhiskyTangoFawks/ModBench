@@ -22,7 +22,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         if (compiledPlugin)
         {
-            (await Client.Init(Origin)).EnsureSuccessStatusCode();
+            (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
             await Client.NextSnapshot(fx);
             await Client.PluginReportsCompiledPlugin(Plugin);
         }
@@ -66,7 +66,7 @@ public sealed class EditRecordChangesApiTests : HostedTests
                 origin: "OverrideMod")
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Init(["MasterMod", "OverrideMod"])).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(["MasterMod", "OverrideMod"])).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin("Override.esp");
         var formKey = await Client.FirstFormKey("Override.esp", "OverrideMod");

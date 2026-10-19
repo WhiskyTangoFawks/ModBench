@@ -60,11 +60,11 @@ internal static class Wire
         return problem;
     }
 
-    internal static Task<HttpResponseMessage> Init(this HttpClient client, string mod) =>
-        client.Init([mod]);
+    internal static Task<HttpResponseMessage> DecompileAndCommit(this HttpClient client, string mod) =>
+        client.DecompileAndCommit([mod]);
 
     /// <summary>Each mod as one with no file of the mod manager's.</summary>
-    internal static Task<HttpResponseMessage> Init(this HttpClient client, IEnumerable<string> mods) =>
+    internal static Task<HttpResponseMessage> DecompileAndCommit(this HttpClient client, IEnumerable<string> mods) =>
         client.PostAsJsonAsync("/decompile-and-commit", new
         {
             mods = mods.Select(name => new
@@ -245,7 +245,7 @@ internal static class Wire
     internal static async Task<JsonElement> Plugin(this HttpClient client, string name) =>
         (await client.Plugins()).Single(p => p.GetProperty("name").GetString() == name);
 
-    /// <summary>Init's write reaches the answers at the next snapshot (ADR-0015), whose reconcile
+    /// <summary>Decompile and commit's write reaches the answers at the next snapshot (ADR-0015), whose reconcile
     /// reports the plugin compiled before it validates every plugin, so its end is awaited too.</summary>
     internal static async Task PluginReportsCompiledPlugin(this HttpClient client, string name)
     {

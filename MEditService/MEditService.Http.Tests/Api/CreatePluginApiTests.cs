@@ -93,7 +93,7 @@ public sealed class CreatePluginApiTests : HostedTests
     {
         var fx = Owned(OneMod());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single(plugin => plugin.Origin == Origin).Path) ?? throw new InvalidOperationException("A mod plugin has a folder.");
         File.Delete(Path.Combine(modFolder, Held));
         (await PutWithPlaces(

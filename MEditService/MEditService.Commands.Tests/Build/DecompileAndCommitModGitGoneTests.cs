@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.Commands.Tests.Build;
 
 [Collection(ProcessEnvironmentCollection.Name)]
-public sealed class InitModGitGoneTests
+public sealed class DecompileAndCommitModGitGoneTests
 {
     [Fact]
     public async Task InitMod_WhenGitCannotRun_RefusesTheWholeSelection_WithoutNamingAnyMod()
@@ -16,7 +16,7 @@ public sealed class InitModGitGoneTests
         using var gameDir = new ScratchDirectory("medit-init-nogit-game-");
         var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], [], [], [], Language.English);
 
-        var result = await InitEveryPluginOf.ModAsync(loadOrder, "AnyMod", source: new GitGoneSourceAdapter());
+        var result = await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "AnyMod", source: new GitGoneSourceAdapter());
 
         Assert.Equal(DecompileAndCommitRefusal.GitUnavailable, result.WholeSelectionRefusal().Refusal);
     }
