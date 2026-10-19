@@ -10,8 +10,8 @@ import {
 } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
-import { messageLine } from '../drivingLib/nameFilter';
-import type { DownloadArgument } from '../drivingLib/argument';
+import { messageLine } from '../drivingLib/syncFailureReport';
+import type { DownloadedFileArgument } from '../drivingLib/argument';
 
 // Mirrors the reference tool's own colour-coded Status cell. The icon is always set explicitly so
 // the file-icon theme never takes over; a colour is affordable because every row is an archive.
@@ -56,7 +56,7 @@ export class DownloadNode extends vscode.TreeItem {
   /** The Argument view on Nexus reads, which the Mods row supplies under the same name. */
   readonly nexusModId: string | undefined;
   readonly nexusGame: string | undefined;
-  readonly argument: DownloadArgument;
+  readonly argument: DownloadedFileArgument;
   constructor(row: DownloadFile) {
     super(row.displayName, vscode.TreeItemCollapsibleState.None);
     this.argument = { kind: 'download', row };

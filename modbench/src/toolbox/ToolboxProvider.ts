@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { gameFolderNotFoundLine } from './gameFolderNotFoundLog';
 import { ErrorNode } from '../drivingLib/errorNode';
-import { messageLine } from '../drivingLib/nameFilter';
+import { messageLine } from '../drivingLib/syncFailureReport';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { instanceMessages, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 

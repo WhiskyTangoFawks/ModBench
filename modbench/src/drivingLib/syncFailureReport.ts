@@ -1,5 +1,28 @@
 import { errorMessage } from '../ports/errorMessage';
-import type { SyncMessage } from './nameFilter';
+
+/** One view's message line, said by several writers: each part present, in order. */
+export function messageLine(...parts: (string | undefined)[]): string | undefined {
+  const said = parts.filter((part) => part !== undefined);
+  return said.length > 0 ? said.join(' ') : undefined;
+}
+
+/** A system command's part of its view's message line. */
+export interface SyncMessage {
+  /** The failure standing now, or undefined. */
+  message(): string | undefined;
+  onMessageChanged(listener: () => void): { dispose(): void };
+}
+
+/** Several system commands' parts of one view's message line, as one. */
+export function joinSyncMessages(...parts: SyncMessage[]): SyncMessage {
+  return {
+    message: () => messageLine(...parts.map((part) => part.message())),
+    onMessageChanged: (listener) => {
+      const subscriptions = parts.map((part) => part.onMessageChanged(listener));
+      return { dispose: () => subscriptions.forEach((subscription) => subscription.dispose()) };
+    },
+  };
+}
 
 type SyncOutcome =
   | { applied: true; added: readonly string[]; dropped: readonly string[] }
