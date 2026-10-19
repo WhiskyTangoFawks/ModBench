@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { pluginStanding } from '../pluginStanding';
 import type { LoadOrderPlugin } from '../loadOrderSnapshot';
-import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../loadOrderSnapshot';
+import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import type { Mod } from '../instance';
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });

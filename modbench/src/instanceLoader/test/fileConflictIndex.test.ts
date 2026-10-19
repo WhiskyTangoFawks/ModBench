@@ -5,7 +5,7 @@ import {
   buildFileConflictIndex, modOrigin, goToModCandidates, inFileOrderConflict, fileOrderConflictOf, outranksACopy, winsPath, RUNTIME_OUTPUT, type ConflictEntry,
 } from '../fileConflictIndex';
 import type { OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
-import { OVERWRITE_ORIGIN } from '../loadOrderSnapshot';
+import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());

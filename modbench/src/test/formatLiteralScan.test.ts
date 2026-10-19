@@ -48,7 +48,7 @@ const LAYOUT: Record<string, LayoutName> = {
   profiles: { owners: [join('instanceAdapter', 'layout.ts')] },
   mods: { owners: [join('instanceAdapter', 'layout.ts')] },
   downloads: { owners: [join('instanceAdapter', 'layout.ts')] },
-  overwrite: { owners: [join(ADAPTER_CODECS, 'modlistText.ts')] },
+  overwrite: { owners: [join(ADAPTER_CODECS, 'modlistText.ts'), join('wire', 'pluginAddress.ts')] },
   'modlist.txt': { owners: [join(ADAPTER_CODECS, 'modlistText.ts')], matchedWithinLiterals: true },
   'ModOrganizer.ini': { owners: [join(ADAPTER_CODECS, 'modOrganizerIni.ts')], matchedWithinLiterals: true },
   'meta.ini': { owners: [join(ADAPTER_CODECS, 'metaIni.ts')], matchedWithinLiterals: true },

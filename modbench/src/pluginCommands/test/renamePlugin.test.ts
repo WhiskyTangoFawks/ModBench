@@ -3,7 +3,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { OVERWRITE_ORIGIN } from '../../instanceAdapter/instanceAdapter';
+import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { scriptedDialog } from '../../test/surfacingDoubles';
