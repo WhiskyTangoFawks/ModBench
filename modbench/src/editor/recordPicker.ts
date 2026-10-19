@@ -12,10 +12,10 @@ export interface RecordPickerDeps {
 
 type PickItem = vscode.QuickPickItem & { formKey?: string };
 
-// FormKeyLink and FormKeyCell show a resolved reference in this label, so a record is chosen and
+// The backend decided these match, so VS Code does not filter them again by label. FormKeyLink and FormKeyCell show a resolved reference in this label, so a record is chosen and
 // read back in the same words.
 function toPickItem(r: RecordSummary): PickItem {
-  return { label: recordLabel(r.editorId, r.formKey), formKey: r.formKey };
+  return { label: recordLabel(r.editorId, r.formKey), formKey: r.formKey, alwaysShow: true };
 }
 
 function failureItem(err: unknown): PickItem {
