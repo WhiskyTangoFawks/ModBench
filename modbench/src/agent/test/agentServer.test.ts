@@ -648,16 +648,16 @@ describe('the agent server, running a gesture', () => {
     const answer = await call(client, 'mod_disable', { argument: [{ name: 'A' }, { name: 'Textures', kind: 'mod' }] });
 
     expect(fired.calls).toEqual([['modbench.mod.disable', new AgentCall([{ kind: 'mod', name: 'A' }, { kind: 'mod', name: 'Textures' }], {})]]);
-    expect(answer).toEqual({ isError: false, text: JSON.stringify(fired.outcome) });
+    expect(answer).toEqual({ isError: false, text: JSON.stringify({ landed: ['A', 'Textures'], refused: [] }) });
   });
 
-  it('refuses in part with the whole outcome, what landed and what was refused and why, in the Output and in no notification', async () => {
+  it('refuses in part, answering what landed and what was refused and why, in the Output and in no notification', async () => {
     fired.outcome = { applied: true, outcome: { landed: ['A'], refused: [{ item: 'B', reason: 'Mod not found in modlist: B' }] } };
     const { client, lines, reporter } = await served();
 
     const answer = await call(client, 'mod_enable', { argument: [{ name: 'A' }, { name: 'B' }] });
 
-    expect(answer).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
+    expect(answer).toEqual({ isError: true, text: JSON.stringify({ landed: ['A'], refused: [{ item: 'B', reason: 'Mod not found in modlist: B' }] }) });
     expect(lines.join('\n')).toContain('"B" (Mod not found in modlist: B)');
     expect(reporter.reports).toEqual([]);
   });
@@ -674,11 +674,11 @@ describe('the agent server, running a gesture', () => {
     expect(errored).toEqual(['[agent] mod_enable: disk gone']);
   });
 
-  it('refuses in whole with the outcome, which holds the command\'s refusal', async () => {
+  it('refuses in whole, answering the command\'s refusal', async () => {
     fired.outcome = { applied: false, refusal: 'ENOENT: modlist.txt' };
     const { client, lines } = await served();
 
-    expect(await call(client, 'mod_enable', { argument: [{ name: 'A' }] })).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
+    expect(await call(client, 'mod_enable', { argument: [{ name: 'A' }] })).toEqual({ isError: true, text: JSON.stringify({ refusal: 'ENOENT: modlist.txt' }) });
     expect(lines.join('\n')).toContain('ENOENT: modlist.txt');
   });
 
@@ -758,7 +758,7 @@ describe('the agent server, running a gesture', () => {
 
       const answer = await call(client, 'plugin_decompile', { argument: [{ name: 'Solo.esp' }] });
 
-      expect(answer).toEqual({ isError: true, text: JSON.stringify(fired.outcome) });
+      expect(answer).toEqual({ isError: true, text: JSON.stringify({ refusal: 'Could not move plugins.', detail: 'A.esp is a master.' }) });
       expect(lines.join('\n')).toContain('Could not move plugins. A.esp is a master.');
     });
 
@@ -867,13 +867,13 @@ describe('the agent server, running a gesture', () => {
       expect(fired.calls).toEqual([]);
     });
 
-    it('logs the parts of a landed gesture that failed, though it landed', async () => {
+    it('logs the parts of a landed gesture that failed in the Output, and answers it as landed', async () => {
       fired.outcome = { applied: true, outcome: { landed: ['Bee'], refused: [] }, partial: [{ message: '"B" was renamed, but a line could not be renamed.', detail: 'disk full', severity: 'warning' }] };
       const { client, lines } = await served();
 
       const answer = await call(client, 'mod_rename', { argument: [{ name: 'B' }], options: { name: 'Bee' } });
 
-      expect(answer.isError).toBe(true);
+      expect(answer.isError).toBe(false);
       expect(lines.join('\n')).toContain('"B" was renamed, but a line could not be renamed. disk full');
     });
 
@@ -1000,6 +1000,12 @@ describe('the agent server, running a gesture', () => {
       await fire('mod_install', { argument: [outside], options: { target: 'B' } });
 
       expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], { target: 'B' })]]);
+    });
+
+    it('fires install with no Options when the call leaves out options, for the command to refuse naming them', async () => {
+      await fire('mod_install', { argument: [outside] });
+
+      expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], {})]]);
     });
 
     it('fires install with force as an Option', async () => {
