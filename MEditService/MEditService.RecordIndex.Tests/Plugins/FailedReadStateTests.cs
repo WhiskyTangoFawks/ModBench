@@ -295,6 +295,25 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
+    public void ABinaryReadThatRanOutOfMemory_BesideAnUnreadableDocument_IsNotReadAgainWhileItsBytesHold()
+    {
+        SourceMods.Init(Plugin);
+        File.WriteAllText(StrayDocument, "{}");
+        var binaryReads = 0;
+        using var index = Reconciled(new PartwayAdapter(afterRecords: 0, () =>
+        {
+            Interlocked.Increment(ref binaryReads);
+            throw Faults.Of(typeof(OutOfMemoryException));
+        }));
+        Assert.True(Failed(index));
+
+        index.Reconcile(index.Holder, _fixture.GameDirectory, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
+            GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        Assert.Equal(1, Volatile.Read(ref binaryReads));
+    }
+
+    [Fact]
     public void ATreeReadAgainAtEverySnapshot_ReadsTheBinaryInItsPlaceOncePerChangeOfItsBytes()
     {
         SourceMods.Init(Plugin);
@@ -428,6 +447,56 @@ public sealed class FailedReadStateTests : IDisposable
         index.NextSnapshotUntil(() => !Failed(index), "the binary opened again");
 
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+    }
+
+    [Fact]
+    public void AValidationThatRunsOutOfMemory_IsThePluginsFailedToRead_WithoutReadingItWhole()
+    {
+        SourceMods.Init(Plugin);
+        using var index = Reconciled();
+        var document = NpcDocument;
+        File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{NpcEditorId}\"", "\"EditedNpc\"", StringComparison.Ordinal));
+        var thrown = Faults.Of(typeof(OutOfMemoryException));
+        Arm(TreeMoment.RecordRead, () => throw thrown);
+        var readsBefore = TreeReads();
+
+        index.NextSnapshotUntil(() => Failed(index), "the plugin's failure");
+
+        Assert.Contains(thrown.Message, Reason(index), StringComparison.Ordinal);
+        Assert.Equal(readsBefore, TreeReads());
+    }
+
+    [Fact]
+    public void AWarmLoadWhoseValidationRunsOutOfMemory_IsThePluginsFailedToRead_WithoutReadingItWhole()
+    {
+        SourceMods.Init(Plugin);
+        using (Reconciled()) { }
+        var document = NpcDocument;
+        File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{NpcEditorId}\"", "\"EditedNpc\"", StringComparison.Ordinal));
+        var thrown = Faults.Of(typeof(OutOfMemoryException));
+        Arm(TreeMoment.RecordRead, () => throw thrown);
+        var readsBefore = TreeReads();
+
+        using var index = Reconciled();
+
+        Assert.Contains(thrown.Message, Reason(index), StringComparison.Ordinal);
+        Assert.Equal(readsBefore, TreeReads());
+    }
+
+    [Fact]
+    public void ATreeWhoseReadRunsOutOfMemory_SaysSo_AndIsNotReadAgainWhileItsDocumentsHold()
+    {
+        SourceMods.Init(Plugin);
+        var thrown = Faults.Of(typeof(OutOfMemoryException));
+        Arm(TreeMoment.ReadBegins, () => throw thrown);
+        using var index = Reconciled();
+        Assert.Contains(thrown.Message, index.PluginRowOf(Plugin.KeyOf())?.PluginSourceUnreadable?.Reason, StringComparison.Ordinal);
+        var readsBefore = TreeReads();
+
+        index.Reconcile(index.Holder, _fixture.GameDirectory, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
+            GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        Assert.Equal(readsBefore, TreeReads());
     }
 
     [Theory]

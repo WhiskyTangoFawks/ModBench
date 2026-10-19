@@ -12,13 +12,18 @@ internal static class Faults
 
     /// <summary>On its nth run, throws an exception of the nth of <paramref name="turns"/>; a null turn, or a run
     /// past the last, throws nothing.</summary>
-    internal static Action InTurn(params Type?[] turns)
+    internal static Action InTurn(params Type?[] turns) =>
+        InTurn([.. turns.Select(type => type is null ? null : new Action(() => throw Of(type)))]);
+
+    /// <summary>On its nth run, runs the nth of <paramref name="turns"/>; a null turn, or a run past the
+    /// last, does nothing.</summary>
+    internal static Action InTurn(params Action?[] turns)
     {
         var run = -1;
         return () =>
         {
             var turn = Interlocked.Increment(ref run);
-            if (turn < turns.Length && turns[turn] is { } type) throw Of(type);
+            if (turn < turns.Length) turns[turn]?.Invoke();
         };
     }
 
