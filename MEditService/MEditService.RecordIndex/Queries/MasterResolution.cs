@@ -7,10 +7,8 @@ namespace MEditService.RecordIndex.Queries;
 // (ADR-0012).
 internal static class MasterResolution
 {
-    /// <summary>For each active plugin, the masters in its header that are not active, as MO2's
-    /// <c>PluginList::testMasters</c> finds them, and those that are active but load after it. A
-    /// plugin with neither has no entry. A header names a master by filename, so the match is by
-    /// filename among the active plugins, which hold one file per name.</summary>
+    /// <summary>For each active plugin, its masters that are not active (MO2's <c>testMasters</c>)
+    /// or load after it, matched by filename. A plugin with neither has no entry.</summary>
     public static IReadOnlyDictionary<PluginAddress, MasterProblems> Classify(
         LoadOrderSnapshot loadOrder, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
     {
