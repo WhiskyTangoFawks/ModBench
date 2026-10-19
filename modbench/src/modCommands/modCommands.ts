@@ -7,7 +7,7 @@ import {
   type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace, type SourceMods,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
-import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal as unclaimedModName, type EntryKey } from './nameRefusals';
+import { EMPTY_MOD_NAME, entryNameRefusal, unclaimedModName, type EntryKey } from './nameRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { isRefused, type MEditClient, type ReadModStatus } from '../client';

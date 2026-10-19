@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { TakenNames } from '../../instanceAdapter/instanceAdapter';
-import { entryNameRefusal, newModNameRefusal } from '../nameRefusals';
+import { entryNameRefusal, unclaimedModName } from '../nameRefusals';
 
 const mod = (name: string) => ({ kind: 'mod', name } as const);
 const separator = (name: string) => ({ kind: 'separator', name } as const);
@@ -14,33 +14,33 @@ const taken: TakenNames = {
   modFolders: [folder('mod', 'Harder VATS'), folder('mod', 'Folder Only'), folder('separator', 'Group A')],
 };
 
-describe('newModNameRefusal', () => {
+describe('unclaimedModName', () => {
   it('names the collision and the way out when a folder holds a mod of that name', () => {
-    expect(newModNameRefusal(key, taken, 'Harder VATS')).toBe(
+    expect(unclaimedModName(key, taken, 'Harder VATS')).toBe(
       'A mod named "Harder VATS" already exists. Install its next release from Downloads, or uninstall it to install anew.');
   });
 
   it('names the collision for a mod of that name in another case, in the name as given, so the prompt does not accept a name the create or the install then refuses', () => {
-    expect(newModNameRefusal(key, taken, 'harder vats')).toMatch(/"harder vats" already exists/);
+    expect(unclaimedModName(key, taken, 'harder vats')).toMatch(/"harder vats" already exists/);
   });
 
   it('is silent for a free name, a separator\'s name, a name only mod order lists, and a blank one', () => {
-    expect(newModNameRefusal(key, taken, 'A New Mod')).toBeUndefined();
-    expect(newModNameRefusal(key, taken, 'Group A')).toBeUndefined();
-    expect(newModNameRefusal(key, taken, 'Listed Only')).toBeUndefined();
-    expect(newModNameRefusal(key, taken, '   ')).toBeUndefined();
+    expect(unclaimedModName(key, taken, 'A New Mod')).toBeUndefined();
+    expect(unclaimedModName(key, taken, 'Group A')).toBeUndefined();
+    expect(unclaimedModName(key, taken, 'Listed Only')).toBeUndefined();
+    expect(unclaimedModName(key, taken, '   ')).toBeUndefined();
   });
 
   it('checks the name trimmed', () => {
-    expect(newModNameRefusal(key, taken, '  Harder VATS ')).toMatch(/"Harder VATS" already exists/);
+    expect(unclaimedModName(key, taken, '  Harder VATS ')).toMatch(/"Harder VATS" already exists/);
   });
 
   it('names the collision for the name of a separator\'s folder, the manager knowing a mod by its folder\'s name', () => {
-    expect(newModNameRefusal(key, taken, 'group a_SEPARATOR')).toMatch(/"group a_SEPARATOR" already exists/);
+    expect(unclaimedModName(key, taken, 'group a_SEPARATOR')).toMatch(/"group a_SEPARATOR" already exists/);
   });
 
   it('is silent while the instance has no folder for mods', () => {
-    expect(newModNameRefusal(key, { mods: [], modFolders: undefined }, 'Harder VATS')).toBeUndefined();
+    expect(unclaimedModName(key, { mods: [], modFolders: undefined }, 'Harder VATS')).toBeUndefined();
   });
 });
 
