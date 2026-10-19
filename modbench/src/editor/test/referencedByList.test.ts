@@ -8,8 +8,8 @@ vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, EventEmitter, The
 import {
   readReferencedBy,
   referencedByCopyValueText,
-  type ConditionsOf,
 } from '../referencedByList';
+import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ReferenceResult } from '../../client';
 import { present } from '../../ports/present';
@@ -43,10 +43,8 @@ function indexed(references: ReferenceResult[]): InMemoryMEditClient {
   return client;
 }
 
-const NOTHING_EDITABLE: ConditionsOf = () => ({ editable: false });
-
-async function listOf(client: InMemoryMEditClient, list = 'a list', conditionsOf: ConditionsOf = NOTHING_EDITABLE) {
-  const read = await readReferencedBy(client, leveledLog(), TARGET, list, conditionsOf);
+async function listOf(client: InMemoryMEditClient, list = 'a list') {
+  const read = await readReferencedBy(client, leveledLog(), TARGET, list);
   return { ...read, referrers: read.provider.getChildren() };
 }
 
@@ -75,7 +73,7 @@ describe('the Referenced By list — states', () => {
     const log = leveledLog();
     const client = indexed([]);
     client.setQueryFailure('getReferences', { failed: 'refused', refusal: 'boom' });
-    const [error, ...rest] = (await readReferencedBy(client, log, TARGET, 'a list', NOTHING_EDITABLE)).provider.getChildren();
+    const [error, ...rest] = (await readReferencedBy(client, log, TARGET, 'a list')).provider.getChildren();
     expect(rest).toEqual([]);
     expect(error?.label).toBe('Failed to load: boom');
     expect(error?.tooltip).toBe('boom');
@@ -84,7 +82,7 @@ describe('the Referenced By list — states', () => {
 
   it('is a snapshot: mEdit is asked once, however often the view asks for rows and whatever changes after', async () => {
     const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
-    const { provider } = await readReferencedBy(client, leveledLog(), TARGET, 'a list', NOTHING_EDITABLE);
+    const { provider } = await readReferencedBy(client, leveledLog(), TARGET, 'a list');
     client.emit({ kind: 'rows-changed', plugin: '', origin: '', keys: [], sequence: 0 });
     provider.getChildren();
     provider.getChildren();
@@ -198,13 +196,14 @@ describe('the Referenced By list — where a referrer is held', () => {
 
 describe('the Referenced By list — what a plugin copy offers', () => {
   const EDITABLE_MOD = 'EditableMod';
-  const conditions: ConditionsOf = ({ origin }) => ({ editable: origin === EDITABLE_MOD });
+  const editablePlugin = (name: string) => pluginMetadataFixture({ name, origin: EDITABLE_MOD, isCompiledPlugin: true, isImmutable: false });
   const HOLDS_CHILDREN = [{ type: 'dial', displayName: 'Dialog Topic' }];
 
   async function listedAs(references: ReferenceResult[], children: typeof HOLDS_CHILDREN) {
     const client = indexed(references);
     client.setQueryAnswer('getChildRecordTypes', children);
-    const { provider, referrers: [referrer] } = await listOf(client, 'a list', conditions);
+    client.setQueryAnswer('getPlugins', [editablePlugin('Fallout4.esm'), editablePlugin('E.esp')]);
+    const { provider, referrers: [referrer] } = await listOf(client);
     return { client, offers: provider.getChildren(present(referrer, 'the referrer')).map((holder) => holder.contextValue) };
   }
 
@@ -212,7 +211,7 @@ describe('the Referenced By list — what a plugin copy offers', () => {
     ['an editable plugin, for a record that can hold a child', EDITABLE_MOD, HOLDS_CHILDREN, 'referencedByHolder editable container'],
     ['an editable plugin, for a record that can hold none', EDITABLE_MOD, [], 'referencedByHolder editable'],
     ['a plugin that is not editable', 'Fallout4.esm', HOLDS_CHILDREN, 'referencedByHolder'],
-  ])('is stated as Plugins states it for %s', async (_, origin, children, expected) => {
+  ])('is stated by whether mEdit answers its plugin can be edited, for %s', async (_, origin, children, expected) => {
     expect((await listedAs([reference({ formKey: '000002:Fallout4.esm', origin })], children)).offers).toEqual([expected]);
   });
 
@@ -227,11 +226,30 @@ describe('the Referenced By list — what a plugin copy offers', () => {
     ]);
   });
 
+  it('offers nothing editable of a plugin mEdit answers cannot be edited', async () => {
+    const client = indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD })]);
+    client.setQueryAnswer('getPlugins', [{ ...editablePlugin('Fallout4.esm'), isImmutable: true }]);
+    const { provider, referrers: [referrer] } = await listOf(client);
+    expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder']);
+  });
+
+  it('offers nothing editable where the plugins cannot be read, and logs it', async () => {
+    const client = indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD })]);
+    client.setQueryFailure('getPlugins', { failed: 'refused', refusal: 'no instance' });
+    const log = leveledLog();
+    const { provider } = await readReferencedBy(client, log, TARGET, 'a list');
+    const [referrer] = provider.getChildren();
+    expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder']);
+    expect(log.lines.warn).toHaveLength(1);
+    expect(log.lines.warn[0]).toContain('getPlugins');
+  });
+
   it('offers no create where what the record can hold cannot be read, and logs it', async () => {
     const client = indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD })]);
+    client.setQueryAnswer('getPlugins', [editablePlugin('Fallout4.esm')]);
     client.setQueryFailure('getChildRecordTypes', { failed: 'refused', refusal: 'boom' });
     const log = leveledLog();
-    const { provider } = await readReferencedBy(client, log, TARGET, 'a list', conditions);
+    const { provider } = await readReferencedBy(client, log, TARGET, 'a list');
     const [referrer] = provider.getChildren();
     expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder editable']);
     expect(log.lines.warn).toHaveLength(1);

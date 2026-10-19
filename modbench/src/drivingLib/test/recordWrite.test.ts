@@ -8,18 +8,19 @@ vi.mock('vscode', async () => {
 import { progressSteps as steps } from '../../test/recordedProgress';
 import { recordWriteOver } from '../recordWrite';
 
+const VIEW = 'a.view';
 const instanceThatReads = () => ({ refresh: () => { steps.push('refresh'); return Promise.resolve(undefined); } });
 const noPut = { latestLoadOrder: () => Promise.resolve(undefined) };
 
 describe('a record write', () => {
-  it('holds the Plugins view\'s progress until the record index reaches the newest load order the read put', async () => {
+  it('holds the view\'s progress until the record index reaches the newest load order the read put', async () => {
     steps.length = 0;
     let reached!: () => void;
     const client = { latestLoadOrder: () => new Promise<undefined>((resolve) => { reached = () => resolve(undefined); }) };
 
-    const writing = recordWriteOver(instanceThatReads(), client)(() => { steps.push('write'); return Promise.resolve(); });
+    const writing = recordWriteOver(VIEW, instanceThatReads(), client)(() => { steps.push('write'); return Promise.resolve(); });
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(steps).toEqual(['progress opens on modbench.pluginListTree', 'write', 'refresh']);
+    expect(steps).toEqual(['progress opens on a.view', 'write', 'refresh']);
 
     reached();
     await writing;
@@ -29,8 +30,8 @@ describe('a record write', () => {
   it('ends when the read lands when no put follows it', async () => {
     steps.length = 0;
 
-    await recordWriteOver(instanceThatReads(), noPut)(() => Promise.resolve());
+    await recordWriteOver(VIEW, instanceThatReads(), noPut)(() => Promise.resolve());
 
-    expect(steps).toEqual(['progress opens on modbench.pluginListTree', 'refresh', 'progress closes']);
+    expect(steps).toEqual(['progress opens on a.view', 'refresh', 'progress closes']);
   });
 });
