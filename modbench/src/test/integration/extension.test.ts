@@ -482,6 +482,7 @@ before(async function () {
   }
 
   await waitFor('Modbench to launch mEdit and open its notification stream', () => sseClients.length > 0);
+  await waitFor('the instance\'s first load order, put before the record tab below asks for plugins', () => requestLog.includes('PUT /load-order'));
   await openRecord({ formKey: 'Fallout4.esm:0000FF' });
   await waitFor('a record tab, opened alone, to ask for its record: on a new profile VS Code 1.140 never loads a webview page '
     + 'opened while the first registers its origin\'s service worker', () => askedToRead('Fallout4.esm:0000FF'));
