@@ -1,11 +1,10 @@
 import type { MEditClient } from '../client';
-import { runWritingGesture, type RecordWrite } from '../drivingLib/writingGesture';
+import { runWritingGesture, type RecordWrite } from './writingGesture';
 import type { Instance } from '../instanceLoader/instance';
-import { PLUGINS_KEY_ARGS } from './gestureEntry';
 
 // The read's load-order put is what the record index must reach before the rows show the write.
 export function recordWriteOver(
-  instance: Pick<Instance, 'refresh'>, client: Pick<MEditClient, 'latestLoadOrder'>,
+  view: string, instance: Pick<Instance, 'refresh'>, client: Pick<MEditClient, 'latestLoadOrder'>,
 ): RecordWrite {
   const untilIndexShows = {
     refresh: async () => {
@@ -13,5 +12,5 @@ export function recordWriteOver(
       await client.latestLoadOrder();
     },
   };
-  return (command) => runWritingGesture(PLUGINS_KEY_ARGS.view, untilIndexShows, command);
+  return (command) => runWritingGesture(view, untilIndexShows, command);
 }
