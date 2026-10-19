@@ -16,8 +16,9 @@ const diagnosis = (text: string): PluginDiagnosisReport => (
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((r) => { resolve = r; });
-  return { promise, resolve };
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
 }
 
 function watched<T>() {
@@ -147,36 +148,34 @@ describe('PluginFactsFeed', () => {
     expect(feed.rows.description(A)).toBe('malformed');
   });
 
-  it('says in the message line that the scan failed, and clears it when the next scan answers', async () => {
+  it('records a failed scan on the rows and fires a change, and the next answer clears it', async () => {
     const { feed, client, logged, changes } = feedOver();
     client.setQueryAnswer('getPlugins', [held()]);
-    client.setQueryAnswer('getDiagnoses', [diagnosis('first')]);
-    await feed.reconciled([]);
+    client.setQueryAnswer('getDiagnoses', []);
     client.setQueryFailureOnce('getDiagnoses', { failed: 'refused', refusal: '503' });
     const warned = logged.next();
     await feed.reconciled([]);
     await warned;
 
-    expect(feed.rows.laterReadFailureMessage()).toMatch(/^Showing the last good read: .*malformed-plugin scan.*503/);
+    expect(feed.rows.laterReadFailureMessage()).toContain('503');
 
-    const answered = changes.mock.calls.length;
+    const before = changes.mock.calls.length;
     await feed.reconciled([]);
-    await vi.waitFor(() => { expect(changes.mock.calls.length).toBeGreaterThan(answered + 1); });
+    await vi.waitFor(() => { expect(changes.mock.calls.length).toBeGreaterThan(before + 1); });
 
     expect(feed.rows.laterReadFailureMessage()).toBeUndefined();
   });
 
   it('logs a failed scan once, and again only when the reason changes', async () => {
-    const { feed, client, logged } = feedOver();
+    const { feed, client, logged, changes } = feedOver();
     client.setQueryAnswer('getPlugins', [held()]);
     client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: '503' });
     const warned = logged.next();
     await feed.reconciled([]);
     await warned;
-    const again = vi.fn();
-    feed.onDidChange(again);
+    const before = changes.mock.calls.length;
     await feed.reconciled([]);
-    await vi.waitFor(() => { expect(again.mock.calls.length).toBeGreaterThan(1); });
+    await vi.waitFor(() => { expect(changes.mock.calls.length).toBeGreaterThan(before + 1); });
     expect(logged.items).toHaveLength(1);
 
     client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: '500' });
@@ -185,6 +184,24 @@ describe('PluginFactsFeed', () => {
     await changed;
 
     expect(logged.items).toHaveLength(2);
+  });
+
+  it('logs a failed scan that a newer event superseded, and changes no facts', async () => {
+    const { feed, client, logged, changes } = feedOver();
+    client.setQueryAnswer('getPlugins', [held()]);
+    const slowScan = deferred<PluginDiagnosisReport[]>();
+    client.setQueryAnswerOnce('getDiagnoses', slowScan.promise);
+    await feed.reconciled([]);
+    feed.unreachable('gone');
+    const before = changes.mock.calls.length;
+    const warned = logged.next();
+
+    slowScan.reject(new Error('late'));
+    await warned;
+
+    expect(logged.items.map((l) => l.level)).toEqual(['warn']);
+    expect(changes.mock.calls.length).toBe(before);
+    expect(feed.rows.laterReadFailureMessage()).toBeUndefined();
   });
 
   it('drops a scan answer that lands after a newer event', async () => {

@@ -110,6 +110,7 @@ export class PluginFacts {
   private noMatchAnywhere = false;
   private laterFailures = new Map<string, string>();
   private scanFailure?: string;
+  private scanAnswered = false;
 
   /** A progressive reconcile's tick. */
   indexed(plugins: readonly PluginAddress[], failures: readonly PluginLoadFailure[]): void {
@@ -171,17 +172,15 @@ export class PluginFacts {
   /** The malformed-plugin scan's answer, replacing the last. */
   diagnosed(reports: readonly PluginDiagnosisReport[]): void {
     this.scanFailure = undefined;
+    this.scanAnswered = true;
     this.diagnosisReports = [...reports];
     this.diagnosisTexts = new ByPluginAddress<string[]>();
     for (const r of reports) this.diagnosisTexts.append({ name: r.plugin, origin: r.origin }, r.text);
   }
 
-  /** The malformed-plugin scan could not be read; the last answer stays. False when this reason
-   *  is the one already standing. */
-  scanFailed(reason: string): boolean {
-    const isNew = reason !== this.scanFailure;
+  /** The malformed-plugin scan could not be read; the last answer stays. */
+  scanFailed(reason: string): void {
     this.scanFailure = reason;
-    return isNew;
   }
 
   /** Each settle of a source mod names every plugin of it that changed outside Modbench, so it
@@ -218,13 +217,17 @@ export class PluginFacts {
     return this.laterFailures;
   }
 
-  /** The message line's part for those failures; undefined when none stands. */
-  laterReadFailureMessage(): string | undefined {
-    const reasons = [
-      ...this.laterFailures.values(),
-      ...this.scanFailure === undefined ? [] : [`the malformed-plugin scan: ${this.scanFailure}`],
-    ];
-    return reasons.length === 0 ? undefined : `Showing the last good read: ${reasons.join('; ')}`;
+  /** The message line's part for the reads that failed after rows landed, joined with the
+   *  instance's own read failure, and for a scan that failed before any answered. */
+  laterReadFailureMessage(instanceReadFailure?: string): string | undefined {
+    const scan = this.scanFailure === undefined ? undefined : `the malformed-plugin scan: ${this.scanFailure}`;
+    const lastGood = [instanceReadFailure, ...this.laterFailures.values(), this.scanAnswered ? scan : undefined]
+      .filter((reason) => reason !== undefined);
+    const lines = [
+      lastGood.length === 0 ? undefined : `Showing the last good read: ${lastGood.join('; ')}`,
+      this.scanAnswered || scan === undefined ? undefined : `Failed to load: ${scan}`,
+    ].filter((line) => line !== undefined);
+    return lines.length === 0 ? undefined : lines.join(' ');
   }
 
   /** The failed index (plugins.md, States 6). */

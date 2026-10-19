@@ -128,15 +128,21 @@ export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' |
 
 const cannotTellRunning = (manager: string, reason: string): string => `Cannot tell whether ${manager} is running: ${reason}.`;
 
-function managerRunningMessage({ managerRunning, managerNames: { manager } }: InstanceValue): string | undefined {
+export function managerRunningMessage({ managerRunning, managerNames: { manager } }: InstanceValue): string | undefined {
   if (managerRunning.kind === 'unknown') return cannotTellRunning(manager, managerRunning.reason);
   return managerRunning.kind === 'running' ? `${manager} is running, and overwrites your changes when it launches a program or exits.` : undefined;
 }
 
+/** The instance's read failure once rows have landed, the reason of story 6's line. */
+export function instanceLastGoodReadFailure({ sequence, readFailure }: Pick<InstanceView, 'sequence' | 'readFailure'>): string | undefined {
+  return sequence > 0 ? readFailure : undefined;
+}
+
 /** What every view of the instance says on its message line (common.md, States), in order: the mod manager running
  *  (story 8), and a read that failed after rows landed (story 6), the error row's business before then. */
-export function instanceMessages({ value, sequence, readFailure }: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'>): (string | undefined)[] {
-  return [managerRunningMessage(value), sequence > 0 && readFailure !== undefined ? `Showing the last good read: ${readFailure}` : undefined];
+export function instanceMessages(view: Pick<InstanceView, 'value' | 'sequence' | 'readFailure'>): (string | undefined)[] {
+  const reason = instanceLastGoodReadFailure(view);
+  return [managerRunningMessage(view.value), reason === undefined ? undefined : `Showing the last good read: ${reason}`];
 }
 
 interface FocusWindow {
