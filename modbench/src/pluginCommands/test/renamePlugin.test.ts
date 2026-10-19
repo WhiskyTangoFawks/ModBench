@@ -27,7 +27,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
   });
   const rename = (newName: string, plugin: PluginAddress = PLUGIN, answers: InstanceAnswers = {}) => {
     const fake = fakeInstanceAdapter(undefined, answers);
-    const result = pluginCommandsWith(fake.adapter, client).renamePlugin({ apply }, plugin, newName, 'Fallout4');
+    const result = pluginCommandsWith(fake.adapter, client).renamePlugin({ apply }, plugin, newName);
     return { fake, result };
   };
 
@@ -53,7 +53,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     ]);
     expect(applied).toEqual([CHANGES]);
     expect(fake.calls).toEqual([
-      { verb: 'renamePlugin', origin: { kind: 'mod', name: 'Patch Mod' }, from: 'Patch Mod.esp', to: 'Renamed Patch.esp', gameRelease: 'Fallout4' },
+      { verb: 'renamePlugin', origin: { kind: 'mod', name: 'Patch Mod' }, from: 'Patch Mod.esp', to: 'Renamed Patch.esp' },
     ]);
   });
 
@@ -62,7 +62,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
 
     await result;
 
-    expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'runtimeOutput' }, from: 'Run.esp', to: 'Ran.esp', gameRelease: 'Fallout4' }]);
+    expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'runtimeOutput' }, from: 'Run.esp', to: 'Ran.esp' }]);
   });
 
   it('refuses a name the origin already holds before any write', async () => {

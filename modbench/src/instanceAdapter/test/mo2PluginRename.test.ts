@@ -62,7 +62,12 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
   const at = (relative: string): string => join(root, relative);
   const text = (relative: string): Promise<string> => readFile(at(relative), 'utf8');
   const rename = (to = 'Renamed Patch.esp'): Promise<void> =>
-    adapter.renamePlugin(ORIGIN, 'Patch Mod.esp', to, 'Fallout4');
+    adapter.renamePlugin(ORIGIN, 'Patch Mod.esp', to);
+
+  async function settingsNameGame(gameName: string): Promise<void> {
+    const file = join(root, 'ModOrganizer.ini');
+    await writeFile(file, (await readFile(file, 'utf8')).replace(/^gameName=.*$/m, `gameName=${gameName}`));
+  }
 
   async function put(relative: string, contents = relative): Promise<void> {
     await mkdir(join(at(relative), '..'), { recursive: true });
@@ -173,8 +178,9 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
   it('renames the files a release of another game names for a plugin, by that release\'s archive extension and language spellings', async () => {
     await put(`${MOD}/Patch Mod - Main.bsa`);
     await put(`${MOD}/Strings/Patch Mod_English.STRINGS`);
+    await settingsNameGame('Skyrim Special Edition');
 
-    await adapter.renamePlugin(ORIGIN, 'Patch Mod.esp', 'Renamed Patch.esp', 'SkyrimSE');
+    await adapter.renamePlugin(ORIGIN, 'Patch Mod.esp', 'Renamed Patch.esp');
 
     const after = await snapshotTree(root);
     expect(after.has(`${MOD}/Renamed Patch - Main.bsa`)).toBe(true);
@@ -196,7 +202,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     await put('overwrite/Run.esp');
     await put(DEFAULT_PLUGINS, '*Run.esp\r\n');
 
-    await adapter.renamePlugin({ kind: 'runtimeOutput' }, 'Run.esp', 'Ran.esp', 'Fallout4');
+    await adapter.renamePlugin({ kind: 'runtimeOutput' }, 'Run.esp', 'Ran.esp');
 
     expect((await snapshotTree(root)).has('overwrite/Ran.esp')).toBe(true);
     expect(await text(DEFAULT_PLUGINS)).toBe('*Ran.esp\r\n');
@@ -220,7 +226,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     };
 
     it('refuses a plugin that is not in the origin', () =>
-      refused(() => adapter.renamePlugin(ORIGIN, 'Missing.esp', 'Renamed Patch.esp', 'Fallout4'), /Missing\.esp/));
+      refused(() => adapter.renamePlugin(ORIGIN, 'Missing.esp', 'Renamed Patch.esp'), /Missing\.esp/));
 
     it('refuses a name a file of the origin already has, in any case', async () => {
       await put(`${MOD}/RENAMED PATCH.esp`);
@@ -251,8 +257,6 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     it.each(['a/b.esp', 'a\\b.esp', '..', ''])('refuses the name "%s", which is no file of the origin', (name) =>
       refused(() => rename(name), /not a valid/i));
 
-    it('refuses a release the tables hold no row for, as it cannot say which files are named for the plugin', () =>
-      refused(() => adapter.renamePlugin(ORIGIN, 'Patch Mod.esp', 'Renamed Patch.esp', undefined), /release/i));
   });
 
   describe('a failed write leaves every file under its old name', () => {

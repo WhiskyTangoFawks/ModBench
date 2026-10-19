@@ -26,8 +26,8 @@ interface InstanceSettings {
   readonly profile: string;
   /** The game as the mod manager's configuration names it. */
   readonly gameName: string;
-  /** Mutagen's release of that game; undefined when the tables hold none for it. */
-  readonly gameRelease: string | undefined;
+  /** Mutagen's release of that game. */
+  readonly gameRelease: string;
   gameFolder(): Promise<GameFolder>;
   downloadedFiles(skippedLink: SkippedLink): Promise<DownloadedFiles>;
 }

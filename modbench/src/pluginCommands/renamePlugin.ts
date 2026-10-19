@@ -74,7 +74,7 @@ async function refusalBeforeWrite(access: PluginRenameAccess, plugin: PluginAddr
 }
 
 async function renamePlugin(
-  access: PluginRenameAccess, source: { apply(changes: SourceChanges): Promise<string | undefined> }, plugin: PluginAddress, newName: string, gameRelease: string | undefined,
+  access: PluginRenameAccess, source: { apply(changes: SourceChanges): Promise<string | undefined> }, plugin: PluginAddress, newName: string,
 ): Promise<PluginRenameResult> {
   const refused = await refusalBeforeWrite(access, plugin, newName);
   if (refused !== undefined) return refused;
@@ -86,7 +86,7 @@ async function renamePlugin(
   const moved = await access.client.moveLastWritten(plugin, changes.treeName, newName);
   if (isRefused(moved)) return { applied: false, sourceRenamed: true, refusal: moved.message };
   try {
-    await access.adapter.renamePlugin(fileOriginOf(plugin.origin), plugin.name, newName, gameRelease);
+    await access.adapter.renamePlugin(fileOriginOf(plugin.origin), plugin.name, newName);
     return { applied: true };
   } catch (err) {
     return { applied: false, sourceRenamed: true, refusal: errorMessage(err) };

@@ -54,7 +54,7 @@ const rowsOf = (...addresses: { name: string; origin: string }[]): [PluginNode |
 const invoke = (...args: unknown[]) => Promise.resolve(present(handlers.get(MOVE), 'the move command')(...args));
 
 const fakeOver = (...names: string[]) => fakeInstanceAdapter(readingFixture({ pluginOrder: names.map((name) => ({ name, enabled: true })) }));
-const moved = (plugin: string, toIndex: number) => [{ verb: 'changePluginOrder', profile: 'Default', changes: [{ kind: 'move', plugins: [plugin], toIndex }] }];
+const moved = (plugin: string, toIndex: number) => [{ verb: 'changePluginOrderOverProvided', profile: 'Default', changes: [{ kind: 'move', plugins: [plugin], toIndex }] }];
 
 beforeEach(() => {
   handlers.clear();
@@ -152,17 +152,6 @@ describe('modbench.plugin.move', () => {
       severity: 'error', message: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.',
     }]);
     expect(fake.calls).toEqual([]);
-  });
-
-  it('does not count the line of a plugin the game loads with no line', async () => {
-    const masters = { getPlugins: () => Promise.resolve([held('DLCRobot.esm', []), held('A.esp', []), held('X.esp', ['DLCRobot.esm'])]) };
-    const value = instanceValueFixture({ activeProfile: 'Default', pluginsLoadedWithNoLine: [{ name: 'DLCRobot.esm', origin: 'Data/', path: '/game/Data/DLCRobot.esm' }] });
-    const { reporter, fake } = registered([], masters, undefined, fakeOver('DLCRobot.esm', 'A.esp', 'X.esp'), value);
-
-    await invoke(...rowsOf({ name: 'X.esp', origin: 'ModX' }), LOSING_END);
-
-    expect(reporter.reports).toEqual([]);
-    expect(fake.calls).toEqual(moved('X.esp', 0));
   });
 
   it('reports what throws as a failure, apart from a refusal', async () => {

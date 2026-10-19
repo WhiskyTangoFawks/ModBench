@@ -227,16 +227,13 @@ describe('the game folder not found, across the whole instance', () => {
   });
 });
 
-describe('a gesture writes the profile the Instance last landed', () => {
+describe('a gesture writes the profile the Instance adapter says is active', () => {
   it('lands on the new profile after a switch, with no refresh asked for', async () => {
-    const { fake, instance } = await settledFakeInstance();
-    const before = instance.sequence;
+    const { fake } = await settledFakeInstance();
 
     fake.read({ profile: 'Secondary' });
-    fake.changed();
-    expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
 
-    const result = await pluginCommandsWith(fake.adapter).setPluginsEnabled(instance.value.activeProfile, ['Base.esp'], false);
+    const result = await pluginCommandsWith(fake.adapter).setPluginsEnabled(['Base.esp'], false);
 
     expect(result).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
     expect(fake.calls.at(-1)).toEqual({ verb: 'changePluginOrder', profile: 'Secondary', changes: [{ kind: 'enable', plugin: 'Base.esp', enabled: false }] });
