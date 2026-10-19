@@ -92,7 +92,7 @@ export interface Sync extends SyncMessage, SyncRuns {
   run(): Promise<void>;
 }
 
-export function createSync<T extends SyncOutcome>(sync: () => Promise<T>, channel: SyncChannel, labels: SyncLabels): Sync {
+function createSync<T extends SyncOutcome>(sync: () => Promise<T>, channel: SyncChannel, labels: SyncLabels): Sync {
   const failures = reportSyncFailures(labels.command, labels.unsynced, (line) => channel.error(`${labels.prefix} ${line}`));
   const runs = trackSyncRuns();
   const tell = (verb: string, what: string, names: readonly string[]): void => {
