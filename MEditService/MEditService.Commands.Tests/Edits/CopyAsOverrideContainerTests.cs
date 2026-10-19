@@ -44,7 +44,7 @@ public sealed class CopyAsOverrideContainerTests
             CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
         Assert.Empty(result.Refused);
-        Assert.Equal(2, result.Landed.Count);
+        Assert.Equal(2, result.Applied.Count);
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString()));
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.ExteriorCell.ToString()));
     }
@@ -59,7 +59,7 @@ public sealed class CopyAsOverrideContainerTests
             CopyMode.Override, [fixture.DestinationPlugin], replace: false);
 
         Assert.Empty(result.Refused);
-        Assert.Equal(2, result.Landed.Count);
+        Assert.Equal(2, result.Applied.Count);
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()));
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString()));
     }

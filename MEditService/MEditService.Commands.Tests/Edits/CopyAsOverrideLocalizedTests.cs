@@ -104,13 +104,13 @@ public abstract class LocalizedSourceCopyScenario : IDisposable
         return body;
     }
 
-    protected SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> CopyCellThenDoor()
+    protected CopyRecordResult CopyCellThenDoor()
     {
         RecordAt[] records = [.. new[] { _cell, _door }.Select(formKey => new RecordAt(new PluginAddress(SourcePluginName, SourceOrigin), formKey.ToString()))];
         return _handler.CopySync(records, CopyMode.Override, [Destination], replace: false);
     }
 
-    protected SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> CopyPlacedObject() =>
+    protected CopyRecordResult CopyPlacedObject() =>
         _handler.CopySync([new RecordAt(new PluginAddress(SourcePluginName, SourceOrigin), _placedObject.ToString())], CopyMode.Override, [Destination], replace: false);
 
     protected SourceDocument? DoorInDestination() => SourceModTree.Document(_destinationModFolder, Destination, _door.ToString());
@@ -173,7 +173,7 @@ public sealed class CopyAsOverrideWithoutStringsLanguageTextTests() : LocalizedS
     {
         var result = CopyCellThenDoor();
 
-        Assert.Single(result.Landed);
+        Assert.Single(result.Applied);
         Assert.NotNull(CellInDestination());
     }
 }

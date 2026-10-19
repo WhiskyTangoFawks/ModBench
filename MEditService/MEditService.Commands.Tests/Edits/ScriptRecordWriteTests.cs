@@ -11,7 +11,7 @@ public sealed class ScriptRecordWriteTests
 {
     private static RecordEditResult Copy(CopyFixture mod, CopyMode mode, PluginAddress destination) =>
         mod.ScriptCopyHandler.Copy(new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString()), mode, destination, replace: false)
-            .GetAwaiter().GetResult();
+            .GetAwaiter().GetResult().AsResult();
 
     private static RecordEditResult Delete(SourceEditFixture mod, string formKey) =>
         mod.ScriptDeleteHandler.Delete(new RecordAt(mod.Plugin, formKey)).GetAwaiter().GetResult();
@@ -69,7 +69,7 @@ public sealed class ScriptRecordWriteTests
     {
         using var mod = SourceEditFixture.CompiledPlugin();
 
-        var outcome = mod.ScriptCreateHandler.Create(mod.Plugin, "npc_");
+        var outcome = mod.ScriptCreateHandler.Create(mod.Plugin, "npc_").AsResult();
 
         Assert.True(outcome.Applied, outcome.Message);
         Assert.NotNull(mod.Document(outcome.NewFormKey.Require()));
@@ -83,7 +83,7 @@ public sealed class ScriptRecordWriteTests
         mod.Unsaved.Apply([new DocumentChange(header, File.ReadAllText(header) + " ")]);
         var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
 
-        var outcome = mod.ScriptCreateHandler.Create(mod.Plugin, "npc_");
+        var outcome = mod.ScriptCreateHandler.Create(mod.Plugin, "npc_").AsResult();
 
         Assert.Equal(RecordEditRefusal.UnsavedChanges, outcome.Refusal);
         Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));

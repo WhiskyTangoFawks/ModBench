@@ -22,7 +22,7 @@ public sealed class DeleteRecordChangesHandlerTests
 
         var result = mod.DeleteHandler.DeleteRecordsSync([npc, header, otherNpc]);
 
-        Assert.Equal([npc, otherNpc], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([npc, otherNpc], result.Applied.Select(applied => applied.Record));
         var refused = Assert.Single(result.Refused);
         Assert.Equal(header, refused.Item);
         Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
@@ -45,7 +45,7 @@ public sealed class DeleteRecordChangesHandlerTests
 
         var result = mod.DeleteHandler.DeleteRecordsSync([npc, otherNpc, npc, npcSpelledOtherwise]);
 
-        Assert.Equal([npc, otherNpc], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([npc, otherNpc], result.Applied.Select(applied => applied.Record));
         Assert.Empty(result.Refused);
     }
 
@@ -60,7 +60,7 @@ public sealed class DeleteRecordChangesHandlerTests
 
         var result = mod.DeleteHandler.DeleteRecordsSync([otherNpc, npc, keyword]);
 
-        Assert.Equal([otherNpc, keyword], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([otherNpc, keyword], result.Applied.Select(applied => applied.Record));
         var refused = Assert.Single(result.Refused);
         Assert.Equal(npc, refused.Item);
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
@@ -75,7 +75,7 @@ public sealed class DeleteRecordChangesHandlerTests
 
         var result = mod.DeleteHandler.DeleteChangesSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
 
-        var deletion = Assert.Single(Assert.Single(result.Landed).Outcome.Deletions);
+        var deletion = Assert.Single(Assert.Single(result.Applied).Deletions);
         Assert.Equal(TreeTampering.FileOf(mod.ModFolder, mod.Plugin, mod.NpcIdentity), deletion);
         Assert.True(File.Exists(deletion));
         Assert.NotNull(mod.Document(mod.Npc.ToString()));
@@ -93,7 +93,7 @@ public sealed class DeleteRecordChangesHandlerTests
 
         var result = fixture.DeleteHandler.DeleteChangesSync([new RecordAt(fixture.Plugin, fixture.TemporaryRef.ToString())]);
 
-        var document = Assert.Single(Assert.Single(result.Landed).Outcome.Documents);
+        var document = Assert.Single(Assert.Single(result.Applied).Documents);
         Assert.Contains("UnsavedNavmesh", document.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerModPlugin.TemporaryRefEditorId, document.Text, StringComparison.Ordinal);
     }
@@ -109,7 +109,7 @@ public sealed class DeleteRecordChangesHandlerTests
 
         var result = mod.DeleteHandler.DeleteChangesSync([new RecordAt(mod.Plugin, retyped)]);
 
-        Assert.Equal(file, Assert.Single(Assert.Single(result.Landed).Outcome.Deletions));
+        Assert.Equal(file, Assert.Single(Assert.Single(result.Applied).Deletions));
     }
 
     [Fact]

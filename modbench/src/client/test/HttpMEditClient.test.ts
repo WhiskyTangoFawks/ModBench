@@ -184,9 +184,9 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const sharedKey = '000800:Shared.esp';
   const first = { name: 'First.esp', origin: 'ModA' };
   const second = { name: 'Second.esp', origin: 'ModB' };
-  const kept = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
-  const gone = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
-  const nonCompiledPlugin = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
+  const kept = { formKey: '000801:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } };
+  const gone = { formKey: '000802:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } };
+  const nonCompiledPlugin = { formKey: '000900:Other.esp', plugin: { name: 'Other.esp', origin: 'ModB' } };
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };
   const other = { name: 'Other.esp', origin: 'OtherMod' };
   const newPlugin = { name: 'New.esp', origin: 'ModA' };
@@ -980,7 +980,7 @@ describe('HttpMEditClient — a plugin address on the wire', () => {
 
 describe('HttpMEditClient — a changes request reads the documents mEdit holds', () => {
   const plugin = { name: 'MyPatch.esp', origin: 'ModA' };
-  const record = { formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+  const record = { formKey: '000800:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } };
   const envelope: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'Renamed' };
 
   const gestures: [string, (client: MEditClient) => Promise<unknown>, route: string][] = [

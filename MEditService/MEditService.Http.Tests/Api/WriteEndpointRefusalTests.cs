@@ -77,7 +77,7 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
     {
         var response = await _client.PostAsJsonAsync("/records/delete-changes", new
         {
-            records = new[] { new { formKey = "000800:Editable.esp", plugin = Plugin, origin = "" } },
+            records = new[] { new { formKey = "000800:Editable.esp", plugin = new { name = Plugin, origin = "" } } },
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

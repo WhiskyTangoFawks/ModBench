@@ -1,5 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -20,10 +21,10 @@ public sealed class CreateRecordHandler
         ILogger<CreateRecordHandler> logger) =>
         (_changes, _source, _unsaved, _loadOrder, _logger) = (changes, source, unsaved, loadOrder, logger);
 
-    public RecordEditResult Create(PluginAddress plugin, string recordType, string? container = null, GridPosition? position = null)
+    public Answer<RecordWritten, RecordEditRefused> Create(PluginAddress plugin, string recordType, string? container = null, GridPosition? position = null)
     {
         var sessions = new WriteSessions(_source, _unsaved.Current);
         var outcome = _changes.CreateRecord(plugin, recordType, container, position, sessions).Outcome;
-        return sessions.Written(outcome, $"Could not write the new {recordType}", _loadOrder, _logger);
+        return sessions.Written(outcome, $"Could not write the new {recordType}", _loadOrder, _logger).AsWritten();
     }
 }

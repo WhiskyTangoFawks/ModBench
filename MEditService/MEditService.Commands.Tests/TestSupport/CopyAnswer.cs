@@ -1,20 +1,18 @@
-using MEditService.Commands.Edits;
-
 namespace MEditService.Commands.Tests.TestSupport;
 
 internal static class CopyAnswer
 {
-    internal static string? OnlyLanded(this SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> answer)
+    /// <summary>The FormKey the one landed copy drew: null for an override.</summary>
+    internal static string? OnlyLanded(this CopyRecordResult answer)
     {
-        var refusal = answer.SelectionRefusal?.Message ?? (answer.Refused is [var first, ..] ? first.Message : null);
-        Assert.True(refusal is null && answer.Landed.Count == 1, refusal);
-        return answer.Landed[0].Outcome.Outcome.NewFormKey;
+        var refusal = answer.Refused is [var first, ..] ? first.Message : null;
+        Assert.True(refusal is null && answer.Applied.Count == 1, refusal);
+        return answer.Applied[0].NewFormKey;
     }
 
-    internal static ItemRefused<CopyItem, RecordEditRefusal> OnlyRefused(
-        this SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> answer)
+    internal static CopyRecordRefused OnlyRefused(this CopyRecordResult answer)
     {
-        Assert.Empty(answer.Landed);
+        Assert.Empty(answer.Applied);
         return Assert.Single(answer.Refused);
     }
 }

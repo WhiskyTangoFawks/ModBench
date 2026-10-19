@@ -19,8 +19,8 @@ public sealed class NoLoadOrderRefusalTests
     {
         { "Decompile", async () => (await Handler<DecompilePluginHandler>().DecompileAsync([Plugin], force: false)).WholeSelectionRefusal().Refusal },
         { "Compile", async () => (await Handler<CompilePluginHandler>().CompileAsync([Plugin])).WholeSelectionRefusal().Refusal },
-        { "Copy", async () => (await Handler<CopyRecordChangesHandler>().CopyRecords([Record], CopyMode.Override, [Plugin], replace: false)).SelectionRefusal?.Refusal },
-        { "Delete", async () => (await Handler<DeleteRecordChangesHandler>().DeleteRecords([Record])).SelectionRefusal?.Refusal },
+        { "Copy", async () => (await Handler<CopyRecordChangesHandler>().CopyRecords([Record], CopyMode.Override, [Plugin], replace: false)).WholeSelectionRefusal().Refusal },
+        { "Delete", async () => (await Handler<DeleteRecordChangesHandler>().DeleteRecords([Record])).WholeSelectionRefusal().Refusal },
         {
             "RenameSource",
             () => Task.FromResult<object?>(Handler<RenameSourceChangesHandler>().RenameSource(Plugin, "Renamed.esp")

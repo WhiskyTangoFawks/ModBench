@@ -33,8 +33,13 @@ public sealed class EditRecordChangesHandler
     }
 
     /// <summary>Over the unsaved documents mEdit holds, which stand in for their files.</summary>
-    public RecordEditChanges Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
-        Changes(plugin, formKey, envelope, new WriteSessions(_source, _unsaved.Current));
+    public Answer<EditRecordChanges, RecordEditRefused> Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
+    {
+        var (outcome, (moves, deletions, documents)) = Changes(plugin, formKey, envelope, new WriteSessions(_source, _unsaved.Current));
+        return outcome.Applied
+            ? new EditRecordChanges(formKey, RecordEditEnvelope.Spell(envelope.Path), moves, deletions, documents, outcome.NewFormKey)
+            : outcome.AsRefused();
+    }
 
     /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>
     internal RecordEditChanges Changes(PluginAddress plugin, string formKey, RecordEditEnvelope envelope, WriteSessions sessions) =>

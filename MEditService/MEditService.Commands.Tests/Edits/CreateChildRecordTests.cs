@@ -44,7 +44,7 @@ public sealed class CreateChildRecordTests : IDisposable
 
         Assert.True(outcome.Applied, outcome.Message);
         Assert.Equal(before, File.ReadAllText(file));
-        var quest = JsonNode.Parse(Assert.Single(changes.Documents, document => document.Path == file).Text).Require();
+        var quest = JsonNode.Parse(Assert.Single(changes.Require().Documents, document => document.Path == file).Text).Require();
         Assert.Equal(
             [_fixture.DialogTopic2.ToString(), _fixture.DialogTopic3.ToString(), outcome.NewFormKey.Require()],
             quest["DialogTopics"].Require().AsArray().Select(child => child.Require()["FormKey"].Require().GetValue<string>()));

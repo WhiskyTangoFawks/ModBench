@@ -53,7 +53,7 @@ describe('a file\'s tab an edit moves the file of', () => {
 
   async function editMovingTheFile() {
     const meditClient = new InMemoryMEditClient();
-    meditClient.setQueryAnswer('getRecordOfFile', { formKey: NPC, plugin: plugin.name, origin: plugin.origin });
+    meditClient.setQueryAnswer('getRecordOfFile', { formKey: NPC, plugin });
     meditClient.setQueryAnswer('getEditChanges', { applied: true, moves: [{ from: FILE, to: MOVED }], deletions: [], documents: [{ path: MOVED, text: '{}' }] });
     await register({ meditClient });
     const provider = registerCustomEditorProvider.mock.calls.at(-1)?.[1];
