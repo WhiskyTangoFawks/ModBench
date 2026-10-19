@@ -837,7 +837,7 @@ describe('the Plugins view\'s message line and name filter', () => {
     "Game folder not found: set modbench.mods.gameFolder. The Toolbox's Game row names each place Modbench looked.";
   const heldPlugin = (name: string, hasMatchingRecords: boolean): PluginMetadata => ({
     name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0,
-    isImmutable: false, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, hasMatchingRecords, isCompiledPlugin: false,
+    isImmutable: false, origin: 'SomeMod', missingMasters: [], inLoadOrder: true, hasMatchingRecords, isCompiledPlugin: false,
     hasParseFailure: false, pluginSourceUnreadable: null,
   });
   const NO_MATCH = 'No matches for "zzznomatch".';

@@ -45,8 +45,9 @@ internal sealed class RecordQueries(
         PluginRow ToRow(RegisteredPlugin plugin, bool hasMatchingRecords)
         {
             DerivedFrom? derivedFrom = derivations.TryGetValue(plugin.Key, out var stamped) ? stamped : null;
+            var problems = masterIssues?.GetValueOrDefault(plugin.Key, MasterProblems.None);
             return new(plugin, snapshot.LoadOrderIndex(plugin.Key), IsImmutable: snapshot.ProviderOf(plugin.Key) == PluginProvider.Game, opened[plugin.Key],
-                masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
+                problems?.Missing, problems?.Late, hasMatchingRecords,
                 parseFailures.Contains(plugin.Key),
                 IsCompiledPlugin: derivedFrom?.IsSourceMod() ?? false,
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null,

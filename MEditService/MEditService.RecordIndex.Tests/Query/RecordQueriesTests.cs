@@ -142,7 +142,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     {
         var patch = Assert.Single(PatchOfAGhostMaster().Queries.GetPlugins().Value(), p => p.Plugin.Name == "Patch.esp");
 
-        Assert.Equal(["Ghost.esm"], patch.MasterIssues);
+        Assert.Equal(["Ghost.esm"], patch.MissingMasters);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     [Fact]
     public void GetPlugins_PluginWithNoMissingMasters_ReportsEmptyMasterIssues()
     {
-        Assert.Equal([], Assert.Single(_svc.GetPlugins().Value()).MasterIssues);
+        Assert.Equal([], Assert.Single(_svc.GetPlugins().Value()).MissingMasters);
     }
 
     [Fact]

@@ -1552,7 +1552,8 @@ export interface components {
             recordCount: number;
             isImmutable: boolean;
             origin: string;
-            masterIssues?: string[] | null;
+            missingMasters?: string[] | null;
+            lateMasters?: string[] | null;
             inLoadOrder: boolean;
             hasMatchingRecords: boolean;
             isCompiledPlugin: boolean;
