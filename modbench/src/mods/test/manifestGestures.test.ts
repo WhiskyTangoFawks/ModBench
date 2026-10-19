@@ -180,7 +180,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
   });
 
   it('update manifest shows its progress by mod in a notification with Cancel', async () => {
-    updateManifest.mockImplementationOnce((_mods, _instance, options) => {
+    updateManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'Updating', mod: 'ModA', modsDone: 0, modsTotal: 2 });
       return Promise.resolve({ applied: true, notes: [], submoduleNotes: [], landed: [], refused: [] });
     });
@@ -192,7 +192,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
   });
 
   it('restore from manifest shows its progress by mod in a notification with Cancel', async () => {
-    restoreFromManifest.mockImplementationOnce((_mods, _instance, options) => {
+    restoreFromManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'Restoring', mod: 'ModA', modsDone: 0, modsTotal: 2 });
       return Promise.resolve({ applied: true, landed: [], refused: [] });
     });
@@ -205,7 +205,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
 
   it('update manifest, cancelled, aborts the signal it handed the command, and reports what mEdit answered', async () => {
     let signal: AbortSignal | undefined;
-    updateManifest.mockImplementationOnce((_mods, _instance, options) => {
+    updateManifest.mockImplementationOnce((_mods, options) => {
       notification.cancel();
       signal = options?.signal;
       return Promise.resolve({ applied: true, notes: [], submoduleNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [] }], refused: [] });
@@ -219,7 +219,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
 
   it('restore from manifest, cancelled, aborts the signal it handed the command, and reports what mEdit answered', async () => {
     let signal: AbortSignal | undefined;
-    restoreFromManifest.mockImplementationOnce((_mods, _instance, options) => {
+    restoreFromManifest.mockImplementationOnce((_mods, options) => {
       notification.cancel();
       signal = options?.signal;
       return Promise.resolve({ applied: false, refusal: 'Could not restore 2 mods — mEdit stopped.', unfinished: ['ModB'] });
@@ -248,7 +248,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
 
 describe('Update manifest', () => {
   it('says its phase on the Toolbox\'s message line while it runs, and gives the line back when it ends', async () => {
-    updateManifest.mockImplementationOnce((_mods, _instance, options) => {
+    updateManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'ReadingFiles', mod: 'ModA' });
       options?.onProgress?.({ phase: 'Updating', mod: 'ModA', modsDone: 0, modsTotal: 2 });
       return Promise.resolve({ applied: true, notes: [], submoduleNotes: [], landed: [], refused: [] });
@@ -445,7 +445,7 @@ describe('Restore from manifest', () => {
   });
 
   it('says its phase on the Toolbox\'s message line while it runs, and gives the line back when it ends', async () => {
-    restoreFromManifest.mockImplementationOnce((_mods, _instance, options) => {
+    restoreFromManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'ReadingFiles', mod: 'ModA' });
       options?.onProgress?.({ phase: 'Restoring', mod: 'ModA', modsDone: 0, modsTotal: 2 });
       return Promise.resolve({ applied: true, landed: [], refused: [] });
@@ -618,7 +618,7 @@ describe('A separator in a report or an outcome', () => {
   });
 
   it('restore from manifest names it as a separator in its progress, its report and what it left unfinished', async () => {
-    restoreFromManifest.mockImplementationOnce((_mods, _instance, options) => {
+    restoreFromManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'Restoring', mod: WIRE, modsDone: 0, modsTotal: 1 });
       return Promise.resolve({ applied: true, landed: [], refused: [{ item: WIRE, reason: 'was skipped: it has no manifest.' }] });
     });
