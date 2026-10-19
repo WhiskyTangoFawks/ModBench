@@ -39,8 +39,8 @@ import {
   registerDownloadsSingleRowCommands,
   registerDownloadsSortCommand,
 } from '../DownloadsPanel';
-import { DownloadNode, DownloadsProvider } from '../DownloadsProvider';
-import { downloadNodeFixture } from '../../test/mo2/downloadNodeFixture';
+import { DownloadedFileNode, DownloadsProvider } from '../DownloadsProvider';
+import { downloadedFileNodeFixture } from '../../test/mo2/downloadedFileNodeFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { downloadedFileCommands } from '../../downloadedFileCommands/downloads';
 import { AgentCall } from '../../drivingLib/agentGesture';
@@ -53,8 +53,8 @@ import { fakeInstanceAdapter, readingFixture, type FakeInstanceAdapter } from '.
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-const node = (root: string, name: string, row: Partial<DownloadRow> = {}): DownloadNode =>
-  downloadNodeFixture(downloadRowFixture(name, row, root));
+const node = (root: string, name: string, row: Partial<DownloadRow> = {}): DownloadedFileNode =>
+  downloadedFileNodeFixture(downloadRowFixture(name, row, root));
 
 const ROOT = '/instance';
 
@@ -270,7 +270,7 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
     registerDownloadsMultiRowCommands(downloadedFileCommands(fakeInstanceAdapter().adapter), instance, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.exclude', node(ROOT, 'foo.7z'));
 
-    expect((await provider.getChildren()).map((n) => n.kind === 'download' && n.argument.row.name)).toEqual(['foo.7z']);
+    expect((await provider.getChildren()).map((n) => n.kind === 'downloadedFile' && n.argument.row.name)).toEqual(['foo.7z']);
     expect(provider.viewMessage()).toBe('Showing the last good read: locked');
   });
 });
@@ -361,7 +361,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     }]);
   });
 
-  it.each<[string, (a: DownloadNode, b: DownloadNode) => DownloadNode[], string]>([
+  it.each<[string, (a: DownloadedFileNode, b: DownloadedFileNode) => DownloadedFileNode[], string]>([
     ['one file', (a) => [a], '"a.7z"'],
     ['the count for several files', (a, b) => [a, b], '2'],
   ])('names %s, says trash, and says the installed mod is untouched', async (_name, selecting, named) => {

@@ -40,7 +40,7 @@ function rowIdentity(kind: 'mod' | 'separator', name: string): string {
   return `${kind}:${name}`;
 }
 
-// A space-separated flag string, matching `downloadContextValue`'s own pattern: package.json's
+// A space-separated flag string, matching `downloadedFileContextValue`'s own pattern: package.json's
 // `when` clauses match a flag with `viewItem =~ /\bflag\b/`.
 function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>, facts: ModFacts | undefined): string {
   const flags = [

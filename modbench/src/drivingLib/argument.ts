@@ -37,14 +37,14 @@ export function rowLabelOf(carrier: unknown): string | undefined {
 export const rowNameOf = (carrier: unknown): string => rowLabelOf(carrier) ?? 'a selected row';
 
 export interface DownloadedFileArgument {
-  readonly kind: 'download';
+  readonly kind: 'downloadedFile';
   readonly row: DownloadFile;
 }
 
 export function downloadedFileArgumentOf(carrier: unknown): DownloadedFileArgument | undefined {
   const argument = carriedArgument(carrier);
   const isDownloadedFile = (value: object): value is DownloadedFileArgument =>
-    Reflect.get(value, 'kind') === 'download' && typeof Reflect.get(value, 'row') === 'object';
+    Reflect.get(value, 'kind') === 'downloadedFile' && typeof Reflect.get(value, 'row') === 'object';
   return argument && isDownloadedFile(argument) ? argument : undefined;
 }
 

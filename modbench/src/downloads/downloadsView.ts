@@ -10,7 +10,7 @@ import {
   registerDownloadsSingleRowCommands, registerDownloadsSortCommand,
 } from './DownloadsPanel';
 import { DownloadsProvider, type DownloadsTreeNode } from './DownloadsProvider';
-import { ExcludedDownloadDecorationProvider } from './ExcludedDownloadDecorationProvider';
+import { ExcludedDownloadedFileDecorationProvider } from './ExcludedDownloadedFileDecorationProvider';
 import { downloadsFolderUnresolvedLine } from './downloadsFolderUnresolvedLog';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
 import { DOWNLOADS_KEY_ARGS, downloadsKeyContext } from './keyContext';
@@ -42,7 +42,7 @@ export function createDownloadsView(
   });
   // Dims excluded rows once Show excluded is on. VS Code never re-queries a decoration provider
   // on its own, so this refreshes it on every rows change — exclude, include and a disk edit alike.
-  const excludedDecorations = new ExcludedDownloadDecorationProvider(
+  const excludedDecorations = new ExcludedDownloadedFileDecorationProvider(
     () => instance.value.paths.downloadsDir, () => provider.excludedNames());
   const nameFilter = registerNameFilter({
     view, object: 'modbench.downloadedFile', placeholder: 'Filter downloads…',

@@ -8,16 +8,16 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile },
 }));
 
-import { DownloadNode } from '../DownloadsProvider';
-import { downloadNodeFixture } from '../../test/mo2/downloadNodeFixture';
+import { DownloadedFileNode } from '../DownloadsProvider';
+import { downloadedFileNodeFixture } from '../../test/mo2/downloadedFileNodeFixture';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText, downloadsKeyContext } from '../keyContext';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 
 describe('what the Downloads palette entries, handed no row, read off the selection', () => {
-  const plain = downloadNodeFixture(downloadRowFixture('plain.7z'));
-  const withMeta = downloadNodeFixture(downloadRowFixture('meta.7z', { hasMeta: true }));
-  const excluded = downloadNodeFixture(downloadRowFixture('excluded.7z', { hasMeta: true, excluded: true }));
+  const plain = downloadedFileNodeFixture(downloadRowFixture('plain.7z'));
+  const withMeta = downloadedFileNodeFixture(downloadRowFixture('meta.7z', { hasMeta: true }));
+  const excluded = downloadedFileNodeFixture(downloadRowFixture('excluded.7z', { hasMeta: true, excluded: true }));
 
   it('open sees exactly one selected file', () => {
     expect(downloadsKeyContext([plain]).singleFile).toBe(true);
@@ -45,9 +45,9 @@ describe('what the Downloads palette entries, handed no row, read off the select
 });
 
 describe('Downloads\' own text for the catalog\'s copy value', () => {
-  const alpha = downloadNodeFixture(downloadRowFixture('alpha.7z', { displayName: 'Alpha Mod' }));
-  const beta = downloadNodeFixture(downloadRowFixture('beta.7z'));
-  const copy = (selection: readonly (DownloadNode | ErrorNode)[]) => downloadsCopyValueText(() => selection);
+  const alpha = downloadedFileNodeFixture(downloadRowFixture('alpha.7z', { displayName: 'Alpha Mod' }));
+  const beta = downloadedFileNodeFixture(downloadRowFixture('beta.7z'));
+  const copy = (selection: readonly (DownloadedFileNode | ErrorNode)[]) => downloadsCopyValueText(() => selection);
 
   it('is the file name of a right-clicked row, not its display name', () => {
     expect(copy([])(alpha, undefined)).toBe('alpha.7z');
