@@ -16,7 +16,7 @@ import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderCha
 import { downloadFile, pluginOrderFiles, settingsFile } from './layout';
 import { sourceModsIn } from './sourceMods';
 import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
-import { readPluginsProvided, type ReadingSource } from './mo2Reads';
+import { readPluginsProvided, type ReadingSource } from './instanceReading';
 
 type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'

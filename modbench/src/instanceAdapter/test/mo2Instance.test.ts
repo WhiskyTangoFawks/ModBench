@@ -33,7 +33,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, matchesGlob, sep } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import type { Mo2Context } from '../mo2Context';
-import { readingSource, readInstance, readPluginsProvided, type ReadingSource } from '../mo2Reads';
+import { readInstance, readPluginsProvided, type ReadingSource } from '../instanceReading';
+import { readingSource } from '../mo2Reads';
 import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
 import type {
   ArchiveReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
