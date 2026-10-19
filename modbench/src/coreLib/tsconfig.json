@@ -5,7 +5,6 @@
     "outDir": "../../out/projects/coreLib"
   },
   "references": [
-    { "path": "../instanceAdapter" },
     { "path": "../ports" }
   ],
   "include": ["**/*.ts"],
