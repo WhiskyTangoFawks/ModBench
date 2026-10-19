@@ -16,7 +16,8 @@ import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, type ViewSelections,
 } from './recordLifecycleCommands';
 import { announceConflictsComputed, subscribeRecordTabsToNotifications } from './notificationWiring';
-import type { RecordWrite } from '../drivingLib/writingGesture';
+import { recordWriteOver } from '../drivingLib/recordWrite';
+import type { Instance } from '../instanceLoader/instance';
 import type { SourceEditing } from '../textDocuments/sourceEditing';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -43,12 +44,14 @@ export interface EditorCommandDeps {
     | 'getDeleteChanges' | 'getCopyChanges'
     | 'getPlugins' | 'getRecordHolders'
     | 'getComparison' | 'getRecordsComparison' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onReconnected' | 'getRecordOwner'
-    | 'getCopyDocument' | 'getRecordOfFile' | 'getRenderedDocument'>;
+    | 'latestLoadOrder' | 'getCopyDocument' | 'getRecordOfFile' | 'getRenderedDocument'>;
   // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
   // The rows selected in the view `view` names, which a key bound in that view acts on.
   selectionOf: (view: string) => readonly unknown[];
-  recordWrite: RecordWrite;
+  // A record write holds this view's progress until the Instance shows the write.
+  writeProgressView: string;
+  instance: Pick<Instance, 'refresh'>;
   sourceEditing: SourceEditing;
   // The instance's mods, which a column header reads for its mod's repository state.
   modFacts: ModFacts;
@@ -60,6 +63,7 @@ export interface EditorCommandDeps {
 
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const { context, tabs, meditClient, outputChannel } = deps;
+  const recordWrite = recordWriteOver(deps.writeProgressView, deps.instance, meditClient);
   const selections: ViewSelections = { focused: deps.focusedViewSelection, of: deps.selectionOf };
   // The picker and the title are each tab's own, which the record grid adds per tab.
   const routerDeps: SharedRecordPanelDeps = {
@@ -112,9 +116,9 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       tellFocusedPanel: (message) => { tabs.activeTab()?.post(message); },
     }),
     ...registerRecordLifecycleCommands(
-      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, deps.recordWrite, deps.sourceEditing),
+      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, selections, recordWrite, deps.sourceEditing),
     ...registerRecordCopyCommands(
-      meditClient, deps.reporterFor('recordCopy'), deps.ask, selections, deps.recordWrite, deps.sourceEditing),
+      meditClient, deps.reporterFor('recordCopy'), deps.ask, selections, recordWrite, deps.sourceEditing),
     registerAgentGesture('modbench.record.open', () => [], recordOpenGesture(meditClient, deps.reporterFor('recordOpen'), recordEditorProvider, deps.focusedViewSelection)),
     vscode.commands.registerCommand('modbench.record.openPinned', (row?: unknown, selection?: unknown) =>
       vscode.commands.executeCommand('modbench.record.open', pinnedArgument(row, selection))),
