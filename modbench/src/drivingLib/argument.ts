@@ -36,16 +36,16 @@ export function rowLabelOf(carrier: unknown): string | undefined {
 /** What names a row in a refusal. */
 export const rowNameOf = (carrier: unknown): string => rowLabelOf(carrier) ?? 'a selected row';
 
-export interface DownloadArgument {
+export interface DownloadedFileArgument {
   readonly kind: 'download';
   readonly row: DownloadFile;
 }
 
-export function downloadArgumentOf(carrier: unknown): DownloadArgument | undefined {
+export function downloadedFileArgumentOf(carrier: unknown): DownloadedFileArgument | undefined {
   const argument = carriedArgument(carrier);
-  const isDownload = (value: object): value is DownloadArgument =>
+  const isDownloadedFile = (value: object): value is DownloadedFileArgument =>
     Reflect.get(value, 'kind') === 'download' && typeof Reflect.get(value, 'row') === 'object';
-  return argument && isDownload(argument) ? argument : undefined;
+  return argument && isDownloadedFile(argument) ? argument : undefined;
 }
 
 export function downloadedFileNamed(downloads: InstanceValue['downloads'], name: string): DownloadFile {

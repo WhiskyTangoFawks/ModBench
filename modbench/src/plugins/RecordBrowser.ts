@@ -12,7 +12,7 @@ import { failurePrefixIcon } from './failurePrefixIcon';
 import { pluginAddressKey, pluginAddressOf, type PluginAddress } from '../wire/pluginAddress';
 import { conditionedContextValue, type PluginConditions } from '../drivingLib/recordRowContext';
 import { errorMessage } from '../ports/errorMessage';
-import type { SyncMessage } from '../drivingLib/nameFilter';
+import type { SyncMessage } from '../drivingLib/syncFailureReport';
 import { blankIcon } from '../drivingLib/blankIcon';
 import { UNLIMITED_RECORDS } from '../client';
 import { answerOf } from '../wire/readFailed';

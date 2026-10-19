@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { PluginDiagnosisReport, PluginAddress } from '../client';
 import { instanceLastGoodReadFailure, managerRunningMessage, type Instance, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
-import { messageLine } from '../drivingLib/nameFilter';
+import { messageLine } from '../drivingLib/messageLine';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import type { PluginsDrop } from '../pluginCommands/plugins';
