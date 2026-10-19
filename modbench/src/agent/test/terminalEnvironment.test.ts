@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { inheritedPythonPath, onTerminalEnvChange, reachMEditFromTerminals } from '../terminalEnvironment';
+import { reachMEditFromTerminals } from '../terminalEnvironment';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 function fakeCollection() {
@@ -28,36 +28,81 @@ function fakeCollection() {
   return { collection, entries };
 }
 
-const noWatch = () => ({ dispose: () => undefined });
+const SCRIPTS = '/ext/scripts';
+const changeTo = (section: string): void => configListener?.({ affectsConfiguration: (s) => s === section });
+
+function pythonPathOf(): string | undefined {
+  const { collection, entries } = fakeCollection();
+  reachMEditFromTerminals(collection, new InMemoryMEditClient(), SCRIPTS);
+  return entries.get('PYTHONPATH')?.value;
+}
 
 describe('reachMEditFromTerminals', () => {
-  it('replaces PYTHONPATH again when the setting it was composed from changes', () => {
-    const { collection, entries } = fakeCollection();
-    let inherited: string | undefined = '/first';
-    let changed: () => void = () => undefined;
-    reachMEditFromTerminals(collection, new InMemoryMEditClient(), '/ext/scripts', () => inherited, (listener) => { changed = listener; return noWatch(); });
-
-    inherited = '/second';
-    changed();
-
-    expect(entries.get('PYTHONPATH')?.value).toBe(`/ext/scripts${delimiter}/second`);
+  const platform = process.platform;
+  const hostPythonPath = process.env.PYTHONPATH;
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: platform });
+    if (hostPythonPath === undefined) delete process.env.PYTHONPATH;
+    else process.env.PYTHONPATH = hostPythonPath;
+    terminalSettings = {};
   });
 
-  it.each([[undefined, '/ext/scripts'], ['', '/ext/scripts'], ['/other', `/ext/scripts${delimiter}/other`]])(
+  it('replaces PYTHONPATH again when the terminal environment setting it was composed from changes', () => {
+    const { collection, entries } = fakeCollection();
+    terminalSettings = { 'env.linux': { PYTHONPATH: '/first' } };
+    reachMEditFromTerminals(collection, new InMemoryMEditClient(), SCRIPTS);
+
+    terminalSettings = { 'env.linux': { PYTHONPATH: '/second' } };
+    changeTo('terminal.integrated.env.linux');
+
+    expect(entries.get('PYTHONPATH')?.value).toBe(`${SCRIPTS}${delimiter}/second`);
+  });
+
+  it.each([[undefined, SCRIPTS], ['', SCRIPTS], ['/other', `${SCRIPTS}${delimiter}/other`]])(
     'hands a terminal inheriting PYTHONPATH %j the scripts folder first and no empty entry, which Python reads as the working directory',
     (inherited, expected) => {
-      const { collection, entries } = fakeCollection();
+      if (inherited === undefined) delete process.env.PYTHONPATH;
+      else process.env.PYTHONPATH = inherited;
 
-      reachMEditFromTerminals(collection, new InMemoryMEditClient(), '/ext/scripts', () => inherited, noWatch);
-
-      expect(entries.get('PYTHONPATH')).toEqual({ how: 'replace', value: expected });
+      expect(pythonPathOf()).toBe(expected);
     },
   );
+
+  it.each([['linux', 'env.linux'], ['darwin', 'env.osx'], ['win32', 'env.windows']])(
+    'gives %s terminals the PYTHONPATH the user sets for them, ahead of the extension host\'s own',
+    (os, setting) => {
+      Object.defineProperty(process, 'platform', { value: os });
+      process.env.PYTHONPATH = '/host';
+      terminalSettings = { [setting]: { PYTHONPATH: '/user' } };
+
+      expect(pythonPathOf()).toBe(`${SCRIPTS}${delimiter}/user`);
+    },
+  );
+
+  it('gives terminals the extension host\'s own PYTHONPATH when the setting names none', () => {
+    process.env.PYTHONPATH = '/host';
+    terminalSettings = { 'env.linux': { OTHER: 'x' } };
+
+    expect(pythonPathOf()).toBe(`${SCRIPTS}${delimiter}/host`);
+  });
+
+  it('recomposes for this platform\'s terminal environment setting and for no other', () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    const { collection, entries } = fakeCollection();
+    reachMEditFromTerminals(collection, new InMemoryMEditClient(), SCRIPTS);
+    terminalSettings = { 'env.windows': { PYTHONPATH: '/win' }, 'env.linux': { PYTHONPATH: '/lin' } };
+
+    changeTo('terminal.integrated.env.linux');
+    expect(entries.get('PYTHONPATH')?.value).not.toContain('/win');
+
+    changeTo('terminal.integrated.env.windows');
+    expect(entries.get('PYTHONPATH')?.value).toBe(`${SCRIPTS}${delimiter}/win`);
+  });
 
   it('hands a terminal this window\'s mEdit port once it is known, and the next one when it changes', () => {
     const { collection, entries } = fakeCollection();
     const client = new InMemoryMEditClient();
-    reachMEditFromTerminals(collection, client, '/ext/scripts', () => undefined, noWatch);
+    reachMEditFromTerminals(collection, client, SCRIPTS);
     expect(entries.has('MEDIT_PORT')).toBe(false);
 
     client.claimedPort(41000);
@@ -70,7 +115,7 @@ describe('reachMEditFromTerminals', () => {
   it('is not persisted, so a terminal VS Code restores never holds the last session\'s port', () => {
     const { collection } = fakeCollection();
 
-    reachMEditFromTerminals(collection, new InMemoryMEditClient(), '/ext/scripts', () => undefined, noWatch);
+    reachMEditFromTerminals(collection, new InMemoryMEditClient(), SCRIPTS);
 
     expect(collection.persistent).toBe(false);
   });
@@ -79,49 +124,9 @@ describe('reachMEditFromTerminals', () => {
     const { collection, entries } = fakeCollection();
     const client = new InMemoryMEditClient();
 
-    reachMEditFromTerminals(collection, client, '/ext/scripts', () => undefined, noWatch).dispose();
+    reachMEditFromTerminals(collection, client, SCRIPTS).dispose();
     client.claimedPort(41000);
 
     expect([...entries]).toEqual([]);
-  });
-});
-
-describe('the terminal environment', () => {
-  const platform = process.platform;
-  const hostPythonPath = process.env.PYTHONPATH;
-  afterEach(() => {
-    Object.defineProperty(process, 'platform', { value: platform });
-    process.env.PYTHONPATH = hostPythonPath;
-    terminalSettings = {};
-  });
-
-  it.each([['linux', 'env.linux'], ['darwin', 'env.osx'], ['win32', 'env.windows']])(
-    'gives %s terminals the PYTHONPATH the user sets for them, ahead of the extension host\'s own',
-    (os, setting) => {
-      Object.defineProperty(process, 'platform', { value: os });
-      process.env.PYTHONPATH = '/host';
-      terminalSettings = { [setting]: { PYTHONPATH: '/user' } };
-
-      expect(inheritedPythonPath()).toBe('/user');
-    },
-  );
-
-  it('gives terminals the extension host\'s own PYTHONPATH when the setting names none', () => {
-    process.env.PYTHONPATH = '/host';
-    terminalSettings = { 'env.linux': { OTHER: 'x' } };
-
-    expect(inheritedPythonPath()).toBe('/host');
-  });
-
-  it('signals for this platform\'s terminal environment setting and for no other', () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' });
-    const listener = vi.fn();
-    onTerminalEnvChange(listener);
-
-    configListener?.({ affectsConfiguration: (s) => s === 'terminal.integrated.env.linux' });
-    expect(listener).not.toHaveBeenCalled();
-
-    configListener?.({ affectsConfiguration: (s) => s === 'terminal.integrated.env.windows' });
-    expect(listener).toHaveBeenCalledTimes(1);
   });
 });
