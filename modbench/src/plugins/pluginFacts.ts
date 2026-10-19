@@ -43,7 +43,7 @@ interface PluginRead {
   readOnly: boolean;
   compiledPlugin: boolean;
   sourceUnreadable: UnreadableSource | undefined;
-  masterIssues?: string[];
+  missingMasters?: string[];
   lateMasters?: string[];
   parseFailure: boolean;
 }
@@ -144,7 +144,7 @@ export class PluginFacts {
     this.refreshed(plugins);
   }
 
-  /** The facts alone, leaving which plugins are held as they are. No `masterIssues` means not
+  /** The facts alone, leaving which plugins are held as they are. No `missingMasters` means not
    *  yet checked, so the last answer stays until one lands. */
   refreshed(plugins: readonly PluginMetadata[]): void {
     const reads = new ByPluginAddress<PluginRead>();
@@ -153,7 +153,7 @@ export class PluginFacts {
       reads.set(p, {
         readOnly: !pluginCanBeEdited(p), compiledPlugin: p.isCompiledPlugin,
         sourceUnreadable: p.pluginSourceUnreadable ?? undefined, parseFailure: p.hasParseFailure,
-        masterIssues: p.masterIssues ?? this.reads.get(p)?.masterIssues,
+        missingMasters: p.missingMasters ?? this.reads.get(p)?.missingMasters,
         lateMasters: p.lateMasters ?? this.reads.get(p)?.lateMasters,
       });
       matches.set(p, p.hasMatchingRecords);
@@ -234,7 +234,7 @@ export class PluginFacts {
     const read = this.reads.get(address);
     return [
       failedToRead(this.loadFailures.get(address)?.reason),
-      masterIssues(read?.masterIssues ?? [], read?.lateMasters ?? []),
+      masterIssues(read?.missingMasters ?? [], read?.lateMasters ?? []),
       unreadableRecords(read?.parseFailure === true),
       sourceUnreadable(read?.sourceUnreadable),
       changedOutside(this.changed.has(address)),

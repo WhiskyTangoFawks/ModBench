@@ -1,4 +1,6 @@
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -37,7 +39,7 @@ public class MasterResolutionTests
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> Classify(PluginFixtureBuilder builder) =>
         GetPlugins(builder)
-            .Select(row => (row.Plugin.Name, Issues: Assert.IsAssignableFrom<IReadOnlyList<string>>(row.MasterIssues)))
+            .Select(row => (row.Plugin.Name, Issues: Assert.IsAssignableFrom<IReadOnlyList<string>>(row.MissingMasters)))
             .Where(row => row.Issues.Count > 0)
             .ToDictionary(row => row.Name, row => row.Issues, StringComparer.OrdinalIgnoreCase);
 
@@ -67,7 +69,7 @@ public class MasterResolutionTests
         var rows = index.Queries.GetPlugins().Value();
 
         Assert.DoesNotContain(rows, r => r.Plugin.Name == "Broken.esm");
-        Assert.Equal([], rows.Single(r => r.Plugin.Name == "Patch.esp").MasterIssues);
+        Assert.Equal([], rows.Single(r => r.Plugin.Name == "Patch.esp").MissingMasters);
     }
 
     [Fact]
@@ -89,8 +91,8 @@ public class MasterResolutionTests
 
         var rows = index.Queries.GetPlugins().Value();
 
-        Assert.Equal(["Ghost.esm"], rows.Single(r => r.Plugin.Origin == "WinningMod").MasterIssues);
-        Assert.Equal([], rows.Single(r => r.Plugin.Origin == "LosingMod").MasterIssues);
+        Assert.Equal(["Ghost.esm"], rows.Single(r => r.Plugin.Origin == "WinningMod").MissingMasters);
+        Assert.Equal([], rows.Single(r => r.Plugin.Origin == "LosingMod").MissingMasters);
     }
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> LateMasters(PluginFixtureBuilder builder) =>
@@ -99,28 +101,19 @@ public class MasterResolutionTests
             .Where(row => row.Late.Count > 0)
             .ToDictionary(row => row.Name, row => row.Late, StringComparer.OrdinalIgnoreCase);
 
-    [Fact]
-    public void MasterLoadingAfterItsDependant_IsALateMaster_ForTheGameCrashesOnIt()
+    [Theory]
+    [InlineData(false, "Base.esm", "Base.esm", true)]
+    [InlineData(true, "Base.esm", "Base.esm", false)]
+    [InlineData(false, "base.esm", "Base.ESM", true)]
+    public void MasterLoadingAfterItsDependant_IsALateMaster_ForTheGameCrashesOnIt(
+        bool masterFirst, string declared, string fileName, bool late)
     {
-        var result = LateMasters(Plugins(Plugin("Patch.esp", "Base.esm"), Plugin("Base.esm")));
+        var master = Plugin(fileName);
+        var dependant = Plugin("Patch.esp", declared);
 
-        Assert.Equal(["Base.esm"], result["Patch.esp"]);
-    }
+        var result = LateMasters(Plugins(masterFirst ? [master, dependant] : [dependant, master]));
 
-    [Fact]
-    public void MasterLoadingBeforeItsDependant_IsNoLateMaster()
-    {
-        var result = LateMasters(Plugins(Plugin("Base.esm"), Plugin("Patch.esp", "Base.esm")));
-
-        Assert.Empty(result);
-    }
-
-    [Fact]
-    public void LateMasterNamesMatchIgnoringCase()
-    {
-        var result = LateMasters(Plugins(Plugin("Patch.esp", "base.esm"), Plugin("Base.ESM")));
-
-        Assert.Equal(["base.esm"], result["Patch.esp"]);
+        Assert.Equal(late ? [declared] : [], result.GetValueOrDefault("Patch.esp", []));
     }
 
     [Fact]
@@ -131,28 +124,31 @@ public class MasterResolutionTests
         Assert.Empty(result);
     }
 
-    [Fact]
-    public async Task WhileTheLoadOrderIsStillIndexing_LateMastersAreNull()
+    [Theory]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, true)]
+    public void MasterLoadingAfterItsDependant_IsLateOnlyWithinOneBlueprintClass_ForBlueprintLastDecidesAcrossTheTwo(
+        bool dependantIsBlueprint, bool masterIsBlueprint, bool late)
     {
-        using var fixture = Plugins(Plugin("A.esp", "B.esp"), Plugin("B.esp")).Build();
-        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder, gate);
-        var load = Task.Run(() => index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4));
-        await gate.WaitUntilParkedAsync();
+        using var fixture = Plugins(Plugin("Patch.esp", "Base.esm"), Plugin("Base.esm")).Build();
+        var blueprints = new[] { ("Patch.esp", dependantIsBlueprint), ("Base.esm", masterIsBlueprint) }
+            .Where(plugin => plugin.Item2).Select(plugin => plugin.Item1).ToHashSet();
+        using var index = Indexes.Reconciled(fixture, adapter: new BlueprintPluginAdapter(blueprints));
 
-        IReadOnlyList<PluginRow> rows;
-        try
-        {
-            rows = index.Queries.GetPlugins().Value();
-        }
-        finally
-        {
-            gate.Release();
-        }
-        await load;
+        var row = index.Queries.GetPlugins().Value().Single(r => r.Plugin.Name == "Patch.esp");
 
-        Assert.Null(rows.Single(r => r.Plugin.Name == "A.esp").LateMasters);
+        Assert.Equal(late ? ["Base.esm"] : [], row.LateMasters);
+    }
+
+    private sealed class BlueprintPluginAdapter(IReadOnlySet<string> blueprints) : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
+            ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings? strings = null) =>
+            base.ReadContent(modPath, loadOrder, strings).Then(read =>
+                (Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure>)
+                (read.Content with { IsBlueprint = blueprints.Contains(modPath.ModKey.FileName.ToString()) }, read.Unreachable));
     }
 
     [Fact]
@@ -189,7 +185,7 @@ public class MasterResolutionTests
     }
 
     [Fact]
-    public async Task WhileTheLoadOrderIsStillIndexing_MasterIssuesAreNotYetCheckedNull_NotAnEmptyListMeaningNoIssues()
+    public async Task WhileTheLoadOrderIsStillIndexing_MasterProblemsAreNotYetCheckedNull_NotAnEmptyListMeaningNoIssues()
     {
         using var fixture = Plugins(Plugin("A.esp", "Ghost.esm"), Plugin("B.esp")).Build();
         using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
@@ -209,6 +205,8 @@ public class MasterResolutionTests
         }
         await load;
 
-        Assert.Null(rows.Single(r => r.Plugin.Name == "A.esp").MasterIssues);
+        var row = rows.Single(r => r.Plugin.Name == "A.esp");
+        Assert.Null(row.MissingMasters);
+        Assert.Null(row.LateMasters);
     }
 }

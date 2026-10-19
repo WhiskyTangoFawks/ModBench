@@ -47,7 +47,7 @@ internal sealed class RecordQueries(
             DerivedFrom? derivedFrom = derivations.TryGetValue(plugin.Key, out var stamped) ? stamped : null;
             var problems = masterIssues?.GetValueOrDefault(plugin.Key, MasterProblems.None);
             return new(plugin, snapshot.LoadOrderIndex(plugin.Key), IsImmutable: snapshot.ProviderOf(plugin.Key) == PluginProvider.Game, opened[plugin.Key],
-                problems?.Inactive, problems?.LoadAfter, hasMatchingRecords,
+                problems?.Missing, problems?.Late, hasMatchingRecords,
                 parseFailures.Contains(plugin.Key),
                 IsCompiledPlugin: derivedFrom?.IsSourceMod() ?? false,
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null,

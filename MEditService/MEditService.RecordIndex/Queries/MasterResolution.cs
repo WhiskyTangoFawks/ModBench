@@ -13,25 +13,30 @@ internal static class MasterResolution
         LoadOrderSnapshot loadOrder, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
     {
         var active = loadOrder.Active;
-        var placeOfName = active
-            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => loadOrder.LoadOrderIndex(g.First().Key), StringComparer.OrdinalIgnoreCase);
+        var activeByName = active.ToDictionary(p => p.Name, p => p.Key, StringComparer.OrdinalIgnoreCase);
 
         var result = new Dictionary<PluginAddress, MasterProblems>(PluginAddress.Comparer);
         foreach (var key in active.Select(p => p.Key))
         {
             if (!opened.TryGetValue(key, out var content)) continue;
-            var own = loadOrder.LoadOrderIndex(key);
-            var inactive = content.Masters.Where(master => !placeOfName.ContainsKey(master)).ToList();
-            var late = content.Masters.Where(master => placeOfName.TryGetValue(master, out var place) && place > own).ToList();
-            if (inactive.Count + late.Count > 0) result[key] = new(inactive, late);
+            var missing = content.Masters.Where(master => !activeByName.ContainsKey(master)).ToList();
+            var late = content.Masters.Where(master => activeByName.TryGetValue(master, out var masterKey)
+                && SameBlueprintClass(opened, content, masterKey)
+                && loadOrder.LoadOrderIndex(masterKey) > loadOrder.LoadOrderIndex(key)).ToList();
+            if (missing.Count + late.Count > 0) result[key] = new(missing, late);
         }
         return result;
     }
+
+    // Master order holds only within one blueprint class; across the two, blueprint last decides
+    // (plugins.md, Drag and drop, story 3). A master mEdit has not read counts as the same class.
+    private static bool SameBlueprintClass(
+        IReadOnlyDictionary<PluginAddress, PluginContent> opened, PluginContent plugin, PluginAddress master) =>
+        !opened.TryGetValue(master, out var masterContent) || masterContent.IsBlueprint == plugin.IsBlueprint;
 }
 
 /// <summary>The masters of one plugin that the game cannot load it with.</summary>
-internal sealed record MasterProblems(IReadOnlyList<string> Inactive, IReadOnlyList<string> LoadAfter)
+internal sealed record MasterProblems(IReadOnlyList<string> Missing, IReadOnlyList<string> Late)
 {
     public static readonly MasterProblems None = new([], []);
 }

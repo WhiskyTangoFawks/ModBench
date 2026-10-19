@@ -138,7 +138,7 @@
       "isLight": false,
       "isMaster": true,
       "loadOrderIndex": 0,
-      "masterIssues": [],
+      "missingMasters": [],
       "masters": [],
       "name": "Base.esm",
       "origin": "Data/",
@@ -151,7 +151,7 @@
       "isLight": false,
       "isMaster": false,
       "loadOrderIndex": 1,
-      "masterIssues": [],
+      "missingMasters": [],
       "masters": [
         "Base.esm"
       ],
@@ -166,7 +166,7 @@
       "isLight": false,
       "isMaster": false,
       "loadOrderIndex": 2,
-      "masterIssues": [],
+      "missingMasters": [],
       "masters": [
         "Base.esm"
       ],
