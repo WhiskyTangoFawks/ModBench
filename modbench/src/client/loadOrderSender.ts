@@ -1,15 +1,13 @@
 import { errorMessage } from '../ports/errorMessage';
+import { createLauncher, type LauncherWire } from './backendLifecycle';
 import {
   isMEditGone, type BackendStatus, type LaunchOutcome, type LoadOrderOutcome, type LoadOrderSnapshot,
 } from './MEditClient';
 
 /** What an adapter gives the sender: its process, its stream's reopen, and one PUT of a snapshot. */
-export interface LoadOrderWire {
-  status(): BackendStatus;
+export interface LoadOrderWire extends LauncherWire {
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
   onReconnected(listener: () => void): () => void;
-  start(): Promise<void>;
-  stop(): Promise<void>;
   put(snapshot: LoadOrderSnapshot, signal: AbortSignal): Promise<LoadOrderOutcome>;
 }
 
@@ -90,9 +88,6 @@ function createSendSlot(wire: LoadOrderWire) {
   };
 }
 
-const RUNNING: LaunchOutcome = { outcome: 'running' };
-const STOPPED: LaunchOutcome = { outcome: 'stopped' };
-
 function listeners<A extends unknown[]>() {
   const held = new Set<(...args: A) => void>();
   return {
@@ -103,42 +98,6 @@ function listeners<A extends unknown[]>() {
     fire: (...args: A): void => {
       for (const listener of held) listener(...args);
     },
-  };
-}
-
-// One launch at a time; a launch asked for while one runs shares it. A stop is the end: it cuts a
-// launch short, it and not the launch answers the snapshot, and nothing launches after it.
-function createLauncher(wire: LoadOrderWire, announce: (launched: Promise<LaunchOutcome>) => void) {
-  let launching: Promise<LaunchOutcome> | undefined;
-  let stopped = false;
-
-  const comeUp = async (): Promise<LaunchOutcome> => {
-    let error: string | undefined;
-    try {
-      await wire.start();
-    } catch (e) {
-      error = errorMessage(e);
-    }
-    if (stopped) return STOPPED;
-    if (wire.status() === 'running') return RUNNING;
-    await wire.stop();
-    return error === undefined ? { outcome: 'failed' } : { outcome: 'failed', error };
-  };
-
-  return {
-    launch(): Promise<LaunchOutcome> {
-      if (stopped) return Promise.resolve(STOPPED);
-      if (launching) return launching;
-      // Held before the start runs, so a status the start reports at once finds the launch under way.
-      const launched = Promise.resolve().then(() => (stopped ? STOPPED : comeUp()));
-      launching = launched;
-      void launched.then(() => { launching = undefined; });
-      announce(launched);
-      return launched;
-    },
-    launching: () => launching !== undefined,
-    stop: () => { stopped = true; },
-    stopped: () => stopped,
   };
 }
 

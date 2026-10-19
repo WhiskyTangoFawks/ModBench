@@ -2,7 +2,8 @@ import * as http from 'node:http';
 import { SILENT_LOG, type Log } from '../ports/log';
 import * as net from 'node:net';
 import * as readline from 'node:readline';
-import type { BackendStatus } from './MEditClient';
+import { errorMessage } from '../ports/errorMessage';
+import type { BackendStatus, LaunchOutcome } from './MEditClient';
 
 /** Which of the spawned process's two streams a line arrived on. The forwarder that levels it
  *  takes this type, so the client names no VS Code type (ADR-0019). */
@@ -46,6 +47,53 @@ export interface BackendLifecycleOptions {
   /** Polled at `pollIntervalMs` while attaching/starting; defaults to a real GET `/health`
    *  against `port`. Injectable so a test drives attach timing without a real socket. */
   checkHealth?: () => Promise<boolean>;
+}
+
+export interface LauncherWire {
+  status(): BackendStatus;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+}
+
+const RUNNING: LaunchOutcome = { outcome: 'running' };
+const STOPPED: LaunchOutcome = { outcome: 'stopped' };
+
+export function createLauncher(wire: LauncherWire, announce: (launched: Promise<LaunchOutcome>) => void) {
+  let launching: Promise<LaunchOutcome> | undefined;
+  let stopped = false;
+
+  const comeUp = async (): Promise<LaunchOutcome> => {
+    const errors: string[] = [];
+    try {
+      await wire.start();
+    } catch (e) {
+      errors.push(errorMessage(e));
+    }
+    if (stopped) return STOPPED;
+    if (wire.status() === 'running') return RUNNING;
+    try {
+      await wire.stop();
+    } catch (e) {
+      errors.push(errorMessage(e));
+    }
+    return errors.length === 0 ? { outcome: 'failed' } : { outcome: 'failed', error: errors.join('; ') };
+  };
+
+  return {
+    launch(): Promise<LaunchOutcome> {
+      if (stopped) return Promise.resolve(STOPPED);
+      if (launching) return launching;
+      // Held before the start runs, so a status the start reports at once finds the launch under way.
+      const launched = Promise.resolve().then(() => (stopped ? STOPPED : comeUp()));
+      launching = launched;
+      void launched.then(() => { launching = undefined; });
+      announce(launched);
+      return launched;
+    },
+    launching: () => launching !== undefined,
+    stop: () => { stopped = true; },
+    stopped: () => stopped,
+  };
 }
 
 /** The backend process the client hides (ADR-0002). */
@@ -156,10 +204,11 @@ export class BackendLifecycle {
     this.generation++; // cancels an in-flight doStart()/connect()
     const child = this.child;
     this.child = undefined;
-    if (child) {
-      await this.killAndConfirmExit(child);
+    try {
+      if (child) await this.killAndConfirmExit(child);
+    } finally {
+      if (this._status !== 'stopped') this.setStatus('stopped');
     }
-    if (this._status !== 'stopped') this.setStatus('stopped');
   }
 
   // A backend mid a long synchronous request won't notice SIGTERM, so this escalates to SIGKILL
