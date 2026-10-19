@@ -47,9 +47,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
     [Fact]
     public async Task CopyAsNewRecord_OnADialogTopicWithResponses_LandsTheTopicWithoutItsResponses()
     {
-        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.DialogTopic.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+        var newFormKey = _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.DialogTopic.ToString()), _fixture.DestinationPlugin);
 
-        var newFormKey = result.OnlyLanded().Require();
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newFormKey, StringComparison.OrdinalIgnoreCase);
 
         var quest = _fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString());
@@ -69,11 +68,9 @@ public sealed class CopyAsNewContainerTests : IDisposable
     [Fact]
     public void CopyAsNewRecord_OnADialogTopic_CopiedTwice_EachRecordGetsItsOwnNextCounter()
     {
-        var first = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.DialogTopic.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
-        first.OnlyLanded();
+        var first = _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.DialogTopic.ToString()), _fixture.DestinationPlugin);
 
-        var second = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.DialogTopic.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
-        var secondFormKey = second.OnlyLanded().Require();
+        var secondFormKey = _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.DialogTopic.ToString()), _fixture.DestinationPlugin);
 
         var secondTopic = _fixture.Document(_fixture.DestinationPlugin, secondFormKey);
         Assert.NotNull(secondTopic);
@@ -86,9 +83,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
         _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Quest.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false).OnlyLanded();
         var questBefore = JsonDocument.Parse(_fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.QuestEditorId).Body);
 
-        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.DialogTopic.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+        var newFormKey = _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.DialogTopic.ToString()), _fixture.DestinationPlugin);
 
-        var newFormKey = result.OnlyLanded().Require();
 
         Assert.False(questBefore.RootElement.TryGetProperty(nameof(Quest.DialogTopics), out _));
         var questAfter = JsonDocument.Parse(_fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.QuestEditorId).Body);
@@ -114,9 +110,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
     [Fact]
     public void CopyAsNewRecord_OnASelfLinkingResponse_RemapsTheLinkOntoTheNewFormKey()
     {
-        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+        var newFormKey = _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString()), _fixture.DestinationPlugin);
 
-        var newFormKey = result.OnlyLanded().Require();
         var landed = Assert.Single(Responses(_fixture.DialogTopic.ToString()));
         Assert.Equal(newFormKey, Member(landed, "PreviousDialog"));
     }
@@ -124,9 +119,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
     [Fact]
     public void CopyAsNewRecord_OnAResponseLinkingItsSibling_LeavesTheLinkAtTheOriginal()
     {
-        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response2.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+        var result = _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.Response2.ToString()), _fixture.DestinationPlugin);
 
-        result.OnlyLanded();
         var landed = Assert.Single(Responses(_fixture.DialogTopic.ToString()));
         Assert.Equal(_fixture.Response1.ToString(), Member(landed, "PreviousDialog"));
     }
@@ -134,9 +128,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
     [Fact]
     public void CopyAsNewRecord_OnAReferenceInAWorldspacesPersistentCell_CopiesTheWorldspaceAndItsPersistentCellIn()
     {
-        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.TopCellRef.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+        var newFormKey = _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.TopCellRef.ToString()), _fixture.DestinationPlugin);
 
-        var newFormKey = result.OnlyLanded().Require();
         var worldspace = _fixture.Document(_fixture.DestinationPlugin, _fixture.Worldspace.ToString()).Require();
         Assert.True(worldspace.IsPartialForm());
         Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, worldspace.EditorId);
@@ -149,9 +142,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
     [Fact]
     public async Task CopyAsNewRecord_OnAResponseAlone_AutoCreatesTheQuestAndTopicChain()
     {
-        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+        var newFormKey = _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString()), _fixture.DestinationPlugin);
 
-        var newFormKey = result.OnlyLanded().Require();
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newFormKey, StringComparison.OrdinalIgnoreCase);
 
         var quest = _fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString()).Require();
@@ -179,9 +171,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
     [Fact]
     public async Task CopyAsNewRecord_OnAQuest_LandsANewQuestUnderAFreshFormKey_WithoutItsTopics()
     {
-        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Quest.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+        var newFormKey = _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.Quest.ToString()), _fixture.DestinationPlugin);
 
-        var newFormKey = result.OnlyLanded().Require();
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newFormKey, StringComparison.OrdinalIgnoreCase);
 
         var document = _fixture.Document(_fixture.DestinationPlugin, newFormKey);
@@ -203,29 +194,29 @@ public sealed class CopyAsNewContainerTests : IDisposable
     [Fact]
     public void CopyAsNewRecord_OfAResponseWhoseChainItCopiesIn_MovesTheDestinationsNextObjectIdPastIt()
     {
-        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+        var result = _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString()), _fixture.DestinationPlugin);
 
-        Assert.Equal("000801:ContainerDestination.esp", result.OnlyLanded());
+        Assert.Equal("000801:ContainerDestination.esp", result);
         Assert.Equal(0x802u, _fixture.NextObjectId(_fixture.DestinationPlugin));
     }
 
     [Fact]
     public void CopyAsNewRecord_OfAResponseIntoATopicTheDestinationHolds_MovesTheDestinationsNextObjectIdPastIt()
     {
-        _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false).OnlyLanded();
+        _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString()), _fixture.DestinationPlugin);
 
-        var second = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response2.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+        var second = _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.Response2.ToString()), _fixture.DestinationPlugin);
 
-        Assert.Equal("000802:ContainerDestination.esp", second.OnlyLanded());
+        Assert.Equal("000802:ContainerDestination.esp", second);
         Assert.Equal(0x803u, _fixture.NextObjectId(_fixture.DestinationPlugin));
     }
 
     [Fact]
     public void CopyAsNewRecord_OfAReferenceInAnExteriorCellTheDestinationLacks_MovesTheDestinationsNextObjectIdPastIt()
     {
-        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorPersistentRef.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+        var result = _fixture.ScriptCopyHandler.CopyAsNew(new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorPersistentRef.ToString()), _fixture.DestinationPlugin);
 
-        Assert.Equal("000801:ContainerDestination.esp", result.OnlyLanded());
+        Assert.Equal("000801:ContainerDestination.esp", result);
         Assert.Equal(0x802u, _fixture.NextObjectId(_fixture.DestinationPlugin));
     }
 }

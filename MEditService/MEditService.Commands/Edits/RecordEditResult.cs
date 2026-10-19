@@ -171,6 +171,13 @@ public sealed record RecordEditResult(
     internal static Answer<RecordEditResult, SourceFailure> Making(RecordEditResult outcome, IWriteSession session, Action writes) =>
         session.Atomically(writes) is { } failure ? failure : outcome;
 
+    internal RecordEditRefused AsRefused() => new(Refusal, Message, Path);
+
+    internal Answer<RecordWritten, RecordEditRefused> AsWritten() =>
+        Applied
+            ? new RecordWritten(NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey."))
+            : AsRefused();
+
     public static implicit operator Answer<RecordEditChanges, SourceFailure>(RecordEditResult outcome) =>
         SourceAnswer.Of<RecordEditChanges>(outcome);
 }

@@ -35,9 +35,9 @@ public sealed class WriteGatesOverAFakeSourceTests
         return TestEditService.Over(disk.Holder, source: source);
     }
 
-    private static RecordEditChanges SetHeight(IServiceProvider services, string formKey) =>
+    private static (RecordEditResult Outcome, EditRecordChanges Changes) SetHeight(IServiceProvider services, string formKey) =>
         services.GetRequiredService<EditRecordChangesHandler>()
-            .Changes(Plugin, formKey, SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax")));
+            .Changes(Plugin, formKey, SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).Seen();
 
     [Fact]
     public void EditingAPluginOfAnNonSourceMod_IsRefused_NamingTheInitCommand()
@@ -46,7 +46,7 @@ public sealed class WriteGatesOverAFakeSourceTests
         using var _ = disk;
 
         var result = services.GetRequiredService<EditRecordChangesHandler>()
-            .Changes(disk.Plugin, disk.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).Outcome;
+            .Changes(disk.Plugin, disk.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).AsResult();
 
         Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, result.Refusal);
         Assert.Contains("Decompile and commit its mod", result.Message, StringComparison.Ordinal);
@@ -59,7 +59,7 @@ public sealed class WriteGatesOverAFakeSourceTests
         using var _ = disk;
 
         var result = services.GetRequiredService<EditRecordChangesHandler>()
-            .Changes(disk.Plugin, $"ABCDEF:{disk.Plugin.Name}", SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).Outcome;
+            .Changes(disk.Plugin, $"ABCDEF:{disk.Plugin.Name}", SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).AsResult();
 
         Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, result.Refusal);
     }
@@ -81,7 +81,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     {
         var source = new FakeSourceAdapter().WithUnreadableSourceMod(ModFolder);
 
-        var result = Over(source).GetRequiredService<CreateRecordChangesHandler>().CreateRecord(Plugin, "npc_").Outcome;
+        var result = Over(source).GetRequiredService<CreateRecordChangesHandler>().CreateRecord(Plugin, "npc_").AsResult();
 
         Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, result.Refusal);
         Assert.Equal(0, source.SessionsOpened);

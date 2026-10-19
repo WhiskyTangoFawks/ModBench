@@ -13,7 +13,7 @@ public enum CopyMode
 }
 
 /// <summary>One record into one destination: the unit a copy lands or is refused by.</summary>
-public readonly record struct CopyItem(RecordAt Record, PluginAddress Destination);
+internal readonly record struct CopyItem(RecordAt Record, PluginAddress Destination);
 
 internal sealed class SameCopy : IEqualityComparer<CopyItem>
 {

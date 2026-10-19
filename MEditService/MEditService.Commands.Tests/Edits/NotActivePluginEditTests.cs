@@ -92,7 +92,7 @@ public sealed class NotActivePluginEditTests
 
         var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(plugin, npc)]);
 
-        Assert.Single(result.Landed);
+        Assert.Single(result.Applied);
         Assert.Null(mod.Document(plugin, npc));
     }
 

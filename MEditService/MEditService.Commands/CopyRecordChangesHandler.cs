@@ -2,6 +2,7 @@ using System.ComponentModel;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Resolution;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -29,9 +30,15 @@ public sealed class CopyRecordChangesHandler
 
     /// <summary>Each record's copy into each destination, containers first, answered as the changes it makes over
     /// the unsaved documents mEdit holds, written nowhere. Refuses with <see cref="RecordEditRefusal.NoLoadOrder"/> when none is held.</summary>
-    public Task<SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges>> CopyRecords(
+    public async Task<Answer<CopyRecordResult, SelectionRefusal<RecordEditRefusal>>> CopyRecords(
         IReadOnlyList<RecordAt> records, CopyMode mode, IReadOnlyList<PluginAddress> destinations, bool replace) =>
-        CopyRecords(records, mode, destinations, replace, new WriteSessions(_source, _unsaved.Current));
+        (await CopyRecords(records, mode, destinations, replace, new WriteSessions(_source, _unsaved.Current))).ToAnswer(
+            landed => new RecordCopied(
+                RecordAddress.Of(landed.Item.Record), landed.Item.Destination,
+                landed.Outcome.Changes.Moves, landed.Outcome.Changes.Deletions, landed.Outcome.Changes.Documents),
+            refused => new CopyRefused(
+                new RecordCopyItem(RecordAddress.Of(refused.Item.Record), refused.Item.Destination), refused.Refusal, refused.Message),
+            (applied, refused) => new CopyRecordResult(applied, refused));
 
     /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>
     internal async Task<SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges>> CopyRecords(

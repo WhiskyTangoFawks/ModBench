@@ -61,9 +61,8 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     {
         var readable = MisshapedPerkPlugin.ReadableFormKey;
 
-        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, readable)], CopyMode.New, [_mod.DestinationPlugin], replace: false);
+        var newFormKey = _mod.ScriptCopyHandler.CopyAsNew(new RecordAt(_mod.SourcePlugin, readable), _mod.DestinationPlugin);
 
-        var newFormKey = result.OnlyLanded().Require();
         Assert.NotNull(_mod.Document(_mod.DestinationPlugin, newFormKey));
         Assert.Equal(["000000:Destination.esp", newFormKey], _mod.ChangedFormKeys(_mod.DestinationPlugin));
     }
@@ -83,6 +82,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         public PluginAddress SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
         public PluginAddress DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
         public CopyRecordChangesHandler CopyHandler { get; }
+        public CopyRecordHandler ScriptCopyHandler { get; }
 
         public ParseFailedCopyFixture()
         {
@@ -114,6 +114,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
             holder.Apply(loadOrder);
             CopyHandler = TestEditService.CopyHandler(holder);
+            ScriptCopyHandler = TestEditService.ScriptCopyHandler(holder);
         }
 
         public string ModFolderOf(PluginAddress plugin) => plugin == DestinationPlugin ? _destinationModFolder : _sourceModFolder;

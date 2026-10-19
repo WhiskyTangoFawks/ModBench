@@ -131,7 +131,7 @@ internal static class RecordEndpoints
                 return EndpointMapping.BadRequest("Name the file by its absolute path.");
             return EndpointMapping.Answered(svc.GetRecordOfFile(path), file => file switch
             {
-                RecordOfFileAnswer.Holds holds => Results.Ok(Addressed(holds.Record)),
+                RecordOfFileAnswer.Holds holds => Results.Ok(RecordAddress.Of(holds.Record)),
                 RecordOfFileAnswer.HoldsNone => Results.NoContent(),
                 RecordOfFileAnswer.Refused refused => Results.Problem(refused.Why, statusCode: 422),
                 _ => throw new UnreachableException(),
@@ -179,7 +179,7 @@ internal static class RecordEndpoints
             "path is where it stands once moved. Every path is absolute. Any other document the edit reads is read from " +
             "disk. A refusal is the one the edit itself gives.")
         .WithTags("Records")
-        .Produces<RecordEditChangesResponse>()
+        .Produces<EditRecordChanges>()
         .ProducesProblem(400)
         .ProducesProblem(404)
         .ProducesProblem(409)
@@ -210,7 +210,7 @@ internal static class RecordEndpoints
             "file. Answers the FormKey the copy holds in the destination. A copy that would write a file held unsaved " +
             "is refused naming it, and nothing is written.")
         .WithTags("Records")
-        .Produces<RecordWrittenResponse>()
+        .Produces<RecordWritten>()
         .ProducesProblem(400)
         .ProducesProblem(404)
         .ProducesProblem(409)
@@ -243,7 +243,7 @@ internal static class RecordEndpoints
             "refused on its own, and the answer names both. No reference cascade — a FormLink elsewhere pointing at " +
             "a deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0007).")
         .WithTags("Records")
-        .Produces<RecordDeleteChangesResponse>()
+        .Produces<DeleteRecordResult>()
         .ProducesProblem(400)
         .ProducesProblem(500)
         .ProducesProblem(503);
@@ -266,7 +266,7 @@ internal static class RecordEndpoints
             "copy carries. Each record and destination is applied or refused on its own, and the " +
             "answer names both.")
         .WithTags("Records")
-        .Produces<RecordCopyChangesResponse>()
+        .Produces<CopyRecordResult>()
         .ProducesProblem(400)
         .ProducesProblem(500)
         .ProducesProblem(503);
@@ -281,15 +281,13 @@ internal static class RecordEndpoints
         // A body missing its edit binds it as null, whatever the type says; validation answers that.
         RecordEditRequest? edit = request.Edit;
         var spelled = RecordEditEnvelope.Spell(edit?.Path ?? []);
-        return EndpointMapping.Execute(
+        LogEditReceived(logger, "EditRecordChanges", edit, decoded, spelled);
+        return EditRequestProblem(edit) ?? EndpointMapping.Answered(
             "EditChanges", logger,
-            logReceived: () => LogEditReceived(logger, "EditRecordChanges", edit, decoded, spelled),
-            validate: () => EditRequestProblem(edit),
-            execute: () => edits.Changes(
+            edits.Changes(
                 new PluginAddress(request.Edit.Plugin, request.Edit.Origin), decoded,
                 new RecordEditEnvelope(request.Edit.Op, request.Edit.Path ?? [], request.Edit.EditedValue)),
-            outcome: answer => answer.Outcome,
-            onApplied: answer => Results.Ok(RecordEditChangesResponse.Of(decoded, spelled, answer)));
+            Results.Ok);
     }
 
     internal static IResult EditRecord(string formKey, RecordEditRequest request, EditRecordHandler edits, ILogger logger)
@@ -306,17 +304,14 @@ internal static class RecordEndpoints
             onApplied: _ => Results.NoContent());
     }
 
-    internal static Task<IResult> CopyRecord(ScriptCopyRequest request, CopyRecordHandler copies, ILogger logger)
+    internal static async Task<IResult> CopyRecord(ScriptCopyRequest request, CopyRecordHandler copies, ILogger logger)
     {
-        return EndpointMapping.ExecuteWriting(
-            "CopyRecord", logger,
-            logReceived: null,
-            validate: () => AddressProblem(request.Record) ?? (
-                string.IsNullOrWhiteSpace(request.Destination.Name) || string.IsNullOrWhiteSpace(request.Destination.Origin)
-                    ? EndpointMapping.BadRequest("Every destination needs a name and an origin.")
-                    : null),
-            execute: () => copies.Copy(AtRecord(request.Record), request.Mode, request.Destination, request.Replace),
-            onApplied: result => Results.Ok(new RecordWrittenResponse(EndpointMapping.RequireNewFormKey(result))));
+        if (AddressProblem(request.Record) is { } unaddressed) return unaddressed;
+        if (string.IsNullOrWhiteSpace(request.Destination.Name) || string.IsNullOrWhiteSpace(request.Destination.Origin))
+            return EndpointMapping.BadRequest("Every destination needs a name and an origin.");
+
+        return EndpointMapping.Answered(
+            "CopyRecord", logger, await copies.Copy(request.Record.ToRecordAt(), request.Mode, request.Destination, request.Replace), Results.Ok);
     }
 
     internal static Task<IResult> DeleteRecord(RecordAddress request, DeleteRecordHandler deletes, ILogger logger)
@@ -325,7 +320,7 @@ internal static class RecordEndpoints
             "DeleteRecord", logger,
             logReceived: null,
             validate: () => AddressProblem(request),
-            execute: () => deletes.Delete(AtRecord(request)),
+            execute: () => deletes.Delete(request.ToRecordAt()),
             onApplied: _ => Results.NoContent());
     }
 
@@ -333,8 +328,6 @@ internal static class RecordEndpoints
         string.IsNullOrWhiteSpace(record?.FormKey) || string.IsNullOrWhiteSpace(record.Plugin) || string.IsNullOrWhiteSpace(record.Origin)
             ? EndpointMapping.BadRequest("Every record needs a FormKey, a plugin name and an origin.")
             : null;
-
-    private static RecordAt AtRecord(RecordAddress record) => new(new PluginAddress(record.Plugin, record.Origin), record.FormKey);
 
     private static void LogEditReceived(ILogger logger, string route, RecordEditRequest? edit, string formKey, string spelled)
     {
@@ -365,15 +358,7 @@ internal static class RecordEndpoints
         }
         return OverRecords(records, validateOptions: () => null, answer: addressed =>
         {
-            return EndpointMapping.Answered(
-                "Delete", logger,
-                edits.DeleteRecords(addressed),
-                EndpointMapping.Refusal,
-                landed => new RecordDeleteChanges(
-                    Addressed(landed.Item),
-                    landed.Outcome.Moves, landed.Outcome.Deletions, landed.Outcome.Documents),
-                refused => new RecordAddressRefusal(Addressed(refused.Item), refused.Refusal, refused.Message),
-                (applied, refused) => new RecordDeleteChangesResponse(applied, refused));
+            return EndpointMapping.Answered("Delete", logger, edits.DeleteRecords(addressed), EndpointMapping.Refusal);
         });
     }
 
@@ -397,15 +382,7 @@ internal static class RecordEndpoints
         }, answer: addressed =>
         {
             return EndpointMapping.Answered(
-                "Copy", logger,
-                edits.CopyRecords(addressed, request.Mode, destinations, request.Replace),
-                EndpointMapping.Refusal,
-                landed => new RecordCopyChanges(
-                    Addressed(landed.Item.Record), landed.Item.Destination,
-                    landed.Outcome.Changes.Moves, landed.Outcome.Changes.Deletions, landed.Outcome.Changes.Documents),
-                refused => new RecordCopyRefusal(
-                    new RecordCopyItem(Addressed(refused.Item.Record), refused.Item.Destination), refused.Refusal, refused.Message),
-                (applied, refused) => new RecordCopyChangesResponse(applied, refused));
+                "Copy", logger, edits.CopyRecords(addressed, request.Mode, destinations, request.Replace), EndpointMapping.Refusal);
         });
     }
 
@@ -421,11 +398,8 @@ internal static class RecordEndpoints
             return EndpointMapping.BadRequest("Every record needs a FormKey, a plugin name and an origin.");
         if (validateOptions() is { } invalid) return invalid;
 
-        return await answer([.. records.Select(r => new RecordAt(new PluginAddress(r.Plugin, r.Origin), r.FormKey))]);
+        return await answer([.. records.Select(r => r.ToRecordAt())]);
     }
-
-    private static RecordAddress Addressed(RecordAt record) =>
-        new(record.FormKey, record.Plugin.Name, record.Plugin.Origin);
 
     internal static CopyMissing Wire(MissingCopy missing) =>
         new(missing.Copy.FormKey, missing.Copy.Plugin, missing.Reason, missing.Message);

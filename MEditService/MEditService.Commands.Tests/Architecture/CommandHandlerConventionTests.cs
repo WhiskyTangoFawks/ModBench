@@ -38,6 +38,18 @@ public sealed class CommandHandlerConventionTests
     private static readonly Type[] Carriers =
     [
         typeof(CompiledPlugin),
+        typeof(CopyRecordResult),
+        typeof(CopyRefused),
+        typeof(CreateRecordChanges),
+        typeof(DeleteRecordResult),
+        typeof(DeleteRefused),
+        typeof(EditRecordChanges),
+        typeof(RecordAddress),
+        typeof(RecordCopied),
+        typeof(RecordCopyItem),
+        typeof(RecordDeleted),
+        typeof(RecordEditRefused),
+        typeof(RecordWritten),
         typeof(CompileRefusal),
         typeof(CompileRefused),
         typeof(CompileResult),

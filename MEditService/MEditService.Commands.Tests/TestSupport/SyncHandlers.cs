@@ -1,6 +1,5 @@
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.TestSupport;
@@ -10,16 +9,16 @@ namespace MEditService.Commands.Tests.TestSupport;
 internal static class SyncHandlers
 {
     /// <summary>What Delete answers, written nowhere.</summary>
-    internal static SelectionResult<RecordAt, RecordEditRefusal, SourceChanges> DeleteChangesSync(
+    internal static DeleteRecordResult DeleteChangesSync(
         this DeleteRecordChangesHandler handler, IReadOnlyList<RecordAt> records) =>
-        handler.DeleteRecords(records).GetAwaiter().GetResult();
+        handler.DeleteRecords(records).GetAwaiter().GetResult().Value();
 
     /// <summary>Delete, then each landed item's changes made on disk in the order answered, as the editor makes them.</summary>
-    internal static SelectionResult<RecordAt, RecordEditRefusal, SourceChanges> DeleteRecordsSync(
+    internal static DeleteRecordResult DeleteRecordsSync(
         this DeleteRecordChangesHandler handler, IReadOnlyList<RecordAt> records)
     {
         var result = handler.DeleteChangesSync(records);
-        foreach (var changes in result.Landed.Select(landed => landed.Outcome))
+        foreach (var changes in result.Applied)
         {
             EditSaving.Save(
                 changes.Moves.Select(move => (move.From, move.To)), changes.Deletions,
@@ -33,26 +32,29 @@ internal static class SyncHandlers
         this CreateRecordChangesHandler handler, PluginAddress plugin, string recordType, string? container = null,
         GridPosition? position = null)
     {
-        var (outcome, changes) = handler.CreateRecord(plugin, recordType, container, position);
-        EditSaving.Save(
-            changes.Moves.Select(move => (move.From, move.To)), changes.Deletions,
-            changes.Documents.Select(document => (document.Path, document.Text)));
-        return outcome;
+        var answer = handler.CreateRecord(plugin, recordType, container, position);
+        if (answer.Holds(out var changes, out _))
+        {
+            EditSaving.Save(
+                changes.Moves.Select(move => (move.From, move.To)), changes.Deletions,
+                changes.Documents.Select(document => (document.Path, document.Text)));
+        }
+        return answer.AsResult();
     }
 
     /// <summary>What Copy answers, written nowhere.</summary>
-    internal static SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> CopyChangesSync(
+    internal static CopyRecordResult CopyChangesSync(
         this CopyRecordChangesHandler handler, IReadOnlyList<RecordAt> records, CopyMode mode,
         IReadOnlyList<PluginAddress> destinations, bool replace) =>
-        handler.CopyRecords(records, mode, destinations, replace).GetAwaiter().GetResult();
+        handler.CopyRecords(records, mode, destinations, replace).GetAwaiter().GetResult().Value();
 
     /// <summary>Copy, then each landed item's changes made on disk in the order answered, as the editor makes them.</summary>
-    internal static SelectionResult<CopyItem, RecordEditRefusal, RecordEditChanges> CopySync(
+    internal static CopyRecordResult CopySync(
         this CopyRecordChangesHandler handler, IReadOnlyList<RecordAt> records, CopyMode mode,
         IReadOnlyList<PluginAddress> destinations, bool replace)
     {
         var result = handler.CopyChangesSync(records, mode, destinations, replace);
-        foreach (var changes in result.Landed.Select(landed => landed.Outcome.Changes))
+        foreach (var changes in result.Applied)
         {
             EditSaving.Save(
                 changes.Moves.Select(move => (move.From, move.To)), changes.Deletions,

@@ -42,11 +42,6 @@ internal static class EndpointMapping
             ? null
             : Results.Problem($"Unknown strings language: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<Language>())}", statusCode: 400);
 
-    /// <summary>The FormKey an applied create or copy allocated. Every caller here reaches
-    /// this only once the result is known applied.</summary>
-    internal static string RequireNewFormKey(RecordEditResult result) =>
-        result.NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey.");
-
     /// <summary>A "not right now" the caller can retry, never a bad request.</summary>
     internal static IResult NoLoadOrder() =>
         new Logged(nameof(IndexRefusal.NoLoadOrder), NoLoadOrderException.DefaultMessage, NoLoadOrderProblem());
@@ -71,6 +66,8 @@ internal static class EndpointMapping
     /// <summary>The status code says what kind of problem; the refusal and path extensions say
     /// exactly which (ADR-0019).</summary>
     internal static IResult Refusal(RecordEditResult result) => RecordEditProblem(result.Refusal, result.Message, result.Path);
+
+    internal static IResult Refusal(RecordEditRefused refused) => RecordEditProblem(refused.Refusal, refused.Message, refused.Path);
 
     internal static IResult Refusal(SelectionRefusal<RecordEditRefusal> refusal) =>
         RecordEditProblem(refusal.Refusal, refusal.Message, path: null);
@@ -250,6 +247,16 @@ internal static class EndpointMapping
         return Results.Ok(response([.. result.Landed.Select(landed)], [.. result.Refused.Select(refused)]));
     }
 
+    /// <summary>A gesture on one record answers 200 with its answer, or the refusal that left the source as it was
+    /// (ADR-0019).</summary>
+    internal static IResult Answered<T>(string gesture, ILogger logger, Answer<T, RecordEditRefused> answer, Func<T, IResult> onAnswered)
+    {
+        if (answer.Holds(out var value, out var refused)) return onAnswered(value);
+
+        LogRefusal(logger, gesture, refused.Refusal, refused.Message);
+        return Refusal(refused);
+    }
+
     internal static void LogRefusal<TRefusal>(ILogger logger, string gesture, TRefusal refusal, string? message) =>
         logger.LogWarning("Refused {Gesture}: {Refusal} — {Message}", gesture, refusal, message);
 
@@ -280,27 +287,15 @@ internal static class EndpointMapping
         Action? logReceived,
         Func<IResult?> validate,
         Func<RecordEditResult> execute,
-        Func<RecordEditResult, IResult> onApplied) =>
-        Execute(gesture, logger, logReceived, validate, execute, result => result, onApplied);
-
-    /// <summary><see cref="Execute(string, ILogger, Action?, Func{IResult?}, Func{RecordEditResult}, Func{RecordEditResult, IResult})"/>
-    /// for an answer that carries more than its <paramref name="outcome"/>.</summary>
-    internal static IResult Execute<T>(
-        string gesture, ILogger logger,
-        Action? logReceived,
-        Func<IResult?> validate,
-        Func<T> execute,
-        Func<T, RecordEditResult> outcome,
-        Func<T, IResult> onApplied)
+        Func<RecordEditResult, IResult> onApplied)
     {
         logReceived?.Invoke();
 
         if (validate() is { } validationFailure)
             return validationFailure;
 
-        var answer = execute();
-        var result = outcome(answer);
-        if (result.Applied) return onApplied(answer);
+        var result = execute();
+        if (result.Applied) return onApplied(result);
 
         LogRefusal(logger, gesture, result.Refusal, result.Message);
         return Refusal(result);

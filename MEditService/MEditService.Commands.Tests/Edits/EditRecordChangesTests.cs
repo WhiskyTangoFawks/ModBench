@@ -35,15 +35,25 @@ public sealed class EditRecordChangesTests : IDisposable
     private static string TextOf(TestInstance instance, PluginAddress plugin, string formKey) =>
         File.ReadAllText(Path.Combine(instance.ModFolderOf(plugin), SourceModTree.DocumentFile(instance.ModFolderOf(plugin), plugin, formKey).Require()));
 
-    private static RecordEditChanges Changes(TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
-        instance.EditChangesHandler.Changes(plugin, formKey, envelope);
+    private static (RecordEditResult Outcome, EditRecordChanges Changes) Changes(
+        TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope) =>
+        instance.EditChangesHandler.Changes(plugin, formKey, envelope).Seen();
 
-    private static RecordEditChanges ChangesOver(
+    private static (RecordEditResult Outcome, EditRecordChanges Changes) ChangesOver(
         TestInstance instance, PluginAddress plugin, string formKey, RecordEditEnvelope envelope, string unsaved)
     {
         var file = Path.Combine(instance.ModFolderOf(plugin), SourceModTree.DocumentFile(instance.ModFolderOf(plugin), plugin, formKey).Require());
         instance.Unsaved.Apply([new DocumentChange(file, unsaved)]);
-        return instance.EditChangesHandler.Changes(plugin, formKey, envelope);
+        return instance.EditChangesHandler.Changes(plugin, formKey, envelope).Seen();
+    }
+
+    [Fact]
+    public void AFieldEdit_AnswersTheRecordAndPathItEdited()
+    {
+        var answer = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"));
+
+        Assert.Equal(_mod.Npc.ToString(), answer.Changes.FormKey);
+        Assert.Equal("HeightMax", answer.Changes.Path);
     }
 
     [Fact]
@@ -83,7 +93,7 @@ public sealed class EditRecordChangesTests : IDisposable
         _mod.Unsaved.Apply([new DocumentChange(file, given)]);
         File.WriteAllText(file, "not a document");
 
-        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75"));
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, _mod.Npc.ToString(), Set("HeightMax", "0.75")).Seen();
 
         Assert.True(answer.Outcome.Applied, answer.Outcome.Message);
         var document = Assert.Single(answer.Changes.Documents);
@@ -104,7 +114,7 @@ public sealed class EditRecordChangesTests : IDisposable
         _mod.Unsaved.Apply([new DocumentChange(file, given)]);
         File.Delete(file);
 
-        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, formKey, Set("EditorID", "\"Edited\""));
+        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, formKey, Set("EditorID", "\"Edited\"")).Seen();
 
         Assert.Equal(RecordEditRefusal.RecordNotFound, answer.Outcome.Refusal);
         Assert.Empty(answer.Changes.Documents);
