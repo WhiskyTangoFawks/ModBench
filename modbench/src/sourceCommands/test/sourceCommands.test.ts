@@ -30,6 +30,22 @@ describe('sourceCommands build', () => {
     }]);
   });
 
+  it('hands mEdit the mods once the record index has reconciled the newest load order, which their plugins compile against', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('build', BUILT);
+    let reconciled!: () => void;
+    const latestLoadOrder = () => new Promise<undefined>((resolve) => { reconciled = () => { resolve(undefined); }; });
+    const commands = sourceCommands({ client: { build: client.build.bind(client), init: client.init.bind(client), latestLoadOrder }, adapter: fakeAdapter() });
+
+    const built = commands.build(['ModA'], 'Fallout4', SOURCES);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(client.calls).toEqual([]);
+
+    reconciled();
+    await built;
+    expect(client.calls.map((call) => call.method)).toEqual(['build']);
+  });
+
   it('refuses a mod whose metadata cannot be read, naming why, and builds the rest', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
@@ -89,6 +105,22 @@ describe('sourceCommands decompileAndCommit', () => {
         { name: 'ModB', sourceFolder: '/source/ModB', metadataFiles: ['meta.ini'] },
       ], {}],
     }]);
+  });
+
+  it('hands mEdit the mods once the record index has reconciled the newest load order, which names their plugins', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('init', { landed: [], refused: [] });
+    let reconciled!: () => void;
+    const latestLoadOrder = () => new Promise<undefined>((resolve) => { reconciled = () => { resolve(undefined); }; });
+    const commands = sourceCommands({ client: { build: client.build.bind(client), init: client.init.bind(client), latestLoadOrder }, adapter: fakeAdapter() });
+
+    const decompiled = commands.decompileAndCommit(['ModA']);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(client.calls).toEqual([]);
+
+    reconciled();
+    await decompiled;
+    expect(client.calls.map((call) => call.method)).toEqual(['init']);
   });
 
   it('refuses a mod whose name gives it no source folder, naming why', async () => {

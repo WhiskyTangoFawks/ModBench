@@ -6,14 +6,15 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'init'>;
+  client: Pick<MEditClient, 'build' | 'init' | 'latestLoadOrder'>;
   adapter: Pick<InstanceAdapter,
     'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder' | 'sourceHost'>;
 }
 
 export const metadataUnreadable = (reason: string): string => `its metadata could not be read: ${reason}`;
 
-/** The source mod gestures, bound to the mEdit client and handing it the instance's facts. */
+/** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,
+ *  which lacks a snapshot still waiting to be put, so each first waits for the newest to reconcile. */
 export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
   return {
     /** A mod no repository builds, or whose folder or metadata the Instance adapter cannot answer, is
@@ -40,6 +41,7 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
         }
       }
       if (sent.length === 0) return { landed: [], refused };
+      await client.latestLoadOrder();
       const outcome = await client.build(
         sent, { excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(gameRelease), statCache: adapter.statCacheFolder });
       return isRefused(outcome) ? outcome : { landed: outcome.landed, refused: [...outcome.refused, ...refused] };
@@ -57,6 +59,7 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
         else sent.push({ name: mod, sourceFolder, metadataFiles: [...adapter.metadataFilesInModFolder] });
       }
       if (sent.length === 0) return { landed: [], refused };
+      await client.latestLoadOrder();
       const outcome = await client.init(sent, options);
       return isRefused(outcome) ? outcome : { landed: outcome.landed, refused: [...outcome.refused, ...refused] };
     },
