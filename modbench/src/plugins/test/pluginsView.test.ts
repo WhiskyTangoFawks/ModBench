@@ -111,7 +111,7 @@ vi.mock('vscode', () => {
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { createPluginsView } from '../pluginsView';
 import { createPlugins } from '../index';
-import { createSync, type Sync } from '../../drivingLib/syncFailureReport';
+import { createPluginSync, type Sync } from '../../drivingLib/syncFailureReport';
 import type { PluginSyncRun } from '../../pluginCommands/plugins';
 import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
 import { PluginNode } from '../pluginRows';
@@ -149,11 +149,6 @@ const tick = (over: Partial<NonNullable<NotificationEvent['loadOrderStatus']>> =
 });
 
 const silentChannel = { error: vi.fn(), info: vi.fn() };
-
-const createPluginSync = (sync: PluginSyncRun, channel: typeof silentChannel) =>
-  createSync(sync, channel, {
-    command: 'plugin sync', prefix: '[pluginCommands]', unsynced: 'plugins.txt is not synced', added: 'plugins.txt lines added', dropped: 'plugins.txt lines dropped',
-  });
 
 function syncRefusing() {
   let refusal: string | undefined;
