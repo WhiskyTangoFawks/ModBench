@@ -112,7 +112,6 @@ import { createFocusedView } from '../../drivingLib/focusedView';
 import { createPluginsView } from '../pluginsView';
 import { createPlugins } from '../index';
 import { createPluginSync, type Sync } from '../../drivingLib/syncFailureReport';
-import type { PluginSyncRun } from '../../pluginCommands/plugins';
 import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
 import { PluginNode } from '../pluginRows';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
