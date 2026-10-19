@@ -141,7 +141,7 @@ async function updateManifest(deps: ManifestGestureDeps, { mods, refused, view }
   const label = labelsOf(instance);
   await runWritingGesture(view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
-      commands.updateManifest(mods, instance.value, { onProgress: (status) => { show(updateMessage(status, label)); }, signal }));
+      commands.updateManifest(mods, { onProgress: (status) => { show(updateMessage(status, label)); }, signal }));
     if (!outcome.applied) { reporter.report('error', outcome.refusal); return; }
     reportCancelRefused(reporter, outcome);
     const answered = named(label, outcome);
@@ -154,7 +154,7 @@ async function updateManifestForAgent(
 ): Promise<AgentOutcome<Extract<UpdateManifestResult, { applied: true }>['landed'][number]>> {
   const label = labelsOf(instance);
   const mods = modsOfAgent(argument, instance.value);
-  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods, instance.value));
+  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.updateManifest(mods));
   if (!result.applied) return { applied: false, refusal: result.refusal };
   const outcome = named(label, result);
   const notHeld = outcome.landed.flatMap(({ mod, notInPackage }) => notInPackage.map((path) => `${mod}: its package does not hold ${path}`));
@@ -240,7 +240,7 @@ async function restoreFromManifest(deps: ManifestGestureDeps, toRun: ModsToRun):
   if (listing.destroys.length > 0 && !(await confirmRestore(deps.ask, label, toRun))) return;
   await runWritingGesture(view, instance, async () => {
     const outcome = await withProgressAndCancel(deps, (show, signal) =>
-      commands.restoreFromManifest(toRestore, instance.value, { onProgress: (status) => { show(restoreMessage(status, label)); }, signal }));
+      commands.restoreFromManifest(toRestore, { onProgress: (status) => { show(restoreMessage(status, label)); }, signal }));
     if (!outcome.applied) {
       reporter.report('error', outcome.refusal, outcome.unfinished.length === 0
         ? undefined
@@ -274,7 +274,7 @@ async function restoreFromManifestForAgent(
   const notRestored = new Set(refused.map(({ item }) => item));
   const toRestore = mods.filter((mod) => !notRestored.has(mod));
   if (toRestore.length === 0) return { applied: true, outcome: named(label, { landed: [], refused }) };
-  const outcome = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.restoreFromManifest(toRestore, instance.value));
+  const outcome = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.restoreFromManifest(toRestore));
   if (!outcome.applied) {
     return { applied: false, refusal: outcome.refusal, ...(outcome.unfinished.length === 0 ? {} : { detail: `Not finished: ${quoted(label, outcome.unfinished)}. Restoring again finishes them.` }) };
   }

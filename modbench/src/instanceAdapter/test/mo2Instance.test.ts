@@ -150,6 +150,17 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.gameRelease()).toBe('Fallout4');
       });
 
+      it('answers the game folder the game folder setting names, with its Data folder', async () => {
+        const game = await mkdtemp(join(tmpdir(), 'mo2-instance-gamefolder-'));
+        try {
+          await mkdir(join(game, 'Data'));
+
+          expect(await adapterAt(root, game).gameFolder()).toEqual({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
+        } finally {
+          await rm(game, { recursive: true, force: true });
+        }
+      });
+
       it('answers every profile', async () => {
         expect([...await adapter.profiles()].sort()).toEqual(['Default', 'Secondary']);
       });
