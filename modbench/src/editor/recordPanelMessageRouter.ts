@@ -141,10 +141,18 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
   try {
     m = parseWebviewToExtension(msg);
   } catch (err) {
-    deps.channel.warn(`Dropped a message from a record tab's page: ${errorMessage(err)} ${JSON.stringify(msg)}`);
+    deps.channel.warn(`Dropped a message from a record tab's page: ${errorMessage(err)} ${written(msg)}`);
     return;
   }
   await dispatch(deps, m);
+}
+
+function written(msg: unknown): string {
+  try {
+    return JSON.stringify(msg) ?? String(msg);
+  } catch {
+    return String(msg);
+  }
 }
 
 async function replyFormKeyPicked(

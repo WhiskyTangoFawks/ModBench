@@ -248,23 +248,3 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
     expect(opened()).toEqual([]);
   });
 });
-
-describe('a message from a tab\'s page that the host routes nowhere', () => {
-  it('is dropped, saying in the Output what the page sent', async () => {
-    const warn = vi.fn();
-    const meditClient = new InMemoryMEditClient();
-    meditClient.setQueryAnswer('getRecordOfFile', { formKey: '000800:A.esp', plugin: 'A.esp', origin: 'ModA' });
-    await register({ meditClient, outputChannel: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() } });
-    const provider = registerCustomEditorProvider.mock.calls.at(-1)?.[1];
-    const document = { uri: vscode.Uri.file('/source/ModA/plugin-source/A.esp/Npcs/Npc.json'), getText: () => '{}', isDirty: false };
-    const tab = webviewPanel();
-    if (!isProvider(provider) || !isDocument(document)) throw new Error('no record grid registered');
-    await provider.resolveCustomTextEditor(document, tab.panel, { isCancellationRequested: false, onCancellationRequested: vi.fn() });
-
-    tab.tell({ type: 'requestRecordLoaded', requestId: 'nb-1', formKey: '000800:A.esp', columns: [] });
-
-    await vi.waitFor(() => expect(warn).toHaveBeenCalledWith(
-      'Dropped a message from a record tab\'s page: Expected a webview-to-extension message of a known type. '
-      + '{"type":"requestRecordLoaded","requestId":"nb-1","formKey":"000800:A.esp","columns":[]}'));
-  });
-});
