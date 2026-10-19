@@ -1472,6 +1472,18 @@ describe('the MO2 Instance adapter', () => {
         ]);
       });
 
+      it('leaves out the mod\'s own manifest at its root, and keeps a file below the root that bears the name', async () => {
+        const folder = join(root, 'mods', 'Harder VATS');
+        await mkdir(join(folder, 'docs'), { recursive: true });
+        await writeFile(join(folder, 'Harder VATS.manifest.json'), '{}');
+        await writeFile(join(folder, 'Other.manifest.json'), '{}');
+        await writeFile(join(folder, 'docs', 'Harder VATS.manifest.json'), '{}');
+
+        const files = await source.originFiles(mod('Harder VATS'), 'list');
+
+        expect(relativePaths(files.files)).toEqual(['Other.manifest.json', 'docs/Harder VATS.manifest.json']);
+      });
+
       it.each([
         ['.medit_tmp_12_ab.tmp'], ['.medit_tmp_12_ab'],
       ])('leaves out %s, a temp left by a dead writer, at any depth', async (temp) => {
