@@ -90,7 +90,6 @@ function sourceFiles(): string[] {
   return productionFiles(SRC).map((f) => relative(SRC, f).split(sep).join('/'));
 }
 
-/** A view's id is declared once, beside the view: `NAME = 'id'` or `NAME = { view: 'id' }`, read as `NAME` or `NAME.view`. */
 function viewIdConstants(): Map<string, string> {
   const ids = new Map<string, string>();
   for (const file of sourceFiles()) {
