@@ -62,13 +62,13 @@ interface GameToHand {
 }
 
 // The game folder found, named by the game's release, or why a manifest cannot name it.
-async function namedGameFolder(adapter: Adapter): Promise<NamedGameFolder | string> {
+async function namedGameFolder(adapter: Adapter, gameRelease: string): Promise<NamedGameFolder | string> {
   const gameFolder = await adapter.gameFolder();
-  return gameFolder.kind === 'found' ? { name: await adapter.gameRelease(), dataFolder: gameFolder.dataFolder } : 'the game folder was not found';
+  return gameFolder.kind === 'found' ? { name: gameRelease, dataFolder: gameFolder.dataFolder } : 'the game folder was not found';
 }
 
 async function gameToHand(adapter: Adapter, sourceMods: SourceMods): Promise<GameToHand> {
-  const [{ modFolders }, folder] = await Promise.all([adapter.modOrder(), namedGameFolder(adapter)]);
+  const [{ modFolders }, folder] = await Promise.all([adapter.modOrder(), namedGameFolder(adapter, await adapter.gameRelease())]);
   return { folder, takes: (mod) => sourceMods.folderOf(mod) === undefined && modFolders?.find((entry) => entry.modName === mod)?.kind !== 'separator' };
 }
 
@@ -291,12 +291,13 @@ async function restoreFolders(
   { client, adapter }: ModlistRepositoryCommandsDeps, mods: readonly string[],
   { onProgress, signal }: ModlistCallOptions<RestoreStatus>,
 ): Promise<Extract<RestoreResult, { applied: true }> | FoldersNotFinished> {
-  const folder = await namedGameFolder(adapter);
+  const gameRelease = await adapter.gameRelease();
+  const folder = await namedGameFolder(adapter, gameRelease);
   const read = await readMods(adapter, mods, noneBeforeTheManifestNamesThem, undefined, { onProgress, signal });
   if (read.sent.length === 0) return { applied: true, landed: [], refused: read.refused };
   const sent: readonly RestoreMod[] = read.sent;
   const facts: RestoreFacts = {
-    statCache: adapter.statCacheFolder, excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(await adapter.gameRelease()), gameFolder: wireGameFolder(folder, []),
+    statCache: adapter.statCacheFolder, excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(gameRelease), gameFolder: wireGameFolder(folder, []),
   };
   const restoring = { onProgress: (progress: ModlistProgress): void => { onProgress?.({ phase: 'Restoring', ...progress }); }, signal };
   const first = await restoreOnce(client, sent, facts, restoring);

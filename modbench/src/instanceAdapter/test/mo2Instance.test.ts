@@ -150,7 +150,7 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.gameRelease()).toBe('Fallout4');
       });
 
-      it('answers where the game is, as the reading does', async () => {
+      it('answers the game folder the game folder setting names, with its Data folder', async () => {
         const game = await mkdtemp(join(tmpdir(), 'mo2-instance-gamefolder-'));
         try {
           await mkdir(join(game, 'Data'));

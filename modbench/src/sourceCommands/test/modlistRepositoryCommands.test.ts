@@ -10,7 +10,7 @@ const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, 
 const recording = (file: InstallationFile): FileRead<InstallationFile> => ({ kind: 'read', answer: file });
 const FOUND: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
 const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'modbench.gameDirectory' };
-const instanceOf = (sourceFolders: Record<string, string> = {}, gameFolder: GameFolder = FOUND, modFolders?: ModFolders): Partial<InstanceReading> =>
+const readingOf = (sourceFolders: Record<string, string> = {}, gameFolder: GameFolder = FOUND, modFolders?: ModFolders): Partial<InstanceReading> =>
   ({ gameFolder, sourceMods: sourceModsOf(sourceFolders), modFolders });
 const GAME_FOLDER = { name: 'Fallout4', dataFolder: '/game/Data', files: [] };
 const filesIn = (filesByMod: Record<string, readonly OriginFile[]>): ReadonlyMap<string, OriginFiles> =>
@@ -19,7 +19,7 @@ const filesIn = (filesByMod: Record<string, readonly OriginFile[]>): ReadonlyMap
 const sentNamesOf = (mods: unknown): string[] => (Array.isArray(mods) ? mods.map((mod: { name: string }) => mod.name) : []);
 
 function commandsOver(
-  answers: InstanceAnswers = {}, client = new InMemoryMEditClient(), filesByMod: Record<string, readonly OriginFile[]> = {}, instance: Partial<InstanceReading> = instanceOf(),
+  answers: InstanceAnswers = {}, client = new InMemoryMEditClient(), filesByMod: Record<string, readonly OriginFile[]> = {}, instance: Partial<InstanceReading> = readingOf(),
 ) {
   const adapter = fakeInstanceAdapter(readingFixture({ modFiles: filesIn(filesByMod), ...instance }), answers);
   const repositories: string[] = [];
@@ -114,7 +114,7 @@ describe('modlistRepositoryCommands update manifest', () => {
     const { commands, client } = commandsOver({
       installations: new Map([['ModA', recording(INSTALLED)]]),
       metadata: new Map([['ModA', { version: '1.2.3' }]]),
-    }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.ESM')], ModB: [fileIn('/mods/ModB', 'a.nif')] }, instanceOf({ ModB: '/source/Old ModB' }));
+    }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.ESM')], ModB: [fileIn('/mods/ModB', 'a.nif')] }, readingOf({ ModB: '/source/Old ModB' }));
     client.setCommandResult('updateManifest', UPDATED);
 
     await commands.updateManifest(['ModA', 'ModB']);
@@ -186,7 +186,7 @@ describe('modlistRepositoryCommands update manifest', () => {
   });
 
   it('names a mod with no installation file when the game folder was not found, and sends no game folder', async () => {
-    const { commands, client } = commandsOver({ installations: new Map([['ModA', recording(INSTALLED)]]) }, new InMemoryMEditClient(), {}, instanceOf({}, NOT_FOUND));
+    const { commands, client } = commandsOver({ installations: new Map([['ModA', recording(INSTALLED)]]) }, new InMemoryMEditClient(), {}, readingOf({}, NOT_FOUND));
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModA', 'ModB']);
@@ -199,8 +199,8 @@ describe('modlistRepositoryCommands update manifest', () => {
     const unreadable: FileRead<{ gameFiles: []; notes: [] }> = { kind: 'unreadable', reason: 'it was asked' };
     const answers = { gameFilesTaken: new Map([['Source', unreadable], ['Group_separator', unreadable]]) };
     const folders = modFoldersOf('ModA', 'Source', { kind: 'separator', name: 'Group', modName: 'Group_separator' });
-    const found = commandsOver(answers, new InMemoryMEditClient(), {}, instanceOf({ Source: '/source/Source' }, FOUND, folders));
-    const notFound = commandsOver(answers, new InMemoryMEditClient(), {}, instanceOf({ Source: '/source/Source' }, NOT_FOUND, folders));
+    const found = commandsOver(answers, new InMemoryMEditClient(), {}, readingOf({ Source: '/source/Source' }, FOUND, folders));
+    const notFound = commandsOver(answers, new InMemoryMEditClient(), {}, readingOf({ Source: '/source/Source' }, NOT_FOUND, folders));
     found.client.setCommandResult('updateManifest', UPDATED);
     notFound.client.setCommandResult('updateManifest', UPDATED);
 
@@ -248,7 +248,7 @@ describe('modlistRepositoryCommands update manifest', () => {
   });
 
   describe('refuses a mod, naming why, and updates the rest', () => {
-    const adapterOf = fakeInstanceAdapter(readingFixture(instanceOf())).adapter;
+    const adapterOf = fakeInstanceAdapter(readingFixture(readingOf())).adapter;
     const refusedFor: [string, Partial<InstanceAdapter>, string][] = [
       ['its name gives it no folder', { modFolderPath: (mod) => Promise.resolve(mod === 'ModA' ? undefined : `/mods/${mod}`) }, 'its name gives it no folder'],
       ['its installation files cannot be read', {
@@ -324,7 +324,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
   it('hands mEdit each mod with its folder and no installation file or submodule, its metadata files, the stat cache\'s folder and what a build needs', async () => {
     const { commands, client } = commandsOver(
-      { installations: new Map([['ModA', recording(INSTALLED)]]), metadata: new Map([['ModA', { version: '1.2.3' }]]) }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] }, instanceOf({ ModB: '/source/Old ModB' }));
+      { installations: new Map([['ModA', recording(INSTALLED)]]), metadata: new Map([['ModA', { version: '1.2.3' }]]) }, new InMemoryMEditClient(), { ModA: [fileIn('/mods/ModA', 'game.esm')] }, readingOf({ ModB: '/source/Old ModB' }));
     client.setCommandResult('restoreFromManifest', RESTORED);
 
     await commands.restoreFromManifest(['ModA', 'ModB']);
@@ -356,7 +356,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   });
 
   it('says why beside a mod still skipped for game files when the game folder was not found', async () => {
-    const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, instanceOf({}, NOT_FOUND));
+    const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf({}, NOT_FOUND));
     client.setCommandResult('restoreFromManifest', {
       landed: [], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }], notFound: [{ mod: 'ModA', gameFiles: ['a.nif'] }],
     });
@@ -516,7 +516,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   });
 
   it('refuses a mod the Instance adapter cannot answer, naming why, and restores the rest', async () => {
-    const adapter = fakeInstanceAdapter(readingFixture(instanceOf())).adapter;
+    const adapter = fakeInstanceAdapter(readingFixture(readingOf())).adapter;
     const client = new InMemoryMEditClient();
     const commands = modlistRepositoryCommands({
       client, adapter: { ...adapter, modFolderPath: (mod) => Promise.resolve(mod === 'ModA' ? undefined : `/mods/${mod}`) },
