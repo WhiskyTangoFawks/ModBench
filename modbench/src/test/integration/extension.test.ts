@@ -482,6 +482,10 @@ before(async function () {
   }
 
   await waitFor('Modbench to launch mEdit and open its notification stream', () => sseClients.length > 0);
+  await openRecord({ formKey: 'Fallout4.esm:0000FF' });
+  await waitFor('a record tab, opened alone, to ask for its record: on a new profile VS Code 1.140 never loads a webview page '
+    + 'opened while the first registers its origin\'s service worker', () => askedToRead('Fallout4.esm:0000FF'));
+  await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 });
 
 afterEach(function () {
@@ -603,6 +607,7 @@ const executeOpen = (records: RecordToOpen | RecordToOpen[], pinned?: true) =>
   vscode.commands.executeCommand('modbench.record.open', Array.isArray(records) ? records.map(asArgument(pinned)) : asArgument(pinned)(records));
 const openRecord = (records: RecordToOpen | RecordToOpen[]) => executeOpen(records);
 const openPinnedRecord = (records: RecordToOpen | RecordToOpen[]) => executeOpen(records, true);
+const askedToRead = (formKey: string, since = 0) => requestLog.slice(since).includes(`GET /records/${encodeURIComponent(formKey)}/compare`);
 const inSecondGroup = () => vscode.commands.executeCommand(
   vscode.window.tabGroups.all.length < 2 ? 'workbench.action.newGroupRight' : 'workbench.action.focusSecondEditorGroup');
 
@@ -620,10 +625,11 @@ describe('modbench.record.open', () => {
 
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
 
-  it('opens the winning copy\'s document, titled with its file\'s name', async () => {
+  it('opens the winning copy\'s document, titled with its file\'s name, which asks for its record', async () => {
     await openRecord({ formKey: 'Fallout4.esm:000001' });
 
     await waitFor('the winning copy\'s tab', () => hasRenderedTab('Fallout4.esm:000001') || undefined);
+    await waitFor('the record\'s read', () => askedToRead('Fallout4.esm:000001'));
   });
 
   it('a second click replaces the preview tab instead of adding one', async () => {
@@ -730,18 +736,17 @@ describe('a compiled plugin copy of a record', () => {
   const compiledPluginCopy = { formKey: COMPILED_PLUGIN_FORM_KEY, plugin: { name: COMPILED_PLUGIN, origin: COMPILED_PLUGIN_ORIGIN } };
   const fileTabs = () => openTabs().filter((t) =>
     t.input instanceof vscode.TabInputCustom && t.input.uri.fsPath === COMPILED_PLUGIN_FS_PATH && t.input.viewType === 'modbench.record');
-  const reads = () => requestLog.filter((line) => line === `GET /records/${encodeURIComponent(COMPILED_PLUGIN_FORM_KEY)}/compare`).length;
   const compiledPlugin = present(MOCK_PLUGINS.find((p) => p.name === COMPILED_PLUGIN), 'the compiled plugin\'s row');
 
   before(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
   afterEach(async () => { await vscode.commands.executeCommand('workbench.action.closeAllEditors'); });
 
   it('opens as its file in the record grid, titled with the file\'s name after its read lands', async () => {
-    const readsBefore = reads();
+    const asked = requestLog.length;
 
     await openRecord(compiledPluginCopy);
     const [tab] = await waitFor('the file\'s tab', () => fileTabs().length > 0 && fileTabs());
-    await waitFor('the record\'s read', () => reads() > readsBefore);
+    await waitFor('the record\'s read', () => askedToRead(COMPILED_PLUGIN_FORM_KEY, asked));
     await sleep(500);
 
     assert.strictEqual(tab?.label, 'CompiledPluginGun.json');
@@ -809,10 +814,10 @@ describe('a compiled plugin copy of a record', () => {
 
     await openRecord([compiledPluginCopy, { formKey: 'Fallout4.esm:000070' }]);
     await waitFor('the records read side by side', () => comparedSideBySide.some((asked) => JSON.stringify(asked) === JSON.stringify(copies)));
-    const readsBefore = reads();
+    const asked = requestLog.length;
     await openRecord(compiledPluginCopy);
 
-    await waitFor('the record read alone', () => reads() > readsBefore);
+    await waitFor('the record read alone', () => askedToRead(COMPILED_PLUGIN_FORM_KEY, asked));
     assert.strictEqual(openTabs().length, 1);
   });
 
@@ -875,7 +880,7 @@ describe('a child record of a compiled plugin', () => {
     const asked = requestLog.length;
     await executeOpen(record, pinned);
     await waitFor(`${record.formKey}'s page loaded, asking its read`,
-      () => requestLog.slice(asked).includes(`GET /records/${encodeURIComponent(record.formKey)}/compare`));
+      () => askedToRead(record.formKey, asked));
   };
 
   const reportChanged = (formKey: string) => {
