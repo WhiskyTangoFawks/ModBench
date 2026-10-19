@@ -319,8 +319,12 @@ export default defineConfig(
         rules: { 'no-restricted-syntax': restrictedSyntax([...EVERYWHERE_IN_SRC, 'hostFs']) },
     },
     {
-        files: ['src/drivingLib/reporter.ts', 'src/dialog.ts'],
+        files: ['src/dialog.ts'],
         rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('message')) },
+    },
+    {
+        files: ['src/drivingLib/reporter.ts'],
+        rules: { 'no-restricted-syntax': restrictedSyntax([...everywhereBut('message'), 'hostFs']) },
     },
     // ADR-0014: the activation file and its wiring decide nothing.
     {

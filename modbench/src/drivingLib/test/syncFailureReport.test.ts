@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createModSync, createPluginSync } from '../syncFailureReport';
+import { createModSync, createPluginSync, type SyncChannel } from '../syncFailureReport';
 import { present } from '../../ports/present';
 
 type Outcome =
@@ -56,8 +56,8 @@ describe('a sync: outcome handling', () => {
     await run();
 
     expect(channel.info).toHaveBeenCalledTimes(2);
-    expect(channel.info).toHaveBeenCalledWith('[pluginCommands] plugin sync added 1 disabled plugins.txt line(s) for plugin(s) on disk with no line: New');
-    expect(channel.info).toHaveBeenCalledWith('[pluginCommands] plugin sync dropped 1 plugins.txt line(s) with no plugin on disk: Gone');
+    expect(channel.info).toHaveBeenCalledWith(expect.stringMatching(/ added 1 .*: New$/));
+    expect(channel.info).toHaveBeenCalledWith(expect.stringMatching(/ dropped 1 .*: Gone$/));
     expect(channel.error).not.toHaveBeenCalled();
   });
 
@@ -73,8 +73,8 @@ describe('a sync: outcome handling', () => {
     const { channel, sync, messageChanged, run } = syncAnswering(refused('the folder is gone'));
     await run();
 
-    expect(channel.error).toHaveBeenCalledWith('[pluginCommands] plugin sync failed: the folder is gone');
-    expect(sync.message()).toBe('plugins.txt is not synced: the folder is gone.');
+    expect(channel.error).toHaveBeenCalledWith(expect.stringMatching(/ failed: the folder is gone$/));
+    expect(sync.message()).toMatch(/ is not synced: the folder is gone\.$/);
     expect(messageChanged).toHaveBeenCalledTimes(1);
   });
 
@@ -169,30 +169,32 @@ describe('a sync: a refusal the instance\'s state already tells', () => {
 describe('the sync wording', () => {
   const addedAndDropped = () => Promise.resolve<Outcome>({ applied: true, added: ['A'], dropped: ['B'] });
   const refusing = () => Promise.resolve<Outcome>({ applied: false, refusal: 'locked' });
+  const modSync = (run: () => Promise<Outcome>, channel: SyncChannel) => createModSync(run, channel, 'modlist.txt');
 
-  it('names the mod manager\'s mod order file for a mod sync', async () => {
+  it.each([
+    {
+      name: 'a mod sync names the mod manager\'s mod order file', create: modSync,
+      lines: [
+        '[modCommands] mod sync added 1 modlist.txt line(s) for folder(s) in mods/ with no line: A',
+        '[modCommands] mod sync dropped 1 modlist.txt line(s) whose folder is gone from mods/: B',
+      ],
+      unsynced: 'modlist.txt is not synced: locked.',
+    },
+    {
+      name: 'a plugin sync names plugins.txt', create: createPluginSync,
+      lines: [
+        '[pluginCommands] plugin sync added 1 disabled plugins.txt line(s) for plugin(s) on disk with no line: A',
+        '[pluginCommands] plugin sync dropped 1 plugins.txt line(s) with no plugin on disk: B',
+      ],
+      unsynced: 'plugins.txt is not synced: locked.',
+    },
+  ])('$name', async ({ create, lines, unsynced }) => {
     const channel = { error: vi.fn(), info: vi.fn() };
-    const sync = createModSync(addedAndDropped, channel, 'modlist.txt');
-    await sync.run();
-    expect(channel.info.mock.calls).toEqual([
-      ['[modCommands] mod sync added 1 modlist.txt line(s) for folder(s) in mods/ with no line: A'],
-      ['[modCommands] mod sync dropped 1 modlist.txt line(s) whose folder is gone from mods/: B'],
-    ]);
-    const refused = createModSync(refusing, channel, 'modlist.txt');
-    await refused.run();
-    expect(refused.message()).toBe('modlist.txt is not synced: locked.');
-  });
+    await create(addedAndDropped, channel).run();
+    expect(channel.info.mock.calls).toEqual(lines.map((line) => [line]));
 
-  it('names plugins.txt for a plugin sync', async () => {
-    const channel = { error: vi.fn(), info: vi.fn() };
-    const sync = createPluginSync(addedAndDropped, channel);
-    await sync.run();
-    expect(channel.info.mock.calls).toEqual([
-      ['[pluginCommands] plugin sync added 1 disabled plugins.txt line(s) for plugin(s) on disk with no line: A'],
-      ['[pluginCommands] plugin sync dropped 1 plugins.txt line(s) with no plugin on disk: B'],
-    ]);
-    const refused = createPluginSync(refusing, channel);
+    const refused = create(refusing, channel);
     await refused.run();
-    expect(refused.message()).toBe('plugins.txt is not synced: locked.');
+    expect(refused.message()).toBe(unsynced);
   });
 });
