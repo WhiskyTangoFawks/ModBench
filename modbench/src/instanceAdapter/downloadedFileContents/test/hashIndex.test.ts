@@ -2,18 +2,18 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { appendFile, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fakeArchiveReader } from '../../test/fakeArchiveReader';
+import { fakeArchiveReader } from '../../../test/fakeArchiveReader';
 import type { ArchiveReader } from '../archiveReader';
 import { digestOf } from '../contentDigest';
-import { stampOf } from '../files';
+import { stampOf } from '../../files';
 import { hashIndex } from '../hashIndex';
 
 vi.mock('../contentDigest', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../contentDigest')>();
   return { digestOf: vi.fn(actual.digestOf) };
 });
-vi.mock('../files', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../files')>();
+vi.mock('../../files', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../files')>();
   return { ...actual, stampOf: vi.fn(actual.stampOf) };
 });
 

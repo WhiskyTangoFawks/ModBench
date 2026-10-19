@@ -9,7 +9,7 @@ export const modNameTakenRefusal = (name: string): string =>
 /** How the manager matches an entry's name: two entries with one key are one name to it. */
 export type EntryKey = (entry: EntryRef) => string;
 
-export function takenModNameRefusal(key: EntryKey, { modFolders }: TakenNames, name: string): string | undefined {
+export function newModNameRefusal(key: EntryKey, { modFolders }: TakenNames, name: string): string | undefined {
   const trimmed = name.trim();
   if (!trimmed) return undefined;
   const wanted = key({ kind: 'mod', name: trimmed });

@@ -2,7 +2,7 @@
 // its contents. An upgrade keeps its folder, so every watcher armed on it survives the release.
 
 import { parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
-import type { ArchiveReader } from './archiveReader';
+import type { ArchiveReader } from './downloadedFileContents/archiveReader';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from './files';
 import type { InstallPackage, InstanceAdapter, ModMeta, OwnedMetaKeys } from './instanceAdapter';
 import { fileInFolder, manifestFileIn, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix } from './layout';

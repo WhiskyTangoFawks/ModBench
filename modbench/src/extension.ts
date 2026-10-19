@@ -20,7 +20,7 @@ import { Instance } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
 import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
-import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
+import { downloadedFileReader, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
 import { agentPort } from './agent/agentPort';
 import { attachPort, gameFolderSetting, onStringsLanguageChange, stringsLanguage } from './workspaceConfig';
@@ -114,7 +114,7 @@ function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened 
   return whenOpened<Opened>(openedFolder(isMo2Instance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = mo2InstanceAdapter({
-        instanceRoot, gameFolderSetting, archives: sevenZip,
+        instanceRoot, gameFolderSetting, archives: downloadedFileReader,
       });
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
