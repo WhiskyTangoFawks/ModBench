@@ -70,11 +70,12 @@ function recordingWrite(): { write: RecordWrite; writing: string[] } {
 async function referencedByCopy(record: RecordAt, editorId: string) {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getChildRecordTypes', []);
+  client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...record.plugin, isCompiledPlugin: true, isImmutable: false })]);
   client.setQueryAnswer('getReferences', [{
     formKey: record.formKey, plugin: record.plugin.name, origin: record.plugin.origin, fieldPath: 'Keywords[0]',
     recordType: 'npc_', recordTypeName: 'Non-Player Character', editorId,
   }]);
-  const { provider } = await readReferencedBy(client, SILENT_LOG, '000001:A.esp', 'a list', () => ({ editable: true }));
+  const { provider } = await readReferencedBy(client, SILENT_LOG, '000001:A.esp', 'a list');
   const [referrer] = provider.getChildren();
   const [copy] = provider.getChildren(present(referrer, 'the referrer'));
   return present(copy, 'its plugin copy');
