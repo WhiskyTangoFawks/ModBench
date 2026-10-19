@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isFieldType } from '../fieldType';
+import { isFieldType } from './fieldType';
 
 describe('isFieldType', () => {
   it('accepts a type the webview switches on', () => {

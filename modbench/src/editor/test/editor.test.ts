@@ -192,7 +192,7 @@ function makeEditor(
     ask: vi.fn(),
     focusedView,
     recordViewIds,
-    writeProgressView: 'test.view',
+    recordWriteProgressView: 'test.view',
     instance: { refresh: () => Promise.resolve(undefined) },
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     modFacts,

@@ -156,9 +156,7 @@ export interface ReferencedByList {
 
 export type ReferencedByClient = Pick<MEditClient, 'getReferences' | 'getChildRecordTypes' | 'getPlugins' | 'loadOrderStatus'>;
 
-// What mEdit answers of each plugin; a plugin it does not answer for, or an answer that cannot be
-// read, is not editable.
-async function conditionsRead(client: Pick<MEditClient, 'getPlugins'>, log: Log): Promise<ConditionsOf> {
+async function editabilityFromPlugins(client: Pick<MEditClient, 'getPlugins'>, log: Log): Promise<ConditionsOf> {
   const plugins = await client.getPlugins().catch((error: unknown) => localFailure(errorMessage(error)));
   if (isReadFailed(plugins)) {
     log.warn(`[ReferencedBy] getPlugins failed: ${failureReason(plugins)}`);
@@ -179,7 +177,7 @@ export async function readReferencedBy(
     log.error(`[ReferencedBy] getReferences(${target}) failed: ${reason}`);
     return { provider: new ReferencedByTreeProvider([new ErrorNode(reason)]), message: indexing };
   }
-  const lookups = { list, conditionsOf: await conditionsRead(client, log), client, log };
+  const lookups = { list, conditionsOf: await editabilityFromPlugins(client, log), client, log };
   const referrers = (await Promise.all(groupBy(read, r => r.formKey).map(copies => referrerNode(lookups, copies))))
     .flatMap(referrer => referrer ?? []).sort(byTypeThenLabel);
   return {

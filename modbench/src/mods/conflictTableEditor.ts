@@ -2,6 +2,7 @@
 // address of its own, so preview, an open tab and restore-after-reload are VS Code's.
 
 import * as vscode from 'vscode';
+import { WEBVIEW_SCRIPTS } from '../wire/webviewPages';
 import type { InstanceView } from '../instanceLoader/instance';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import {
@@ -95,7 +96,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
     panel.webview.onDidReceiveMessage((message: unknown) => {
       if (isConflictTableReady(message)) void show(this.instance);
     });
-    showWebviewPage(panel.webview, this.extensionUri, { script: 'conflicts.js' });
+    showWebviewPage(panel.webview, this.extensionUri, { script: WEBVIEW_SCRIPTS.CONFLICTS });
   }
 }
 

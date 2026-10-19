@@ -1,9 +1,9 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "path";
-import { WEBVIEW_STYLESHEET } from "../src/drivingLib/webviewStylesheet";
+import { WEBVIEW_SCRIPTS, WEBVIEW_STYLESHEET } from "../src/wire/webviewPages";
 
-const HOST_ASSETS = [WEBVIEW_STYLESHEET, "main.js", "conflicts.js"];
+const HOST_ASSETS = [WEBVIEW_STYLESHEET, ...Object.values(WEBVIEW_SCRIPTS)];
 
 const hostsFindTheirAssets = (): Plugin => ({
   name: "hosts-find-their-assets",
