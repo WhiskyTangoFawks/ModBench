@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { STATUS_MESSAGE_MS } from './statusMessage';
 
 // The term lives here, not in the `InputBox`: that widget hides the moment focus leaves, and
 // clicking a row is the first thing anyone does with a filtered list.
@@ -144,16 +145,17 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   };
 }
 
+const NOTHING_TO_FILTER = 'Focus a list to filter it.';
+
 /** The catalog's filter pair acts on the view it is given, else the focused one. A title icon
  *  cannot name its view, so `<view id>.filterHere` and `.clearFilterHere` fire the pair with it. */
 export function registerFilterCommands(
   focusedViewId: () => string | undefined,
   filters: ReadonlyMap<string, Pick<NameFilter, 'open' | 'clear'>>,
-  nothingFocused: () => void,
 ): vscode.Disposable[] {
   const on = (act: (filter: Pick<NameFilter, 'open' | 'clear'>) => void) => (viewId: unknown = focusedViewId()) => {
     const filter = typeof viewId === 'string' ? filters.get(viewId) : undefined;
-    if (filter === undefined) nothingFocused();
+    if (filter === undefined) vscode.window.setStatusBarMessage(NOTHING_TO_FILTER, STATUS_MESSAGE_MS);
     else act(filter);
   };
   const open = on((filter) => filter.open());

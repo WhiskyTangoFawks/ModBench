@@ -9,6 +9,7 @@ import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import type { MEditClient } from '../client/MEditClient';
+import { AGENT_PORT_SETTING } from './agentPort';
 import { FILE_CONFLICTS } from './fileConflicts';
 import { GESTURE_TOOLS } from './gestures';
 import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
@@ -22,8 +23,6 @@ import { RESOLVE_NAMES } from './resolveNames';
 import { SCRIPT_ENVIRONMENT, type TerminalEnvironment } from './scriptEnvironment';
 import { SELECT_ROWS } from './selectRows';
 import { SOURCE_PROBLEMS } from './sourceProblems';
-
-const AGENT_PORT_SETTING = 'modbench.agent.port';
 
 export interface AgentServerOptions {
   port: number;
