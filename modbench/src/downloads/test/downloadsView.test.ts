@@ -99,11 +99,11 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
     expect(downloadsView.message).toBe('No matches for "zzznomatch".');
 
     instance.publish(instanceValueFixture({ downloads: { kind: 'listed', rows: [downloadRowFixture('zzznomatch.7z')] } }));
-    await waitForMessage(downloadsView, (m) => m === undefined, 'the message clearing once a matching download lands');
+    await waitForMessage(downloadsView, (m) => m === undefined, 'the message clearing once a matching downloaded file lands');
     expect(downloadsView.message).toBeUndefined();
 
     instance.publish(instanceValueFixture());
-    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message returning once the download is gone');
+    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message returning once the downloaded file is gone');
     expect(downloadsView.message).toBe('No matches for "zzznomatch".');
   });
 });
@@ -115,11 +115,11 @@ describe('the Downloads filter follows a toggle with no new instance value', () 
 
     downloadsFilter.open();
     currentBox().type('zzznomatch');
-    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message with the excluded download left out');
+    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message with the excluded downloaded file left out');
     expect(downloadsView.message).toBe('No matches for "zzznomatch".');
 
     await command('modbench.downloadedFile.showExcluded')();
-    await waitForMessage(downloadsView, (m) => m === undefined, 'the message clearing once the excluded download counts');
+    await waitForMessage(downloadsView, (m) => m === undefined, 'the message clearing once the excluded downloaded file counts');
     expect(downloadsView.message).toBeUndefined();
 
     await command('modbench.downloadedFile.hideExcluded')();
@@ -132,7 +132,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
   const KEY = 'modbench.downloadedFile.allExcluded';
   const contextValue = () => h.state.contextKeys.get(KEY);
 
-  it('is true once the one download is excluded, and follows Show excluded both ways', async () => {
+  it('is true once the one downloaded file is excluded, and follows Show excluded both ways', async () => {
     viewOver(instanceOver(downloadRowFixture('a.7z', { excluded: true })));
 
     await vi.waitFor(() => expect(contextValue()).toBe(true));
@@ -144,7 +144,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
     await vi.waitFor(() => expect(contextValue()).toBe(true));
   });
 
-  it('stays false while at least one download is not excluded', async () => {
+  it('stays false while at least one downloaded file is not excluded', async () => {
     viewOver(instanceOver(downloadRowFixture('a.7z'), downloadRowFixture('b.7z', { excluded: true })));
 
     await vi.waitFor(() => expect(contextValue()).toBe(false));
@@ -152,7 +152,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
 });
 
 describe('the Downloads decoration provider follows a rows change', () => {
-  it('fires onDidChangeFileDecorations once the Instance value carries a new download', async () => {
+  it('fires onDidChangeFileDecorations once the Instance value carries a new downloaded file', async () => {
     const instance = instanceOver();
     viewOver(instance);
     const [provider] = h.decorationProviders;

@@ -28,6 +28,6 @@ export function downloadsKeyContext(selection: readonly DownloadsTreeNode[]): Do
 export const DOWNLOADS_KEY_ARGS = { view: 'modbench.downloads' } as const;
 
 /** Downloads' own text for the catalog's one copy value id: each file's file name, or `undefined`
- *  unless the invocation is a download row or the Downloads key's args. */
+ *  unless the invocation is a downloaded file row or the Downloads key's args. */
 export const downloadsCopyValueText = (viewSelection: () => readonly DownloadsTreeNode[]) =>
   viewCopyValueText<DownloadsTreeNode, 'downloadedFile'>(DOWNLOADS_KEY_ARGS.view, ['downloadedFile'], (node) => node.argument.row.name, viewSelection);

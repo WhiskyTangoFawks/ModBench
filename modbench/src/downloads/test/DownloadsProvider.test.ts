@@ -22,7 +22,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { DownloadFile, DownloadRow, InstanceValue } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 
-const rowNamesOfDownloadNodes = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadedFileNode).argument.row.name);
+const rowNamesOfDownloadedFileNodes = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadedFileNode).argument.row.name);
 
 const row = (extra: Partial<DownloadRow> = {}): DownloadFile => downloadRowFixture(extra.name ?? 'foo.zip', extra);
 
@@ -136,7 +136,7 @@ describe('DownloadedFileNode', () => {
 
   it('resourceUri is the path the value carries for the row', () => {
     const node = downloadedFileNodeFixture(row({ name: 'foo.zip' }));
-    expect(present(node.resourceUri, "the download node's resourceUri").fsPath).toBe(join('/instance', 'downloads', 'foo.zip'));
+    expect(present(node.resourceUri, "the downloaded file node's resourceUri").fsPath).toBe(join('/instance', 'downloads', 'foo.zip'));
   });
 
   it('exposes the source row for command handlers to act on', () => {
@@ -161,7 +161,7 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
       row({ name: 'old.zip', mtimeMs: 1000 }),
       row({ name: 'new.zip', mtimeMs: 2000 }),
     ]);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['new.zip', 'old.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['new.zip', 'old.zip']);
   });
 
   it('narrows to rows whose label contains the filter text, case-insensitively', async () => {
@@ -172,7 +172,7 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
     await provider.getChildren();
     provider.setFilter('armor');
 
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['ArmorPack.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['ArmorPack.zip']);
   });
 
   it('narrows by the label, not the raw filename, which has no "armor" in it', async () => {
@@ -183,12 +183,12 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
     await provider.getChildren();
     provider.setFilter('armor');
 
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['file-one.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['file-one.zip']);
   });
 
   it('excludes excluded rows by default (Show excluded off)', async () => {
     const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['visible.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['visible.zip']);
   });
 
   it('returns no children when the Instance value has no downloads', async () => {
@@ -196,7 +196,7 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
     expect(await provider.getChildren()).toEqual([]);
   });
 
-  it('a non-root element (a download row) has no children of its own', async () => {
+  it('a non-root element (a downloaded file row) has no children of its own', async () => {
     const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'foo.zip' })]);
     const [node] = await provider.getChildren();
     expect(await provider.getChildren(node)).toEqual([]);
@@ -208,7 +208,7 @@ describe('setShowExcluded', () => {
     const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
     provider.setShowExcluded(true);
     const nodes = await provider.getChildren();
-    expect(rowNamesOfDownloadNodes(nodes).sort()).toEqual(['excluded.zip', 'visible.zip']);
+    expect(rowNamesOfDownloadedFileNodes(nodes).sort()).toEqual(['excluded.zip', 'visible.zip']);
     expect(nodes.map((n) => expectInstanceOf(n, DownloadedFileNode).argument.row).find((r) => r.name === 'excluded.zip')?.excluded).toBe(true);
   });
 
@@ -217,7 +217,7 @@ describe('setShowExcluded', () => {
     provider.setShowExcluded(true);
     await provider.getChildren();
     provider.setShowExcluded(false);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['visible.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['visible.zip']);
   });
 
   it('re-renders: fires onDidChangeTreeData', async () => {
@@ -237,7 +237,7 @@ describe('setSort', () => {
       row({ name: 'apple.zip', displayName: 'apple.zip' }),
     ]);
     provider.setSort('name', false);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['apple.zip', 'banana.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['apple.zip', 'banana.zip']);
   });
 
   it('re-renders: fires onDidChangeTreeData', async () => {
@@ -325,7 +325,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     const pending = provider.getChildren();
     instance.publish(valueOf([row({ name: 'a.zip' })]));
 
-    expect(rowNamesOfDownloadNodes(await pending)).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await pending)).toEqual(['a.zip']);
   });
 
   it('settles a failed first read, rather than spinning forever, on the one error row naming the reason, then renders rows when a value lands', async () => {
@@ -345,7 +345,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     instance.publish(valueOf([row({ name: 'a.zip' })]));
     const after = await explicitFailureIfNotSettledWithin(provider.getChildren(), 500);
 
-    expect(rowNamesOfDownloadNodes(after)).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadedFileNodes(after)).toEqual(['a.zip']);
   });
 
   it('renders no rows immediately when the first landed value is genuinely empty', async () => {
@@ -356,12 +356,12 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
   it('re-renders when the Instance publishes a new landed value, read again a macrotask after the publish', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.zip' })]));
     const provider = makeProviderOverRowsNeverOnDisk([], { instance });
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['a.zip']);
 
     instance.publish(valueOf([row({ name: 'a.zip' }), row({ name: 'b.zip' })]));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(rowNamesOfDownloadNodes(await provider.getChildren()).sort()).toEqual(['a.zip', 'b.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren()).sort()).toEqual(['a.zip', 'b.zip']);
   });
 
   it('dispose() disposes the Instance subscription: a publish afterward leaves the cache untouched', async () => {
@@ -373,7 +373,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     instance.publish(valueOf([row({ name: 'a.zip' }), row({ name: 'b.zip' })]));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['a.zip']);
   });
 });
 
@@ -417,6 +417,6 @@ describe('DownloadsProvider — a configured downloads folder Modbench cannot re
 
     instance.publish(valueOf([row({ name: 'a.zip' })]));
 
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['a.zip']);
   });
 });

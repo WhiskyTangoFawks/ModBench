@@ -757,7 +757,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
 
 describe('package.json Downloads row menu order', () => {
   const DOWNLOADED_FILE_ROW = String.raw`viewItem =~ /\bdownloadedFile\b/`;
-  const downloadRowMenu = (): MenuEntry[] =>
+  const downloadedFileRowMenu = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
       .filter((e) => requires(e.when, 'view == modbench.downloads') && requires(e.when, DOWNLOADED_FILE_ROW));
 
@@ -773,11 +773,11 @@ describe('package.json Downloads row menu order', () => {
     ['downloadedFile excluded', [INSTALL, OPEN, INCLUDE, COPY_VALUE, DELETE]],
     ['downloadedFile hasModID hasMeta excluded', [INSTALL, VIEW_ON_NEXUS, OPEN, OPEN_META, INCLUDE, COPY_VALUE, DELETE]],
   ])('the menu on a %s row', (viewItem, commands) => {
-    expect(offeredIn(downloadRowMenu(), { view: 'modbench.downloads', viewItem })).toEqual(commands);
+    expect(offeredIn(downloadedFileRowMenu(), { view: 'modbench.downloads', viewItem })).toEqual(commands);
   });
 
   it('orders the row in strictly increasing slots: install, view on Nexus, open, open .meta, exclude/include sharing one, copy value, delete', () => {
-    const entries = downloadRowMenu();
+    const entries = downloadedFileRowMenu();
     const slotOf = (command: string): number => {
       const group = present(entries.find((e) => e.command === command), `a ${command} row-menu entry`).group ?? '';
       return Number(present(/@(\d+)$/.exec(group)?.[1], `a numbered group for ${command} (got "${group}")`));
