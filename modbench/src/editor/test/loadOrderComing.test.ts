@@ -7,7 +7,7 @@ const status = (overrides: Partial<LoadOrderStatus>): LoadOrderStatus => ({
 });
 
 const comingFor = (modbenchHasOne: boolean, loadOrderStatus?: LoadOrderStatus) =>
-  loadOrderComing({ now: () => modbenchHasOne, onChanged: () => ({ dispose: () => undefined }) }, { loadOrderStatus }).now();
+  loadOrderComing({ hasLoadOrderToHand: modbenchHasOne, subscribe: () => ({ dispose: () => undefined }) }, { loadOrderStatus }).now();
 
 describe('whether a load order is on its way to mEdit', () => {
   it.each([

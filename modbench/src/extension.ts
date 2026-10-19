@@ -8,7 +8,7 @@ import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
-import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor, type LoadOrderComing } from './editor';
+import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage, formKeyLocation } from './sourceLanguage';
 import { saveModPluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
@@ -104,7 +104,7 @@ interface OpenedInstance {
 
 interface Opened {
   facts: InstanceFacts;
-  handing?: LoadOrderComing;
+  instance?: Instance;
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
 }
 
@@ -117,7 +117,7 @@ function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened 
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
       }));
-      return { facts: factsOf(instance), handing: handingOf(instance), side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
+      return { facts: factsOf(instance), instance, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
     notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, side: buildBareSide }),
   });
@@ -193,11 +193,6 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   };
 }
 
-const handingOf = (instance: Instance): LoadOrderComing => ({
-  now: () => instance.hasLoadOrderToHand,
-  onChanged: (listener) => instance.subscribe(() => { listener(); }),
-});
-
 function ownership(): { own: Own; dispose: () => void } {
   const owned: vscode.Disposable[] = [];
   const own: Own = (disposable) => {
@@ -257,7 +252,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const editor = createEditor({
     context, meditClient, outputChannel,
     loadOrderComing: loadOrderComing(
-      opened.handing, meditClient),
+      opened.instance, meditClient),
     reporterFor,
     ask: askQuestion,
     focusedView,
