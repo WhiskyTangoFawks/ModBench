@@ -2,13 +2,12 @@
 // can answer, and the dependants query; the file and its lines are the Instance adapter's.
 
 import type { TailOf } from '../coreLib/boundCommand';
-import { type FileOrigin, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
+import type { FileOrigin, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { OVERWRITE_ORIGIN, type PluginAddress } from '../wire/pluginAddress';
 import { isRefused, type MEditClient, type SourceChanges } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 import { pluginNameRefusal } from './pluginName';
-import type { PluginAddress } from '../wire/pluginAddress';
 import { answerOf } from '../wire/readFailed';
 
 export type PluginRenameClient = Pick<MEditClient, 'getRenameSourceChanges' | 'moveLastWritten' | 'getPluginDependants' | 'getCreatablePluginExtensions'>;

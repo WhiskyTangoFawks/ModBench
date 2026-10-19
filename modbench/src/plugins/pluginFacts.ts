@@ -1,9 +1,8 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import type { UnreadableSource } from '../wire/unreadableSource';
-import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
+import { OVERWRITE_ORIGIN, pluginAddressKey } from '../wire/pluginAddress';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
-import { pluginAddressKey } from '../wire/pluginAddress';
 import { ByPluginAddress } from './pluginAddress';
 import type { PluginConditions } from '../drivingLib/recordRowContext';
 

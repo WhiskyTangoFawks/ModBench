@@ -1,6 +1,5 @@
-import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
+import { OVERWRITE_ORIGIN, type PluginPlace } from '../wire/pluginAddress';
 import type { InstanceValue } from './instance';
-import type { PluginPlace } from '../wire/pluginAddress';
 
 /** Where a new plugin can live: each enabled mod that has a mod folder, a source mod with its source folder, then
  *  Overwrite once its folder is read. The one place rule, for the snapshot and the create gesture. */

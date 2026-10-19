@@ -1,8 +1,7 @@
 import type { InstanceValue } from './instance';
 import { isDisabledOrInDisabledMod } from './disabledPlugin';
 import { foldPath, OVERWRITE_LABEL } from './fileConflictIndex';
-import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../wire/pluginAddress';
-import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
+import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 
 export type PluginStanding = { kind: 'enabled' } | { kind: 'disabled' } | { kind: 'overridden'; by: string };
 
