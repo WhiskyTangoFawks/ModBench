@@ -22,7 +22,6 @@ const HASH_INDEX = 'hash-index';
 const STAT_CACHE = 'stat-cache';
 const IGNORE_LIST_FILE = '.gitignore';
 const SUBMODULES_FILE = '.gitmodules';
-const MANIFEST_GLOB = '*.manifest.json';
 const PLUGIN_ORDER_FILE = 'loadorder.txt';
 
 export const profilesDir = (instanceRoot: string): string => join(instanceRoot, PROFILES);
@@ -240,7 +239,7 @@ export function withSourceModLines(ignoreList: string, folderNames: readonly str
 export const WHITELIST_IGNORE_LIST = `${[
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
   ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
-  ...heldInEachFolderOf(MODS, [MANIFEST_GLOB]),
+  ...heldInEachFolderOf(MODS, [manifestFileName('*')]),
 ].join('\n')}\n`;
 
 /** The archives at the root of the Data folder and the files of its strings folder, the Data folder its base. */

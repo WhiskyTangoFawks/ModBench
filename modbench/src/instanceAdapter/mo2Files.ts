@@ -12,8 +12,7 @@ import { isExcludedName, isOwnTemp, manifestFileName, overwriteDir } from './lay
 import { originFolder, type Mo2Context } from './mo2Context';
 
 // The mod's metadata is MO2's and its manifest is Modbench's: neither is the mod's content.
-const notContentOf = (modName?: string): ReadonlySet<string> =>
-  new Set(modName === undefined ? [MOD_META_FILE_NAME] : [MOD_META_FILE_NAME, manifestFileName(modName)]);
+const NOT_CONTENT: ReadonlySet<string> = new Set([MOD_META_FILE_NAME]);
 
 interface Walk {
   readonly root: string;
@@ -105,7 +104,7 @@ async function walkDir(walk: Walk, dir: string, ancestors: ReadonlySet<string>):
 }
 
 async function walkMod(folder: string, modName: string, rootOnly: boolean): Promise<Walk> {
-  const walk: Walk = { root: folder, notContent: notContentOf(modName), rootOnly, files: [], folders: [], notes: [] };
+  const walk: Walk = { root: folder, notContent: new Set([...NOT_CONTENT, manifestFileName(modName)]), rootOnly, files: [], folders: [], notes: [] };
   try {
     await walkDir(walk, folder, new Set([(await factsOf(folder)).realPath]));
   } catch (err) {
@@ -133,7 +132,7 @@ async function listWhole(walk: Walk, dir: string): Promise<void> {
 }
 
 async function listOverwrite(folder: string, rootOnly: boolean): Promise<Walk> {
-  const walk: Walk = { root: folder, notContent: notContentOf(), rootOnly, files: [], folders: [], notes: [] };
+  const walk: Walk = { root: folder, notContent: NOT_CONTENT, rootOnly, files: [], folders: [], notes: [] };
   try {
     await listWhole(walk, folder);
   } catch (err) {
