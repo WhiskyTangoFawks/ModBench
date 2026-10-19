@@ -1,6 +1,5 @@
 using System.Text;
 using MEditService.Commands.Build;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
@@ -196,7 +195,7 @@ public sealed class BuildModHandlerTests : IDisposable
         WriteInFolder("a.txt", "changed in the folder");
         var held = Path.Combine(SourceFolder, "assets", "z.txt");
         FileModes.Set(held, "000");
-        BuiltMod built;
+        ModBuilt built;
         try
         {
             built = await Landed();
@@ -250,7 +249,7 @@ public sealed class BuildModHandlerTests : IDisposable
         File.WriteAllText(stringsFiles[0], "changed outside Modbench");
 
         var built = Assert.Single((await TestEditService.BuildModHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null)], _noArchives)).Landed).Outcome;
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null)], _noArchives)).Value().Applied);
 
         Assert.Equal(["Fixture.esp", $"Strings/{Path.GetFileName(stringsFiles[0])}"], built.Overwritten);
     }
@@ -262,7 +261,7 @@ public sealed class BuildModHandlerTests : IDisposable
         GitProbe.Run(Path.Combine(SourceFolder, ".git"), SourceFolder, "remote", "add", "origin", Remote);
 
         Assert.Single((await TestEditService.BuildModHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, IsSubmodule: true)], _noArchives)).Landed);
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, IsSubmodule: true)], _noArchives)).Value().Applied);
 
         var stringsFiles = Directory.GetFiles(Path.Combine(ModFolder, "Strings")).Select(file => $"Strings/{Path.GetFileName(file)}");
         var manifest = ManifestWritten().Require();
@@ -282,9 +281,9 @@ public sealed class BuildModHandlerTests : IDisposable
         _holder.Apply(SnapshotPlugins.Snapshot(Path.Combine(_root, "game"), _root, GameRelease.Fallout4, []));
 
         var built = Assert.Single((await TestEditService.BuildModHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null)], _noArchives)).Landed).Outcome;
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null)], _noArchives)).Value().Applied);
 
-        Assert.Equal(["Fixture.esp"], built.Compiled.Select(plugin => plugin.Item.Name));
+        Assert.Equal(["Fixture.esp"], built.Compiled.Select(plugin => plugin.Name));
         Assert.True(File.Exists(Path.Combine(ModFolder, "Fixture.esp")));
     }
 
@@ -295,8 +294,8 @@ public sealed class BuildModHandlerTests : IDisposable
         WriteInFolder(MetaIni, "[General]");
 
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
-        var built = await TestEditService.BuildModHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], "1.2.3")], _noArchives);
+        var built = (await TestEditService.BuildModHandler(_holder)
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], "1.2.3")], _noArchives)).Value();
 
         Assert.Empty(built.Refused);
 
@@ -314,23 +313,23 @@ public sealed class BuildModHandlerTests : IDisposable
         var provider = new PluginProvider.FromMod(ModName, ModFolder, SourceFolder);
         _holder.Apply(SnapshotPlugins.Snapshot(Directory.CreateDirectory(Path.Combine(_root, "game")).FullName, _root, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: provider)]));
-        Assert.Single((await TestEditService.InitModHandler(_holder).InitAsync([new ModToInit(ModName, SourceFolder, [])])).Landed);
+        Assert.Single((await TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync([new ModToDecompileAndCommit(ModName, SourceFolder, [])])).Value().Applied);
     }
 
-    private async Task<BuiltMod> Landed() => await Landed(_noArchives);
+    private async Task<ModBuilt> Landed() => await Landed(_noArchives);
 
-    private async Task<BuiltMod> Landed(InstanceToBuild instance, bool isSubmodule = false)
+    private async Task<ModBuilt> Landed(InstanceToBuild instance, bool isSubmodule = false)
     {
         var result = await Build(instance, isSubmodule);
         Assert.Empty(result.Refused);
-        return Assert.Single(result.Landed).Outcome;
+        return Assert.Single(result.Applied);
     }
 
-    private Task<SelectionResult<string, BuildRefusal, BuiltMod>> Build(InstanceToBuild instance, bool isSubmodule = false)
+    private async Task<BuildResult> Build(InstanceToBuild instance, bool isSubmodule = false)
     {
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
-        return TestEditService.BuildModHandler(_holder).BuildAsync(
-            [new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, isSubmodule)], instance);
+        return (await TestEditService.BuildModHandler(_holder).BuildAsync(
+            [new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, isSubmodule)], instance)).Value();
     }
 
     private void WriteSource(string configuration, params (string Path, string Text)[] assets)

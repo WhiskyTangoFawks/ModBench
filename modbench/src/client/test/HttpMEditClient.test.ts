@@ -167,7 +167,7 @@ async function exchange(verb: Verb, respond: () => Promise<Response>) {
   return { result, log, fetch, request };
 }
 
-const modToInit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, metadataFiles: ['meta.ini'] });
+const modToDecompileAndCommit = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, metadataFiles: ['meta.ini'] });
 const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${name}`, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], isSubmodule: true });
 const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], isSourceMod: false });
 const updateFacts = { statCache: '/instance/stat-cache' };
@@ -243,10 +243,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/records/000801%3AMyPatch.esp/compare', body: documentText },
     { name: 'getRecordsComparison', verb: (c) => c.getRecordsComparison(copies), ...same({ compare: comparison, missing: [] }),
       path: '/records/compare', body: { copies } },
-    { name: 'init', verb: (c) => c.init([modToInit('ModA'), modToInit('ModC')]),
+    { name: 'decompileAndCommit', verb: (c) => c.decompileAndCommit([modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModC')]),
       answer: { applied: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', refusal: 'ModProvidesNoPlugin', message: 'ModC provides no plugin.' }] },
       reads: { landed: [{ mod: 'ModA', plugins: [first] }], refused: [{ item: 'ModC', reason: 'ModC provides no plugin.' }] },
-      path: '/init', body: { mods: [modToInit('ModA'), modToInit('ModC')] } },
+      path: '/decompile-and-commit', body: { mods: [modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModC')] } },
     { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModC')], buildFacts),
       answer: {
         applied: [{
@@ -469,7 +469,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         text: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'Could not create "New.esp"' },
       { name: 'getRenameSourceChanges', verb: (c) => c.getRenameSourceChanges({ name: 'Old.esp', origin: 'ModA' }, 'New.esp'), status: 409,
         body: { detail: 'ModA already holds New.esp.', refusal: 'NameTaken' }, text: 'ModA already holds New.esp.', refusal: 'Could not rename the source of "Old.esp"' },
-      { name: 'init', verb: (c) => c.init([modToInit('ModA'), modToInit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile and commit 2 mods' },
+      { name: 'decompileAndCommit', verb: (c) => c.decompileAndCommit([modToDecompileAndCommit('ModA'), modToDecompileAndCommit('ModB')]), status: 500, body: 'git was not found on PATH.', text: 'git was not found on PATH.', refusal: 'Could not decompile and commit 2 mods' },
       { name: 'build', verb: (c) => c.build([modToBuild('ModA'), modToBuild('ModB')], buildFacts), status: 503, body: detail, text: detail, refusal: 'Could not build 2 mods' },
       { name: 'updateManifest', verb: (c) => c.updateManifest([modToUpdate('ModA'), modToUpdate('ModB')], updateFacts), status: 503, body: detail, text: detail, refusal: 'Could not update the manifest of 2 mods' },
       { name: 'restoreFromManifest', verb: (c) => c.restoreFromManifest([modToRestore('ModA')], restoreFacts), status: 503, body: detail, text: detail,

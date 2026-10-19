@@ -131,7 +131,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   it('passes an anonymous export default function, which no name can call', () => {
     const messages = lines(
       'export default function (tree) { tree.invalidate(); }',
-      'async function f(client) { await client.init(x); }',
+      'async function f(client) { await client.decompileAndCommit(x); }',
     );
 
     expect(messages).toEqual([]);
@@ -153,7 +153,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   });
 
   it('fails a re-read chained on a write with .finally, past a .then, as part of the caller', () => {
-    const messages = lint('function f(client, tree) { return client.init(x).then(report).finally(() => tree.invalidate()); }\n');
+    const messages = lint('function f(client, tree) { return client.decompileAndCommit(x).then(report).finally(() => tree.invalidate()); }\n');
 
     expect(messages).toHaveLength(1);
   });
@@ -219,14 +219,14 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   it('passes a helper that neither writes nor re-reads', () => {
     const messages = lines(
       'function say(reporter) { reporter.landed("Initialized."); }',
-      'async function f(client, reporter) { await client.init(x); say(reporter); }',
+      'async function f(client, reporter) { await client.decompileAndCommit(x); say(reporter); }',
     );
 
     expect(messages).toEqual([]);
   });
 
   it('judges a nested function apart from the function around it', () => {
-    const messages = lint('async function outer(c, t) { await c.init(x); async function inner() { await c.init(y); t.refresh(); } }\n');
+    const messages = lint('async function outer(c, t) { await c.decompileAndCommit(x); async function inner() { await c.decompileAndCommit(y); t.refresh(); } }\n');
 
     expect(messages).toHaveLength(1);
   });
@@ -249,7 +249,7 @@ describe('no-reread-after-write judges a function by what a call of it runs', ()
   });
 
   it('passes a write that re-reads nothing', () => {
-    const messages = lint('async function f(client, reporter) { await client.init(x); reporter.landed("Copied."); }\n');
+    const messages = lint('async function f(client, reporter) { await client.decompileAndCommit(x); reporter.landed("Copied."); }\n');
 
     expect(messages).toEqual([]);
   });

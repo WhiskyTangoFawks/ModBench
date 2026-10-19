@@ -16,7 +16,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
         var result = await scratch.InitAsync();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains("Perk", result.Message);
         Assert.Contains(MisshapedPerkPlugin.FormKey, result.Message);
@@ -33,7 +33,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
         var result = await scratch.InitAsync();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains("All FNAM strings should be the same", result.Message);
         Assert.DoesNotContain("EditorID", result.Message);
@@ -48,7 +48,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
         var result = await scratch.InitAsync();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains("blocked upstream: Mutagen #687", result.Message);
         Assert.DoesNotContain($"— {PluginDiagnosis.UnknownClass}:", result.Message);

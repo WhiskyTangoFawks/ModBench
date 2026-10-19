@@ -2,7 +2,6 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 using MEditService.Commands.Build;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
@@ -55,17 +54,17 @@ public sealed class ArchivePackerTests : IDisposable
 
     public void Dispose() => _scratch.Dispose();
 
-    private async Task<(byte[]? Archive, ItemRefused<string, ArchiveRefusal>? Refusal)> PackAsync(IArchiveVariant variant, params string[] files)
+    private async Task<(byte[]? Archive, ArchiveRefused? Refusal)> PackAsync(IArchiveVariant variant, params string[] files)
     {
         var source = new FakeSourceAdapter().Building(SourceFolder, new SourceToBuild(
             "Mod", [], [new ArchiveToPack(Archive, files)], [], [.. files.Select(file => new Asset(file, () => _folders.OpenFile(Assets, file)))]));
         var holder = new LoadOrderHolder();
         holder.Apply(SnapshotPlugins.Snapshot(_scratch, null, GameRelease.Fallout4, []));
 
-        var built = await TestEditService.BuildModHandler(holder, source: source, modFolders: _folders)
-            .BuildAsync([new ModToBuild("Mod", SourceFolder, Mod, [], null)], new InstanceToBuild(".mohidden", new ArchiveVariants(variant, variant), "stat-cache"));
+        var built = (await TestEditService.BuildModHandler(holder, source: source, modFolders: _folders)
+            .BuildAsync([new ModToBuild("Mod", SourceFolder, Mod, [], null)], new InstanceToBuild(".mohidden", new ArchiveVariants(variant, variant), "stat-cache"))).Value();
 
-        return (_folders.Written.GetValueOrDefault((Mod, Archive)), Assert.Single(built.Landed).Outcome.ArchivesRefused.SingleOrDefault());
+        return (_folders.Written.GetValueOrDefault((Mod, Archive)), Assert.Single(built.Applied).ArchivesRefused.SingleOrDefault());
     }
 
     private async Task<byte[]> PackedAsync(IArchiveVariant variant, params string[] files)
@@ -75,11 +74,11 @@ public sealed class ArchivePackerTests : IDisposable
         return Assert.IsType<byte[]>(archive);
     }
 
-    private async Task<ItemRefused<string, ArchiveRefusal>> RefusedAsync(IArchiveVariant variant, params string[] files)
+    private async Task<ArchiveRefused> RefusedAsync(IArchiveVariant variant, params string[] files)
     {
         var (archive, refusal) = await PackAsync(variant, files);
         Assert.Null(archive);
-        return Assert.IsType<ItemRefused<string, ArchiveRefusal>>(refusal);
+        return Assert.IsType<ArchiveRefused>(refusal);
     }
 
     private IArchiveReader Reader(GameRelease release, byte[] archive)

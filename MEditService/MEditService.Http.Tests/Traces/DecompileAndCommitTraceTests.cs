@@ -54,7 +54,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         await Loaded();
         var sourceFolder = Client.SourceFolderSentFor(Origin);
 
-        var response = await Client.PostAsJsonAsync("/init", new
+        var response = await Client.PostAsJsonAsync("/decompile-and-commit", new
         {
             mods = new[] { new { name = Origin, sourceFolder, metadataFiles = new[] { "meta.ini" } } },
         });
@@ -92,7 +92,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     {
         await Loaded();
 
-        var response = await Client.PostAsJsonAsync("/init", new
+        var response = await Client.PostAsJsonAsync("/decompile-and-commit", new
         {
             mods = new[] { new { name = Origin, metadataFiles = Array.Empty<string>() } },
         });
@@ -105,7 +105,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     {
         await Loaded();
 
-        var response = await Client.PostAsJsonAsync("/init", new
+        var response = await Client.PostAsJsonAsync("/decompile-and-commit", new
         {
             mods = new[] { new { name = Origin, metadataFiles = new[] { " " } } },
         });

@@ -101,7 +101,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         var result = await scratch.InitAsync(DeserializeThenAddAnNpc);
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         var extraFormKey = extra
             ?? throw new InvalidOperationException("Expected DeserializeThenAddAnNpc to run and set extra.");

@@ -1,16 +1,15 @@
 using System.Text.Json.Serialization;
-using MEditService.LoadOrder;
 
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod to init, by name, with the source folder its repository goes in and the mod manager's own files in
 /// its folder, which no build makes.</summary>
-public sealed record ModToInit(string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles);
+public sealed record ModToDecompileAndCommit(string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles);
 
 /// <summary>Why init refused (ADR-0019): each value is a different way out, and the
 /// endpoint's status is one switch over them.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum InitRefusal
+public enum DecompileAndCommitRefusal
 {
     None,
 
@@ -42,7 +41,3 @@ public enum InitRefusal
     /// <summary>No load order has been received, so the gesture has nothing to act on.</summary>
     NoLoadOrder,
 }
-
-/// <summary>A mod of the selection that landed whole: every plugin whose source its commit holds. A mod with any
-/// plugin refused is refused instead, and writes nothing.</summary>
-public sealed record InitializedMod(IReadOnlyList<PluginAddress> Plugins);

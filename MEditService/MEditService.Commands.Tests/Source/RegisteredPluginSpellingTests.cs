@@ -19,7 +19,7 @@ public sealed class RegisteredPluginSpellingTests
     {
         using var scratch = new ModFolderUnderAnInstanceRootScratch();
 
-        var result = await InitEveryPluginOf.ModAsync(scratch.LoadOrder, Origin);
+        var result = (await InitEveryPluginOf.ModAsync(scratch.LoadOrder, Origin)).Value();
 
         Assert.Empty(result.Refused);
         var repository = TestAdapters.Source().Open(TestMod.Of(scratch.Plugin, scratch.ModFolder), Release).Require();

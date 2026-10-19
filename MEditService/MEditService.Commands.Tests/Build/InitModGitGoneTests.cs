@@ -18,8 +18,6 @@ public sealed class InitModGitGoneTests
 
         var result = await InitEveryPluginOf.ModAsync(loadOrder, "AnyMod", source: new GitGoneSourceAdapter());
 
-        Assert.Equal(InitRefusal.GitUnavailable, result.SelectionRefusal?.Refusal);
-        Assert.Empty(result.Refused);
-        Assert.Empty(result.Landed);
+        Assert.Equal(DecompileAndCommitRefusal.GitUnavailable, result.WholeSelectionRefusal().Refusal);
     }
 }

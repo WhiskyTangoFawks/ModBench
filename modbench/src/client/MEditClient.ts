@@ -157,14 +157,14 @@ interface InitializedMod {
   plugins: readonly PluginAddress[];
 }
 
-/** Init's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
-export interface InitOutcome {
+/** Decompile and commit's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
+export interface DecompileAndCommitOutcome {
   landed: readonly InitializedMod[];
   refused: readonly ItemRefusal<string>[];
 }
 
-/** A mod to init, with its installation files and the mod manager's own files in its folder (ADR-0013). */
-export type InitMod = components['schemas']['InitModRequest'];
+/** A mod to decompile and commit, with its installation files and the mod manager's own files in its folder (ADR-0013). */
+export type DecompileAndCommitMod = components['schemas']['DecompileAndCommitModRequest'];
 
 /** A mod to build: the source folder whose build configuration names it, its folder and its installation files
  *  (ADR-0013). */
@@ -328,7 +328,7 @@ export interface MEditClient {
   // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
   moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
-  init(mods: readonly InitMod[], options?: { onProgress?: (status: DecompileAndCommitProgress) => void }): Promise<InitOutcome | WriteRefused>;
+  decompileAndCommit(mods: readonly DecompileAndCommitMod[], options?: { onProgress?: (status: DecompileAndCommitProgress) => void }): Promise<DecompileAndCommitOutcome | WriteRefused>;
   // Over the unsaved documents mEdit holds. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getCreateChanges(
     plugin: PluginAddress, recordType: string,

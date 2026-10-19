@@ -65,7 +65,7 @@ internal static class Wire
 
     /// <summary>Each mod as one with no file of the mod manager's.</summary>
     internal static Task<HttpResponseMessage> Init(this HttpClient client, IEnumerable<string> mods) =>
-        client.PostAsJsonAsync("/init", new
+        client.PostAsJsonAsync("/decompile-and-commit", new
         {
             mods = mods.Select(name => new
             {

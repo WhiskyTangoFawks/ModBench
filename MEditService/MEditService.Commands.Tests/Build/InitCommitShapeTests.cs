@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Build;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -63,9 +62,9 @@ public sealed class InitCommitShapeTests : IDisposable
 
         var result = await Init(TestAdapters.Mutagen(), source);
 
-        Assert.Empty(result.Landed);
+        Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, InitRefusal.AlreadyInitialized), (refused.Item, refused.Refusal));
+        Assert.Equal((ModName, DecompileAndCommitRefusal.AlreadyInitialized), (refused.Item, refused.Refusal));
         Assert.Contains("decompile", refused.Message, StringComparison.Ordinal);
         Assert.Empty(source.InitCalls);
     }
@@ -78,9 +77,9 @@ public sealed class InitCommitShapeTests : IDisposable
 
         var result = await Init(TestAdapters.Mutagen(), source);
 
-        Assert.Empty(result.Landed);
+        Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, InitRefusal.AlreadyInitialized), (refused.Item, refused.Refusal));
+        Assert.Equal((ModName, DecompileAndCommitRefusal.AlreadyInitialized), (refused.Item, refused.Refusal));
         Assert.Contains(_modFolder, refused.Message, StringComparison.Ordinal);
         Assert.Empty(source.InitCalls);
     }
@@ -96,9 +95,9 @@ public sealed class InitCommitShapeTests : IDisposable
 
         var result = await Init(new RoundTripFailsFor("Second.esp"), source);
 
-        Assert.Empty(result.Landed);
+        Assert.Empty(result.Applied);
         var refusedMod = Assert.Single(result.Refused);
-        Assert.Equal(InitRefusal.RoundTripFailed, refusedMod.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, refusedMod.Refusal);
         Assert.Contains("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
         Assert.Empty(source.InitCalls);
     }
@@ -127,9 +126,9 @@ public sealed class InitCommitShapeTests : IDisposable
 
         var result = await Init(new RoundTripFailsFor("Second.esp"), source);
 
-        Assert.Empty(result.Landed);
+        Assert.Empty(result.Applied);
         var refusedMod = Assert.Single(result.Refused);
-        Assert.Equal(InitRefusal.RoundTripFailed, refusedMod.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, refusedMod.Refusal);
         Assert.Contains("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
         Assert.Empty(source.InitCalls);
     }
@@ -143,7 +142,7 @@ public sealed class InitCommitShapeTests : IDisposable
         var result = await Init(new RoundTripFailsForEvery("First.esp", "Second.esp"));
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, InitRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
+        Assert.Equal((ModName, DecompileAndCommitRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
         Assert.Contains("FirstNpc", refused.Message, StringComparison.Ordinal);
         Assert.Contains("SecondNpc", refused.Message, StringComparison.Ordinal);
     }
@@ -159,7 +158,7 @@ public sealed class InitCommitShapeTests : IDisposable
         var result = await Init(new RoundTripFailsFor("First.esp"), source);
 
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, InitRefusal.PluginsRefused), (refused.Item, refused.Refusal));
+        Assert.Equal((ModName, DecompileAndCommitRefusal.PluginsRefused), (refused.Item, refused.Refusal));
         Assert.Contains("FirstNpc", refused.Message, StringComparison.Ordinal);
         Assert.Contains("Second_en.STRINGS", refused.Message, StringComparison.Ordinal);
         Assert.Empty(source.InitCalls);
@@ -217,10 +216,10 @@ public sealed class InitCommitShapeTests : IDisposable
         return Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
     }
 
-    private Task<SelectionResult<string, InitRefusal, InitializedMod>> Init() => Init(TestAdapters.Mutagen());
+    private Task<DecompileAndCommitResult> Init() => Init(TestAdapters.Mutagen());
 
-    private Task<SelectionResult<string, InitRefusal, InitializedMod>> Init(IPluginAdapter adapter, ISourceAdapter? source = null) =>
-        InitEveryPluginOf.ModAsync(LoadOrder(), ModName, adapter, source: source);
+    private async Task<DecompileAndCommitResult> Init(IPluginAdapter adapter, ISourceAdapter? source = null) =>
+        (await InitEveryPluginOf.ModAsync(LoadOrder(), ModName, adapter, source: source)).Value();
 
     private LoadOrderSnapshot LoadOrder()
     {

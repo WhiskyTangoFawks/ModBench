@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import { isRefused, type InitOutcome, type PluginAddress } from '../client';
+import { isRefused, type DecompileAndCommitOutcome, type PluginAddress } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
@@ -23,7 +23,7 @@ export interface DecompileAndCommitDeps {
   pluginsView: string;
 }
 
-type DecompiledAndCommitted = GestureResult<InitOutcome['landed'][number], string>;
+type DecompiledAndCommitted = GestureResult<DecompileAndCommitOutcome['landed'][number], string>;
 
 /** commands.md, `decompile and commit`: the mods of Mods rows, plugin rows, a column header, or the palette's
  *  selection, in one call. A plugin no mod provides is refused here, since mEdit is sent mods. */
@@ -70,7 +70,7 @@ function reportDecompiledAndCommitted(
 }
 
 interface DecompileAndCommitReport {
-  refused: InitOutcome['refused'];
+  refused: DecompileAndCommitOutcome['refused'];
   plugins: readonly PluginAddress[];
   refusedPlugins: readonly ItemRefusal<string>[];
 }

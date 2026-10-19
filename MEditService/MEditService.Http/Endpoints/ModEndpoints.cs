@@ -1,6 +1,5 @@
 using MEditService.Commands;
 using MEditService.Commands.Build;
-using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Http.Endpoints;
@@ -20,19 +19,19 @@ internal static class ModEndpoints
                 "build did not make stays. A mod is refused before it writes, or lands naming each file it replaced that held other bytes, and " +
                 "what failed when a read or write stopped it part way. " +
                 "Progress is the build-progress notification.")
-            .Produces<BuildResponse>()
+            .Produces<BuildResult>()
             .ProducesProblem(400)
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        app.MapPost("/init", Init)
-            .WithName("InitMod")
+        app.MapPost("/decompile-and-commit", DecompileAndCommit)
+            .WithName("DecompileAndCommitMod")
             .WithTags("Mods")
             .WithDescription(
                 "Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every " +
                 "plugin it provides, the files no installation file yields as its assets, and a build configuration naming " +
                 "its folder as the output, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification.")
-            .Produces<InitResponse>()
+            .Produces<DecompileAndCommitResult>()
             .ProducesProblem(400)
             .ProducesProblem(500)
             .ProducesProblem(503);
@@ -52,7 +51,7 @@ internal static class ModEndpoints
     }
 
     // decompile-and-commit: the selection (commands.md, A selection is one gesture); the load order says each mod's plugins and folder.
-    internal static async Task<IResult> Init(InitRequest req, InitModHandler initModHandler, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> DecompileAndCommit(DecompileAndCommitRequest req, DecompileAndCommitModHandler handler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(ModEndpoints));
         var mods = req.Mods ?? [];
@@ -65,12 +64,9 @@ internal static class ModEndpoints
         }
 
         return await EndpointMapping.Answered(
-            "Init", logger,
-            initModHandler.InitAsync([.. mods.Select(mod => new ModToInit(mod.Name, mod.SourceFolder, mod.MetadataFiles ?? []))]),
-            EndpointMapping.Refusal,
-            landed => new InitializedModResponse(landed.Item, landed.Outcome.Plugins),
-            refused => new ModInitRefusal(refused.Item, refused.Refusal, refused.Message),
-            (applied, refused) => new InitResponse(applied, refused));
+            "Decompile and commit", logger,
+            handler.DecompileAndCommitAsync([.. mods.Select(mod => new ModToDecompileAndCommit(mod.Name, mod.SourceFolder, mod.MetadataFiles ?? []))]),
+            EndpointMapping.Refusal);
     }
 
     internal static IResult ChangeBuildConfiguration(
@@ -111,15 +107,7 @@ internal static class ModEndpoints
             buildModHandler.BuildAsync(
                 [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, mod.MetadataFiles ?? [], mod.Version, mod.IsSubmodule))],
                 new InstanceToBuild(req.ExcludedSuffix, variants, req.StatCache)),
-            EndpointMapping.Refusal,
-            landed => new BuiltModResponse(
-                landed.Item,
-                [.. landed.Outcome.Compiled.Select(c => new CompiledPlugin(c.Item.Name, c.Item.Origin, c.Outcome))],
-                [.. landed.Outcome.Refused.Select(r => new CompileRefused(r.Item, r.Refusal, r.Message))],
-                [.. landed.Outcome.ArchivesRefused.Select(r => new ArchivePackRefusal(r.Item, r.Refusal, r.Message))],
-                landed.Outcome.Overwritten, landed.Outcome.Failure, landed.Outcome.Uncommitted, landed.Outcome.Unpushed),
-            refused => new ModBuildRefusal(refused.Item, refused.Refusal, refused.Message),
-            (applied, refused) => new BuildResponse(applied, refused));
+            EndpointMapping.Refusal);
     }
 }
 
@@ -164,35 +152,9 @@ internal sealed record Ba2VariantRequest(uint Version, bool Compressed);
 
 internal sealed record BsaVariantRequest(uint Version, uint ArchiveFlags, uint FileFlags);
 
-/// <summary>The mods to init (ADR-0013).</summary>
-internal sealed record InitRequest(IReadOnlyList<InitModRequest> Mods);
+/// <summary>The mods to decompile and commit (ADR-0013).</summary>
+internal sealed record DecompileAndCommitRequest(IReadOnlyList<DecompileAndCommitModRequest> Mods);
 
 /// <summary>A mod by name, the folder its repository goes in, and the mod manager's own files in its folder, by
 /// forward-slash path, which no build makes.</summary>
-internal sealed record InitModRequest(string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles);
-
-/// <summary>A mod of the selection that landed: the plugins whose source its commit holds.</summary>
-internal sealed record InitializedModResponse(string Mod, IReadOnlyList<PluginAddress> Plugins);
-
-/// <summary>A mod of the selection that wrote nothing: the typed refusal, and the message naming each refused plugin
-/// and why.</summary>
-internal sealed record ModInitRefusal(string Item, InitRefusal Refusal, string Message);
-
-/// <summary>Landed or refused, per mod (ADR-0019), never the status of the call.</summary>
-internal sealed record InitResponse(IReadOnlyList<InitializedModResponse> Applied, IReadOnlyList<ModInitRefusal> Refused);
-
-/// <summary>A mod of the selection that built: the plugins that compiled, the plugins and archives refused, which
-/// stay as they were, each file it replaced that held other bytes, what stopped it part way, Uncommitted and Unpushed.</summary>
-internal sealed record BuiltModResponse(
-    string Mod, IReadOnlyList<CompiledPlugin> Compiled, IReadOnlyList<CompileRefused> Refused,
-    IReadOnlyList<ArchivePackRefusal> ArchivesRefused, IReadOnlyList<string> Overwritten, string? Failure, bool Uncommitted, bool Unpushed);
-
-/// <summary>An archive of a built mod that was not packed, by its path in the mod folder.</summary>
-internal sealed record ArchivePackRefusal(string Item, ArchiveRefusal Refusal, string Message);
-
-/// <summary>A mod of the selection that wrote nothing: the typed refusal, and the message naming the
-/// way out.</summary>
-internal sealed record ModBuildRefusal(string Item, BuildRefusal Refusal, string Message);
-
-/// <summary>Applied or refusal, per mod (ADR-0019), never the status of the call.</summary>
-internal sealed record BuildResponse(IReadOnlyList<BuiltModResponse> Applied, IReadOnlyList<ModBuildRefusal> Refused);
+internal sealed record DecompileAndCommitModRequest(string Name, string SourceFolder, IReadOnlyList<string> MetadataFiles);
