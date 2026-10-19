@@ -5,7 +5,7 @@ import { sep } from 'node:path';
 import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
-import { OVERWRITE_ORIGIN } from './codecs/modlistText';
+import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import { factsOf, listDir } from './files';
 import type { FileOrigin, ModFolders, OriginFile, OriginFiles, OriginFolder } from './instanceAdapter';
 import { isExcludedName, isOwnTemp, manifestFileName, overwriteDir } from './layout';

@@ -10,9 +10,6 @@ export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 export { filesWinningFirst } from './pluginsProvided';
 export { dataFolderFile } from './gameFolder/dataFolder';
 
-/** The reserved origin of the files the game wrote at run time (ADR-0012). */
-export { OVERWRITE_ORIGIN } from './codecs/modlistText';
-
 export type { ArchiveReader } from './archiveReader';
 export { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder } from './archiveNames';
 export { samePath } from './samePath';

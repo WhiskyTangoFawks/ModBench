@@ -8,8 +8,10 @@ export type PluginPlace = components['schemas']['PluginPlace'];
 /** A strings file or archive, with the stamp Mod Management read of it. */
 export type StampedFile = components['schemas']['StampedFile'];
 
-// Ends in `/`, which no folder name holds, so no mod shares it. Equal to mEdit's PluginOrigin.
+// The two origins that are not mods end in `/`, which no folder name holds, so no mod shares them.
+// Equal to mEdit's PluginOrigin.
 export const DATA_DIRECTORY_ORIGIN = 'Data/';
+export const OVERWRITE_ORIGIN = 'overwrite/';
 
 /** A plugin's file name as the game compares it. */
 export const pluginNameKey = (name: string): string => name.toLowerCase();

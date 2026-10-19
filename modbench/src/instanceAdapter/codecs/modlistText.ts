@@ -9,13 +9,8 @@ import { editLines, entryLineIndices, stripBom } from '../../loadOrderFileCodec/
 /** The per-profile mod list, one line per mod in Mod override order. */
 export const MODLIST_FILE_NAME = 'modlist.txt';
 
-/** MO2's overwrite folder, a reserved origin (ADR-0012) that no modlist line takes.
- *  The Instance adapter joins it to the instance root. */
+/** MO2's overwrite folder, which no modlist line takes. */
 export const OVERWRITE_DIR_NAME = 'overwrite';
-
-/** The origin of Overwrite's files. It ends in `/`, which no folder name holds, so no mod shares
- *  it. Equal to mEdit's PluginOrigin.Overwrite. */
-export const OVERWRITE_ORIGIN = `${OVERWRITE_DIR_NAME}/`;
 
 const SEPARATOR_SUFFIX = '_separator';
 
