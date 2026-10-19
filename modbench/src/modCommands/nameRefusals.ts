@@ -2,12 +2,14 @@ import type { EntryRef, TakenNames } from '../instanceAdapter/instanceAdapter';
 
 export const EMPTY_MOD_NAME = 'A mod name cannot be empty.';
 
+/** One wording for create and install. */
 export const modNameTakenRefusal = (name: string): string =>
   `A mod named "${name}" already exists. Install its next release from Downloads, or uninstall it to install anew.`;
 
+/** How the manager matches an entry's name: two entries with one key are one name to it. */
 export type EntryKey = (entry: EntryRef) => string;
 
-export function unclaimedModName(key: EntryKey, { modFolders }: TakenNames, name: string): string | undefined {
+export function takenModNameRefusal(key: EntryKey, { modFolders }: TakenNames, name: string): string | undefined {
   const trimmed = name.trim();
   if (!trimmed) return undefined;
   const wanted = key({ kind: 'mod', name: trimmed });
