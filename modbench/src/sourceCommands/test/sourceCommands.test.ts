@@ -1,11 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { fakeInstanceAdapter, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, readingFixture, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { sourceCommands } from '../sourceCommands';
 
-const SOURCES: ReadonlyMap<string, string> = new Map([['ModA', '/instance/source/ModA'], ['ModB', '/instance/source/Old ModB']]);
-
-const sourceModsOf = (folders: ReadonlyMap<string, string>) => ({ folders, folderOf: (mod: string) => folders.get(mod), notes: [] });
+const SOURCES = { ModA: '/instance/source/ModA', ModB: '/instance/source/Old ModB' };
 
 const fakeAdapter = (answers: InstanceAnswers = {}, gameRelease = 'Fallout4') =>
   fakeInstanceAdapter(readingFixture({ gameRelease, sourceMods: sourceModsOf(SOURCES) }), answers).adapter;
@@ -75,7 +73,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
 
-    await sourceCommands({ client, adapter: fakeAdapter({}, 'NoSuchRelease') }).build(['ModA']);
+    await sourceCommands({ client, adapter: fakeAdapter({}, 'SkyrimSE') }).build(['ModA']);
 
     expect(client.calls.map((call) => call.args[1])).toEqual([{ excludedSuffix: '.excluded', archives: null, statCache: '/instance/stat-cache' }]);
   });

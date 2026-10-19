@@ -23,7 +23,6 @@ export interface BuildDeps {
   /** Saves the mod's unsaved plugin source; answers the paths VS Code left unsaved. */
   saveUnsaved: (mod: string) => Promise<string[]>;
   modOfOrigin: (origin: string) => string | undefined;
-  /** The name of each mod that holds a repository. */
   sourceModNames: () => Iterable<string>;
   /** The Plugins view's id, whose bar a gesture from a plugin row runs under. */
   pluginsView: string;

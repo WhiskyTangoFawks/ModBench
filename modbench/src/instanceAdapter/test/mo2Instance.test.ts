@@ -146,6 +146,10 @@ describe('the MO2 Instance adapter', () => {
         expect([before, await adapter.activeProfile()]).toEqual(['Default', 'Other']);
       });
 
+      it('answers the release of the game the settings name', async () => {
+        expect(await adapter.gameRelease()).toBe('Fallout4');
+      });
+
       it('answers every profile', async () => {
         expect([...await adapter.profiles()].sort()).toEqual(['Default', 'Secondary']);
       });

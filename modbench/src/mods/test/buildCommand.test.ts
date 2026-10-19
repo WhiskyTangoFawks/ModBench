@@ -29,7 +29,7 @@ describe('modbench.mod.build', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const MOD_DIRS = new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB'], ['ModC', '/mods/ModC']]);
-  const SOURCE_DIRS = new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, `/source/${mod}`]));
+  const SOURCE_MODS = ['ModA', 'ModB', 'ModS'];
   const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
   const built = (mod: string, plugins: PluginAddress[] = [], refused: { item: PluginAddress; reason: string }[] = []) =>
     ({ mod, compiled: plugins.map((plugin) => compiledPluginFixture({ plugin })), refused, archivesRefused: [], overwritten: [] });
@@ -53,7 +53,7 @@ describe('modbench.mod.build', () => {
       },
       instance: instanceThatReads,
       reporter, problems: new BuildProblems(diagnostics),
-      modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()), sourceModNames: () => SOURCE_DIRS.keys(), pluginsView: 'modbench.pluginListTree',
+      modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()), sourceModNames: () => SOURCE_MODS, pluginsView: 'modbench.pluginListTree',
       sourceFiles: (origin) => sourceFiles(FILES, origin),
       saveUnsaved: (mod) => {
         const files = sourceFiles(FILES, mod);
@@ -69,7 +69,6 @@ describe('modbench.mod.build', () => {
     };
   }
 
-  const buildCalls = () => builds.map((mods) => [mods]);
 
   it('on a Mods row, builds the mod, and the Mods view\'s progress bar closes once the Instance loader has read again, and lands once', async () => {
     const client = new InMemoryMEditClient();
@@ -93,7 +92,7 @@ describe('modbench.mod.build', () => {
 
     await handler(row(PATCH));
 
-    expect(buildCalls()).toEqual([[['ModA']]]);
+    expect(builds).toEqual([['ModA']]);
     expect(progressSteps).toContain('progress opens on modbench.pluginListTree');
   });
 
@@ -104,7 +103,7 @@ describe('modbench.mod.build', () => {
 
     await handler({ webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Other.esp', plugin: OTHER } });
 
-    expect(buildCalls()).toEqual([[['ModB']]]);
+    expect(builds).toEqual([['ModB']]);
   });
 
   it('builds the mods of a selection once each, in one call', async () => {
@@ -115,7 +114,7 @@ describe('modbench.mod.build', () => {
 
     await handler(rows[0], rows);
 
-    expect(buildCalls()).toEqual([[['ModA', 'ModB']]]);
+    expect(builds).toEqual([['ModA', 'ModB']]);
     expect(reporter.landings).toEqual(['Built 2 mods.']);
   });
 
@@ -126,7 +125,7 @@ describe('modbench.mod.build', () => {
 
     await handler(new ModsRowStandIn('ModS'));
 
-    expect(buildCalls()).toEqual([[['ModS']]]);
+    expect(builds).toEqual([['ModS']]);
     expect(reporter.landings).toEqual(['Built "ModS".']);
   });
 
@@ -137,7 +136,7 @@ describe('modbench.mod.build', () => {
 
     await handler(new ModsRowStandIn('ModA'));
 
-    expect(buildCalls()).toEqual([]);
+    expect(builds).toEqual([]);
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not build: VS Code did not save its plugin source.', detail: unsaved }]);
     expect(reporter.landings).toEqual([]);
   });
@@ -151,7 +150,7 @@ describe('modbench.mod.build', () => {
     await handler(rows[0], rows);
 
     expect(progressSteps).toEqual([`save ${normalize('/instance/source/ModA')}`, `save ${normalize('/instance/source/ModB')}`]);
-    expect(buildCalls()).toEqual([]);
+    expect(builds).toEqual([]);
     expect(reporter.reports.map((r) => r.detail)).toEqual([unsaved]);
   });
 
@@ -191,7 +190,7 @@ describe('modbench.mod.build', () => {
 
     await handler(rows[0], rows);
 
-    expect(buildCalls()).toEqual([[['ModA', 'ModC']]]);
+    expect(builds).toEqual([['ModA', 'ModC']]);
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not build 1 of 2 mods.', detail: '"ModC" (no repository in the source folder builds it)' },
     ]);
@@ -366,7 +365,7 @@ describe('modbench.mod.build', () => {
     await handler();
 
     expect(showQuickPick).not.toHaveBeenCalled();
-    expect(buildCalls()).toEqual([[['ModB']]]);
+    expect(builds).toEqual([['ModB']]);
   });
 
   it('from the palette with only a mod that is not a source mod selected, sends it to source commands without the pick', async () => {
@@ -377,7 +376,7 @@ describe('modbench.mod.build', () => {
     await handler();
 
     expect(showQuickPick).not.toHaveBeenCalled();
-    expect(buildCalls()).toEqual([[['ModC']]]);
+    expect(builds).toEqual([['ModC']]);
     expect(reporter.reports.map((r) => r.detail)).toEqual(['"ModC" (no repository in the source folder builds it)']);
   });
 
@@ -390,7 +389,7 @@ describe('modbench.mod.build', () => {
     await handler();
 
     expect(showQuickPick).not.toHaveBeenCalled();
-    expect(buildCalls()).toEqual([]);
+    expect(builds).toEqual([]);
     expect(reporter.reports.map((r) => r.detail)).toEqual([detail]);
   });
 
@@ -404,7 +403,7 @@ describe('modbench.mod.build', () => {
 
     expect(showQuickPick).toHaveBeenCalledWith(
       [{ label: 'ModA' }, { label: 'ModB' }, { label: 'ModS' }], { canPickMany: true, placeHolder: 'Build which mods?' });
-    expect(buildCalls()).toEqual([[['ModA', 'ModB']]]);
+    expect(builds).toEqual([['ModA', 'ModB']]);
   });
 
   it('from the palette, builds nothing when the pick is dismissed', async () => {
@@ -414,7 +413,7 @@ describe('modbench.mod.build', () => {
 
     await handler();
 
-    expect(buildCalls()).toEqual([]);
+    expect(builds).toEqual([]);
     expect(reporter.reports).toEqual([]);
   });
 
