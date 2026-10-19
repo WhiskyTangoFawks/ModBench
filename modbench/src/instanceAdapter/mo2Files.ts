@@ -8,14 +8,16 @@ import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from './codecs/modlistText';
 import { factsOf, listDir } from './files';
 import type { FileOrigin, ModFolders, OriginFile, OriginFiles, OriginFolder } from './instanceAdapter';
-import { isExcludedName, isOwnTemp, overwriteDir } from './layout';
+import { isExcludedName, isOwnTemp, manifestFileName, overwriteDir } from './layout';
 import { originFolder, type Mo2Context } from './mo2Context';
 
-// The mod's metadata is MO2's, not the mod's content: nearly every mod has one.
-const NOT_CONTENT = new Set([MOD_META_FILE_NAME]);
+// The mod's metadata is MO2's and its manifest is Modbench's: neither is the mod's content.
+const notContentOf = (modName?: string): ReadonlySet<string> =>
+  new Set(modName === undefined ? [MOD_META_FILE_NAME] : [MOD_META_FILE_NAME, manifestFileName(modName)]);
 
 interface Walk {
   readonly root: string;
+  readonly notContent: ReadonlySet<string>;
   /** Lists the origin's root alone, never a folder below it. */
   readonly rootOnly: boolean;
   readonly files: OriginFile[];
@@ -35,7 +37,7 @@ const isExcluded = (relativePath: string): boolean => relativePath.split('/').so
 
 function keep(walk: Walk, path: string, sourcePath: string = path): void {
   const relativePath = relativeUnder(walk.root, path);
-  if (NOT_CONTENT.has(relativePath)) return;
+  if (walk.notContent.has(relativePath)) return;
   walk.files.push({ relativePath, path, sourcePath, excluded: isExcluded(relativePath), excludedByName: isExcludedName(relativePath) });
 }
 
@@ -102,8 +104,8 @@ async function walkDir(walk: Walk, dir: string, ancestors: ReadonlySet<string>):
   }
 }
 
-async function walkMod(folder: string, rootOnly: boolean): Promise<Walk> {
-  const walk: Walk = { root: folder, rootOnly, files: [], folders: [], notes: [] };
+async function walkMod(folder: string, modName: string, rootOnly: boolean): Promise<Walk> {
+  const walk: Walk = { root: folder, notContent: notContentOf(modName), rootOnly, files: [], folders: [], notes: [] };
   try {
     await walkDir(walk, folder, new Set([(await factsOf(folder)).realPath]));
   } catch (err) {
@@ -131,7 +133,7 @@ async function listWhole(walk: Walk, dir: string): Promise<void> {
 }
 
 async function listOverwrite(folder: string, rootOnly: boolean): Promise<Walk> {
-  const walk: Walk = { root: folder, rootOnly, files: [], folders: [], notes: [] };
+  const walk: Walk = { root: folder, notContent: notContentOf(), rootOnly, files: [], folders: [], notes: [] };
   try {
     await listWhole(walk, folder);
   } catch (err) {
@@ -148,6 +150,6 @@ export async function originFilesIn(context: Mo2Context, origin: FileOrigin, roo
   }
   const folder = await originFolder(context, origin, modFolders);
   if (folder === undefined) return { origin: origin.name, folder: undefined, files: [], folders: [], notes: [] };
-  const { files, folders, notes } = await walkMod(folder, rootOnly);
+  const { files, folders, notes } = await walkMod(folder, origin.name, rootOnly);
   return { origin: origin.name, folder, files, folders, notes };
 }
