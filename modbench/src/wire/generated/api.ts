@@ -1144,6 +1144,10 @@ export interface components {
         };
         /** @enum {string} */
         CopyDocumentKind: "OwnFile" | "ContainersFile" | "Rendered";
+        CopyItem: {
+            record: components["schemas"]["RecordAt"];
+            destination: components["schemas"]["PluginAddress"];
+        };
         CopyMissing: {
             formKey: string;
             plugin: components["schemas"]["PluginAddress"];
@@ -1154,6 +1158,15 @@ export interface components {
         CopyMissingReason: "RecordGone" | "NotInPlugin";
         /** @enum {string} */
         CopyMode: "New" | "Override";
+        CopyRecordRefused: {
+            item: components["schemas"]["CopyItem"];
+            refusal: components["schemas"]["RecordEditRefusal"];
+            message: string;
+        };
+        CopyRecordResult: {
+            applied: components["schemas"]["RecordCopied"][];
+            refused: components["schemas"]["CopyRecordRefused"][];
+        };
         CopyText: {
             plugin: components["schemas"]["PluginAddress"];
             documentText: string;
@@ -1168,6 +1181,12 @@ export interface components {
             name: string;
             folder: string;
             sourceFolder?: string | null;
+        };
+        CreateRecordChanges: {
+            formKey: string;
+            moves: components["schemas"]["SourceMove"][];
+            deletions: string[];
+            documents: components["schemas"]["DocumentChange"][];
         };
         /** @enum {string} */
         DecompileAndCommitPhase: "Parsing" | "Serializing" | "ReadingFiles" | "Committing";
@@ -1186,9 +1205,26 @@ export interface components {
             applied: components["schemas"]["PluginAddress"][];
             refused: components["schemas"]["DecompileRefused"][];
         };
+        DeleteRecordRefused: {
+            item: components["schemas"]["RecordAt"];
+            refusal: components["schemas"]["RecordEditRefusal"];
+            message: string;
+        };
+        DeleteRecordResult: {
+            applied: components["schemas"]["RecordDeleted"][];
+            refused: components["schemas"]["DeleteRecordRefused"][];
+        };
         DocumentChange: {
             path: string;
             text: string;
+        };
+        EditRecordChanges: {
+            formKey: string;
+            path: string;
+            moves: components["schemas"]["SourceMove"][];
+            deletions: string[];
+            documents: components["schemas"]["DocumentChange"][];
+            newFormKey?: string | null;
         };
         EnumMember: {
             value: string;
@@ -1581,43 +1617,25 @@ export interface components {
             instanceRoot: string;
             gameRelease: string;
         };
-        RecordAddress: {
+        RecordAt: {
+            plugin: components["schemas"]["PluginAddress"];
             formKey: string;
-            plugin: string;
-            origin: string;
         };
-        RecordAddressRefusal: {
-            item: components["schemas"]["RecordAddress"];
-            refusal: components["schemas"]["RecordEditRefusal"];
-            message: string;
+        RecordCopied: {
+            record: components["schemas"]["RecordAt"];
+            destination: components["schemas"]["PluginAddress"];
+            moves: components["schemas"]["SourceMove"][];
+            deletions: string[];
+            documents: components["schemas"]["DocumentChange"][];
+            newFormKey?: string | null;
         };
         RecordCopy: {
             formKey: string;
             plugin: components["schemas"]["PluginAddress"];
             documentText?: string | null;
         };
-        RecordCopyChanges: {
-            record: components["schemas"]["RecordAddress"];
-            destination: components["schemas"]["PluginAddress"];
-            moves: components["schemas"]["SourceMove"][];
-            deletions: string[];
-            documents: components["schemas"]["DocumentChange"][];
-        };
-        RecordCopyChangesResponse: {
-            applied: components["schemas"]["RecordCopyChanges"][];
-            refused: components["schemas"]["RecordCopyRefusal"][];
-        };
-        RecordCopyItem: {
-            record: components["schemas"]["RecordAddress"];
-            destination: components["schemas"]["PluginAddress"];
-        };
-        RecordCopyRefusal: {
-            item: components["schemas"]["RecordCopyItem"];
-            refusal: components["schemas"]["RecordEditRefusal"];
-            message: string;
-        };
         RecordCopyRequest: {
-            records: components["schemas"]["RecordAddress"][];
+            records: components["schemas"]["RecordAt"][];
             mode: components["schemas"]["CopyMode"];
             destinations: components["schemas"]["PluginAddress"][];
             replace: boolean;
@@ -1628,24 +1646,14 @@ export interface components {
             container?: string | null;
             position?: components["schemas"]["GridPosition"] | null;
         };
-        RecordCreateChangesResponse: {
-            formKey: string;
-            moves: components["schemas"]["SourceMove"][];
-            deletions: string[];
-            documents: components["schemas"]["DocumentChange"][];
-        };
-        RecordDeleteChanges: {
-            record: components["schemas"]["RecordAddress"];
-            moves: components["schemas"]["SourceMove"][];
-            deletions: string[];
-            documents: components["schemas"]["DocumentChange"][];
-        };
         RecordDeleteChangesRequest: {
-            records: components["schemas"]["RecordAddress"][];
+            records: components["schemas"]["RecordAt"][];
         };
-        RecordDeleteChangesResponse: {
-            applied: components["schemas"]["RecordDeleteChanges"][];
-            refused: components["schemas"]["RecordAddressRefusal"][];
+        RecordDeleted: {
+            record: components["schemas"]["RecordAt"];
+            moves: components["schemas"]["SourceMove"][];
+            deletions: string[];
+            documents: components["schemas"]["DocumentChange"][];
         };
         RecordDetail: {
             formKey: string;
@@ -1660,14 +1668,6 @@ export interface components {
         };
         RecordEditChangesRequest: {
             edit: components["schemas"]["RecordEditRequest"];
-        };
-        RecordEditChangesResponse: {
-            formKey: string;
-            path: string;
-            moves: components["schemas"]["SourceMove"][];
-            deletions: string[];
-            documents: components["schemas"]["DocumentChange"][];
-            newFormKey?: string | null;
         };
         /** @enum {string} */
         RecordEditRefusal: "None" | "PluginNotCompiledPlugin" | "PluginSourceUnreadable" | "PluginHasNoModFolder" | "PluginNotInLoadOrder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "ContainerCannotHoldType" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "HeldInAnotherRecordNotYetSupported" | "SourceUnitNotFound" | "SourceAccessFailed" | "UnsavedChanges" | "AmbiguousSourceUnit" | "FormIdOutsideFlagLimit" | "PartialFormFieldReadOnly" | "CannotBePartialForm" | "SyntheticMemberIndirectWrite" | "PersistentOnDeletedRecord" | "PersistentMoveDestinationUnknown" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "ChildSlotHeldByAnotherRecord" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "AlphaNotHeld" | "CodecRejected" | "CodecDroppedValue" | "NoTextInStringsLanguage" | "RecordParseFailed" | "GitUnavailable" | "NoLoadOrder";
@@ -1705,7 +1705,7 @@ export interface components {
             type: string;
             displayName: string;
         };
-        RecordWrittenResponse: {
+        RecordWritten: {
             formKey: string;
         };
         ReferenceResult: {
@@ -1769,7 +1769,7 @@ export interface components {
             leftDetached?: string | null;
         };
         ScriptCopyRequest: {
-            record: components["schemas"]["RecordAddress"];
+            record: components["schemas"]["RecordAt"];
             mode: components["schemas"]["CopyMode"];
             destination: components["schemas"]["PluginAddress"];
             replace: boolean;
@@ -3363,7 +3363,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordCreateChangesResponse"];
+                    "application/json": components["schemas"]["CreateRecordChanges"];
                 };
             };
             /** @description Bad Request */
@@ -3434,7 +3434,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordWrittenResponse"];
+                    "application/json": components["schemas"]["RecordWritten"];
                 };
             };
             /** @description Bad Request */
@@ -3805,7 +3805,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordAddress"];
+                    "application/json": components["schemas"]["RecordAt"];
                 };
             };
             /** @description No Content */
@@ -3945,7 +3945,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordEditChangesResponse"];
+                    "application/json": components["schemas"]["EditRecordChanges"];
                 };
             };
             /** @description Bad Request */
@@ -4083,7 +4083,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordWrittenResponse"];
+                    "application/json": components["schemas"]["RecordWritten"];
                 };
             };
             /** @description Bad Request */
@@ -4142,7 +4142,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RecordAddress"];
+                "application/json": components["schemas"]["RecordAt"];
             };
         };
         responses: {
@@ -4219,7 +4219,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordDeleteChangesResponse"];
+                    "application/json": components["schemas"]["DeleteRecordResult"];
                 };
             };
             /** @description Bad Request */
@@ -4270,7 +4270,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordCopyChangesResponse"];
+                    "application/json": components["schemas"]["CopyRecordResult"];
                 };
             };
             /** @description Bad Request */

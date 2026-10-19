@@ -15,7 +15,7 @@ public sealed class CopyAsOverrideTests
 
         var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false);
 
-        Assert.Null(result.OnlyLanded());
+        result.OnlyLanded();
 
         var document = mod.Document(mod.DestinationPlugin, mod.SourceNpc.ToString());
         Assert.NotNull(document);

@@ -70,17 +70,6 @@ internal sealed record RecordEditRequest(
 
 internal sealed record RecordEditChangesRequest(RecordEditRequest Edit);
 
-/// <summary>The changes an edit makes to plugin source, written nowhere: each move, then each deletion,
-/// then each document's new text at its absolute path once moved. A refusal is ProblemDetails, as the edit's is.</summary>
-internal sealed record RecordEditChangesResponse(
-    string FormKey, string Path, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents,
-    string? NewFormKey = null)
-{
-    internal static RecordEditChangesResponse Of(string formKey, string path, RecordEditChanges answer) =>
-        new(formKey, path,
-            answer.Changes.Moves, answer.Changes.Deletions, answer.Changes.Documents, answer.Outcome.NewFormKey);
-}
-
 /// <summary>Documents are the unsaved texts of every dirty plugin-source document.</summary>
 internal sealed record UnsavedDocumentsRequest(IReadOnlyList<DocumentChange> Documents);
 
@@ -93,24 +82,6 @@ internal sealed record UnsavedDocumentsRequest(IReadOnlyList<DocumentChange> Doc
 internal sealed record RecordCreateChangesRequest(
     string Origin, string RecordType, string? Container = null, GridPosition? Position = null);
 
-/// <summary>The changes creating a record makes to plugin source, written nowhere, as an edit's are.</summary>
-internal sealed record RecordCreateChangesResponse(
-    string FormKey, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents)
-{
-    internal static RecordCreateChangesResponse Of(string formKey, RecordEditChanges answer)
-    {
-        var (moves, deletions, documents) = answer.Changes;
-        return new(formKey, moves, deletions, documents);
-    }
-}
-
-/// <summary>A record and the plugin holding it (ADR-0012).</summary>
-internal sealed record RecordAddress(string FormKey, string Plugin, string Origin);
-
-/// <summary>A record of the selection that wrote nothing: the typed refusal, and the message naming
-/// the way out.</summary>
-internal sealed record RecordAddressRefusal(RecordAddress Item, RecordEditRefusal Refusal, string Message);
-
 internal sealed record CompareRecordsRequest(IReadOnlyList<RecordCopy> Copies);
 
 /// <summary>A copy of the comparison that no plugin gave: RecordGone when no registered
@@ -121,37 +92,11 @@ internal sealed record CopyMissing(string FormKey, PluginAddress Plugin, CopyMis
 /// when Missing is not empty.</summary>
 internal sealed record CompareRecordsResponse(CompareResult? Compare, IReadOnlyList<CopyMissing> Missing);
 
-internal sealed record RecordDeleteChangesRequest(IReadOnlyList<RecordAddress> Records);
-
-/// <summary>The changes deleting one record makes to plugin source, written nowhere, as an edit's are.</summary>
-internal sealed record RecordDeleteChanges(
-    RecordAddress Record, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents);
-
-/// <summary>Changes or refusal, per record (ADR-0019): a refusal is an item of the answer, never the status of the call.
-/// Made in the order answered, the items leave the records deleted one after another.</summary>
-internal sealed record RecordDeleteChangesResponse(IReadOnlyList<RecordDeleteChanges> Applied, IReadOnlyList<RecordAddressRefusal> Refused);
+internal sealed record RecordDeleteChangesRequest(IReadOnlyList<RecordAt> Records);
 
 /// <summary>A script's copy of one record into one destination.</summary>
-internal sealed record ScriptCopyRequest(RecordAddress Record, CopyMode Mode, PluginAddress Destination, bool Replace = false);
-
-/// <summary>The record a script's write made or left: the new FormKey of a copy as new or a create, otherwise the
-/// FormKey the copy keeps.</summary>
-internal sealed record RecordWrittenResponse(string FormKey);
+internal sealed record ScriptCopyRequest(RecordAt Record, CopyMode Mode, PluginAddress Destination, bool Replace = false);
 
 /// <summary>Copy's Argument and Options (commands.md, Record, `copy`). <see cref="Replace"/> lets an override copy over the one a destination holds.</summary>
 internal sealed record RecordCopyRequest(
-    IReadOnlyList<RecordAddress> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, bool Replace = false);
-
-/// <summary>The changes copying one record into one destination makes to plugin source, written nowhere, as an
-/// edit's are.</summary>
-internal sealed record RecordCopyChanges(
-    RecordAddress Record, PluginAddress Destination, IReadOnlyList<SourceMove> Moves,
-    IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents);
-
-internal sealed record RecordCopyItem(RecordAddress Record, PluginAddress Destination);
-
-internal sealed record RecordCopyRefusal(RecordCopyItem Item, RecordEditRefusal Refusal, string Message);
-
-/// <summary>Changes or refusal, per record and destination (ADR-0019). Made in the order answered, the items leave
-/// the records copied one after another.</summary>
-internal sealed record RecordCopyChangesResponse(IReadOnlyList<RecordCopyChanges> Applied, IReadOnlyList<RecordCopyRefusal> Refused);
+    IReadOnlyList<RecordAt> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, bool Replace = false);

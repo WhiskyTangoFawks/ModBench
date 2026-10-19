@@ -45,10 +45,10 @@ public sealed class CreateRecordChangesHandlerTests
         Assert.Equal(FixtureNextObjectId, outcome.NewFormKey);
         Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
         Assert.Equal(0x807u, mod.NextObjectId());
-        Assert.Empty(changes.Moves);
-        Assert.Empty(changes.Deletions);
-        Assert.Contains(changes.Documents, document => document.Text.Contains(FixtureNextObjectId, StringComparison.Ordinal));
-        var header = Assert.Single(changes.Documents, document => document.Path == Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin)));
+        Assert.Empty(changes.Require().Moves);
+        Assert.Empty(changes.Require().Deletions);
+        Assert.Contains(changes.Require().Documents, document => document.Text.Contains(FixtureNextObjectId, StringComparison.Ordinal));
+        var header = Assert.Single(changes.Require().Documents, document => document.Path == Path.Combine(mod.ModFolder, SourceModTree.HeaderDocumentFile(mod.ModFolder, mod.Plugin)));
         Assert.Equal(0x808u, HeaderDocument.NextObjectId(Encoding.UTF8.GetBytes(header.Text), GameRelease.Fallout4));
     }
 

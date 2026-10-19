@@ -126,7 +126,7 @@ internal static class Wire
     {
         var response = await client.PostAsJsonAsync("/records/delete-changes", new
         {
-            records = records.Select(r => new { formKey = r.FormKey, plugin = r.Plugin, origin = r.Origin }),
+            records = records.Select(r => new { formKey = r.FormKey, plugin = new { name = r.Plugin, origin = r.Origin } }),
         });
         if (!response.IsSuccessStatusCode) return response;
 
@@ -187,7 +187,7 @@ internal static class Wire
     {
         var response = await client.PostAsJsonAsync("/records/copy-changes", new
         {
-            records = records.Select(r => new { formKey = r.FormKey, plugin = r.Plugin, origin = r.Origin }),
+            records = records.Select(r => new { formKey = r.FormKey, plugin = new { name = r.Plugin, origin = r.Origin } }),
             mode,
             destinations = destinations.Select(d => new { name = d.Plugin, origin = d.Origin }),
             replace,

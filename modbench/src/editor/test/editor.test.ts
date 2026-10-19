@@ -331,7 +331,7 @@ describe('Referenced By from the palette asks about the record tab in focus', ()
     client.setQueryAnswer('getComparison', null);
     client.setQueryAnswer('getPlugins', activeA);
     client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/A.esp/Npcs/Npc.json' });
-    client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
+    client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN });
     client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], deletions: [], documents: [] });
     const { open } = makeEditor(client);
     const moving = open(OLD);
@@ -573,7 +573,7 @@ describe('a record tab whose record an edit of its FormID moved', () => {
     client.setQueryAnswer('getRecordsComparison', { compare: null, missing: [{ formKey: OLD, plugin: COPY_PLUGIN, reason: 'RecordGone', message: 'gone' }] });
     client.setQueryAnswer('getPlugins', activeA);
     client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/A.esp/Npcs/Npc.json' });
-    client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
+    client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN });
     const { open } = makeEditor(client);
     const tab = open(OLD);
     client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], deletions: [], documents: [] });
@@ -600,7 +600,7 @@ describe('an edit of a FormID, fired with no panel', () => {
     client.setQueryAnswer('getComparison', null);
     client.setQueryAnswer('getRecordsComparison', { compare: null, missing: [{ formKey: OLD, plugin: COPY_PLUGIN, reason: 'RecordGone', message: 'gone' }] });
     client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/A.esp/Npcs/Npc.json' });
-    client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
+    client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN });
     client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], deletions: [], documents: [] });
     const { open } = makeEditor(client);
     const [one, other, elsewhere] = [open(OLD), open(OLD), open(ELSEWHERE)];
@@ -705,7 +705,7 @@ describe('the Editor\'s file systems', () => {
 describe('a record file\'s tab', () => {
   const GUN = '000801:A.esp';
   const FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
-  const holding = (formKey: string) => ({ formKey, plugin: 'A.esp', origin: 'ModA' });
+  const holding = (formKey: string) => ({ formKey, plugin: { name: 'A.esp', origin: 'ModA' } });
   function fileClient(): InMemoryMEditClient {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
@@ -932,7 +932,7 @@ describe('a file whose plugin is disabled, or in a disabled mod', () => {
     const client = new InMemoryMEditClient();
     const copy = comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModA', isWinner: false, editorId: 'Gun' }]);
     client.setQueryAnswer('getReferences', []);
-    client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: 'A.esp', origin: 'ModA' });
+    client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' } });
     client.setQueryAnswer('getComparison', copy);
     client.setQueryAnswer('getRecordsComparison', { compare: copy, missing: [] });
     client.setQueryAnswer('getPlugins', plugins);
@@ -969,7 +969,7 @@ describe('a file whose plugin is disabled, or in a disabled mod', () => {
   it('is read again when the instance changes whether its plugin is disabled, and not when the instance changes otherwise', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
-    client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: 'A.esp', origin: 'ModA' });
+    client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' } });
     client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModA', isWinner: false, editorId: 'Gun' }]));
     client.setQueryAnswer('getPlugins', inactiveA);
     let disabled = true;
@@ -1003,7 +1003,7 @@ describe('a file whose plugin is overridden', () => {
   function clientFor(plugins: typeof inactiveA) {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
-    client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: 'A.esp', origin: 'ModA' });
+    client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' } });
     client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', origin: 'ModA', isWinner: false, editorId: 'Gun' }]));
     client.setQueryAnswer('getPlugins', plugins);
     return client;
@@ -1078,7 +1078,7 @@ describe('a record tab closed while its read is in flight', () => {
 describe('a record tab closed', () => {
   const GUN = '000801:A.esp';
   const FILE = '/source/ModA/plugin-source/A.esp/Weapons/Gun.json';
-  const holding = { formKey: GUN, plugin: 'A.esp', origin: 'ModA' };
+  const holding = { formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' } };
 
   it('before mEdit says which record its file holds shows nothing when the answer lands, nor is the record tab in focus', async () => {
     const client = new InMemoryMEditClient();
@@ -1237,7 +1237,7 @@ describe('what a record tab\'s webview posts', () => {
     function editing(): InMemoryMEditClient {
       const editing = client();
       editing.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/A.esp/Npcs/Npc.json' });
-      editing.setQueryAnswer('getRecordOfFile', { formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA' });
+      editing.setQueryAnswer('getRecordOfFile', { formKey: FORM_KEY, plugin: { name: 'A.esp', origin: 'ModA' } });
       editing.setQueryAnswer('getEditChanges', { applied: true, moves: [], deletions: [], documents: [] });
       return editing;
     }
@@ -1661,7 +1661,7 @@ describe('several records opened at once', () => {
     const client = severalClient();
     client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: GUN_FILE });
     client.setQueryFailureOnce('getRecordOfFile', { failed: 'unreachable' });
-    client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin });
+    client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: COPY_PLUGIN });
     const { openDocument } = makeEditor(client);
     const tab = await openDocument(fakeUri(GUN_FILE));
 

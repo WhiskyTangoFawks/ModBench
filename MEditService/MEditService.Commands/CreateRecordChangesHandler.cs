@@ -39,9 +39,15 @@ public sealed class CreateRecordChangesHandler
 
     /// <summary>The changes creating the record makes over the unsaved documents mEdit holds, which stand in for their
     /// files. The outcome carries the new FormKey.</summary>
-    public RecordEditChanges CreateRecord(
-        PluginAddress plugin, string recordType, string? container = null, GridPosition? position = null) =>
-        CreateRecord(plugin, recordType, container, position, new WriteSessions(_source, _unsaved.Current));
+    public Answer<CreateRecordChanges, RecordEditRefused> CreateRecord(
+        PluginAddress plugin, string recordType, string? container = null, GridPosition? position = null)
+    {
+        var (outcome, (moves, deletions, documents)) =
+            CreateRecord(plugin, recordType, container, position, new WriteSessions(_source, _unsaved.Current));
+        return outcome.AsWritten().Holds(out var written, out var refused)
+            ? new CreateRecordChanges(written.FormKey, moves, deletions, documents)
+            : refused;
+    }
 
     /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>
     internal RecordEditChanges CreateRecord(

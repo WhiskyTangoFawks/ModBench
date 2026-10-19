@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
-import type { CopyItem, RecordAddress } from '../../client';
+import type { CopyItem, RecordAt } from '../../client';
 import type { ItemRefusal } from '../../ports/selectionOutcome';
 import type { SourceEditing } from '../../textDocuments/sourceEditing';
 
@@ -45,14 +45,14 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-const carrying = ({ formKey, plugin, origin }: { formKey: string; plugin: string; origin: string }, label?: string) =>
-  ({ label, argument: { kind: 'record', plugin: { name: plugin, origin }, formKey } });
+const carrying = ({ formKey, plugin }: RecordAt, label?: string) =>
+  ({ label, argument: { kind: 'record', plugin, formKey } });
 
 let viewSelection: readonly unknown[] = [];
 const selectionsOfViews = new Map<string, readonly unknown[]>();
 const selections = { focused: () => viewSelection, of: (view: string) => selectionsOfViews.get(view) ?? [] };
 
-const RECORD_IDENTITY = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+const RECORD_IDENTITY = { formKey: '000801:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } };
 const RECORD_NODE = carrying(RECORD_IDENTITY);
 
 function recordingWrite(): { write: RecordWrite; writing: string[] } {
@@ -67,11 +67,11 @@ function recordingWrite(): { write: RecordWrite; writing: string[] } {
   };
 }
 
-async function referencedByCopy(record: RecordAddress, editorId: string) {
+async function referencedByCopy(record: RecordAt, editorId: string) {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getChildRecordTypes', []);
   client.setQueryAnswer('getReferences', [{
-    formKey: record.formKey, plugin: record.plugin, origin: record.origin, fieldPath: 'Keywords[0]',
+    formKey: record.formKey, plugin: record.plugin.name, origin: record.plugin.origin, fieldPath: 'Keywords[0]',
     recordType: 'npc_', recordTypeName: 'Non-Player Character', editorId,
   }]);
   const { provider } = await readReferencedBy(client, SILENT_LOG, '000001:A.esp', 'a list', () => ({ editable: true }));
@@ -80,7 +80,7 @@ async function referencedByCopy(record: RecordAddress, editorId: string) {
   return present(copy, 'its plugin copy');
 }
 
-const changes = (record: RecordAddress) => ({ record, moves: [], deletions: [], documents: [] });
+const changes = (record: RecordAt) => ({ record, moves: [], deletions: [], documents: [] });
 
 describe('registerRecordLifecycleCommands', () => {
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
@@ -105,7 +105,7 @@ describe('registerRecordLifecycleCommands', () => {
       await present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")();
 
       expect(client.calls.filter(c => c.method === 'getDeleteChanges').map(c => c.args[0])).toEqual([
-        [{ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' }],
+        [{ formKey: '000801:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } }],
       ]);
     });
   });
@@ -116,7 +116,7 @@ describe('registerRecordLifecycleCommands', () => {
     it('deletes the selection of the view it is bound in, not the view last selected in', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('getDeleteChanges', { applied: [].map(changes), refused: [] });
-      viewSelection = [carrying({ formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' })];
+      viewSelection = [carrying({ formKey: '000900:Other.esp', plugin: { name: 'Other.esp', origin: 'ModB' } })];
       selectionsOfViews.set('modbench.pluginListTree', [RECORD_NODE]);
       invoke(client, 'Delete');
 
@@ -140,9 +140,9 @@ describe('registerRecordLifecycleCommands', () => {
     const deleteRecords = (...args: unknown[]) =>
       present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")(...args);
 
-    const FIRST = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
-    const SECOND = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
-    const NON_COMPILED_PLUGIN = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' };
+    const FIRST = { formKey: '000801:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } };
+    const SECOND = { formKey: '000802:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } };
+    const NON_COMPILED_PLUGIN = { formKey: '000900:Other.esp', plugin: { name: 'Other.esp', origin: 'ModB' } };
     const SECOND_NODE = carrying(SECOND, 'SecondNpc');
     const NON_COMPILED_PLUGIN_NODE = carrying(NON_COMPILED_PLUGIN);
     const deleteCalls = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'getDeleteChanges').map(c => c.args[0]);
@@ -402,8 +402,8 @@ describe('registerRecordLifecycleCommands', () => {
 });
 
 describe('modbench.record.copy, one command over the selection: the mode picked, then the destinations', () => {
-  const SOURCE = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
-  const SECOND = { formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+  const SOURCE = { formKey: '000801:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } };
+  const SECOND = { formKey: '000802:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } };
   const SECOND_NODE = carrying(SECOND, 'Second');
   const PATCH = { name: 'Patch.esp', origin: 'PatchMod' };
   const OTHER = { name: 'Other.esp', origin: 'OtherMod' };
@@ -412,7 +412,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   afterEach(() => { viewSelection = []; });
   beforeEach(function dropUnansweredPicksSoTheyDoNotAnswerTheNextTest() { showQuickPick.mockReset(); });
 
-  const copyChanges = (record: RecordAddress, destination: { name: string; origin: string }) =>
+  const copyChanges = (record: RecordAt, destination: { name: string; origin: string }) =>
     ({ record, destination, moves: [], deletions: [], documents: [] });
 
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
@@ -584,7 +584,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   it('asks nothing of a record\'s own plugin picked for a mixed selection, which holds the record and no copy to replace, and says nothing of it', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
-    const elsewhere = { formKey: '000900:Patch.esp', plugin: 'Patch.esp', origin: 'PatchMod' };
+    const elsewhere = { formKey: '000900:Patch.esp', plugin: { name: 'Patch.esp', origin: 'PatchMod' } };
     client.setQueryAnswerOnce('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }]);
     client.setQueryAnswerOnce('getRecordHolders', [PATCH]);
     client.setCommandResult('getCopyChanges', {
