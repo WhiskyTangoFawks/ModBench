@@ -53,9 +53,7 @@ export function registerPluginMoveCommand(
         return { applied: true, outcome: { landed: [], refused: plugins.map((item) => ({ item, reason: `The drop is on "${drop.name}", which is moving.` })) } };
       }
       try {
-        const { activeProfile, pluginsLoadedWithNoLine } = instance.value;
-        const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(
-          activeProfile, plugins, drop, (pluginsLoadedWithNoLine ?? []).map(({ name }) => name)));
+        const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
         return result.applied
           ? { applied: true, outcome: { landed: plugins, refused: [] } }
           : { applied: false, refusal: 'Could not move plugins.', detail: result.refusal };

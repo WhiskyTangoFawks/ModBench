@@ -41,12 +41,11 @@ async function changeDeciding<A extends unknown[], T extends object>(
   }
 }
 
-const overOrder = (adapter: InstanceAdapter, profile: string) => (decide: DecidePluginOrder) => adapter.changePluginOrder(profile, decide);
+const overOrder = (adapter: InstanceAdapter) => async (decide: DecidePluginOrder) =>
+  adapter.changePluginOrder(await adapter.activeProfile(), decide);
 
-async function changePluginOrder(adapter: InstanceAdapter, profile: string, decide: DecidePluginOrder): Promise<CommandResult> {
-  const outcome = await changeDeciding(overOrder(adapter, profile), (order) => ({ changes: decide(order), decided: {} }));
-  return outcome.applied ? { applied: true, wrote: outcome.wrote } : outcome;
-}
+const overProvided = (adapter: InstanceAdapter) => async (decide: DecidePluginOrderOverProvided) =>
+  adapter.changePluginOrderOverProvided(await adapter.activeProfile(), decide);
 
 /** One plugin's target state — the check box's own shape, where several rows toggled at once can
  *  each ask for a different state. */
@@ -59,9 +58,9 @@ export interface PluginParticipation {
 //  selection in one write (commands.md, "A selection is one gesture") — every entry lands or is
 //  refused by name, whatever state each one asks for.
 async function setPluginsParticipation(
-  adapter: InstanceAdapter, profile: string, entries: readonly PluginParticipation[],
+  adapter: InstanceAdapter, entries: readonly PluginParticipation[],
 ): Promise<SelectionResult<string>> {
-  const outcome = await changeDeciding(overOrder(adapter, profile), (order) => {
+  const outcome = await changeDeciding(overOrder(adapter), (order) => {
     const known = new Set(order.map((entry) => pluginKey(entry.name)));
     const found = entries.filter((entry) => known.has(pluginKey(entry.name)));
     const refused: ItemRefusal<string>[] = entries.filter((entry) => !known.has(pluginKey(entry.name)))
@@ -77,9 +76,9 @@ async function setPluginsParticipation(
 // `setPluginsParticipation`, one state for the whole selection — the menu and the key's own
 //  shape, which never mixes directions in one gesture.
 function setPluginsEnabled(
-  adapter: InstanceAdapter, profile: string, pluginNames: readonly string[], enabled: boolean,
+  adapter: InstanceAdapter, pluginNames: readonly string[], enabled: boolean,
 ): Promise<SelectionResult<string>> {
-  return setPluginsParticipation(adapter, profile, pluginNames.map((name) => ({ name, enabled })));
+  return setPluginsParticipation(adapter, pluginNames.map((name) => ({ name, enabled })));
 }
 
 /** Where a drag landed in the Plugins tree. */
@@ -101,21 +100,21 @@ async function orderFactsFrom(masters: PluginMasters): Promise<PluginOrderFactsO
 }
 
 async function reorderPlugins(
-  { adapter, client: masters }: { adapter: InstanceAdapter; client: PluginMasters }, profile: string, plugins: readonly PluginAddress[], drop: Drop,
-  loadedWithNoLine: readonly string[],
+  { adapter, client: masters }: { adapter: InstanceAdapter; client: PluginMasters }, plugins: readonly PluginAddress[], drop: Drop,
 ): Promise<CommandResult> {
   const pluginNames = plugins.map((plugin) => plugin.name);
-  const noLine = new Set(loadedWithNoLine.map(pluginKey));
   const factsOf = await orderFactsFrom(masters);
   // Settled against the order the change lands on, so a tree a generation behind plugins.txt
   // cannot land the block at a stale index.
-  return changePluginOrder(adapter, profile, (order) => {
+  const outcome = await changeDeciding(overProvided(adapter), (order, provided) => {
     const names = order.map((p) => p.name);
+    const noLine = new Set(provided.kind === 'listed' ? provided.loadedWithNoLine.map(pluginKey) : []);
     // A line for a plugin the game loads with no line does not place it.
     const refusal = moveOrderRefusal(names.filter((name) => !noLine.has(pluginKey(name))), pluginNames, drop, factsOf);
     if (refusal !== undefined) throw new Error(refusal);
-    return [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(names, pluginNames, drop) }];
+    return { changes: [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(names, pluginNames, drop) }], decided: {} };
   });
+  return outcome.applied ? { applied: true, wrote: outcome.wrote } : outcome;
 }
 
 interface PluginLinesDelta {
@@ -144,9 +143,7 @@ function pluginLinesDelta(listed: readonly string[], { plugins, loadedWithNoLine
 }
 
 async function syncPlugins(adapter: InstanceAdapter): Promise<PluginSyncResult> {
-  const profile = await adapter.activeProfile();
-  const overProvided = (decide: DecidePluginOrderOverProvided) => adapter.changePluginOrderOverProvided(profile, decide);
-  const outcome = await changeDeciding(overProvided, (order, provided): Decision<PluginLinesDelta | { gameFolderNotFound: true }> => {
+  const outcome = await changeDeciding(overProvided(adapter), (order, provided): Decision<PluginLinesDelta | { gameFolderNotFound: true }> => {
     // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder
     // not found is told once, as the instance's state (common.md, States, story 5).
     if (provided.kind === 'unresolved') return { changes: [], decided: { gameFolderNotFound: true } };

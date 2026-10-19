@@ -3,10 +3,12 @@
 
 import { basename, parse } from 'node:path';
 import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCodec/pluginsText';
+import { present } from '../ports/present';
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
 import { get, ignoreSkippedLink, listEntries, listFolders, readOrAbsent, rename, undoAll, type Undo, withLock, write } from './files';
 import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
 import { fileInFolder, pluginOrderFiles, profilesDir } from './layout';
+import type { ReadingSource } from './instanceReading';
 import { originFolder, type Mo2Context } from './mo2Context';
 
 type Mo2PluginRename = Pick<InstanceAdapter, 'renamePlugin' | 'originHoldsPlugin'>;
@@ -60,7 +62,7 @@ function withLocks<T>(keys: readonly string[], task: () => Promise<T>): Promise<
   return first === undefined ? task() : withLock(first, () => withLocks(rest, task));
 }
 
-export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
+export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Mo2PluginRename {
   const { instanceRoot } = context;
 
   // Each file of a folder that `named` picks, renamed by `target`. Two files that land on one name
@@ -97,9 +99,9 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
   }
 
   // Everything the rename refuses, read before any write.
-  async function plan(orders: readonly string[], origin: FileOrigin, from: string, to: string, gameRelease: string | undefined) {
-    const rule = pluginCompanionRule(gameRelease);
-    if (rule === undefined) throw new Error(`No table of the files named for a plugin for the release ${gameRelease ?? 'of this game'}`);
+  async function plan(orders: readonly string[], origin: FileOrigin, from: string, to: string) {
+    const { gameRelease } = await source.settings();
+    const rule = present(pluginCompanionRule(gameRelease), `the files named for a plugin of ${gameRelease}`);
     if (!namedFile(to)) throw new Error(`Not a valid plugin file name: "${to}"`);
     const folder = await originFolder(context, origin, 'list');
     if (folder === undefined) throw notAFileOf(origin, from);
@@ -112,10 +114,10 @@ export function mo2PluginRename(context: Mo2Context): Mo2PluginRename {
       return folder !== undefined && (await entriesIn(folder)).some((entry) => !entry.isFolder && sameName(entry.name, name));
     },
 
-    async renamePlugin(origin, from, to, gameRelease) {
+    async renamePlugin(origin, from, to) {
       const orders = await orderFiles();
       await withLocks(orders, async () => {
-        const { lines, files } = await plan(orders, origin, from, to, gameRelease);
+        const { lines, files } = await plan(orders, origin, from, to);
         const undos: Undo[] = [];
         try {
           for (const move of files) {
