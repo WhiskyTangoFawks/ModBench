@@ -313,9 +313,8 @@ internal sealed class RelationReads(
             .ToList();
     }
 
-    /// <summary>Every link a plugin read from its source tree carries to a FormKey no active plugin
-    /// holds (engine-defined FormIds exempt), placed on its file in the source <paramref name="sourceOf"/>
-    /// answers. A binary's links are not its tree's.</summary>
+    /// <summary>Each link from a plugin read from its source tree to a FormKey no active plugin holds,
+    /// on its file in the source <paramref name="sourceOf"/> answers. A binary's links are not its tree's.</summary>
     public IReadOnlyList<MissingReferenceOnFile> GetReferencesToMissingRecordsOnFiles(
         Func<PluginAddress, ISourceRepositoryReads?> sourceOf)
     {
