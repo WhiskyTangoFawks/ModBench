@@ -310,10 +310,6 @@ export default defineConfig(
         rules: { 'no-restricted-syntax': restrictedSyntax(['message']) },
     },
     {
-        files: ['src/drivingLib/reporter.ts', 'src/dialog.ts'],
-        rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('message')) },
-    },
-    {
         files: ['src/instanceAdapter/mo2Watch.ts'],
         rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('watcher')) },
     },
@@ -321,6 +317,10 @@ export default defineConfig(
         files: ['src/downloads/**/*.ts', 'src/drivingLib/**/*.ts', 'src/editor/**/*.ts'],
         ignores: NOT_PRODUCTION,
         rules: { 'no-restricted-syntax': restrictedSyntax([...EVERYWHERE_IN_SRC, 'hostFs']) },
+    },
+    {
+        files: ['src/drivingLib/reporter.ts', 'src/dialog.ts'],
+        rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('message')) },
     },
     // ADR-0014: the activation file and its wiring decide nothing.
     {
