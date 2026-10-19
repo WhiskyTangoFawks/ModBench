@@ -11,10 +11,10 @@ from tests.fixture_medit import (
     RECIPE_FILE,
     Fixture,
     changed,
+    decompile_and_commit_mod,
     files_and_bytes,
     fixture_medit,
     holding_unsaved,
-    decompile_and_commit_mod,
     source_folder,
     window_of,
 )
