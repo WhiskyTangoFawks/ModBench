@@ -26,8 +26,6 @@ function terminalEnvSetting(): string {
   return TERMINAL_ENV_SETTING[process.platform === 'win32' || process.platform === 'darwin' ? process.platform : 'linux'];
 }
 
-/** The PYTHONPATH a terminal starts with: the user's terminal.integrated.env setting for this platform
- *  if it sets one, else the extension host's own. */
 function inheritedPythonPath(): string | undefined {
   const env = vscode.workspace.getConfiguration('terminal.integrated').get<Record<string, string | null>>(terminalEnvSetting());
   return env?.PYTHONPATH ?? process.env.PYTHONPATH;
