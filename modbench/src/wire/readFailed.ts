@@ -11,7 +11,7 @@ const IN_FRONT_END_WORDS = {
 type ReadFailedKind = keyof typeof IN_FRONT_END_WORDS;
 
 /** A read that did not land, as data (ADR-0019). `refusal` is mEdit's own sentence, on `refused` and
- *  `no-load-order`, a read not yet answerable; `cause` is this side's. None carries the transport's verb, path or status. */
+ *  `no-load-order`, a read not yet answerable; `cause` is this side's. None carries the transport's verb or status. */
 export interface ReadFailed {
   readonly failed: ReadFailedKind;
   readonly refusal?: string;

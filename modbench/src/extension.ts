@@ -104,7 +104,7 @@ interface OpenedInstance {
 
 interface Opened {
   facts: InstanceFacts;
-  instance?: Instance;
+  handing?: LoadOrderComing;
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
 }
 
@@ -117,7 +117,7 @@ function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened 
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
       }));
-      return { facts: factsOf(instance), instance, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
+      return { facts: factsOf(instance), handing: handingOf(instance), side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
     notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, side: buildBareSide }),
   });
@@ -257,7 +257,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const editor = createEditor({
     context, meditClient, outputChannel,
     loadOrderComing: loadOrderComing(
-      opened.instance && handingOf(opened.instance), meditClient),
+      opened.handing, meditClient),
     reporterFor,
     ask: askQuestion,
     focusedView,

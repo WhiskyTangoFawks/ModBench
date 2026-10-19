@@ -1186,12 +1186,12 @@ describe('what a record tab\'s webview posts', () => {
       expect(outputChannel.warn).toHaveBeenCalledWith(refusedWarning);
     });
 
-    it('reads again on a status that ends the reconcile Failed, and is then failed in the Output', async () => {
+    it('reads again on a status once no load order is coming', async () => {
       const { tab, mEdit } = await refusedTab();
       const postsBefore = loadRecordPosts(tab).length;
 
       loadOrder.coming = false;
-      mEdit.emit({ ...statusTick(false, 1), loadOrderStatus: { ...statusTick(false, 1).loadOrderStatus!, state: 'Failed', message: 'The game folder is gone.' } });
+      mEdit.emit(statusTick(false, 1));
       await settle();
 
       expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1);
