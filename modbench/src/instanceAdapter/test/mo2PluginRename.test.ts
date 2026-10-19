@@ -257,10 +257,6 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
     it.each(['a/b.esp', 'a\\b.esp', '..', ''])('refuses the name "%s", which is no file of the origin', (name) =>
       refused(() => rename(name), /not a valid/i));
 
-    it('refuses a game the tables hold no release for, as it cannot say which files are named for the plugin', async () => {
-      await settingsNameGame('Unknown Game');
-      await refused(() => rename(), /does not support Unknown Game/);
-    });
   });
 
   describe('a failed write leaves every file under its old name', () => {

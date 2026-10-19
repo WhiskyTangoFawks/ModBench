@@ -3,6 +3,7 @@
 
 import { basename, parse } from 'node:path';
 import { parsePlugins, pluginKey, renamePluginInText } from '../loadOrderFileCodec/pluginsText';
+import { present } from '../ports/present';
 import { pluginCompanionRule, type PluginCompanionRule } from '../tables/gamePaths';
 import { get, ignoreSkippedLink, listEntries, listFolders, readOrAbsent, rename, undoAll, type Undo, withLock, write } from './files';
 import type { FileOrigin, InstanceAdapter } from './instanceAdapter';
@@ -100,8 +101,7 @@ export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Mo2
   // Everything the rename refuses, read before any write.
   async function plan(orders: readonly string[], origin: FileOrigin, from: string, to: string) {
     const { gameRelease } = await source.settings();
-    const rule = pluginCompanionRule(gameRelease);
-    if (rule === undefined) throw new Error(`No table of the files named for a plugin for the release ${gameRelease ?? 'of this game'}`);
+    const rule = present(pluginCompanionRule(gameRelease), `the files named for a plugin of ${gameRelease}`);
     if (!namedFile(to)) throw new Error(`Not a valid plugin file name: "${to}"`);
     const folder = await originFolder(context, origin, 'list');
     if (folder === undefined) throw notAFileOf(origin, from);

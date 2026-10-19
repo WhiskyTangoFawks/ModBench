@@ -22,7 +22,6 @@ const moving = (...names: string[]) => names.map((name) => ({ name, origin: 'Som
 const lines = (...names: string[]) => names.map((name) => ({ name, enabled: true }));
 const fakeOver = (...names: string[]) => fakeInstanceAdapter(readingFixture({ pluginOrder: lines(...names) }));
 const handed = (changes: readonly PluginOrderChange[], profile = PROFILE) => [{ verb: 'changePluginOrder', profile, changes }];
-const handedOverProvided = (changes: readonly PluginOrderChange[]) => [{ verb: 'changePluginOrderOverProvided', profile: PROFILE, changes }];
 const synced = (changes: readonly PluginOrderChange[], profile = PROFILE) => [{ verb: 'changePluginOrderOverProvided', profile, changes }];
 
 describe('reorderPlugins hands the adapter a move decided against the order it holds', () => {
@@ -31,7 +30,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
 
     await pluginCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(moving('Base.esp'), { kind: 'after', name: 'Gone.esp' });
 
-    expect(fake.calls).toEqual(handedOverProvided([{ kind: 'move', plugins: ['Base.esp'], toIndex: 1 }]));
+    expect(fake.calls).toEqual(synced([{ kind: 'move', plugins: ['Base.esp'], toIndex: 1 }]));
   });
 
   it('a drop on a row the order does not list is refused by name, and no change is handed over', async () => {
