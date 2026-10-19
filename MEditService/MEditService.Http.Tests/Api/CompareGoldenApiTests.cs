@@ -20,7 +20,7 @@ public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : ICl
         recordCount = p.GetProperty("recordCount"),
         isImmutable = p.GetProperty("isImmutable"),
         origin = p.GetProperty("origin"),
-        masterIssues = p.GetProperty("masterIssues"),
+        missingMasters = p.GetProperty("missingMasters"),
         inLoadOrder = p.GetProperty("inLoadOrder"),
         hasMatchingRecords = p.GetProperty("hasMatchingRecords"),
     };

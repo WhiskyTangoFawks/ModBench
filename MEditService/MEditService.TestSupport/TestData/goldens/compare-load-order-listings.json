@@ -138,8 +138,8 @@
       "isLight": false,
       "isMaster": true,
       "loadOrderIndex": 0,
-      "masterIssues": [],
       "masters": [],
+      "missingMasters": [],
       "name": "Base.esm",
       "origin": "Data/",
       "recordCount": 4
@@ -151,10 +151,10 @@
       "isLight": false,
       "isMaster": false,
       "loadOrderIndex": 1,
-      "masterIssues": [],
       "masters": [
         "Base.esm"
       ],
+      "missingMasters": [],
       "name": "Mid.esp",
       "origin": "Data/",
       "recordCount": 3
@@ -166,10 +166,10 @@
       "isLight": false,
       "isMaster": false,
       "loadOrderIndex": 2,
-      "masterIssues": [],
       "masters": [
         "Base.esm"
       ],
+      "missingMasters": [],
       "name": "Top.esp",
       "origin": "Data/",
       "recordCount": 2
