@@ -1,8 +1,8 @@
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.RepositoriesLib;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
+using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
