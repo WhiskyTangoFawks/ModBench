@@ -156,7 +156,7 @@ export class PluginsTreeProvider
   }
 
   standingMessage(): string | undefined {
-    return messageLine(managerRunningMessage(this.instanceValue), this.facts.rows.laterReadFailureMessage(instanceLastGoodReadFailure(this.instance)));
+    return messageLine(managerRunningMessage(this.instanceValue), this.facts.rows.readFailureMessage(instanceLastGoodReadFailure(this.instance)));
   }
 
   // The game folder not found (common.md, States 5), a failed index (plugins.md, States 6), no rows

@@ -438,42 +438,47 @@ describe('PluginFacts — the record index failure message (plugins.md, States, 
   });
 });
 
-describe('PluginFacts — a later read that failed (common.md, States, story 6)', () => {
+describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6)', () => {
   const failing = held({ laterReadFailure: [{ sourceRelativePath: 'A.esp/Npc.json', message: 'Unexpected end at 12.' }, { sourceRelativePath: 'A.esp/Cell.json', message: 'Duplicate FormKey.' }] });
 
   it('says every failure, naming the plugin and each file and message', () => {
     const facts = new PluginFacts();
     facts.refreshed([failing, held({ name: 'B.esp', laterReadFailure: [{ sourceRelativePath: 'B.esp/X.json', message: 'bad' }] })]);
 
-    expect(facts.laterReadFailureMessage()).toBe(
+    expect(facts.readFailureMessage()).toBe(
       'Showing the last good read: "A.esp" (SomeMod): A.esp/Npc.json: Unexpected end at 12.; A.esp/Cell.json: Duplicate FormKey.; "B.esp" (SomeMod): B.esp/X.json: bad',
     );
   });
 
-  it('says a scan that failed before any answered failed to load', () => {
-    const facts = new PluginFacts();
+  describe.each([
+    ['malformed-plugin scan', (facts: PluginFacts) => facts.diagnosed([]), (facts: PluginFacts) => facts.scanFailed('503')],
+    ['plugin list', (facts: PluginFacts) => facts.refreshed([]), (facts: PluginFacts) => facts.listFailed('503')],
+  ] as const)('the %s', (read, answer, fail) => {
+    it('says it failed to load when it failed before any answered', () => {
+      const facts = new PluginFacts();
 
-    facts.scanFailed('503');
+      fail(facts);
 
-    expect(facts.laterReadFailureMessage()).toBe('Failed to load: the malformed-plugin scan: 503');
-  });
+      expect(facts.readFailureMessage()).toBe(`Failed to load: the ${read}: 503`);
+    });
 
-  it('says a scan that failed after one answered shows the last good read', () => {
-    const facts = new PluginFacts();
-    facts.diagnosed([]);
+    it('says the last good read shows when it failed after one answered', () => {
+      const facts = new PluginFacts();
+      answer(facts);
 
-    facts.scanFailed('503');
+      fail(facts);
 
-    expect(facts.laterReadFailureMessage()).toBe('Showing the last good read: the malformed-plugin scan: 503');
-  });
+      expect(facts.readFailureMessage()).toBe(`Showing the last good read: the ${read}: 503`);
+    });
 
-  it('says nothing once the next scan answers', () => {
-    const facts = new PluginFacts();
-    facts.scanFailed('503');
+    it('says nothing once the next read answers', () => {
+      const facts = new PluginFacts();
+      fail(facts);
 
-    facts.diagnosed([]);
+      answer(facts);
 
-    expect(facts.laterReadFailureMessage()).toBeUndefined();
+      expect(facts.readFailureMessage()).toBeUndefined();
+    });
   });
 
   it('puts the instance read failure and every failed read under one prefix', () => {
@@ -482,7 +487,7 @@ describe('PluginFacts — a later read that failed (common.md, States, story 6)'
     facts.refreshed([failing]);
     facts.scanFailed('503');
 
-    expect(facts.laterReadFailureMessage('mo2 gone')).toBe(
+    expect(facts.readFailureMessage('mo2 gone')).toBe(
       'Showing the last good read: mo2 gone; "A.esp" (SomeMod): A.esp/Npc.json: Unexpected end at 12.; A.esp/Cell.json: Duplicate FormKey.; the malformed-plugin scan: 503',
     );
   });
@@ -493,7 +498,7 @@ describe('PluginFacts — a later read that failed (common.md, States, story 6)'
 
     facts.refreshed([held({ laterReadFailure: answer })]);
 
-    expect(facts.laterReadFailureMessage()).toBeUndefined();
+    expect(facts.readFailureMessage()).toBeUndefined();
     expect(facts.laterReadFailures().size).toBe(0);
   });
 });

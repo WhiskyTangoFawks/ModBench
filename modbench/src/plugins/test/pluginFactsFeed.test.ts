@@ -62,13 +62,14 @@ describe('PluginFactsFeed', () => {
     expect(changes).toHaveBeenCalled();
   });
 
-  it('names an unreadable plugin list on the rows, logs it as an error, and answers undefined', async () => {
+  it('names an unreadable plugin list on the rows and the message line, logs it as an error, and answers undefined', async () => {
     const { feed, client, logged } = feedOver();
     client.setQueryFailure('getPlugins', { failed: 'unreachable' });
 
     expect(await feed.reconciled([])).toBeUndefined();
 
     expect(feed.rows.expansion(A)).toEqual({ kind: 'error', message: 'mEdit could not be reached.' });
+    expect(feed.rows.readFailureMessage()).toBe('Failed to load: the plugin list: mEdit could not be reached.');
     expect(logged.items.map((l) => l.level)).toEqual(['error']);
   });
 
@@ -157,13 +158,13 @@ describe('PluginFactsFeed', () => {
     await feed.reconciled([]);
     await warned;
 
-    expect(feed.rows.laterReadFailureMessage()).toContain('503');
+    expect(feed.rows.readFailureMessage()).toContain('503');
 
     const before = changes.mock.calls.length;
     await feed.reconciled([]);
     await vi.waitFor(() => { expect(changes.mock.calls.length).toBeGreaterThan(before + 1); });
 
-    expect(feed.rows.laterReadFailureMessage()).toBeUndefined();
+    expect(feed.rows.readFailureMessage()).toBeUndefined();
   });
 
   it('logs a failed scan once, and again only when the reason changes', async () => {
@@ -201,7 +202,7 @@ describe('PluginFactsFeed', () => {
 
     expect(logged.items.map((l) => l.level)).toEqual(['warn']);
     expect(changes.mock.calls.length).toBe(before);
-    expect(feed.rows.laterReadFailureMessage()).toBeUndefined();
+    expect(feed.rows.readFailureMessage()).toBeUndefined();
   });
 
   it('drops a scan answer that lands after a newer event', async () => {
@@ -253,12 +254,12 @@ describe('PluginFactsFeed', () => {
       const { feed, client } = feedOver();
       client.setQueryAnswer('getPlugins', [failing('bad')]);
       await feed.refresh();
-      expect(feed.rows.laterReadFailureMessage()).toContain('bad');
+      expect(feed.rows.readFailureMessage()).toContain('bad');
 
       client.setQueryAnswer('getPlugins', [held()]);
       await feed.refresh();
 
-      expect(feed.rows.laterReadFailureMessage()).toBeUndefined();
+      expect(feed.rows.readFailureMessage()).toBeUndefined();
     });
   });
 });

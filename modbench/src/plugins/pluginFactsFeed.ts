@@ -25,7 +25,7 @@ export interface PluginFactsFeedDeps {
 }
 
 export type PluginRowFacts = Pick<PluginFacts,
-  'expansion' | 'indexFailureMessage' | 'laterReadFailureMessage' | 'noRecordMatchMessage' | 'hiddenByRecordFilter'
+  'expansion' | 'indexFailureMessage' | 'readFailureMessage' | 'noRecordMatchMessage' | 'hiddenByRecordFilter'
   | 'icon' | 'description' | 'tooltipLines' | 'contextFlags' | 'conditions'>;
 
 /** mEdit's answers about each plugin, ordered into the facts the Plugins tree's rows read: the
@@ -123,6 +123,7 @@ export class PluginFactsFeed implements vscode.Disposable {
       const message = errorMessage(err);
       this.deps.log('error', `[PluginFactsFeed] reading the backend's plugin list failed: ${message}`);
       this.facts.unreachable(message);
+      this.facts.listFailed(message);
       this.changed.fire();
       return undefined;
     }
