@@ -7,12 +7,15 @@ import type { RecordArgument } from '../drivingLib/recordArgument';
 import { recordLabel } from '../wire/recordLabel';
 import { conditionedContextValue, type PluginConditions } from '../drivingLib/recordRowContext';
 import { failureReason, isReadFailed, localFailure } from '../wire/readFailed';
+import { pluginCanBeEdited } from '../wire/pluginEditable';
+import { messageLine } from '../drivingLib/messageLine';
+import { pluginAddressKey } from '../wire/pluginAddress';
 
 function openCommand(row: { readonly argument: RecordArgument }): vscode.Command {
   return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: row.argument }] };
 }
 
-export type ConditionsOf = (plugin: PluginAddress) => PluginConditions;
+type ConditionsOf = (plugin: PluginAddress) => PluginConditions;
 
 class ReferencedByHolderNode extends vscode.TreeItem {
   readonly argument: RecordArgument;
@@ -130,10 +133,6 @@ async function referrerNode({ list, conditionsOf, client, log }: Lookups, copies
 const byTypeThenLabel = (a: ReferencedByReferrerNode, b: ReferencedByReferrerNode): number =>
   a.recordTypeName.localeCompare(b.recordTypeName) || a.name.localeCompare(b.name);
 
-function messageLine(...parts: (string | undefined)[]): string | undefined {
-  return parts.filter(part => part !== undefined).join(' ') || undefined;
-}
-
 const NO_REFERENCES_MESSAGE = 'No references found.';
 const INDEXING_MESSAGE = 'mEdit is still indexing plugins: this list may not be complete.';
 
@@ -155,11 +154,23 @@ export interface ReferencedByList {
   message: string | undefined;
 }
 
-export type ReferencedByClient = Pick<MEditClient, 'getReferences' | 'getChildRecordTypes' | 'loadOrderStatus'>;
+export type ReferencedByClient = Pick<MEditClient, 'getReferences' | 'getChildRecordTypes' | 'getPlugins' | 'loadOrderStatus'>;
+
+// What mEdit answers of each plugin; a plugin it does not answer for, or an answer that cannot be
+// read, is not editable.
+async function conditionsRead(client: Pick<MEditClient, 'getPlugins'>, log: Log): Promise<ConditionsOf> {
+  const plugins = await client.getPlugins().catch((error: unknown) => localFailure(errorMessage(error)));
+  if (isReadFailed(plugins)) {
+    log.warn(`[ReferencedBy] getPlugins failed: ${failureReason(plugins)}`);
+    return () => ({ editable: false });
+  }
+  const editable = new Set(plugins.filter(pluginCanBeEdited).map(pluginAddressKey));
+  return (plugin) => ({ editable: editable.has(pluginAddressKey(plugin)) });
+}
 
 /** What references `target`, read once (editor-referenced-by.md, Asking, story 4); `list` tells this list from every other asked for. */
 export async function readReferencedBy(
-  client: ReferencedByClient, log: Log, target: string, list: string, conditionsOf: ConditionsOf,
+  client: ReferencedByClient, log: Log, target: string, list: string,
 ): Promise<ReferencedByList> {
   const read = await client.getReferences(target).catch((error: unknown) => localFailure(errorMessage(error)));
   const indexing = client.loadOrderStatus?.conflictsComputed ? undefined : INDEXING_MESSAGE;
@@ -168,7 +179,7 @@ export async function readReferencedBy(
     log.error(`[ReferencedBy] getReferences(${target}) failed: ${reason}`);
     return { provider: new ReferencedByTreeProvider([new ErrorNode(reason)]), message: indexing };
   }
-  const lookups = { list, conditionsOf, client, log };
+  const lookups = { list, conditionsOf: await conditionsRead(client, log), client, log };
   const referrers = (await Promise.all(groupBy(read, r => r.formKey).map(copies => referrerNode(lookups, copies))))
     .flatMap(referrer => referrer ?? []).sort(byTypeThenLabel);
   return {

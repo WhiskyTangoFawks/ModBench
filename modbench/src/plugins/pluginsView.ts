@@ -13,7 +13,6 @@ import type { Instance } from '../instanceLoader/instance';
 import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider';
 import { type PluginsTreeNode } from './pluginRows';
 import type { PluginFactsClient } from './pluginFactsFeed';
-import type { PluginConditions } from '../drivingLib/recordRowContext';
 import type { RecordBrowser } from './RecordBrowser';
 import { publishPluginProblems } from './loadDiagnostics';
 import { PLUGINS_KEY_ARGS, pluginsKeyContext } from './gestureEntry';
@@ -70,8 +69,6 @@ export interface PluginsView extends vscode.Disposable {
   /** The load order Editing could not put: its refusal is this view's message line too. */
   loadOrderPut: SyncFailureReport;
   copyValue: CopyValueAdapter;
-  /** What mEdit has told the view of whether a plugin is a compiled plugin, and its editability. */
-  conditionsOf: (plugin: PluginAddress) => PluginConditions;
   progress: PluginsViewProgress;
   narrator: ReconcileNarrator;
 }
@@ -150,7 +147,6 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     view, nameFilter,
     followed: { get selection() { return selected.rows(); }, onDidChangeSelection: view.onDidChangeSelection }, loadOrderPut,
     copyValue: { text: pluginsCopyValueText(selected.rows), reporterTag: 'pluginListTree.copyValue' },
-    conditionsOf: (plugin) => tree.facts.rows.conditions(plugin),
     progress, narrator: indexStatus.narrator,
     dispose: () => { disposable.dispose(); },
   };

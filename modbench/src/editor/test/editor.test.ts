@@ -3,7 +3,6 @@ import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, uriFrom, fakeUri } from '../../test/vscodeMock';
 import type { ReferencesViewInput } from '../referencesView';
-import type { ConditionsOf } from '../referencedByList';
 
 const h = vi.hoisted(() => ({
   referencesView: { enabled: true, inputs: [] as ReferencesViewInput[] },
@@ -179,7 +178,6 @@ let loadOrder = fakeLoadOrder();
 function makeEditor(
   client = new InMemoryMEditClient(), recordViewIds = [] as readonly string[], modFacts = NO_MODS,
   locateRecord = vi.fn((_record: object) => Promise.resolve<vscode.Location | { refused: string } | undefined>(inItsDocument())),
-  conditionsOf: ConditionsOf = () => ({ editable: false }),
 ) {
   const focusedView = createFocusedView();
   const outputChannel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -194,11 +192,11 @@ function makeEditor(
     ask: vi.fn(),
     focusedView,
     recordViewIds,
-    recordWrite: (command) => command(),
+    writeProgressView: 'test.view',
+    instance: { refresh: () => Promise.resolve(undefined) },
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
     modFacts,
     locateRecord,
-    conditionsOf,
   });
   const provider = h.editorProviders.get('modbench.record');
   if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
@@ -376,14 +374,15 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
     expect(await labelsOf(input)).toEqual(['Rifle']);
   });
 
-  it('states each plugin copy by what the Plugins view knows of its plugin', async () => {
+  it('states each plugin copy by whether mEdit answers its plugin can be edited', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getComparison', null);
     client.setQueryAnswer('getChildRecordTypes', []);
     client.setQueryAnswer('getReferences', [{
       formKey: '000900:A.esp', plugin: 'A.esp', origin: 'ModA', fieldPath: 'Keywords[0]', recordType: 'weap', recordTypeName: 'Weapon', editorId: 'Rifle',
     }]);
-    makeEditor(client, [], NO_MODS, undefined, ({ origin }) => ({ editable: origin === 'ModA' }));
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'A.esp', origin: 'ModA', isCompiledPlugin: true, isImmutable: false })]);
+    makeEditor(client);
 
     const { provider } = await present(await askReferencedBy(recordRow), 'the list shown').resolve();
     const [referrer] = provider.getChildren();

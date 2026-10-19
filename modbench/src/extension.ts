@@ -254,11 +254,11 @@ export function activate(context: vscode.ExtensionContext): void {
     ask: askQuestion,
     focusedView,
     recordViewIds: [PLUGINS_KEY_ARGS.view],
-    recordWrite: plugins.recordWrite,
+    writeProgressView: PLUGINS_KEY_ARGS.view,
+    instance: opened.facts,
     sourceEditing,
     modFacts: opened.facts,
     locateRecord: formKeyLocation(meditClient),
-    conditionsOf: (plugin) => plugins.conditionsOf(plugin),
   });
   const views = buildViews(opened, ownedByViews, {
     outputChannel, client: meditClient,

@@ -110,14 +110,13 @@ vi.mock('vscode', () => {
 
 import { createFocusedView } from '../../drivingLib/focusedView';
 import { createPluginsView } from '../pluginsView';
-import { createPlugins } from '../index';
 import { createPluginSync, type Sync } from '../../drivingLib/syncFailureReport';
 import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
 import { PluginNode } from '../pluginRows';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import type { PluginMetadata, RecordSummary } from '../../client';
-import { recordTypeCountFixture, pluginMetadataFixture } from '../../client/test/fixtures';
+import { recordTypeCountFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
@@ -225,62 +224,6 @@ describe('the Plugins view registers its own gestures', () => {
     expect(plugins.copyValue.reporterTag).toBe('pluginListTree.copyValue');
     expect(plugins.copyValue.text({ view: 'modbench.modList' }, undefined)).toBeUndefined();
     expect(plugins.copyValue.text({ view: 'modbench.pluginListTree' }, undefined)).toBe('');
-  });
-});
-
-describe('the Plugins view says what it knows of whether a plugin is a compiled plugin, and its editability', () => {
-  const COMPILED_PLUGIN_EDITABLE = { name: 'Test.esp', origin: 'ModA' };
-  const withThePlugin = () => instanceValueFixture({
-    plugins: [{ name: 'Test.esp', path: '/instance/mods/ModA/Test.esp', origin: 'ModA', line: 0, enabled: true, winning: true }],
-  });
-  const holdingCompiledPluginEditable = () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ ...COMPILED_PLUGIN_EDITABLE, isCompiledPlugin: true, isImmutable: false })]);
-    return client;
-  };
-
-  it('says nothing is a compiled plugin or editable until mEdit has answered, then what it answered', async () => {
-    const client = holdingCompiledPluginEditable();
-    const { plugins } = pluginsView(withThePlugin(), { client });
-    expect(plugins.conditionsOf(COMPILED_PLUGIN_EDITABLE)).toEqual({ editable: false });
-
-    client.emit(rowsChanged);
-    await settle();
-
-    expect(plugins.conditionsOf(COMPILED_PLUGIN_EDITABLE)).toEqual({ editable: true });
-    expect(plugins.conditionsOf({ name: 'Other.esp', origin: 'ModA' })).toEqual({ editable: false });
-  });
-
-  describe('through the Plugins box', () => {
-    const NOTHING = { editable: false };
-
-    function box(client: InMemoryMEditClient) {
-      const value = withThePlugin();
-      const plugins = createPlugins({
-        client, facts: new FakeInstance(value), channel: { ...silentChannel, warn: vi.fn(), show: vi.fn() },
-        reporterFor: () => recordingReporter(), registerRepositories: () => Promise.resolve(), ask: scriptedDialog(),
-        sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
-      });
-      const onInstance = () => plugins.onInstance({
-        instance: new FakeInstance(value), commands: pluginCommandsWith(fakeInstanceAdapter().adapter),
-        pluginSync: syncRefusing().pluginSync,
-      });
-      return { plugins, onInstance };
-    }
-
-    it('says nothing is editable before an Instance is open and after its view is gone, and what the view knows between', async () => {
-      const client = holdingCompiledPluginEditable();
-      const { plugins, onInstance } = box(client);
-      expect(plugins.conditionsOf(COMPILED_PLUGIN_EDITABLE)).toEqual(NOTHING);
-
-      const opened = onInstance();
-      client.emit(rowsChanged);
-      await settle();
-      expect(plugins.conditionsOf(COMPILED_PLUGIN_EDITABLE)).toEqual({ editable: true });
-
-      opened.dispose();
-      expect(plugins.conditionsOf(COMPILED_PLUGIN_EDITABLE)).toEqual(NOTHING);
-    });
   });
 });
 
