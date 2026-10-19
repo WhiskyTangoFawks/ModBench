@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { DownloadFile, Instance } from '../instanceLoader/instance';
 import { ARCHIVE_EXTENSIONS } from '../instanceAdapter/instanceAdapter';
 import type { InstallTarget, ModCommands, ModPackage } from '../modCommands/modCommands';
-import { downloadArgumentOf, downloadedFileNamed } from '../drivingLib/argument';
+import { downloadedFileArgumentOf, downloadedFileNamed } from '../drivingLib/argument';
 import {
   argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure,
 } from '../drivingLib/agentGesture';
@@ -156,7 +156,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
 
   const gesture: AgentGesture<KindedRow, Install, InstallResult, InstallOptions> = {
     fromView: async (_entry, _option, clicked) => {
-      const download = downloadArgumentOf(clicked);
+      const download = downloadedFileArgumentOf(clicked);
       if (!download) return pickedPackage();
       try {
         return await downloadedFileInstall(download.row.name);

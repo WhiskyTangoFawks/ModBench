@@ -5,7 +5,7 @@ import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from 
 import { instanceMessages, type InstanceValue, type InstanceView, type ModGroup, type ModGroups } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
-import { messageLine } from '../drivingLib/nameFilter';
+import { messageLine } from '../drivingLib/messageLine';
 import { dropMove, type DraggedRows } from './moveDrop';
 import {
   anyNamed, expanderOver, filesIn, narrowToMatches, shownUnder, FileNode, FolderNode,
