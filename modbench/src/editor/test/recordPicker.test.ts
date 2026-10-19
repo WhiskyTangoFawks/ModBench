@@ -31,7 +31,7 @@ function makeFakeQuickPick() {
     value: '',
     placeholder: undefined as string | undefined,
     title: undefined as string | undefined,
-    items: [] as vscode.QuickPickItem[],
+    items: [] as Array<vscode.QuickPickItem & { formKey?: string }>,
     activeItems: [] as unknown[],
     selectedItems: [] as unknown[],
     busy: false,
