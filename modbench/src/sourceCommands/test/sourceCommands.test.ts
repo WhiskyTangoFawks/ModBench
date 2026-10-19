@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { fakeInstanceAdapter, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, readingFixture, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { sourceCommands } from '../sourceCommands';
 
-const SOURCES: ReadonlyMap<string, string> = new Map([['ModA', '/instance/source/ModA'], ['ModB', '/instance/source/Old ModB']]);
+const SOURCES = { ModA: '/instance/source/ModA', ModB: '/instance/source/Old ModB' };
 
-const fakeAdapter = (answers: InstanceAnswers = {}) => fakeInstanceAdapter(readingFixture(), answers).adapter;
+const fakeAdapter = (answers: InstanceAnswers = {}, gameRelease = 'Fallout4') =>
+  fakeInstanceAdapter(readingFixture({ gameRelease, sourceMods: sourceModsOf(SOURCES) }), answers).adapter;
 
 const BUILT = { landed: [{ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [] }], refused: [] };
 
@@ -18,7 +19,7 @@ describe('sourceCommands build', () => {
       hosts: new Map([['/instance/source/ModA', { kind: 'read', answer: { kind: 'host', url: 'https://example.test/a.git' } }]]),
     });
 
-    await sourceCommands({ client, adapter }).build(['ModA', 'ModB'], 'Fallout4', SOURCES);
+    await sourceCommands({ client, adapter }).build(['ModA', 'ModB']);
 
     const ba2 = { ba2: { version: 1, compressed: true } };
     expect(client.calls).toEqual([{
@@ -37,7 +38,7 @@ describe('sourceCommands build', () => {
     const latestLoadOrder = () => new Promise<undefined>((resolve) => { reconciled = () => { resolve(undefined); }; });
     const commands = sourceCommands({ client: { build: client.build.bind(client), init: client.init.bind(client), latestLoadOrder }, adapter: fakeAdapter() });
 
-    const built = commands.build(['ModA'], 'Fallout4', SOURCES);
+    const built = commands.build(['ModA']);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(client.calls).toEqual([]);
 
@@ -51,7 +52,7 @@ describe('sourceCommands build', () => {
     client.setCommandResult('build', BUILT);
     const adapter = fakeAdapter({ unreadableMetadata: new Map([['ModA', 'EISDIR: meta.ini']]) });
 
-    const outcome = await sourceCommands({ client, adapter }).build(['ModA', 'ModB'], undefined, SOURCES);
+    const outcome = await sourceCommands({ client, adapter }).build(['ModA', 'ModB']);
 
     expect(client.calls).toMatchObject([{ args: [[{ name: 'ModB' }], expect.anything()] }]);
     expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'its metadata could not be read: EISDIR: meta.ini' }] });
@@ -62,7 +63,7 @@ describe('sourceCommands build', () => {
     client.setCommandResult('build', BUILT);
     const adapter = fakeAdapter({ hosts: new Map([['/instance/source/ModA', { kind: 'unreadable', reason: 'git remote failed' }]]) });
 
-    const outcome = await sourceCommands({ client, adapter }).build(['ModA', 'ModB'], undefined, SOURCES);
+    const outcome = await sourceCommands({ client, adapter }).build(['ModA', 'ModB']);
 
     expect(client.calls).toMatchObject([{ args: [[{ name: 'ModB' }], expect.anything()] }]);
     expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'its remote could not be read: git remote failed' }] });
@@ -72,7 +73,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
 
-    await sourceCommands({ client, adapter: fakeAdapter() }).build(['ModA'], undefined, SOURCES);
+    await sourceCommands({ client, adapter: fakeAdapter({}, 'SkyrimSE') }).build(['ModA']);
 
     expect(client.calls.map((call) => call.args[1])).toEqual([{ excludedSuffix: '.excluded', archives: null, statCache: '/instance/stat-cache' }]);
   });
@@ -81,7 +82,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
 
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter() }).build(['ModA', 'ModC'], 'Fallout4', SOURCES);
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter() }).build(['ModA', 'ModC']);
 
     expect(client.calls).toEqual([{ method: 'build', args: [[expect.objectContaining({ name: 'ModA' })], expect.anything()] }]);
     expect(outcome).toEqual({

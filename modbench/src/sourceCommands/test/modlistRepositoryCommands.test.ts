@@ -32,23 +32,15 @@ describe('modlistRepositoryCommands git init', () => {
   it('writes the ignore list, makes the instance folder a repository, then makes it refuse a push of a pin its remote lacks', async () => {
     const { commands, adapter, repositories } = commandsOver();
 
-    const result = await commands.gitInit({ holdsRepository: false });
+    const result = await commands.gitInit();
 
     expect([result.applied, adapter.calls, repositories]).toEqual([true, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }], ['made']]);
   });
 
-  it('refuses an instance folder that already holds a repository, naming it, and changes nothing', async () => {
-    const { commands, adapter, repositories } = commandsOver();
-
-    const result = await commands.gitInit({ holdsRepository: true });
-
-    expect([result, repositories, adapter.calls]).toEqual([{ applied: false, refusal: '/instance already holds a repository.' }, [], []]);
-  });
-
-  it('refuses a repository on disk that its last reading did not hold, and changes nothing', async () => {
+  it('refuses an instance folder that holds a repository on disk, naming it, and changes nothing', async () => {
     const { commands, adapter, repositories } = commandsOver({ repositoryOnDisk: true });
 
-    const result = await commands.gitInit({ holdsRepository: false });
+    const result = await commands.gitInit();
 
     expect([result, repositories, adapter.calls]).toEqual([{ applied: false, refusal: '/instance already holds a repository.' }, [], []]);
   });
@@ -56,13 +48,13 @@ describe('modlistRepositoryCommands git init', () => {
   it('makes no repository when the ignore list could not be written, and says why', async () => {
     const { commands, repositories } = commandsOver({ refusals: refusing('writeIgnoreList', '/instance/.gitignore already exists') });
 
-    expect([await commands.gitInit({ holdsRepository: false }), repositories]).toEqual([{ applied: false, refusal: '/instance/.gitignore already exists' }, []]);
+    expect([await commands.gitInit(), repositories]).toEqual([{ applied: false, refusal: '/instance/.gitignore already exists' }, []]);
   });
 
   it('refuses before it writes anything when the push refusal has no free place, naming why', async () => {
     const { commands, adapter, repositories } = commandsOver({ refusals: refusing('checkPushRefusalFree', '/instance/.git/hooks/pre-push already exists') });
 
-    expect([await commands.gitInit({ holdsRepository: false }), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
+    expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
       { applied: false, refusal: '/instance/.git/hooks/pre-push already exists' }, [], ['checkPushRefusalFree'],
     ]);
   });
@@ -70,7 +62,7 @@ describe('modlistRepositoryCommands git init', () => {
   it('takes back the repository and the ignore list it made when the push refusal could not be written, naming why', async () => {
     const { commands, adapter, repositories } = commandsOver({ refusals: refusing('refuseUnpublishedPins', '/instance/.git/hooks/pre-push already exists') });
 
-    expect([await commands.gitInit({ holdsRepository: false }), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
+    expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
       { applied: false, refusal: '/instance/.git/hooks/pre-push already exists' },
       ['made'], ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'removeRepository', 'removeIgnoreList'],
     ]);
@@ -81,7 +73,7 @@ describe('modlistRepositoryCommands git init', () => {
       refusals: (call) => ({ refuseUnpublishedPins: 'a hook is there', removeRepository: 'read-only folder' })[call.verb as string],
     });
 
-    expect(await commands.gitInit({ holdsRepository: false })).toEqual({
+    expect(await commands.gitInit()).toEqual({
       applied: false, refusal: 'a hook is there; the repository it made remains: read-only folder',
     });
   });
@@ -93,7 +85,7 @@ describe('modlistRepositoryCommands git init', () => {
       makeRepository: () => Promise.reject(new Error('git is not available')), trash: () => Promise.resolve(),
     });
 
-    const result = await commands.gitInit({ holdsRepository: false });
+    const result = await commands.gitInit();
 
     expect([result, adapter.calls]).toEqual([
       { applied: false, refusal: 'git is not available' }, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'removeIgnoreList' }],
@@ -107,7 +99,7 @@ describe('modlistRepositoryCommands git init', () => {
       makeRepository: () => Promise.reject(new Error('git is not available')), trash: () => Promise.resolve(),
     });
 
-    expect(await commands.gitInit({ holdsRepository: false })).toEqual({
+    expect(await commands.gitInit()).toEqual({
       applied: false, refusal: 'git is not available; the ignore list it wrote remains: read-only folder',
     });
   });

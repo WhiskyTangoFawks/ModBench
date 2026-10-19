@@ -20,7 +20,7 @@ export function registerModlistCommands(deps: ModlistGestureDeps): vscode.Dispos
 }
 
 const gitInitInToolbox = ({ commands, instance }: ModlistGestureDeps) =>
-  runWritingGesture(TOOLBOX_VIEW, instance, () => commands.gitInit(instance.value));
+  runWritingGesture(TOOLBOX_VIEW, instance, () => commands.gitInit());
 
 async function gitInit(deps: ModlistGestureDeps): Promise<void> {
   const result = await gitInitInToolbox(deps);

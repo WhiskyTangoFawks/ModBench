@@ -176,9 +176,9 @@ function registerSourceGestures(
       modOfOrigin: owner, pluginsView,
     }, rows),
     registerBuildCommand({
-      commands, instance, gameRelease: () => instance.value.gameRelease, reporter: reporterFor('mod.build'), problems,
+      commands, instance, reporter: reporterFor('mod.build'), problems,
       sourceFiles: (origin) => sourceFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
-      modOfOrigin: owner, sourceDirs: () => instance.value.paths.sourceDirs, pluginsView,
+      modOfOrigin: owner, sourceModNames: () => instance.value.paths.sourceDirs.keys(), pluginsView,
     }, rows),
     provider.onDidChangeTreeData(showAnySource),
     problems,

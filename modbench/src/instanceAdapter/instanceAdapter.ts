@@ -393,8 +393,7 @@ export interface ManagerNames {
 // The game as the mod manager's configuration names it, and Mutagen's release of it.
 interface InstanceGame {
   readonly gameName: string;
-  /** Undefined when the tables hold none for the game. */
-  readonly gameRelease: string | undefined;
+  readonly gameRelease: string;
 }
 
 /** Whether the mod manager that made the instance is running, or why Modbench cannot tell. */
@@ -453,6 +452,8 @@ export interface InstanceAdapter {
   reading(): Promise<InstanceReading>;
   /** The profile the mod manager's configuration selects now. */
   activeProfile(): Promise<string>;
+  /** Mutagen's release of the game the mod manager's configuration selects now. */
+  gameRelease(): Promise<string>;
   /** Every profile's name. */
   profiles(): Promise<readonly string[]>;
   /** The active profile's mod order and the mod folders, without the rest of the instance. */
