@@ -1,6 +1,6 @@
 // A free function per gesture, applied or a refusal (ADR-0014; ADR-0015).
 
-import { refuse } from '../ports/refuse';
+import { refuse } from '../coreLib/refuse';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';

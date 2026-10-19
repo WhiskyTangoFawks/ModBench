@@ -1,4 +1,4 @@
-import { errorMessage } from './errorMessage';
+import { errorMessage } from '../ports/errorMessage';
 
 /** A caught error turned into the `{ applied: false }` arm every command result shares. */
 export function refuse(err: unknown): { applied: false; refusal: string } {
