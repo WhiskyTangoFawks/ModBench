@@ -11,6 +11,9 @@ export type StampedFile = components['schemas']['StampedFile'];
 // Ends in `/`, which no folder name holds, so no mod shares it. Equal to mEdit's PluginOrigin.
 export const DATA_DIRECTORY_ORIGIN = 'Data/';
 
+// Ends in `/`, which no folder name holds, so no mod shares it. Equal to mEdit's PluginOrigin.Overwrite.
+export const OVERWRITE_ORIGIN = 'overwrite/';
+
 /** A plugin's file name as the game compares it. */
 export const pluginNameKey = (name: string): string => name.toLowerCase();
 

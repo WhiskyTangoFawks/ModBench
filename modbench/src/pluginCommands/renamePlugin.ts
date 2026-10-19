@@ -2,7 +2,8 @@
 // can answer, and the dependants query; the file and its lines are the Instance adapter's.
 
 import type { TailOf } from '../coreLib/boundCommand';
-import { OVERWRITE_ORIGIN, type FileOrigin, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { type FileOrigin, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import { isRefused, type MEditClient, type SourceChanges } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';

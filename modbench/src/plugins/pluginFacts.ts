@@ -1,6 +1,6 @@
 import type { LoadOrderRefusal, NotificationPayloads, PluginAddress, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata } from '../client';
 import type { UnreadableSource } from '../wire/unreadableSource';
-import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
+import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import { pluginOriginName } from '../instanceLoader/pluginStanding';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { pluginAddressKey } from '../wire/pluginAddress';

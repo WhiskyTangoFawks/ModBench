@@ -1,4 +1,4 @@
-import { OVERWRITE_ORIGIN } from './loadOrderSnapshot';
+import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import type { InstanceValue } from './instance';
 import type { PluginPlace } from '../wire/pluginAddress';
 

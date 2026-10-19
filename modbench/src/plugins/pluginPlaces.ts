@@ -5,7 +5,7 @@ import type { InstanceValue } from '../instanceLoader/instance';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { pluginPlacesOf } from '../instanceLoader/pluginPlacesOf';
 import { samePluginAddress, type PluginAddress, type PluginPlace } from '../wire/pluginAddress';
-import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
+import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 
 function holdsPlugin(value: Pick<InstanceValue, 'plugins'>, plugin: PluginAddress): boolean {
   return value.plugins.some((p) => p.path !== undefined && samePluginAddress(p, plugin));

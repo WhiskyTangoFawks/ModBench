@@ -35,7 +35,8 @@ import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import type { Mo2Context } from '../mo2Context';
 import { readInstance, readPluginsProvided, type ReadingSource } from '../instanceReading';
 import { readingSource } from '../mo2Reads';
-import { OVERWRITE_ORIGIN, type Subscription } from '../instanceAdapter';
+import { type Subscription } from '../instanceAdapter';
+import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import type {
   ArchiveReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided,
 } from '../instanceAdapter';

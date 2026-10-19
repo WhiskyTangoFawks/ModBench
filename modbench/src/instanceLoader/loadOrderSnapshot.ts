@@ -4,7 +4,7 @@ import {
   foldPath, type FileConflictIndex, type FileWinners,
 } from './fileConflictIndex';
 import {
-  dataFolderFile, fileInFolder, OVERWRITE_ORIGIN, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
+  dataFolderFile, fileInFolder, type DataFolderArchives, type DataFolderPlugins, type FileRead, type FileStamp, type GameFolder,
   type ModFolders, type ModlistEntry, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { isRootLevel } from '../tables/pluginFile';
@@ -13,10 +13,9 @@ import { pluginOrderOf } from './pluginOrder';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { pluginCompanionRule } from '../tables/gamePaths';
 import type { InstanceValue } from './instance';
-import { DATA_DIRECTORY_ORIGIN, exactPluginAddressKey, pluginNameKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
+import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN, exactPluginAddressKey, pluginNameKey, type PluginAddress, type PluginPlace, type StampedFile } from '../wire/pluginAddress';
 import type { ModByFolder } from '../wire/modByFolder';
 
-export { OVERWRITE_ORIGIN };
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
 
 export { DATA_DIRECTORY_ORIGIN };

@@ -3,11 +3,12 @@
 import type { Log } from '../ports/log';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
-  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, OVERWRITE_ORIGIN, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
+  buildLoadOrderRows, listedArchivesNothingHolds, loadOrderSnapshotOf, pluginsLoadedWithNoLineOf, stampedSnapshot, type ArchiveSources,
   type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine, type LoadOrderSnapshotRefusal,
   type LoadOrderSnapshotValue, type PluginWithNoLine,
 } from './loadOrderSnapshot';
 import { withMetadataRead } from '../wire/modByFolder';
+import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import { modNameOf, modNamesOf } from './modName';
 import { present } from '../ports/present';
 import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
