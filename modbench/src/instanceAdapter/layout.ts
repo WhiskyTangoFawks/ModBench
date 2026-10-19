@@ -23,6 +23,7 @@ const STAT_CACHE = 'stat-cache';
 const IGNORE_LIST_FILE = '.gitignore';
 const SUBMODULES_FILE = '.gitmodules';
 const PLUGIN_ORDER_FILE = 'loadorder.txt';
+const MANIFEST_GLOB = '*.manifest.json';
 
 export const profilesDir = (instanceRoot: string): string => join(instanceRoot, PROFILES);
 
@@ -107,7 +108,7 @@ export const defaultDownloadsDir = (instanceRoot: string): string => join(instan
 export const settingsFile = (instanceRoot: string): string => join(instanceRoot, SETTINGS_FILE_NAME);
 
 /** A mod's manifest, in its folder, named for the mod. */
-export const manifestFileName = (modName: string): string => `${modName}.manifest.json`;
+export const manifestFileName = (modName: string): string => `${modName}${MANIFEST_GLOB.slice(1)}`;
 export const manifestFileIn = (modFolder: string, modName: string): string => join(modFolder, manifestFileName(modName));
 
 /** The meta file of the mod folder `modFolder`, wherever that folder is. */
@@ -239,7 +240,7 @@ export function withSourceModLines(ignoreList: string, folderNames: readonly str
 export const WHITELIST_IGNORE_LIST = `${[
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
   ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
-  ...heldInEachFolderOf(MODS, [manifestFileName('*')]),
+  ...heldInEachFolderOf(MODS, [MANIFEST_GLOB]),
 ].join('\n')}\n`;
 
 /** The archives at the root of the Data folder and the files of its strings folder, the Data folder its base. */
