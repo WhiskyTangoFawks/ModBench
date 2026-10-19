@@ -1,10 +1,5 @@
 import { errorMessage } from '../ports/errorMessage';
-
-/** One view's message line, said by several writers: each part present, in order. */
-export function messageLine(...parts: (string | undefined)[]): string | undefined {
-  const said = parts.filter((part) => part !== undefined);
-  return said.length > 0 ? said.join(' ') : undefined;
-}
+import { messageLine } from './messageLine';
 
 /** A system command's part of its view's message line. */
 export interface SyncMessage {

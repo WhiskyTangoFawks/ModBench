@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { messageLine } from './syncFailureReport';
+import { messageLine } from './messageLine';
 import { STATUS_MESSAGE_MS } from './statusMessage';
 
 // The term lives here, not in the `InputBox`: that widget hides the moment focus leaves, and

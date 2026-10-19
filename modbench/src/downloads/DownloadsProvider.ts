@@ -10,7 +10,7 @@ import {
 } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
-import { messageLine } from '../drivingLib/syncFailureReport';
+import { messageLine } from '../drivingLib/messageLine';
 import type { DownloadedFileArgument } from '../drivingLib/argument';
 
 // Mirrors the reference tool's own colour-coded Status cell. The icon is always set explicitly so

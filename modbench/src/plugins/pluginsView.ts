@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress } from '../client';
 import { registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
-import { joinSyncMessages, messageLine, type SyncMessage } from '../drivingLib/syncFailureReport';
+import { messageLine } from '../drivingLib/messageLine';
+import { joinSyncMessages, type SyncMessage } from '../drivingLib/syncFailureReport';
 import type { PluginCommands } from '../pluginCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
