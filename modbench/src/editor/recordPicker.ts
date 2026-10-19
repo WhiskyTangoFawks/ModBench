@@ -13,8 +13,7 @@ export interface RecordPickerDeps {
 type PickItem = vscode.QuickPickItem & { formKey?: string };
 
 // VS Code filters items by label against the typed text, which would drop a record the backend
-// found by FormID or by a stale label. FormKeyLink and FormKeyCell show a resolved reference in
-// this label, so a record is chosen and read back in the same words.
+// found by FormID or by a stale label. The label is the one FormKeyLink and FormKeyCell show.
 function toPickItem(r: RecordSummary): PickItem {
   return { label: recordLabel(r.editorId, r.formKey), formKey: r.formKey, alwaysShow: true };
 }
