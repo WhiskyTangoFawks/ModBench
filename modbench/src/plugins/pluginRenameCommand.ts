@@ -30,11 +30,11 @@ interface Rename {
   readonly newName: string;
 }
 
-type RenameDeps = Pick<RenamePluginDeps, 'commands' | 'source' | 'instance'>;
+type RenameDeps = Pick<RenamePluginDeps, 'commands' | 'source'>;
 
 const refused = (refusal: string, detail?: string): GestureResult<PluginAddress> => ({ applied: false, refusal, detail });
 
-async function renamed({ commands, source, instance }: RenameDeps, plugin: PluginAddress, newName: string): Promise<GestureResult<PluginAddress>> {
+async function renamed({ commands, source }: RenameDeps, plugin: PluginAddress, newName: string): Promise<GestureResult<PluginAddress>> {
   const couldNot = `Could not rename "${plugin.name}" (${plugin.origin}): its plugin source`;
   const apply = (changes: SourceChanges) => applyAnswered(source, [changes], [plugin]);
   const result = await commands.renamePlugin({ apply }, plugin, newName);
@@ -81,7 +81,7 @@ export function registerRenamePluginCommand(
       return { plugin, newName: name };
     },
     run: async ({ plugin, newName }) => vscode.window.withProgress({ location: { viewId: PLUGINS_KEY_ARGS.view } }, () =>
-      instance.quiet(() => source.oneAtATime(() => renamed({ commands, source, instance }, plugin, newName)))),
+      instance.quiet(() => source.oneAtATime(() => renamed({ commands, source }, plugin, newName)))),
     report: (result) => {
       if (!result.applied) reporter.report('error', result.refusal, result.detail);
     },
