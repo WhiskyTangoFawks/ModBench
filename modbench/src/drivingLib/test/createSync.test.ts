@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createSync } from '../syncFailureReport';
+import { createModSync, createPluginSync, createSync } from '../syncFailureReport';
 import { present } from '../../ports/present';
 
 type Outcome =
@@ -167,5 +167,36 @@ describe('createSync: a refusal the instance\'s state already tells', () => {
     await run();
 
     expect(sync.message()).toBeUndefined();
+  });
+});
+
+describe('the sync wording', () => {
+  const addedAndDropped = () => Promise.resolve<Outcome>({ applied: true, added: ['A'], dropped: ['B'] });
+  const refusing = () => Promise.resolve<Outcome>({ applied: false, refusal: 'locked' });
+
+  it('names the mod manager\'s mod order file for a mod sync', async () => {
+    const channel = { error: vi.fn(), info: vi.fn() };
+    const sync = createModSync(addedAndDropped, channel, 'modlist.txt');
+    await sync.run();
+    expect(channel.info.mock.calls).toEqual([
+      ['[modCommands] mod sync added 1 modlist.txt line(s) for folder(s) in mods/ with no line: A'],
+      ['[modCommands] mod sync dropped 1 modlist.txt line(s) whose folder is gone from mods/: B'],
+    ]);
+    const refused = createModSync(refusing, channel, 'modlist.txt');
+    await refused.run();
+    expect(refused.message()).toBe('modlist.txt is not synced: locked.');
+  });
+
+  it('names plugins.txt for a plugin sync', async () => {
+    const channel = { error: vi.fn(), info: vi.fn() };
+    const sync = createPluginSync(addedAndDropped, channel);
+    await sync.run();
+    expect(channel.info.mock.calls).toEqual([
+      ['[pluginCommands] plugin sync added 1 disabled plugins.txt line(s) for plugin(s) on disk with no line: A'],
+      ['[pluginCommands] plugin sync dropped 1 plugins.txt line(s) with no plugin on disk: B'],
+    ]);
+    const refused = createPluginSync(refusing, channel);
+    await refused.run();
+    expect(refused.message()).toBe('plugins.txt is not synced: locked.');
   });
 });

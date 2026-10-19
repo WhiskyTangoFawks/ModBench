@@ -8,7 +8,7 @@ const { showErrorMessage, showWarningMessage, showInformationMessage } = vi.hois
 vi.mock('vscode', () => ({ window: { showErrorMessage, showWarningMessage, showInformationMessage } }));
 
 import { makeReporter } from '../reporter';
-import type { SelectionOutcome } from '../ports/selectionOutcome';
+import type { SelectionOutcome } from '../../ports/selectionOutcome';
 
 function fakeChannelOfEveryLevel() {
   return {

@@ -310,7 +310,7 @@ export default defineConfig(
         rules: { 'no-restricted-syntax': restrictedSyntax(['message']) },
     },
     {
-        files: ['src/reporter.ts', 'src/dialog.ts'],
+        files: ['src/drivingLib/reporter.ts', 'src/dialog.ts'],
         rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('message')) },
     },
     {

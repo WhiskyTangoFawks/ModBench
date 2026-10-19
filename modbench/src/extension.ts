@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import { createMEditClient, stopMEditClient, type MEditClient, type ReadModStatus } from './client';
-import { makeReporter } from './reporter';
+import { makeReporter } from './drivingLib/reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
