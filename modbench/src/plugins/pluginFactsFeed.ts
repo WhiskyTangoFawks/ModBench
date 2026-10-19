@@ -40,6 +40,7 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // `refresh`' own order, apart from `generation` so a fact re-read never discards a hand-off.
   private refreshes = 0;
+  private loggedScanFailure?: string;
 
   readonly rows: PluginRowFacts = this.facts;
   readonly onDidChange = this.changed.event;
@@ -88,8 +89,7 @@ export class PluginFactsFeed implements vscode.Disposable {
     if (plugins === undefined || generation !== this.generation) return undefined;
     this.facts.reconciled(plugins, failures);
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
-    // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer;
-    // a failed scan leaves them alone too.
+    // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer.
     this.changed.fire();
     // Fire-and-forget: the hand-off must not wait on a whole-load-order scan. A failed scan is
     // ADR-0019's background tier, and retries at the next reconcile.
@@ -133,11 +133,19 @@ export class PluginFactsFeed implements vscode.Disposable {
       const reports = answerOf(await this.deps.client.getDiagnoses());
       if (generation !== this.generation) return;
       // One derivation, two surfaces — the tree badge and the Problems panel cannot disagree.
+      this.loggedScanFailure = undefined;
       this.facts.diagnosed(reports);
       this.deps.publishDiagnoses(this.facts.problems().malformed);
       this.changed.fire();
     } catch (err) {
-      this.deps.log('warn', `[PluginFactsFeed] the malformed-plugin scan could not be read: ${errorMessage(err)}`);
+      const reason = errorMessage(err);
+      if (reason !== this.loggedScanFailure) {
+        this.loggedScanFailure = reason;
+        this.deps.log('warn', `[PluginFactsFeed] the malformed-plugin scan could not be read: ${reason}`);
+      }
+      if (generation !== this.generation) return;
+      this.facts.scanFailed(reason);
+      this.changed.fire();
     }
   }
 }
