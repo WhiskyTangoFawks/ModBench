@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { DownloadSortColumn } from './downloadRows';
+import type { DownloadedFileSortColumn } from './downloadRows';
 import type { DeletedDownload, DownloadedFileCommands } from '../downloadedFileCommands/downloads';
 import type { DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS } from './keyContext';
@@ -53,7 +53,7 @@ function deleteGesture(
 ): DownloadsGesture<readonly string[], DeletedDownload> {
   return {
     fromView: async (entry) => {
-      const names = pluralArgument(entry, 'download').map((node) => node.argument.row.name);
+      const names = pluralArgument(entry, 'downloadedFile').map((node) => node.argument.row.name);
       return names.length > 0 && await confirmDelete(names, ask) ? names : undefined;
     },
     fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
@@ -74,7 +74,7 @@ function markGesture(
   const verb = excluded ? 'exclude' : 'include';
   return {
     fromView: (entry) => {
-      const names = pluralArgument(entry, 'download').map((node) => node.argument.row.name);
+      const names = pluralArgument(entry, 'downloadedFile').map((node) => node.argument.row.name);
       return names.length === 0 ? undefined : names;
     },
     fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
@@ -94,14 +94,14 @@ export function registerDownloadsSingleRowCommands(
 ): vscode.Disposable[] {
   return [
     registerGesture('modbench.downloadedFile.open', viewSelection, async (entry) => {
-      const row = singularArgument(entry, 'download')?.argument.row;
+      const row = singularArgument(entry, 'downloadedFile')?.argument.row;
       if (!row) return;
       await reportFailure(reporter, `Open File for "${row.name}" failed.`, async () => {
         await vscode.env.openExternal(vscode.Uri.file(row.path));
       });
     }),
     registerGesture('modbench.downloadedFile.openMeta', viewSelection, async (entry) => {
-      const row = singularArgument(entry, 'download')?.argument.row;
+      const row = singularArgument(entry, 'downloadedFile')?.argument.row;
       if (!row) return;
       await reportFailure(reporter, `Open Meta File for "${row.name}" failed.`, async () => {
         await vscode.window.showTextDocument(vscode.Uri.file(row.sidecarPath));
@@ -129,7 +129,7 @@ export function registerDownloadsMultiRowCommands(
 
 // Filetime descending, last, is the default DownloadsProvider already starts at, so leaving it
 // unpicked changes nothing.
-const SORT_OPTIONS: readonly { label: string; column: DownloadSortColumn; descending: boolean }[] = [
+const SORT_OPTIONS: readonly { label: string; column: DownloadedFileSortColumn; descending: boolean }[] = [
   { label: 'Name (A to Z)', column: 'name', descending: false },
   { label: 'Name (Z to A)', column: 'name', descending: true },
   { label: 'Download Status (A to Z)', column: 'status', descending: false },
@@ -140,9 +140,9 @@ const SORT_OPTIONS: readonly { label: string; column: DownloadSortColumn; descen
   { label: 'Filetime (Newest First)', column: 'mtimeMs', descending: true },
 ];
 
-type SortOption = { label: string; column: DownloadSortColumn; descending: boolean };
+type SortOption = { label: string; column: DownloadedFileSortColumn; descending: boolean };
 
-function pickSort(current: { column: DownloadSortColumn; descending: boolean }): Promise<SortOption | undefined> {
+function pickSort(current: { column: DownloadedFileSortColumn; descending: boolean }): Promise<SortOption | undefined> {
   const active = SORT_OPTIONS.find((o) => o.column === current.column && o.descending === current.descending);
   return pickWithMarked(SORT_OPTIONS, active, 'Sort downloads by');
 }

@@ -1361,43 +1361,43 @@
         },
         {
           "command": "modbench.mod.install",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
-          "group": "downloadActions@1"
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownloadedFile\\b/",
+          "group": "downloadedFileActions@1"
         },
         {
           "command": "modbench.mod.viewOnNexus",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bhasModID\\b/",
-          "group": "downloadActions@2"
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownloadedFile\\b/ && viewItem =~ /\\bhasModID\\b/",
+          "group": "downloadedFileActions@2"
         },
         {
           "command": "modbench.downloadedFile.open",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
-          "group": "downloadActions@3"
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownloadedFile\\b/",
+          "group": "downloadedFileActions@3"
         },
         {
           "command": "modbench.downloadedFile.openMeta",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bhasMeta\\b/",
-          "group": "downloadActions@4"
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownloadedFile\\b/ && viewItem =~ /\\bhasMeta\\b/",
+          "group": "downloadedFileActions@4"
         },
         {
           "command": "modbench.downloadedFile.exclude",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && !(viewItem =~ /\\bexcluded\\b/)",
-          "group": "downloadActions@5"
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownloadedFile\\b/ && !(viewItem =~ /\\bexcluded\\b/)",
+          "group": "downloadedFileActions@5"
         },
         {
           "command": "modbench.downloadedFile.include",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bexcluded\\b/",
-          "group": "downloadActions@5"
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownloadedFile\\b/ && viewItem =~ /\\bexcluded\\b/",
+          "group": "downloadedFileActions@5"
         },
         {
           "command": "modbench.copyValue",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
-          "group": "downloadActions@6"
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownloadedFile\\b/",
+          "group": "downloadedFileActions@6"
         },
         {
           "command": "modbench.downloadedFile.delete",
-          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
-          "group": "downloadActions@7"
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownloadedFile\\b/",
+          "group": "downloadedFileActions@7"
         },
         {
           "command": "modbench.plugin.reveal",

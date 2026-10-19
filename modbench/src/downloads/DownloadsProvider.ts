@@ -3,7 +3,7 @@
 
 import * as vscode from 'vscode';
 import {
-  downloadContextValue, filterExcludedRows, sortDownloadRows, type DownloadSortColumn,
+  downloadedFileContextValue, filterExcludedRows, sortDownloadedFileRows, type DownloadedFileSortColumn,
 } from './downloadRows';
 import {
   instanceMessages, type DownloadFile, type DownloadRow, type DownloadStatus, type InstanceValue, type InstanceView,
@@ -15,7 +15,7 @@ import type { DownloadedFileArgument } from '../drivingLib/argument';
 
 // Mirrors the reference tool's own colour-coded Status cell. The icon is always set explicitly so
 // the file-icon theme never takes over; a colour is affordable because every row is an archive.
-function downloadStatusIcon(status: DownloadStatus): vscode.ThemeIcon {
+function downloadedFileStatusIcon(status: DownloadStatus): vscode.ThemeIcon {
   switch (status) {
     case 'Downloaded':
       return new vscode.ThemeIcon('archive', new vscode.ThemeColor('charts.green'));
@@ -28,14 +28,14 @@ function downloadStatusIcon(status: DownloadStatus): vscode.ThemeIcon {
 
 // `v%1` is the reference tool's own version display convention. The icon always carries status, so
 // the description repeats it only for a state other than the Downloaded default.
-function downloadDescription(row: DownloadRow): string {
+function downloadedFileDescription(row: DownloadRow): string {
   const version = row.version ? `v${row.version}` : undefined;
   const status = row.status === 'Downloaded' ? undefined : row.status;
   return [version, status].filter((s): s is string => !!s).join(' ');
 }
 
 // A manually-dropped archive with no sidecar still gets a valid, minimal tooltip.
-function downloadTooltip(row: DownloadRow): vscode.MarkdownString {
+function downloadedFileTooltip(row: DownloadRow): vscode.MarkdownString {
   const lines = [
     `**${row.name}**`,
     row.modName && `Mod: ${row.modName}`,
@@ -51,28 +51,28 @@ function downloadTooltip(row: DownloadRow): vscode.MarkdownString {
 
 /** `id` is pinned to the raw filename because TreeItem otherwise auto-derives it from the
  *  label, and a metadata name change would then silently drop the user's tree selection. */
-export class DownloadNode extends vscode.TreeItem {
-  readonly kind = 'download' as const;
+export class DownloadedFileNode extends vscode.TreeItem {
+  readonly kind = 'downloadedFile' as const;
   /** The Argument view on Nexus reads, which the Mods row supplies under the same name. */
   readonly nexusModId: string | undefined;
   readonly nexusGame: string | undefined;
   readonly argument: DownloadedFileArgument;
   constructor(row: DownloadFile) {
     super(row.displayName, vscode.TreeItemCollapsibleState.None);
-    this.argument = { kind: 'download', row };
+    this.argument = { kind: 'downloadedFile', row };
     this.nexusModId = row.modID;
     this.nexusGame = row.gameName;
     this.id = row.name;
-    this.iconPath = downloadStatusIcon(row.status);
-    this.description = downloadDescription(row);
-    this.tooltip = downloadTooltip(row);
-    this.contextValue = downloadContextValue(row);
+    this.iconPath = downloadedFileStatusIcon(row.status);
+    this.description = downloadedFileDescription(row);
+    this.tooltip = downloadedFileTooltip(row);
+    this.contextValue = downloadedFileContextValue(row);
     // Decoration hook — the dimming FileDecorationProvider keys off this URI.
     this.resourceUri = vscode.Uri.file(row.path);
   }
 }
 
-export type DownloadsTreeNode = DownloadNode | ErrorNode;
+export type DownloadsTreeNode = DownloadedFileNode | ErrorNode;
 
 interface DownloadsProviderOptions {
   /** downloads/ rows, metadata folded in. */
@@ -91,13 +91,13 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   private readonly readFailureSubscription: vscode.Disposable;
   private readonly firstRead: FirstRead;
 
-  private cache?: DownloadNode[];
+  private cache?: DownloadedFileNode[];
 
   // Transient view state — never persisted, matching the Mods tree's Sort Direction
   // toggle: a fresh activation always starts back at the spec's defaults (excluded rows hidden,
   // Filetime descending).
   private showExcluded = false;
-  private sortColumn: DownloadSortColumn = 'mtimeMs';
+  private sortColumn: DownloadedFileSortColumn = 'mtimeMs';
   private sortDescending = true;
   private filterLower = '';
 
@@ -134,7 +134,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     this.invalidate();
   }
 
-  setSort(column: DownloadSortColumn, descending: boolean): void {
+  setSort(column: DownloadedFileSortColumn, descending: boolean): void {
     this.sortColumn = column;
     this.sortDescending = descending;
     this.invalidate();
@@ -142,7 +142,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
 
   /** What the sort pick pre-selects (downloads.md, Order and view state, story 2: "The pick
    *  marks the current sort"). */
-  currentSort(): { column: DownloadSortColumn; descending: boolean } {
+  currentSort(): { column: DownloadedFileSortColumn; descending: boolean } {
     return { column: this.sortColumn, descending: this.sortDescending };
   }
 
@@ -184,8 +184,8 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     return this.cache.filter((n) => n.argument.row.displayName.toLowerCase().includes(this.filterLower));
   }
 
-  private build(downloads: readonly DownloadFile[]): DownloadNode[] {
-    const rows = sortDownloadRows(filterExcludedRows(downloads, this.showExcluded), this.sortColumn, this.sortDescending);
-    return rows.map((row) => new DownloadNode(row));
+  private build(downloads: readonly DownloadFile[]): DownloadedFileNode[] {
+    const rows = sortDownloadedFileRows(filterExcludedRows(downloads, this.showExcluded), this.sortColumn, this.sortDescending);
+    return rows.map((row) => new DownloadedFileNode(row));
   }
 }

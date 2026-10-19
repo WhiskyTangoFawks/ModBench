@@ -61,7 +61,7 @@ const installDownloaded = async (file: DownloadFile, listed: readonly DownloadFi
     warnIfFomod: deps.warnIfFomod, downloadInstall: deps,
   });
   const handler = registerCommand.mock.calls.findLast((call) => call[0] === 'modbench.mod.install')?.[1];
-  await handler?.({ argument: { kind: 'download', row: file } });
+  await handler?.({ argument: { kind: 'downloadedFile', row: file } });
 };
 
 const installRow = (deps: DownloadInstallDeps, row: Partial<DownloadRow> = {}): Promise<void> => {

@@ -12,8 +12,8 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile },
 }));
 
-import { DownloadsProvider, DownloadNode, type DownloadsTreeNode } from '../DownloadsProvider';
-import { downloadNodeFixture } from '../../test/mo2/downloadNodeFixture';
+import { DownloadsProvider, DownloadedFileNode, type DownloadsTreeNode } from '../DownloadsProvider';
+import { downloadedFileNodeFixture } from '../../test/mo2/downloadedFileNodeFixture';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
@@ -22,7 +22,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { DownloadFile, DownloadRow, InstanceValue } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 
-const rowNamesOfDownloadNodes = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadNode).argument.row.name);
+const rowNamesOfDownloadedFileNodes = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadedFileNode).argument.row.name);
 
 const row = (extra: Partial<DownloadRow> = {}): DownloadFile => downloadRowFixture(extra.name ?? 'foo.zip', extra);
 
@@ -46,35 +46,35 @@ const makeProviderOverRowsNeverOnDisk = (
   return new DownloadsProvider(options);
 };
 
-describe('DownloadNode', () => {
+describe('DownloadedFileNode', () => {
   it('label is the row displayName; id is pinned to the raw filename', () => {
-    const node = downloadNodeFixture(row({ name: 'foo_1_2_3.zip', displayName: 'Sleep or Save' }));
+    const node = downloadedFileNodeFixture(row({ name: 'foo_1_2_3.zip', displayName: 'Sleep or Save' }));
     expect(node.label).toBe('Sleep or Save');
     expect(node.id).toBe('foo_1_2_3.zip');
   });
 
   it('is a flat leaf row (no children)', () => {
-    const node = downloadNodeFixture(row());
+    const node = downloadedFileNodeFixture(row());
     expect(node.collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 
   describe('status icon + colour', () => {
     it('Downloaded -> archive icon, green', () => {
-      const node = downloadNodeFixture(row({ status: 'Downloaded' }));
+      const node = downloadedFileNodeFixture(row({ status: 'Downloaded' }));
       const icon = expectInstanceOf(node.iconPath, ThemeIcon);
       expect(icon.id).toBe('archive');
       expect(icon.color?.id).toBe('charts.green');
     });
 
     it('Installed -> check icon, no explicit colour', () => {
-      const node = downloadNodeFixture(row({ status: 'Installed' }));
+      const node = downloadedFileNodeFixture(row({ status: 'Installed' }));
       const icon = expectInstanceOf(node.iconPath, ThemeIcon);
       expect(icon.id).toBe('check');
       expect(icon.color).toBeUndefined();
     });
 
     it('Uninstalled -> circle-slash icon, yellow', () => {
-      const node = downloadNodeFixture(row({ status: 'Uninstalled' }));
+      const node = downloadedFileNodeFixture(row({ status: 'Uninstalled' }));
       const icon = expectInstanceOf(node.iconPath, ThemeIcon);
       expect(icon.id).toBe('circle-slash');
       expect(icon.color?.id).toBe('charts.yellow');
@@ -83,29 +83,29 @@ describe('DownloadNode', () => {
 
   describe('description', () => {
     it('Downloaded (default) shows only the version, unmarked', () => {
-      const node = downloadNodeFixture(row({ status: 'Downloaded', version: '2.2.1' }));
+      const node = downloadedFileNodeFixture(row({ status: 'Downloaded', version: '2.2.1' }));
       expect(node.description).toBe('v2.2.1');
     });
 
     it('Installed appends the status word after the version', () => {
-      const node = downloadNodeFixture(row({ status: 'Installed', version: '2.2.1' }));
+      const node = downloadedFileNodeFixture(row({ status: 'Installed', version: '2.2.1' }));
       expect(node.description).toBe('v2.2.1 Installed');
     });
 
     it('Uninstalled appends the status word after the version', () => {
-      const node = downloadNodeFixture(row({ status: 'Uninstalled', version: '2.2.1' }));
+      const node = downloadedFileNodeFixture(row({ status: 'Uninstalled', version: '2.2.1' }));
       expect(node.description).toBe('v2.2.1 Uninstalled');
     });
 
     it('omits the version entirely when absent, leaving just the status word (or nothing)', () => {
-      expect(downloadNodeFixture(row({ status: 'Downloaded' })).description).toBe('');
-      expect(downloadNodeFixture(row({ status: 'Installed' })).description).toBe('Installed');
+      expect(downloadedFileNodeFixture(row({ status: 'Downloaded' })).description).toBe('');
+      expect(downloadedFileNodeFixture(row({ status: 'Installed' })).description).toBe('Installed');
     });
   });
 
   describe('tooltip', () => {
     it('a fully-populated row includes every field', () => {
-      const node = downloadNodeFixture(
+      const node = downloadedFileNodeFixture(
         row({
           modName: 'Sleep or Save', version: '2.2.1', modID: '12345', size: 4096,
           mtimeMs: Date.parse('2024-01-15T10:00:00Z'), gameName: 'Fallout4', author: 'SomeAuthor',
@@ -122,36 +122,36 @@ describe('DownloadNode', () => {
     });
 
     it('a minimal row (filename only) omits every optional field without erroring', () => {
-      const node = downloadNodeFixture(row());
+      const node = downloadedFileNodeFixture(row());
       const tooltip = expectInstanceOf(node.tooltip, MarkdownString);
       expect(tooltip.value).toContain('foo.zip');
       expect(tooltip.value).not.toContain('undefined');
     });
   });
 
-  it('contextValue is the row\'s downloadContextValue', () => {
-    const node = downloadNodeFixture(row({ hasMeta: true, modID: '1', excluded: true }));
-    expect(node.contextValue).toBe('download hasModID hasMeta excluded');
+  it('contextValue is the row\'s downloadedFileContextValue', () => {
+    const node = downloadedFileNodeFixture(row({ hasMeta: true, modID: '1', excluded: true }));
+    expect(node.contextValue).toBe('downloadedFile hasModID hasMeta excluded');
   });
 
   it('resourceUri is the path the value carries for the row', () => {
-    const node = downloadNodeFixture(row({ name: 'foo.zip' }));
-    expect(present(node.resourceUri, "the download node's resourceUri").fsPath).toBe(join('/instance', 'downloads', 'foo.zip'));
+    const node = downloadedFileNodeFixture(row({ name: 'foo.zip' }));
+    expect(present(node.resourceUri, "the downloaded file node's resourceUri").fsPath).toBe(join('/instance', 'downloads', 'foo.zip'));
   });
 
   it('exposes the source row for command handlers to act on', () => {
     const r = row();
-    expect(downloadNodeFixture(r).argument.row).toBe(r);
+    expect(downloadedFileNodeFixture(r).argument.row).toBe(r);
   });
 
   it('carries its sidecar\'s modID as the Nexus mod id view on Nexus opens, and none without one', () => {
-    expect(downloadNodeFixture(row({ modID: '123' })).nexusModId).toBe('123');
-    expect(downloadNodeFixture(row()).nexusModId).toBeUndefined();
+    expect(downloadedFileNodeFixture(row({ modID: '123' })).nexusModId).toBe('123');
+    expect(downloadedFileNodeFixture(row()).nexusModId).toBeUndefined();
   });
 
   it('carries its sidecar\'s game as the game view on Nexus opens the page of, and none without one', () => {
-    expect(downloadNodeFixture(row({ gameName: 'SkyrimSE' })).nexusGame).toBe('SkyrimSE');
-    expect(downloadNodeFixture(row()).nexusGame).toBeUndefined();
+    expect(downloadedFileNodeFixture(row({ gameName: 'SkyrimSE' })).nexusGame).toBe('SkyrimSE');
+    expect(downloadedFileNodeFixture(row()).nexusGame).toBeUndefined();
   });
 });
 
@@ -161,7 +161,7 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
       row({ name: 'old.zip', mtimeMs: 1000 }),
       row({ name: 'new.zip', mtimeMs: 2000 }),
     ]);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['new.zip', 'old.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['new.zip', 'old.zip']);
   });
 
   it('narrows to rows whose label contains the filter text, case-insensitively', async () => {
@@ -172,7 +172,7 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
     await provider.getChildren();
     provider.setFilter('armor');
 
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['ArmorPack.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['ArmorPack.zip']);
   });
 
   it('narrows by the label, not the raw filename, which has no "armor" in it', async () => {
@@ -183,12 +183,12 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
     await provider.getChildren();
     provider.setFilter('armor');
 
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['file-one.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['file-one.zip']);
   });
 
   it('excludes excluded rows by default (Show excluded off)', async () => {
     const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['visible.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['visible.zip']);
   });
 
   it('returns no children when the Instance value has no downloads', async () => {
@@ -196,7 +196,7 @@ describe('DownloadsProvider — rows come from the Instance value', () => {
     expect(await provider.getChildren()).toEqual([]);
   });
 
-  it('a non-root element (a download row) has no children of its own', async () => {
+  it('a non-root element (a downloaded file row) has no children of its own', async () => {
     const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'foo.zip' })]);
     const [node] = await provider.getChildren();
     expect(await provider.getChildren(node)).toEqual([]);
@@ -208,8 +208,8 @@ describe('setShowExcluded', () => {
     const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
     provider.setShowExcluded(true);
     const nodes = await provider.getChildren();
-    expect(rowNamesOfDownloadNodes(nodes).sort()).toEqual(['excluded.zip', 'visible.zip']);
-    expect(nodes.map((n) => expectInstanceOf(n, DownloadNode).argument.row).find((r) => r.name === 'excluded.zip')?.excluded).toBe(true);
+    expect(rowNamesOfDownloadedFileNodes(nodes).sort()).toEqual(['excluded.zip', 'visible.zip']);
+    expect(nodes.map((n) => expectInstanceOf(n, DownloadedFileNode).argument.row).find((r) => r.name === 'excluded.zip')?.excluded).toBe(true);
   });
 
   it('excludes excluded rows again once turned back off', async () => {
@@ -217,7 +217,7 @@ describe('setShowExcluded', () => {
     provider.setShowExcluded(true);
     await provider.getChildren();
     provider.setShowExcluded(false);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['visible.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['visible.zip']);
   });
 
   it('re-renders: fires onDidChangeTreeData', async () => {
@@ -237,7 +237,7 @@ describe('setSort', () => {
       row({ name: 'apple.zip', displayName: 'apple.zip' }),
     ]);
     provider.setSort('name', false);
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['apple.zip', 'banana.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['apple.zip', 'banana.zip']);
   });
 
   it('re-renders: fires onDidChangeTreeData', async () => {
@@ -325,7 +325,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     const pending = provider.getChildren();
     instance.publish(valueOf([row({ name: 'a.zip' })]));
 
-    expect(rowNamesOfDownloadNodes(await pending)).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await pending)).toEqual(['a.zip']);
   });
 
   it('settles a failed first read, rather than spinning forever, on the one error row naming the reason, then renders rows when a value lands', async () => {
@@ -345,7 +345,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     instance.publish(valueOf([row({ name: 'a.zip' })]));
     const after = await explicitFailureIfNotSettledWithin(provider.getChildren(), 500);
 
-    expect(rowNamesOfDownloadNodes(after)).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadedFileNodes(after)).toEqual(['a.zip']);
   });
 
   it('renders no rows immediately when the first landed value is genuinely empty', async () => {
@@ -356,12 +356,12 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
   it('re-renders when the Instance publishes a new landed value, read again a macrotask after the publish', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.zip' })]));
     const provider = makeProviderOverRowsNeverOnDisk([], { instance });
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['a.zip']);
 
     instance.publish(valueOf([row({ name: 'a.zip' }), row({ name: 'b.zip' })]));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(rowNamesOfDownloadNodes(await provider.getChildren()).sort()).toEqual(['a.zip', 'b.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren()).sort()).toEqual(['a.zip', 'b.zip']);
   });
 
   it('dispose() disposes the Instance subscription: a publish afterward leaves the cache untouched', async () => {
@@ -373,7 +373,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     instance.publish(valueOf([row({ name: 'a.zip' }), row({ name: 'b.zip' })]));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['a.zip']);
   });
 });
 
@@ -417,6 +417,6 @@ describe('DownloadsProvider — a configured downloads folder Modbench cannot re
 
     instance.publish(valueOf([row({ name: 'a.zip' })]));
 
-    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadedFileNodes(await provider.getChildren())).toEqual(['a.zip']);
   });
 });

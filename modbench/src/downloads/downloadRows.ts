@@ -6,15 +6,15 @@ import type { DownloadRow } from '../instanceLoader/instance';
 /** The columns the reference tool's own Downloads pane sorts by. `name` means the label
  *  (downloads.md, Order and view state, story 2), so it reads `displayName`, not the row's `name`
  *  field. */
-export type DownloadSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';
+export type DownloadedFileSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';
 
-function sortValue(row: DownloadRow, column: DownloadSortColumn): string | number {
+function sortValue(row: DownloadRow, column: DownloadedFileSortColumn): string | number {
   return column === 'name' ? row.displayName : row[column];
 }
 
-export function sortDownloadRows<T extends DownloadRow>(
+export function sortDownloadedFileRows<T extends DownloadRow>(
   rows: readonly T[],
-  column: DownloadSortColumn,
+  column: DownloadedFileSortColumn,
   descending: boolean,
 ): T[] {
   // Negate the comparator for descending, don't reverse the sorted array —
@@ -38,11 +38,11 @@ export function filterExcludedRows<T extends DownloadRow>(rows: readonly T[], sh
 // A space-separated flag string, because `when` clauses match it with
 // `viewItem =~ /\bflag\b/`: flags appear only when true, and the word-boundary
 // regex makes any one of them testable regardless of the others.
-export function downloadContextValue(row: DownloadRow): string {
+export function downloadedFileContextValue(row: DownloadRow): string {
   const flags = [
     row.modID !== undefined && 'hasModID',
     row.hasMeta && 'hasMeta',
     row.excluded && 'excluded',
   ].filter((f): f is string => f !== false);
-  return ['download', ...flags].join(' ');
+  return ['downloadedFile', ...flags].join(' ');
 }
