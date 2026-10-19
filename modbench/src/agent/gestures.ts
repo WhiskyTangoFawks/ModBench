@@ -116,11 +116,10 @@ const INSTALL_SOURCE = z.union([
 
 const INSTALL = gestureInput(
   'argument: the one source, { kind: \'downloadedFile\', name } as list_downloads names it, or { kind: \'archive\' | \'folder\', path } for one outside the downloads; '
-    + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, not both; '
-    + 'force?: true to upgrade a mod that differs from its manifest, has no manifest or has a file its package does not hold, which is otherwise refused',
+    + 'options: { name: the new mod\'s name } or { target: the installed mod it upgrades, as list_mods names it }, exactly one of the two, and force?: true to upgrade a mod that differs from its manifest, has no manifest or has a file its package does not hold, which is otherwise refused',
   z.object({
     argument: z.array(INSTALL_SOURCE),
-    options: z.object({ name: z.string().optional(), target: z.string().optional(), force: z.boolean().optional() }),
+    options: z.object({ name: z.string().optional(), target: z.string().optional(), force: z.boolean().optional() }).default({}),
   }),
   (value, { argument, options: { name, target, force } }) => new AgentCall(
     argument.map((source) => (source.kind === 'downloadedFile'
@@ -243,14 +242,23 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
 
 type GestureOutcome = GestureResult<unknown>;
 
+const partialsIn = ({ partial = [] }: Extract<GestureOutcome, { applied: true }>): string[] =>
+  partial.map(({ message, detail }) => `${message} ${detail}`);
+
 function refusalIn(outcome: GestureOutcome): string | undefined {
   if (!outcome.applied) return outcome.detail === undefined ? outcome.refusal : `${outcome.refusal} ${outcome.detail}`;
   const { refused, landed } = outcome.outcome;
-  const refusals = refused.length === 0 ? [] : [
+  if (refused.length === 0) return undefined;
+  return [
     `Refused ${refused.length} of ${refused.length + landed.length}: ${refused.map(({ item, reason }) => `${JSON.stringify(item)} (${reason})`).join(', ')}.`,
-  ];
-  const partials = (outcome.partial ?? []).map(({ message, detail }) => `${message} ${detail}`);
-  return [...refusals, ...partials].join(' ') || undefined;
+    ...partialsIn(outcome),
+  ].join(' ');
+}
+
+function answerOf(outcome: GestureOutcome) {
+  return outcome.applied
+    ? { landed: outcome.outcome.landed, refused: outcome.outcome.refused, partial: outcome.partial }
+    : { refusal: outcome.refusal, detail: outcome.detail };
 }
 
 const toolName = (command: string): string =>
@@ -261,10 +269,11 @@ export const GESTURE_TOOLS = [...AGENT_GESTURES].map(([command, gesture]) => ({
   name: toolName(command),
   description: `Runs ${command}. ${gesture.takes}`.trim(),
   input: gesture.input,
-  of: async (value: InstanceValue, mEdit: NameResolver, given: unknown) => {
+  of: async (value: InstanceValue, mEdit: NameResolver, given: unknown, warn: (line: string) => void) => {
     const outcome = await vscode.commands.executeCommand<GestureOutcome>(command, await gesture.callOf(value, given, mEdit));
     const refusal = refusalIn(outcome);
-    if (refusal !== undefined) throw new Refusal(refusal, outcome);
-    return outcome;
+    if (refusal !== undefined) throw new Refusal(refusal, answerOf(outcome));
+    if (outcome.applied) partialsIn(outcome).forEach(warn);
+    return answerOf(outcome);
   },
 }));

@@ -83,7 +83,7 @@ const targetOf = async (
     return { kind: 'new', name };
   }
   if (target !== undefined && name === undefined) return { kind: 'upgrade', name: target };
-  throw new Refusal('An agent call to install carries the name of a new mod, or the target mod to upgrade, and not both.');
+  throw new Refusal('An agent call to install carries exactly one of the name of a new mod and the target mod to upgrade.');
 };
 
 async function pickPackagePath(): Promise<{ kind: 'archive' | 'folder'; path: string } | undefined> {
