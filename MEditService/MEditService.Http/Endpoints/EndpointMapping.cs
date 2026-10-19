@@ -52,7 +52,9 @@ internal static class EndpointMapping
         new Logged(nameof(IndexRefusal.NoLoadOrder), NoLoadOrderException.DefaultMessage, NoLoadOrderProblem());
 
     private static IResult NoLoadOrderProblem() =>
-        Results.Problem(NoLoadOrderException.DefaultMessage, statusCode: StatusCodes.Status503ServiceUnavailable);
+        Results.Problem(
+            NoLoadOrderException.DefaultMessage, statusCode: StatusCodes.Status503ServiceUnavailable,
+            extensions: new Dictionary<string, object?> { ["refusal"] = nameof(IndexRefusal.NoLoadOrder) });
 
     private static IResult Problem<TRefusal>(
         TRefusal refusal, TRefusal noLoadOrder, string? message, Func<TRefusal, int> status,
@@ -187,7 +189,8 @@ internal static class EndpointMapping
             IndexRefusal.FilterRejected or IndexRefusal.SelectRejected or IndexRefusal.NameRefused => StatusCodes.Status400BadRequest,
             IndexRefusal.SourceStopped => StatusCodes.Status422UnprocessableEntity,
             _ => throw new InvalidEnumArgumentException(nameof(refused), (int)refused.Refusal, typeof(IndexRefusal)),
-        }));
+        },
+        extensions: new Dictionary<string, object?> { ["refusal"] = refused.Refusal.ToString() }));
 
     private sealed class Logged(string refusal, string message, IResult problem) : IResult
     {

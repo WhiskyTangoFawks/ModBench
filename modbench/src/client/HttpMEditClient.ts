@@ -75,6 +75,10 @@ function editRefused(
   };
 }
 
+function refusalNamed(error: unknown): unknown {
+  return typeof error === 'object' && error !== null ? (error as { refusal?: unknown }).refusal : undefined;
+}
+
 function backendOptions(deps: HttpMEditClientDeps): BackendLifecycleOptions {
   return {
     executablePath: bundledBackendPath(process.platform, __dirname),
@@ -586,8 +590,7 @@ class HttpMEditClient implements MEditClient {
       if (!response.ok) {
         const text = errorText(error);
         this.log.error(`[HttpMEditClient] ${what} failed (${response.status})${text ? `: ${text}` : ''}`);
-        if (!text) return NO_ANSWER;
-        return response.status === 503 && !this.loadOrderStatusKept.everHeld() ? { failed: 'no-load-order', refusal: text } : { failed: 'refused', refusal: text };
+        return text ? { failed: refusalNamed(error) === 'NoLoadOrder' ? 'no-load-order' : 'refused', refusal: text } : NO_ANSWER;
       }
       const answered = answer(data);
       if (isReadFailed(answered)) this.log.error(`[HttpMEditClient] ${what}: mEdit answered with no body`);

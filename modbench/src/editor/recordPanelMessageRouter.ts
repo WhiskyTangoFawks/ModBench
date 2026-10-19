@@ -42,6 +42,8 @@ export interface RouteRecordPanelMessageDeps {
   documentText: (pluginActive: boolean) => Promise<string | undefined>;
   // The panel's read of `formKey` is answered, and the webview shows that record from then on.
   readAnswered: (formKey: string, columns: readonly RecordCopy[]) => void;
+  // Whether any read of the panel has landed: a refusal for want of a load order before that is not read yet.
+  firstReadLanded: () => boolean;
   // The grid's place, which the tab an edit's move of the file opens shows again.
   keepViewState: (state: ViewState) => void;
   // The latest load-order status, read rather than fetched.
@@ -54,7 +56,7 @@ export interface RouteRecordPanelMessageDeps {
 
 /** What every panel's messages share: the rest is the panel's own. */
 export type SharedRecordPanelDeps = Omit<
-  RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'keepViewState' | 'readAnswered' | 'originsShown'>;
+  RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | keyof TabDocument | 'keepViewState' | 'readAnswered' | 'firstReadLanded' | 'originsShown'>;
 
 /** What a tab's document gives its panel's messages. */
 export type TabDocument = Pick<RouteRecordPanelMessageDeps, 'titleFromRead' | 'plugin' | 'documentText'>;
@@ -64,6 +66,7 @@ export function routerDepsForTab(
   shared: SharedRecordPanelDeps, tab: RecordTab, tabs: Pick<RecordTabs, 'setCell'>, document: TabDocument,
 ): RouteRecordPanelMessageDeps {
   const reply = (m: ExtensionToWebview) => { tab.post(m); };
+  let landed = false;
   let read = shared.modFacts.standingOf(document.plugin);
   tab.own(shared.modFacts.onChange(() => {
     reply({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: modsByOrigin(tab.origins, shared.modFacts) });
@@ -81,7 +84,8 @@ export function routerDepsForTab(
     ...document,
     titleFromRead: (formKey, columns) => { if (tab.isOpen) document.titleFromRead(formKey, columns); },
     keepViewState: (state) => { tab.keepPlace(state); },
-    readAnswered: (formKey, columns) => { tab.answered(formKey, columns); },
+    readAnswered: (formKey, columns) => { landed = true; tab.answered(formKey, columns); },
+    firstReadLanded: () => landed,
   };
 }
 
@@ -191,7 +195,7 @@ async function answerRecordLoad(
   const [settled] = await Promise.allSettled([readRecord(deps, m, pluginActive)]);
   const read = settled.status === 'rejected' ? localFailure(errorMessage(settled.reason)) : settled.value;
   if (isReadFailed(read)) {
-    if (read.failed === 'no-load-order') return;
+    if (read.failed === 'no-load-order' && !deps.firstReadLanded()) return;
     deps.channel.warn(`Failed to read ${m.formKey}: ${failureReason(read)}`);
     deps.reply({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: false, failure: read });
     return;

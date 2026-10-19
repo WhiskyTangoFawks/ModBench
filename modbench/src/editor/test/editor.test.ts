@@ -1098,23 +1098,34 @@ describe('what a record tab\'s webview posts', () => {
 
   describe('a read mEdit refuses for want of a load order', () => {
     const refusal = { failed: 'no-load-order', refusal: 'No load order has been received.' } as const;
-    const childTab = async () => {
+    const childTab = async (refusing = true) => {
       const mEdit = client();
-      mEdit.setQueryFailure('getComparison', refusal);
+      if (refusing) mEdit.setQueryFailure('getComparison', refusal);
       const { openDocument, outputChannel } = makeEditor(mEdit);
       const tab = await openDocument({
         scheme: 'modbench-child-record', path: '/source/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000801%3AA.esp&name=A.esp&origin=ModA',
       });
       tab.receive(loadRequest);
       await settle();
-      return { tab, outputChannel };
+      return { tab, outputChannel, mEdit };
     };
 
-    it('answers nothing and writes no line in the Output', async () => {
+    it('answers nothing and writes no line in the Output, while the tab has read nothing', async () => {
       const { tab, outputChannel } = await childTab();
 
       expect(loadAnswered(tab)).toEqual([]);
       expect(outputChannel.warn).not.toHaveBeenCalled();
+    });
+
+    it('is failed in the Output once a read of the tab has landed', async () => {
+      const { tab, outputChannel, mEdit } = await childTab(false);
+      mEdit.setQueryFailure('getComparison', refusal);
+
+      tab.receive({ ...loadRequest, requestId: 'r2' });
+      await settle();
+
+      expect(loadAnswered(tab).at(-1)).toEqual({ type: 'recordLoadAnswered', requestId: 'r2', ok: false, failure: refusal });
+      expect(outputChannel.warn).toHaveBeenCalledWith(`Failed to read ${GUN}: No load order has been received.`);
     });
   });
 

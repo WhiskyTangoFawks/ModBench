@@ -3,8 +3,6 @@ import { isMEditGone, type MEditClient } from './MEditClient';
 
 export interface LoadOrderStatusKeeper {
   current(): LoadOrderStatus | undefined;
-  /** Whether mEdit has reported holding a load order since the status last reset. */
-  everHeld(): boolean;
   onStatus(listener: (status: LoadOrderStatus | undefined) => void): () => void;
   onSettled(listener: (status: LoadOrderStatus) => void): () => void;
 }
@@ -14,7 +12,6 @@ export function keepLoadOrderStatus(
 ): LoadOrderStatusKeeper {
   let latest: LoadOrderStatus | undefined;
   let settledVersion = -1;
-  let held = false;
   const statusListeners = new Set<(status: LoadOrderStatus | undefined) => void>();
   const settledListeners = new Set<(status: LoadOrderStatus) => void>();
   const tell = <T>(listeners: Set<(value: T) => void>, value: T) => { for (const listener of listeners) listener(value); };
@@ -22,7 +19,6 @@ export function keepLoadOrderStatus(
   const hear = (status: LoadOrderStatus) => {
     const failuresChanged = JSON.stringify(status.failures) !== JSON.stringify(latest?.failures ?? []);
     latest = status;
-    held ||= !status.holdsNone;
     tell(statusListeners, status);
     const reconciled = status.conflictsComputed && status.version > settledVersion;
     if (reconciled) settledVersion = status.version;
@@ -31,7 +27,6 @@ export function keepLoadOrderStatus(
   const reset = () => {
     latest = undefined;
     settledVersion = -1;
-    held = false;
     tell(statusListeners, undefined);
   };
   client.onNotification('load-order-status', hear);
@@ -39,7 +34,6 @@ export function keepLoadOrderStatus(
   client.onReconnected(reset);
   return {
     current: () => latest,
-    everHeld: () => held,
     onStatus: (listener) => { statusListeners.add(listener); return () => { statusListeners.delete(listener); }; },
     onSettled: (listener) => { settledListeners.add(listener); return () => { settledListeners.delete(listener); }; },
   };
