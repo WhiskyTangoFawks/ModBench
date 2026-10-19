@@ -33,6 +33,7 @@ export class RecordTab {
   private readonly moves: Move[] = [];
   private clock = 0;
   private open = true;
+  private landed = false;
   private readonly owned: vscode.Disposable[] = [];
   private pageListens: () => void = () => undefined;
   // A tab's page listens once it asks its first read, so a message posted before it is lost.
@@ -43,6 +44,9 @@ export class RecordTab {
   }
 
   get isOpen(): boolean { return this.open; }
+
+  /** Whether any read of the tab has been answered. */
+  get readLanded(): boolean { return this.landed; }
 
   /** The copy the tab's document holds, while it is open and shown. */
   get copy(): EditAddress | undefined { return this.open && this.shown ? { ...this.shown } : undefined; }
@@ -150,6 +154,7 @@ export class RecordTab {
    *  beside it. Reading a chain's last key ends every move in it, back to the key the tab last read. */
   answered(formKey: string, columns: readonly RecordCopy[]): void {
     this.columnsRead = columns;
+    this.landed = true;
     const answeredAt = ++this.clock;
     let ended = this.moves.filter(move => move.readAnsweredAt === undefined && move.to === formKey);
     while (ended.length > 0) {

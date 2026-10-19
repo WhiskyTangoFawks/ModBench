@@ -165,6 +165,17 @@ const NO_MODS: ModFacts = {
 
 const inItsDocument = () => new vscode.Location(vscode.Uri.file('/its/document.json'), new vscode.Position(3, 15));
 
+function fakeLoadOrder() {
+  const listeners = new Set<() => void>();
+  return {
+    coming: true,
+    now() { return this.coming; },
+    onChanged(listener: () => void) { listeners.add(listener); return { dispose: () => { listeners.delete(listener); } }; },
+    changed() { listeners.forEach((listener) => { listener(); }); },
+  };
+}
+let loadOrder = fakeLoadOrder();
+
 function makeEditor(
   client = new InMemoryMEditClient(), recordViewIds = [] as readonly string[], modFacts = NO_MODS,
   locateRecord = vi.fn((_record: object) => Promise.resolve<vscode.Location | { refused: string } | undefined>(inItsDocument())),
@@ -175,6 +186,7 @@ function makeEditor(
   const editor = createEditor({
     context: { extensionUri: fakeUri('/ext') },
     meditClient: client,
+    loadOrderComing: loadOrder,
     outputChannel,
     reporterFor: () => ({
       report: (...args: unknown[]) => { h.reports.push(args); }, landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn(),
@@ -216,6 +228,7 @@ function makeEditor(
 }
 
 beforeEach(() => {
+  loadOrder = fakeLoadOrder();
   h.disk.clear();
   h.commands.clear();
   h.contextKeys.clear();
@@ -742,6 +755,50 @@ describe('a record file\'s tab', () => {
     expect(outputChannel.warn).toHaveBeenCalledWith(`Failed to read ${FILE}: ${why}`);
   });
 
+  it('shows the empty panel, and no line in the Output, when mEdit refuses while a load order is on its way, then the record once it arrives', async () => {
+    const client = fileClient();
+    client.setQueryFailureOnce('getRecordOfFile', { failed: 'no-load-order', refusal: 'No load order has been received.' });
+    client.setQueryAnswer('getRecordOfFile', holding(GUN));
+    const { openFile, outputChannel } = makeEditor(client);
+
+    const tab = await openFile(FILE);
+
+    expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
+    expect(outputChannel.warn).not.toHaveBeenCalled();
+
+    client.emit(statusTick(false, 1));
+    await settle();
+
+    expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
+  });
+
+  it('shows "Failed to load:" and a line in the Output when mEdit refuses and no load order is on its way', async () => {
+    loadOrder.coming = false;
+    const client = fileClient();
+    const refusal = { failed: 'no-load-order', refusal: 'No load order has been received.' } as const;
+    client.setQueryFailure('getRecordOfFile', refusal);
+    const { openFile, outputChannel } = makeEditor(client);
+
+    const tab = await openFile(FILE);
+
+    expect(pageGlobal(tab, 'mEditLoadError')).toEqual(refusal);
+    expect(outputChannel.warn).toHaveBeenCalledWith(`Failed to read ${FILE}: No load order has been received.`);
+  });
+
+  it('empties the panel of an earlier failure when mEdit then refuses while a load order is on its way', async () => {
+    const client = fileClient();
+    client.setQueryFailureOnce('getRecordOfFile', { failed: 'unreachable' });
+    client.setQueryFailure('getRecordOfFile', { failed: 'no-load-order', refusal: 'No load order has been received.' });
+    const { openFile } = makeEditor(client);
+    const tab = await openFile(FILE);
+    expect(pageGlobal(tab, 'mEditLoadError')).toEqual({ failed: 'unreachable' });
+
+    client.emit(statusTick(false, 1));
+    await settle();
+
+    expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
+  });
+
   it('asks again on mEdit\'s next load-order status, and shows the record once mEdit answers', async () => {
     const client = fileClient();
     client.setQueryFailureOnce('getRecordOfFile', { failed: 'unreachable' });
@@ -1078,6 +1135,101 @@ describe('what a record tab\'s webview posts', () => {
     client.setQueryAnswer('getPlugins', activeA);
     return client;
   }
+
+  describe('a read mEdit refuses for want of a load order', () => {
+    const refusal = { failed: 'no-load-order', refusal: 'No load order has been received.' } as const;
+    const refusedWarning = `Failed to read ${GUN}: No load order has been received.`;
+    const cell = {
+      scheme: 'modbench-child-record', path: '/source/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000801%3AA.esp&name=A.esp&origin=ModA',
+    };
+    const lastLoadAnswer = (tab: FakePanel) => loadAnswered(tab).at(-1);
+    const loadRecordPosts = (tab: FakePanel) => answered(tab).filter((message) => typeof message === 'object' && message !== null && Reflect.get(message, 'type') === 'loadRecord');
+
+    async function refusedTab() {
+      const mEdit = client();
+      mEdit.setQueryFailure('getComparison', refusal);
+      const { openDocument, outputChannel } = makeEditor(mEdit);
+      const tab = await openDocument(cell);
+      tab.receive(loadRequest);
+      await settle();
+      return { tab, outputChannel, mEdit };
+    }
+
+    it('answers nothing and writes no line in the Output, while a load order is on its way and the tab has read nothing', async () => {
+      const { tab, outputChannel } = await refusedTab();
+
+      expect(loadAnswered(tab)).toEqual([]);
+      expect(outputChannel.warn).not.toHaveBeenCalled();
+    });
+
+    it('is failed in the Output once no load order is on its way', async () => {
+      loadOrder.coming = false;
+
+      const { tab, outputChannel } = await refusedTab();
+
+      expect(lastLoadAnswer(tab)).toEqual({ type: 'recordLoadAnswered', requestId: 'r1', ok: false, failure: refusal });
+      expect(outputChannel.warn).toHaveBeenCalledWith(refusedWarning);
+    });
+
+    it('reads again when Modbench declines to hand a load order, and is then failed in the Output', async () => {
+      const { tab, outputChannel } = await refusedTab();
+      const postsBefore = loadRecordPosts(tab).length;
+
+      loadOrder.coming = false;
+      loadOrder.changed();
+      await settle();
+
+      expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1);
+      tab.receive({ ...loadRequest, requestId: 'r2' });
+      await settle();
+      expect(lastLoadAnswer(tab)).toEqual({ type: 'recordLoadAnswered', requestId: 'r2', ok: false, failure: refusal });
+      expect(outputChannel.warn).toHaveBeenCalledWith(refusedWarning);
+    });
+
+    it('reads again on a status once no load order is coming', async () => {
+      const { tab, mEdit } = await refusedTab();
+      const postsBefore = loadRecordPosts(tab).length;
+
+      loadOrder.coming = false;
+      mEdit.emit(statusTick(false, 1));
+      await settle();
+
+      expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1);
+    });
+
+    it('reads again once the load order\'s reconcile settles, and lands the record', async () => {
+      const mEdit = client();
+      mEdit.setQueryFailureOnce('getComparison', refusal);
+      const { openDocument } = makeEditor(mEdit);
+      const tab = await openDocument(cell);
+      tab.receive(loadRequest);
+      await settle();
+      const postsBefore = loadRecordPosts(tab).length;
+
+      mEdit.emit(statusTick(true, 1));
+      await settle();
+
+      expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1);
+      tab.receive({ ...loadRequest, requestId: 'r2' });
+      await settle();
+      expect(lastLoadAnswer(tab)).toMatchObject({ requestId: 'r2', ok: true });
+    });
+
+    it('is failed in the Output once a read of the tab has landed', async () => {
+      const mEdit = client();
+      const { openDocument, outputChannel } = makeEditor(mEdit);
+      const tab = await openDocument(cell);
+      tab.receive(loadRequest);
+      await settle();
+      mEdit.setQueryFailure('getComparison', refusal);
+
+      tab.receive({ ...loadRequest, requestId: 'r2' });
+      await settle();
+
+      expect(lastLoadAnswer(tab)).toEqual({ type: 'recordLoadAnswered', requestId: 'r2', ok: false, failure: refusal });
+      expect(outputChannel.warn).toHaveBeenCalledWith(refusedWarning);
+    });
+  });
 
   describe('an edit of a field', () => {
     const [FORM_KEY, MODDED] = ['000800:A.esp', '000900:A.esp'];

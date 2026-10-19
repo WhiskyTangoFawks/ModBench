@@ -79,6 +79,7 @@ export async function register({
   createEditor({
     context: { extensionUri: vscode.Uri.from({ scheme: 'file' }) },
     meditClient: meditClient ?? new InMemoryMEditClient(),
+    loadOrderComing: { now: () => true, onChanged: () => ({ dispose: () => undefined }) },
     outputChannel,
     reporterFor: () => reporter,
     ask: vi.fn(),

@@ -169,6 +169,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
 
         var problem = AssertIsProblemDetails(resp, expectedStatus);
         Assert.Contains("load order", problem.GetProperty("detail").GetString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("NoLoadOrder", problem.GetProperty("refusal").GetString());
     }
 
     [Theory]
@@ -210,6 +211,6 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         var problem = AssertIsProblemDetails(response, 503);
         Assert.Equal(LoadOrder.NoLoadOrderException.DefaultMessage, problem.GetProperty("detail").GetString());
         Assert.Equal("Service Unavailable", problem.GetProperty("title").GetString());
-        Assert.False(problem.TryGetProperty("refusal", out _));
+        Assert.Equal("NoLoadOrder", problem.GetProperty("refusal").GetString());
     }
 }

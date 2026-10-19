@@ -64,13 +64,17 @@ function appliedWithRefusals<A, R>(
 
 // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived from the
 // status: only it tells "not a compiled plugin" from "no folder", whose ways out differ.
+function refusalNamed(error: unknown): string | undefined {
+  const refusal = typeof error === 'object' && error !== null ? (error as { refusal?: unknown }).refusal : undefined;
+  return typeof refusal === 'string' ? refusal : undefined;
+}
+
 function editRefused(
   error: { refusal?: unknown; detail?: string | null } | undefined,
 ): { applied: false; refusal: string; message: string } {
-  const refusal = error?.refusal;
   return {
     applied: false,
-    refusal: typeof refusal === 'string' ? refusal : 'Unknown',
+    refusal: refusalNamed(error) ?? 'Unknown',
     message: error?.detail ?? (errorText(error) || 'mEdit refused the edit.'),
   };
 }
@@ -586,7 +590,7 @@ class HttpMEditClient implements MEditClient {
       if (!response.ok) {
         const text = errorText(error);
         this.log.error(`[HttpMEditClient] ${what} failed (${response.status})${text ? `: ${text}` : ''}`);
-        return text ? { failed: 'refused', refusal: text } : NO_ANSWER;
+        return text ? { failed: refusalNamed(error) === 'NoLoadOrder' ? 'no-load-order' : 'refused', refusal: text } : NO_ANSWER;
       }
       const answered = answer(data);
       if (isReadFailed(answered)) this.log.error(`[HttpMEditClient] ${what}: mEdit answered with no body`);

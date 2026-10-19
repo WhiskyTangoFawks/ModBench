@@ -8,7 +8,7 @@ import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
 import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFocusedView';
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
-import { createEditor, sourceModRepositoriesOver, type Editor } from './editor';
+import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage, formKeyLocation } from './sourceLanguage';
 import { saveModPluginSource } from './sourceLanguage/dirtyPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
@@ -104,6 +104,7 @@ interface OpenedInstance {
 
 interface Opened {
   facts: InstanceFacts;
+  instance?: Instance;
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
 }
 
@@ -116,7 +117,7 @@ function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened 
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
       }));
-      return { facts: factsOf(instance), side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
+      return { facts: factsOf(instance), instance, side: (own, deps) => buildInstanceSide(own, { instanceRoot, adapter, instance }, deps) };
     },
     notAnInstance: () => ({ facts: NO_INSTANCE_FACTS, side: buildBareSide }),
   });
@@ -250,6 +251,8 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   const editor = createEditor({
     context, meditClient, outputChannel,
+    loadOrderComing: loadOrderComing(
+      opened.instance, meditClient),
     reporterFor,
     ask: askQuestion,
     focusedView,

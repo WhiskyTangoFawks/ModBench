@@ -183,8 +183,14 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     let shownReason: string | undefined;
     const read = async (): Promise<void> => {
       const fail = (failure: ReadFailed): void => {
+        if (!tab.awaitsRecord) return;
+        if (failure.failed === 'no-load-order' && this.deps.routerDeps.loadOrderComing()) {
+          if (shownReason !== undefined) showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: 'main.js', globals: {} });
+          shownReason = undefined;
+          return;
+        }
         const reason = failureReason(failure);
-        if (reason === shownReason || !tab.awaitsRecord) return;
+        if (reason === shownReason) return;
         shownReason = reason;
         this.deps.channel.warn(`Failed to read ${fsPath}: ${reason}`);
         showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: 'main.js', globals: { mEditLoadError: failure } satisfies RecordPageGlobals });
@@ -221,7 +227,10 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
   }
 
   readAgain(): void {
-    for (const tab of this.deps.tabs) tab.askWhichRecordAgain();
+    for (const tab of this.deps.tabs) {
+      tab.askWhichRecordAgain();
+      if (!tab.readLanded && !this.deps.routerDeps.loadOrderComing()) tab.refresh();
+    }
   }
 
   // Saved, the read model wins (commands.md, Principles), but mEdit compares no inactive plugin's
