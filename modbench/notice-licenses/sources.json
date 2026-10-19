@@ -1,4 +1,30 @@
 {
+  "GPL-3.0.txt": {
+    "sources": [
+      "https://raw.githubusercontent.com/Mutagen-Modding/Mutagen/414371eedc94a3e0c28f082180e0492df67ab8ca/LICENSE.txt",
+      "https://raw.githubusercontent.com/Noggog/Loqui/da23e9867105c91e855edf791a35386ef038f063/LICENSE.txt",
+      "https://raw.githubusercontent.com/Noggog/CSharpExt/dc1558f85e7595bdbae20a18a57905c3a07add9d/LICENSE.txt",
+      "https://raw.githubusercontent.com/erri120/GameFinder/efa23bd6d02ec07aa9fb1abe1025efafe3190d9f/LICENSE",
+      "https://raw.githubusercontent.com/Mutagen-Modding/Mutagen.Bethesda.Serialization/427a683037bdbb9e3c607bf29257b809703833e6/LICENSE.txt"
+    ],
+    "packages": {
+      "Loqui": "3.7.0",
+      "Mutagen.Bethesda.Core": "0.55.0-alpha.67",
+      "Mutagen.Bethesda.Fallout4": "0.55.0-alpha.67",
+      "Mutagen.Bethesda.Kernel": "0.55.0-alpha.67",
+      "Mutagen.Bethesda.Skyrim": "0.55.0-alpha.67",
+      "Mutagen.Bethesda.Starfield": "0.55.0-alpha.67",
+      "Noggog.CSharpExt": "4.3.0",
+      "GameFinder.Common": "4.9.0",
+      "GameFinder.RegistryUtils": "4.9.0",
+      "GameFinder.StoreHandlers.GOG": "4.9.0",
+      "GameFinder.StoreHandlers.Steam": "4.9.0",
+      "GameFinder.StoreHandlers.Xbox": "4.9.0",
+      "GameFinder.Wine": "4.9.0",
+      "Mutagen.Bethesda.Serialization": "1.37.1",
+      "Mutagen.Bethesda.Serialization.Newtonsoft": "1.37.1"
+    }
+  },
   "Apache-2.0-Serilog.txt": {
     "sources": [
       "https://raw.githubusercontent.com/serilog/serilog/726e29c5b172aa8813285be1ad8cc728fd531eab/LICENSE"
@@ -13,38 +39,6 @@
       "Serilog.Sinks.Console": "6.1.1",
       "Serilog.Sinks.Debug": "3.0.0",
       "Serilog.Sinks.File": "7.0.0"
-    }
-  },
-  "GPL-3.0-Mutagen.txt": {
-    "sources": [
-      "https://raw.githubusercontent.com/Mutagen-Modding/Mutagen/414371eedc94a3e0c28f082180e0492df67ab8ca/LICENSE.txt",
-      "https://raw.githubusercontent.com/Noggog/Loqui/da23e9867105c91e855edf791a35386ef038f063/LICENSE.txt",
-      "https://raw.githubusercontent.com/Noggog/CSharpExt/dc1558f85e7595bdbae20a18a57905c3a07add9d/LICENSE.txt"
-    ],
-    "packages": {
-      "Loqui": "3.7.0",
-      "Mutagen.Bethesda.Core": "0.55.0-alpha.67",
-      "Mutagen.Bethesda.Fallout4": "0.55.0-alpha.67",
-      "Mutagen.Bethesda.Kernel": "0.55.0-alpha.67",
-      "Mutagen.Bethesda.Skyrim": "0.55.0-alpha.67",
-      "Mutagen.Bethesda.Starfield": "0.55.0-alpha.67",
-      "Noggog.CSharpExt": "4.3.0"
-    }
-  },
-  "GPL-3.0-GameFinder.txt": {
-    "sources": [
-      "https://raw.githubusercontent.com/erri120/GameFinder/efa23bd6d02ec07aa9fb1abe1025efafe3190d9f/LICENSE",
-      "https://raw.githubusercontent.com/Mutagen-Modding/Mutagen.Bethesda.Serialization/427a683037bdbb9e3c607bf29257b809703833e6/LICENSE.txt"
-    ],
-    "packages": {
-      "GameFinder.Common": "4.9.0",
-      "GameFinder.RegistryUtils": "4.9.0",
-      "GameFinder.StoreHandlers.GOG": "4.9.0",
-      "GameFinder.StoreHandlers.Steam": "4.9.0",
-      "GameFinder.StoreHandlers.Xbox": "4.9.0",
-      "GameFinder.Wine": "4.9.0",
-      "Mutagen.Bethesda.Serialization": "1.37.1",
-      "Mutagen.Bethesda.Serialization.Newtonsoft": "1.37.1"
     }
   },
   "GPL-3.0-NexusMods.Paths.txt": {

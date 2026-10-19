@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+const LICENSE_TEXTS = 'notice-licenses';
 const LICENSE_FILE = /^(licen[cs]e|third-party-notices|notice)/i;
 
 function licenseTexts(dir) {
@@ -11,10 +12,10 @@ function licenseTexts(dir) {
 }
 
 function suppliedTexts() {
-  const sources = JSON.parse(readFileSync(join('notice-licenses', 'sources.json'), 'utf8'));
+  const sources = JSON.parse(readFileSync(join(LICENSE_TEXTS, 'sources.json'), 'utf8'));
   const byId = new Map();
   for (const [file, { packages }] of Object.entries(sources)) {
-    const text = readFileSync(join('notice-licenses', file), 'utf8').trim();
+    const text = readFileSync(join(LICENSE_TEXTS, file), 'utf8').trim();
     for (const [name, version] of Object.entries(packages)) byId.set(`${name}@${version}`, text);
   }
   return byId;
@@ -66,8 +67,8 @@ function nugetPackages() {
 const packages = [...npmPackages(), ...nugetPackages()].sort((a, b) => a.id.localeCompare(b.id));
 const textless = packages.filter(({ texts }) => texts.length === 0).map(({ id }) => id);
 if (textless.length > 0) {
-  throw new Error(`No license text for ${textless.join(', ')}. Add each to notice-licenses/sources.json with its upstream source.`);
+  throw new Error(`No license text for ${textless.join(', ')}. A NuGet package that ships none takes its text from ${LICENSE_TEXTS}/sources.json: recheck the license at the new version and key its entry to that version. An npm package must ship its own.`);
 }
 const sections = packages.map(({ id, license, texts }) => [`${id} (${license ?? 'see license text'})`, ...texts].join('\n\n'));
 
-writeFileSync('THIRD-PARTY-NOTICES.txt', `Modbench bundles the following third-party software.\n\n${sections.join('\n\n----------------------------------------\n\n')}\n`);
+writeFileSync('THIRD-PARTY-NOTICES.txt', `Modbench bundles the following third-party software.\n\n${sections.join('\n\n----------------------------------------\n\n')}\n`.replaceAll('\r\n', '\n'));
