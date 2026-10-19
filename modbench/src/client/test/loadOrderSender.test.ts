@@ -337,6 +337,28 @@ describe('each launch, announced as it begins', () => {
     await expect(launches[0]).resolves.toEqual({ outcome: 'failed' });
   });
 
+  it('comes to failed with the error when taking the half-started mEdit down threw', async () => {
+    const client = new InMemoryMEditClient();
+    client.answerStart(() => { client.setStatus('disconnected'); return Promise.resolve(); });
+    client.answerStop(() => { throw new Error('would not die'); });
+    const launches = launchesOf(client);
+
+    await client.start();
+
+    await expect(launches[0]).resolves.toEqual({ outcome: 'failed', error: 'would not die' });
+  });
+
+  it('carries both errors when the launch threw and taking it down threw', async () => {
+    const client = new InMemoryMEditClient();
+    client.answerStart(() => Promise.reject(new Error('no port')));
+    client.answerStop(() => { throw new Error('would not die'); });
+    const launches = launchesOf(client);
+
+    await client.start();
+
+    await expect(launches[0]).resolves.toEqual({ outcome: 'failed', error: 'no port; would not die' });
+  });
+
   it('comes to stopped when a stop cut it short', async () => {
     const client = new InMemoryMEditClient();
     const launched = pending<undefined>();
