@@ -72,12 +72,12 @@
           {
             "id": "decompile",
             "title": "Decompile a mod",
-            "description": "Decompile and Commit Mod turns each plugin of a mod into plugin source: one JSON file for each record, in a repository of its own in source/.\n[Decompile and Commit Mod](command:modbench.mod.decompileAndCommit)",
+            "description": "Decompile and Commit Mod turns each plugin of a mod into plugin source: one JSON file for each record, in a repository of its own in source/. Right-click a mod in the Mods view and choose it.\n[Show the Mods view](command:modbench.modList.focus)",
             "media": {
               "markdown": "walkthrough/getting-started.md"
             },
             "completionEvents": [
-              "onCommand:modbench.mod.decompileAndCommit"
+              "onContext:modbench.mod.anySource == true"
             ]
           },
           {

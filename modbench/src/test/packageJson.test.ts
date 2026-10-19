@@ -193,6 +193,8 @@ describe('package.json activation', () => {
   });
 });
 
+const SOURCE_MOD_KEY = 'modbench.mod.anySource';
+
 describe('package.json getting started (user-docs.md, The walkthrough)', () => {
   const steps = pkg.contributes.walkthroughs.flatMap((walkthrough) => walkthrough.steps);
   const commands = new Set(pkg.contributes.commands.map(({ command }) => command));
@@ -202,7 +204,7 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
   const OWNERS: Record<string, (subject: string) => boolean> = {
     onCommand: isCommand,
     onView: (subject) => views.has(subject) || isVsCodes(subject),
-    onContext: (subject) => [FOLDER_KEY, INSTANCE_READ_KEY].some((key) => subject.startsWith(`${key} `)),
+    onContext: (subject) => [FOLDER_KEY, INSTANCE_READ_KEY, SOURCE_MOD_KEY].some((key) => subject.startsWith(`${key} `)),
     onLink: (subject) => subject.startsWith(`${REPOSITORY}/blob/main/docs/wiki/`),
   };
   const owned = (event: string): boolean => {
@@ -217,6 +219,10 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
 
   it('ticks each step on a command, view or context of Modbench or VS Code, or a link into the repository (story 3)', () => {
     expect(steps.filter((step) => step.completionEvents.length === 0 || !step.completionEvents.every(owned)).map(({ id }) => id)).toEqual([]);
+  });
+
+  it('ticks the decompile step when a source mod exists, not when its command fires (story 3)', () => {
+    expect(steps.find(({ id }) => id === 'decompile')?.completionEvents).toEqual([`onContext:${SOURCE_MOD_KEY} == true`]);
   });
 
   it('links each step only to commands that exist', () => {
