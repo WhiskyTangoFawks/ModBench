@@ -118,7 +118,7 @@ async function applyReconciled(
   totalPlugins: number,
 ): Promise<void> {
   const held = await facts.reconciled(failures);
-  // A newer reconcile hands its own load order over, and the feed reports a failed read itself.
+  // Superseded by a newer step, which shows its own state, or a failed read the feed reported.
   if (held === undefined) return;
   // Do not remove as logging noise: `held + failures.length` landing close to
   // `totalPlugins` is what tells a stuck-tail reconcile here from one broken upstream.

@@ -3,8 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h = vi.hoisted(() => ({ items: [] as { text: string }[] }));
 
-vi.mock('vscode', async () => ({
-  EventEmitter: (await import('../../test/vscodeMock')).EventEmitter,
+vi.mock('vscode', () => ({
   StatusBarAlignment: { Left: 1, Right: 2 },
   window: {
     createStatusBarItem: () => {
@@ -20,9 +19,6 @@ import { createStatusBar } from '../statusBar';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
-import { PluginFactsFeed } from '../pluginFactsFeed';
-import { pluginMetadataFixture } from '../../client/test/fixtures';
-import type { PluginMetadata } from '../../client';
 
 const statusBarText = (): string => present(h.items.at(-1), 'the status bar item').text;
 
@@ -80,6 +76,18 @@ describe('the Plugins view following the record index status and mEdit\'s own', 
     await flushed();
 
     expect(deps.log).toHaveBeenCalledWith('info', expect.stringContaining('3 in the load order, 0 failed'));
+  });
+
+  it('reports nothing when the hand-off did not land', async () => {
+    const { client, deps, followed: following } = followed();
+    deps.facts.reconciled.mockResolvedValue(undefined);
+
+    client.emit(statusEvent());
+    await following.narrator.settled(1);
+    following.dispose();
+
+    expect(deps.log).not.toHaveBeenCalledWith('error', expect.anything());
+    expect(deps.reporter.reports).toEqual([]);
   });
 
   it.each([
@@ -231,37 +239,5 @@ describe('a reconcile that reached Ready, reported and then applied whoever star
       "Could not read the record filter — the Plugins view shows it as it last was. boom");
     expect(deps.showRecordFilter).not.toHaveBeenCalled();
     expect(deps.facts.reconciled).toHaveBeenCalledOnce();
-  });
-});
-
-describe('a reconcile whose hand-off outlasts the start of a newer one', () => {
-  const A = { name: 'A.esp', origin: 'SomeMod' };
-
-  it('reports nothing for the superseded hand-off, and the newer one\'s rows expand into records', async () => {
-    const { client, deps, followed: overDoubles } = followed();
-    overDoubles.dispose();
-    const feed = new PluginFactsFeed({
-      client, shownPlugins: () => [A], log: deps.log,
-      publishDiagnoses: () => undefined, publishChangedOutside: () => undefined, publishFailedToRead: () => undefined,
-    });
-    const following = followIndexStatus({ ...deps, facts: feed });
-    let answerFirstRead!: (plugins: PluginMetadata[]) => void;
-    client.setQueryAnswerOnce('getPlugins', new Promise<PluginMetadata[]>((resolve) => { answerFirstRead = resolve; }));
-    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'A.esp' })]);
-    client.setQueryAnswer('getDiagnoses', []);
-
-    client.emit(statusEvent({ state: 'Reconciling', conflictsComputed: false, indexedPlugins: [A] }));
-    client.emit(statusEvent({ indexedPlugins: [A] }));
-    await flushed();
-    client.emit(statusEvent({ state: 'Reconciling', conflictsComputed: false, indexedPlugins: [], version: 2 }));
-    answerFirstRead([pluginMetadataFixture({ name: 'A.esp' })]);
-    await flushed();
-    client.emit(statusEvent({ state: 'Reconciling', conflictsComputed: false, indexedPlugins: [A], version: 2 }));
-    client.emit(statusEvent({ indexedPlugins: [A], version: 2 }));
-    await following.narrator.settled(2);
-
-    expect(feed.rows.expansion(A)).toEqual({ kind: 'records' });
-    expect(deps.log).not.toHaveBeenCalledWith('error', expect.anything());
-    expect(deps.reporter.reports).toEqual([]);
   });
 });

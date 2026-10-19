@@ -69,7 +69,23 @@ describe('PluginFactsFeed', () => {
     expect(await feed.reconciled([])).toBeUndefined();
 
     expect(feed.rows.expansion(A)).toEqual({ kind: 'error', message: 'mEdit could not be reached.' });
-    expect(feed.rows.readFailureMessage()).toBe('Failed to load: the plugin list: mEdit could not be reached.');
+    expect(feed.rows.readFailureMessage()).toBe("Failed to load: mEdit's facts about each plugin: mEdit could not be reached.");
+    expect(logged.items.map((l) => l.level)).toEqual(['error']);
+  });
+
+  it.each([
+    ['re-read', (feed: PluginFactsFeed) => feed.refresh()],
+    ['hand-off', (feed: PluginFactsFeed) => feed.reconciled([])],
+  ] as const)('a failed %s that mEdit going away superseded logs its line and leaves the rows to the disconnect', async (_read, read) => {
+    const { feed, client, logged } = feedOver();
+    client.setQueryFailure('getPlugins', { failed: 'unreachable' });
+
+    const reading = read(feed);
+    feed.unreachable('mEdit is disconnected.');
+    await reading;
+
+    expect(feed.rows.readFailureMessage()).toBeUndefined();
+    expect(feed.rows.expansion(A)).toEqual({ kind: 'error', message: 'mEdit is disconnected.' });
     expect(logged.items.map((l) => l.level)).toEqual(['error']);
   });
 

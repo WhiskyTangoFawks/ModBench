@@ -451,15 +451,15 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
   });
 
   describe.each([
-    ['malformed-plugin scan', (facts: PluginFacts) => facts.diagnosed([]), (facts: PluginFacts) => facts.scanFailed('503')],
-    ['plugin list', (facts: PluginFacts) => facts.refreshed([]), (facts: PluginFacts) => facts.listFailed('503')],
-  ] as const)('the %s', (read, answer, fail) => {
+    ['the malformed-plugin scan', (facts: PluginFacts) => facts.diagnosed([]), (facts: PluginFacts) => facts.scanFailed('503')],
+    ["mEdit's facts about each plugin", (facts: PluginFacts) => facts.refreshed([]), (facts: PluginFacts) => facts.metadataFailed('503')],
+  ] as const)('%s', (read, answer, fail) => {
     it('says it failed to load when it failed before any answered', () => {
       const facts = new PluginFacts();
 
       fail(facts);
 
-      expect(facts.readFailureMessage()).toBe(`Failed to load: the ${read}: 503`);
+      expect(facts.readFailureMessage()).toBe(`Failed to load: ${read}: 503`);
     });
 
     it('says the last good read shows when it failed after one answered', () => {
@@ -468,7 +468,7 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
 
       fail(facts);
 
-      expect(facts.readFailureMessage()).toBe(`Showing the last good read: the ${read}: 503`);
+      expect(facts.readFailureMessage()).toBe(`Showing the last good read: ${read}: 503`);
     });
 
     it('says nothing once the next read answers', () => {
