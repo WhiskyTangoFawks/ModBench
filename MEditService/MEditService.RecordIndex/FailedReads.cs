@@ -78,20 +78,25 @@ internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger lo
             NoteProblems(plugin.Key, state.Stamps?.Problems ?? []);
             return outcome;
         }
-        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // A plugin file's own failure is an answer, so a throw is the store's or the tree's, and
-            // nothing the state holds observes it.
-            Settle(plugin.Key, FailureOf(plugin.Key, state, stands: false, treeStopped: null, why: null));
+            // A plugin file's own failure is an answer, so a throw is the store's, the tree's, or the
+            // memory's.
+            Settle(plugin.Key, FailureOf(plugin.Key, state, state is not null && StandsOn(state, ReadOutcome.StoppedAt(ex)), treeStopped: null, why: null));
             throw;
         }
     }
 
     private static Failure? FailureAfter(PluginAddress key, ReadState state, ReadOutcome outcome)
     {
-        if (!outcome.Served) return FailureOf(key, state, state.Vouches && StateObserves(outcome), outcome.TreeStopped, WhyStopped(outcome));
+        if (!outcome.Served) return FailureOf(key, state, StandsOn(state, outcome), outcome.TreeStopped, WhyStopped(outcome));
         return state.Stamps is { StoppedOnlyByUnsavedText: true } ? RowsStandOver(key, state) : null;
     }
+
+    // A read that ran out of memory stands on a state that does not vouch: a file it could not read did
+    // not run it out.
+    private static bool StandsOn(ReadState state, ReadOutcome outcome) =>
+        outcome.StoppedBy is OutOfMemoryException || (state.Vouches && StateObserves(outcome));
 
     // A stopped read stands on what the state holds: a tree's document stamps, a binary's hash. A
     // failure of git, or not of the plugin's bytes, is read again at the next reconcile.
