@@ -120,7 +120,7 @@ function digestModuleOffences(sourceText: string, fileName: string): string[] {
   return offences;
 }
 
-const THE_DIGEST = join(SRC, 'instanceAdapter', 'contentDigest.ts');
+const THE_DIGEST = join(SRC, 'instanceAdapter', 'downloadedFileContents', 'contentDigest.ts');
 
 describe('the extension interprets no plugin binary (ADR-0004): its one byte-level read feeds a hash', () => {
   it('covers the whole extension source tree', () => {

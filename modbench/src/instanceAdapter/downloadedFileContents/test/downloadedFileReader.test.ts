@@ -2,9 +2,9 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { copyFile, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sevenZip } from '../sevenZip';
+import { downloadedFileReader } from '../downloadedFileReader';
 
-describe('sevenZip, spawning the binary itself', () => {
+describe('downloadedFileReader, spawning the binary itself', () => {
   const FAKE_7Z = process.platform === 'win32' ? '7z.exe' : '7z';
   let bin: string;
   let originalPath: string | undefined;
@@ -43,7 +43,7 @@ describe('sevenZip, spawning the binary itself', () => {
   it('extracts into the destination, overwriting, by asking 7z for exactly that', async () => {
     fakeNodeAs7zPreloadedToExit(0);
 
-    await sevenZip.extract('/tmp/mod.7z', '/tmp/stage');
+    await downloadedFileReader.extract('/tmp/mod.7z', '/tmp/stage');
 
     expect(await argvAsked()).toEqual(['x', '/tmp/mod.7z', '-o/tmp/stage', '-y']);
   });
@@ -51,13 +51,13 @@ describe('sevenZip, spawning the binary itself', () => {
   it('rejects with the exit code in the message when the binary exits non-zero', async () => {
     fakeNodeAs7zPreloadedToExit(3);
 
-    await expect(sevenZip.extract('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(/exited with code 3/);
+    await expect(downloadedFileReader.extract('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(/exited with code 3/);
   });
 
   it('names every candidate, and the archives install extracts, when no binary is on the path', async () => {
     process.env.PATH = '';
 
-    await expect(sevenZip.extract('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(
+    await expect(downloadedFileReader.extract('/tmp/mod.7z', '/tmp/stage')).rejects.toThrow(
       'No 7z binary found (tried 7z, 7za, 7zz). Install p7zip-full to extract .zip/.7z/.rar archives.');
   });
 
@@ -70,14 +70,14 @@ describe('sevenZip, spawning the binary itself', () => {
       'Path = Wrapper/b.esp\nAttributes = A',
     ].join('\n\n') + '\n';
 
-    await expect(sevenZip.list('/tmp/mod.7z')).resolves.toEqual(['Wrapper/textures/a.dds', 'Wrapper/b.esp']);
+    await expect(downloadedFileReader.list('/tmp/mod.7z')).resolves.toEqual(['Wrapper/textures/a.dds', 'Wrapper/b.esp']);
   });
 
   it('reads non-ASCII entry names as UTF-8 and asks 7z to write them so', async () => {
     fakeNodeAs7zPreloadedToExit(0);
     process.env.FAKE_7Z_STDOUT = 'Path = café/日本.esp\nAttributes = A\n';
 
-    await expect(sevenZip.list('/tmp/mod.7z')).resolves.toEqual(['café/日本.esp']);
+    await expect(downloadedFileReader.list('/tmp/mod.7z')).resolves.toEqual(['café/日本.esp']);
 
     expect(await argvAsked()).toEqual(['l', '-slt', '-ba', '-sccUTF-8', '/tmp/mod.7z']);
   });
@@ -85,7 +85,7 @@ describe('sevenZip, spawning the binary itself', () => {
   it('rejects a listing with the exit code in the message when the binary exits non-zero', async () => {
     fakeNodeAs7zPreloadedToExit(2);
 
-    await expect(sevenZip.list('/tmp/bad.7z')).rejects.toThrow(/Failed to list \/tmp\/bad\.7z.*exited with code 2/);
+    await expect(downloadedFileReader.list('/tmp/bad.7z')).rejects.toThrow(/Failed to list \/tmp\/bad\.7z.*exited with code 2/);
   });
 
   it('falls through to the next binary name when one is absent', async () => {
@@ -94,7 +94,7 @@ describe('sevenZip, spawning the binary itself', () => {
     fakeNodeAs7zPreloadedToExit(0);
 
     try {
-      await sevenZip.extract('/tmp/mod.7z', '/tmp/stage');
+      await downloadedFileReader.extract('/tmp/mod.7z', '/tmp/stage');
 
       expect(await argvAsked()).toEqual(['x', '/tmp/mod.7z', '-o/tmp/stage', '-y']);
     } finally {

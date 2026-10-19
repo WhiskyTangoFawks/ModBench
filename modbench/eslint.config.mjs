@@ -244,7 +244,7 @@ export default defineConfig(
         rules: { 'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: false, clientSeam: false }) },
     })),
     {
-        files: ['src/instanceAdapter/contentDigest.ts'],
+        files: ['src/instanceAdapter/downloadedFileContents/contentDigest.ts'],
         rules: {
             'no-restricted-imports': restrictedImports({
                 vscode: true, packages: false, path: false, inAdapter: true, byteReads: false, extra: [DIGEST_PACKAGE_IMPORT],

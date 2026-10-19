@@ -10,9 +10,9 @@ export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
 export { filesWinningFirst } from './pluginsProvided';
 export { dataFolderFile } from './gameFolder/dataFolder';
 
-export type { ArchiveReader } from './archiveReader';
-export { ARCHIVE_EXTENSIONS } from './archiveNames';
-export { sevenZip } from './sevenZip';
+export type { ArchiveReader } from './downloadedFileContents/archiveReader';
+export { ARCHIVE_EXTENSIONS } from './downloadedFileContents/archiveNames';
+export { downloadedFileReader } from './downloadedFileContents/downloadedFileReader';
 
 /** The setting that names the game folder outright: its id
  *  is what fixes a folder not found, its value is read fresh on each resolve, and a change is heard
