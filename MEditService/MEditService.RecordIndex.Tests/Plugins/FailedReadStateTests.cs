@@ -295,15 +295,22 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
-    public void ABinaryReadThatRanOutOfMemory_BesideAnUnreadableDocument_IsReadAgainAtTheNextSnapshot()
+    public void ABinaryReadThatRanOutOfMemory_BesideAnUnreadableDocument_IsNotReadAgainWhileItsBytesHold()
     {
         SourceMods.Init(Plugin);
         File.WriteAllText(StrayDocument, "{}");
-        using var index = Reconciled(new PartwayAdapter(afterRecords: 0, () => throw Faults.Of(typeof(OutOfMemoryException))));
+        var binaryReads = 0;
+        using var index = Reconciled(new PartwayAdapter(afterRecords: 0, () =>
+        {
+            Interlocked.Increment(ref binaryReads);
+            throw Faults.Of(typeof(OutOfMemoryException));
+        }));
         Assert.True(Failed(index));
-        var readsBefore = TreeReads();
 
-        index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the tree read again");
+        index.Reconcile(index.Holder, _fixture.GameDirectory, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
+            GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        Assert.Equal(1, Volatile.Read(ref binaryReads));
     }
 
     [Fact]
@@ -443,7 +450,7 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
-    public void AValidationThatRunsOutOfMemory_FailsThePluginToRead_WithoutReadingItWhole()
+    public void AValidationThatRunsOutOfMemory_IsThePluginsFailedToRead_WithoutReadingItWhole()
     {
         SourceMods.Init(Plugin);
         using var index = Reconciled();
@@ -460,7 +467,7 @@ public sealed class FailedReadStateTests : IDisposable
     }
 
     [Fact]
-    public void AWarmLoadWhoseValidationRunsOutOfMemory_FailsThePluginToRead_WithoutReadingItWhole()
+    public void AWarmLoadWhoseValidationRunsOutOfMemory_IsThePluginsFailedToRead_WithoutReadingItWhole()
     {
         SourceMods.Init(Plugin);
         using (Reconciled()) { }

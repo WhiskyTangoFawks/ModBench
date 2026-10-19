@@ -80,23 +80,28 @@ internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger lo
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // A plugin file's own failure is an answer, so a throw is the store's or the tree's, save
-            // what StateObserves names.
-            Settle(plugin.Key, FailureOf(plugin.Key, state, state is { Vouches: true } && StateObserves(ReadOutcome.StoppedAt(ex)), treeStopped: null, why: null));
+            // A plugin file's own failure is an answer, so a throw is the store's, the tree's, or the
+            // memory's.
+            Settle(plugin.Key, FailureOf(plugin.Key, state, state is not null && StandsOn(state, ReadOutcome.StoppedAt(ex)), treeStopped: null, why: null));
             throw;
         }
     }
 
     private static Failure? FailureAfter(PluginAddress key, ReadState state, ReadOutcome outcome)
     {
-        if (!outcome.Served) return FailureOf(key, state, state.Vouches && StateObserves(outcome), outcome.TreeStopped, WhyStopped(outcome));
+        if (!outcome.Served) return FailureOf(key, state, StandsOn(state, outcome), outcome.TreeStopped, WhyStopped(outcome));
         return state.Stamps is { StoppedOnlyByUnsavedText: true } ? RowsStandOver(key, state) : null;
     }
 
-    // A stopped read stands on its state: a tree's document stamps, a binary's hash. A failure of git,
-    // or not of the plugin's bytes, is read again. One that ran out of memory would run out again.
+    // A read that ran out of memory stands on a state that does not vouch: a file it could not read did
+    // not run it out.
+    private static bool StandsOn(ReadState state, ReadOutcome outcome) =>
+        outcome.StoppedBy is OutOfMemoryException || (state.Vouches && StateObserves(outcome));
+
+    // A stopped read stands on what the state holds: a tree's document stamps, a binary's hash. A
+    // failure of git, or not of the plugin's bytes, is read again at the next reconcile.
     private static bool StateObserves(ReadOutcome outcome) =>
-        outcome is { Failure: null or { OfItsBytes: true }, StoppedBy: null or OutOfMemoryException, TreeStopped: null or SourceFailure.Unreadable or SourceFailure.Ambiguous };
+        outcome is { Failure: null or { OfItsBytes: true }, StoppedBy: null, TreeStopped: null or SourceFailure.Unreadable or SourceFailure.Ambiguous };
 
     private static UnreadableSource? WhyStopped(ReadOutcome outcome)
     {

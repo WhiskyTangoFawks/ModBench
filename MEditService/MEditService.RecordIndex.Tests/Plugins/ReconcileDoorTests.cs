@@ -161,13 +161,12 @@ public sealed class ReconcileDoorTests
             })
             .Build();
         var holder = new LoadOrderHolder();
-        var failReadsOfBThenC = Faults.InTurn(typeof(InvalidOperationException), typeof(InvalidOperationException));
-        var reads = 0;
-        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, () =>
-        {
-            if (++reads == 4) IndexFiles.AbortNextCheckpoint(data.InstanceRoot);
-            else failReadsOfBThenC();
-        }));
+        Action failRead = () => throw Faults.Of(typeof(InvalidOperationException));
+        Action abortCheckpoint = () => IndexFiles.AbortNextCheckpoint(data.InstanceRoot);
+        var readB = failRead;
+        var readC = failRead;
+        var readCAgain = abortCheckpoint;
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.InTurn(readB, readC, null, readCAgain)));
 
         index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
