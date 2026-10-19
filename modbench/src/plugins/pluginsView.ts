@@ -15,7 +15,7 @@ import type { PluginFactsClient } from './pluginFactsFeed';
 import type { PluginConditions } from '../drivingLib/recordRowContext';
 import type { RecordBrowser } from './RecordBrowser';
 import { publishPluginProblems } from './loadDiagnostics';
-import { pluginsKeyContext } from './gestureEntry';
+import { PLUGINS_KEY_ARGS, pluginsKeyContext } from './gestureEntry';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
@@ -93,7 +93,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     publishChangedOutside: (warnings) => publishPluginProblems(changedOutsideDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning),
     publishFailedToRead: (errors) => publishPluginProblems(failedToReadDiagnostics, pluginFile, errors, vscode.DiagnosticSeverity.Error),
   });
-  const view = vscode.window.createTreeView('modbench.pluginListTree', {
+  const view = vscode.window.createTreeView(PLUGINS_KEY_ARGS.view, {
     treeDataProvider: tree,
     canSelectMany: true,
     // A drag moves plugins.txt lines, which the same provider owns.
@@ -188,7 +188,7 @@ function pluginsViewProgress(
   return {
     say,
     while: (work) => Promise.resolve(vscode.window.withProgress(
-      { location: { viewId: 'modbench.pluginListTree' } },
+      { location: { viewId: PLUGINS_KEY_ARGS.view } },
       async () => { try { await work(); } finally { say(undefined); } },
     )),
   };

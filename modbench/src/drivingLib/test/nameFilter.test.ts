@@ -7,11 +7,11 @@ const h = vi.hoisted(() => {
   const state: FilterBoxState & { contextKeys: Map<string, unknown> } = {
     commands: new Map(), contextKeys: new Map(), boxes: [],
   };
-  return { state };
+  return { state, statusBar: [] as unknown[][] };
 });
 
 vi.mock('vscode', () => ({
-  window: filterBoxWindowMock(h.state),
+  window: { ...filterBoxWindowMock(h.state), setStatusBarMessage: (...args: unknown[]) => { h.statusBar.push(args); } },
   commands: {
     ...filterBoxCommandsMock(h.state),
     executeCommand: (command: string, ...args: unknown[]) => {
@@ -401,10 +401,10 @@ describe('the catalog\'s filter pair acts on the focused view\'s filter', () => 
 
   function wire(focused: string | undefined) {
     const calls: string[] = [];
+    h.statusBar.length = 0;
     registerFilterCommands(
       () => focused,
       new Map([['view.a', filterOf(calls, 'a')], ['view.b', filterOf(calls, 'b')]]),
-      () => { calls.push('nothing focused'); },
     );
     return { calls, run: (id: string) => { void present(h.state.commands.get(id), id)(); } };
   }
@@ -414,13 +414,13 @@ describe('the catalog\'s filter pair acts on the focused view\'s filter', () => 
     ['clears the focused view\'s filter, and no other\'s', 'view.a', 'modbench.clearFilter', ['a clear']],
     ['opens the filter of the view whose title icon was clicked, whichever view was last selected in', 'view.a', 'view.b.filterHere', ['b open']],
     ['clears the filter of the view whose title icon was clicked, whichever view was last selected in', 'view.a', 'view.b.clearFilterHere', ['b clear']],
-    ['says so when open finds a focused view with no name filter', 'view.elsewhere', 'modbench.filter', ['nothing focused']],
-    ['says so when clear finds a focused view with no name filter', 'view.elsewhere', 'modbench.clearFilter', ['nothing focused']],
-    ['says so when open finds no view focused', undefined, 'modbench.filter', ['nothing focused']],
-    ['says so when clear finds no view focused', undefined, 'modbench.clearFilter', ['nothing focused']],
+    ['says so when open finds a focused view with no name filter', 'view.elsewhere', 'modbench.filter', ['Focus a list to filter it. | 5000']],
+    ['says so when clear finds a focused view with no name filter', 'view.elsewhere', 'modbench.clearFilter', ['Focus a list to filter it. | 5000']],
+    ['says so when open finds no view focused', undefined, 'modbench.filter', ['Focus a list to filter it. | 5000']],
+    ['says so when clear finds no view focused', undefined, 'modbench.clearFilter', ['Focus a list to filter it. | 5000']],
   ])('%s', (_what, focused, command, expected) => {
     const { calls, run } = wire(focused);
     run(command);
-    expect(calls).toEqual(expected);
+    expect([...calls, ...h.statusBar.map((args) => args.join(' | '))]).toEqual(expected);
   });
 });
