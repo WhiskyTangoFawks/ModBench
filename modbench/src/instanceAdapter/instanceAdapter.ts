@@ -11,8 +11,7 @@ export { filesWinningFirst } from './pluginsProvided';
 export { dataFolderFile } from './gameFolder/dataFolder';
 
 export type { ArchiveReader } from './archiveReader';
-export { ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder } from './archiveNames';
-export { samePath } from './samePath';
+export { ARCHIVE_EXTENSIONS } from './archiveNames';
 export { sevenZip } from './sevenZip';
 
 /** The setting that names the game folder outright: its id

@@ -1,7 +1,7 @@
 import { basename } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../coreLib/refuse';
-import { samePath } from '../instanceAdapter/instanceAdapter';
+import { samePath } from './samePath';
 import type {
   InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstallKeys, DownloadedFile,
 } from '../instanceAdapter/instanceAdapter';

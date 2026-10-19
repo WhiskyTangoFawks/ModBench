@@ -106,7 +106,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   it('archive: the OS picker offers install\'s own archive extensions rather than a list of its own that would drift', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/foo.zip' }]);
+    showOpenDialog.mockResolvedValueOnce([uriFile('/somewhere/foo.zip')]);
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
     registerModInstallCommands(deps());
@@ -121,7 +121,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     const row = downloadRowFixture('foo.7z', { modID: '111', fileID: '222', version: '2.0' });
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce([{ fsPath: row.path }]);
+    showOpenDialog.mockResolvedValueOnce([uriFile(row.path)]);
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
     registerModInstallCommands(deps({
@@ -141,7 +141,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     const reporter = recordingReporter();
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce([{ fsPath: row.path }]);
+    showOpenDialog.mockResolvedValueOnce([uriFile(row.path)]);
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false, downloadedFile: 'foo.7z', downloadedFileRefusal: 'locked' });
 
     registerModInstallCommands(deps({
@@ -155,16 +155,15 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('archive: one outside the downloads folder, though it shares a downloaded file\'s name, installs as an archive under the name prompted, prefilled from it', async () => {
+  it('archive: one outside the downloads folder, though it shares a downloaded file\'s name, installs as an archive under the name prompted', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce([{ fsPath: '/archive/foo.7z' }]);
+    showOpenDialog.mockResolvedValueOnce([uriFile('/archive/foo.7z')]);
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
     registerModInstallCommands(deps());
     await invoke('modbench.mod.install');
 
-    expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'foo' }));
     expect(installMod).toHaveBeenCalledWith(
       { kind: 'archive', path: '/archive/foo.7z' }, { kind: 'new', name: 'New Mod' }, true,
     );
@@ -173,7 +172,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   it('archive: a cancelled name prompt installs nothing', async () => {
     showInputBox.mockResolvedValueOnce(undefined);
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce([{ fsPath: '/archive/foo.7z' }]);
+    showOpenDialog.mockResolvedValueOnce([uriFile('/archive/foo.7z')]);
 
     registerModInstallCommands(deps());
     await invoke('modbench.mod.install');
@@ -191,10 +190,10 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(installMod).not.toHaveBeenCalled();
   });
 
-  it('folder: installs as a new mod under the name prompted, prefilled from the folder', async () => {
+  it('folder: installs as a new mod under the name prompted', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'folder' });
-    showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/Loose Files' }]);
+    showOpenDialog.mockResolvedValueOnce([uriFile('/somewhere/Loose Files')]);
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
     registerModInstallCommands(deps());
@@ -203,10 +202,31 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
       canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
     }));
-    expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'Loose Files' }));
     expect(installMod).toHaveBeenCalledWith(
       { kind: 'folder', path: '/somewhere/Loose Files' }, { kind: 'new', name: 'New Mod' }, true,
     );
+  });
+});
+
+describe('modbench.mod.install: the name prompt', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    ['archive', '/archive/Sleep or Save-123-1-0.7z', 'Sleep or Save-123-1-0'],
+    ['archive', 'C:\\archive\\Sleep or Save.ZIP', 'Sleep or Save'],
+    ['archive', '/archive/Mod v1.2.rar', 'Mod v1.2'],
+    ['archive', '/archive/notes.txt', 'notes'],
+    ['folder', '/somewhere/Loose Files', 'Loose Files'],
+    ['folder', 'C:\\somewhere\\Loose v1.2', 'Loose v1.2'],
+  ] as const)('%s picked at %s: the prompt holds %s', async (packageKind, picked, name) => {
+    showQuickPick.mockResolvedValueOnce({ packageKind });
+    showOpenDialog.mockResolvedValueOnce([uriFile(picked)]);
+    showInputBox.mockResolvedValueOnce(undefined);
+
+    registerModInstallCommands(deps());
+    await invoke('modbench.mod.install');
+
+    expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: name }));
   });
 });
 
@@ -214,8 +234,8 @@ describe('modbench.mod.install: a failed install', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it.each([
-    ['archive', { fsPath: '/somewhere/foo.zip' }, 'installFromArchive'],
-    ['folder', { fsPath: '/somewhere/foo' }, 'installFromFolder'],
+    ['archive', uriFile('/somewhere/foo.zip'), 'installFromArchive'],
+    ['folder', uriFile('/somewhere/foo'), 'installFromFolder'],
   ] as const)('from a %s is reported under the gesture, naming the mod', async (packageKind, picked, tag) => {
     const reporter = recordingReporter();
     const tags: string[] = [];
@@ -459,8 +479,8 @@ describe('an install ends on the Instance loader\'s read, with the Mods progress
   const ends = ['progress opens on modbench.modList', 'install', 'Instance loader: read every file again', 'progress closes'];
 
   it.each([
-    ['archive', { fsPath: '/somewhere/foo.zip' }],
-    ['folder', { fsPath: '/somewhere/foo' }],
+    ['archive', uriFile('/somewhere/foo.zip')],
+    ['folder', uriFile('/somewhere/foo')],
   ] as const)('from a %s', async (packageKind, picked) => {
     installMod.mockImplementationOnce(() => { progressSteps.push('install'); return Promise.resolve({ applied: true, isFomod: false }); });
     showQuickPick.mockResolvedValueOnce({ packageKind });
