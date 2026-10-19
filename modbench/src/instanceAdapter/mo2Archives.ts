@@ -6,8 +6,9 @@ import { archiveListsOf, pluginCompanionRule } from '../tables/gamePaths';
 import { dataFolderOf } from './gameFolder/dataFolder';
 import { get, ignoreSkippedLink, listEntries, readOrAbsent, readOrReason, type SkippedLink } from './files';
 import { archivesListedIn } from './gameFolder/gameIni';
-import type { DataFolderArchives, GameFolder } from './instanceAdapter';
+import type { DataFolderArchives } from './instanceAdapter';
 import { anyCase, dataFolderArchivesGlob, fileInFolder, profileDir, profileSettingsFile } from './layout';
+import type { ArchiveReads } from './instanceReading';
 import type { Mo2Context } from './mo2Context';
 
 // The one spelled as `name` first, then one Windows takes for it.
@@ -54,15 +55,6 @@ async function gameInisFolder(
     folder: undefined,
     notes: [`The profile ${profile} keeps no game INIs of its own, and the game's were not found: the archives listed are its default INI's. Looked at ${myGames.looked.join('; ')}.`],
   };
-}
-
-export interface ArchiveReads {
-  /** The archives the INIs list, in load order: the default INI, then the profile's own INIs or else My Games',
-   *  a key's last value winning. `notes` says what was not read, and where it looked. */
-  archiveList(
-    profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
-  ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;
-  gameFolderArchives(gameFolder: GameFolder, gameRelease: string | undefined, skippedLink: SkippedLink): Promise<DataFolderArchives>;
 }
 
 export function mo2Archives(context: Mo2Context): ArchiveReads {

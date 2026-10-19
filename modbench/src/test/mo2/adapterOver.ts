@@ -8,7 +8,8 @@ import { gameFolderResolver, type GameDetectors } from '../../instanceAdapter/ga
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { mo2Watch } from '../../instanceAdapter/mo2Watch';
 import { myGamesResolver } from '../../instanceAdapter/gameFolder/myGames';
-import { readingSource, type ReadingSource } from '../../instanceAdapter/mo2Reads';
+import type { ReadingSource } from '../../instanceAdapter/instanceReading';
+import { readingSource } from '../../instanceAdapter/mo2Reads';
 import type { PluginCommands, pluginCommands } from '../../pluginCommands/plugins';
 import { pluginCommandsWith } from '../pluginCommandsWith';
 import { fakeArchiveReader } from '../fakeArchiveReader';

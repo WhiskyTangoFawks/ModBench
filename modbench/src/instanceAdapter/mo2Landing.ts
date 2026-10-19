@@ -9,7 +9,7 @@ import { fileInFolder, manifestFileIn, modMetaFileIn, modsDir, newModExtractionP
 import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
-import type { ReadingSource } from './mo2Reads';
+import type { ReadingSource } from './instanceReading';
 import { releaseRoot } from './gameFolder/releaseRoot';
 
 interface Extraction {

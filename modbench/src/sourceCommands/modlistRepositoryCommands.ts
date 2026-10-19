@@ -5,7 +5,7 @@ import {
 import type { CommandResult } from '../coreLib/commandResult';
 import type { FileRead, GameFile, GameFolder, InstallationFile, InstanceAdapter, ModFolder, ModMetadata } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
-import { refuse } from '../ports/refuse';
+import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import { modWithMetadata, withMetadataRead } from '../wire/modByFolder';

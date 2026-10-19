@@ -22,7 +22,7 @@ import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoad
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { sevenZip, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
-import { agentPort, attachPort, gameFolderSetting, inheritedPythonPath, onStringsLanguageChange, onTerminalEnvChange, stringsLanguage } from './workspaceConfig';
+import { agentPort, attachPort, gameFolderSetting, onStringsLanguageChange, stringsLanguage } from './workspaceConfig';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { createModsView } from './mods/modsView';
 import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
@@ -43,7 +43,7 @@ import { warnIfFomod } from './mods/fomodWarning';
 import { downloadedFileCommands } from './downloadedFileCommands/downloads';
 import { editingFlow } from './instanceCommands/editing';
 import { instanceCommands } from './instanceCommands/instanceCommands';
-import { reachMEditFromTerminals } from './terminalEnvironment';
+import { reachMEditFromTerminals } from './agent/terminalEnvironment';
 import { openWalkthroughOnce } from './walkthrough';
 import { instanceSyncs, registerSyncCommands, loadOrderPutHandler, loadOrderPutOnEachLanguageChange, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
@@ -279,7 +279,7 @@ export function activate(context: vscode.ExtensionContext): void {
     plugins,
     editor,
     serveAgent({ port: agentPort(), instance: views.instance, readStatus: views.readStatus, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel }),
-    reachMEditFromTerminals(context.environmentVariableCollection, meditClient, vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath, inheritedPythonPath, onTerminalEnvChange),
+    reachMEditFromTerminals(context.environmentVariableCollection, meditClient, vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath),
     createSourceLanguage({
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
     }),

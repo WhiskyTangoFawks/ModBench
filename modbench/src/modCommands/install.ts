@@ -1,11 +1,12 @@
 import { basename } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
-import { refuse } from '../ports/refuse';
+import { refuse } from '../coreLib/refuse';
 import { samePath } from '../instanceAdapter/instanceAdapter';
 import type {
   InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstallKeys, DownloadedFile,
 } from '../instanceAdapter/instanceAdapter';
-import { EMPTY_MOD_NAME, goneFromDisk, modNameTakenRefusal } from '../coreLib/commandRefusals';
+import { goneFromDisk } from '../coreLib/commandRefusals';
+import { EMPTY_MOD_NAME, modNameTakenRefusal } from './nameRefusals';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { ModStatus, ReadModStatus } from '../client';
 import { failureReason, isReadFailed } from '../wire/readFailed';

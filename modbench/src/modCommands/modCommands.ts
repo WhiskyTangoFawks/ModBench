@@ -1,4 +1,4 @@
-import { refuse } from '../ports/refuse';
+import { refuse } from '../coreLib/refuse';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
@@ -6,7 +6,8 @@ import {
   entryNotFound, sameEntry, type DecideModOrder, type EntryRef, type FileOrigin, type FileRead, type InstanceAdapter,
   type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace, type SourceMods,
 } from '../instanceAdapter/instanceAdapter';
-import { EMPTY_MOD_NAME, entryNameRefusal, goneFromDisk, newModNameRefusal as unclaimedModName, type EntryKey } from '../coreLib/commandRefusals';
+import { goneFromDisk } from '../coreLib/commandRefusals';
+import { EMPTY_MOD_NAME, entryNameRefusal, unclaimedModName, type EntryKey } from './nameRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { isRefused, type MEditClient, type ReadModStatus } from '../client';

@@ -1,7 +1,7 @@
 // The switch profile gesture (ADR-0015) and refresh, bound to one instance.
 
 import type { MEditClient } from '../client';
-import { refuse } from '../ports/refuse';
+import { refuse } from '../coreLib/refuse';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { TailOf } from '../coreLib/boundCommand';

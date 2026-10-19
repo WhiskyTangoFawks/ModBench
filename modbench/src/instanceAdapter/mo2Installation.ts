@@ -10,7 +10,7 @@ import type { HashIndex } from './hashIndex';
 import type { FileRead, InstalledFileId, InstallationFile, InstanceAdapter, ModMeta, ModMetadata, OwnedMetaKeys } from './instanceAdapter';
 import { downloadFile, modMetaFileIn, settingsFile } from './layout';
 import { currentDownloadsDir, folderHolding, newModFolder, type Mo2Context } from './mo2Context';
-import type { ReadingSource } from './mo2Reads';
+import type { ReadingSource } from './instanceReading';
 import { formatNexusPage, parseNexusPage } from './nexusPage';
 
 // MO2 records a file installed from outside the downloads folder by its whole path, and reinstalls from the
