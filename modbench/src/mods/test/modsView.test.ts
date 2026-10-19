@@ -97,7 +97,7 @@ import { mod } from './indexedValue';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
 import { Uri } from 'vscode';
-import { createSync } from '../../drivingLib/syncFailureReport';
+import { createModSync } from '../../drivingLib/syncFailureReport';
 import type { ModSyncRun } from '../../modCommands/modCommands';
 import { rowLabelOf } from '../../drivingLib/argument';
 import { present } from '../../ports/present';
@@ -133,9 +133,7 @@ const otherDeps = () => ({
 
 const silentChannel = { error: () => undefined, info: () => undefined };
 const modSyncAnswering = (sync: ModSyncRun) => ({
-  modSync: createSync(sync, silentChannel, {
-    command: 'mod sync', prefix: '[modCommands]', unsynced: 'modlist.txt is not synced', added: 'modlist.txt lines added', dropped: 'modlist.txt lines dropped',
-  }),
+  modSync: createModSync(sync, silentChannel, 'modlist.txt'),
 });
 const noSync = () => modSyncAnswering(() => Promise.resolve({ applied: true as const, added: [], dropped: [] }));
 

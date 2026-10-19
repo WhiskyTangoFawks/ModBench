@@ -4,7 +4,7 @@ const { showErrorMessage } = vi.hoisted(() => ({ showErrorMessage: vi.fn() }));
 vi.mock('vscode', () => ({ window: { showErrorMessage } }));
 
 import { recordingReporter } from './surfacingDoubles';
-import { makeReporter } from '../reporter';
+import { makeReporter } from '../drivingLib/reporter';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 
 describe('the recording reporter, given a selection\'s outcome', () => {

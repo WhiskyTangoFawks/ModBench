@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createSync } from '../syncFailureReport';
+import { createModSync, createPluginSync, type SyncChannel } from '../syncFailureReport';
 import { present } from '../../ports/present';
 
 type Outcome =
@@ -7,15 +7,11 @@ type Outcome =
   | { applied: false; refusal: string }
   | { applied: false; toldAsInstanceState: true };
 
-const LABELS = {
-  command: 'tidy', prefix: '[tidy]', unsynced: 'order.txt is not synced', added: 'order.txt line(s) added', dropped: 'order.txt line(s) dropped',
-};
-
 function syncAnswering(...outcomes: (() => Promise<Outcome>)[]) {
   const channel = { error: vi.fn(), info: vi.fn() };
   const messageChanged = vi.fn();
   let calls = 0;
-  const sync = createSync(() => present(outcomes[calls++], 'an outcome for this run')(), channel, LABELS);
+  const sync = createPluginSync(() => present(outcomes[calls++], 'an outcome for this run')(), channel);
   sync.onMessageChanged(messageChanged);
   const run = async (): Promise<void> => {
     expect(() => { void sync.run(); }).not.toThrow();
@@ -28,12 +24,12 @@ const refused = (refusal: string) => () => Promise.resolve<Outcome>({ applied: f
 const landed = () => Promise.resolve<Outcome>({ applied: true, added: [], dropped: [] });
 const toldAsInstanceState = () => Promise.resolve<Outcome>({ applied: false, toldAsInstanceState: true });
 
-describe('createSync: settled', () => {
+describe('a sync: settled', () => {
   it('resolves once every run begun has written its Output', async () => {
     const channel = { error: vi.fn(), info: vi.fn() };
     let answer = (): void => {};
     const answered = new Promise<Outcome>((resolve) => { answer = () => resolve({ applied: true, added: ['New'], dropped: [] }); });
-    const sync = createSync(() => answered, channel, LABELS);
+    const sync = createPluginSync(() => answered, channel);
 
     void sync.run();
     const settled = sync.settled();
@@ -45,7 +41,7 @@ describe('createSync: settled', () => {
 
   it('resolves for a run whose Output write threw', async () => {
     const channel = { error: vi.fn(), info: vi.fn(() => { throw new Error('the Output is gone'); }) };
-    const sync = createSync(() => Promise.resolve<Outcome>({ applied: true, added: ['New'], dropped: [] }), channel, LABELS);
+    const sync = createPluginSync(() => Promise.resolve<Outcome>({ applied: true, added: ['New'], dropped: [] }), channel);
 
     const run = sync.run();
 
@@ -54,14 +50,14 @@ describe('createSync: settled', () => {
   });
 });
 
-describe('createSync: outcome handling', () => {
+describe('a sync: outcome handling', () => {
   it('logs the lines it added and dropped, one Output line each way, under its prefix and labels', async () => {
     const { channel, run } = syncAnswering(() => Promise.resolve<Outcome>({ applied: true, added: ['New'], dropped: ['Gone'] }));
     await run();
 
     expect(channel.info).toHaveBeenCalledTimes(2);
-    expect(channel.info).toHaveBeenCalledWith('[tidy] tidy added 1 order.txt line(s) added: New');
-    expect(channel.info).toHaveBeenCalledWith('[tidy] tidy dropped 1 order.txt line(s) dropped: Gone');
+    expect(channel.info).toHaveBeenCalledWith(expect.stringMatching(/ added 1 .*: New$/));
+    expect(channel.info).toHaveBeenCalledWith(expect.stringMatching(/ dropped 1 .*: Gone$/));
     expect(channel.error).not.toHaveBeenCalled();
   });
 
@@ -77,8 +73,8 @@ describe('createSync: outcome handling', () => {
     const { channel, sync, messageChanged, run } = syncAnswering(refused('the folder is gone'));
     await run();
 
-    expect(channel.error).toHaveBeenCalledWith('[tidy] tidy failed: the folder is gone');
-    expect(sync.message()).toBe('order.txt is not synced: the folder is gone.');
+    expect(channel.error).toHaveBeenCalledWith(expect.stringMatching(/ failed: the folder is gone$/));
+    expect(sync.message()).toMatch(/ is not synced: the folder is gone\.$/);
     expect(messageChanged).toHaveBeenCalledTimes(1);
   });
 
@@ -149,7 +145,7 @@ describe('createSync: outcome handling', () => {
   });
 });
 
-describe('createSync: a refusal the instance\'s state already tells', () => {
+describe('a sync: a refusal the instance\'s state already tells', () => {
   it('reports nothing of its own: no Output line and no message line', async () => {
     const { channel, sync, messageChanged, run } = syncAnswering(toldAsInstanceState);
     await run();
@@ -167,5 +163,38 @@ describe('createSync: a refusal the instance\'s state already tells', () => {
     await run();
 
     expect(sync.message()).toBeUndefined();
+  });
+});
+
+describe('the sync wording', () => {
+  const addedAndDropped = () => Promise.resolve<Outcome>({ applied: true, added: ['A'], dropped: ['B'] });
+  const refusing = () => Promise.resolve<Outcome>({ applied: false, refusal: 'locked' });
+  const modSync = (run: () => Promise<Outcome>, channel: SyncChannel) => createModSync(run, channel, 'modlist.txt');
+
+  it.each([
+    {
+      name: 'a mod sync names the mod manager\'s mod order file', create: modSync,
+      lines: [
+        '[modCommands] mod sync added 1 modlist.txt line(s) for folder(s) in mods/ with no line: A',
+        '[modCommands] mod sync dropped 1 modlist.txt line(s) whose folder is gone from mods/: B',
+      ],
+      unsynced: 'modlist.txt is not synced: locked.',
+    },
+    {
+      name: 'a plugin sync names plugins.txt', create: createPluginSync,
+      lines: [
+        '[pluginCommands] plugin sync added 1 disabled plugins.txt line(s) for plugin(s) on disk with no line: A',
+        '[pluginCommands] plugin sync dropped 1 plugins.txt line(s) with no plugin on disk: B',
+      ],
+      unsynced: 'plugins.txt is not synced: locked.',
+    },
+  ])('$name', async ({ create, lines, unsynced }) => {
+    const channel = { error: vi.fn(), info: vi.fn() };
+    await create(addedAndDropped, channel).run();
+    expect(channel.info.mock.calls).toEqual(lines.map((line) => [line]));
+
+    const refused = create(refusing, channel);
+    await refused.run();
+    expect(refused.message()).toBe(unsynced);
   });
 });
