@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
-import { pluginAddressOf, samePluginAddress } from '../wire/pluginAddress';
+import { samePluginAddress } from '../wire/pluginAddress';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import { routeRecordPanelMessage, routerDepsForTab, type SharedRecordPanelDeps, type TabDocument } from './recordPanelMessageRouter';
 import type { EditAddress, RecordTab } from './recordTab';
@@ -206,8 +206,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
           await this.reopenAsText(tab);
           return;
         }
-        const { formKey, ...copy } = record;
-        this.showFile(panel, tab, document, { formKey, plugin: pluginAddressOf(copy) }, { columns, place }, () => undefined);
+        this.showFile(panel, tab, document, record, { columns, place }, () => undefined);
       } catch (err) {
         fail(localFailure(errorMessage(err)));
       }

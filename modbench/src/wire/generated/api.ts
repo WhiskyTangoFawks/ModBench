@@ -1144,6 +1144,10 @@ export interface components {
         };
         /** @enum {string} */
         CopyDocumentKind: "OwnFile" | "ContainersFile" | "Rendered";
+        CopyItem: {
+            record: components["schemas"]["RecordAt"];
+            destination: components["schemas"]["PluginAddress"];
+        };
         CopyMissing: {
             formKey: string;
             plugin: components["schemas"]["PluginAddress"];
@@ -1159,7 +1163,7 @@ export interface components {
             refused: components["schemas"]["CopyRefused"][];
         };
         CopyRefused: {
-            item: components["schemas"]["RecordCopyItem"];
+            item: components["schemas"]["CopyItem"];
             refusal: components["schemas"]["RecordEditRefusal"];
             message: string;
         };
@@ -1206,7 +1210,7 @@ export interface components {
             refused: components["schemas"]["DeleteRefused"][];
         };
         DeleteRefused: {
-            item: components["schemas"]["RecordAddress"];
+            item: components["schemas"]["RecordAt"];
             refusal: components["schemas"]["RecordEditRefusal"];
             message: string;
         };
@@ -1613,13 +1617,12 @@ export interface components {
             instanceRoot: string;
             gameRelease: string;
         };
-        RecordAddress: {
+        RecordAt: {
+            plugin: components["schemas"]["PluginAddress"];
             formKey: string;
-            plugin: string;
-            origin: string;
         };
         RecordCopied: {
-            record: components["schemas"]["RecordAddress"];
+            record: components["schemas"]["RecordAt"];
             destination: components["schemas"]["PluginAddress"];
             moves: components["schemas"]["SourceMove"][];
             deletions: string[];
@@ -1630,12 +1633,8 @@ export interface components {
             plugin: components["schemas"]["PluginAddress"];
             documentText?: string | null;
         };
-        RecordCopyItem: {
-            record: components["schemas"]["RecordAddress"];
-            destination: components["schemas"]["PluginAddress"];
-        };
         RecordCopyRequest: {
-            records: components["schemas"]["RecordAddress"][];
+            records: components["schemas"]["RecordAt"][];
             mode: components["schemas"]["CopyMode"];
             destinations: components["schemas"]["PluginAddress"][];
             replace: boolean;
@@ -1647,10 +1646,10 @@ export interface components {
             position?: components["schemas"]["GridPosition"] | null;
         };
         RecordDeleteChangesRequest: {
-            records: components["schemas"]["RecordAddress"][];
+            records: components["schemas"]["RecordAt"][];
         };
         RecordDeleted: {
-            record: components["schemas"]["RecordAddress"];
+            record: components["schemas"]["RecordAt"];
             moves: components["schemas"]["SourceMove"][];
             deletions: string[];
             documents: components["schemas"]["DocumentChange"][];
@@ -1769,7 +1768,7 @@ export interface components {
             leftDetached?: string | null;
         };
         ScriptCopyRequest: {
-            record: components["schemas"]["RecordAddress"];
+            record: components["schemas"]["RecordAt"];
             mode: components["schemas"]["CopyMode"];
             destination: components["schemas"]["PluginAddress"];
             replace: boolean;
@@ -3805,7 +3804,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordAddress"];
+                    "application/json": components["schemas"]["RecordAt"];
                 };
             };
             /** @description No Content */
@@ -4142,7 +4141,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RecordAddress"];
+                "application/json": components["schemas"]["RecordAt"];
             };
         };
         responses: {

@@ -104,12 +104,12 @@ export interface UnsavedDocument { path: string; text: string }
 export type SourceChanges = Pick<components['schemas']['EditRecordChanges'], 'moves' | 'deletions' | 'documents'>;
 
 // What deleting one record changes in plugin source.
-type RecordDeleteChanges = SourceChanges & { record: RecordAddress };
+type RecordDeleteChanges = SourceChanges & { record: RecordAt };
 
 /** A delete's changes per record, in the order to make them, and the records mEdit refused. */
 export interface DeleteChangesOutcome {
   applied: readonly RecordDeleteChanges[];
-  refused: readonly ItemRefusal<RecordAddress>[];
+  refused: readonly ItemRefusal<RecordAt>[];
 }
 
 /** The changes renaming a plugin's source makes, and the name its tree was filed under. */
@@ -294,7 +294,7 @@ export interface RestoreOutcome {
 
 export type GridPosition = components['schemas']['GridPosition'];
 /** A record and the plugin holding it (ADR-0012). */
-export type RecordAddress = components['schemas']['RecordAddress'];
+export type RecordAt = components['schemas']['RecordAt'];
 /** Copy's mode Option (commands.md, Record, `copy`). */
 export type CopyMode = components['schemas']['CopyMode'];
 type CopyChanges = components['schemas']['RecordCopied'];
@@ -337,12 +337,12 @@ export interface MEditClient {
   // commands.md, A selection is one gesture, and each item lands on its own. Over the unsaved documents
   // mEdit holds. A WriteRefused is the call itself failing. Nothing is written.
   getDeleteChanges(
-    records: readonly RecordAddress[],
+    records: readonly RecordAt[],
   ): Promise<DeleteChangesOutcome | WriteRefused>;
   // Each record into each destination is one item, changed or refused on its own. `replace` lets an override
   // copy over a held one. Over the unsaved documents mEdit holds. A WriteRefused is the call failing. Nothing is written.
   getCopyChanges(
-    records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
+    records: readonly RecordAt[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
   ): Promise<CopyChangesOutcome | WriteRefused>;
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
@@ -402,7 +402,7 @@ export interface MEditClient {
   getCopyDocument(plugin: PluginAddress, formKey: string): Promise<CopyDocument | null | ReadFailed>;
   /** The record whose own document the file at the absolute `path` is; null when mEdit answers the file holds
    *  no record. Fails with mEdit's reason when it cannot read the file. */
-  getRecordOfFile(path: string): Promise<RecordAddress | null | ReadFailed>;
+  getRecordOfFile(path: string): Promise<RecordAt | null | ReadFailed>;
   /** Over the unsaved documents mEdit holds. mEdit writes nothing. */
   getEditChanges(
     formKey: string, plugin: PluginAddress, envelope: RecordEditEnvelope,

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import {
-  isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress,
+  isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAt,
 } from '../client';
 import { copyModeItems, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
@@ -14,7 +14,6 @@ import { keyArgsView } from '../drivingLib/copyValue';
 import { gestureEntry, isClickedRow } from '../drivingLib/gestureEntry';
 import { rowLabelOf, rowNameOf } from '../drivingLib/argument';
 import { recordArgumentOf } from '../drivingLib/recordArgument';
-import { pluginAddressOf } from '../wire/pluginAddress';
 import { answerOf } from '../wire/readFailed';
 
 function recordName(formKey: string, label: string | undefined): string {
@@ -22,8 +21,8 @@ function recordName(formKey: string, label: string | undefined): string {
 }
 
 // The question names the origin too, so it says which plugin of the filename it means (ADR-0012).
-function recordLabel({ formKey, plugin, origin }: RecordAddress, label: string | undefined): string {
-  return `${recordName(formKey, label)} in ${plugin} (${origin})`;
+function recordLabel({ formKey, plugin }: RecordAt, label: string | undefined): string {
+  return `${recordName(formKey, label)} in ${plugin.name} (${plugin.origin})`;
 }
 
 function landedUnless<T>(failure: string | undefined, items: readonly T[], reporter: Reporter, notApplied: string): readonly T[] {
@@ -49,7 +48,7 @@ const NO_RECORD_ARGUMENT = 'it carries no record Argument';
 const NO_PLUGIN = 'it names no plugin';
 
 interface Selection {
-  records: RecordAddress[];
+  records: RecordAt[];
   unreadable: ItemRefusal<string>[];
   labels: ReadonlyMap<string, string | undefined>;
 }
@@ -69,7 +68,7 @@ function rowsOf(clicked: unknown, selected: readonly unknown[] | undefined, sele
 }
 
 function selectedRecords(nodes: readonly unknown[]): Selection {
-  const records: RecordAddress[] = [];
+  const records: RecordAt[] = [];
   const unreadable: ItemRefusal<string>[] = [];
   const labels = new Map<string, string | undefined>();
   for (const node of nodes) {
@@ -78,7 +77,7 @@ function selectedRecords(nodes: readonly unknown[]): Selection {
       unreadable.push({ item: rowNameOf(node), reason: argument === undefined ? NO_RECORD_ARGUMENT : NO_PLUGIN });
       continue;
     }
-    records.push({ formKey: argument.formKey, plugin: argument.plugin.name, origin: argument.plugin.origin });
+    records.push({ formKey: argument.formKey, plugin: argument.plugin });
     labels.set(argument.formKey, rowLabelOf(node));
   }
   return { records, unreadable, labels };
@@ -96,17 +95,17 @@ export function registerRecordLifecycleCommands(
     // Asked once for the whole selection and naming each record, so the user confirms the right thing.
     vscode.commands.registerCommand('modbench.record.delete', async (clicked?: unknown, selected?: readonly unknown[]) => {
       const { records, unreadable, labels } = selectedRecords(rowsOf(clicked, selected, selections));
-      const label = (item: RecordAddress | string) => (typeof item === 'string' ? item : addressLabel(item, labels));
+      const label = (item: RecordAt | string) => (typeof item === 'string' ? item : addressLabel(item, labels));
       if (records.length > 0 && await askToDelete(records.map(label), ask) !== 'Delete') return;
 
       const reportOutcome = () => source.oneAtATime(async () => {
         const answer = records.length > 0 ? await client.getDeleteChanges(records) : { applied: [], refused: [] };
         if (isRefused(answer)) { reporter.report('error', answer.message); return; }
         const refused = [...unreadable, ...answer.refused];
-        const outcome = (landed: readonly RecordAddress[]) => reporter.selectionOutcome(
+        const outcome = (landed: readonly RecordAt[]) => reporter.selectionOutcome(
           `Could not delete ${refused.length} of ${records.length + unreadable.length} records.`, { landed, refused }, label);
         const touched = answer.applied.map(({ record }) => record);
-        const failure = await applyAnswered(source, answer.applied, touched.map(pluginAddressOf));
+        const failure = await applyAnswered(source, answer.applied, touched.map(({ plugin }) => plugin));
         outcome(landedUnless(failure, touched, reporter, 'Could not delete the records.'));
       });
       await (records.length > 0 ? write(reportOutcome) : reportOutcome());
@@ -123,7 +122,7 @@ async function pickCopyMode(): Promise<CopyMode | undefined> {
 
 // A pick left with nothing picked is Esc by another route: nothing is copied and nothing said.
 async function pickCopyDestinations(
-  client: RecordCopyClient, mode: CopyMode, records: readonly RecordAddress[], reporter: Reporter,
+  client: RecordCopyClient, mode: CopyMode, records: readonly RecordAt[], reporter: Reporter,
 ): Promise<PluginAddress[] | undefined> {
   let items: CopyDestinationItem[];
   try {
@@ -142,7 +141,7 @@ async function pickCopyDestinations(
 
 // What an override would replace, asked of mEdit once per record before anything is written.
 async function copiesAnOverrideReplaces(
-  client: RecordCopyClient, records: readonly RecordAddress[], destinations: readonly PluginAddress[],
+  client: RecordCopyClient, records: readonly RecordAt[], destinations: readonly PluginAddress[],
 ): Promise<CopyItem[]> {
   const holders = new Map<string, PluginAddress[]>();
   for (const formKey of new Set(records.map((r) => r.formKey))) {
@@ -151,7 +150,7 @@ async function copiesAnOverrideReplaces(
   return heldCopies(records, destinations, holders);
 }
 
-function addressLabel(record: RecordAddress, labels: ReadonlyMap<string, string | undefined>): string {
+function addressLabel(record: RecordAt, labels: ReadonlyMap<string, string | undefined>): string {
   return recordLabel(record, labels.get(record.formKey));
 }
 
@@ -171,7 +170,7 @@ function askToReplace(
 }
 
 async function confirmReplacement(
-  client: RecordCopyClient, records: readonly RecordAddress[], destinations: readonly PluginAddress[],
+  client: RecordCopyClient, records: readonly RecordAt[], destinations: readonly PluginAddress[],
   labels: ReadonlyMap<string, string | undefined>, ask: AskQuestion, reporter: Reporter,
 ): Promise<{ readonly replace: boolean } | 'cancelled'> {
   let held: CopyItem[];

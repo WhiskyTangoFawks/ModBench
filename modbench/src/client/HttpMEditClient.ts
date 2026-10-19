@@ -21,7 +21,7 @@ import {
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
-  type GridPosition, type RecordAddress, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
+  type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
   type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type InitMod, type InitOutcome, type DecompileAndCommitProgress,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
@@ -424,7 +424,7 @@ class HttpMEditClient implements MEditClient {
   }
 
   async getDeleteChanges(
-    records: readonly RecordAddress[],
+    records: readonly RecordAt[],
   ): Promise<DeleteChangesOutcome | WriteRefused> {
     return this.mutateEach({
       verb: 'delete', noun: 'record', items: records,
@@ -435,7 +435,7 @@ class HttpMEditClient implements MEditClient {
   }
 
   async getCopyChanges(
-    records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
+    records: readonly RecordAt[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
   ): Promise<CopyChangesOutcome | WriteRefused> {
     return this.mutateEach({
       verb: 'copy', noun: 'record', items: records,
@@ -743,7 +743,7 @@ class HttpMEditClient implements MEditClient {
     }), noBodyFails, { timed: true, absent: { status: 404, answers: null } });
   }
 
-  getRecordOfFile(path: string): Promise<RecordAddress | null | ReadFailed> {
+  getRecordOfFile(path: string): Promise<RecordAt | null | ReadFailed> {
     return this.read(`getRecordOfFile(${path})`, (signal) => this.apiClient.GET('/plugin-source/record', { params: { query: { path } }, signal }),
       noBodyFails, { timed: true, absent: { status: 204, answers: null } });
   }
