@@ -89,10 +89,10 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.facts.reconciled(plugins, failures);
     this.deps.publishFailedToRead(this.facts.problems().failedToRead);
     // Diagnoses stay as the last scan left them (no blink) until the scan lands a fresh answer;
-    // a failed scan leaves them alone too.
+    // a failed scan leaves them alone too, and says so in the message line.
     this.changed.fire();
     // Fire-and-forget: the hand-off must not wait on a whole-load-order scan. A failed scan is
-    // ADR-0019's background tier, and retries at the next reconcile.
+    // ADR-0019's background tier: a message line and one Output line, and a retry at the next reconcile.
     void this.scanDiagnoses(generation);
     return plugins.length;
   }
@@ -137,7 +137,12 @@ export class PluginFactsFeed implements vscode.Disposable {
       this.deps.publishDiagnoses(this.facts.problems().malformed);
       this.changed.fire();
     } catch (err) {
-      this.deps.log('warn', `[PluginFactsFeed] the malformed-plugin scan could not be read: ${errorMessage(err)}`);
+      if (generation !== this.generation) return;
+      const reason = errorMessage(err);
+      if (this.facts.scanFailed(reason)) {
+        this.deps.log('warn', `[PluginFactsFeed] the malformed-plugin scan could not be read: ${reason}`);
+      }
+      this.changed.fire();
     }
   }
 }

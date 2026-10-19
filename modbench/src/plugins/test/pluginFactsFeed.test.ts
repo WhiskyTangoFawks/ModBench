@@ -147,6 +147,46 @@ describe('PluginFactsFeed', () => {
     expect(feed.rows.description(A)).toBe('malformed');
   });
 
+  it('says in the message line that the scan failed, and clears it when the next scan answers', async () => {
+    const { feed, client, logged, changes } = feedOver();
+    client.setQueryAnswer('getPlugins', [held()]);
+    client.setQueryAnswer('getDiagnoses', [diagnosis('first')]);
+    await feed.reconciled([]);
+    client.setQueryFailureOnce('getDiagnoses', { failed: 'refused', refusal: '503' });
+    const warned = logged.next();
+    await feed.reconciled([]);
+    await warned;
+
+    expect(feed.rows.laterReadFailureMessage()).toMatch(/^Showing the last good read: .*malformed-plugin scan.*503/);
+
+    const answered = changes.mock.calls.length;
+    await feed.reconciled([]);
+    await vi.waitFor(() => { expect(changes.mock.calls.length).toBeGreaterThan(answered + 1); });
+
+    expect(feed.rows.laterReadFailureMessage()).toBeUndefined();
+  });
+
+  it('logs a failed scan once, and again only when the reason changes', async () => {
+    const { feed, client, logged } = feedOver();
+    client.setQueryAnswer('getPlugins', [held()]);
+    client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: '503' });
+    const warned = logged.next();
+    await feed.reconciled([]);
+    await warned;
+    const again = vi.fn();
+    feed.onDidChange(again);
+    await feed.reconciled([]);
+    await vi.waitFor(() => { expect(again.mock.calls.length).toBeGreaterThan(1); });
+    expect(logged.items).toHaveLength(1);
+
+    client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: '500' });
+    const changed = logged.next();
+    await feed.reconciled([]);
+    await changed;
+
+    expect(logged.items).toHaveLength(2);
+  });
+
   it('drops a scan answer that lands after a newer event', async () => {
     const { feed, client, diagnoses } = feedOver();
     const slowScan = deferred<PluginDiagnosisReport[]>();

@@ -105,7 +105,7 @@ public class MasterResolutionTests
     [InlineData(false, "Base.esm", "Base.esm", true)]
     [InlineData(true, "Base.esm", "Base.esm", false)]
     [InlineData(false, "base.esm", "Base.ESM", true)]
-    public void MasterLoadingAfterItsDependant_IsALateMaster_ForTheGameCrashesOnIt(
+    public void LateMasters_NamesAMasterOnlyWhenItLoadsAfterItsDependant(
         bool masterFirst, string declared, string fileName, bool late)
     {
         var master = Plugin(fileName);

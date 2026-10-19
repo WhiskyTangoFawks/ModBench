@@ -53,11 +53,11 @@ const failedToRead = (reason: string | undefined): PluginStatus | undefined => r
   : { kind: 'failedToRead', words: 'failed to read', tooltipLine: `Failed to read: ${reason}` };
 
 // "Missing" is the reference tool's word for a master that is not active, file present or not.
-const masterIssues = (inactiveMasters: readonly string[], lateMasters: readonly string[]): PluginStatus | undefined => {
-  const count = inactiveMasters.length + lateMasters.length;
+const masterIssues = (missingMasters: readonly string[], lateMasters: readonly string[]): PluginStatus | undefined => {
+  const count = missingMasters.length + lateMasters.length;
   if (count === 0) return undefined;
   const lines = [
-    ...inactiveMasters.length === 0 ? [] : [`Missing masters: ${inactiveMasters.join(', ')}`],
+    ...missingMasters.length === 0 ? [] : [`Missing masters: ${missingMasters.join(', ')}`],
     ...lateMasters.length === 0 ? [] : [`Masters loading after it: ${lateMasters.join(', ')}`],
   ];
   return { kind: 'masterIssues', words: count === 1 ? '1 master issue' : `${count} master issues`, tooltipLine: lines.join('; ') };
@@ -109,6 +109,7 @@ export class PluginFacts {
   private indexFailure?: string;
   private noMatchAnywhere = false;
   private laterFailures = new Map<string, string>();
+  private scanFailure?: string;
 
   /** A progressive reconcile's tick. */
   indexed(plugins: readonly PluginAddress[], failures: readonly PluginLoadFailure[]): void {
@@ -169,9 +170,18 @@ export class PluginFacts {
 
   /** The malformed-plugin scan's answer, replacing the last. */
   diagnosed(reports: readonly PluginDiagnosisReport[]): void {
+    this.scanFailure = undefined;
     this.diagnosisReports = [...reports];
     this.diagnosisTexts = new ByPluginAddress<string[]>();
     for (const r of reports) this.diagnosisTexts.append({ name: r.plugin, origin: r.origin }, r.text);
+  }
+
+  /** The malformed-plugin scan could not be read; the last answer stays. False when this reason
+   *  is the one already standing. */
+  scanFailed(reason: string): boolean {
+    const isNew = reason !== this.scanFailure;
+    this.scanFailure = reason;
+    return isNew;
   }
 
   /** Each settle of a source mod names every plugin of it that changed outside Modbench, so it
@@ -210,8 +220,11 @@ export class PluginFacts {
 
   /** The message line's part for those failures; undefined when none stands. */
   laterReadFailureMessage(): string | undefined {
-    return this.laterFailures.size === 0 ? undefined
-      : `Showing the last good read: ${[...this.laterFailures.values()].join('; ')}`;
+    const reasons = [
+      ...this.laterFailures.values(),
+      ...this.scanFailure === undefined ? [] : [`the malformed-plugin scan: ${this.scanFailure}`],
+    ];
+    return reasons.length === 0 ? undefined : `Showing the last good read: ${reasons.join('; ')}`;
   }
 
   /** The failed index (plugins.md, States 6). */
