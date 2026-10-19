@@ -1,3 +1,5 @@
+using DuckDB.NET.Data;
+using DuckDB.NET.Native;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
@@ -40,6 +42,9 @@ internal static class IndexAnswer
     {
         NoLoadOrderException => new IndexRefused(IndexRefusal.NoLoadOrder, ex.Message),
         IndexNotReadyException => new IndexRefused(IndexRefusal.IndexNotReady, ex.Message),
+        // DuckDB's message goes on to advise tuning it, which is mEdit's to do and not the user's.
+        DuckDBException { ErrorType: DuckDBErrorType.OutOfMemory } => new IndexRefused(
+            IndexRefusal.OutOfMemory, $"mEdit's record index ran out of memory for this read: {ex.Message.Split('\n')[0]}"),
         _ => null,
     };
 }

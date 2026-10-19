@@ -177,12 +177,13 @@ internal static class EndpointMapping
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = refused.Refusal.ToString() });
 
-    /// <summary>No load order, or an index not yet ready, is a "not right now", never a bad request.</summary>
+    /// <summary>No load order, an index not yet ready, or one out of memory while other reads hold it, is a "not
+    /// right now", never a bad request.</summary>
     internal static IResult Refusal(IndexRefused refused) => new Logged(refused.Refusal.ToString(), refused.Message, Results.Problem(
         refused.Message,
         statusCode: refused.Refusal switch
         {
-            IndexRefusal.NoLoadOrder or IndexRefusal.IndexNotReady => StatusCodes.Status503ServiceUnavailable,
+            IndexRefusal.NoLoadOrder or IndexRefusal.IndexNotReady or IndexRefusal.OutOfMemory => StatusCodes.Status503ServiceUnavailable,
             IndexRefusal.FilterRejected or IndexRefusal.SelectRejected or IndexRefusal.NameRefused => StatusCodes.Status400BadRequest,
             IndexRefusal.SourceStopped => StatusCodes.Status422UnprocessableEntity,
             _ => throw new InvalidEnumArgumentException(nameof(refused), (int)refused.Refusal, typeof(IndexRefusal)),

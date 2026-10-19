@@ -10,8 +10,8 @@ using Mutagen.Bethesda;
 namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>A face that fails every question; given a rebuild refusal, answers a rebuild with it, as
-/// another window's hold does.</summary>
-internal sealed class FailingQueries(string? rebuildRefusal = null) : IQueries
+/// another window's hold does; given a problems refusal, answers the Problems read with it.</summary>
+internal sealed class FailingQueries(string? rebuildRefusal = null, IndexRefused? problemsRefusal = null) : IQueries
 {
     public Answer<IReadOnlyList<PluginRow>, IndexRefused> GetPlugins() => throw Failed();
 
@@ -75,10 +75,10 @@ internal sealed class FailingQueries(string? rebuildRefusal = null) : IQueries
 
     public Answer<PluginDependants, IndexRefused> GetDependants(PluginAddress plugin) => throw Failed();
 
-    public Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems() => throw Failed();
+    public Answer<IReadOnlyList<PluginProblems>, IndexRefused> GetProblems() => problemsRefusal ?? throw Failed();
 
-    internal static void Replace(IServiceCollection services, string? rebuildRefusal = null) =>
-        services.AddSingleton<IQueries>(new FailingQueries(rebuildRefusal));
+    internal static void Replace(IServiceCollection services, string? rebuildRefusal = null, IndexRefused? problemsRefusal = null) =>
+        services.AddSingleton<IQueries>(new FailingQueries(rebuildRefusal, problemsRefusal));
 
     private static InvalidOperationException Failed() => new("The record index failed.");
 }
