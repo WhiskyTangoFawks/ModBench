@@ -560,7 +560,7 @@ export interface InstanceAdapter {
   /** Renames plugin `from` of `origin`, its named files and its line in every profile, in one
    *  write; a failed write puts every file back. Refuses, changing nothing, a taken name or a
    *  plugin not there. */
-  renamePlugin(origin: FileOrigin, from: string, to: string, gameRelease: string | undefined): Promise<void>;
+  renamePlugin(origin: FileOrigin, from: string, to: string): Promise<void>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** Moves a downloaded file to the trash, then what the manager keeps about it. Rejects when the

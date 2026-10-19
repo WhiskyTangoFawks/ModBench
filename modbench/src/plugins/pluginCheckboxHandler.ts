@@ -12,14 +12,14 @@ import type { Reporter } from '../ports/reporter';
  *  says. */
 export async function onPluginCheckboxChanged(
   e: vscode.TreeCheckboxChangeEvent<PluginsTreeNode>,
-  commands: Pick<PluginCommands, 'setPluginsParticipation'>, profile: () => string, reporter: Reporter, instance: Pick<Instance, 'refresh'>,
+  commands: Pick<PluginCommands, 'setPluginsParticipation'>, reporter: Reporter, instance: Pick<Instance, 'refresh'>,
 ): Promise<void> {
   const entries = e.items
     .filter((item): item is [PluginNode, vscode.TreeItemCheckboxState] => item[0].kind === 'plugin')
     .map(([node, state]) => ({ name: node.plugin.name, enabled: state === vscode.TreeItemCheckboxState.Checked }));
   if (entries.length === 0) return;
   await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, async () => {
-    const result = await commands.setPluginsParticipation(profile(), entries);
+    const result = await commands.setPluginsParticipation(entries);
     reportPluginsParticipation(result, entries, reporter);
   });
 }

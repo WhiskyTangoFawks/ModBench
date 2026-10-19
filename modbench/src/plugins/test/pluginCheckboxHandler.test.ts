@@ -30,13 +30,12 @@ beforeEach(() => {
 const REFUSED: InstanceAnswers = { refusals: refusing('changePluginOrder', 'ENOENT: no plugins.txt') };
 const fake = (answers: InstanceAnswers = {}) =>
   fakeInstanceAdapter(readingFixture({ pluginOrder: [{ name: 'A.esp', enabled: false }, { name: 'B.esp', enabled: true }] }), answers);
-const profile = () => 'Default';
 const instance = { refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); } };
 const toggled = (...items: [string, 0 | 1][]) => ({
   items: items.map(([name, state]) => [new PluginNode({ name, enabled: state === 0 }, 'SomeMod'), state] as [PluginNode, 0 | 1]),
 });
 const toggle = (event: ReturnType<typeof toggled>, adapter = fake(), reporter = recordingReporter()) =>
-  onPluginCheckboxChanged(event, pluginCommandsWith(adapter.adapter), profile, reporter, instance);
+  onPluginCheckboxChanged(event, pluginCommandsWith(adapter.adapter), reporter, instance);
 const enabling = (...pairs: [string, boolean][]) =>
   [{ verb: 'changePluginOrder', profile: 'Default', changes: pairs.map(([plugin, enabled]) => ({ kind: 'enable', plugin, enabled })) }];
 
@@ -86,7 +85,7 @@ describe('onPluginCheckboxChanged', () => {
     const adapter = fake();
     const recordNode = await recordRow(recordSummaryFixture(), 'Data/');
 
-    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, pluginCommandsWith(adapter.adapter), profile, recordingReporter(), instance);
+    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, pluginCommandsWith(adapter.adapter), recordingReporter(), instance);
 
     expect(adapter.calls).toEqual([]);
   });
@@ -113,7 +112,7 @@ describe('a check box ends when the read lands (common.md, A gesture that writes
 
   it('opens no progress for a record row', async () => {
     await onPluginCheckboxChanged(
-      { items: [[await recordRow(recordSummaryFixture(), 'Data/'), 1]] }, pluginCommandsWith(fake().adapter), profile, recordingReporter(), instance);
+      { items: [[await recordRow(recordSummaryFixture(), 'Data/'), 1]] }, pluginCommandsWith(fake().adapter), recordingReporter(), instance);
 
     expect(progressSteps).toEqual([]);
   });
