@@ -15,6 +15,7 @@ esbuild.mjs
 buildWebview.mjs
 package.mjs
 notices.mjs
+notice-licenses/**
 knip.jsonc
 eslint-rules/**
 backend/**/*.pdb
