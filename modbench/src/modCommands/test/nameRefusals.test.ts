@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { entryNameRefusal, newModNameRefusal, type TakenNames } from '../commandRefusals';
+import type { TakenNames } from '../../instanceAdapter/instanceAdapter';
+import { entryNameRefusal, newModNameRefusal } from '../nameRefusals';
 
 const mod = (name: string) => ({ kind: 'mod', name } as const);
 const separator = (name: string) => ({ kind: 'separator', name } as const);
