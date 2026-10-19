@@ -6,7 +6,7 @@ import { gameReleaseForNexusDomain, nexusDomainForMetaGame } from '../tables/gam
 import { changeOwnedKeysInText, MOD_META_FILE_NAME, parseMetaIni } from './codecs/metaIni';
 import { readGameName } from './codecs/modOrganizerIni';
 import { ensureDir, exists, get, readOrReason, withLock, write } from './files';
-import type { HashIndex } from './hashIndex';
+import type { HashIndex } from './downloadedFileContents/hashIndex';
 import type { FileRead, InstalledFileId, InstallationFile, InstanceAdapter, ModMeta, ModMetadata, OwnedMetaKeys } from './instanceAdapter';
 import { downloadFile, modMetaFileIn, settingsFile } from './layout';
 import { currentDownloadsDir, folderHolding, newModFolder, type Mo2Context } from './mo2Context';

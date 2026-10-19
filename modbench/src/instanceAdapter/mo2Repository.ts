@@ -2,7 +2,7 @@
 
 import { join } from 'node:path';
 import { exists, ignoreSkippedLink, listEntries, remove, type ResolvedEntry, write } from './files';
-import type { HashIndex } from './hashIndex';
+import type { HashIndex } from './downloadedFileContents/hashIndex';
 import type { GameFile, InstanceAdapter } from './instanceAdapter';
 import { ignoreListFile, WHITELIST_IGNORE_LIST } from './layout';
 import type { Mo2Context } from './mo2Context';

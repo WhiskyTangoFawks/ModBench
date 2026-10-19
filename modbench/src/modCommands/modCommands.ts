@@ -7,7 +7,7 @@ import {
   type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace, type SourceMods,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
-import { EMPTY_MOD_NAME, entryNameRefusal, takenModNameRefusal, type EntryKey } from './nameRefusals';
+import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, type EntryKey } from './nameRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { isRefused, type MEditClient, type ReadModStatus } from '../client';
@@ -227,8 +227,8 @@ async function renameModNameRefusal(adapter: InstanceAdapter, requested: string,
     : entryNameRefusal(keyOf(adapter), await adapter.modOrder(), 'mod', requested, MOD_NAME_CLASH, own);
 }
 
-async function newModNameRefusal(adapter: InstanceAdapter, name: string): Promise<string | undefined> {
-  return takenModNameRefusal(keyOf(adapter), await adapter.modOrder(), name);
+async function newModNameRefusalInInstance(adapter: InstanceAdapter, name: string): Promise<string | undefined> {
+  return newModNameRefusal(keyOf(adapter), await adapter.modOrder(), name);
 }
 
 // Insert a new enabled separator next to the anchor (mods.md, Add separator); the adapter places it.
@@ -472,7 +472,7 @@ export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['m
     renameMod: (...args: TailOf<typeof renameMod>) => renameMod({ adapter, mEdit }, ...args),
     separatorNameRefusal: (...args: TailOf<typeof separatorNameRefusal>) => separatorNameRefusal(adapter, ...args),
     renameModNameRefusal: (...args: TailOf<typeof renameModNameRefusal>) => renameModNameRefusal(adapter, ...args),
-    newModNameRefusal: (...args: TailOf<typeof newModNameRefusal>) => newModNameRefusal(adapter, ...args),
+    newModNameRefusal: (...args: TailOf<typeof newModNameRefusalInInstance>) => newModNameRefusalInInstance(adapter, ...args),
     names: adapter.names,
     installMod: (...args: TailOf<typeof installMod>) => installMod({ adapter, readStatus, listMod: (name) => listMod(adapter, name) }, ...args),
     upgradeLoss: (...args: TailOf<typeof upgradeLoss>) => upgradeLoss({ adapter, readStatus }, ...args),

@@ -4,8 +4,8 @@
 import { join } from 'node:path';
 import type { ArchiveReader } from './archiveReader';
 import { digestOf } from './contentDigest';
-import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, stampOf, withLock } from './files';
-import type { FileRead, FileStamp, HashedDownload, HashedFile, InstanceAdapter } from './instanceAdapter';
+import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, stampOf, withLock } from '../files';
+import type { FileRead, FileStamp, HashedDownload, HashedFile, InstanceAdapter } from '../instanceAdapter';
 
 const INDEX_FILE = 'hashes.jsonl';
 const EXTRACTION_PREFIX = 'entries-';

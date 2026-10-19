@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
-import { errnoCode } from './errno';
+import { errnoCode } from '../errno';
 import { ARCHIVE_EXTENSIONS } from './archiveNames';
-import { errorMessage } from '../ports/errorMessage';
+import { errorMessage } from '../../ports/errorMessage';
 import type { ArchiveReader } from './archiveReader';
 
 const CANDIDATES = ['7z', '7za', '7zz'] as const;
@@ -42,7 +42,7 @@ function fileEntries(listing: string): string[] {
   });
 }
 
-export const sevenZip: ArchiveReader = {
+export const downloadedFileReader: ArchiveReader = {
   list: async (archivePath) => fileEntries(await stdoutOfSevenZip(archivePath, 'list', ['l', '-slt', '-ba', '-sccUTF-8', archivePath])),
   extract: async (archivePath, destDir) => {
     await stdoutOfSevenZip(archivePath, 'extract', ['x', archivePath, `-o${destDir}`, '-y']);

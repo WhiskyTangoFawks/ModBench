@@ -19,7 +19,7 @@ import { readInstance } from './instanceReading';
 import { mo2Reads, readingSource } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { programRunning } from './processes';
-import { hashIndex } from './hashIndex';
+import { hashIndex } from './downloadedFileContents/hashIndex';
 import { hashIndexDir, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
 
 const MO2_PROGRAM = 'ModOrganizer.exe';

@@ -3,7 +3,7 @@
 
 import { basename, dirname } from 'node:path';
 import { parsePlugins } from '../loadOrderFileCodec/pluginsText';
-import { isArchiveName } from './archiveNames';
+import { isArchiveName } from './downloadedFileContents/archiveNames';
 import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
