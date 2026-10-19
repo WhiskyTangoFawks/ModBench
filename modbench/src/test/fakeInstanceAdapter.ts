@@ -53,7 +53,7 @@ export type AdapterCall =
   | { readonly verb: 'createModFolder'; readonly mod: string }
   | { readonly verb: 'renameModFolder'; readonly from: string; readonly to: string }
   | { readonly verb: 'markOriginFile'; readonly origin: FileOrigin; readonly relativePath: string; readonly mark: OriginFileMark }
-  | { readonly verb: 'renamePlugin'; readonly origin: FileOrigin; readonly from: string; readonly to: string; readonly gameRelease: string | undefined }
+  | { readonly verb: 'renamePlugin'; readonly origin: FileOrigin; readonly from: string; readonly to: string }
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
   | { readonly verb: 'trashModFile'; readonly mod: string; readonly relativePath: string }
   | { readonly verb: 'trashSourceFolder'; readonly mod: string }
@@ -244,7 +244,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     excludedSuffix: EXCLUDED_SUFFIX,
     originHoldsPlugin: (origin, name) => Promise.resolve((answers.heldPlugins ?? []).some((held) =>
       originKey(held.origin) === originKey(origin) && pluginKey(held.name) === pluginKey(name))),
-    renamePlugin: (origin, from, to, gameRelease) => record({ verb: 'renamePlugin', origin, from, to, gameRelease }, undefined),
+    renamePlugin: (origin, from, to) => record({ verb: 'renamePlugin', origin, from, to }, undefined),
     trashEntryFolder: (entry) => record({ verb: 'trashEntryFolder', entry }, !answers.foldersAbsent?.has(entry.name)),
     trashModFile: (mod, relativePath) => record({ verb: 'trashModFile', mod, relativePath }, undefined),
     trashSourceFolder: (mod) => record({ verb: 'trashSourceFolder', mod }, true),

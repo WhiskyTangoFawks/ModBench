@@ -37,7 +37,7 @@ const refused = (refusal: string, detail?: string): GestureResult<PluginAddress>
 async function renamed({ commands, source, instance }: RenameDeps, plugin: PluginAddress, newName: string): Promise<GestureResult<PluginAddress>> {
   const couldNot = `Could not rename "${plugin.name}" (${plugin.origin}): its plugin source`;
   const apply = (changes: SourceChanges) => applyAnswered(source, [changes], [plugin]);
-  const result = await commands.renamePlugin({ apply }, plugin, newName, instance.value.gameRelease);
+  const result = await commands.renamePlugin({ apply }, plugin, newName);
   if (result.applied) return { applied: true, outcome: { landed: [{ name: newName, origin: plugin.origin }], refused: [] } };
   if ('reported' in result) return refused(`${couldNot} may be partly renamed. Reverting the source rename in git undoes it.`, result.reported);
   if (!result.sourceRenamed) return refused(result.refusal, result.detail);

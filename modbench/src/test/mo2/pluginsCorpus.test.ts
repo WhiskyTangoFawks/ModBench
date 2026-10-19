@@ -47,7 +47,7 @@ describe('plugins.txt corpus', () => {
   it('setPluginsEnabled(false) flips several lines in one write, touching only the active profile\'s plugins.txt', async () => {
     const before = await snapshotTree(dir);
     const orderBefore = await pluginOrder(dir);
-    const result = await pluginCommandsOver(dir).setPluginsEnabled(PROFILE, ['Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
+    const result = await pluginCommandsOver(dir).setPluginsEnabled(['Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS, DEFAULT_LOAD_ORDER]));
 
@@ -63,7 +63,7 @@ describe('plugins.txt corpus', () => {
 
   it('setPluginsParticipation flips a mixed selection in one write, touching only plugins.txt and loadorder.txt', async () => {
     const before = await snapshotTree(dir);
-    const result = await pluginCommandsOver(dir).setPluginsParticipation(PROFILE, [
+    const result = await pluginCommandsOver(dir).setPluginsParticipation([
       { name: 'Patch Mod.esp', enabled: false },
       { name: 'NonAsciiRetexture.esp', enabled: true },
     ]);
@@ -120,7 +120,7 @@ describe('plugins.txt corpus', () => {
 
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt and loadorder.txt', async () => {
     const before = await snapshotTree(dir);
-    await pluginCommandsOver(dir, NOT_INDEXED).reorderPlugins(PROFILE, moving('NonAsciiRetexture.esp'), { kind: 'winningEnd' }, []);
+    await pluginCommandsOver(dir, NOT_INDEXED).reorderPlugins(moving('NonAsciiRetexture.esp'), { kind: 'winningEnd' });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS, DEFAULT_LOAD_ORDER]));
 

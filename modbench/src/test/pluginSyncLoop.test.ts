@@ -236,7 +236,7 @@ describe('a gesture writes the profile the Instance last landed', () => {
     fake.changed();
     expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
 
-    const result = await pluginCommandsWith(fake.adapter).setPluginsEnabled(instance.value.activeProfile, ['Base.esp'], false);
+    const result = await pluginCommandsWith(fake.adapter).setPluginsEnabled(['Base.esp'], false);
 
     expect(result).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
     expect(fake.calls.at(-1)).toEqual({ verb: 'changePluginOrder', profile: 'Secondary', changes: [{ kind: 'enable', plugin: 'Base.esp', enabled: false }] });
