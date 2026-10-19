@@ -92,7 +92,7 @@ export interface Sync extends SyncMessage, SyncRuns {
   run(): Promise<void>;
 }
 
-export function createSync<T extends SyncOutcome>(sync: () => Promise<T>, channel: SyncChannel, labels: SyncLabels): Sync {
+function createSync<T extends SyncOutcome>(sync: () => Promise<T>, channel: SyncChannel, labels: SyncLabels): Sync {
   const failures = reportSyncFailures(labels.command, labels.unsynced, (line) => channel.error(`${labels.prefix} ${line}`));
   const runs = trackSyncRuns();
   const tell = (verb: string, what: string, names: readonly string[]): void => {
@@ -113,4 +113,24 @@ export function createSync<T extends SyncOutcome>(sync: () => Promise<T>, channe
     onMessageChanged: (listener) => failures.onMessageChanged(listener),
     settled: () => runs.settled(),
   };
+}
+
+export function createModSync<T extends SyncOutcome>(sync: () => Promise<T>, channel: SyncChannel, modOrderFile: string): Sync {
+  return createSync(sync, channel, {
+    command: 'mod sync',
+    prefix: '[modCommands]',
+    unsynced: `${modOrderFile} is not synced`,
+    added: `${modOrderFile} line(s) for folder(s) in mods/ with no line`,
+    dropped: `${modOrderFile} line(s) whose folder is gone from mods/`,
+  });
+}
+
+export function createPluginSync<T extends SyncOutcome>(sync: () => Promise<T>, channel: SyncChannel): Sync {
+  return createSync(sync, channel, {
+    command: 'plugin sync',
+    prefix: '[pluginCommands]',
+    unsynced: 'plugins.txt is not synced',
+    added: 'disabled plugins.txt line(s) for plugin(s) on disk with no line',
+    dropped: 'plugins.txt line(s) with no plugin on disk',
+  });
 }

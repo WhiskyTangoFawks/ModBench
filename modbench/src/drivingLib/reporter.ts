@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { reportSelectionOutcome, type Reporter, type Severity } from './ports/reporter';
+import { reportSelectionOutcome, type Reporter, type Severity } from '../ports/reporter';
 
 export function makeReporter(channel: Pick<vscode.LogOutputChannel, 'warn' | 'error'>, tag: string): Reporter {
   const log = (severity: Severity, said: string) => {
