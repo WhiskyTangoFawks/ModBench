@@ -1158,14 +1158,14 @@ export interface components {
         CopyMissingReason: "RecordGone" | "NotInPlugin";
         /** @enum {string} */
         CopyMode: "New" | "Override";
-        CopyRecordResult: {
-            applied: components["schemas"]["RecordCopied"][];
-            refused: components["schemas"]["CopyRefused"][];
-        };
-        CopyRefused: {
+        CopyRecordRefused: {
             item: components["schemas"]["CopyItem"];
             refusal: components["schemas"]["RecordEditRefusal"];
             message: string;
+        };
+        CopyRecordResult: {
+            applied: components["schemas"]["RecordCopied"][];
+            refused: components["schemas"]["CopyRecordRefused"][];
         };
         CopyText: {
             plugin: components["schemas"]["PluginAddress"];
@@ -1205,14 +1205,14 @@ export interface components {
             applied: components["schemas"]["PluginAddress"][];
             refused: components["schemas"]["DecompileRefused"][];
         };
-        DeleteRecordResult: {
-            applied: components["schemas"]["RecordDeleted"][];
-            refused: components["schemas"]["DeleteRefused"][];
-        };
-        DeleteRefused: {
+        DeleteRecordRefused: {
             item: components["schemas"]["RecordAt"];
             refusal: components["schemas"]["RecordEditRefusal"];
             message: string;
+        };
+        DeleteRecordResult: {
+            applied: components["schemas"]["RecordDeleted"][];
+            refused: components["schemas"]["DeleteRecordRefused"][];
         };
         DocumentChange: {
             path: string;
@@ -1627,6 +1627,7 @@ export interface components {
             moves: components["schemas"]["SourceMove"][];
             deletions: string[];
             documents: components["schemas"]["DocumentChange"][];
+            newFormKey?: string | null;
         };
         RecordCopy: {
             formKey: string;
