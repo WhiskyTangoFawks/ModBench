@@ -1,4 +1,5 @@
 using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
@@ -10,10 +11,10 @@ public sealed record DeleteRecordResult(IReadOnlyList<RecordDeleted> Applied, IR
 
 /// <summary>The changes deleting one record makes to plugin source, written nowhere, as an edit's are.</summary>
 public sealed record RecordDeleted(
-    RecordAddress Record, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents);
+    RecordAt Record, IReadOnlyList<SourceMove> Moves, IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents);
 
 /// <summary>A record of the selection that wrote nothing: the typed refusal, and the message naming the way out.</summary>
-public sealed record DeleteRefused(RecordAddress Item, RecordEditRefusal Refusal, string Message) : IItemRefused<RecordEditRefusal>
+public sealed record DeleteRefused(RecordAt Item, RecordEditRefusal Refusal, string Message) : IItemRefused<RecordEditRefusal>
 {
     object IItemRefused<RecordEditRefusal>.Item => Item;
 }

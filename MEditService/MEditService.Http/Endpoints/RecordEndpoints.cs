@@ -131,7 +131,7 @@ internal static class RecordEndpoints
                 return EndpointMapping.BadRequest("Name the file by its absolute path.");
             return EndpointMapping.Answered(svc.GetRecordOfFile(path), file => file switch
             {
-                RecordOfFileAnswer.Holds holds => Results.Ok(RecordAddress.Of(holds.Record)),
+                RecordOfFileAnswer.Holds holds => Results.Ok(holds.Record),
                 RecordOfFileAnswer.HoldsNone => Results.NoContent(),
                 RecordOfFileAnswer.Refused refused => Results.Problem(refused.Why, statusCode: 422),
                 _ => throw new UnreachableException(),
@@ -143,7 +143,7 @@ internal static class RecordEndpoints
             "FormKey. No content when the file holds no record. A file that cannot be read as a " +
             "record's own document refuses, saying why.")
         .WithTags("Records")
-        .Produces<RecordAddress>()
+        .Produces<RecordAt>()
         .Produces(204)
         .ProducesProblem(400)
         .ProducesProblem(422)
@@ -217,7 +217,7 @@ internal static class RecordEndpoints
         .ProducesProblem(422)
         .ProducesProblem(500);
 
-        app.MapPost("/records/delete", (RecordAddress request, DeleteRecordHandler deletes) =>
+        app.MapPost("/records/delete", (RecordAt request, DeleteRecordHandler deletes) =>
             DeleteRecord(request, deletes, logger))
         .WithName("DeleteRecord")
         .WithSummary("Deletes a record from plugin source: a script's delete.")
@@ -311,23 +311,24 @@ internal static class RecordEndpoints
             return EndpointMapping.BadRequest("Every destination needs a name and an origin.");
 
         return EndpointMapping.Answered(
-            "CopyRecord", logger, await copies.Copy(request.Record.ToRecordAt(), request.Mode, request.Destination, request.Replace), Results.Ok);
+            "CopyRecord", logger, await copies.Copy(request.Record, request.Mode, request.Destination, request.Replace), Results.Ok);
     }
 
-    internal static Task<IResult> DeleteRecord(RecordAddress request, DeleteRecordHandler deletes, ILogger logger)
+    internal static Task<IResult> DeleteRecord(RecordAt request, DeleteRecordHandler deletes, ILogger logger)
     {
         return EndpointMapping.ExecuteWriting(
             "DeleteRecord", logger,
             logReceived: null,
             validate: () => AddressProblem(request),
-            execute: () => deletes.Delete(request.ToRecordAt()),
+            execute: () => deletes.Delete(request),
             onApplied: _ => Results.NoContent());
     }
 
-    private static IResult? AddressProblem(RecordAddress? record) =>
-        string.IsNullOrWhiteSpace(record?.FormKey) || string.IsNullOrWhiteSpace(record.Plugin) || string.IsNullOrWhiteSpace(record.Origin)
-            ? EndpointMapping.BadRequest("Every record needs a FormKey, a plugin name and an origin.")
-            : null;
+    private static bool Unaddressed(RecordAt record) =>
+        string.IsNullOrWhiteSpace(record.FormKey) || string.IsNullOrWhiteSpace(record.Plugin.Name) || string.IsNullOrWhiteSpace(record.Plugin.Origin);
+
+    private static IResult? AddressProblem(RecordAt record) =>
+        Unaddressed(record) ? EndpointMapping.BadRequest("Every record needs a FormKey, a plugin name and an origin.") : null;
 
     private static void LogEditReceived(ILogger logger, string route, RecordEditRequest? edit, string formKey, string spelled)
     {
@@ -388,17 +389,16 @@ internal static class RecordEndpoints
 
     // The routes over a selection of records share their request's shape.
     private static async Task<IResult> OverRecords(
-        IReadOnlyList<RecordAddress> records,
+        IReadOnlyList<RecordAt> records,
         Func<IResult?> validateOptions, Func<IReadOnlyList<RecordAt>, Task<IResult>> answer)
     {
         if (records.Count == 0)
             return EndpointMapping.BadRequest("At least one record is required.");
-        if (records.Any(r =>
-                string.IsNullOrWhiteSpace(r.FormKey) || string.IsNullOrWhiteSpace(r.Plugin) || string.IsNullOrWhiteSpace(r.Origin)))
+        if (records.Any(Unaddressed))
             return EndpointMapping.BadRequest("Every record needs a FormKey, a plugin name and an origin.");
         if (validateOptions() is { } invalid) return invalid;
 
-        return await answer([.. records.Select(r => r.ToRecordAt())]);
+        return await answer(records);
     }
 
     internal static CopyMissing Wire(MissingCopy missing) =>

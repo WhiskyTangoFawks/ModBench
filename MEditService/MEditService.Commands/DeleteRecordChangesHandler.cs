@@ -28,8 +28,8 @@ public sealed class DeleteRecordChangesHandler
     /// nowhere (ADR-0001). Each item sees the ones before it. No load order held refuses (ADR-0013).</summary>
     public async Task<Answer<DeleteRecordResult, SelectionRefusal<RecordEditRefusal>>> DeleteRecords(IReadOnlyList<RecordAt> records) =>
         (await DeleteRecords(records, new WriteSessions(_source, _unsaved.Current))).ToAnswer(
-            landed => new RecordDeleted(RecordAddress.Of(landed.Item), landed.Outcome.Moves, landed.Outcome.Deletions, landed.Outcome.Documents),
-            refused => new DeleteRefused(RecordAddress.Of(refused.Item), refused.Refusal, refused.Message),
+            landed => new RecordDeleted(landed.Item, landed.Outcome.Moves, landed.Outcome.Deletions, landed.Outcome.Documents),
+            refused => new DeleteRefused(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new DeleteRecordResult(applied, refused));
 
     /// <summary>The changes stay in <paramref name="sessions"/>, for a caller that writes them.</summary>

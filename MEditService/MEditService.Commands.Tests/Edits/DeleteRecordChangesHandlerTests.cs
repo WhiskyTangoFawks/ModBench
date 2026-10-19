@@ -22,9 +22,9 @@ public sealed class DeleteRecordChangesHandlerTests
 
         var result = mod.DeleteHandler.DeleteRecordsSync([npc, header, otherNpc]);
 
-        Assert.Equal([npc, otherNpc], result.Applied.Select(applied => applied.Record.ToRecordAt()));
+        Assert.Equal([npc, otherNpc], result.Applied.Select(applied => applied.Record));
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(header, refused.Item.ToRecordAt());
+        Assert.Equal(header, refused.Item);
         Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
         Assert.False(string.IsNullOrWhiteSpace(refused.Message));
         Assert.Null(mod.Document(mod.Npc.ToString()));
@@ -45,7 +45,7 @@ public sealed class DeleteRecordChangesHandlerTests
 
         var result = mod.DeleteHandler.DeleteRecordsSync([npc, otherNpc, npc, npcSpelledOtherwise]);
 
-        Assert.Equal([npc, otherNpc], result.Applied.Select(applied => applied.Record.ToRecordAt()));
+        Assert.Equal([npc, otherNpc], result.Applied.Select(applied => applied.Record));
         Assert.Empty(result.Refused);
     }
 
@@ -60,9 +60,9 @@ public sealed class DeleteRecordChangesHandlerTests
 
         var result = mod.DeleteHandler.DeleteRecordsSync([otherNpc, npc, keyword]);
 
-        Assert.Equal([otherNpc, keyword], result.Applied.Select(applied => applied.Record.ToRecordAt()));
+        Assert.Equal([otherNpc, keyword], result.Applied.Select(applied => applied.Record));
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(npc, refused.Item.ToRecordAt());
+        Assert.Equal(npc, refused.Item);
         Assert.Equal(RecordEditRefusal.AmbiguousSourceUnit, refused.Refusal);
         Assert.Contains(mod.Npc.ToString(), refused.Message, StringComparison.Ordinal);
         Assert.IsType<SourceFailure.Ambiguous>(SourceModTree.Repository(mod.ModFolder, mod.Plugin).RecordByFormKey(mod.Plugin, mod.Npc.ToString()).Stopped());

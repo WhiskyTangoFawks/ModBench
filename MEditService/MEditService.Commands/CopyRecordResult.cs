@@ -12,12 +12,10 @@ public sealed record CopyRecordResult(IReadOnlyList<RecordCopied> Applied, IRead
 /// <summary>The changes copying one record into one destination makes to plugin source, written nowhere, as an
 /// edit's are.</summary>
 public sealed record RecordCopied(
-    RecordAddress Record, PluginAddress Destination, IReadOnlyList<SourceMove> Moves,
+    RecordAt Record, PluginAddress Destination, IReadOnlyList<SourceMove> Moves,
     IReadOnlyList<string> Deletions, IReadOnlyList<DocumentChange> Documents);
 
-public sealed record RecordCopyItem(RecordAddress Record, PluginAddress Destination);
-
-public sealed record CopyRefused(RecordCopyItem Item, RecordEditRefusal Refusal, string Message) : IItemRefused<RecordEditRefusal>
+public sealed record CopyRefused(CopyItem Item, RecordEditRefusal Refusal, string Message) : IItemRefused<RecordEditRefusal>
 {
     object IItemRefused<RecordEditRefusal>.Item => Item;
 }

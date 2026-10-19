@@ -23,10 +23,10 @@ public sealed class CopyRecordChangesHandlerTests
         var result = mod.CopyHandler.CopySync([npc, faction], mode, [mod.DestinationPlugin, mod.SourcePlugin], replace: false);
 
         Assert.Equal(
-            [Item(npc, mod.DestinationPlugin), Item(faction, mod.DestinationPlugin)],
-            result.Applied.Select(applied => new RecordCopyItem(applied.Record, applied.Destination)));
+            [new CopyItem(npc, mod.DestinationPlugin), new CopyItem(faction, mod.DestinationPlugin)],
+            result.Applied.Select(applied => new CopyItem(applied.Record, applied.Destination)));
         Assert.Equal(
-            [Item(npc, mod.SourcePlugin), Item(faction, mod.SourcePlugin)],
+            [new CopyItem(npc, mod.SourcePlugin), new CopyItem(faction, mod.SourcePlugin)],
             result.Refused.Select(refused => refused.Item));
         Assert.All(result.Refused, refused => Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, refused.Refusal));
     }
@@ -43,9 +43,9 @@ public sealed class CopyRecordChangesHandlerTests
 
         var result = mod.CopyHandler.CopySync([npc, faction], CopyMode.Override, [mod.DestinationPlugin], replace);
 
-        Assert.Equal([Item(faction, mod.DestinationPlugin)], result.Applied.Select(applied => new RecordCopyItem(applied.Record, applied.Destination)));
+        Assert.Equal([new CopyItem(faction, mod.DestinationPlugin)], result.Applied.Select(applied => new CopyItem(applied.Record, applied.Destination)));
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(Item(npc, mod.DestinationPlugin), refused.Item);
+        Assert.Equal(new CopyItem(npc, mod.DestinationPlugin), refused.Item);
         Assert.Equal(RecordEditRefusal.FormKeyCollision, refused.Refusal);
     }
 
@@ -61,7 +61,7 @@ public sealed class CopyRecordChangesHandlerTests
 
         var result = mod.CopyHandler.CopySync([npc], CopyMode.Override, [mod.SourcePlugin], replace);
 
-        Assert.Equal([Item(npc, mod.SourcePlugin)], result.Applied.Select(applied => new RecordCopyItem(applied.Record, applied.Destination)));
+        Assert.Equal([new CopyItem(npc, mod.SourcePlugin)], result.Applied.Select(applied => new CopyItem(applied.Record, applied.Destination)));
         Assert.Empty(result.Refused);
         Assert.Equal(before, SourceModTree.Records(mod.SourceModFolder, mod.SourcePlugin));
     }
@@ -145,8 +145,6 @@ public sealed class CopyRecordChangesHandlerTests
         var drawn = result.Applied.Select(applied => Assert.Single(applied.Documents.SelectMany(document => RootFormKeys(document.Text)))).ToList();
         Assert.Equal(2, drawn.Distinct().Count());
     }
-
-    private static RecordCopyItem Item(RecordAt record, PluginAddress destination) => new(RecordAddress.Of(record), destination);
 
     private static IEnumerable<string> RootFormKeys(string documentText) =>
         DocumentTokens.FormKeysIn(Encoding.UTF8.GetBytes(documentText), GameRelease.Fallout4)

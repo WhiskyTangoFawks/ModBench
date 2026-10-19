@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using MEditService.Commands;
 using MEditService.Commands.Build;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
@@ -93,11 +92,11 @@ internal sealed record CopyMissing(string FormKey, PluginAddress Plugin, CopyMis
 /// when Missing is not empty.</summary>
 internal sealed record CompareRecordsResponse(CompareResult? Compare, IReadOnlyList<CopyMissing> Missing);
 
-internal sealed record RecordDeleteChangesRequest(IReadOnlyList<RecordAddress> Records);
+internal sealed record RecordDeleteChangesRequest(IReadOnlyList<RecordAt> Records);
 
 /// <summary>A script's copy of one record into one destination.</summary>
-internal sealed record ScriptCopyRequest(RecordAddress Record, CopyMode Mode, PluginAddress Destination, bool Replace = false);
+internal sealed record ScriptCopyRequest(RecordAt Record, CopyMode Mode, PluginAddress Destination, bool Replace = false);
 
 /// <summary>Copy's Argument and Options (commands.md, Record, `copy`). <see cref="Replace"/> lets an override copy over the one a destination holds.</summary>
 internal sealed record RecordCopyRequest(
-    IReadOnlyList<RecordAddress> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, bool Replace = false);
+    IReadOnlyList<RecordAt> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, bool Replace = false);
