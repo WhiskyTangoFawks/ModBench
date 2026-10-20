@@ -31,7 +31,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         _npc = npc;
         SourceMods.Init(_compiledPlugin);
         _index = Indexes.Open(_holder, timeProvider: _clock);
-        _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         _compiledPlugin.HandEdit(_index.DocumentOf(_npc, _compiledPlugin.KeyOf()), "\"CompiledPluginNpc\"", "\"Written\"");
         _holder.SourceWritten();
     }
@@ -75,7 +75,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         var resolved = Task.Run(() => _index.Queries.ResolveNames([new NameQuery(CompiledPlugin, null)]));
         await Task.Delay(TimeSpan.FromMilliseconds(500));
 
-        _holder.Apply(SnapshotPlugins.Snapshot(_fixture.GameDirectory, _fixture.InstanceRoot, GameRelease.Fallout4, []));
+        _holder.Apply(SnapshotPlugins.Snapshot(_fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, []));
 
         var refused = (await resolved.WaitAsync(Generous)).Refused();
         Assert.Equal(IndexRefusal.NameRefused, refused.Refusal);

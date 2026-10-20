@@ -121,7 +121,7 @@ public class SelectTests(TestPluginFixture fixture)
         var plugins = new[] { Written(scratch, "First.esp", 0), Written(scratch, "Later.esp", 1) };
         using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
         using var index = Indexes.Open(holder, gate);
-        var load = Task.Run(() => index.Reconcile(holder, Path.Combine(scratch, "game"), plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, Path.Combine(scratch, "Data"), plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.SelectRows("SELECT form_key FROM npc_").Refused().Refusal);

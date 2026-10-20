@@ -50,7 +50,7 @@ public sealed class ReconcileDiffTests
         var opens = new GatedPluginAdapter();
         using var _ = opens;
         using var index = Indexes.Open(holder, opens, notifications: notifications);
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var statusAfterFirst = index.Status;
         Assert.True(statusAfterFirst.ConflictsComputed);
         var patch = fx.Plugins.Single(p => p.Name == "B.esp");
@@ -72,7 +72,7 @@ public sealed class ReconcileDiffTests
         var (index, opens) = MakeIndex(holder);
         using var _ = index;
         using var __ = opens;
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var npc = SharedNpc(index, fx);
         Assert.Equal("B.esp", WinnerOf(index, npc));
         var opened = opens.OpenedTotal;
@@ -82,7 +82,7 @@ public sealed class ReconcileDiffTests
         var bodiesBefore = (A: Bodies(index, aKey), B: Bodies(index, bKey));
 
         var swapped = fx.Plugins.Select(p => p with { Line = p.Name == "A.esm" ? 1 : 0 }).ToList();
-        index.Reconcile(holder, fx.GameDirectory, swapped, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, swapped, GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);
         Assert.Equal("A.esm", WinnerOf(index, npc));
@@ -99,19 +99,19 @@ public sealed class ReconcileDiffTests
         var (index, opens) = MakeIndex(holder);
         using var _ = index;
         using var __ = opens;
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var npc = SharedNpc(index, fx);
         var opened = opens.OpenedTotal;
         var bKey = Key(fx, "B.esp");
 
-        index.Reconcile(holder, fx.GameDirectory, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);
         Assert.Empty(index.ListedIn(bKey));
         Assert.NotNull(index.PluginResponseOf(bKey));
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         Assert.Equal(opened, opens.OpenedTotal);
         Assert.Equal("B.esp", WinnerOf(index, npc));
     }
@@ -129,7 +129,7 @@ public sealed class ReconcileDiffTests
         using var _ = index;
         using var __ = opens;
 
-        index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, snapshot, GameRelease.Fallout4);
 
         var modA = new PluginAddress("Shared.esp", "ModA");
         var modB = new PluginAddress("Shared.esp", "ModB");
@@ -140,7 +140,7 @@ public sealed class ReconcileDiffTests
 
         var opened = opens.OpenedTotal;
         var flipped = snapshot.Select(p => p with { Winning = p.Origin == "ModB" }).ToList();
-        index.Reconcile(holder, fx.GameDirectory, flipped, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, flipped, GameRelease.Fallout4);
         only = Assert.Single(index.StackOf("000800:Shared.esp"));
         Assert.Equal(modB, new PluginAddress(only.Plugin, only.Origin));
         Assert.True(only.IsWinner);
@@ -155,19 +155,19 @@ public sealed class ReconcileDiffTests
         var (index, opens) = MakeIndex(holder);
         using var _ = index;
         using var __ = opens;
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var npc = SharedNpc(index, fx);
         var opened = opens.OpenedTotal;
         var bKey = Key(fx, "B.esp");
 
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4);
 
         Assert.Null(index.PluginResponseOf(bKey));
         Assert.Empty(index.ListedIn(bKey));
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "B.esp");
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);
         Assert.NotNull(index.PluginResponseOf(bKey));
@@ -183,14 +183,14 @@ public sealed class ReconcileDiffTests
         using (first)
         using (firstOpens)
         {
-            first.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
+            first.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
         }
 
         var (second, opens) = MakeIndex(holder);
         using (second)
         using (opens)
         {
-            second.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
+            second.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
 
             Assert.Equal(0, opens.OpenedTotal);
             Assert.Equal("B.esp", WinnerOf(second, SharedNpc(second, fx)));
@@ -201,7 +201,7 @@ public sealed class ReconcileDiffTests
         using (third)
         using (thirdOpens)
         {
-            third.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4, fx.InstanceRoot);
+            third.Reconcile(holder, fx.DataFolder, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4, fx.InstanceRoot);
 
             Assert.Equal(0, thirdOpens.OpenedTotal);
             Assert.Empty(third.ListedIn(Key(fx, "B.esp")));
@@ -221,7 +221,7 @@ public sealed class ReconcileDiffTests
         using var _ = index;
         using var __ = opens;
 
-        index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, snapshot, GameRelease.Fallout4);
 
         Assert.Contains(index.Status.Failures, f => f.Name == "Bad.esp");
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
@@ -246,10 +246,10 @@ public sealed class ReconcileDiffTests
         var (index, opens) = MakeIndex(holder);
         using var _ = index;
         using var __ = opens;
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
         var otherInstance = Directory.CreateDirectory(Path.Combine(fx.Root, "other-instance")).FullName;
 
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, otherInstance);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4, otherInstance);
 
         Assert.True(File.Exists(IndexFiles.In(otherInstance)));
         Assert.Equal(otherInstance, holder.Current.InstanceRoot);

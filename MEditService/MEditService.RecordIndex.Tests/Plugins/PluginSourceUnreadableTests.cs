@@ -101,7 +101,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
     public void ACopyInAPluginThatIsNotActiveAndWhoseSourceIsUnreadable_IsRenderedFromItsPluginFile()
     {
         Directory.Delete(SourceRoot, recursive: true);
-        using var index = Indexes.Reconciled(_fixture.GameDirectory, [_entry with { Enabled = false }], _fixture.InstanceRoot);
+        using var index = Indexes.Reconciled(_fixture.DataFolder, [_entry with { Enabled = false }], _fixture.InstanceRoot);
 
         var rendered = index.Queries.GetRenderedDocument(Plugin, _npc).Value();
 

@@ -15,7 +15,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     private const string Origin = "CellFullNameMod";
     private readonly PluginAddress _plugin = new(PluginName, Origin);
     private readonly ScratchDirectory _modFolder = new("medit-cell-fullname-mod-");
-    private readonly ScratchDirectory _gameDirectory = new("medit-cell-fullname-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-cell-fullname-data-");
     private readonly OpenedIndex _index;
     private readonly string _worldspaceFormKey;
 
@@ -48,7 +48,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
 
         _index = Indexes.Open(holder);
         _index.Reconcile(holder,
-            _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Line: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
+            _dataFolder, [new LoadOrderEntry(PluginName, pluginPath, Origin, Line: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
         SourceMods.Init(pluginPath);
         _index.NextSnapshot();
@@ -58,7 +58,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     {
         _index.Dispose();
         _modFolder.Dispose();
-        _gameDirectory.Dispose();
+        _dataFolder.Dispose();
     }
 
     [Fact]

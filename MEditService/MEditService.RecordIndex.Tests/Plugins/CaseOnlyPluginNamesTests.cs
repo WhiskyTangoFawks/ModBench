@@ -23,10 +23,10 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     private LoadOrderEntry Twin => Inactive("dup.esp");
 
     private OpenedIndex Reconciled(params LoadOrderEntry[] plugins) =>
-        Indexes.Reconciled(_fixture.GameDirectory, plugins, _fixture.InstanceRoot);
+        Indexes.Reconciled(_fixture.DataFolder, plugins, _fixture.InstanceRoot);
 
     private void Arrive(OpenedIndex index, params LoadOrderEntry[] plugins) =>
-        index.Reconcile(index.Holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        index.Reconcile(index.Holder, _fixture.DataFolder, plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
     private static string[] IndexedNames(OpenedIndex index) =>
         [.. index.Queries.GetPlugins().Value().Select(row => row.Name).Order(StringComparer.Ordinal)];
@@ -109,7 +109,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     [Fact]
     public void Reconcile_AFailedPluginWhoseOriginChangesOnlyInCase_KeepsOneFailureRow()
     {
-        var missing = Named("Fine.esp") with { Path = Path.Combine(_fixture.GameDirectory, "Missing.esp") };
+        var missing = Named("Fine.esp") with { Path = Path.Combine(_fixture.DataFolder, "Missing.esp") };
         using var index = Reconciled(missing);
         Assert.Equal(["Fine.esp"], FailedNames(index));
 
@@ -136,7 +136,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     [Fact]
     public void Reconcile_AFailedPluginRespelledOnlyInCase_IsNamedAsSpelledNow()
     {
-        var missing = Named("Fine.esp") with { Path = Path.Combine(_fixture.GameDirectory, "Missing.esp") };
+        var missing = Named("Fine.esp") with { Path = Path.Combine(_fixture.DataFolder, "Missing.esp") };
         using var index = Reconciled(missing);
 
         Arrive(index, missing with { Name = "fine.esp" });

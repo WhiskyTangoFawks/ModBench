@@ -39,7 +39,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     }
 
     private void Reconcile(bool active) =>
-        _index.Reconcile(_holder, _fixture.GameDirectory, [_mod with { Enabled = active }, _partner], GameRelease.Fallout4);
+        _index.Reconcile(_holder, _fixture.DataFolder, [_mod with { Enabled = active }, _partner], GameRelease.Fallout4);
 
     [Fact]
     public void APluginRow_IsInTheLoadOrderExactlyWhenItIsActive()

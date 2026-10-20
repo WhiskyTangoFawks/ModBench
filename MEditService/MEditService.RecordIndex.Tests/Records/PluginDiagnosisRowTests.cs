@@ -13,7 +13,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
     private const string Origin = "ShortRdatMod";
     private static readonly PluginAddress Key = new(MalformedFixture, Origin);
 
-    private readonly ScratchDirectory _gameDirectory = new("medit-diagnosis-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-diagnosis-data-");
     private readonly ScratchDirectory _instanceRoot = new("medit-diagnosis-instance-");
     private readonly string _pluginPath;
 
@@ -26,7 +26,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
 
     public void Dispose()
     {
-        _gameDirectory.Dispose();
+        _dataFolder.Dispose();
         _instanceRoot.Dispose();
     }
 
@@ -35,7 +35,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
     private OpenedIndex Reconciled(LoadOrderHolder holder, GatedPluginAdapter? opens = null)
     {
         var index = Indexes.Open(holder, opens);
-        index.Reconcile(holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
+        index.Reconcile(holder, _dataFolder, [Entry], GameRelease.Fallout4, _instanceRoot);
         return index;
     }
 
@@ -51,7 +51,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
     {
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
-        index.Reconcile(holder, _gameDirectory, [Entry with { Enabled = false }], GameRelease.Fallout4, _instanceRoot);
+        index.Reconcile(holder, _dataFolder, [Entry with { Enabled = false }], GameRelease.Fallout4, _instanceRoot);
 
         var report = Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
         Assert.Equal(Key, new PluginAddress(report.Plugin, report.Origin));
@@ -109,7 +109,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
         using var index = Reconciled(holder);
         Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
 
-        index.Reconcile(holder, _gameDirectory, [], GameRelease.Fallout4, _instanceRoot);
+        index.Reconcile(holder, _dataFolder, [], GameRelease.Fallout4, _instanceRoot);
 
         Assert.Empty(index.Queries.GetLoadOrderDiagnoses().Value());
     }

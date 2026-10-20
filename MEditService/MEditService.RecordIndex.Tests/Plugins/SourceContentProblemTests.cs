@@ -18,7 +18,7 @@ public sealed class SourceContentProblemTests : IDisposable
         var file = NpcFile;
         File.WriteAllText(file, File.ReadAllText(file).Replace("\"FormKey\"", "\"NoSuchField\": 1,\n  \"FormKey\"", StringComparison.Ordinal));
 
-        using var index = Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
+        using var index = Indexes.Reconciled(_fixture.DataFolder, [_fixture.Entry]);
 
         var problem = Assert.Single(index.SourceProblems());
         Assert.Equal((Relative(file), _fixture.Npc.ToString()), (problem.SourceRelativePath, problem.FormKey));

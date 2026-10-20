@@ -61,7 +61,7 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
     private LoadOrderEntry Entry(string name) => _fixture.Plugins.Single(p => p.Name == name);
 
     private void Reconcile(params string[] names) =>
-        _index.Reconcile(_holder, _fixture.GameDirectory, [.. _fixture.Plugins.Where(p => names.Contains(p.Name))], GameRelease.Fallout4);
+        _index.Reconcile(_holder, _fixture.DataFolder, [.. _fixture.Plugins.Where(p => names.Contains(p.Name))], GameRelease.Fallout4);
 
     private void CompiledPluginNpcEditedWhileOutOfTheLoadOrder_ToMatchTheFilter()
     {

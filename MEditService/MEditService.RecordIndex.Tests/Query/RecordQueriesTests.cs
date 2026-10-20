@@ -70,12 +70,12 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
     private OpenedIndex WithAnUnreadableNpc(string unreadable, params LoadOrderEntry[] besides)
     {
-        var gameDirectory = new ScratchDirectory("medit-record-query-unreadable-");
-        _built.Add(gameDirectory);
-        var path = Path.Combine(gameDirectory, FormKey.Factory(unreadable).ModKey.FileName);
+        var dataFolder = new ScratchDirectory("medit-record-query-unreadable-");
+        _built.Add(dataFolder);
+        var path = Path.Combine(dataFolder, FormKey.Factory(unreadable).ModKey.FileName);
         DeletedNpcPlugin.WriteHoldingFields(path, FormKey.Factory(unreadable));
         var index = Indexes.Reconciled(
-            gameDirectory,
+            dataFolder,
             [new LoadOrderEntry(Path.GetFileName(path), path, PluginOrigin.DataDirectory, Line: 0, Enabled: true, Winning: true), .. besides]);
         _built.Add(index);
         return index;
@@ -391,12 +391,12 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         var holder = new LoadOrderHolder();
         using var gate = new GatedPluginAdapter();
         using var index = Indexes.Open(holder, gate);
-        index.Reconcile(holder, fixture.GameDirectory, [.. fixture.Plugins.Where(p => p.Name != "Later.esp")], GameRelease.Fallout4);
+        index.Reconcile(holder, fixture.DataFolder, [.. fixture.Plugins.Where(p => p.Name != "Later.esp")], GameRelease.Fallout4);
         gate.ParkNextOpenOf("Later.esp");
         var winnerDeactivated = fixture.Plugins
             .Select(p => p.Name switch { "Winner.esp" => p with { Enabled = false }, "Next.esp" => p with { Enabled = true }, _ => p })
             .ToList();
-        var load = Task.Run(() => index.Reconcile(holder, fixture.GameDirectory, winnerDeactivated, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fixture.DataFolder, winnerDeactivated, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         try
@@ -501,7 +501,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         var fixture = Built(TwoNpcsPlugin());
         var index = Reconciled(fixture);
 
-        index.Receive(index.Holder, SnapshotPlugins.Snapshot(fixture.GameDirectory, null, GameRelease.Fallout4, fixture.Plugins, stringsLanguage: Language.German));
+        index.Receive(index.Holder, SnapshotPlugins.Snapshot(fixture.DataFolder, null, GameRelease.Fallout4, fixture.Plugins, stringsLanguage: Language.German));
         index.Settled();
 
         Assert.Equal("German", index.Queries.GetCompare(Npc01).Value()?.StringsLanguage);

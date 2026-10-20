@@ -243,7 +243,7 @@ public class HeaderIndexingTests
 
         foreach (var (origin, author) in new[] { ("ModA", "Author A"), ("ModB", "Author B") })
         {
-            var header = Assert.Single(index.WithWinner(holder, fixture.GameDirectory, fixture.Plugins, origin)
+            var header = Assert.Single(index.WithWinner(holder, fixture.DataFolder, fixture.Plugins, origin)
                 .StackOf("000000:Shared.esp"));
             Assert.Equal(origin, header.Origin);
             Assert.Equal(author, Assert.IsType<JsonElement>(FieldValueOf(header, "Author")).GetString());

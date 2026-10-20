@@ -18,7 +18,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
 
     public void Dispose() => _instance.Dispose();
 
-    private string GameDirectory => Directory.CreateDirectory(Path.Combine(_instance, "GameDir")).FullName;
+    private string DataFolder => Directory.CreateDirectory(Path.Combine(_instance, "Data")).FullName;
 
     private LoadOrderEntry Plugin(
         string name, string origin = "SomeMod", int? line = 0, bool enabled = true, bool winning = true,
@@ -34,7 +34,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
 
     private PluginDiagnosisReport[] Diagnose(params LoadOrderEntry[] plugins)
     {
-        using var index = Indexes.Reconciled(GameDirectory, plugins);
+        using var index = Indexes.Reconciled(DataFolder, plugins);
         return [.. index.Queries.GetLoadOrderDiagnoses().Value()];
     }
 
@@ -59,7 +59,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
     public void GetLoadOrderDiagnoses_ADiagnosisWithNoAnchorAndNoTail_ReadsBackWithNone()
     {
         var adapter = new DiagnosisClaimingAdapter(new PluginDiagnosis(null, "unknown", null, "boom"));
-        using var index = Indexes.Reconciled(GameDirectory, [Clean("Clean.esp")], adapter: adapter);
+        using var index = Indexes.Reconciled(DataFolder, [Clean("Clean.esp")], adapter: adapter);
 
         var report = Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
 
@@ -80,7 +80,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
         var master = Plugin(Malformed, origin: "CleanedMasters") with { LoadedWithNoLine = true };
         var upper = master with { Name = Malformed.ToUpperInvariant(), LoadedWithNoLine = false, Enabled = false };
 
-        using var index = Indexes.Reconciled(GameDirectory, [upper, master]);
+        using var index = Indexes.Reconciled(DataFolder, [upper, master]);
 
         Assert.Empty(index.Queries.GetLoadOrderDiagnoses().Value());
         Assert.Equal([Malformed.ToUpperInvariant(), Malformed], index.Status.Failures.Select(f => f.Name).Order(StringComparer.Ordinal));
@@ -117,10 +117,10 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
         var gone = Plugin(Malformed, origin: "RemovedMod");
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
-        index.Reconcile(holder, GameDirectory, [held, gone], GameRelease.Fallout4);
+        index.Reconcile(holder, DataFolder, [held, gone], GameRelease.Fallout4);
         Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
 
-        index.Reconcile(holder, GameDirectory, [held], GameRelease.Fallout4);
+        index.Reconcile(holder, DataFolder, [held], GameRelease.Fallout4);
 
         Assert.Empty(index.Queries.GetLoadOrderDiagnoses().Value());
     }
@@ -161,7 +161,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
         var holder = new LoadOrderHolder();
         using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
         using var index = Indexes.Open(holder, gate);
-        var load = Task.Run(() => index.Reconcile(holder, GameDirectory, plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, DataFolder, plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetLoadOrderDiagnoses().Refused().Refusal);

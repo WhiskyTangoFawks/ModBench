@@ -226,11 +226,11 @@ public sealed class ProblemsPanelTests : IDisposable
                 answered ??= ready.Queries.GetProblems().Value();
         })));
         using var index = Indexes.Open(holder, loggerFactory: loggers);
-        index.Reconcile(holder, Fixture.GameDirectory, Fixture.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, Fixture.DataFolder, Fixture.Plugins, GameRelease.Fallout4);
         reconciled = index;
 
         index.Reconcile(
-            holder, Fixture.GameDirectory, [Entry(plugin) with { NamedProvider = PluginProvider.NoMod }], GameRelease.Fallout4);
+            holder, Fixture.DataFolder, [Entry(plugin) with { NamedProvider = PluginProvider.NoMod }], GameRelease.Fallout4);
 
         Assert.NotNull(answered);
         var unprovided = Assert.Single(answered);
@@ -320,7 +320,7 @@ public sealed class ProblemsPanelTests : IDisposable
         var holder = new LoadOrderHolder();
         using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
         using var index = Indexes.Open(holder, gate);
-        var load = Task.Run(() => index.Reconcile(holder, Fixture.GameDirectory, plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, Fixture.DataFolder, plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetProblems().Refused().Refusal);

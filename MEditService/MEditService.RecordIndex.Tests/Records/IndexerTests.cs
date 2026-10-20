@@ -30,7 +30,7 @@ public sealed class IndexerTests
             .BuildScattered();
 
     private static LoadOrderSnapshot Snapshot(ScatteredFixtureData fx, IReadOnlyList<LoadOrderEntry>? plugins = null) =>
-        SnapshotPlugins.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, plugins ?? fx.Plugins);
+        SnapshotPlugins.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, plugins ?? fx.Plugins);
 
     private static void ReconcileInTheLoadOrderEndpointsOrder(OpenedIndex indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
         indexer.Receive(holder, snapshot);
@@ -108,7 +108,7 @@ public sealed class IndexerTests
         var holder = new LoadOrderHolder();
         using var fx = TwoProvidersOfSharedNpcDefinedInAEsmAndOverriddenInBEsp("indexer-unopenable-content");
         using var indexer = MakeIndexer(holder);
-        var gone = new LoadOrderEntry("Gone.esp", Path.Combine(fx.GameDirectory, "Gone.esp"), "SomeMod", 9, true, true);
+        var gone = new LoadOrderEntry("Gone.esp", Path.Combine(fx.DataFolder, "Gone.esp"), "SomeMod", 9, true, true);
         var snapshot = Snapshot(fx, [.. fx.Plugins, gone]);
 
         ReconcileInTheLoadOrderEndpointsOrder(indexer, holder, snapshot);

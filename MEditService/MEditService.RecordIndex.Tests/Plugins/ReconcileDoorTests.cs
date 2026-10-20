@@ -247,10 +247,10 @@ public sealed class ReconcileDoorTests
         using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
         using var index = Indexes.Open(holder, gate, notifications: notifications);
 
-        var first = holder.Apply(LoadOrderArrival.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
+        var first = holder.Apply(LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
         await gate.WaitUntilParkedAsync();
         var second = holder.Apply(LoadOrderArrival.Snapshot(
-            fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, [fx.Plugins[0] with { Enabled = false }, .. fx.Plugins.Skip(1)]));
+            fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, [fx.Plugins[0] with { Enabled = false }, .. fx.Plugins.Skip(1)]));
         gate.Release();
         index.AwaitVersion(second);
 

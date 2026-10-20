@@ -13,9 +13,9 @@ public sealed class UnreadableBinaryTests : IDisposable
     private readonly LoadOrderHolder _holder = new();
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly OpenedIndex _index;
-    private readonly ScratchDirectory _game = new("medit-unreadable-binary-game-");
+    private readonly ScratchDirectory _data = new("medit-unreadable-binary-data-");
     private readonly ScratchDirectory _instance = new("medit-unreadable-binary-instance-");
-    private string _gameDirectory => _game.Path;
+    private string _dataFolder => _data.Path;
     private string _instanceRoot => _instance.Path;
     private const string PluginName = "NonCompiledPlugin.esp";
     private const string Origin = "NonSourceMod";
@@ -33,13 +33,13 @@ public sealed class UnreadableBinaryTests : IDisposable
     public void Dispose()
     {
         _index.Dispose();
-        _game.Dispose();
+        _data.Dispose();
         _instance.Dispose();
     }
 
     private LoadOrderEntry Entry => new(PluginName, _pluginPath, Origin, 0, Enabled: true, Winning: true);
 
-    private string OtherPluginPath => Path.Combine(_gameDirectory, "Other.esp");
+    private string OtherPluginPath => Path.Combine(_dataFolder, "Other.esp");
 
     private LoadOrderEntry OtherEntry => new("Other.esp", OtherPluginPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true);
 
@@ -51,7 +51,7 @@ public sealed class UnreadableBinaryTests : IDisposable
     }
 
     private void Reconcile(params LoadOrderEntry[] entries) =>
-        _index.Reconcile(_holder, _gameDirectory, entries, GameRelease.Fallout4, _instanceRoot);
+        _index.Reconcile(_holder, _dataFolder, entries, GameRelease.Fallout4, _instanceRoot);
 
     private void NonCompiledPluginOverAnUnreadableBinary()
     {

@@ -219,7 +219,7 @@ public sealed class ParseFailedRecordTests
             return path;
         }
 
-        private readonly ScratchDirectory _gameDirectory = new("medit-parsefail-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-parsefail-data-");
         private readonly ScratchDirectory _modFolder = new("medit-parsefail-mod-");
 
         public OpenedIndex Index { get; }
@@ -245,7 +245,7 @@ public sealed class ParseFailedRecordTests
             {
                 foreach (var master in overlay.ModHeader.MasterReferences)
                 {
-                    var emptyStubOfADeclaredMasterBecauseTheIndexNeedsTheNamePresentNotTheContent = Path.Combine(_gameDirectory, master.Master.FileName);
+                    var emptyStubOfADeclaredMasterBecauseTheIndexNeedsTheNamePresentNotTheContent = Path.Combine(_dataFolder, master.Master.FileName);
                     new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(emptyStubOfADeclaredMasterBecauseTheIndexNeedsTheNamePresentNotTheContent);
                     inputs.Add(new LoadOrderEntry(master.Master.FileName, emptyStubOfADeclaredMasterBecauseTheIndexNeedsTheNamePresentNotTheContent, "Stubs", inputs.Count, Enabled: true, Winning: true));
                 }
@@ -255,14 +255,14 @@ public sealed class ParseFailedRecordTests
             byte[] truncatedBelowATes4HeaderSoNoRecordIdentityExistsToHangAStatusOn = [0x54, 0x45, 0x53, 0x34, 0xFF];
             if (corruptWholeFile) File.WriteAllBytes(pluginPath, truncatedBelowATes4HeaderSoNoRecordIdentityExistsToHangAStatusOn);
 
-            Index = Indexes.Reconciled(_gameDirectory, inputs);
+            Index = Indexes.Reconciled(_dataFolder, inputs);
         }
 
         public void Dispose()
         {
             Index.Dispose();
             _modFolder.Dispose();
-            _gameDirectory.Dispose();
+            _dataFolder.Dispose();
         }
     }
 }

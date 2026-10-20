@@ -18,9 +18,9 @@ public sealed class CutDownPluginFixture : IDisposable
 
     public CutDownPluginFixture()
     {
-        var gameDirectory = Directory.CreateDirectory(Path.Combine(InstanceRoot, "GameDir")).FullName;
+        var dataFolder = Directory.CreateDirectory(Path.Combine(InstanceRoot, "Data")).FullName;
         Index = Indexes.Reconciled(
-            gameDirectory,
+            dataFolder,
             [new LoadOrderEntry(
                 RealDataPlugin.PluginFileName, RealDataPlugin.PluginPath, PluginOrigin.DataDirectory,
                 Line: 0, Enabled: true, Winning: true)],

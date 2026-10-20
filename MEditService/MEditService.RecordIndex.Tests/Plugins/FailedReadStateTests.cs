@@ -205,7 +205,7 @@ public sealed class FailedReadStateTests : IDisposable
         Assert.True(Failed(index));
         var readsBefore = TreeReads();
 
-        index.Reconcile(index.Holder, _fixture.GameDirectory, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
+        index.Reconcile(index.Holder, _fixture.DataFolder, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
             GameRelease.Fallout4, _fixture.InstanceRoot);
 
         var failure = Assert.Single(index.Status.Failures);
@@ -307,7 +307,7 @@ public sealed class FailedReadStateTests : IDisposable
         }));
         Assert.True(Failed(index));
 
-        index.Reconcile(index.Holder, _fixture.GameDirectory, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
+        index.Reconcile(index.Holder, _fixture.DataFolder, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
             GameRelease.Fallout4, _fixture.InstanceRoot);
 
         Assert.Equal(1, Volatile.Read(ref binaryReads));
@@ -493,7 +493,7 @@ public sealed class FailedReadStateTests : IDisposable
         Assert.Contains(thrown.Message, index.PluginResponseOf(Plugin.KeyOf())?.PluginSourceUnreadable?.Reason, StringComparison.Ordinal);
         var readsBefore = TreeReads();
 
-        index.Reconcile(index.Holder, _fixture.GameDirectory, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
+        index.Reconcile(index.Holder, _fixture.DataFolder, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
             GameRelease.Fallout4, _fixture.InstanceRoot);
 
         Assert.Equal(readsBefore, TreeReads());

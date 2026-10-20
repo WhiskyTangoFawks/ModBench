@@ -149,13 +149,13 @@ public sealed class WarmReconcileTests
         string npcSourceFile;
         using (var second = OpenIndex(holder))
         {
-            second.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
+            second.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
             var npc = second.ListedIn(entry.KeyOf()).Single(row => row.EditorId == "CompiledPluginNpc");
             npcSourceFile = entry.SourceFileOf(second.DocumentOf(npc.FormKey, entry.KeyOf()));
         }
 
         using var third = OpenIndex(holder);
-        third.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
+        third.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
 
         Assert.Empty(third.Status.Failures);
 
@@ -163,7 +163,7 @@ public sealed class WarmReconcileTests
         await File.WriteAllTextAsync(
             npcSourceFile, text.Replace("\"CompiledPluginNpc\"", "\"EditedBetweenLoads\"", StringComparison.Ordinal));
         using var fourth = OpenIndex(holder);
-        fourth.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
+        fourth.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
         Assert.Contains(
             fourth.ListedIn(entry.KeyOf()), row => row.EditorId == "EditedBetweenLoads");
     }

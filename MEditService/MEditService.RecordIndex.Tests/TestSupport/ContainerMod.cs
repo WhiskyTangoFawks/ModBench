@@ -18,7 +18,7 @@ internal sealed class ContainerMod : IDisposable
 
     public LoadOrderEntry Entry { get; }
     public PluginAddress Plugin => Entry.KeyOf();
-    public string GameDirectory => _fixture.GameDirectory;
+    public string DataFolder => _fixture.DataFolder;
 
     public FormKey Cell { get; }
     public FormKey EmbedCell { get; }
@@ -70,7 +70,7 @@ internal sealed class IndexedContainerMod : IDisposable
     public OpenedIndex Index { get; }
 
     public IndexedContainerMod(INotificationPublisher? notifications = null) =>
-        Index = Indexes.Reconciled(_mod.GameDirectory, [_mod.Entry], notifications: notifications);
+        Index = Indexes.Reconciled(_mod.DataFolder, [_mod.Entry], notifications: notifications);
 
     public ContainerMod Mod => _mod;
     public LoadOrderEntry Entry => _mod.Entry;

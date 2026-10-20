@@ -32,7 +32,7 @@ public sealed class ProgressiveIndexingTests
         using var _ = index;
         using var __ = gate;
 
-        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         Assert.Equal(1, index.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
@@ -55,7 +55,7 @@ public sealed class ProgressiveIndexingTests
 
         Assert.Equal(LoadOrderState.None, index.Status.State);
 
-        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         var loading = index.Status;
@@ -91,7 +91,7 @@ public sealed class ProgressiveIndexingTests
         using var gate = new GatedPluginAdapter(gateBefore: "B.esp", poisonPlugin: "A.esp");
         using var index = Indexes.Open(holder, gate);
 
-        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         var status = index.Status;
@@ -115,7 +115,7 @@ public sealed class ProgressiveIndexingTests
         using var _ = index;
         using var __ = gate;
 
-        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
         gate.Release();
         await load;
@@ -141,7 +141,7 @@ public sealed class ProgressiveIndexingTests
         using var __ = gate;
         var order = new ConcurrentQueue<string>();
 
-        holder.Apply(LoadOrderArrival.Snapshot(fx.GameDirectory, null, GameRelease.Fallout4, fx.Plugins));
+        holder.Apply(LoadOrderArrival.Snapshot(fx.DataFolder, null, GameRelease.Fallout4, fx.Plugins));
         await gate.WaitUntilParkedAsync();
 
         using var unloadAttempting = new ManualResetEventSlim();
@@ -173,14 +173,14 @@ public sealed class ProgressiveIndexingTests
         using var __ = gate;
         var order = new ConcurrentQueue<string>();
 
-        var first = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var first = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         using var secondAttempting = new ManualResetEventSlim();
         var second = Task.Run(() =>
         {
             secondAttempting.Set();
-            index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+            index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
             order.Enqueue("second-done");
         });
         Assert.True(secondAttempting.Wait(TimeSpan.FromSeconds(5)));
@@ -214,10 +214,10 @@ public sealed class ProgressiveIndexingTests
         using var _ = index;
         using var __ = gate;
 
-        var first = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, beforeTheCreate, GameRelease.Fallout4));
+        var first = Task.Run(() => index.Reconcile(holder, fx.DataFolder, beforeTheCreate, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        var second = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var second = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
         Assert.True(
             await Waits.Until(() => holder.Current.Plugins.Count == 5),
             "the arriving snapshot never reached the holder");
@@ -256,7 +256,7 @@ public sealed class ProgressiveIndexingTests
         using var _ = index;
         using var __ = gate;
 
-        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         var patch = fx.Plugins.Single(p => p.Name == "Patch.esp").KeyOf();
@@ -277,7 +277,7 @@ public sealed class ProgressiveIndexingTests
         using var _ = index;
         using var __ = gate;
 
-        var load = Task.Run(() => index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         var read = Task.Run(() => index.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));

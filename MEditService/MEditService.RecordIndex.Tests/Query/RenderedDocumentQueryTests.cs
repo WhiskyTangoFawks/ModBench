@@ -74,12 +74,12 @@ public sealed class RenderedDocumentQueryTests : IDisposable
     public void ACopyMEditCouldNotParse_RendersWhatCouldBeStored()
     {
         const string unreadable = "000800:DeletedNpc.esp";
-        using var gameDirectory = new ScratchDirectory("medit-rendered-unreadable-");
-        var path = Path.Combine(gameDirectory, "DeletedNpc.esp");
+        using var dataFolder = new ScratchDirectory("medit-rendered-unreadable-");
+        var path = Path.Combine(dataFolder, "DeletedNpc.esp");
         DeletedNpcPlugin.WriteHoldingFields(path, FormKey.Factory(unreadable));
         var plugin = new PluginAddress("DeletedNpc.esp", PluginOrigin.DataDirectory);
         using var index = Indexes.Reconciled(
-            gameDirectory, [new LoadOrderEntry(plugin.Name, path, plugin.Origin, Line: 0, Enabled: true, Winning: true)]);
+            dataFolder, [new LoadOrderEntry(plugin.Name, path, plugin.Origin, Line: 0, Enabled: true, Winning: true)]);
         Assert.NotNull(index.RowOf(unreadable, plugin)?.ParseDiagnosis);
 
         var text = index.Queries.GetRenderedDocument(plugin, unreadable).Value()?.Text;
