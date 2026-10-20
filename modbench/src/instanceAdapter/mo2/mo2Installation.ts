@@ -45,13 +45,13 @@ async function pageChanges(carried: MetaIni, page: string, context: Mo2Context):
   if (nexus === undefined) return { unwritable: `its page '${page}' is not a Nexus page, the only host MO2's metadata holds` };
   const gameName = await metaGameFor(nexus.game, context);
   if (gameName === undefined) return { unwritable: `its page names the Nexus game '${nexus.game}', which Modbench has no game for` };
+  const heldGame = carried.gameName ?? readGameName(await get(settingsFile(context.instanceRoot)));
   const carriedFile = installedFileOf(carried);
   const sameFile = nexus.fileId === undefined ? carriedFile === undefined : carriedFile?.fileId === nexus.fileId && carriedFile.nexusId === nexus.modId;
   const installedFiles = sameFile ? carried.installedFiles : nexus.fileId === undefined ? undefined : [{ nexusId: nexus.modId, fileId: nexus.fileId }];
-  const pageModId = installedFileOf({ ...carried, installedFiles })?.nexusId || carried.nexusId;
   return {
-    ...(carried.gameName !== undefined && nexusDomainForMetaGame(carried.gameName) === nexus.game ? {} : { gameName }),
-    ...(pageModId === nexus.modId ? {} : { nexusId: nexus.modId }),
+    ...(nexusDomainForMetaGame(heldGame) === nexus.game ? {} : { gameName }),
+    ...(sameFile || nexus.modId === carried.nexusId ? {} : { nexusId: nexus.modId }),
     ...(sameFile ? {} : { installedFiles }),
   };
 }

@@ -1771,6 +1771,11 @@ describe('the MO2 Instance adapter', () => {
           return text;
         };
 
+        const metaWith = (general: string, pairs: readonly (readonly [string, string])[]): string =>
+          `[General]\r\n${general}installationFile=${DOWNLOADED_FILE}\r\n\r\n[installedFiles]\r\n${pairs.map(([modid, fileid], i) => `${i + 1}\\modid=${modid}\r\n${i + 1}\\fileid=${fileid}\r\n`).join('')}size=${pairs.length}\r\n`;
+        const pageOf = (mod: string, file?: string): string => `https://www.nexusmods.com/fallout4/mods/${mod}${file === undefined ? '' : `?tab=files&file_id=${file}`}`;
+        const generalModId = (text: string): string | undefined => /^modid=(.*)\r$/m.exec(text)?.[1];
+
         it('answers the version, and each installation file by its name with where it comes from', async () => {
           await patchMeta(`installationFile=${DOWNLOADED_FILE}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
 
@@ -1805,7 +1810,8 @@ describe('the MO2 Instance adapter', () => {
           expect(text).toContain('version=3.0');
           expect(text).toContain('installationFile=Patch-3.7z');
           expect(text).toContain('gameName=SkyrimSE');
-          expect(text).toContain('modid=12');
+          expect(generalModId(text)).toBe('12');
+          expect(text).toContain('1\\modid=12');
           expect(text).toContain('1\\fileid=99');
           expect(text).toContain(CHROME);
         });
@@ -1829,36 +1835,33 @@ describe('the MO2 Instance adapter', () => {
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
         });
 
-        it('leaves metadata byte for byte when the manifest names the file the metadata names among several', async () => {
-          const held = await holding(`[General]\r\ngameName=Fallout4\r\nmodid=4598\r\ninstallationFile=${DOWNLOADED_FILE}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\n2\\modid=4598\r\n2\\fileid=78\r\nsize=2\r\n`);
+        it.each([
+          ['the file it names among several', metaWith('gameName=Fallout4\r\nmodid=4598\r\n', [['4598', '77'], ['4598', '78']]), pageOf('4598', '77')],
+          ['the pair its modid disagrees with', metaWith('gameName=Fallout4\r\nmodid=601\r\n', [['600', '901']]), pageOf('600', '901')],
+          ['the pair its modid agrees with', metaWith('gameName=Fallout4\r\nmodid=600\r\n', [['600', '901']]), pageOf('600', '901')],
+          ['the instance game it names no game of its own', metaWith('modid=600\r\n', [['600', '901']]), pageOf('600', '901')],
+        ])('leaves metadata byte for byte when the manifest page is %s', async (_name, text, page) => {
+          const held = await holding(text);
 
-          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page: PAGE } });
-
-          expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
-        });
-
-        it('leaves metadata byte for byte when the manifest page is the one its installed file pair names, whatever its modid says', async () => {
-          const held = await holding(`[General]\r\ngameName=Fallout4\r\nmodid=601\r\ninstallationFile=${DOWNLOADED_FILE}\r\n\r\n[installedFiles]\r\n1\\modid=600\r\n1\\fileid=901\r\nsize=1\r\n`);
-
-          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page: 'https://www.nexusmods.com/fallout4/mods/600?tab=files&file_id=901' } });
+          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page } });
 
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
         });
 
-        it('writes the modid when dropping the installed file would leave the page naming another mod', async () => {
-          await holding(`[General]\r\ngameName=Fallout4\r\nmodid=601\r\ninstallationFile=${DOWNLOADED_FILE}\r\n\r\n[installedFiles]\r\n1\\modid=600\r\n1\\fileid=901\r\nsize=1\r\n`);
+        it.each([
+          ['a fresh clone with no modid and no pair', metaWith('gameName=Fallout4\r\n', []), pageOf('600', '901'), '600', 1],
+          ['the modid MO2 writes by default', metaWith('gameName=Fallout4\r\nmodid=0\r\n', []), pageOf('600', '901'), '600', 1],
+          ['a modid beside a pair the page does not name', metaWith('gameName=Fallout4\r\nmodid=601\r\n', [['600', '901']]), pageOf('700', '950'), '700', 1],
+          ['several pairs with the page naming the one the modid does not', metaWith('gameName=Fallout4\r\nmodid=4598\r\n', [['4598', '77'], ['9', '78']]), pageOf('9', '78'), '9', 1],
+          ['a page with no file beside a pair', metaWith('gameName=Fallout4\r\nmodid=601\r\n', [['600', '901']]), pageOf('600'), '600', 0],
+        ])('writes the modid the manifest page names over %s', async (_name, text, page, modId, pairs) => {
+          await holding(text);
 
-          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page: 'https://www.nexusmods.com/fallout4/mods/600' } });
+          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page } });
 
-          expect(await readFile(metaOf(PATCH), 'utf8')).toContain('modid=600');
-        });
-
-        it('leaves metadata byte for byte when the manifest page is the one its modid and installed file name', async () => {
-          const held = await holding(`[General]\r\ngameName=Fallout4\r\nmodid=600\r\ninstallationFile=${DOWNLOADED_FILE}\r\n\r\n[installedFiles]\r\n1\\modid=600\r\n1\\fileid=901\r\nsize=1\r\n`);
-
-          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page: 'https://www.nexusmods.com/fallout4/mods/600?tab=files&file_id=901' } });
-
-          expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
+          const written = await readFile(metaOf(PATCH), 'utf8');
+          expect(generalModId(written)).toBe(modId);
+          expect(written.match(/^\d+\\modid=/gm) ?? []).toHaveLength(pairs);
         });
 
         it('changes only the value that differs', async () => {
