@@ -254,7 +254,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ask: askQuestion,
     focusedView,
     recordViewIds: [PLUGINS_KEY_ARGS.view],
-    writeProgressView: PLUGINS_KEY_ARGS.view,
+    recordWriteProgressView: PLUGINS_KEY_ARGS.view,
     instance: opened.facts,
     sourceEditing,
     modFacts: opened.facts,

@@ -1,6 +1,6 @@
 import { recordLabel as wireRecordLabel } from '../../src/wire/recordLabel';
 import { isString } from '../../src/wire/messages';
-import { isFieldType } from '../../src/wire/fieldType';
+import { isFieldType } from './fieldType';
 import { shapeUnderOwner } from '../../src/wire/indexShape';
 import type { ColumnKey, CompareOverride, FieldMetadata, FieldValue, PathHop, PathSegment } from './types';
 import { copyColumnKey } from '../../src/wire/columnKey';

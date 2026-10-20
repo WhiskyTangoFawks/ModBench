@@ -1,7 +1,7 @@
 import { isString } from '../../src/wire/messages';
 import { toStr } from './recordUtils';
 import { formKeyLabel } from './FormKeyLink';
-import { isFieldType } from '../../src/wire/fieldType';
+import { isFieldType } from './fieldType';
 import type { FieldMetadata, FormKeyResolution } from './types';
 
 // One definition of a cell's edit value, so the readout and what Ctrl+C copies cannot drift from

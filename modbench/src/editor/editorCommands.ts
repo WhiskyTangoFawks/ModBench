@@ -49,8 +49,7 @@ export interface EditorCommandDeps {
   focusedViewSelection: () => readonly unknown[];
   // The rows selected in the view `view` names, which a key bound in that view acts on.
   selectionOf: (view: string) => readonly unknown[];
-  // A record write holds this view's progress until the Instance shows the write.
-  writeProgressView: string;
+  recordWriteProgressView: string;
   instance: Pick<Instance, 'refresh'>;
   sourceEditing: SourceEditing;
   // The instance's mods, which a column header reads for its mod's repository state.
@@ -63,7 +62,7 @@ export interface EditorCommandDeps {
 
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const { context, tabs, meditClient, outputChannel } = deps;
-  const recordWrite = recordWriteOver(deps.writeProgressView, deps.instance, meditClient);
+  const recordWrite = recordWriteOver(deps.recordWriteProgressView, deps.instance, meditClient);
   const selections: ViewSelections = { focused: deps.focusedViewSelection, of: deps.selectionOf };
   // The picker and the title are each tab's own, which the record grid adds per tab.
   const routerDeps: SharedRecordPanelDeps = {
