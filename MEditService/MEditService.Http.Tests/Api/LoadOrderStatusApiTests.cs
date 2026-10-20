@@ -87,7 +87,7 @@ public sealed class LoadOrderStatusApiTests : IDisposable
 
         Assert.Equal(HttpStatusCode.OK, load.StatusCode);
         var body = await load.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(body.GetProperty("applied").GetBoolean());
+        Assert.Equal(["version"], body.EnumerateObject().Select(p => p.Name));
 
         await _client.AwaitTerminalLoadOrderStatus(body.GetProperty("version").GetInt64());
         var status = await _client.GetFromJsonAsync<JsonElement>("/load-order/status");

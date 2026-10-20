@@ -156,3 +156,8 @@ public partial class Program
 {
     private Program() { }
 }
+
+namespace MEditService.Http
+{
+    internal sealed record HealthResponse(string Status);
+}

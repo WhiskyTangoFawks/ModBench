@@ -83,8 +83,6 @@ internal static class Wire
         this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>
         client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
 
-    /// <summary>Each mod by name and folder, with the source folder its load order sent and MO2's
-    /// meta.ini as its metadata file, under MO2's exclusion mark.</summary>
     internal static Task<HttpResponseMessage> Build(
         this HttpClient client, IEnumerable<(string Name, string Folder)> mods, string statCache, object? archives = null, string? version = null) =>
         client.PostAsJsonAsync("/build", new

@@ -131,3 +131,7 @@ internal static class IndexEndpoints
             : Results.NoContent();
     }
 }
+
+// The Refresh rebuild's own request (ADR-0010), keyed on the instance as
+// LoadOrderRequest is.
+internal sealed record RebuildIndexRequest(string InstanceRoot, string GameRelease);

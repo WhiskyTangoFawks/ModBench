@@ -23,7 +23,6 @@ public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixtur
 
         var response = await Put(fx, fx.Plugins);
         response.EnsureSuccessStatusCode();
-        Assert.True((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
 
         var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
         var byName = plugins.EnumerateArray().ToDictionary(p => JsonStrings.Of(p.GetProperty("name")));

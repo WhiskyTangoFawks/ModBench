@@ -1,4 +1,5 @@
 using MEditService.Commands;
+using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RepositoriesLib;
@@ -192,6 +193,7 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
+            .ProducesProblem(422)
             .ProducesProblem(500)
             .ProducesProblem(503);
 
@@ -222,7 +224,8 @@ internal static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(409)
             .ProducesProblem(422)
-            .ProducesProblem(500);
+            .ProducesProblem(500)
+            .ProducesProblem(503);
 
         app.MapPost("/plugins/{plugin}/create-record", CreateRecord)
             .WithName("CreateRecord")
@@ -237,7 +240,8 @@ internal static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(409)
             .ProducesProblem(422)
-            .ProducesProblem(500);
+            .ProducesProblem(500)
+            .ProducesProblem(503);
 
         return app;
     }
@@ -261,8 +265,7 @@ internal static class PluginEndpoints
         if (Malformed(req) is { } malformed) return malformed;
 
         var plugin = new PluginAddress(req.Name, req.Origin);
-        var result = await create.CreatePlugin(plugin, req.Folder, req.SourceFolder);
-        return Created(logger, "Create plugin", plugin, result);
+        return EndpointMapping.Answered("Create plugin", logger, plugin, await create.CreatePlugin(plugin, req.Folder, req.SourceFolder));
     }
 
     internal static async Task<IResult> CreatePluginInMod(
@@ -271,16 +274,7 @@ internal static class PluginEndpoints
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return EndpointMapping.BadRequest("Plugin name and origin are required.");
 
-        var result = await create.CreatePluginIn(plugin.Origin, plugin.Name);
-        return Created(logger, "Create plugin in mod", plugin, result);
-    }
-
-    private static IResult Created(ILogger logger, string gesture, PluginAddress plugin, Answer<PluginAddress, PluginCreateRefused> answer)
-    {
-        if (answer.Holds(out var created, out var refused)) return Results.Ok(created);
-
-        EndpointMapping.LogRefusal(logger, gesture, refused.Refusal, refused.Message, plugin);
-        return EndpointMapping.Refusal(refused.Refusal, refused.Message);
+        return EndpointMapping.Answered("Create plugin in mod", logger, plugin, await create.CreatePluginIn(plugin.Origin, plugin.Name));
     }
 
     // The refusals a malformed request earns, taken before the door so a name that could never be
@@ -299,10 +293,8 @@ internal static class PluginEndpoints
     {
         if (RenamedPlugin(req.Name, req.Origin) is not { } plugin) return EndpointMapping.BadRequest("Plugin name and origin are required.");
 
-        var result = rename.RenameSource(plugin, req.NewName ?? string.Empty);
-        return result.Match(
-            Results.Ok,
-            (refusal, message) => Refused(loggerFactory, "Rename source", refusal, message, plugin));
+        return EndpointMapping.Answered(
+            "Rename source", loggerFactory.CreateLogger(nameof(PluginEndpoints)), plugin, rename.RenameSource(plugin, req.NewName ?? string.Empty));
     }
 
     internal static IResult MoveLastWritten(
@@ -311,20 +303,13 @@ internal static class PluginEndpoints
         if (RenamedPlugin(req.Name, req.Origin) is not { } plugin || string.IsNullOrWhiteSpace(req.TreeName))
             return EndpointMapping.BadRequest("Plugin name, origin and tree name are required.");
 
-        var result = move.MoveLastWritten(plugin, req.TreeName, req.NewName ?? string.Empty);
-        return result.Refusal is { } refusal
-            ? Refused(loggerFactory, "Move last written", refusal, result.Message, plugin)
-            : Results.NoContent();
+        return EndpointMapping.Answered(
+            "Move last written", loggerFactory.CreateLogger(nameof(PluginEndpoints)), plugin,
+            move.MoveLastWritten(plugin, req.TreeName, req.NewName ?? string.Empty));
     }
 
     private static PluginAddress? RenamedPlugin(string? name, string? origin) =>
         string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(origin) ? null : new PluginAddress(name, origin);
-
-    private static IResult Refused(ILoggerFactory loggerFactory, string gesture, RenameSourceRefusal refusal, string? message, PluginAddress plugin)
-    {
-        EndpointMapping.LogRefusal(loggerFactory.CreateLogger(nameof(PluginEndpoints)), gesture, refusal, message, plugin);
-        return EndpointMapping.Refusal(refusal, message);
-    }
 
     // decompile-plugin: the selection (commands.md, A selection is one gesture).
     internal static Task<IResult> Decompile(
@@ -398,3 +383,8 @@ internal sealed record MoveLastWrittenRequest(string Origin, string Name, string
 internal sealed record DecompileRequest(IReadOnlyList<PluginAddress> Plugins, bool Force);
 
 internal sealed record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
+
+/// <summary>Container is the FormKey, in the plugin the request names, of the record the new one goes into;
+/// Position is an exterior cell's grid position, and only a worldspace takes one.</summary>
+internal sealed record RecordCreateChangesRequest(
+    string Origin, string RecordType, string? Container = null, GridPosition? Position = null);

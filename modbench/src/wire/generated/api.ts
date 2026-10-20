@@ -1380,11 +1380,6 @@ export interface components {
             mods: components["schemas"]["ModByFolder"][];
             statCache: string;
         };
-        LoadOrderResponse: {
-            applied: boolean;
-            /** Format: int64 */
-            version: number;
-        };
         /** @enum {string} */
         LoadOrderState: "None" | "Reconciling" | "Ready" | "HeldElsewhere" | "Failed";
         LoadOrderStatus: {
@@ -1603,6 +1598,10 @@ export interface components {
         };
         /** @enum {string} */
         ProblemsFailureKind: "Placement" | "LaterRead";
+        PutLoadOrderApplied: {
+            /** Format: int64 */
+            version: number;
+        };
         RebuildIndexRequest: {
             instanceRoot: string;
             gameRelease: string;
@@ -1919,7 +1918,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LoadOrderResponse"];
+                    "application/json": components["schemas"]["PutLoadOrderApplied"];
                 };
             };
             /** @description Bad Request */
@@ -3266,6 +3265,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -3406,6 +3414,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     CreateRecord: {
@@ -3470,6 +3487,15 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3988,6 +4014,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     EditRecord: {
@@ -4050,6 +4085,15 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4126,6 +4170,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     DeleteRecord: {
@@ -4186,6 +4239,15 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

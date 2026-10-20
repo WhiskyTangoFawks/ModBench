@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
@@ -184,7 +186,8 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        .ProducesProblem(500);
+        .ProducesProblem(500)
+        .ProducesProblem(503);
 
         app.MapPost("/records/{formKey}/edit", (string formKey, RecordEditRequest request, EditRecordHandler edits) =>
             EditRecord(formKey, request, edits, logger))
@@ -199,7 +202,8 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        .ProducesProblem(500);
+        .ProducesProblem(500)
+        .ProducesProblem(503);
 
         app.MapPost("/records/copy", (ScriptCopyRequest request, CopyRecordHandler copies) =>
             CopyRecord(request, copies, logger))
@@ -215,7 +219,8 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        .ProducesProblem(500);
+        .ProducesProblem(500)
+        .ProducesProblem(503);
 
         app.MapPost("/records/delete", (RecordAt request, DeleteRecordHandler deletes) =>
             DeleteRecord(request, deletes, logger))
@@ -230,7 +235,8 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        .ProducesProblem(500);
+        .ProducesProblem(500)
+        .ProducesProblem(503);
 
         app.MapPost("/records/delete-changes", (RecordDeleteChangesRequest request, DeleteRecordChangesHandler edits) =>
             DeleteRecordChanges(request, edits, logger))
@@ -294,14 +300,12 @@ internal static class RecordEndpoints
     {
         var decoded = Uri.UnescapeDataString(formKey);
         var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
-        return EndpointMapping.Execute(
+        LogEditReceived(logger, "EditRecord", request, decoded, spelled);
+        return EditRequestProblem(request) ?? EndpointMapping.Answered(
             "EditRecord", logger,
-            logReceived: () => LogEditReceived(logger, "EditRecord", request, decoded, spelled),
-            validate: () => EditRequestProblem(request),
-            execute: () => edits.Edit(
+            edits.Edit(
                 new PluginAddress(request.Plugin, request.Origin), decoded,
-                new RecordEditEnvelope(request.Op, request.Path ?? [], request.EditedValue)),
-            onApplied: _ => Results.NoContent());
+                new RecordEditEnvelope(request.Op, request.Path ?? [], request.EditedValue)));
     }
 
     internal static async Task<IResult> CopyRecord(ScriptCopyRequest request, CopyRecordHandler copies, ILogger logger)
@@ -314,15 +318,8 @@ internal static class RecordEndpoints
             "CopyRecord", logger, await copies.Copy(request.Record, request.Mode, request.Destination, request.Replace), Results.Ok);
     }
 
-    internal static Task<IResult> DeleteRecord(RecordAt request, DeleteRecordHandler deletes, ILogger logger)
-    {
-        return EndpointMapping.ExecuteWriting(
-            "DeleteRecord", logger,
-            logReceived: null,
-            validate: () => AddressProblem(request),
-            execute: () => deletes.Delete(request),
-            onApplied: _ => Results.NoContent());
-    }
+    internal static async Task<IResult> DeleteRecord(RecordAt request, DeleteRecordHandler deletes, ILogger logger) =>
+        AddressProblem(request) ?? EndpointMapping.Answered("DeleteRecord", logger, await deletes.Delete(request));
 
     private static bool Unaddressed(RecordAt record) =>
         string.IsNullOrWhiteSpace(record.FormKey) || string.IsNullOrWhiteSpace(record.Plugin.Name) || string.IsNullOrWhiteSpace(record.Plugin.Origin);
@@ -430,3 +427,39 @@ internal static class RecordEndpoints
         return EndpointMapping.Ok(read(Uri.UnescapeDataString(formKey)));
     }
 }
+
+internal sealed record SelectRequest(string Sql);
+
+internal sealed record ResolveNamesRequest(IReadOnlyList<NameQuery> Names);
+
+// One edit on one plugin's copy, as the one envelope (ADR-0005). Value is a raw
+// JsonElement: a value is whatever its schema says, so typing it here would re-declare the
+// schema on the wire.
+internal sealed record RecordEditRequest(
+    string Plugin,
+    string Origin,
+    string Op,
+    IReadOnlyList<PathHop> Path,
+    [property: JsonConverter(typeof(KeepsJsonNullConverter))] JsonElement? Value = null)
+{
+    internal EditValue? EditedValue => Value switch
+    {
+        null => null,
+        { ValueKind: JsonValueKind.Number } number when number.TryGetInt64(out _) => new(EditValueKind.WholeNumber, number.GetRawText()),
+        { ValueKind: JsonValueKind.String } text => new(EditValueKind.Text, text.GetRawText(), text.GetString()),
+        { } other => new(EditValueKind.Other, other.GetRawText()),
+    };
+}
+
+internal sealed record RecordEditChangesRequest(RecordEditRequest Edit);
+
+internal sealed record CompareRecordsRequest(IReadOnlyList<RecordCopy> Copies);
+
+internal sealed record RecordDeleteChangesRequest(IReadOnlyList<RecordAt> Records);
+
+/// <summary>A script's copy of one record into one destination.</summary>
+internal sealed record ScriptCopyRequest(RecordAt Record, CopyMode Mode, PluginAddress Destination, bool Replace = false);
+
+/// <summary>Copy's Argument and Options (commands.md, Record, `copy`). <see cref="Replace"/> lets an override copy over the one a destination holds.</summary>
+internal sealed record RecordCopyRequest(
+    IReadOnlyList<RecordAt> Records, CopyMode Mode, IReadOnlyList<PluginAddress> Destinations, bool Replace = false);

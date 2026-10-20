@@ -3,8 +3,6 @@ namespace MEditService.Commands;
 /// <summary>Why Put load order refused (ADR-0019).</summary>
 public enum PutLoadOrderRefusal
 {
-    None,
-
     /// <summary>The Data folder the snapshot names is not on disk.</summary>
     DataFolderNotFound,
 
@@ -18,11 +16,9 @@ public enum PutLoadOrderRefusal
     InvalidSnapshot,
 }
 
-/// <summary>Put load order's outcome (ADR-0014). The message names the way out, since a
-/// refusal the user cannot act on is dead UI.</summary>
-public sealed record PutLoadOrderResult(bool Applied, PutLoadOrderRefusal Refusal, string Message, long Version = 0)
-{
-    internal static PutLoadOrderResult Success(long version) => new(true, PutLoadOrderRefusal.None, "", version);
+/// <summary>The version of the load order Put load order applied.</summary>
+public sealed record PutLoadOrderApplied(long Version);
 
-    internal static PutLoadOrderResult Refused(PutLoadOrderRefusal refusal, string message) => new(false, refusal, message);
-}
+/// <summary>Why Put load order applied nothing. The message names the way out, since a
+/// refusal the user cannot act on is dead UI.</summary>
+public sealed record PutLoadOrderRefused(PutLoadOrderRefusal Refusal, string Message);
