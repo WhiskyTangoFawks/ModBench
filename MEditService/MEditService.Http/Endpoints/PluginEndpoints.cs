@@ -193,6 +193,7 @@ internal static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
+            .ProducesProblem(422)
             .ProducesProblem(500)
             .ProducesProblem(503);
 
@@ -223,7 +224,8 @@ internal static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(409)
             .ProducesProblem(422)
-            .ProducesProblem(500);
+            .ProducesProblem(500)
+            .ProducesProblem(503);
 
         app.MapPost("/plugins/{plugin}/create-record", CreateRecord)
             .WithName("CreateRecord")
@@ -238,7 +240,8 @@ internal static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(409)
             .ProducesProblem(422)
-            .ProducesProblem(500);
+            .ProducesProblem(500)
+            .ProducesProblem(503);
 
         return app;
     }

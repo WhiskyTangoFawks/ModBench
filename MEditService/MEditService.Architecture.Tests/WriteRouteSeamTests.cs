@@ -37,6 +37,7 @@ public sealed class WriteRouteSeamTests
         @"^(?:""(?:[^""\\]|\\.)*""|[A-Z]\w*(?:\.[A-Z]\w*)+)$", RegexOptions.Compiled);
     private const string BadRequestCall = "EndpointMapping.BadRequest(";
     private const string AnsweredCall = "EndpointMapping.Answered(";
+    private static readonly Regex RefusalCall = new(@"EndpointMapping\.(?:Refusal|LogRefusal)\s*[<(]", RegexOptions.Compiled);
 
     private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
 
@@ -76,6 +77,29 @@ public sealed class WriteRouteSeamTests
             offenders.Length == 0,
             $"{route}: {method} hand-rolls a Results.Problem(...) outside the request-shape validation "
             + $"carve-out — a handler outcome must map through EndpointMapping instead: {string.Join(" | ", offenders)}");
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryNamedMethodRoute))]
+    public void AWriteRoute_NeverCallsARefusalHelperOutsideAnswered(string route, string method)
+    {
+        var offenders = ReachInFollowingEachHelperOnce(EndpointFiles.Select(EndpointFile), method)
+            .SelectMany(body => RefusalCall.Matches(body).Select(m => m.Value))
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, $"{route}: {method} calls {string.Join(", ", offenders)} itself; a refusal is mapped and logged only through EndpointMapping.Answered.");
+    }
+
+    [Theory]
+    [InlineData("EndpointMapping.Refusal(null!)", 1)]
+    [InlineData("EndpointMapping.LogRefusal(null!, \"x\", 1, \"m\")", 1)]
+    [InlineData("EndpointMapping.Answered(\"x\", null!, 1, EndpointMapping.Refusal)", 0)]
+    public void TheScan_FlagsARefusalHelperCalledBesideAnswered(string other, int flagged)
+    {
+        WithPlantedFile(
+            "internal static class PlantedEndpoints\n{\n"
+            + $"    internal static IResult Route(bool x) => x ? EndpointMapping.Answered(null!) : {other};\n}}\n",
+            file => Assert.Equal(flagged, ReachInFollowingEachHelperOnce([file], "Route").SelectMany(body => RefusalCall.Matches(body)).Count()));
     }
 
     [Fact]

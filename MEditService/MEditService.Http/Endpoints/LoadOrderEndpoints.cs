@@ -26,7 +26,7 @@ internal static class LoadOrderEndpoints
                 "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +
                 "Answers as soon as the snapshot is applied; the sweep runs after, reported on " +
                 "GET /load-order/status and the load-order-status notification.")
-            .Produces<PutLoadOrderResult>()
+            .Produces<PutLoadOrderApplied>()
             .ProducesProblem(400)
             .ProducesProblem(500);
 

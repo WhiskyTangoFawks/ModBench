@@ -1,6 +1,13 @@
+using System.ComponentModel;
+using System.Globalization;
+using System.Reflection;
 using System.Text.Json;
+using MEditService.Commands;
+using MEditService.Commands.Build;
+using MEditService.Commands.Edits;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.AspNetCore.Http;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -34,16 +41,6 @@ public sealed class SwaggerSchemaTests
             allOf[0].GetProperty("$ref").GetString());
     }
 
-    [Fact]
-    public async Task CreatePluginRoute_DeclaresEveryStatusItsHandlerCanReturn_ElseSwashbuckleEmitsContentNever()
-    {
-        var root = await GetSchemaAsync();
-        var responses = root.GetProperty("paths").GetProperty("/plugins/create").GetProperty("post").GetProperty("responses");
-
-        var declared = responses.EnumerateObject().Select(p => p.Name).ToHashSet();
-        Assert.Equal(new HashSet<string> { "200", "400", "404", "409", "422", "503" }, declared);
-    }
-
     [Theory]
     [InlineData("get", "/plugins")]
     [InlineData("get", "/records")]
@@ -64,22 +61,52 @@ public sealed class SwaggerSchemaTests
     }
 
     [Theory]
-    [InlineData("put", "/load-order", new[] { "400" })]
-    [InlineData("post", "/plugins/create", new[] { "400", "404", "409", "422", "503" })]
-    [InlineData("post", "/plugins/create-in-mod", new[] { "400", "404", "409", "422", "503" })]
-    [InlineData("post", "/plugins/rename-source-changes", new[] { "400", "404", "409", "422", "500", "503" })]
-    [InlineData("post", "/plugins/move-last-written", new[] { "400", "404", "409", "500", "503" })]
-    [InlineData("post", "/build-configuration", new[] { "400", "422", "500" })]
-    [InlineData("post", "/records/{formKey}/edit", new[] { "400", "404", "409", "422", "500" })]
-    [InlineData("post", "/records/delete", new[] { "400", "404", "409", "422", "500" })]
-    public async Task AWriteRoute_DeclaresEveryStatusItsRefusalCanAnswer_ElseSwashbuckleEmitsContentNeverForIt(
-        string method, string path, string[] refusalStatuses)
+    [InlineData("put", "/load-order", RefusalKind.PutLoadOrder)]
+    [InlineData("post", "/plugins/create", RefusalKind.PluginCreate)]
+    [InlineData("post", "/plugins/create-in-mod", RefusalKind.PluginCreate)]
+    [InlineData("post", "/plugins/rename-source-changes", RefusalKind.RenameSource)]
+    [InlineData("post", "/plugins/move-last-written", RefusalKind.RenameSource)]
+    [InlineData("post", "/build-configuration", RefusalKind.BuildConfiguration)]
+    [InlineData("post", "/records/{formKey}/edit", RefusalKind.RecordEdit)]
+    [InlineData("post", "/records/{formKey}/edit-changes", RefusalKind.RecordEdit)]
+    [InlineData("post", "/records/copy", RefusalKind.RecordEdit)]
+    [InlineData("post", "/records/delete", RefusalKind.RecordEdit)]
+    [InlineData("post", "/plugins/{plugin}/create-record", RefusalKind.RecordEdit)]
+    [InlineData("post", "/plugins/{plugin}/create-record-changes", RefusalKind.RecordEdit)]
+    public async Task AWriteRoute_DeclaresEveryStatusItsRefusalMapsTo_ElseSwashbuckleEmitsContentNeverForIt(
+        string method, string path, RefusalKind kind)
     {
         var root = await GetSchemaAsync();
         var responses = root.GetProperty("paths").GetProperty(path).GetProperty(method).GetProperty("responses");
 
         var declared = responses.EnumerateObject().Select(p => p.Name).ToHashSet();
-        Assert.Empty(refusalStatuses.Except(declared));
+        Assert.Empty(StatusesTheMappingGives(kind).Select(status => status.ToString(CultureInfo.InvariantCulture)).Except(declared));
+    }
+
+    public enum RefusalKind { PutLoadOrder, PluginCreate, RenameSource, BuildConfiguration, RecordEdit }
+
+    private static readonly Type EndpointMapping = typeof(Program).Assembly.GetType("MEditService.Http.Endpoints.EndpointMapping")
+        ?? throw new InvalidOperationException("EndpointMapping moved.");
+
+    private static IEnumerable<int> StatusesTheMappingGives(RefusalKind kind) => kind switch
+    {
+        RefusalKind.PutLoadOrder => Each<PutLoadOrderRefusal>(r => Mapped(new PutLoadOrderRefused(r, "m"))),
+        RefusalKind.PluginCreate => Each<PluginCreateRefusal>(r => Mapped(r, "m")),
+        RefusalKind.RenameSource => Each<RenameSourceRefusal>(r => Mapped(r, "m")),
+        RefusalKind.BuildConfiguration => Each<BuildConfigurationRefusal>(r => Mapped(r, "m")),
+        RefusalKind.RecordEdit => Each<RecordEditRefusal>(r => Mapped(new RecordEditRefused(r, "m"))),
+        _ => throw new InvalidEnumArgumentException(nameof(kind), (int)kind, typeof(RefusalKind)),
+    };
+
+    private static IEnumerable<int> Each<TRefusal>(Func<TRefusal, int> status) where TRefusal : struct, Enum =>
+        Enum.GetValues<TRefusal>().Where(refusal => refusal.ToString() != "None").Select(status).Distinct();
+
+    private static int Mapped(params object[] refusal)
+    {
+        var mapping = EndpointMapping
+            .GetMethods(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
+            .Single(m => m.Name == "Refusal" && m.GetParameters().Select(p => p.ParameterType).SequenceEqual(refusal.Select(r => r.GetType())));
+        return Assert.IsAssignableFrom<IStatusCodeHttpResult>(mapping.Invoke(null, refusal)).StatusCode ?? throw new InvalidOperationException("A refusal answers a status.");
     }
 
     [Fact]

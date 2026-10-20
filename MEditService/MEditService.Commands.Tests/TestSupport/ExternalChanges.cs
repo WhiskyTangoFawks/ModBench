@@ -15,7 +15,7 @@ internal static class ExternalChanges
             loadOrder.DataFolderPath, loadOrder.InstanceRoot, loadOrder.GameRelease,
             loadOrder.Plugins, [.. loadOrder.Active.Select(p => p.Key)], [.. loadOrder.LoadedWithNoLine.Select(p => p.Key)], loadOrder.Archives, loadOrder.StringsFiles,
             loadOrder.Places, loadOrder.StringsLanguage, TestEditService.NoMods);
-        Assert.True(put.Applied);
+        Assert.True(put.Holds(out _, out _));
         return notifications.Notifications.OfType<ExternalChangeNotification>().SelectMany(notice => notice.Plugins).ToList();
     }
 }

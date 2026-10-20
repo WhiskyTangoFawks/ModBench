@@ -154,10 +154,10 @@ internal static class EndpointMapping
         extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
 
     /// <summary>Put load order's own refusal: a bad request, since none of them is found by touching the Index.</summary>
-    internal static IResult Refusal(PutLoadOrderResult result) => Results.Problem(
-        detail: result.Message,
+    internal static IResult Refusal(PutLoadOrderRefused refused) => Results.Problem(
+        detail: refused.Message,
         statusCode: 400,
-        extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
+        extensions: new Dictionary<string, object?> { ["refusal"] = refused.Refusal.ToString() });
 
     /// <summary>The store rebuild's refusal: a missing instance root is a bad request, a held index is 423
     /// Locked (ADR-0010), and a read that never ended is the service's own failure.</summary>
@@ -247,12 +247,12 @@ internal static class EndpointMapping
         return Refusal(result);
     }
 
-    internal static IResult Answered(string gesture, ILogger logger, PutLoadOrderResult result)
+    internal static IResult Answered(string gesture, ILogger logger, Answer<PutLoadOrderApplied, PutLoadOrderRefused> answer)
     {
-        if (result.Applied) return Results.Ok(result);
+        if (answer.Holds(out var applied, out var refused)) return Results.Ok(applied);
 
-        LogRefusal(logger, gesture, result.Refusal, result.Message);
-        return Refusal(result);
+        LogRefusal(logger, gesture, refused.Refusal, refused.Message);
+        return Refusal(refused);
     }
 
     internal static IResult Answered(string gesture, ILogger logger, PluginAddress plugin, Answer<PluginAddress, PluginCreateRefused> answer)

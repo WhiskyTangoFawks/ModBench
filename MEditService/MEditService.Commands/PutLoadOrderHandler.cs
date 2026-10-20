@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Commands.Build;
 using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Strings;
@@ -26,16 +27,16 @@ public sealed class PutLoadOrderHandler
         ExternalChangeCheck externalChanges, ModStatusCheck modStatus) =>
         (_modFolders, _holder, _schemaReflector, _source, _externalChanges, _modStatus) = (modFolders, holder, schemaReflector, source, externalChanges, modStatus);
 
-    public PutLoadOrderResult Put(
+    public Answer<PutLoadOrderApplied, PutLoadOrderRefused> Put(
         string dataFolder, string? instanceRoot, GameRelease gameRelease,
         IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine,
         IReadOnlyList<StampedFile> archives, IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginPlace> places,
         Language stringsLanguage, SnapshotMods mods)
     {
         if (!_modFolders.DataFolderExists(dataFolder))
-            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.DataFolderNotFound, $"Data folder not found: {dataFolder}");
+            return new PutLoadOrderRefused(PutLoadOrderRefusal.DataFolderNotFound, $"Data folder not found: {dataFolder}");
         if (_source.InstanceRootNotFound(instanceRoot) is { } notFound)
-            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InstanceRootNotFound, notFound);
+            return new PutLoadOrderRefused(PutLoadOrderRefusal.InstanceRootNotFound, notFound);
 
         // Discovered here, synchronously, never inside a reconcile the caller cannot see — the
         // schema this warms is what the reconcile that follows Apply needs anyway.
@@ -45,16 +46,16 @@ public sealed class PutLoadOrderHandler
         }
         catch (UnsupportedGameReleaseException ex)
         {
-            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.UnsupportedGameRelease, ex.Message);
+            return new PutLoadOrderRefused(PutLoadOrderRefusal.UnsupportedGameRelease, ex.Message);
         }
 
         if (LoadOrderSnapshot.RefusalOf(plugins, active, loadedWithNoLine) is { } invalid)
-            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InvalidSnapshot, invalid);
+            return new PutLoadOrderRefused(PutLoadOrderRefusal.InvalidSnapshot, invalid);
 
         var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage);
         var version = _holder.Apply(snapshot);
         _externalChanges.Check(snapshot);
         _modStatus.Check(mods);
-        return PutLoadOrderResult.Success(version);
+        return new PutLoadOrderApplied(version);
     }
 }

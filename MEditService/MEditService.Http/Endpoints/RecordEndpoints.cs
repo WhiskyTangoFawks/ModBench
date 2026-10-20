@@ -186,7 +186,8 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        .ProducesProblem(500);
+        .ProducesProblem(500)
+        .ProducesProblem(503);
 
         app.MapPost("/records/{formKey}/edit", (string formKey, RecordEditRequest request, EditRecordHandler edits) =>
             EditRecord(formKey, request, edits, logger))
@@ -201,7 +202,8 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        .ProducesProblem(500);
+        .ProducesProblem(500)
+        .ProducesProblem(503);
 
         app.MapPost("/records/copy", (ScriptCopyRequest request, CopyRecordHandler copies) =>
             CopyRecord(request, copies, logger))
@@ -217,7 +219,8 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        .ProducesProblem(500);
+        .ProducesProblem(500)
+        .ProducesProblem(503);
 
         app.MapPost("/records/delete", (RecordAt request, DeleteRecordHandler deletes) =>
             DeleteRecord(request, deletes, logger))
@@ -232,7 +235,8 @@ internal static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        .ProducesProblem(500);
+        .ProducesProblem(500)
+        .ProducesProblem(503);
 
         app.MapPost("/records/delete-changes", (RecordDeleteChangesRequest request, DeleteRecordChangesHandler edits) =>
             DeleteRecordChanges(request, edits, logger))
