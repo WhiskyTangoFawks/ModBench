@@ -1,53 +1,56 @@
 import { describe, it, expect } from 'vitest';
 import {
-  isHiddenInMeta,
   parseDownloadMeta,
   setHiddenInText,
   setInstalledInText,
   setUninstalledInText,
 } from '../../codecs/downloads';
 
+const metaOf = (text: string) => parseDownloadMeta(text).meta;
+
 describe('parseDownloadMeta', () => {
   it('uninstalled=true -> Uninstalled status', () => {
-    expect(parseDownloadMeta('[General]\r\nuninstalled=true\r\n').status).toBe('Uninstalled');
+    expect(metaOf('[General]\r\nuninstalled=true\r\n').status).toBe('Uninstalled');
   });
 
   it('reads the tooltip fields: modName, gameName, author', () => {
-    const meta = parseDownloadMeta('[General]\r\nmodName=Sleep or Save\r\ngameName=Fallout4\r\nauthor=SomeAuthor\r\n');
+    const meta = metaOf('[General]\r\nmodName=Sleep or Save\r\ngameName=Fallout4\r\nauthor=SomeAuthor\r\n');
     expect(meta.modName).toBe('Sleep or Save');
     expect(meta.gameName).toBe('Fallout4');
     expect(meta.author).toBe('SomeAuthor');
   });
 
   it('treats modID=0 as no id, same as an absent modID (Visit-on-Nexus gated off)', () => {
-    expect(parseDownloadMeta('[General]\r\nmodID=0\r\n').modID).toBeUndefined();
+    expect(metaOf('[General]\r\nmodID=0\r\n').modID).toBeUndefined();
   });
 
   it('treats fileID=0 as no id, same as an absent fileID', () => {
-    expect(parseDownloadMeta('[General]\r\nfileID=0\r\n').fileID).toBeUndefined();
-  });
-
-  it('is not hidden when removed is explicitly false', () => {
-    expect(isHiddenInMeta('[General]\r\nremoved=false\r\n')).toBe(false);
-  });
-
-  it('never conflates the Uninstalled Status with excluded: both flags coexist, orthogonal axes derived from different keys (uninstalled=true, removed=true)', () => {
-    const text = '[General]\r\nuninstalled=true\r\nremoved=true\r\n';
-    expect(parseDownloadMeta(text).status).toBe('Uninstalled');
-    expect(isHiddenInMeta(text)).toBe(true);
+    expect(metaOf('[General]\r\nfileID=0\r\n').fileID).toBeUndefined();
   });
 
   it('parses a hand-edited .meta with padded key=value spacing, which a writer never would, the same as the tight form', () => {
-    const tight = parseDownloadMeta('[General]\r\nmodID=12345\r\n');
-    const padded = parseDownloadMeta('[General]\r\nmodID = 12345\r\n');
+    const tight = metaOf('[General]\r\nmodID=12345\r\n');
+    const padded = metaOf('[General]\r\nmodID = 12345\r\n');
     expect(padded.modID).toBe('12345');
     expect(padded).toEqual(tight);
   });
 });
 
+describe('parseDownloadMeta hidden', () => {
+  it('is false when removed is explicitly false', () => {
+    expect(parseDownloadMeta('[General]\r\nremoved=false\r\n').hidden).toBe(false);
+  });
+
+  it('is independent of the Uninstalled Status: both keys coexist', () => {
+    const parsed = parseDownloadMeta('[General]\r\nuninstalled=true\r\nremoved=true\r\n');
+    expect(parsed.meta.status).toBe('Uninstalled');
+    expect(parsed.hidden).toBe(true);
+  });
+});
+
 describe('parseDownloadMeta values', () => {
   it('are decoded, as MO2 writes a name holding a comma quoted', () => {
-    expect(parseDownloadMeta('[General]\r\nmodName="A, B"\r\n').modName).toBe('A, B');
+    expect(metaOf('[General]\r\nmodName="A, B"\r\n').modName).toBe('A, B');
   });
 });
 

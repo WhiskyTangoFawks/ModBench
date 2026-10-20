@@ -8,7 +8,7 @@ import {
   type PluginEntry,
 } from '../../loadOrderFileCodec/pluginsText';
 import { loadOrderTextOf } from './codecs/loadOrderText';
-import { isHiddenInMeta, setHiddenInText, setInstalledInText, setUninstalledInText } from './codecs/downloads';
+import { parseDownloadMeta, setHiddenInText, setInstalledInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadMeta, trashDownloadMeta } from './downloadMeta';
 import { ensureDir, exists, putIfChanged, withLock, write } from '../files';
@@ -55,7 +55,7 @@ function markIn(text: string, mark: DownloadedFileMark): string {
     case 'Excluded':
     case 'Included': {
       const excluded = mark === 'Excluded';
-      return isHiddenInMeta(text) === excluded ? text : setHiddenInText(text, excluded);
+      return parseDownloadMeta(text).hidden === excluded ? text : setHiddenInText(text, excluded);
     }
   }
 }

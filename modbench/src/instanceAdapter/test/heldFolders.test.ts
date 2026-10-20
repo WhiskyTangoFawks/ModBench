@@ -30,7 +30,7 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     heard = [];
     failures = 0;
     slowRealpath = undefined;
-    held =present(heldFolderWatchFor('**', { onChange: (path) => { heard.push(path); }, holds: () => true, onFailure: () => { failures++; } }), 'a held-folder watch on Linux');
+    held = present(heldFolderWatchFor('**', { onChange: (path) => { heard.push(path); }, holds: () => true, onFailure: () => { failures++; } }), 'a held-folder watch on Linux');
     await held.open();
   });
 
@@ -78,6 +78,21 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     expect(heldHeard).toBe(true);
     expect(new Set(heard)).toEqual(new Set([inHeld]));
     expect(await writesHeard(join(outside, 'Gun.json'), join(created, 'Linked', 'Gun.json'))).toBe(true);
+  });
+
+  it('watches a folder that two links reach under the link nearer the created folder', async () => {
+    const target = join(root, 'Target');
+    const created = join(root, 'Created');
+    await mkdir(target);
+    await mkdir(join(created, 'A', 'a1'), { recursive: true });
+    await mkdir(join(created, 'B'));
+    await symlink(target, join(created, 'A', 'a1', 'Deep'));
+    await symlink(target, join(created, 'B', 'Near'));
+
+    await held.created(created);
+
+    expect(await writesHeard(join(target, 'Gun.json'), join(created, 'B', 'Near', 'Gun.json'))).toBe(true);
+    expect(heard.filter((path) => path.includes('Deep'))).toEqual([]);
   });
 
   it('keeps a folder heard removed that is there again, made again at its path', async () => {

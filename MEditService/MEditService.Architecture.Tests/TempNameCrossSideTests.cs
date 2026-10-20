@@ -15,7 +15,7 @@ public sealed class TempNameCrossSideTests
     {
         var root = ServiceProjects.SolutionDirectory();
         var backendFile = Path.Combine(root, "MEditService.RepositoriesLib", "TempName.cs");
-        var frontendFile = Path.Combine(root, "..", "modbench", "src", "wire", "tempName.ts");
+        var frontendFile = Path.Combine(root, "..", "modbench", "src", "instanceAdapter", "files.ts");
 
         Assert.Equal(ValueIn(backendFile, BackendValue), ValueIn(frontendFile, FrontendValue));
     }
@@ -25,9 +25,9 @@ public sealed class TempNameCrossSideTests
     {
         using var dir = new ScratchDirectory("medit-temp-name-cross-side-");
         var backendFile = Path.Combine(dir, "TempName.cs");
-        var frontendFile = Path.Combine(dir, "tempName.ts");
+        var frontendFile = Path.Combine(dir, "files.ts");
         File.WriteAllText(backendFile, "private const string Prefix = \".medit_tmp_\";");
-        File.WriteAllText(frontendFile, "export const TEMP_PREFIX = '.medit_temp_';");
+        File.WriteAllText(frontendFile, "const TEMP_PREFIX = '.medit_temp_';");
 
         Assert.NotEqual(ValueIn(backendFile, BackendValue), ValueIn(frontendFile, FrontendValue));
     }

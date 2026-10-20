@@ -4,7 +4,7 @@
 import { basename, dirname } from 'node:path';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
 import { isArchiveName } from '../downloadedFileContents/archiveNames';
-import { DOWNLOAD_SIDECAR_SUFFIX, isHiddenInMeta, parseDownloadMeta } from './codecs/downloads';
+import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
 import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
@@ -34,9 +34,8 @@ async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLin
       factsOf(path),
       readOrAbsent<string | undefined>(() => get(metaPath), undefined),
     ]);
-    const meta = metaText === undefined ? undefined : parseDownloadMeta(metaText);
-    const excluded = metaText !== undefined && isHiddenInMeta(metaText);
-    return { name, path, metaPath, size: facts.size, mtimeMs: facts.mtimeMs, excluded, meta };
+    const parsed = metaText === undefined ? undefined : parseDownloadMeta(metaText);
+    return { name, path, metaPath, size: facts.size, mtimeMs: facts.mtimeMs, excluded: parsed?.hidden ?? false, meta: parsed?.meta };
   }));
 }
 

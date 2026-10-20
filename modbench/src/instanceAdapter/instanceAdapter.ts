@@ -149,8 +149,8 @@ export interface DownloadMeta {
   author?: string;
 }
 
-/** A downloaded file, with its metadata parsed; `meta` is undefined when it has none. `excluded` is
- *  the adapter's answer, a separate axis from the metadata's `status`. */
+/** A downloaded file, with its metadata parsed; `meta` is undefined when it has none. `excluded` is a separate
+ *  axis from the metadata's `status`. */
 export interface DownloadedFile {
   readonly name: string;
   readonly path: string;
