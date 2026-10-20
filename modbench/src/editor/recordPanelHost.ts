@@ -186,7 +186,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
       const fail = (failure: ReadFailed): void => {
         if (!tab.awaitsRecord) return;
         if (failure.failed === 'no-load-order' && this.deps.routerDeps.loadOrderComing()) {
-          if (shownReason !== undefined) showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: WEBVIEW_SCRIPTS.RECORD, globals: {} });
+          if (shownReason !== undefined) showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: WEBVIEW_SCRIPTS.RECORD_PANEL, globals: {} });
           shownReason = undefined;
           return;
         }
@@ -194,7 +194,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
         if (reason === shownReason) return;
         shownReason = reason;
         this.deps.channel.warn(`Failed to read ${fsPath}: ${reason}`);
-        showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: WEBVIEW_SCRIPTS.RECORD, globals: { mEditLoadError: failure } satisfies RecordPageGlobals });
+        showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: WEBVIEW_SCRIPTS.RECORD_PANEL, globals: { mEditLoadError: failure } satisfies RecordPageGlobals });
       };
       try {
         const record = await this.deps.client.getRecordOfFile(fsPath);
@@ -261,7 +261,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     tabs.focus(tab);
     tab.own(panel.onDidChangeViewState(() => { if (panel.active) tabs.focus(tab); }));
     showWebviewPage(panel.webview, context.extensionUri, {
-      script: WEBVIEW_SCRIPTS.RECORD, globals: { mEditFormKey: formKey, mEditColumns: [...columns], ...(place && { mEditViewState: place }) } satisfies RecordPageGlobals,
+      script: WEBVIEW_SCRIPTS.RECORD_PANEL, globals: { mEditFormKey: formKey, mEditColumns: [...columns], ...(place && { mEditViewState: place }) } satisfies RecordPageGlobals,
     });
   }
 }

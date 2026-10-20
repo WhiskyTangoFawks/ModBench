@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { resolve } from "path";
 import { WEBVIEW_SCRIPTS, WEBVIEW_STYLESHEET } from "../src/wire/webviewPages";
 
+const entryOf = (script: string) => script.replace(/\.js$/, "");
 const HOST_ASSETS = [WEBVIEW_STYLESHEET, ...Object.values(WEBVIEW_SCRIPTS)];
 
 const hostsFindTheirAssets = (): Plugin => ({
@@ -26,8 +27,8 @@ export default defineConfig({
     cssCodeSplit: false,
     rollupOptions: {
       input: {
-        main: resolve(__dirname, "src/index.html"),
-        conflicts: resolve(__dirname, "src/conflicts.html"),
+        [entryOf(WEBVIEW_SCRIPTS.RECORD_PANEL)]: resolve(__dirname, "src/index.html"),
+        [entryOf(WEBVIEW_SCRIPTS.CONFLICT_TABLE)]: resolve(__dirname, "src/conflicts.html"),
       },
       output: {
         entryFileNames: "assets/[name].js",

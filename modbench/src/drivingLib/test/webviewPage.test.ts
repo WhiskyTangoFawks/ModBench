@@ -11,7 +11,7 @@ import * as vscode from 'vscode';
 import { WEBVIEW_SCRIPTS } from '../../wire/webviewPages';
 import { showWebviewPage, type WebviewPage } from '../webviewPage';
 
-const RECORD_PAGE: WebviewPage = { script: WEBVIEW_SCRIPTS.RECORD };
+const RECORD_PAGE: WebviewPage = { script: WEBVIEW_SCRIPTS.RECORD_PANEL };
 
 function shown(page: WebviewPage) {
   const webview = {
@@ -35,7 +35,7 @@ describe('a page of the webview build, loaded into a webview', () => {
   });
 
   it('links the build\'s one stylesheet on every page', () => {
-    expect(shown({ script: WEBVIEW_SCRIPTS.CONFLICTS }).html).toContain('<link rel="stylesheet" href="ext/out/webview/assets/webview.css">');
+    expect(shown({ script: WEBVIEW_SCRIPTS.CONFLICT_TABLE }).html).toContain('<link rel="stylesheet" href="ext/out/webview/assets/webview.css">');
   });
 
   it('includes a nonce in the CSP script-src, and applies it to the inline script tag', () => {
