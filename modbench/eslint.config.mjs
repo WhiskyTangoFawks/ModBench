@@ -52,11 +52,10 @@ const DIGEST_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|xxhash-wasm$)',
     message: 'The content digest imports one package: the xxHash mEdit\'s manifest is hashed with.',
 };
-/** @param {string[]} [allowed] */
-const ADAPTER_INTERNALS_IMPORT = (allowed = []) => ({
-    regex: `^(\\.{1,2}/)+instanceAdapter(/(?!(instanceAdapter${allowed.map((name) => `|${name}`).join('')})$).*)?$`,
+const ADAPTER_INTERNALS_IMPORT = {
+    regex: '^(\\.{1,2}/)+instanceAdapter(/(?!(instanceAdapter|openInstance)$).*)?$',
     message: 'The Instance adapter is reached through its interface alone.',
-});
+};
 const CLIENT_IMPORT = {
     regex: '^(\\.{1,2}/)+client(/.*)?$',
     message: 'The mEdit client is Editing\'s seam: Mod Management never reaches mEdit.',
@@ -83,8 +82,8 @@ const REPORTER_IMPORT = {
     message: 'The Instance leaves a read failure in its value for a subscriber to render; it raises no notification.',
 };
 
-/** @param {{ vscode: boolean, packages: boolean, path: boolean, client?: boolean, inAdapter?: boolean, adapterAllowed?: string[], extra?: object[], clientSeam?: boolean, byteReads?: boolean }} where */
-function restrictedImports({ vscode, packages, path, client = false, inAdapter = false, adapterAllowed, extra = [], clientSeam = true, byteReads = true }) {
+/** @param {{ vscode: boolean, packages: boolean, path: boolean, client?: boolean, inAdapter?: boolean, extra?: object[], clientSeam?: boolean, byteReads?: boolean }} where */
+function restrictedImports({ vscode, packages, path, client = false, inAdapter = false, extra = [], clientSeam = true, byteReads = true }) {
     return ['error', {
         paths: [
             ...(vscode ? [VSCODE_IMPORT] : []),
@@ -93,7 +92,7 @@ function restrictedImports({ vscode, packages, path, client = false, inAdapter =
         ],
         patterns: [
             ...(clientSeam ? [CLIENT_SEAM_IMPORT] : []),
-            ...(inAdapter ? [] : [FS_IMPORT, ADAPTER_INTERNALS_IMPORT(adapterAllowed)]),
+            ...(inAdapter ? [] : [FS_IMPORT, ADAPTER_INTERNALS_IMPORT]),
             ...(path ? [PATH_IMPORT] : []), ...(packages ? [PACKAGE_IMPORT] : []), ...(client ? [CLIENT_IMPORT] : []), ...extra,
         ],
     }];
@@ -268,12 +267,6 @@ export default defineConfig(
         ignores: NOT_PRODUCTION,
         rules: {
             'no-restricted-imports': restrictedImports({ vscode: false, packages: false, path: false }),
-        },
-    },
-    {
-        files: ['src/extension.ts'],
-        rules: {
-            'no-restricted-imports': restrictedImports({ vscode: false, packages: false, path: false, adapterAllowed: ['mo2/mo2Instance'] }),
         },
     },
 
