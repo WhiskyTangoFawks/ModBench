@@ -76,7 +76,7 @@ public abstract class LocalizedSourceCopyScenario : IDisposable
                 new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Line: 1, Enabled: true, Winning: true),
             ],
             stringsLanguage: Language.French);
-        InitEveryPluginOf.ModAsync(_loadOrder, DestinationOrigin).GetAwaiter().GetResult();
+        DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, DestinationOrigin).GetAwaiter().GetResult();
 
         var holder = new LoadOrderHolder();
         holder.Apply(_loadOrder);

@@ -30,7 +30,7 @@ public sealed class CompilePluginLocalizedTests : IDisposable
             _gameDir, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(PluginName, pluginPath, Origin, Line: 0, Enabled: true, Winning: true)]);
 
-        InitEveryPluginOf.ModAsync(_loadOrder, Origin)
+        DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, Origin)
             .GetAwaiter().GetResult();
     }
 

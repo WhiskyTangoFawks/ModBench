@@ -27,7 +27,7 @@ public sealed class CreatePluginTraceTests : HostedTests
     public async Task CreatingAPluginInASourceMod_LandsItsSourceInTheSourceFolderTheRequestNames()
     {
         var fx = Owned(await Loaded());
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
         var folder = OtherTool.ModFolderOf(fx, Origin);
         var sourceFolder = Directory.CreateDirectory(Path.Combine(fx.Root, "source", Origin)).FullName;
         foreach (var entry in new[] { ".git", ".gitignore", "plugin-source" })

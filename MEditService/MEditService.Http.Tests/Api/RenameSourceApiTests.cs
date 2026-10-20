@@ -26,7 +26,7 @@ public sealed class RenameSourceApiTests : HostedTests
     private async Task CompiledPlugin()
     {
         (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
     }
 
     private Task<HttpResponseMessage> RenameSource(string name, string origin, string newName) =>
@@ -151,7 +151,7 @@ public sealed class RenameSourceWithoutGitApiTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("CompiledPluginNpc"), origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
 
         HttpResponseMessage response;
         var path = Environment.GetEnvironmentVariable("PATH");

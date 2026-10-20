@@ -1,5 +1,4 @@
 using MEditService.Commands.Build;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -10,7 +9,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Build;
 
-public sealed class InitModHandlerTests : IDisposable
+public sealed class DecompileAndCommitModHandlerTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
     private const string Origin = "FixtureMod";
@@ -19,7 +18,7 @@ public sealed class InitModHandlerTests : IDisposable
     private readonly LoadOrderHolder _holder = new();
     private readonly PluginProvider.FromMod _mod;
 
-    public InitModHandlerTests()
+    public DecompileAndCommitModHandlerTests()
     {
         _mod = new PluginProvider.FromMod(
             Origin,
@@ -46,12 +45,12 @@ public sealed class InitModHandlerTests : IDisposable
     public async Task Init_OverTheHeldLoadOrder_PutsThePluginsSourceInItsSourceFolder_AndWritesNothingInItsModFolder()
     {
         _holder.Apply(Snapshot);
-        var handler = TestEditService.InitModHandler(_holder);
+        var handler = TestEditService.DecompileAndCommitModHandler(_holder);
         var modFolderBefore = TreeSnapshot.Of(_mod.Folder);
 
-        var result = await handler.InitAsync(ToInit.In(Snapshot, Origin));
+        var result = (await handler.DecompileAndCommitAsync(ToDecompileAndCommit.In(Snapshot, Origin))).Value();
 
-        Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Landed).Outcome.Plugins);
+        Assert.Equal([new PluginAddress(PluginName, Origin)], Assert.Single(result.Applied).Plugins);
         Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(PluginName, Origin, "", _mod, Line: null, PluginStrings.None)));
         Assert.Equal(modFolderBefore, TreeSnapshot.Of(_mod.Folder));
     }
@@ -60,14 +59,13 @@ public sealed class InitModHandlerTests : IDisposable
     public async Task Init_OverAModTwiceUnderDifferentCasing_InitsItOnce_AndRefusesTheModThatProvidesNothingOnItsOwn()
     {
         _holder.Apply(Snapshot);
-        var handler = TestEditService.InitModHandler(_holder);
+        var handler = TestEditService.DecompileAndCommitModHandler(_holder);
 
-        var result = await handler.InitAsync(ToInit.In(Snapshot, Origin, "NoSuchMod", Origin.ToUpperInvariant()));
+        var result = (await handler.DecompileAndCommitAsync(ToDecompileAndCommit.In(Snapshot, Origin, "NoSuchMod", Origin.ToUpperInvariant()))).Value();
 
-        Assert.Equal([Origin], result.Landed.Select(landed => landed.Item));
+        Assert.Equal([Origin], result.Applied.Select(mod => mod.Mod));
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(("NoSuchMod", InitRefusal.ModProvidesNoPlugin), (refused.Item, refused.Refusal));
-        Assert.Null(result.SelectionRefusal);
+        Assert.Equal(("NoSuchMod", DecompileAndCommitRefusal.ModProvidesNoPlugin), (refused.Item, refused.Refusal));
     }
 
     [Fact]
@@ -76,7 +74,7 @@ public sealed class InitModHandlerTests : IDisposable
         WriteInModFolder("meta.ini", "[General]");
         WriteInModFolder("Scripts/Quest.pex", "a script");
 
-        await InitWith(new ModToInit(Origin, SourceFolder, ["meta.ini"]));
+        await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, ["meta.ini"]));
 
         Assert.Equal(["assets/Scripts/Quest.pex"], CommittedAssets());
     }
@@ -89,10 +87,10 @@ public sealed class InitModHandlerTests : IDisposable
         FileModes.Set(held, "000");
         try
         {
-            var result = await InitWith(new ModToInit(Origin, SourceFolder, []));
+            var result = await InitWith(new ModToDecompileAndCommit(Origin, SourceFolder, []));
 
             var refused = Assert.Single(result.Refused);
-            Assert.Equal(InitRefusal.ModFilesUnreadable, refused.Refusal);
+            Assert.Equal(DecompileAndCommitRefusal.ModFilesUnreadable, refused.Refusal);
             Assert.Contains("held.dds", refused.Message, StringComparison.Ordinal);
             Assert.False(Directory.Exists(SourceFolder));
         }
@@ -102,10 +100,10 @@ public sealed class InitModHandlerTests : IDisposable
         }
     }
 
-    private Task<SelectionResult<string, InitRefusal, InitializedMod>> InitWith(ModToInit mod)
+    private async Task<DecompileAndCommitResult> InitWith(ModToDecompileAndCommit mod)
     {
         _holder.Apply(Snapshot);
-        return TestEditService.InitModHandler(_holder).InitAsync([mod]);
+        return (await TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync([mod])).Value();
     }
 
     private void WriteInModFolder(string path, string text)

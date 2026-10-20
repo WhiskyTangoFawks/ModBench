@@ -36,7 +36,7 @@ describe('sourceCommands build', () => {
     client.setCommandResult('build', BUILT);
     let reconciled!: () => void;
     const latestLoadOrder = () => new Promise<undefined>((resolve) => { reconciled = () => { resolve(undefined); }; });
-    const commands = sourceCommands({ client: { build: client.build.bind(client), init: client.init.bind(client), latestLoadOrder }, adapter: fakeAdapter() });
+    const commands = sourceCommands({ client: { build: client.build.bind(client), decompileAndCommit: client.decompileAndCommit.bind(client), latestLoadOrder }, adapter: fakeAdapter() });
 
     const built = commands.build(['ModA']);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -95,12 +95,12 @@ describe('sourceCommands build', () => {
 describe('sourceCommands decompileAndCommit', () => {
   it('hands mEdit each mod with the source folder decompile and commit makes its repository in and the mod manager\'s own files in the mod folder', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('init', { landed: [{ mod: 'ModA', plugins: [] }, { mod: 'ModB', plugins: [] }], refused: [] });
+    client.setCommandResult('decompileAndCommit', { landed: [{ mod: 'ModA', plugins: [] }, { mod: 'ModB', plugins: [] }], refused: [] });
 
     await sourceCommands({ client, adapter: fakeAdapter() }).decompileAndCommit(['ModA', 'ModB']);
 
     expect(client.calls).toEqual([{
-      method: 'init',
+      method: 'decompileAndCommit',
       args: [[
         { name: 'ModA', sourceFolder: '/source/ModA', metadataFiles: ['meta.ini'] },
         { name: 'ModB', sourceFolder: '/source/ModB', metadataFiles: ['meta.ini'] },
@@ -110,10 +110,10 @@ describe('sourceCommands decompileAndCommit', () => {
 
   it('hands mEdit the mods once the record index has reconciled the newest load order, which names their plugins', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('init', { landed: [], refused: [] });
+    client.setCommandResult('decompileAndCommit', { landed: [], refused: [] });
     let reconciled!: () => void;
     const latestLoadOrder = () => new Promise<undefined>((resolve) => { reconciled = () => { resolve(undefined); }; });
-    const commands = sourceCommands({ client: { build: client.build.bind(client), init: client.init.bind(client), latestLoadOrder }, adapter: fakeAdapter() });
+    const commands = sourceCommands({ client: { build: client.build.bind(client), decompileAndCommit: client.decompileAndCommit.bind(client), latestLoadOrder }, adapter: fakeAdapter() });
 
     const decompiled = commands.decompileAndCommit(['ModA']);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -121,7 +121,7 @@ describe('sourceCommands decompileAndCommit', () => {
 
     reconciled();
     await decompiled;
-    expect(client.calls.map((call) => call.method)).toEqual(['init']);
+    expect(client.calls.map((call) => call.method)).toEqual(['decompileAndCommit']);
   });
 
   it('refuses a mod whose name gives it no source folder, naming why', async () => {

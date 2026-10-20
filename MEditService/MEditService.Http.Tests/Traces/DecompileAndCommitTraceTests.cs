@@ -26,7 +26,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         await Loaded();
         using var stream = await Client.NotificationStream();
 
-        var response = await Client.Init(Origin);
+        var response = await Client.DecompileAndCommit(Origin);
 
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -54,7 +54,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         await Loaded();
         var sourceFolder = Client.SourceFolderSentFor(Origin);
 
-        var response = await Client.PostAsJsonAsync("/init", new
+        var response = await Client.PostAsJsonAsync("/decompile-and-commit", new
         {
             mods = new[] { new { name = Origin, sourceFolder, metadataFiles = new[] { "meta.ini" } } },
         });
@@ -72,7 +72,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     {
         await Loaded();
 
-        var response = await Client.Init([]);
+        var response = await Client.DecompileAndCommit([]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -82,7 +82,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     {
         await Loaded();
 
-        var response = await Client.Init(string.Empty);
+        var response = await Client.DecompileAndCommit(string.Empty);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -92,7 +92,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     {
         await Loaded();
 
-        var response = await Client.PostAsJsonAsync("/init", new
+        var response = await Client.PostAsJsonAsync("/decompile-and-commit", new
         {
             mods = new[] { new { name = Origin, metadataFiles = Array.Empty<string>() } },
         });
@@ -105,7 +105,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     {
         await Loaded();
 
-        var response = await Client.PostAsJsonAsync("/init", new
+        var response = await Client.PostAsJsonAsync("/decompile-and-commit", new
         {
             mods = new[] { new { name = Origin, metadataFiles = new[] { " " } } },
         });
@@ -118,7 +118,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
     {
         await Loaded();
 
-        var response = await Client.Init([Origin, "NoSuchMod"]);
+        var response = await Client.DecompileAndCommit([Origin, "NoSuchMod"]);
 
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -134,7 +134,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
         await Loaded();
         Assert.False((await Client.Plugin(Plugin)).GetProperty("isCompiledPlugin").GetBoolean());
 
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(_instance);
 
         await Client.PluginReportsCompiledPlugin(Plugin);

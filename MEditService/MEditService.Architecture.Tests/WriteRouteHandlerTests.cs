@@ -28,7 +28,7 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/plugins/{plugin}/create-record-changes", typeof(CreateRecordChangesHandler)),
         ("PUT", "/load-order", typeof(PutLoadOrderHandler)),
         ("POST", "/build", typeof(BuildModHandler)),
-        ("POST", "/init", typeof(InitModHandler)),
+        ("POST", "/decompile-and-commit", typeof(DecompileAndCommitModHandler)),
         ("POST", "/build-configuration", typeof(ChangeBuildConfigurationHandler)),
         ("POST", "/update-manifest", typeof(UpdateManifestHandler)),
         ("POST", "/restore-from-manifest", typeof(RestoreFromManifestHandler)),

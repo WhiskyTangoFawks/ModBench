@@ -1,4 +1,5 @@
 using System.Reflection;
+using MEditService.Commands.Build;
 using MEditService.Commands.Composition;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,6 +27,8 @@ public sealed class CommandHandlerConventionTests
         typeof(CompilePluginHandler),
         typeof(DecompilePluginHandler),
         typeof(CopyRecordChangesHandler),
+        typeof(BuildModHandler),
+        typeof(DecompileAndCommitModHandler),
     ];
 
     private static readonly Type[] HandlersThatWriteNothing =
@@ -37,6 +40,9 @@ public sealed class CommandHandlerConventionTests
 
     private static readonly Type[] Carriers =
     [
+        typeof(ArchiveRefused),
+        typeof(BuildRefused),
+        typeof(BuildResult),
         typeof(CompileRefusal),
         typeof(CompileRefused),
         typeof(CompileResult),
@@ -44,12 +50,16 @@ public sealed class CommandHandlerConventionTests
         typeof(CopyRecordRefused),
         typeof(CopyRecordResult),
         typeof(CreateRecordChanges),
+        typeof(DecompileAndCommitRefused),
+        typeof(DecompileAndCommitResult),
+        typeof(DecompiledAndCommittedMod),
         typeof(DecompileRefusal),
         typeof(DecompileRefused),
         typeof(DecompileResult),
         typeof(DeleteRecordRefused),
         typeof(DeleteRecordResult),
         typeof(EditRecordChanges),
+        typeof(ModBuilt),
         typeof(MoveLastWrittenResult),
         typeof(PluginCreateRefusal),
         typeof(PluginCreateRefused),
@@ -97,7 +107,7 @@ public sealed class CommandHandlerConventionTests
             .OrderBy(type => type.Name, StringComparer.Ordinal);
 
         Assert.Equal(
-            Handlers.Concat(Carriers).OrderBy(type => type.Name, StringComparer.Ordinal),
+            Handlers.Concat(Carriers).Where(type => type.Namespace == CommandsNamespace).OrderBy(type => type.Name, StringComparer.Ordinal),
             found);
     }
 

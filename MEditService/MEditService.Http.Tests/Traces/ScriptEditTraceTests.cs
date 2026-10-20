@@ -17,7 +17,7 @@ public sealed class ScriptEditTraceTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
         return (
             Directory.EnumerateFiles(modFolder, $"{Npc} - *.json", SearchOption.AllDirectories).Single(),

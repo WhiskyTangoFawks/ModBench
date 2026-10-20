@@ -23,7 +23,7 @@ public sealed class WriteRouteSeamTests
         ("POST /plugins/{plugin}/create-record-changes", "CreateRecordChanges"),
         ("PUT /load-order", "PutLoadOrder"),
         ("POST /build", "Build"),
-        ("POST /init", "Init"),
+        ("POST /decompile-and-commit", "DecompileAndCommit"),
         ("POST /build-configuration", "ChangeBuildConfiguration"),
         ("POST /update-manifest", "UpdateManifest"),
         ("POST /restore-from-manifest", "RestoreFromManifest"),

@@ -71,7 +71,7 @@ public sealed class NonCompiledPluginReadOnlyTests
     public async Task InitingTheSameModFolder_TurnsTheRefusalIntoAnAcceptedEdit()
     {
         using var mod = SourceEditFixture.NonCompiledPlugin();
-        var compiledPlugin = await InitEveryPluginOf.ModAsync(mod.LoadOrder, SourceEditFixture.ModFolderOrigin);
+        var compiledPlugin = await DecompileAndCommitEveryPluginOf.ModAsync(mod.LoadOrder, SourceEditFixture.ModFolderOrigin);
         Assert.Empty(compiledPlugin.RefusalMessages());
 
         var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));

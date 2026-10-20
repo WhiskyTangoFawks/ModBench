@@ -41,10 +41,10 @@ public sealed class NoLoadOrderRefusalTests
     [Fact]
     public async Task Init_WithNoLoadOrderHeld_RefusesTheSelection()
     {
-        var answer = await Handler<InitModHandler>().InitAsync(ToInit.In(null, "FixtureMod"));
+        var refusal = (await Handler<DecompileAndCommitModHandler>().DecompileAndCommitAsync(ToDecompileAndCommit.In(null, "FixtureMod"))).WholeSelectionRefusal();
 
-        Assert.Equal(InitRefusal.NoLoadOrder, answer.SelectionRefusal?.Refusal);
-        Assert.Equal(NoLoadOrderException.DefaultMessage, answer.SelectionRefusal?.Message);
+        Assert.Equal(DecompileAndCommitRefusal.NoLoadOrder, refusal.Refusal);
+        Assert.Equal(NoLoadOrderException.DefaultMessage, refusal.Message);
     }
 
     [Fact]

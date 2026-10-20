@@ -219,7 +219,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/init": {
+    "/decompile-and-commit": {
         parameters: {
             query?: never;
             header?: never;
@@ -229,7 +229,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** @description Puts each mod under git (ADR-0007): a repository in its source folder holding the plugin source of every plugin it provides, the files no installation file yields as its assets, and a build configuration naming its folder as the output, in one commit. A mod lands or is refused whole. Progress is the decompile-and-commit-progress notification. */
-        post: operations["InitMod"];
+        post: operations["DecompileAndCommitMod"];
         delete?: never;
         options?: never;
         head?: never;
@@ -968,13 +968,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ArchivePackRefusal: {
+        /** @enum {string} */
+        ArchiveRefusal: "None" | "VariantNotWritten" | "FileNotPackable" | "NotWritten";
+        ArchiveRefused: {
             item: string;
             refusal: components["schemas"]["ArchiveRefusal"];
             message: string;
         };
-        /** @enum {string} */
-        ArchiveRefusal: "None" | "VariantNotWritten" | "FileNotPackable" | "NotWritten";
         ArchiveVariantRequest: {
             ba2?: components["schemas"]["Ba2VariantRequest"] | null;
             bsa?: components["schemas"]["BsaVariantRequest"] | null;
@@ -1012,25 +1012,20 @@ export interface components {
         };
         /** @enum {string} */
         BuildRefusal: "None" | "GitUnavailable" | "NoLoadOrder" | "SourceUnreadable" | "OutputNotThisMod" | "ArchiveFileNotAnAsset";
+        BuildRefused: {
+            item: string;
+            refusal: components["schemas"]["BuildRefusal"];
+            message: string;
+        };
         BuildRequest: {
             mods: components["schemas"]["BuildModRequest"][];
             excludedSuffix: string;
             archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
             statCache: string;
         };
-        BuildResponse: {
-            applied: components["schemas"]["BuiltModResponse"][];
-            refused: components["schemas"]["ModBuildRefusal"][];
-        };
-        BuiltModResponse: {
-            mod: string;
-            compiled: components["schemas"]["CompiledPlugin"][];
-            refused: components["schemas"]["CompileRefused"][];
-            archivesRefused: components["schemas"]["ArchivePackRefusal"][];
-            overwritten: string[];
-            failure?: string | null;
-            uncommitted: boolean;
-            unpushed: boolean;
+        BuildResult: {
+            applied: components["schemas"]["ModBuilt"][];
+            refused: components["schemas"]["BuildRefused"][];
         };
         CellChildRecords: {
             persistent: components["schemas"]["ChildRecordSummary"][];
@@ -1188,8 +1183,27 @@ export interface components {
             deletions: string[];
             documents: components["schemas"]["DocumentChange"][];
         };
+        DecompileAndCommitModRequest: {
+            name: string;
+            sourceFolder: string;
+            metadataFiles: string[];
+        };
         /** @enum {string} */
         DecompileAndCommitPhase: "Parsing" | "Serializing" | "ReadingFiles" | "Committing";
+        /** @enum {string} */
+        DecompileAndCommitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "ModFilesUnreadable" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
+        DecompileAndCommitRefused: {
+            item: string;
+            refusal: components["schemas"]["DecompileAndCommitRefusal"];
+            message: string;
+        };
+        DecompileAndCommitRequest: {
+            mods: components["schemas"]["DecompileAndCommitModRequest"][];
+        };
+        DecompileAndCommitResult: {
+            applied: components["schemas"]["DecompiledAndCommittedMod"][];
+            refused: components["schemas"]["DecompileAndCommitRefused"][];
+        };
         /** @enum {string} */
         DecompileRefusal: "None" | "PluginNotLoaded" | "NotInSourceMod" | "NotFromAMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "WorkingTreeStatusUnreadable" | "GitUnavailable" | "WorkingTreeChanges" | "NoLoadOrder";
         DecompileRefused: {
@@ -1204,6 +1218,10 @@ export interface components {
         DecompileResult: {
             applied: components["schemas"]["PluginAddress"][];
             refused: components["schemas"]["DecompileRefused"][];
+        };
+        DecompiledAndCommittedMod: {
+            mod: string;
+            plugins: components["schemas"]["PluginAddress"][];
         };
         DeleteRecordRefused: {
             item: components["schemas"]["RecordAt"];
@@ -1321,24 +1339,6 @@ export interface components {
             /** Format: int32 */
             y?: number | null;
         };
-        InitModRequest: {
-            name: string;
-            sourceFolder: string;
-            metadataFiles: string[];
-        };
-        /** @enum {string} */
-        InitRefusal: "None" | "ModProvidesNoPlugin" | "AlreadyInitialized" | "RoundTripFailed" | "MissingLocalizationStrings" | "ModFilesUnreadable" | "CommitFailed" | "PluginsRefused" | "GitUnavailable" | "NoLoadOrder";
-        InitRequest: {
-            mods: components["schemas"]["InitModRequest"][];
-        };
-        InitResponse: {
-            applied: components["schemas"]["InitializedModResponse"][];
-            refused: components["schemas"]["ModInitRefusal"][];
-        };
-        InitializedModResponse: {
-            mod: string;
-            plugins: components["schemas"]["PluginAddress"][];
-        };
         InstallationFileEntryRequest: {
             path: string;
             hash: string;
@@ -1416,10 +1416,15 @@ export interface components {
             name: string;
             page?: string | null;
         };
-        ModBuildRefusal: {
-            item: string;
-            refusal: components["schemas"]["BuildRefusal"];
-            message: string;
+        ModBuilt: {
+            mod: string;
+            compiled: components["schemas"]["CompiledPlugin"][];
+            refused: components["schemas"]["CompileRefused"][];
+            archivesRefused: components["schemas"]["ArchiveRefused"][];
+            overwritten: string[];
+            failure?: string | null;
+            uncommitted: boolean;
+            unpushed: boolean;
         };
         ModByFolder: {
             name: string;
@@ -1431,11 +1436,6 @@ export interface components {
         ModFoldersRequest: {
             mods: components["schemas"]["ModByFolder"][];
             statCache: string;
-        };
-        ModInitRefusal: {
-            item: string;
-            refusal: components["schemas"]["InitRefusal"];
-            message: string;
         };
         ModMetadata: {
             version?: string | null;
@@ -2360,7 +2360,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BuildResponse"];
+                    "application/json": components["schemas"]["BuildResult"];
                 };
             };
             /** @description Bad Request */
@@ -2392,7 +2392,7 @@ export interface operations {
             };
         };
     };
-    InitMod: {
+    DecompileAndCommitMod: {
         parameters: {
             query?: never;
             header?: never;
@@ -2401,7 +2401,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["InitRequest"];
+                "application/json": components["schemas"]["DecompileAndCommitRequest"];
             };
         };
         responses: {
@@ -2411,7 +2411,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InitResponse"];
+                    "application/json": components["schemas"]["DecompileAndCommitResult"];
                 };
             };
             /** @description Bad Request */

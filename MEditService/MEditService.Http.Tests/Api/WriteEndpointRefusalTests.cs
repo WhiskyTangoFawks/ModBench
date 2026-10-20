@@ -49,7 +49,7 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
     }
 
     private async Task Init(string origin) =>
-        (await _client.Init(origin)).EnsureSuccessStatusCode();
+        (await _client.DecompileAndCommit(origin)).EnsureSuccessStatusCode();
 
     private async Task<string> FirstNpcFormKey(string plugin, string origin)
     {

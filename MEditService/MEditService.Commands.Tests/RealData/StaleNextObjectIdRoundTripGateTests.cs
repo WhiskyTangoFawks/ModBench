@@ -45,11 +45,11 @@ public sealed class StaleNextObjectIdRoundTripGateTests
 
     [Theory]
     [MemberData(nameof(InitAndCompileGeneratedPlugins))]
-    public async Task Init_OfAGeneratedPluginWithAStaleHeader_Succeeds(string fileName)
+    public async Task DecompileAndCommit_OfAGeneratedPluginWithAStaleHeader_Succeeds(string fileName)
     {
         using var scratch = new CompiledPluginScratch(fileName);
 
-        await scratch.InitAsync();
+        await scratch.DecompileAndCommitAsync();
 
         Assert.True(TestAdapters.Source().IsSourceMod(scratch.ModFolder));
     }
@@ -62,7 +62,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         using var before = new ScratchDirectory("medit-stale-header-before-");
         var original = Path.Combine(before, fileName);
         File.Copy(scratch.PluginPath, original);
-        await scratch.InitAsync();
+        await scratch.DecompileAndCommitAsync();
 
         await scratch.CompileService().CompileLandedAsync(scratch.Plugin);
 
@@ -78,7 +78,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     {
         using var scratch = new CompiledPluginScratch(fileName);
         var originalHeader = RawPlugin.FirstMiscZlibHeader(await File.ReadAllBytesAsync(scratch.PluginPath));
-        await scratch.InitAsync();
+        await scratch.DecompileAndCommitAsync();
 
         await scratch.CompileService().CompileLandedAsync(scratch.Plugin);
 
@@ -86,7 +86,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Fact]
-    public async Task Init_WithAnExtraRecordInTheRecompiledPlugin_NamesThatRecord()
+    public async Task DecompileAndCommit_WithAnExtraRecordInTheRecompiledPlugin_NamesThatRecord()
     {
         using var scratch = new CompiledPluginScratch(StaleHeaderPlugins.SettingsFileName);
         FormKey? extra = null;
@@ -98,10 +98,10 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             return deserialized;
         }
 
-        var result = await scratch.InitAsync(DeserializeThenAddAnNpc);
+        var result = await scratch.DecompileAndCommitAsync(DeserializeThenAddAnNpc);
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         var extraFormKey = extra
             ?? throw new InvalidOperationException("Expected DeserializeThenAddAnNpc to run and set extra.");
@@ -137,8 +137,8 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             Holder.Apply(_loadOrder);
         }
 
-        public async Task<PluginInit> InitAsync(Func<string, CancellationToken, Task<IMod>>? deserialize = null) =>
-            (await InitEveryPluginOf.ModAsync(
+        public async Task<PluginDecompiledAndCommitted> DecompileAndCommitAsync(Func<string, CancellationToken, Task<IMod>>? deserialize = null) =>
+            (await DecompileAndCommitEveryPluginOf.ModAsync(
                 _loadOrder, Plugin.Origin,
                 deserialize is { } forged ? new ForgedTreeWriteAdapter(forged) : null)).Only();
 

@@ -19,7 +19,7 @@ public sealed record ArchiveVariants(IArchiveVariant General, IArchiveVariant Te
 
 /// <summary>A mod of the selection that built. Overwritten: each replaced file that held other bytes (A source mod,
 /// story 4). Uncommitted and Unpushed as <see cref="SourceToBuild"/>'s. Manifest: the one written, none after a Failure.</summary>
-public sealed record BuiltMod(
+internal sealed record ModBuildOutcome(
     IReadOnlyList<ItemLanded<PluginAddress, IReadOnlyList<CompileDiagnostic>>> Compiled,
     IReadOnlyList<ItemRefused<PluginAddress, CompileRefusal>> Refused,
     IReadOnlyList<ItemRefused<string, ArchiveRefusal>> ArchivesRefused,
