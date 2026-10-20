@@ -10,7 +10,7 @@ namespace MEditService.SourceAdapter;
 /// <summary>Documents by identity over one source mod folder (ADR-0014), and ADR-0007's
 /// git verbs beneath them. Every verb tolerates the folder having vanished since last observed:
 /// another tool can delete it.</summary>
-public sealed class SourceRepository : ISourceRepository
+internal sealed class SourceRepository : ISourceRepository
 {
     private readonly string _sourceFolder;
     private readonly string _modName;
