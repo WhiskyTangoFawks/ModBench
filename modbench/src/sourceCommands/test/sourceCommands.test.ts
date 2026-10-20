@@ -62,7 +62,8 @@ describe('sourceCommands build', () => {
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved }).build(['ModA', 'ModB']);
 
     expect(saved).toEqual(['/instance/source/ModA', '/instance/source/Old ModB']);
-    expect(client.calls.map((call) => (call.args[0] as { name: string }[]).map(({ name }) => name))).toEqual([['ModA']]);
+    expect(client.calls).toHaveLength(1);
+    expect(client.calls[0]?.args[0]).toMatchObject([{ name: 'ModA' }]);
     expect(outcome).toMatchObject({ refused: [{ item: 'ModB', reason: expect.stringContaining('/instance/source/Old ModB/plugin-source/B.esp/Cell.json') }] });
   });
 

@@ -13,6 +13,9 @@ interface SourceCommandsDeps {
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
 }
 
+const unsavedRefusal = (mod: string, paths: readonly string[]): ItemRefusal<string> =>
+  ({ item: mod, reason: `VS Code did not save its plugin source: ${paths.join(', ')}` });
+
 export const metadataUnreadable = (reason: string): string => `its metadata could not be read: ${reason}`;
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,
@@ -28,10 +31,7 @@ export function sourceCommands({ client, adapter, saveUnsaved }: SourceCommandsD
       for (const mod of mods) {
         const sourceFolder = sourceMods.folderOf(mod);
         const unsaved = sourceFolder === undefined ? [] : await saveUnsaved(sourceFolder, isPluginSourcePath);
-        if (unsaved.length > 0) {
-          refused.push({ item: mod, reason: `VS Code did not save its plugin source: ${unsaved.join(', ')}` });
-          continue;
-        }
+        if (unsaved.length > 0) { refused.push(unsavedRefusal(mod, unsaved)); continue; }
         const folder = await adapter.modFolderPath(mod);
         const metadata = await adapter.modMetadata(mod);
         const host = sourceFolder === undefined ? undefined : await adapter.sourceHost(sourceFolder);
