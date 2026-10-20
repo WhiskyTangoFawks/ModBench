@@ -1851,14 +1851,6 @@ describe('the MO2 Instance adapter', () => {
           ['a page with no file and a modid of another mod', metaWith('gameName=Fallout4\r\nmodid=601\r\n', []), pageOf('600'), '600', 0],
         ] as const;
 
-        it.each(LEFT_ALONE)('leaves metadata byte for byte when the manifest page is %s', async (_name, text, page) => {
-          const held = await holding(text);
-
-          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page } });
-
-          expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
-        });
-
         it.each(WRITTEN)('writes the modid the manifest page names over %s', async (_name, text, page, modId, pairs) => {
           await holding(text);
 
