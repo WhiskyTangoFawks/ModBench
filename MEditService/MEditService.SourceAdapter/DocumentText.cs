@@ -5,9 +5,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>What a document's text and bytes declare, read as text rather than through the codec. A
-/// file may vanish or lock since a listing named it: the OrNull readers answer null for either, and
-/// <see cref="BytesIfPresent"/> for a vanished file alone.</summary>
+/// <summary>What a document's text and bytes declare, read as text rather than through the codec. The
+/// OrNull readers answer null for a file that vanished or locked since a listing named it.</summary>
 internal static class DocumentText
 {
     private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
