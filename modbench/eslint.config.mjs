@@ -319,17 +319,17 @@ export default defineConfig(
         rules: { 'no-restricted-syntax': restrictedSyntax([...EVERYWHERE_IN_SRC, 'hostFs']) },
     },
     {
-        files: ['src/dialog.ts'],
-        rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('message')) },
-    },
-    {
         files: ['src/drivingLib/reporter.ts'],
         rules: { 'no-restricted-syntax': restrictedSyntax([...everywhereBut('message'), 'hostFs']) },
     },
-    // ADR-0014: the activation file and its wiring decide nothing.
+    // The dialog is the one root file that surfaces to the user.
     {
-        files: ['src/extension.ts', 'src/syncWiring.ts'],
+        files: ['src/*.ts'],
         rules: { 'no-restricted-syntax': restrictedSyntax([...EVERYWHERE_IN_SRC, 'activation']) },
+    },
+    {
+        files: ['src/dialog.ts'],
+        rules: { 'no-restricted-syntax': restrictedSyntax([...everywhereBut('message'), 'activation']) },
     },
 
     // commands.md, "An entry point fires a gesture. A gesture does not fire another.": the only

@@ -4,6 +4,7 @@
 import * as vscode from 'vscode';
 import { WEBVIEW_SCRIPTS } from '../wire/webviewPages';
 import type { InstanceView } from '../instanceLoader/instance';
+import { onSettingChange } from '../drivingLib/setting';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import {
   CONFLICT_CELL_VALUES, CONFLICT_TABLE_SHOWN, isConflictTableReady, modOfConflictColumn, type ConflictCellValue, type ConflictTable, type ConflictTableShown,
@@ -86,9 +87,7 @@ class ConflictTableEditorProvider implements vscode.CustomReadonlyEditorProvider
       }
     };
     const subscription = this.instance.subscribe((value, sequence) => void show({ value, sequence }));
-    const setting = this.settings.onDidChangeConfiguration((change) => {
-      if (change.affectsConfiguration(CELL_VALUE_SETTING)) void show(this.instance);
-    });
+    const setting = onSettingChange(this.settings.onDidChangeConfiguration, CELL_VALUE_SETTING, () => { void show(this.instance); });
     panel.onDidDispose(() => {
       subscription.dispose();
       setting.dispose();

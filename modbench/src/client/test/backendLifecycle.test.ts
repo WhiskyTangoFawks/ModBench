@@ -149,6 +149,18 @@ describe('BackendLifecycle.start', () => {
     expect(lifecycle.status).toBe('disconnected');
   });
 
+  it('spawns its own backend when the setting declares no attach port, which VS Code reads as null', async () => {
+    const spawn = vi.fn(() => makeChild());
+
+    const lifecycle = new BackendLifecycle({
+      attachPort: null, pollIntervalMs: 5, pollTimeoutMs: 20, spawn, executablePath: '/x/backend', freePort: () => Promise.resolve(6000),
+      checkHealth: () => Promise.resolve(true),
+    });
+    await lifecycle.start();
+
+    expect(spawn).toHaveBeenCalled();
+  });
+
   it('tells a port listener the attached port as it subscribes', () => {
     const lifecycle = new BackendLifecycle({ attachPort: 5172 });
     const heard: number[] = [];

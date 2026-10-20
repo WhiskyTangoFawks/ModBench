@@ -4,7 +4,17 @@ import type { FileRead, GameFolder, InstallationFile, InstanceAdapter, InstanceR
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, refusing, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
 import { archiveVariants } from '../sourceCommands';
+import type { HostGit } from '../../ports/repository';
 import { restoredMod } from '../../test/restoredMod';
+
+const hostGitMaking = (made: string[] = []): HostGit<string> => ({
+  extension: () => ({ activate: () => Promise.resolve({ getAPI: () => ({ init: () => { made.push('made'); return Promise.resolve({}); } }) }) }),
+  folderOf: (path) => path,
+});
+const hostGitFailing = (message: string): HostGit<string> => ({
+  extension: () => ({ activate: () => Promise.reject(new Error(message)) }),
+  folderOf: (path) => path,
+});
 
 const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'E' }] };
 
@@ -26,7 +36,7 @@ function commandsOver(
   const repositories: string[] = [];
   const commands = modlistRepositoryCommands({
     client, adapter: adapter.adapter, instanceRoot: '/instance',
-    makeRepository: () => { repositories.push('made'); return Promise.resolve(); }, trash: () => Promise.resolve(),
+    hostGit: hostGitMaking(repositories), trash: () => Promise.resolve(),
   });
   return { commands, client, adapter, repositories };
 }
@@ -85,7 +95,7 @@ describe('modlistRepositoryCommands git init', () => {
     const adapter = fakeInstanceAdapter();
     const commands = modlistRepositoryCommands({
       client: new InMemoryMEditClient(), adapter: adapter.adapter, instanceRoot: '/instance',
-      makeRepository: () => Promise.reject(new Error('git is not available')), trash: () => Promise.resolve(),
+      hostGit: hostGitFailing('git is not available'), trash: () => Promise.resolve(),
     });
 
     const result = await commands.gitInit();
@@ -99,7 +109,7 @@ describe('modlistRepositoryCommands git init', () => {
     const adapter = fakeInstanceAdapter(readingFixture(), { refusals: refusing('removeIgnoreList', 'read-only folder') });
     const commands = modlistRepositoryCommands({
       client: new InMemoryMEditClient(), adapter: adapter.adapter, instanceRoot: '/instance',
-      makeRepository: () => Promise.reject(new Error('git is not available')), trash: () => Promise.resolve(),
+      hostGit: hostGitFailing('git is not available'), trash: () => Promise.resolve(),
     });
 
     expect(await commands.gitInit()).toEqual({
@@ -261,7 +271,7 @@ describe('modlistRepositoryCommands update manifest', () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('updateManifest', UPDATED);
       const commands = modlistRepositoryCommands({
-        client, adapter: { ...adapterOf, ...override }, instanceRoot: '/instance', makeRepository: () => Promise.resolve(), trash: () => Promise.resolve(),
+        client, adapter: { ...adapterOf, ...override }, instanceRoot: '/instance', hostGit: hostGitMaking(), trash: () => Promise.resolve(),
       });
 
       const outcome = await commands.updateManifest(['ModA', 'ModB']);
@@ -521,7 +531,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const client = new InMemoryMEditClient();
     const commands = modlistRepositoryCommands({
       client, adapter: { ...adapter, modFolderPath: (mod) => Promise.resolve(mod === 'ModA' ? undefined : `/mods/${mod}`) },
-      instanceRoot: '/instance', makeRepository: () => Promise.resolve(), trash: () => Promise.resolve(),
+      instanceRoot: '/instance', hostGit: hostGitMaking(), trash: () => Promise.resolve(),
     });
     client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModB' })], refused: [], notFound: [] });
 
@@ -650,7 +660,7 @@ describe('modlistRepositoryCommands what restore destroys', () => {
     const client = new InMemoryMEditClient();
     const commands = modlistRepositoryCommands({
       client, adapter: { ...fakeInstanceAdapter().adapter, modFolderPath: () => Promise.resolve(undefined) }, instanceRoot: '/instance',
-      makeRepository: () => Promise.resolve(), trash: () => Promise.resolve(),
+      hostGit: hostGitMaking(), trash: () => Promise.resolve(),
     });
 
     expect([await commands.whatRestoreDestroys(['ModA']), client.calls]).toEqual([{ destroys: [], refused: [] }, []]);

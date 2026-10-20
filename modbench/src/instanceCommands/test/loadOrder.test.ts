@@ -68,6 +68,12 @@ describe('put load order', () => {
   });
 });
 
+describe('put load order without a strings language', () => {
+  it('fails loudly rather than inventing a default the manifest owns', async () => {
+    await expect(putLoadOrder(attachedClient(), '/instance', SOURCE, undefined)).rejects.toThrow('The strings language has no value');
+  });
+});
+
 describe('put load order, refused by the loader', () => {
   it('sends nothing and carries the refusal for the caller to tell', async () => {
     const client = attachedClient();
