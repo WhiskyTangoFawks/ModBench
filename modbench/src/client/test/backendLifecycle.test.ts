@@ -55,10 +55,11 @@ describe('BackendLifecycle', () => {
     expect(checkHealth).toHaveBeenCalledTimes(3);
   });
 
-  it('reports disconnected when backend never starts within timeout', async () => {
-    const lifecycle = new BackendLifecycle({
-      attachPort: 5172, pollIntervalMs: 10, pollTimeoutMs: 50, checkHealth: () => Promise.resolve(false),
-    });
+  it.each([
+    ['answers unhealthy', () => Promise.resolve(false)],
+    ['never settles', () => new Promise<boolean>(() => {})],
+  ])('reports disconnected at the deadline when the health check %s', async (_case, checkHealth) => {
+    const lifecycle = new BackendLifecycle({ attachPort: 5172, pollIntervalMs: 10, pollTimeoutMs: 0, checkHealth });
     const statuses = record(lifecycle);
 
     await lifecycle.start();
