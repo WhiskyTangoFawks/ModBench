@@ -382,7 +382,7 @@ describe('the Mods view says when the list is empty', () => {
 });
 
 describe('the Mods view finds a file the filter matches, however deep', () => {
-  const file = (relativePath: string) => ({ relativePath, path: `/instance/${relativePath}`, sourcePath: `/instance/${relativePath}`, excluded: false, excludedByName: false });
+  const file = (relativePath: string) => ({ relativePath, path: `/instance/${relativePath}`, sourcePath: `/instance/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath });
   const folder = (relativePath: string) => ({ relativePath, path: `/instance/${relativePath}`, excluded: false });
   const revealed = () => h.reveals.map((r) => r.label);
   const open = { select: false, focus: false, expand: true };

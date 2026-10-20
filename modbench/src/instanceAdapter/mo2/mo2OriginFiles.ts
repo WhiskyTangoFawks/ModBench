@@ -1,23 +1,41 @@
 // MO2's exclusion of a file, the file or folder renamed with MO2's suffix or restored, and a mod's file sent to the trash.
 
 import { isAbsolute, relative, sep } from 'node:path';
-import { exists, realPathIfThere, rename, withLock } from '../files';
-import { fileInFolder, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
+import { errnoCode } from '../errno';
+import { exists, factsOf, realPathIfThere, rename, withLock } from '../files';
+import { fileInFolder, type FileOrigin, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
 import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName } from './layout';
+import { originFileOf } from './mo2Files';
 import { originFolder, type Mo2Context } from './mo2Context';
 
-type Mo2OriginFiles = Pick<InstanceAdapter, 'markOriginFile' | 'trashModFile' | 'includedPath' | 'excludedSuffix'>;
+type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'trashModFile' | 'excludedSuffix'>;
 
 function fileUnder(folder: string | undefined, relativePath: string): string | undefined {
   const reachesOut = relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
   return folder === undefined || reachesOut ? undefined : fileInFolder(folder, relativePath);
 }
 
+async function pathOf(context: Mo2Context, origin: FileOrigin, relativePath: string): Promise<string> {
+  const path = fileUnder(await originFolder(context, origin, 'list'), relativePath);
+  if (path === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${relativePath}"`);
+  return path;
+}
+
 export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
   return {
+    async originFile(origin, relativePath) {
+      const path = await pathOf(context, origin, relativePath);
+      try {
+        const facts = await factsOf(path);
+        return facts.kind === 'file' ? originFileOf(relativePath, path, facts.realPath) : undefined;
+      } catch (err) {
+        if (errnoCode(err) === 'ENOENT') return undefined;
+        throw err;
+      }
+    },
+
     async markOriginFile(origin, relativePath, mark: OriginFileMark) {
-      const from = fileUnder(await originFolder(context, origin, 'list'), relativePath);
-      if (from === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${relativePath}"`);
+      const from = await pathOf(context, origin, relativePath);
       return withLock(from, async (): Promise<OriginFileMarked> => {
         if (!(await exists(from))) return { gone: true };
         const ownMark = isExcludedName(relativePath);
@@ -46,8 +64,5 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
     },
 
     excludedSuffix: EXCLUDED_SUFFIX,
-
-    includedPath: (relativePath) =>
-      relativePath.split('/').map((segment) => (isExcludedName(segment) ? includedName(segment) : segment)).join('/'),
   };
 }

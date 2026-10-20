@@ -301,7 +301,7 @@ const asLookup = (...entries: ConflictEntry[]) => {
   entries.forEach((entry) => { files.set(entry); });
   return files;
 };
-const ownFile = (relativePath: string) => ({ relativePath, path: `/m/${relativePath}`, sourcePath: `/m/${relativePath}`, excluded: false, excludedByName: false });
+const ownFile = (relativePath: string) => ({ relativePath, path: `/m/${relativePath}`, sourcePath: `/m/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath });
 const CONFLICTED = instanceValueFixture({
   mods: [
     { kind: 'mod', name: 'A', enabled: true },

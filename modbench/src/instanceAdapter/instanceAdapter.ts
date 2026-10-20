@@ -312,11 +312,12 @@ export interface OriginFolder {
   readonly excluded: boolean;
 }
 
-/** A file in an origin, as a folder is, and where it is read from: a link's target.
- *  `excludedByName` holds when its own name carries the mark, whatever its folder's. */
+/** A file in an origin, as a folder is, and where it is read from: a link's target. It carries
+ *  the path it has when nothing excludes it; `markedExcluded` holds when its own mark excludes it. */
 export interface OriginFile extends OriginFolder {
   readonly sourcePath: string;
-  readonly excludedByName: boolean;
+  readonly includedPath: string;
+  readonly markedExcluded: boolean;
 }
 
 /** An origin's files: the origin they take, the folder they are in (none for a name that gives
@@ -547,14 +548,15 @@ export interface InstanceAdapter {
   /** Renames the folder that holds `from` to `to`, in place. Refuses when none holds `from`, and a
    *  folder already there under another name, matched as the manager matches names. */
   renameModFolder(from: string, to: string): Promise<void>;
+  /** The file at `relativePath` as the origin's listing holds it, or `undefined` when none is there.
+   *  Rejects a path outside the origin. */
+  originFile(origin: FileOrigin, relativePath: string): Promise<OriginFile | undefined>;
   /** Marks a file or folder by its own name; a mark already true changes nothing. Refuses an
    *  include on an unmarked name a folder excludes, and a mark replacing a file. Rejects a path
    *  outside the origin. */
   markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<OriginFileMarked>;
   /** How the manager matches an entry's name; two entries with one key are one name to it. */
   entryKey(entry: EntryRef): string;
-  /** The path a file or folder of an origin has when nothing excludes it. */
-  includedPath(relativePath: string): string;
   /** The suffix the manager gives an excluded file's or folder's name. */
   readonly excludedSuffix: string;
   /** Whether the origin's folder holds a file of the name now on disk, compared as the game compares plugin names. */

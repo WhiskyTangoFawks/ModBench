@@ -1105,7 +1105,7 @@ describe('open folder: one command for a mod, the Overwrite row, a file and a fo
   });
 
   const myMod = new ModNode({ kind: 'mod', name: 'My Mod', enabled: true });
-  const linked = { relativePath: 'textures/a.dds', path: '/instance/mods/My Mod/textures/a.dds', sourcePath: '/elsewhere/a.dds', excluded: false, excludedByName: false };
+  const linked = { relativePath: 'textures/a.dds', path: '/instance/mods/My Mod/textures/a.dds', sourcePath: '/elsewhere/a.dds', excluded: false, markedExcluded: false, includedPath: 'textures/a.dds' };
   const folder = new FolderNode(myMod, { kind: 'mod', name: 'My Mod' },
     { relativePath: 'textures', path: '/instance/mods/My Mod/textures', excluded: false }, [linked], [], 'textures');
   const leaf = new FileNode(folder, folder.origin, linked, 'a.dds');
@@ -1276,7 +1276,7 @@ describe('modsCopyValueText, one line for each selected row copy value takes', (
 
   it('copies each selected file\'s and folder\'s path in its mod beside the mods\' names, from a click and from the key', () => {
     const armour = new ModNode({ kind: 'mod', name: 'Armour', enabled: true });
-    const file = { relativePath: 'textures/armour/a.dds', path: '/instance/mods/Armour/textures/armour/a.dds', sourcePath: '/instance/mods/Armour/textures/armour/a.dds', excluded: false, excludedByName: false };
+    const file = { relativePath: 'textures/armour/a.dds', path: '/instance/mods/Armour/textures/armour/a.dds', sourcePath: '/instance/mods/Armour/textures/armour/a.dds', excluded: false, markedExcluded: false, includedPath: 'textures/armour/a.dds' };
     const folder = new FolderNode(armour, { kind: 'mod', name: 'Armour' }, { relativePath: 'textures', path: '/instance/mods/Armour/textures', excluded: false }, [file], [], 'textures');
     const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
     const selection = [alpha, folder, leaf];
@@ -1297,7 +1297,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
   const modRow = new ModNode({ kind: 'mod', name: 'M', enabled: true });
   const origin = { kind: 'mod', name: 'M' } as const;
   const fileRow = (relativePath: string, excluded: boolean) => new FileNode(
-    modRow, origin, { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded, excludedByName: excluded },
+    modRow, origin, { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded, markedExcluded: excluded, includedPath: relativePath.replaceAll('.mohidden', '') },
     relativePath);
   const included = fileRow('a.dds', false);
   const excluded = fileRow('b.dds.mohidden', true);
@@ -1358,8 +1358,8 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
   ] as const)('%s takes a file its folder excludes by its own name, with the selection\'s others', async (verb, mark, clicked) => {
     const hidingFolder = new FolderNode(
       modRow, origin, { relativePath: 'x.mohidden', path: '/instance/mods/M/x.mohidden', excluded: true }, [], [], 'x.mohidden');
-    const inFolder = (relativePath: string, excludedByName: boolean) => new FileNode(hidingFolder, origin,
-      { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded: true, excludedByName },
+    const inFolder = (relativePath: string, markedExcluded: boolean) => new FileNode(hidingFolder, origin,
+      { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded: true, markedExcluded, includedPath: relativePath.replaceAll('.mohidden', '') },
       relativePath);
     markFiles.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
     const reporter = recordingReporter();
@@ -1392,7 +1392,7 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
   const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
   const fileRow = new FileNode(
     modA, { kind: 'mod', name: 'Mod A' },
-    { relativePath: 'a.dds', path: '/a.dds', sourcePath: '/a.dds', excluded: false, excludedByName: false }, 'a.dds');
+    { relativePath: 'a.dds', path: '/a.dds', sourcePath: '/a.dds', excluded: false, markedExcluded: false, includedPath: 'a.dds' }, 'a.dds');
   const written = (write: ReturnType<typeof vi.fn>, result: unknown) =>
     write.mockImplementation(() => { progressSteps.push('write'); return Promise.resolve(result); });
   const landed = { applied: true, outcome: { landed: ['Mod A'], refused: [] } };
@@ -1470,7 +1470,7 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
   it('excluding a file the view shows already excluded still writes, since the disk decides', async () => {
     const stale = new FileNode(
       modA, { kind: 'mod', name: 'Mod A' },
-      { relativePath: 'a.dds.mohidden', path: '/a', sourcePath: '/a', excluded: true, excludedByName: true }, 'a.dds.mohidden');
+      { relativePath: 'a.dds.mohidden', path: '/a', sourcePath: '/a', excluded: true, markedExcluded: true, includedPath: 'a.dds.mohidden' }, 'a.dds.mohidden');
     written(markFiles, { landed: [], refused: [] });
     registerFileExclusionCommands(commands, instance, () => [], reporter());
 
@@ -1837,7 +1837,7 @@ describe('the mod gestures, called by the agent', () => {
     ['modbench.mod.includeFile', 'Included'],
   ])('%s', (command, mark) => {
     const origin = { kind: 'mod', name: 'Mod A' } as const;
-    const inSelection = new FileNode(selected, origin, { relativePath: 'sel.dds', path: '/p/sel.dds', sourcePath: '/p/sel.dds', excluded: false, excludedByName: false }, 'sel.dds');
+    const inSelection = new FileNode(selected, origin, { relativePath: 'sel.dds', path: '/p/sel.dds', sourcePath: '/p/sel.dds', excluded: false, markedExcluded: false, includedPath: 'sel.dds' }, 'sel.dds');
 
     it('marks the files given, never the selection, and answers the outcome', async () => {
       const outcome = { applied: true, outcome: { landed: [{ origin, relativePath: 'a.dds' }], refused: [] } };

@@ -117,8 +117,10 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
     const reals = await Promise.all(folders.map(realOf));
     const fresh = folders.filter((folder, i) => {
       const real = reals[i];
+      // A link back to a folder already watched is not watched again, or the walk would never end.
       return real !== undefined && !passedOver(folder) && !watchedReal.has(real) && register(folder, real);
     });
+    // Each folder is watched before it is listed, so one created between the listing and the watch is not missed.
     await watchLevel((await Promise.all(fresh.map(foldersIn))).flat());
   };
 
