@@ -43,8 +43,6 @@ interface SourceGestureDeps {
   pluginsView: string;
   /** The Plugins view's message line, where decompile and commit says its phase. */
   say: (message: string | undefined) => void;
-  /** Saves a mod's unsaved plugin source; answers the paths VS Code left unsaved. */
-  saveUnsavedPluginSource: (mod: string) => Promise<string[]>;
   /** Registers the source mods' repositories once a decompile and commit landed. */
   registerRepositories: () => Promise<void>;
 }
@@ -168,7 +166,7 @@ function registerSourceGestures(
   const showAnySource = () => { void vscode.commands.executeCommand('setContext', 'modbench.mod.anySource', instance.value.sourceMods.size > 0); };
   showAnySource();
   const problems = new BuildProblems(vscode.languages.createDiagnosticCollection('modbench-build'));
-  const { commands, rows, pluginsView, say, saveUnsavedPluginSource, registerRepositories } = sourceGestures;
+  const { commands, rows, pluginsView, say, registerRepositories } = sourceGestures;
   const owner = (origin: string) => modOfOrigin(instance.value, origin)?.name;
   return [
     registerDecompileAndCommitCommand({
@@ -177,7 +175,7 @@ function registerSourceGestures(
     }, rows),
     registerBuildCommand({
       commands, instance, reporter: reporterFor('mod.build'), problems,
-      sourceFiles: (origin) => sourceFiles(instance.value, origin), saveUnsaved: saveUnsavedPluginSource,
+      sourceFiles: (origin) => sourceFiles(instance.value, origin),
       modOfOrigin: owner, sourceModNames: () => instance.value.paths.sourceDirs.keys(), pluginsView,
     }, rows),
     provider.onDidChangeTreeData(showAnySource),
