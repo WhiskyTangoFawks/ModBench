@@ -103,20 +103,17 @@ export interface UnsavedDocument { path: string; text: string }
  *  each document's text once moved. */
 export type SourceChanges = Pick<components['schemas']['EditRecordChanges'], 'moves' | 'deletions' | 'documents'>;
 
-// What deleting one record changes in plugin source.
-type RecordDeleteChanges = SourceChanges & { record: RecordAt };
-
 /** A delete's changes per record, in the order to make them, and the records mEdit refused. */
 export interface DeleteChangesOutcome {
-  applied: readonly RecordDeleteChanges[];
+  applied: readonly components['schemas']['RecordDeleted'][];
   refused: readonly ItemRefusal<RecordAt>[];
 }
 
 /** The changes renaming a plugin's source makes, and the name its tree was filed under. */
-export type RenameSourceChangesOutcome = SourceChanges & { treeName: string };
+export type RenameSourceChangesOutcome = components['schemas']['RenameSourceChanges'];
 
 /** The changes creating a record makes to plugin source, and the new record's FormKey. */
-export type CreateChangesOutcome = SourceChanges & { formKey: string };
+export type CreateChangesOutcome = components['schemas']['CreateRecordChanges'];
 
 /** An edit's changes to plugin source, each move and then each document's text at its absolute path,
  *  or its refusal: `refusal` is the backend's name, `'Unknown'` this side's. An edit of the FormID
@@ -232,6 +229,9 @@ export type ReadModStatus = (mods: readonly string[]) => Promise<readonly ModSta
 /** A mod restore would destroy files in: each file whose bytes differ from what its package fixes, and each file no line
  *  names, by its path in the mod folder, or a version or page in its metadata. */
 export type ModRestoreDestroys = components['schemas']['ModRestoreDestroys'];
+
+/** What a manifest says of its mod's version and installation files. */
+export type ManifestMetadata = components['schemas']['ModMetadata'];
 
 /** Each mod restore from manifest would destroy files in, and each mod skipped because a file of it could not be read. */
 export interface WhatRestoreDestroys {

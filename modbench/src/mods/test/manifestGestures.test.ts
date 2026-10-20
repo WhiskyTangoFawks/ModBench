@@ -408,7 +408,7 @@ describe('Restore from manifest', () => {
   it('restores only the mods it could ask about, naming each it skipped in its one line', async () => {
     const skipped = "was skipped: a file could not be read: denied";
     whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: 'ModB', reason: skipped }] });
-    restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] })], refused: [] });
+    restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [] });
     const { reporter, run } = register();
 
     await run(RESTORE, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
@@ -462,10 +462,10 @@ describe('Restore from manifest', () => {
   });
 
   it.each([
-    [[restoredMod({ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }), restoredMod({ mod: 'ModB', written: [], namedByNoLine: [] })], ['Restored "ModA" from its manifest.']],
-    [[restoredMod({ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }), restoredMod({ mod: 'ModB', written: ['b.nif'], namedByNoLine: [] })], ['Restored 2 mods from their manifests.']],
-    [[restoredMod({ mod: 'ModA', written: [], namedByNoLine: [] }), restoredMod({ mod: 'ModB', written: [], namedByNoLine: [] })], []],
-    [[restoredMod({ mod: 'ModA', written: [], namedByNoLine: ['mine.txt'] })], ['Restored "ModA" from its manifest.']],
+    [[restoredMod({ mod: 'ModA', written: ['a.nif'] }), restoredMod({ mod: 'ModB' })], ['Restored "ModA" from its manifest.']],
+    [[restoredMod({ mod: 'ModA', written: ['a.nif'] }), restoredMod({ mod: 'ModB', written: ['b.nif'] })], ['Restored 2 mods from their manifests.']],
+    [[restoredMod({ mod: 'ModA' }), restoredMod({ mod: 'ModB' })], []],
+    [[restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'] })], ['Restored "ModA" from its manifest.']],
   ])('says what it restored, and nothing when it changed nothing: %j', async (landed, landings) => {
     restoreFromManifest.mockResolvedValueOnce({ applied: true, landed, refused: [] });
     const { reporter, run } = register();
@@ -477,7 +477,7 @@ describe('Restore from manifest', () => {
 
   it('warns in its one line when the stat cache could not be written for a mod it restored, naming why in the Output', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'], namedByNoLine: [], statCacheNotWritten: '/i/stat-cache is read-only' })], refused: [],
+      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'], statCacheNotWritten: '/i/stat-cache is read-only' })], refused: [],
     });
     const { reporter, run } = register();
 
@@ -491,7 +491,7 @@ describe('Restore from manifest', () => {
   it('warns in its one line when the clone of a submodule was left detached at its pin, naming why in the Output', async () => {
     const why = "its branch 'main' is at abc, not at the pin, so it is left detached at the pin";
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.esp'], namedByNoLine: [], leftDetached: why })], refused: [],
+      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.esp'], leftDetached: why })], refused: [],
     });
     const { reporter, run } = register();
 
@@ -502,7 +502,7 @@ describe('Restore from manifest', () => {
 
   it('warns in its one line when the push refusal could not be written, naming why in the Output', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] })], refused: [], pushRefusalNotWritten: '/i/.git/hooks/pre-push already exists',
+      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], pushRefusalNotWritten: '/i/.git/hooks/pre-push already exists',
     });
     const { reporter, run } = register();
 
@@ -516,7 +516,7 @@ describe('Restore from manifest', () => {
 
   it('warns in its one line when a mod was built from a source holding changes no commit holds, naming it in the Output', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.esp'], namedByNoLine: [], uncommitted: true })], refused: [],
+      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.esp'], uncommitted: true })], refused: [],
     });
     const { reporter, run } = register();
 
@@ -530,7 +530,7 @@ describe('Restore from manifest', () => {
 
   it('names each skipped mod with what it lacks, and does not call the mods that landed failed', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] })], refused: [{ item: 'ModB', reason: "was skipped: its package does not hold 'b.nif'." }],
+      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [{ item: 'ModB', reason: "was skipped: its package does not hold 'b.nif'." }],
     });
     const { reporter, run } = register();
 
@@ -544,7 +544,7 @@ describe('Restore from manifest', () => {
 
   it('says no file differed, warning in its one line, when the only thing to say is a stat cache it could not write', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', written: [], namedByNoLine: [], statCacheNotWritten: 'read-only' })], refused: [],
+      applied: true, landed: [restoredMod({ mod: 'ModA', statCacheNotWritten: 'read-only' })], refused: [],
     });
     const { reporter, run } = register();
 
@@ -557,7 +557,7 @@ describe('Restore from manifest', () => {
 
   it('names a skipped mod and a stat cache it could not write in its one line', async () => {
     restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', written: [], namedByNoLine: [], statCacheNotWritten: 'read-only' })],
+      applied: true, landed: [restoredMod({ mod: 'ModA', statCacheNotWritten: 'read-only' })],
       refused: [{ item: 'ModB', reason: "was skipped: it has no manifest." }],
     });
     const { reporter, run } = register();
@@ -810,7 +810,7 @@ describe('An agent call', () => {
 
     it('answers what it restored, the mods mEdit would not restore refused with why, and a stat cache it could not write as a part that failed', async () => {
       whatRestoreDestroys.mockResolvedValueOnce({ destroys: [], refused: [{ item: 'ModB', reason: 'its name gives it no folder' }] });
-      const landed = restoredMod({ mod: 'ModA', written: [], namedByNoLine: [], statCacheNotWritten: 'disk full' });
+      const landed = restoredMod({ mod: 'ModA', statCacheNotWritten: 'disk full' });
       restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [landed], refused: [] });
       const { run } = register();
 
