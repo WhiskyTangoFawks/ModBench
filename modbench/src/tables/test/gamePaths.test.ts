@@ -33,7 +33,6 @@ describe('ba2VersionsOf', () => {
     ['Fallout4VR', { general: 1, textures: 1 }],
     ['Starfield', undefined],
     ['SkyrimSE', undefined],
-    [undefined, undefined],
   ])('answers the BA2 versions %s\'s archives pack as, and none for a release whose archives mEdit is not known to write so the game loads them', (release, variants) => {
     expect(ba2VersionsOf(release)).toEqual(variants);
   });

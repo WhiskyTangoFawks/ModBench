@@ -454,6 +454,8 @@ export interface InstanceAdapter {
   activeProfile(): Promise<string>;
   /** Mutagen's release of the game the mod manager's configuration selects now. */
   gameRelease(): Promise<string>;
+  /** Where the game is now. */
+  gameFolder(): Promise<GameFolder>;
   /** Every profile's name. */
   profiles(): Promise<readonly string[]>;
   /** The active profile's mod order and the mod folders, without the rest of the instance. */

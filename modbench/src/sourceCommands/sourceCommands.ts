@@ -68,7 +68,7 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
 export type SourceCommands = ReturnType<typeof sourceCommands>;
 
 /** The release's archive variants, none when the table names none. Modbench packs a BA2 compressed, as the game's own are. */
-export function archiveVariants(gameRelease: string | undefined): BuildFacts['archives'] {
+export function archiveVariants(gameRelease: string): BuildFacts['archives'] {
   const versions = ba2VersionsOf(gameRelease);
   return versions === undefined
     ? null

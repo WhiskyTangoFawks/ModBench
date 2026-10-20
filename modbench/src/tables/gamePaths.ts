@@ -211,8 +211,8 @@ function isArchiveOf(stem: string, name: string, extension: string): boolean {
 }
 
 /** The BA2 versions a build packs the release's archives as; none for a release the table names none for. */
-export function ba2VersionsOf(release: string | undefined): Ba2Versions | undefined {
-  return release === undefined ? undefined : GAME_PATHS[release]?.ba2Versions;
+export function ba2VersionsOf(release: string): Ba2Versions | undefined {
+  return GAME_PATHS[release]?.ba2Versions;
 }
 
 /** The rule for what the release names for a plugin; none for a release the table holds no row for. */
