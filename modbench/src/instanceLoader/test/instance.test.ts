@@ -35,7 +35,7 @@ const GAME_FOUND: Partial<InstanceReading> = {
 };
 
 const downloadedFile = (name: string): DownloadedFile =>
-  ({ name, path: `/downloads/${name}`, metaPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1, meta: undefined });
+  ({ name, path: `/downloads/${name}`, metaPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1, excluded: false, meta: undefined });
 const downloads = (...names: string[]): DownloadedFiles =>
   ({ kind: 'listed', downloadsDir: '/downloads', files: names.map(downloadedFile) });
 

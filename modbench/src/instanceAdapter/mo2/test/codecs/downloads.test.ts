@@ -6,47 +6,51 @@ import {
   setUninstalledInText,
 } from '../../codecs/downloads';
 
+const metaOf = (text: string) => parseDownloadMeta(text).meta;
+
 describe('parseDownloadMeta', () => {
   it('uninstalled=true -> Uninstalled status', () => {
-    expect(parseDownloadMeta('[General]\r\nuninstalled=true\r\n').status).toBe('Uninstalled');
+    expect(metaOf('[General]\r\nuninstalled=true\r\n').status).toBe('Uninstalled');
   });
 
   it('reads the tooltip fields: modName, gameName, author', () => {
-    const meta = parseDownloadMeta('[General]\r\nmodName=Sleep or Save\r\ngameName=Fallout4\r\nauthor=SomeAuthor\r\n');
+    const meta = metaOf('[General]\r\nmodName=Sleep or Save\r\ngameName=Fallout4\r\nauthor=SomeAuthor\r\n');
     expect(meta.modName).toBe('Sleep or Save');
     expect(meta.gameName).toBe('Fallout4');
     expect(meta.author).toBe('SomeAuthor');
   });
 
   it('treats modID=0 as no id, same as an absent modID (Visit-on-Nexus gated off)', () => {
-    expect(parseDownloadMeta('[General]\r\nmodID=0\r\n').modID).toBeUndefined();
+    expect(metaOf('[General]\r\nmodID=0\r\n').modID).toBeUndefined();
   });
 
   it('treats fileID=0 as no id, same as an absent fileID', () => {
-    expect(parseDownloadMeta('[General]\r\nfileID=0\r\n').fileID).toBeUndefined();
-  });
-
-  it('is not excluded when removed is explicitly false', () => {
-    expect(parseDownloadMeta('[General]\r\nremoved=false\r\n').excluded).toBe(false);
-  });
-
-  it('never conflates the Uninstalled Status with excluded: both flags coexist, orthogonal axes derived from different keys (uninstalled=true, removed=true)', () => {
-    const meta = parseDownloadMeta('[General]\r\nuninstalled=true\r\nremoved=true\r\n');
-    expect(meta.status).toBe('Uninstalled');
-    expect(meta.excluded).toBe(true);
+    expect(metaOf('[General]\r\nfileID=0\r\n').fileID).toBeUndefined();
   });
 
   it('parses a hand-edited .meta with padded key=value spacing, which a writer never would, the same as the tight form', () => {
-    const tight = parseDownloadMeta('[General]\r\nmodID=12345\r\n');
-    const padded = parseDownloadMeta('[General]\r\nmodID = 12345\r\n');
+    const tight = metaOf('[General]\r\nmodID=12345\r\n');
+    const padded = metaOf('[General]\r\nmodID = 12345\r\n');
     expect(padded.modID).toBe('12345');
     expect(padded).toEqual(tight);
   });
 });
 
+describe('parseDownloadMeta hidden', () => {
+  it('is false when removed is explicitly false', () => {
+    expect(parseDownloadMeta('[General]\r\nremoved=false\r\n').hidden).toBe(false);
+  });
+
+  it('is independent of the Uninstalled Status: both keys coexist', () => {
+    const parsed = parseDownloadMeta('[General]\r\nuninstalled=true\r\nremoved=true\r\n');
+    expect(parsed.meta.status).toBe('Uninstalled');
+    expect(parsed.hidden).toBe(true);
+  });
+});
+
 describe('parseDownloadMeta values', () => {
   it('are decoded, as MO2 writes a name holding a comma quoted', () => {
-    expect(parseDownloadMeta('[General]\r\nmodName="A, B"\r\n').modName).toBe('A, B');
+    expect(metaOf('[General]\r\nmodName="A, B"\r\n').modName).toBe('A, B');
   });
 });
 
@@ -70,8 +74,8 @@ describe('setInstalledInText', () => {
 
   it('clears an earlier uninstall, so a reinstalled download reads Installed again, MO2\'s markInstalled writing uninstalled=false beside installed=true and a reader taking uninstalled first', () => {
     const uninstalled = setUninstalledInText('[General]\r\ninstalled=true\r\n');
-    expect(parseDownloadMeta(uninstalled).status).toBe('Uninstalled');
-    expect(parseDownloadMeta(setInstalledInText(uninstalled)).status).toBe('Installed');
+    expect(metaOf(uninstalled).status).toBe('Uninstalled');
+    expect(metaOf(setInstalledInText(uninstalled)).status).toBe('Installed');
   });
 
 });

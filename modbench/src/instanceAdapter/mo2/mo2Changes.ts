@@ -55,7 +55,7 @@ function markIn(text: string, mark: DownloadedFileMark): string {
     case 'Excluded':
     case 'Included': {
       const excluded = mark === 'Excluded';
-      return parseDownloadMeta(text).excluded === excluded ? text : setHiddenInText(text, excluded);
+      return parseDownloadMeta(text).hidden === excluded ? text : setHiddenInText(text, excluded);
     }
   }
 }
