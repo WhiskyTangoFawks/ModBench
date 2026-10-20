@@ -310,7 +310,7 @@ public sealed class LoadOrderTests
 
         var order = Order([inactive, active, other], active, other);
 
-        Assert.Equal([inactive, active], order.CaseOnlyCollisions);
+        Assert.Equal([inactive, active], order.CollisionReasons().Select(c => c.Plugin));
         Assert.Equal([other], order.Plugins);
         Assert.Equal([other], order.Active);
         Assert.Null(order.LoadOrderIndex(active.Key));
@@ -324,7 +324,7 @@ public sealed class LoadOrderTests
         var upper = Registered("A.esp", "ModA");
         var lower = Registered("A.esp", "moda");
 
-        Assert.Equal([upper, lower], Order([upper, lower]).CaseOnlyCollisions);
+        Assert.Equal([upper, lower], Order([upper, lower]).CollisionReasons().Select(c => c.Plugin));
     }
 
     public static TheoryData<string[][], string[]> CollisionCases => new()

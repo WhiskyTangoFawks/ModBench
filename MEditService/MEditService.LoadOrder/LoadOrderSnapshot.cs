@@ -78,7 +78,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// <summary>The plugins whose address another plugin's differs from only in case. Nothing can
     /// tell which of them the game loads, so they are in none of the other lists. Linux can hold such
     /// a pair; Windows cannot.</summary>
-    public IReadOnlyList<RegisteredPlugin> CaseOnlyCollisions { get; }
+    internal IReadOnlyList<RegisteredPlugin> CaseOnlyCollisions { get; }
 
     /// <summary>Why each of <see cref="CaseOnlyCollisions"/> is read by no one: what differs only in case, and from which
     /// plugins.</summary>
