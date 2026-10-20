@@ -6,7 +6,7 @@ import { realpath, stat } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import { errnoCode } from './errno';
-import { listFolders } from './files';
+import { listFolders, type SkippedLink } from './files';
 
 export interface HeldFolderWatch {
   /** Watches each folder, at any depth, that `folder` holds, while open; settles once each is watched. */
@@ -48,6 +48,7 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
   const watched = new Map<string, { watcher: FSWatcher; real: string }>();
   const watchedReal = new Set<string>();
   const failed = new Map<string, string>();
+  const listingFailed = new Map<string, Set<string>>();
   let isOpen = false;
 
   const forget = (folder: string): void => {
@@ -64,6 +65,7 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
     for (const folder of watched.keys()) if (isWithin(folder, path)) forget(folder);
     for (const folder of createdFolders) if (isWithin(folder, path)) createdFolders.delete(folder);
     for (const folder of failed.keys()) if (isWithin(folder, path)) failed.delete(folder);
+    for (const folder of listingFailed.keys()) if (isWithin(folder, path)) listingFailed.delete(folder);
   };
 
   const fail = (folder: string, error: unknown): void => {
@@ -85,18 +87,31 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
 
   const passedOver = (folder: string): boolean => !isOpen || watched.has(folder);
 
-  // A folder gone, or made a file, is not a failure; any other reason a folder cannot be read leaves it unheard.
-  const unlessGone = <T>(folder: string, instead: T) => (error: unknown): T => {
-    if (!['ENOENT', 'ENOTDIR'].includes(errnoCode(error) ?? '')) fail(folder, error);
-    return instead;
+  const isGone = (error: unknown): boolean => ['ENOENT', 'ENOTDIR'].includes(errnoCode(error) ?? '');
+
+  // A link to nothing is a folder gone; any other reason a link cannot be followed is named once, whichever link.
+  const foldersIn = async (folder: string): Promise<string[]> => {
+    const reasons = new Set<string>();
+    const skippedLink: SkippedLink = (linkPath, reason) => {
+      if (!reason.startsWith('ENOENT')) reasons.add(reason.replace(`, stat '${linkPath}'`, ''));
+    };
+    const names = await listFolders(folder, skippedLink).catch((error: unknown) => {
+      if (!isGone(error)) reasons.add(reasonOf(error));
+      return [];
+    });
+    if (reasons.size === 0) listingFailed.delete(folder);
+    else {
+      listingFailed.set(folder, reasons);
+      onFailure();
+    }
+    return names.map((name) => join(folder, name));
   };
 
-  const foldersIn = async (folder: string): Promise<string[]> =>
-    (await listFolders(folder, fail).catch(unlessGone(folder, [])))
-      .map((name) => join(folder, name));
-
   const realOf = async (folder: string): Promise<string | undefined> =>
-    passedOver(folder) || !holds(folder) ? undefined : realpath(folder).catch(unlessGone(folder, undefined));
+    passedOver(folder) || !holds(folder) ? undefined : realpath(folder).catch((error: unknown) => {
+        if (!isGone(error)) fail(folder, error);
+        return undefined;
+      });
 
   const register = (folder: string, real: string): boolean => {
     try {
@@ -146,7 +161,8 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
       isOpen = false;
       for (const folder of watched.keys()) forget(folder);
       failed.clear();
+      listingFailed.clear();
     },
-    failures: () => [...new Set(failed.values())],
+    failures: () => [...new Set([...failed.values(), ...[...listingFailed.values()].flatMap((reasons) => [...reasons])])],
   };
 }

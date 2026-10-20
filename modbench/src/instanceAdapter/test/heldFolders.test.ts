@@ -164,7 +164,7 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     expect(heard).toEqual([]);
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) answers once each reason a folder\'s watch failed, signalling each failure, and forgets one removed', async () => {
+  it.skipIf(process.getuid?.() === 0)('(root reads every folder) answers once each reason a folder\'s watch failed, signalling each failure, and forgets one removed', async () => {
     const created = join(root, 'Created');
     const unreadable = [join(created, 'Unreadable'), join(created, 'AlsoUnreadable')];
     for (const folder of unreadable) {
@@ -183,7 +183,7 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     expect(held.failures()).toEqual([]);
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) answers the reason a created folder cannot be listed, signalling the failure', async () => {
+  it.skipIf(process.getuid?.() === 0)('(root reads every folder) answers the reason a created folder cannot be listed, signalling the failure', async () => {
     const created = join(root, 'Created');
     await mkdir(created, { recursive: true });
     await chmod(created, 0o000);
@@ -213,18 +213,38 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     expect(failures).toBe(1);
   });
 
-  it('names each link to a folder that cannot be followed, a loop or a dangling link, signalling each', async () => {
+  it('names once a reason links cannot be followed, a loop, and nothing for a link to nothing', async () => {
     const created = join(root, 'Created');
     await mkdir(join(created, 'Held'), { recursive: true });
-    await symlink('Loop', join(created, 'Held', 'Loop'));
+    await symlink('Loop', join(created, 'Loop'));
+    await symlink('AlsoLoop', join(created, 'Held', 'AlsoLoop'));
     await symlink(join(root, 'Gone'), join(created, 'Dangling'));
 
     await held.created(created);
 
-    expect(held.failures()).toEqual([
-      expect.stringContaining(join(created, 'Dangling')),
-      expect.stringContaining(join(created, 'Held', 'Loop')),
-    ]);
+    expect(held.failures()).toEqual(['ELOOP: too many symbolic links encountered']);
     expect(failures).toBe(2);
+  });
+
+  it('answers nothing for a created path that is a file', async () => {
+    const file = join(root, 'Created');
+    await writeFile(file, '');
+
+    await held.created(file);
+
+    expect(held.failures()).toEqual([]);
+    expect(failures).toBe(0);
+  });
+
+  it.skipIf(process.getuid?.() === 0)('(root reads every folder) forgets a reason a created folder could not be listed once it lists', async () => {
+    const created = join(root, 'Created');
+    await mkdir(created, { recursive: true });
+    await chmod(created, 0o000);
+    await held.created(created);
+
+    await chmod(created, 0o755);
+    await held.created(created);
+
+    expect(held.failures()).toEqual([]);
   });
 });
