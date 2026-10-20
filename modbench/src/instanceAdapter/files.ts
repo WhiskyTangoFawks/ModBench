@@ -123,15 +123,15 @@ export async function stampOf(path: string): Promise<FileStamp> {
   return { size: info.size, modifiedNs: info.mtimeNs, changedNs: info.ctimeNs };
 }
 
-/** Whether two paths are one file on disk, however each is spelled: through a symlink, a hard link or a
- *  case-folding file system. A path where nothing is names no file. */
-export async function sameFile(a: string, b: string): Promise<boolean> {
+/** `path`'s device and inode, which name its file whatever the path's spelling; undefined where nothing is, and
+ *  where the file system reports no inode (0), which names no file. */
+export async function identityOf(path: string): Promise<string | undefined> {
   try {
-    const [first, second] = await Promise.all([stat(a, { bigint: true }), stat(b, { bigint: true })]);
-    return first.dev === second.dev && first.ino === second.ino;
+    const { dev, ino } = await stat(path, { bigint: true });
+    return ino === 0n ? undefined : `${dev}:${ino}`;
   } catch (err) {
     if (errnoCode(err) !== 'ENOENT') throw err;
-    return false;
+    return undefined;
   }
 }
 

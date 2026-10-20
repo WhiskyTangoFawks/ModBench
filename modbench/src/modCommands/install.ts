@@ -23,7 +23,11 @@ interface Resolved {
 // installation file outside the downloaded files.
 async function resolve(adapter: InstanceAdapter, installed: ModPackage): Promise<Resolved> {
   if (installed.kind === 'folder') return { extracted: installed, file: undefined };
-  if (installed.kind === 'archive') return { extracted: installed, file: await adapter.downloadedFileAt(installed.path) };
+  if (installed.kind === 'archive') {
+    const at = await adapter.downloadedFileAt(installed.path);
+    if (at.kind === 'unreadable') throw new Error(at.reason);
+    return { extracted: installed, file: at.answer };
+  }
   const listed = await adapter.downloadedFiles();
   const files = listed.kind === 'listed' ? listed.files ?? [] : [];
   const file = files.find(({ name }) => name === installed.name);
