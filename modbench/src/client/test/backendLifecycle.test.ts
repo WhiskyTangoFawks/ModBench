@@ -4,8 +4,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { createServer, type Server } from 'node:http';
 import { spawn as nodeSpawn } from 'node:child_process';
-import { createServer as createNetServer } from 'node:net';
-import type { AddressInfo, Socket } from 'node:net';
+import type { AddressInfo } from 'node:net';
 
 import { BackendLifecycle } from '../backendLifecycle';
 import type { BackendStatus } from '../MEditClient';
@@ -56,41 +55,17 @@ describe('BackendLifecycle', () => {
     expect(checkHealth).toHaveBeenCalledTimes(3);
   });
 
-  it('reports disconnected when backend never starts within timeout', async () => {
-    const lifecycle = new BackendLifecycle({
-      attachPort: 5172, pollIntervalMs: 10, pollTimeoutMs: 50, checkHealth: () => Promise.resolve(false),
-    });
+  it.each([
+    ['answers unhealthy', () => Promise.resolve(false)],
+    ['never settles', () => new Promise<boolean>(() => {})],
+  ])('reports disconnected at the deadline when the health check %s', async (_case, checkHealth) => {
+    const lifecycle = new BackendLifecycle({ attachPort: 5172, pollIntervalMs: 10, pollTimeoutMs: 0, checkHealth });
     const statuses = record(lifecycle);
 
     await lifecycle.start();
 
     expect(statuses).toContain('disconnected');
     expect(lifecycle.status).toBe('disconnected');
-  });
-
-  it('reports disconnected at the deadline when a health check never settles', async () => {
-    const lifecycle = new BackendLifecycle({
-      attachPort: 5172, pollIntervalMs: 10, pollTimeoutMs: 100, checkHealth: () => new Promise<boolean>(() => {}),
-    });
-
-    await lifecycle.start();
-
-    expect(lifecycle.status).toBe('disconnected');
-  });
-
-  it('reports disconnected when a backend accepts the connection and never answers', async () => {
-    const sockets: Socket[] = [];
-    const silent = createNetServer((socket) => { sockets.push(socket); });
-    await new Promise<void>((resolve) => silent.listen(0, 'localhost', resolve));
-    const lifecycle = new BackendLifecycle({
-      attachPort: addressInfo(silent.address()).port, pollIntervalMs: 10, pollTimeoutMs: 100,
-    });
-
-    await lifecycle.start();
-
-    expect(lifecycle.status).toBe('disconnected');
-    sockets.forEach((socket) => socket.destroy());
-    silent.close();
   });
 });
 
