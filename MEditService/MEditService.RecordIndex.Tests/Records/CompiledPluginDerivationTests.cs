@@ -38,7 +38,7 @@ public sealed class CompiledPluginDerivationTests : IDisposable
     private void ReconcileTheSnapshotAlreadyHeldSinceOnlyThePluginsFolderMoved() =>
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
 
-    private bool ReadsAsCompiledPlugin() => _index.PluginRowOf(_mod.KeyOf()) is { IsCompiledPlugin: true, PluginSourceUnreadable: null };
+    private bool ReadsAsCompiledPlugin() => _index.PluginResponseOf(_mod.KeyOf()) is { IsCompiledPlugin: true, PluginSourceUnreadable: null };
 
     [Fact]
     public void APluginCompiledPluginAfterItWasIndexed_ReadsAsCompiledPlugin_AfterTheNextSnapshot()

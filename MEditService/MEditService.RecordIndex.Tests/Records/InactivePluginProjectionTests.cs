@@ -42,6 +42,19 @@ public sealed class InactivePluginProjectionTests : IDisposable
         _index.Reconcile(_holder, _fixture.GameDirectory, [_mod with { Enabled = active }, _partner], GameRelease.Fallout4);
 
     [Fact]
+    public void APluginRow_IsInTheLoadOrderExactlyWhenItIsActive()
+    {
+        PluginResponse Row() => Assert.IsType<PluginResponse>(_index.PluginResponseOf(_mod.KeyOf()));
+        Assert.True(Row().InLoadOrder);
+        Assert.NotNull(Row().LoadOrderIndex);
+
+        Reconcile(active: false);
+
+        Assert.False(Row().InLoadOrder);
+        Assert.Null(Row().LoadOrderIndex);
+    }
+
+    [Fact]
     public void AHandEditWhileNotActive_IsTheRecordTheReadsSeeOnceActive()
     {
         var document = _index.DocumentOf(_npc, _mod.KeyOf());
@@ -102,7 +115,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     {
         Reconcile(active: false);
 
-        var row = _index.PluginRowOf(_mod.KeyOf()) ?? throw new InvalidOperationException("Expected the plugin's row.");
+        var row = _index.PluginResponseOf(_mod.KeyOf()) ?? throw new InvalidOperationException("Expected the plugin's row.");
         Assert.True(row.IsCompiledPlugin);
         Assert.Null(row.PluginSourceUnreadable);
     }

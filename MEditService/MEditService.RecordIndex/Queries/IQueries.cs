@@ -10,7 +10,7 @@ namespace MEditService.RecordIndex.Queries;
 /// <summary>The record index's face (ADR-0014): what the API asks of the read model.</summary>
 public interface IQueries
 {
-    Answer<IReadOnlyList<PluginRow>, IndexRefused> GetPlugins();
+    Answer<IReadOnlyList<PluginResponse>, IndexRefused> GetPlugins();
     // A null plugin browses every plugin.
     Answer<PagedResult<RecordSummary>, IndexRefused> GetRecords(
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset);

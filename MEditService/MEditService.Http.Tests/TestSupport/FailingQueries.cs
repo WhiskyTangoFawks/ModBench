@@ -13,7 +13,7 @@ namespace MEditService.Http.Tests.TestSupport;
 /// another window's hold does; given a problems refusal, answers the Problems read with it.</summary>
 internal sealed class FailingQueries(string? rebuildRefusal = null, IndexRefused? problemsRefusal = null) : IQueries
 {
-    public Answer<IReadOnlyList<PluginRow>, IndexRefused> GetPlugins() => throw Failed();
+    public Answer<IReadOnlyList<PluginResponse>, IndexRefused> GetPlugins() => throw Failed();
 
     public Answer<PagedResult<RecordSummary>, IndexRefused> GetRecords(
         IReadOnlyList<string>? types, PluginAddress? plugin, string? search, int limit, int offset) => throw Failed();

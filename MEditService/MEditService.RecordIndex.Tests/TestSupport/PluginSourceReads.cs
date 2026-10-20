@@ -7,10 +7,10 @@ namespace MEditService.RecordIndex.Tests.TestSupport;
 internal static class PluginSourceReads
 {
     internal static bool ReadFromItsPluginSource(this OpenedIndex index, PluginAddress plugin) =>
-        index.PluginRowOf(plugin) is { IsCompiledPlugin: true, PluginSourceUnreadable: null };
+        index.PluginResponseOf(plugin) is { IsCompiledPlugin: true, PluginSourceUnreadable: null };
 
     internal static bool ReadFromItsPluginFileForItsUnreadableSource(this OpenedIndex index, PluginAddress plugin) =>
-        index.PluginRowOf(plugin) is { IsCompiledPlugin: true, PluginSourceUnreadable: not null };
+        index.PluginResponseOf(plugin) is { IsCompiledPlugin: true, PluginSourceUnreadable: not null };
 
     /// <summary>The problems of the one plugin an index over a single compiled plugin holds.</summary>
     internal static IReadOnlyList<SourceProblem> SourceProblems(this OpenedIndex index) =>

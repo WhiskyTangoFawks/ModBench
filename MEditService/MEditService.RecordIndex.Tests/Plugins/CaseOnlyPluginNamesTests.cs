@@ -29,7 +29,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
         index.Reconcile(index.Holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
     private static string[] IndexedNames(OpenedIndex index) =>
-        [.. index.Queries.GetPlugins().Value().Select(row => row.Plugin.Name).Order(StringComparer.Ordinal)];
+        [.. index.Queries.GetPlugins().Value().Select(row => row.Name).Order(StringComparer.Ordinal)];
 
     private static string[] FailedNames(OpenedIndex index) =>
         [.. index.Status.Failures.Select(f => f.Name).Order(StringComparer.Ordinal)];
@@ -128,7 +128,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
 
         var now = new PluginAddress("fine.esp", Origin.ToLowerInvariant());
         Assert.Equal([now], index.Status.IndexedPlugins);
-        Assert.Equal([now], index.Queries.GetPlugins().Value().Select(row => new PluginAddress(row.Plugin.Name, row.Plugin.Origin)));
+        Assert.Equal([now], index.Queries.GetPlugins().Value().Select(row => row.KeyOf()));
         var record = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items.Single();
         Assert.Equal(("fine.esp", "moda"), (record.Plugin, record.Origin));
     }

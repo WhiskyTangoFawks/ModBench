@@ -30,7 +30,7 @@ public class MasterResolutionTests
             new PluginFixtureBuilder("medit-master-issues"),
             (builder, plugin) => builder.WithPlugin(plugin.Name, Mastering(plugin.Masters), writeParams: AsDeclared, enabled: plugin.Enabled));
 
-    private static IReadOnlyList<PluginRow> GetPlugins(PluginFixtureBuilder builder)
+    private static IReadOnlyList<PluginResponse> GetPlugins(PluginFixtureBuilder builder)
     {
         using var fixture = builder.Build();
         using var index = Indexes.Reconciled(fixture);
@@ -39,7 +39,7 @@ public class MasterResolutionTests
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> Classify(PluginFixtureBuilder builder) =>
         GetPlugins(builder)
-            .Select(row => (row.Plugin.Name, Issues: Assert.IsAssignableFrom<IReadOnlyList<string>>(row.MissingMasters)))
+            .Select(row => (row.Name, Issues: Assert.IsAssignableFrom<IReadOnlyList<string>>(row.MissingMasters)))
             .Where(row => row.Issues.Count > 0)
             .ToDictionary(row => row.Name, row => row.Issues, StringComparer.OrdinalIgnoreCase);
 
@@ -68,8 +68,8 @@ public class MasterResolutionTests
 
         var rows = index.Queries.GetPlugins().Value();
 
-        Assert.DoesNotContain(rows, r => r.Plugin.Name == "Broken.esm");
-        Assert.Equal([], rows.Single(r => r.Plugin.Name == "Patch.esp").MissingMasters);
+        Assert.DoesNotContain(rows, r => r.Name == "Broken.esm");
+        Assert.Equal([], rows.Single(r => r.Name == "Patch.esp").MissingMasters);
     }
 
     [Fact]
@@ -91,13 +91,13 @@ public class MasterResolutionTests
 
         var rows = index.Queries.GetPlugins().Value();
 
-        Assert.Equal(["Ghost.esm"], rows.Single(r => r.Plugin.Origin == "WinningMod").MissingMasters);
-        Assert.Equal([], rows.Single(r => r.Plugin.Origin == "LosingMod").MissingMasters);
+        Assert.Equal(["Ghost.esm"], rows.Single(r => r.Origin == "WinningMod").MissingMasters);
+        Assert.Equal([], rows.Single(r => r.Origin == "LosingMod").MissingMasters);
     }
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> LateMasters(PluginFixtureBuilder builder) =>
         GetPlugins(builder)
-            .Select(row => (row.Plugin.Name, Late: Assert.IsAssignableFrom<IReadOnlyList<string>>(row.LateMasters)))
+            .Select(row => (row.Name, Late: Assert.IsAssignableFrom<IReadOnlyList<string>>(row.LateMasters)))
             .Where(row => row.Late.Count > 0)
             .ToDictionary(row => row.Name, row => row.Late, StringComparer.OrdinalIgnoreCase);
 
@@ -137,7 +137,7 @@ public class MasterResolutionTests
             .Where(plugin => plugin.Item2).Select(plugin => plugin.Item1).ToHashSet();
         using var index = Indexes.Reconciled(fixture, adapter: new BlueprintPluginAdapter(blueprints));
 
-        var row = index.Queries.GetPlugins().Value().Single(r => r.Plugin.Name == "Patch.esp");
+        var row = index.Queries.GetPlugins().Value().Single(r => r.Name == "Patch.esp");
 
         Assert.Equal(late ? ["Base.esm"] : [], row.LateMasters);
     }
@@ -194,7 +194,7 @@ public class MasterResolutionTests
         var load = Task.Run(() => index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        IReadOnlyList<PluginRow> rows;
+        IReadOnlyList<PluginResponse> rows;
         try
         {
             rows = index.Queries.GetPlugins().Value();
@@ -205,7 +205,7 @@ public class MasterResolutionTests
         }
         await load;
 
-        var row = rows.Single(r => r.Plugin.Name == "A.esp");
+        var row = rows.Single(r => r.Name == "A.esp");
         Assert.Null(row.MissingMasters);
         Assert.Null(row.LateMasters);
     }

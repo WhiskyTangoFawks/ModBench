@@ -67,7 +67,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     private IReadOnlyList<SourceProblem>? LaterReadFailureOfCompiledPlugin() => LaterReadFailureOf(_index);
 
     private IReadOnlyList<SourceProblem>? LaterReadFailureOf(OpenedIndex index) =>
-        (index.PluginRowOf(_compiledPlugin.KeyOf()) ?? throw new InvalidOperationException($"Expected a row for {CompiledPlugin}.")).LaterReadFailure;
+        (index.PluginResponseOf(_compiledPlugin.KeyOf()) ?? throw new InvalidOperationException($"Expected a row for {CompiledPlugin}.")).LaterReadFailure;
 
     [Fact]
     public void AHandedDocument_IsReadInPlaceOfItsFile()
