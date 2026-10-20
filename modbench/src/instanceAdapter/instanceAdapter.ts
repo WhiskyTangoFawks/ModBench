@@ -10,8 +10,8 @@ import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { dataFolderFile } from './gameFolder/dataFolder';
 
-export type { ArchiveReader } from './downloadedFileContents/archiveReader';
-export { ARCHIVE_EXTENSIONS } from './downloadedFileContents/archiveNames';
+export type { InstallationFileReader } from './downloadedFileContents/installationFileReader';
+export { INSTALLATION_FILE_EXTENSIONS } from './downloadedFileContents/installationFileNames';
 export { downloadedFileReader } from './downloadedFileContents/downloadedFileReader';
 
 /** The setting that names the game folder outright: its id
@@ -50,7 +50,7 @@ export interface ModMeta {
   gameName?: string;
   version?: string;
   nexusId?: string;
-  archiveFilename?: string;
+  installationFileName?: string;
   /** The keys, as a downloaded file's `installedKey` spells them, of the files it was installed from; undefined when none are recorded. */
   installedFileKeys?: readonly string[];
 }
@@ -117,14 +117,14 @@ export type MovePlace =
 export type SeparatorsPlace = Extract<MovePlace, { kind: 'separator' | 'modOrder' }>;
 
 /** What the caller supplies for the record an install leaves with the mod; the adapter adds what it knows of the instance. */
-export type InstallKeys = Pick<ModMeta, 'nexusId' | 'version' | 'archiveFilename' | 'installedFileKeys'>;
+export type InstallKeys = Pick<ModMeta, 'nexusId' | 'version' | 'installationFileName' | 'installedFileKeys'>;
 
-export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
+export type DownloadedFileStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 
 /** What a downloaded file's metadata says. `status` is the metadata's own claim, never
  *  corroborated against the mods. */
-export interface DownloadMeta {
-  status: DownloadStatus;
+export interface DownloadedFileMeta {
+  status: DownloadedFileStatus;
   modID?: string;
   name?: string;
   version?: string;
@@ -145,7 +145,7 @@ export interface DownloadedFile {
   readonly size: number;
   readonly mtimeMs: number;
   readonly excluded: boolean;
-  readonly meta: DownloadMeta | undefined;
+  readonly meta: DownloadedFileMeta | undefined;
 }
 
 /** The downloaded files, or why their folder could not be resolved. `files` is undefined when the
@@ -174,7 +174,7 @@ export type DataFolderArchives =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
-/** Where a mod's files come from: an archive, extracted, or a folder, copied and left as it was. */
+/** Where a mod's files come from: an installation file, extracted, or a folder, copied and left as it was. */
 export type InstallPackage = { readonly kind: 'archive'; readonly path: string } | { readonly kind: 'folder'; readonly path: string };
 
 /** Which mod an install fills, settled by the caller: the folder on disk is checked against the
@@ -346,13 +346,13 @@ interface GameFilesTaken {
 }
 
 /** A downloaded file hashed whole and entry by entry. */
-export interface HashedDownload extends HashedFile {
+export interface HashedDownloadedFile extends HashedFile {
   /** Each entry by its forward-slash path inside the file. */
   readonly entries: readonly { readonly path: string; readonly hash: string }[];
 }
 
 /** A downloaded file the mod manager records a mod as installed from, with its hashes. */
-export interface InstallationFile extends HashedDownload {
+export interface InstallationFile extends HashedDownloadedFile {
   readonly path: string;
   /** The file's page on its host, a string the Instance adapter formats and the rest keeps opaque. */
   readonly page?: string;
@@ -374,7 +374,7 @@ export interface ModMetadata {
 export interface ManagerNames {
   readonly manager: string;
   readonly modOrderFile: string;
-  readonly downloadMetadataFile: string;
+  readonly downloadedFileMetadataFile: string;
 }
 
 // The game as the mod manager's configuration names it, and Mutagen's release of it.

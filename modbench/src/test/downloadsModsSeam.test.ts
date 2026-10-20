@@ -22,20 +22,20 @@ import { fakeInstanceAdapter } from './fakeInstanceAdapter';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { fakeQuickPick } from '../drivingLib/test/quickPickDouble';
 import { recordingReporter } from './surfacingDoubles';
-import { downloadRowFixture } from './mo2/downloadRowFixture';
+import { downloadedFileRowFixture } from './mo2/downloadedFileRowFixture';
 
 describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', () => {
   it('offers the upgrades the Instance value lists for the file of a real DownloadedFileNode', async () => {
-    const row = downloadRowFixture('foo.7z', { upgrades: [{ modName: 'Harder VATS', version: '1.0', tier: 'fileId' }] });
-    const instance = { value: instanceValueFixture({ downloads: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() };
+    const row = downloadedFileRowFixture('foo.7z', { upgrades: [{ modName: 'Harder VATS', version: '1.0', tier: 'fileId' }] });
+    const instance = { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() };
     const { qp, escape } = fakeQuickPick<{ label: string }>();
     createQuickPick.mockReturnValue(qp);
     registerModInstallCommands({
       commands: modCommands(fakeInstanceAdapter().adapter, new InMemoryMEditClient(), unreadStatus), instance,
       reporterFor: () => recordingReporter(), ask: vi.fn(), warnIfFomod: vi.fn(),
-      downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
+      downloadedFileInstallReporting: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     });
-    const node = new DownloadedFileNode(downloadRowFixture('foo.7z'));
+    const node = new DownloadedFileNode(downloadedFileRowFixture('foo.7z'));
 
     const handler = registerCommand.mock.calls.find((c) => c[0] === 'modbench.mod.install')?.[1];
     const running = handler?.(node);

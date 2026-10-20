@@ -45,9 +45,9 @@ export function modsNamed(value: EntryKeys, given: readonly ModName[]): Entry[] 
 }
 
 /** Each file name as the Downloads view shows it. */
-export function downloadsNamed(downloads: InstanceValue['downloads'], given: readonly string[]): string[] {
-  if (downloads.kind === 'unresolved') throw new Refusal(downloads.reason);
-  const held = new Set(downloads.rows.map(({ name }) => name));
+export function downloadedFilesNamed(downloadedFiles: InstanceValue['downloadedFiles'], given: readonly string[]): string[] {
+  if (downloadedFiles.kind === 'unresolved') throw new Refusal(downloadedFiles.reason);
+  const held = new Set(downloadedFiles.rows.map(({ name }) => name));
   const missing = given.filter((name) => !held.has(name));
   if (missing.length > 0) throw new Refusal(missing.map((name) => `Nothing is named "${name}" among the downloaded files.`).join(' '));
   return [...given];

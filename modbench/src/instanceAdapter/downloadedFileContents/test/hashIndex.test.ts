@@ -2,8 +2,8 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { appendFile, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fakeArchiveReader } from '../../../test/fakeArchiveReader';
-import type { ArchiveReader } from '../archiveReader';
+import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
+import type { InstallationFileReader } from '../installationFileReader';
 import { digestOf } from '../contentDigest';
 import { stampOf } from '../../files';
 import { hashIndex } from '../hashIndex';
@@ -58,15 +58,15 @@ const clockAnHourPastEveryWrite = (): void => {
   vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
 };
 
-function counting(archives: ArchiveReader): ArchiveReader & { extracted: string[] } {
+function counting(installationFileReader: InstallationFileReader): InstallationFileReader & { extracted: string[] } {
   const extracted: string[] = [];
-  return { ...archives, extracted, extract: (path, dest) => { extracted.push(path); return archives.extract(path, dest); } };
+  return { ...installationFileReader, extracted, extract: (path, dest) => { extracted.push(path); return installationFileReader.extract(path, dest); } };
 }
 
 describe('hashIndex', () => {
   it('answers a game file\'s and an origin file\'s size and hash as mEdit\'s manifest carries it', async () => {
     const path = await fileHolding('Game.esm', 'aaaa');
-    const index = hashIndex(folder, fakeArchiveReader([]));
+    const index = hashIndex(folder, fakeInstallationFileReader([]));
 
     const answers = [await index.gameFileHash(path), await index.originFileHash(path)];
 
@@ -77,7 +77,7 @@ describe('hashIndex', () => {
     clockAnHourPastEveryWrite();
     const path = await fileHolding('Mod.7z', 'archive');
 
-    const answer = await hashIndex(folder, fakeArchiveReader(ENTRIES)).downloadedFileHash(path);
+    const answer = await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).downloadedFileHash(path);
 
     expect(answer).toEqual({
       kind: 'read',
@@ -88,26 +88,26 @@ describe('hashIndex', () => {
 
   it('keeps a downloaded file\'s hash and a game file\'s in the record index, and an origin file\'s nowhere but this session', async () => {
     clockAnHourPastEveryWrite();
-    const download = await fileHolding('Mod.7z', 'archive');
+    const downloadedFile = await fileHolding('Mod.7z', 'archive');
     const gameFile = await fileHolding('Game.esm', 'aaaa');
     const copy = await fileHolding('copy.dds', 'bbbb');
-    const session = hashIndex(folder, fakeArchiveReader(ENTRIES));
-    await Promise.all([session.downloadedFileHash(download), session.gameFileHash(gameFile), session.originFileHash(copy)]);
+    const session = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
+    await Promise.all([session.downloadedFileHash(downloadedFile), session.gameFileHash(gameFile), session.originFileHash(copy)]);
     await session.originFileHash(copy);
     const readsInSession = vi.mocked(digestOf).mock.calls.filter(([path]) => path === copy).length;
 
-    await hashIndex(folder, fakeArchiveReader(ENTRIES)).originFileHash(copy);
+    await hashIndex(folder, fakeInstallationFileReader(ENTRIES)).originFileHash(copy);
 
     const text = await indexText();
     const written = (path: string): boolean => text.includes(JSON.stringify(path));
-    expect([written(download), written(gameFile), written(copy)]).toEqual([true, true, false]);
+    expect([written(downloadedFile), written(gameFile), written(copy)]).toEqual([true, true, false]);
     expect([readsInSession, vi.mocked(digestOf).mock.calls.filter(([path]) => path === copy).length]).toEqual([1, 2]);
   });
 
   it('hashes a downloaded file\'s entries though its hash alone was asked before', async () => {
     clockAnHourPastEveryWrite();
     const path = await fileHolding('Mod.7z', 'archive');
-    const index = hashIndex(folder, fakeArchiveReader(ENTRIES));
+    const index = hashIndex(folder, fakeInstallationFileReader(ENTRIES));
     await index.gameFileHash(path);
 
     const answer = await index.downloadedFileHash(path);
@@ -115,44 +115,44 @@ describe('hashIndex', () => {
     expect(answer.kind === 'read' && answer.answer.entries.map((entry) => entry.path)).toEqual(ENTRIES);
   });
 
-  it('answers a file it cannot read, or a downloaded file the archive reader cannot open, with the reason', async () => {
-    const refusing: ArchiveReader = { ...fakeArchiveReader([]), list: () => Promise.reject(new Error('Can not open the file as archive')) };
+  it('answers a file it cannot read, or a downloaded file the installation file reader cannot open, with the reason', async () => {
+    const refusing: InstallationFileReader = { ...fakeInstallationFileReader([]), list: () => Promise.reject(new Error('Can not open the file as archive')) };
     const index = hashIndex(folder, refusing);
 
     const missing = await index.gameFileHash(join(root, 'none.dds'));
-    const notAnArchive = await index.downloadedFileHash(await fileHolding('Mod.esp', 'aaaa'));
+    const notAnInstallationFile = await index.downloadedFileHash(await fileHolding('Mod.esp', 'aaaa'));
 
     expect(missing.kind === 'unreadable' && missing.reason).toContain('ENOENT');
-    expect(notAnArchive).toEqual({ kind: 'unreadable', reason: 'Can not open the file as archive' });
+    expect(notAnInstallationFile).toEqual({ kind: 'unreadable', reason: 'Can not open the file as archive' });
     expect(await readdir(folder).catch(() => [])).toEqual([]);
   });
 
   it('answers a downloaded file whose entries differ only by case unreadable, naming them, and extracts none of it', async () => {
-    const archives = counting(fakeArchiveReader(['textures/a.dds', 'Textures/A.DDS', 'b.esp']));
+    const installationFileReader = counting(fakeInstallationFileReader(['textures/a.dds', 'Textures/A.DDS', 'b.esp']));
 
-    const answer = await hashIndex(folder, archives).downloadedFileHash(await fileHolding('Mod.7z', 'archive'));
+    const answer = await hashIndex(folder, installationFileReader).downloadedFileHash(await fileHolding('Mod.7z', 'archive'));
 
     expect(answer).toEqual({
       kind: 'unreadable',
       reason: 'Its entries textures/a.dds and Textures/A.DDS differ only by case, so one extracts over the other.',
     });
-    expect(archives.extracted).toEqual([]);
+    expect(installationFileReader.extracted).toEqual([]);
   });
 
   it('reads no game file or downloaded file again whose stamp is unchanged, in this session or the next', async () => {
     clockAnHourPastEveryWrite();
     const file = await fileHolding('Game.esm', 'aaaa');
-    const download = await fileHolding('Mod.7z', 'archive');
-    const archives = counting(fakeArchiveReader(ENTRIES));
-    const session = hashIndex(folder, archives);
-    const first = [await session.gameFileHash(file), await session.downloadedFileHash(download)];
+    const downloadedFile = await fileHolding('Mod.7z', 'archive');
+    const installationFileReader = counting(fakeInstallationFileReader(ENTRIES));
+    const session = hashIndex(folder, installationFileReader);
+    const first = [await session.gameFileHash(file), await session.downloadedFileHash(downloadedFile)];
     const reads = vi.mocked(digestOf).mock.calls.length;
 
-    const next = hashIndex(folder, archives);
+    const next = hashIndex(folder, installationFileReader);
 
-    expect([await session.gameFileHash(file), await next.gameFileHash(file), await next.downloadedFileHash(download)]).toEqual([...first.slice(0, 1), ...first]);
+    expect([await session.gameFileHash(file), await next.gameFileHash(file), await next.downloadedFileHash(downloadedFile)]).toEqual([...first.slice(0, 1), ...first]);
     expect(vi.mocked(digestOf).mock.calls).toHaveLength(reads);
-    expect(archives.extracted).toEqual([download]);
+    expect(installationFileReader.extracted).toEqual([downloadedFile]);
   });
 
   async function afterTheFileSystemClockThatStampsAChangePasses(file: string): Promise<void> {
@@ -168,7 +168,7 @@ describe('hashIndex', () => {
     const file = await fileHolding('Game.esm', 'aaaa');
     const kept = new Date('2020-01-01T00:00:00Z');
     await utimes(file, kept, kept);
-    const index = hashIndex(folder, fakeArchiveReader([]));
+    const index = hashIndex(folder, fakeInstallationFileReader([]));
     await index.gameFileHash(file);
     await afterTheFileSystemClockThatStampsAChangePasses(file);
 
@@ -180,18 +180,18 @@ describe('hashIndex', () => {
 
   it('reads again, and keeps no record of, a file whose stamp is within a clock tick of its read, as a write in that tick may keep the stamp', async () => {
     const file = await fileHolding('Game.esm', 'aaaa');
-    const index = hashIndex(folder, fakeArchiveReader([]));
+    const index = hashIndex(folder, fakeInstallationFileReader([]));
     await index.gameFileHash(file);
 
     await index.gameFileHash(file);
-    await hashIndex(folder, fakeArchiveReader([])).gameFileHash(file);
+    await hashIndex(folder, fakeInstallationFileReader([])).gameFileHash(file);
 
     expect(vi.mocked(digestOf).mock.calls).toHaveLength(3);
   });
 
   it('reads a file once for two asks while its first read is still going', async () => {
     const file = await fileHolding('Game.esm', 'aaaa');
-    const index = hashIndex(folder, fakeArchiveReader([]));
+    const index = hashIndex(folder, fakeInstallationFileReader([]));
     const read = nextReadHeldUntilReleased();
 
     const first = index.originFileHash(file);
@@ -208,10 +208,10 @@ describe('hashIndex', () => {
   it('skips a line of the record index it cannot read, as a crash mid-write leaves one, and trusts the lines it can', async () => {
     clockAnHourPastEveryWrite();
     const file = await fileHolding('Game.esm', 'aaaa');
-    await hashIndex(folder, fakeArchiveReader([])).gameFileHash(file);
+    await hashIndex(folder, fakeInstallationFileReader([])).gameFileHash(file);
     await appendFile(join(folder, 'hashes.jsonl'), '["game","/torn');
 
-    expect(await hashIndex(folder, fakeArchiveReader([])).gameFileHash(file)).toEqual({ kind: 'read', answer: { size: 4, hash: HASH_OF_AAAA } });
+    expect(await hashIndex(folder, fakeInstallationFileReader([])).gameFileHash(file)).toEqual({ kind: 'read', answer: { size: 4, hash: HASH_OF_AAAA } });
     expect(vi.mocked(digestOf).mock.calls).toHaveLength(1);
   });
 
@@ -219,9 +219,9 @@ describe('hashIndex', () => {
     const leftover = join(folder, 'entries-crashed');
     await mkdir(leftover, { recursive: true });
     await writeFile(join(leftover, 'texture.dds'), 'aaaa');
-    const archives = fakeArchiveReader(ENTRIES);
+    const installationFileReader = fakeInstallationFileReader(ENTRIES);
     const extractingInto: string[][] = [];
-    const watching: ArchiveReader = { ...archives, extract: async (path, dest) => { extractingInto.push(await readdir(folder)); return archives.extract(path, dest); } };
+    const watching: InstallationFileReader = { ...installationFileReader, extract: async (path, dest) => { extractingInto.push(await readdir(folder)); return installationFileReader.extract(path, dest); } };
 
     await hashIndex(folder, watching).downloadedFileHash(await fileHolding('Mod.7z', 'archive'));
 
@@ -230,15 +230,15 @@ describe('hashIndex', () => {
   });
 
   it('extracts one downloaded file at a time, however many are asked at once', async () => {
-    const archives = fakeArchiveReader(ENTRIES);
+    const installationFileReader = fakeInstallationFileReader(ENTRIES);
     let extracting = 0;
     let mostAtOnce = 0;
-    const overlapping: ArchiveReader = {
-      ...archives,
+    const overlapping: InstallationFileReader = {
+      ...installationFileReader,
       extract: async (path, dest) => {
         mostAtOnce = Math.max(mostAtOnce, ++extracting);
         await new Promise((resolve) => setImmediate(resolve));
-        await archives.extract(path, dest);
+        await installationFileReader.extract(path, dest);
         extracting--;
       },
     };

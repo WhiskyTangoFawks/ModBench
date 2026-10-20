@@ -1,13 +1,13 @@
 // A downloaded file's row: its status is the mods' answer, and its metadata's claim only where no
 // mod names it. It also carries the installed mods the file can upgrade.
 
-import type { DownloadedFile, DownloadStatus, Mod, ModlistEntry } from '../instanceAdapter/instanceAdapter';
+import type { DownloadedFile, DownloadedFileStatus, Mod, ModlistEntry } from '../instanceAdapter/instanceAdapter';
 
-export interface DownloadRow {
+export interface DownloadedFileRow {
   name: string;
   /** The metadata's `name` when non-empty, else the raw filename — never blank. */
   displayName: string;
-  status: DownloadStatus;
+  status: DownloadedFileStatus;
   size: number;
   mtimeMs: number;
   hasMeta: boolean;
@@ -25,58 +25,58 @@ export interface DownloadRow {
 }
 
 /** A downloaded file's row with the two paths a view opens or reveals, so that no view joins one. */
-export interface DownloadFile extends DownloadRow {
+export interface LocatedDownloadedFileRow extends DownloadedFileRow {
   readonly path: string;
   readonly metadataPath: string;
 }
 
-// Archive filenames come from two places and are compared, never displayed, so they are folded: a
+// Installation file names come from two places and are compared, never displayed, so they are folded: a
 // Windows filename is case-insensitive.
-const archiveKey = (filename: string): string => filename.toLowerCase();
+const installationFileKey = (filename: string): string => filename.toLowerCase();
 
-export type UpgradeTier = 'fileId' | 'archiveFilename';
+export type UpgradeTier = 'fileId' | 'installationFileName';
 
 export interface UpgradeCandidate {
   readonly modName: string;
   readonly version?: string;
-  /** `fileId` beats `archiveFilename`; absent, the mod shares only the Nexus mod id. */
+  /** `fileId` beats `installationFileName`; absent, the mod shares only the Nexus mod id. */
   readonly tier?: UpgradeTier;
 }
 
 const isFileIdMatch = (mod: Mod, installedKey: string | undefined): boolean =>
   installedKey !== undefined && mod.installedFileKeys?.includes(installedKey) === true;
 
-const isArchiveFilenameMatch = (mod: Mod, downloadName: string): boolean =>
-  mod.archiveFilename !== undefined && archiveKey(mod.archiveFilename) === archiveKey(downloadName);
+const isInstallationFileNameMatch = (mod: Mod, downloadedFileName: string): boolean =>
+  mod.installationFileName !== undefined && installationFileKey(mod.installationFileName) === installationFileKey(downloadedFileName);
 
-const TIER_RANK: Record<UpgradeTier | 'none', number> = { fileId: 0, archiveFilename: 1, none: 2 };
+const TIER_RANK: Record<UpgradeTier | 'none', number> = { fileId: 0, installationFileName: 1, none: 2 };
 
 function upgradeCandidates(
   mods: readonly ModlistEntry[],
-  download: Pick<DownloadRow, 'modID' | 'name'> & { readonly installedKey?: string },
+  downloadedFile: Pick<DownloadedFileRow, 'modID' | 'name'> & { readonly installedKey?: string },
 ): UpgradeCandidate[] {
-  if (!download.modID) return [];
-  const pool = mods.filter((e): e is Mod => e.kind === 'mod' && e.nexusId === download.modID);
-  const hasFileIdMatch = pool.some((mod) => isFileIdMatch(mod, download.installedKey));
+  if (!downloadedFile.modID) return [];
+  const pool = mods.filter((e): e is Mod => e.kind === 'mod' && e.nexusId === downloadedFile.modID);
+  const hasFileIdMatch = pool.some((mod) => isFileIdMatch(mod, downloadedFile.installedKey));
   const tierOf = (mod: Mod): UpgradeTier | undefined => {
-    if (isFileIdMatch(mod, download.installedKey)) return 'fileId';
-    if (!hasFileIdMatch && isArchiveFilenameMatch(mod, download.name)) return 'archiveFilename';
+    if (isFileIdMatch(mod, downloadedFile.installedKey)) return 'fileId';
+    if (!hasFileIdMatch && isInstallationFileNameMatch(mod, downloadedFile.name)) return 'installationFileName';
     return undefined;
   };
   const candidates = pool.map((mod) => ({ modName: mod.name, version: mod.version, tier: tierOf(mod) }));
   return [...candidates].sort((a, b) => TIER_RANK[a.tier ?? 'none'] - TIER_RANK[b.tier ?? 'none']);
 }
 
-/** Which mods each download was installed into, keyed by the download's folded filename: the
- *  reverse of every mod's archive filename, many to many. A mod naming no file claims nothing,
+/** Which mods each downloaded file was installed into, keyed by its folded filename: the
+ *  reverse of every mod's installation file name, many to many. A mod naming no file claims nothing,
  *  which is unknown rather than an uninstall. */
-export function modsByArchiveFilename(
-  mods: readonly { name: string; archiveFilename?: string }[],
+export function modsByInstallationFileName(
+  mods: readonly { name: string; installationFileName?: string }[],
 ): Map<string, string[]> {
   const byFile = new Map<string, string[]>();
   for (const mod of mods) {
-    if (!mod.archiveFilename) continue;
-    const key = archiveKey(mod.archiveFilename);
+    if (!mod.installationFileName) continue;
+    const key = installationFileKey(mod.installationFileName);
     byFile.set(key, [...(byFile.get(key) ?? []), mod.name]);
   }
   return byFile;
@@ -85,15 +85,15 @@ export function modsByArchiveFilename(
 /** Excluded rows are built and flagged, never filtered — filtering is a view concern. `installedInto`
  *  is what makes a row Installed; unclaimed, the metadata's own claim decides Downloaded vs.
  *  Uninstalled. */
-export function buildDownloadRows(
+export function buildDownloadedFileRows(
   files: readonly DownloadedFile[], installedInto: ReadonlyMap<string, readonly string[]>, mods: readonly ModlistEntry[],
-): DownloadFile[] {
-  return files.map((file): DownloadFile => {
+): LocatedDownloadedFileRow[] {
+  return files.map((file): LocatedDownloadedFileRow => {
     const meta = file.meta;
     // Installed is the mods' own answer, never the metadata's: a claimed install outlives the mod
     // it names, so an uncorroborated installed and uninstalled read alike.
-    let status: DownloadStatus = meta === undefined || meta.status === 'Downloaded' ? 'Downloaded' : 'Uninstalled';
-    if (installedInto.has(archiveKey(file.name))) status = 'Installed';
+    let status: DownloadedFileStatus = meta === undefined || meta.status === 'Downloaded' ? 'Downloaded' : 'Uninstalled';
+    if (installedInto.has(installationFileKey(file.name))) status = 'Installed';
     return {
       name: file.name,
       // The reference tool's displayNameByInfo (downloadmanager.cpp:1410): absent and empty alike

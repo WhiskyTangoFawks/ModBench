@@ -27,7 +27,7 @@ describe('the instance assembled from a manager\'s reading', () => {
     await appendFile(join(dir, DEFAULT_MODLIST), '-Patch Mod\n+PATCH MOD\n');
     const other = {
       ...source,
-      names: { manager: 'Other', modOrderFile: 'order.txt', downloadMetadataFile: '.sidecar' },
+      names: { manager: 'Other', modOrderFile: 'order.txt', downloadedFileMetadataFile: '.metadata' },
       modLineKey: ({ kind, name }: { kind: string; name: string }) => `${kind}:${name}`,
     };
 

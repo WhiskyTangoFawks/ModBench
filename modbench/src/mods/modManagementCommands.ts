@@ -494,11 +494,11 @@ export function registerViewOnNexusCommand(
   instance: Pick<Instance, 'value'>, reporter: Reporter, selectedRow: () => NexusModRow | undefined,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.mod.viewOnNexus', async (row: NexusModRow | undefined) => {
-    const { nexusModId, nexusGame = instance.value.gameName } = (row ?? selectedRow()) ?? {};
+    const { nexusModId, gameName = instance.value.gameName } = (row ?? selectedRow()) ?? {};
     if (!nexusModId) return;
     await reportFailure(reporter, `Failed to open the Nexus page of mod ${nexusModId}.`, async () => {
-      const domain = instance.value.nexusDomainOf(nexusGame);
-      if (domain === undefined) throw new Error(`Nexus has no domain for the game '${nexusGame}'.`);
+      const domain = instance.value.nexusDomainOf(gameName);
+      if (domain === undefined) throw new Error(`Nexus has no domain for the game '${gameName}'.`);
       await vscode.env.openExternal(vscode.Uri.parse(`https://www.nexusmods.com/${domain}/mods/${nexusModId}`));
     });
   });

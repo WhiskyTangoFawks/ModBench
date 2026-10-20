@@ -2,7 +2,7 @@
 // its contents. An upgrade keeps its folder, so every watcher armed on it survives the release.
 
 import { type MetaIni, metaIniOf, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
-import type { ArchiveReader } from '../downloadedFileContents/archiveReader';
+import type { InstallationFileReader } from '../downloadedFileContents/installationFileReader';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from '../files';
 import { fileInFolder, type InstallPackage, InstanceAdapter } from '../instanceAdapter';
 import { manifestFileIn, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix } from './layout';
@@ -24,7 +24,7 @@ function keysOver(keys: OwnedMetaKeys, carried: MetaIni): OwnedMetaKeys {
     gameName: keys.gameName,
     nexusId: keys.nexusId ?? carried.nexusId,
     version: keys.version ?? carried.version,
-    archiveFilename: keys.archiveFilename ?? carried.archiveFilename,
+    installationFileName: keys.installationFileName ?? carried.installationFileName,
     installedFiles: keys.installedFiles ?? carried.installedFiles,
   };
 }
@@ -87,9 +87,9 @@ async function abandonAfter(extraction: Extraction, failure: unknown): Promise<n
   throw failure;
 }
 
-export function mo2Landing(context: Mo2Context, archives: ArchiveReader, { settings }: Pick<ReadingSource, 'settings'>): Pick<InstanceAdapter, 'install'> {
+export function mo2Landing(context: Mo2Context, installationFileReader: InstallationFileReader, { settings }: Pick<ReadingSource, 'settings'>): Pick<InstanceAdapter, 'install'> {
   const fill = (installed: InstallPackage, path: string): Promise<void> =>
-    (installed.kind === 'archive' ? archives.extract(installed.path, path) : copyTree(installed.path, path));
+    (installed.kind === 'archive' ? installationFileReader.extract(installed.path, path) : copyTree(installed.path, path));
 
   return {
     // One lock per instance: two installs of one name must not both pass the name check.

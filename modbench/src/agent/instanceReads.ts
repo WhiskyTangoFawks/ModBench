@@ -45,9 +45,9 @@ export const INSTANCE_READS: readonly Read[] = [
   {
     name: 'list_downloads',
     description: 'The downloaded files by file name, each with its status and whether it is excluded.',
-    of: ({ downloads }) => {
-      if (downloads.kind === 'unresolved') throw new Refusal(downloads.reason);
-      return downloads.rows.map(({ name, status, excluded }) => ({ name, status, excluded }));
+    of: ({ downloadedFiles }) => {
+      if (downloadedFiles.kind === 'unresolved') throw new Refusal(downloadedFiles.reason);
+      return downloadedFiles.rows.map(({ name, status, excluded }) => ({ name, status, excluded }));
     },
   },
 ];

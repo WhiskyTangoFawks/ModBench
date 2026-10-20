@@ -445,7 +445,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   });
 
   it('sends a mod skipped for an installation file the call did not hand again, with the downloaded file of that name, and answers both sends as one', async () => {
-    const { commands, client } = commandsOver({ downloads: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
+    const { commands, client } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods[0]?.installationFile === undefined
       ? { landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFile: 'ModA-1.0.7z', gameFiles: [] }] }
       : RESTORED));
@@ -457,7 +457,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   });
 
   it('says why beside a mod still skipped for an installation file the Instance adapter could not read', async () => {
-    const { commands, client } = commandsOver({ downloads: new Map([['ModA-1.0.7z', { kind: 'unreadable', reason: 'EACCES' }]]) });
+    const { commands, client } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'unreadable', reason: 'EACCES' }]]) });
     client.setCommandResult('restoreFromManifest', {
       landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFile: 'ModA-1.0.7z', gameFiles: [] }],
     });
@@ -518,7 +518,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   });
 
   it('answers the refusal of a cancel during the second send beside what both sends restored', async () => {
-    const { commands, client } = commandsOver({ downloads: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
+    const { commands, client } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods[0]?.installationFile === undefined
       ? { landed: [], refused: [], notFound: [{ mod: 'ModA', installationFile: 'ModA-1.0.7z', gameFiles: [] }] }
       : { landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], notFound: [], cancelRefusal: 'Could not cancel — not running.' }));
@@ -556,7 +556,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   });
 
   it('trashes the files no line names of each mod the first call landed when the second call fails, and names the second call\'s mods', async () => {
-    const { commands, client, adapter } = commandsOver({ downloads: new Map([['ModB.7z', { kind: 'read', answer: INSTALLED }]]) });
+    const { commands, client, adapter } = commandsOver({ downloadedFiles: new Map([['ModB.7z', { kind: 'read', answer: INSTALLED }]]) });
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods.length === 2
       ? { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'] })], refused: [], notFound: [{ mod: 'ModB', installationFile: 'ModB.7z', gameFiles: [] }] }
       : { refused: true as const, message: 'Could not restore 1 mod — mEdit stopped.' }));
@@ -603,7 +603,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   });
 
   it('writes the metadata of a mod the second call landed, and of no mod that was skipped', async () => {
-    const { commands, client, adapter } = commandsOver({ downloads: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
+    const { commands, client, adapter } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
     const metadata = { version: '2.0' };
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods.length === 2
       ? { landed: [], refused: [{ item: 'ModA', reason: 'missing' }, { item: 'ModB', reason: "its package does not hold 'b.nif'" }], notFound: [{ mod: 'ModA', installationFile: 'ModA-1.0.7z', gameFiles: [] }] }
@@ -629,7 +629,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('finds no file by the metadata it writes', async () => {
     const { commands, client } = commandsOver({
       metadata: new Map([['ModA', { version: '1.0', installationFile: { name: 'ModA-1.0.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } }]]),
-      downloads: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]),
+      downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]),
     });
     client.setCommandResult('restoreFromManifest', RESTORED);
 

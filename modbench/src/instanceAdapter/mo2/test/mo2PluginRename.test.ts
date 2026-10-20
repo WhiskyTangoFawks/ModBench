@@ -27,7 +27,7 @@ const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(re
 import { listEntries } from '../../files';
 import type { FileOrigin, InstanceAdapter } from '../../instanceAdapter';
 import { mo2InstanceAdapter } from '../mo2Instance';
-import { fakeArchiveReader } from '../../../test/fakeArchiveReader';
+import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { readPluginLines } from '../../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../../test/mo2/corpusFixture';
 import { NO_DETECTORS } from '../../../test/noDetectors';
@@ -80,7 +80,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       instanceRoot: root,
       gameFolderSetting: fixedGameFolderSetting(),
       detectors: NO_DETECTORS,
-      archives: fakeArchiveReader([]),
+      installationFileReader: fakeInstallationFileReader([]),
     });
     for (const [before] of NAMED_FOR_IT.slice(1)) await put(before);
     for (const path of NOT_NAMED_FOR_IT) await put(path);

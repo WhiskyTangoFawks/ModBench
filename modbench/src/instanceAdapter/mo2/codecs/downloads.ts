@@ -1,18 +1,18 @@
-// `.meta` is a QSettings::IniFormat file MO2 writes beside each download. Its
+// `.meta` is a QSettings::IniFormat file MO2 writes beside each downloaded file. Its
 // `removed=true` flag is MO2's hidden, which Modbench calls excluded; it is a separate axis from
 // Status, which `uninstalled=true` carries.
 
-import type { DownloadMeta, DownloadStatus } from '../../instanceAdapter';
+import type { DownloadedFileMeta, DownloadedFileStatus } from '../../instanceAdapter';
 import { installedFileKey } from './metaIni';
 import { GENERAL_SECTION, readIniSection, setIniValue } from './qSettingsIni';
 
-/** Appended to a download's filename to name its sidecar. */
-export const DOWNLOAD_SIDECAR_SUFFIX = '.meta';
+/** Appended to a downloaded file's name to name its metadata file. */
+export const METADATA_FILE_SUFFIX = '.meta';
 
 /** `removed` is MO2's hidden, a separate key from the `uninstalled` Status. */
-export function parseDownloadMeta(text: string): { meta: DownloadMeta; hidden: boolean } {
+export function parseDownloadedFileMeta(text: string): { meta: DownloadedFileMeta; hidden: boolean } {
   const values = readIniSection(text, GENERAL_SECTION);
-  let status: DownloadStatus = 'Downloaded';
+  let status: DownloadedFileStatus = 'Downloaded';
   if (values.get('uninstalled') === 'true') status = 'Uninstalled';
   else if (values.get('installed') === 'true') status = 'Installed';
   const id = (key: string): string | undefined => {
@@ -22,7 +22,7 @@ export function parseDownloadMeta(text: string): { meta: DownloadMeta; hidden: b
   const modID = id('modID');
   const fileID = id('fileID');
   const installedKey = modID && fileID ? installedFileKey({ nexusId: modID, fileId: fileID }) : undefined;
-  const meta: DownloadMeta = {
+  const meta: DownloadedFileMeta = {
     status,
     modID,
     name: values.get('name'),
@@ -41,13 +41,13 @@ const setMetaFlag = (text: string, key: string, value: boolean): string =>
   setIniValue(text === '' ? `[${GENERAL_SECTION}]\r\n` : text, GENERAL_SECTION, key, String(value));
 
 /** Both keys, as MO2's own markInstalled writes them: a reader resolves `uninstalled` first, so
- *  a download uninstalled and then reinstalled would otherwise still read Uninstalled. */
+ *  a downloaded file uninstalled and then reinstalled would otherwise still read Uninstalled. */
 export function setInstalledInText(text: string): string {
   return setMetaFlag(setMetaFlag(text, 'uninstalled', false), 'installed', true);
 }
 
 /** `installed` is left untouched, as MO2 leaves it: the two keys coexist and
- *  `parseDownloadMeta` resolves the precedence. */
+ *  `parseDownloadedFileMeta` resolves the precedence. */
 export function setUninstalledInText(text: string): string {
   return setMetaFlag(text, 'uninstalled', true);
 }

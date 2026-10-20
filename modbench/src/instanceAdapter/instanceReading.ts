@@ -80,16 +80,16 @@ async function settled(readModOrder: () => Promise<ModlistEntry[]>): Promise<Mod
   return readModOrder();
 }
 
-const metaOf = ({ version, nexusId, archiveFilename, installedFileKeys }: ModMeta): ModMeta =>
-  ({ version, nexusId, archiveFilename, installedFileKeys });
+const metaOf = ({ version, nexusId, installationFileName, installedFileKeys }: ModMeta): ModMeta =>
+  ({ version, nexusId, installationFileName, installedFileKeys });
 
 // A listed mod's meta is the one already read. A folder the mod order does not list is read only
 // when downloaded files are there to be matched against it.
 async function folderMetaOf(
-  source: ReadingSource, entries: readonly ModlistEntry[], folders: ModFolders | undefined, downloadsListed: boolean,
+  source: ReadingSource, entries: readonly ModlistEntry[], folders: ModFolders | undefined, downloadedFilesListed: boolean,
 ): Promise<ReadonlyMap<string, ModMeta>> {
   const read = new Map(entries.flatMap((entry) => (entry.kind === 'mod' ? [[entry.name, metaOf(entry)] as const] : [])));
-  const unlisted = downloadsListed
+  const unlisted = downloadedFilesListed
     ? (folders?.all ?? []).filter((folder) => folder.kind === 'mod' && !read.has(folder.name))
     : [];
   const unlistedMetas = await Promise.all(unlisted.map(async ({ name }) => [name, await source.modMeta(name, folders)] as const));
@@ -108,11 +108,11 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     withNotes(listed, source.modLineKey, ({ kind, name }) => `${source.names.modOrderFile} lists the ${kind} ${name}`));
   const modsKept = modsRead.then(({ kept }) => kept);
   const sourceModsRead = source.sourceMods();
-  const downloadsRead = settings.downloadedFiles(skipLink);
+  const downloadedFilesRead = settings.downloadedFiles(skipLink);
   const [mods, pluginsListed, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceMods, modFiles, folderMeta, holdsRepository, managerRunning] = await Promise.all([
     modsRead,
     source.pluginOrder(profile),
-    downloadsRead,
+    downloadedFilesRead,
     settings.gameFolder().then(async (gameFolder) => ({
       gameFolder,
       dataFolderPlugins: await source.gameFolderPlugins(gameFolder, skipLink),
@@ -126,8 +126,8 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     sourceModsRead,
     Promise.all([modsKept, modFoldersRead]).then(async ([entries, folders]) => new Map(await Promise.all(entries.filter((entry) => entry.kind === 'mod')
       .map(async ({ name }) => [name, await source.originFiles({ kind: 'mod', name }, folders)] as const)))),
-    Promise.all([modsKept, modFoldersRead, downloadsRead]).then(([entries, folders, downloads]) =>
-      folderMetaOf(source, entries, folders, downloads.kind === 'listed' && downloads.files !== undefined)),
+    Promise.all([modsKept, modFoldersRead, downloadedFilesRead]).then(([entries, folders, downloadedFiles]) =>
+      folderMetaOf(source, entries, folders, downloadedFiles.kind === 'listed' && downloadedFiles.files !== undefined)),
     source.holdsRepository(),
     source.managerRunning(),
   ]);

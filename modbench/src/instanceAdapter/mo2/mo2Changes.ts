@@ -8,12 +8,12 @@ import {
   type PluginEntry,
 } from '../../loadOrderFileCodec/pluginsText';
 import { loadOrderTextOf } from './codecs/loadOrderText';
-import { parseDownloadMeta, setHiddenInText, setInstalledInText, setUninstalledInText } from './codecs/downloads';
+import { parseDownloadedFileMeta, setHiddenInText, setInstalledInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
-import { spliceDownloadMeta, trashDownloadMeta } from './downloadMeta';
+import { spliceDownloadedFileMeta, trashDownloadedFileMeta } from './downloadedFileMeta';
 import { ensureDir, exists, putIfChanged, withLock, write } from '../files';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
-import { downloadFile, pluginOrderFiles, settingsFile } from './layout';
+import { downloadedFilePath, pluginOrderFiles, settingsFile } from './layout';
 import { sourceModsIn } from './sourceMods';
 import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
@@ -22,9 +22,9 @@ type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
   | 'trashDownloadedFile' | 'selectProfile'>;
 
-async function heldDownload(context: Mo2Context, name: string): Promise<{ downloadsDir: string; file: string } | undefined> {
+async function heldDownloadedFile(context: Mo2Context, name: string): Promise<{ downloadsDir: string; file: string } | undefined> {
   const downloadsDir = await currentDownloadsDir(context);
-  const file = downloadFile(downloadsDir, name);
+  const file = downloadedFilePath(downloadsDir, name);
   return (await exists(file)) ? { downloadsDir, file } : undefined;
 }
 
@@ -55,7 +55,7 @@ function markIn(text: string, mark: DownloadedFileMark): string {
     case 'Excluded':
     case 'Included': {
       const excluded = mark === 'Excluded';
-      return parseDownloadMeta(text).hidden === excluded ? text : setHiddenInText(text, excluded);
+      return parseDownloadedFileMeta(text).hidden === excluded ? text : setHiddenInText(text, excluded);
     }
   }
 }
@@ -119,20 +119,20 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
     },
 
     async markDownloadedFile(name, mark) {
-      const held = await heldDownload(context, name);
+      const held = await heldDownloadedFile(context, name);
       if (held === undefined) return { gone: true };
       const { downloadsDir } = held;
-      const { wrote } = await spliceDownloadMeta(downloadsDir, name, (text) => markIn(text, mark));
+      const { wrote } = await spliceDownloadedFileMeta(downloadsDir, name, (text) => markIn(text, mark));
       return { gone: false, wrote };
     },
 
     async trashDownloadedFile(name, trash) {
-      const held = await heldDownload(context, name);
+      const held = await heldDownloadedFile(context, name);
       if (held === undefined) return { gone: true };
       const { downloadsDir, file } = held;
       await trash(file);
       try {
-        await trashDownloadMeta(downloadsDir, name, trash);
+        await trashDownloadedFileMeta(downloadsDir, name, trash);
       } catch (err) {
         return { gone: false, metadataLeftBehind: errorMessage(err) };
       }

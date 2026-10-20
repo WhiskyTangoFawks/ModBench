@@ -42,7 +42,7 @@ const VALUE = instanceValueFixture({
     { name: 'B.esp', path: '/m/B.esp', origin: 'Big Rocks', line: 1, enabled: false, winning: true },
     { name: 'A.esp', path: '/m/A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true },
   ],
-  downloads: { kind: 'listed', rows: [{
+  downloadedFiles: { kind: 'listed', rows: [{
     name: 'rocks.7z', displayName: 'Rocks', status: 'Installed', size: 5, mtimeMs: 0, hasMeta: true, excluded: false,
     upgrades: [], path: '/d/rocks.7z', metadataPath: '/d/rocks.7z.meta',
   }] },
@@ -251,7 +251,7 @@ describe('the agent server, given an instance value', () => {
   });
 
   it('refuses a read whose downloads folder is unresolved with the reason, in the Output and in no notification', async () => {
-    const instance = new FakeInstance(instanceValueFixture({ downloads: { kind: 'unresolved', reason: 'no downloads folder' } }));
+    const instance = new FakeInstance(instanceValueFixture({ downloadedFiles: { kind: 'unresolved', reason: 'no downloads folder' } }));
     const { bound, lines, reporter } = await serve(instance);
     const client = new Client({ name: 'test', version: '0' });
     await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
@@ -377,10 +377,10 @@ describe('the agent server, reading file order conflicts', () => {
   });
 });
 
-const CONFLICTED_WITH_DOWNLOADS = { ...CONFLICTED, downloads: VALUE.downloads };
+const CONFLICTED_WITH_DOWNLOADED_FILES = { ...CONFLICTED, downloadedFiles: VALUE.downloadedFiles };
 
 describe('the agent server, resolving names against the instance', () => {
-  const resolve = async (args: Record<string, unknown>) => call(await clientOf(new FakeInstance(CONFLICTED_WITH_DOWNLOADS)), 'resolve_instance_names', args);
+  const resolve = async (args: Record<string, unknown>) => call(await clientOf(new FakeInstance(CONFLICTED_WITH_DOWNLOADED_FILES)), 'resolve_instance_names', args);
 
   it('names a downloaded file by its file name', async () => {
     expect(await resolve({ downloads: ['rocks.7z'] })).toEqual({ isError: false, text: JSON.stringify({ downloads: ['rocks.7z'], files: [] }) });
@@ -391,7 +391,7 @@ describe('the agent server, resolving names against the instance', () => {
   });
 
   it('refuses a downloaded file when the downloads folder is unresolved, with the reason', async () => {
-    const client = await clientOf(new FakeInstance(instanceValueFixture({ downloads: { kind: 'unresolved', reason: 'no downloads folder' } })));
+    const client = await clientOf(new FakeInstance(instanceValueFixture({ downloadedFiles: { kind: 'unresolved', reason: 'no downloads folder' } })));
 
     expect(await call(client, 'resolve_instance_names', { downloads: ['rocks.7z'] })).toEqual({ isError: true, text: 'no downloads folder' });
   });
@@ -964,7 +964,7 @@ describe('the agent server, running a gesture', () => {
     const outside = { kind: 'archive' as const, path: '/elsewhere/a.7z' };
     const fire = async (tool: string, args: Record<string, unknown> = {}) => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
-      const { client } = await served(CONFLICTED_WITH_DOWNLOADS);
+      const { client } = await served(CONFLICTED_WITH_DOWNLOADED_FILES);
       return call(client, tool, args);
     };
 
@@ -988,7 +988,7 @@ describe('the agent server, running a gesture', () => {
 
     it.each([
       ['a downloaded file', rocks],
-      ['an archive outside the downloads', outside],
+      ['an installation file outside the downloaded files', outside],
       ['a folder outside the downloads', { kind: 'folder' as const, path: '/elsewhere/a' }],
     ])('fires install with %s as the source and the new mod\'s name as an Option', async (_, source) => {
       await fire('mod_install', { argument: [source], options: { name: 'New' } });
@@ -1095,7 +1095,7 @@ describe('the agent server, given an input its tool does not take', () => {
     ['select_rows', { sql: 5 }, 'sql'],
     ['mod_enable', { argument: '[{"name":"A"}]' }, 'argument'],
   ])('%s refuses it, naming the input, in the Output and in no notification', async (name, args, input) => {
-    const { bound, lines, reporter } = await serve(new FakeInstance(CONFLICTED_WITH_DOWNLOADS));
+    const { bound, lines, reporter } = await serve(new FakeInstance(CONFLICTED_WITH_DOWNLOADED_FILES));
     const client = new Client({ name: 'test', version: '0' });
     await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
     clients.push(client);

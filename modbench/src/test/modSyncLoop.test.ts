@@ -176,7 +176,7 @@ describe('mod sync, as each landed value drives it', () => {
 
   it('names the file mod order is kept in as the value names it', async () => {
     const instance = new FakeInstance(instanceValueFixture({
-      managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' },
+      managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadedFileMetadataFile: 'order.metadata' },
     }));
     const channel = channelDouble();
     const { modSync } = instanceSyncs({

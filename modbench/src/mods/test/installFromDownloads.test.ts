@@ -23,9 +23,9 @@ vi.mock('vscode', () => ({
 const { installMod, upgradeLoss, ask } = vi.hoisted(() => ({ installMod: vi.fn(), upgradeLoss: vi.fn<(target: unknown) => Promise<string | undefined>>(() => Promise.resolve(undefined)), ask: vi.fn() }));
 
 import { registerModInstallCommands } from '../installCommands';
-import type { DownloadFile, DownloadRow, Instance } from '../../instanceLoader/instance';
+import type { LocatedDownloadedFileRow, DownloadedFileRow, Instance } from '../../instanceLoader/instance';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
+import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import type { UpgradeCandidate } from '../../instanceLoader/instance';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { modCommands } from '../../modCommands/modCommands';
@@ -35,19 +35,19 @@ const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Err
 const installOver = () => ({ ...modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), installMod, upgradeLoss });
 
 
-const fakeInstance = (rows: readonly DownloadFile[] = []): Pick<Instance, 'value' | 'refresh'> => ({
-  value: instanceValueFixture({ downloads: { kind: 'listed', rows } }),
+const fakeInstance = (rows: readonly LocatedDownloadedFileRow[] = []): Pick<Instance, 'value' | 'refresh'> => ({
+  value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows } }),
   refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
 });
 
-interface DownloadInstallDeps {
+interface DownloadedFileInstallDeps {
   reporter: ReturnType<typeof recordingReporter>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
   log: (line: string) => void;
   progressViewId: string;
 }
 
-const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDeps => ({
+const installDeps = (over: Partial<DownloadedFileInstallDeps> = {}): DownloadedFileInstallDeps => ({
   reporter: recordingReporter(),
   warnIfFomod: vi.fn(),
   log: (line) => { downloadsLogLines.push(line); },
@@ -55,18 +55,18 @@ const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDe
   ...over,
 });
 
-const installDownloaded = async (file: DownloadFile, listed: readonly DownloadFile[], deps: DownloadInstallDeps): Promise<void> => {
+const installDownloadedFile = async (file: LocatedDownloadedFileRow, listed: readonly LocatedDownloadedFileRow[], deps: DownloadedFileInstallDeps): Promise<void> => {
   registerModInstallCommands({
     commands: installOver(), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), ask,
-    warnIfFomod: deps.warnIfFomod, downloadInstall: deps,
+    warnIfFomod: deps.warnIfFomod, downloadedFileInstallReporting: deps,
   });
   const handler = registerCommand.mock.calls.findLast((call) => call[0] === 'modbench.mod.install')?.[1];
   await handler?.({ argument: { kind: 'downloadedFile', row: file } });
 };
 
-const installRow = (deps: DownloadInstallDeps, row: Partial<DownloadRow> = {}): Promise<void> => {
-  const file = downloadRowFixture('foo.7z', row);
-  return installDownloaded(file, [file], deps);
+const installRow = (deps: DownloadedFileInstallDeps, row: Partial<DownloadedFileRow> = {}): Promise<void> => {
+  const file = downloadedFileRowFixture('foo.7z', row);
+  return installDownloadedFile(file, [file], deps);
 };
 
 const afterAMacrotaskNotAMicrotask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -80,7 +80,7 @@ afterEach(() => {
 describe('modbench.mod.install over a downloaded file', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('installs the row\'s archive as a new mod named after it', async () => {
+  it('installs the row\'s installation file as a new mod named after it', async () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
     await installRow(installDeps({ reporter: recordingReporter() }));
@@ -141,7 +141,7 @@ describe('modbench.mod.install over a downloaded file', () => {
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'boom' }]);
   });
 
-  it('install: a FOMOD archive installs and the notice names the mod install made', async () => {
+  it('install: a FOMOD installation file installs and the notice names the mod install made', async () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: true });
     const warnIfFomod = vi.fn();
 
@@ -151,7 +151,7 @@ describe('modbench.mod.install over a downloaded file', () => {
   });
 });
 
-const ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR = { modID: '111' };
+const ROW_NEXUS_IDS_READ_OFF_THE_METADATA_FILE = { modID: '111' };
 
 interface FakeUpgradeItem { label: string; description?: string; choice: unknown }
 
@@ -166,7 +166,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
   async function pickAmong(upgrades: readonly UpgradeCandidate[], act: (double: ReturnType<typeof fakeQuickPick<FakeUpgradeItem>>) => void) {
     const double = fakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(double.qp);
-    const installing = installRow(installDeps({ reporter: recordingReporter() }), { ...ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR, upgrades });
+    const installing = installRow(installDeps({ reporter: recordingReporter() }), { ...ROW_NEXUS_IDS_READ_OFF_THE_METADATA_FILE, upgrades });
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     act(double);
     await installing;
@@ -186,8 +186,8 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
     expect(qp.activeItems).toEqual([theMatch]);
   });
 
-  it('labels an archiveFilename match "Installed from this file" and pre-selects it', async () => {
-    const { qp } = await pickAmong([{ modName: 'Harder VATS', version: '1.0', tier: 'archiveFilename' }], (d) => d.escape());
+  it('labels an installationFileName match "Installed from this file" and pre-selects it', async () => {
+    const { qp } = await pickAmong([{ modName: 'Harder VATS', version: '1.0', tier: 'installationFileName' }], (d) => d.escape());
 
     const item = { label: 'Harder VATS (v1.0)', description: 'Installed from this file', choice: { kind: 'upgrade', name: 'Harder VATS' } };
     expect(qp.items).toEqual([item, NEW_MOD_ITEM]);
@@ -267,7 +267,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
   it('refuses a file the Instance value does not list, naming it', async () => {
     const report = recordingReporter();
 
-    await installDownloaded(downloadRowFixture('foo.7z'), [], installDeps({ reporter: report }));
+    await installDownloadedFile(downloadedFileRowFixture('foo.7z'), [], installDeps({ reporter: report }));
 
     expect(installMod).not.toHaveBeenCalled();
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: '"foo.7z" is gone from Downloads.' }]);
@@ -312,7 +312,7 @@ describe('modbench.mod.install over a downloaded file: the progress bar and the 
 
     const running = installRow(
       installDeps({ reporter: recordingReporter() }),
-      { ...ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR, upgrades: [{ modName: 'Foo Mod', version: '1.0' }] });
+      { ...ROW_NEXUS_IDS_READ_OFF_THE_METADATA_FILE, upgrades: [{ modName: 'Foo Mod', version: '1.0' }] });
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
     await running;

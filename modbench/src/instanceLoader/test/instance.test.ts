@@ -36,7 +36,7 @@ const GAME_FOUND: Partial<InstanceReading> = {
 
 const downloadedFile = (name: string): DownloadedFile =>
   ({ name, path: `/downloads/${name}`, metadataPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1, excluded: false, meta: undefined });
-const downloads = (...names: string[]): DownloadedFiles =>
+const downloadedFilesOf = (...names: string[]): DownloadedFiles =>
   ({ kind: 'listed', downloadsDir: '/downloads', files: names.map(downloadedFile) });
 
 function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: InstanceAdapter) => InstanceAdapter = (adapter) => adapter) {
@@ -87,7 +87,7 @@ const settleClockLeavingSetImmediateReal = (): void => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 };
 
-const listedRows = (value: InstanceValue) => (value.downloads.kind === 'listed' ? value.downloads.rows : []);
+const listedRows = (value: InstanceValue) => (value.downloadedFiles.kind === 'listed' ? value.downloadedFiles.rows : []);
 
 const NONO = 'Ñoño\'s Retexture';
 const PATCH = 'Unofficial Fallout 4 Patch';
@@ -514,25 +514,25 @@ describe('Instance — a value that survives a bad read', () => {
 });
 
 describe('Instance — downloads', () => {
-  const ARCHIVE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
+  const DOWNLOADED_FILE_NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
   it('carries the downloaded files as rows, and the folder they are listed from', async () => {
-    const { instance } = loader({ downloadedFiles: downloads(ARCHIVE) });
+    const { instance } = loader({ downloadedFiles: downloadedFilesOf(DOWNLOADED_FILE_NAME) });
 
     await instance.refresh();
 
-    expect(listedRows(instance.value).map((row) => row.name)).toEqual([ARCHIVE]);
+    expect(listedRows(instance.value).map((row) => row.name)).toEqual([DOWNLOADED_FILE_NAME]);
     expect(instance.value.paths.downloadsDir).toBe('/downloads');
   });
 
-  it('reads a download as Installed from the meta of a mod folder, one with no line in the mod order too, and drops it once the folder is gone', async () => {
+  it('reads a downloaded file as Installed from the meta of a mod folder, one with no line in the mod order too, and drops it once the folder is gone', async () => {
     const { instance, fake } = loader({
       mods: [mod(PATCH)],
-      downloadedFiles: downloads(ARCHIVE, 'Off-Profile-1.7z'),
-      folderMeta: new Map([[PATCH, { archiveFilename: ARCHIVE }], ['Off Profile Mod', { archiveFilename: 'Off-Profile-1.7z' }]]),
+      downloadedFiles: downloadedFilesOf(DOWNLOADED_FILE_NAME, 'Off-Profile-1.7z'),
+      folderMeta: new Map([[PATCH, { installationFileName: DOWNLOADED_FILE_NAME }], ['Off Profile Mod', { installationFileName: 'Off-Profile-1.7z' }]]),
     });
     await instance.refresh();
-    expect(listedRows(instance.value).map((row) => [row.name, row.status])).toEqual([[ARCHIVE, 'Installed'], ['Off-Profile-1.7z', 'Installed']]);
+    expect(listedRows(instance.value).map((row) => [row.name, row.status])).toEqual([[DOWNLOADED_FILE_NAME, 'Installed'], ['Off-Profile-1.7z', 'Installed']]);
 
     fake.read({ folderMeta: new Map() });
     await instance.refresh();
@@ -540,8 +540,8 @@ describe('Instance — downloads', () => {
     expect(listedRows(instance.value).map((row) => row.status)).toEqual(['Downloaded', 'Downloaded']);
   });
 
-  it('yields a value with no downloads, rather than a failure, when the downloads folder is absent', async () => {
-    const { instance, fake } = loader({ downloadedFiles: downloads(ARCHIVE) });
+  it('yields a value with no downloaded files, rather than a failure, when the downloads folder is absent', async () => {
+    const { instance, fake } = loader({ downloadedFiles: downloadedFilesOf(DOWNLOADED_FILE_NAME) });
     await instance.refresh();
     const before = instance.sequence;
 
@@ -549,7 +549,7 @@ describe('Instance — downloads', () => {
     await instance.refresh();
 
     expect(instance.sequence).toBe(before + 1);
-    expect(instance.value.downloads).toEqual({ kind: 'listed', rows: [] });
+    expect(instance.value.downloadedFiles).toEqual({ kind: 'listed', rows: [] });
   });
 
   it('lands mods and plugins when the downloads folder is unresolved, losing only the rows and the folder', async () => {
@@ -560,7 +560,7 @@ describe('Instance — downloads', () => {
 
     expect(instance.readFailure).toBeUndefined();
     expect(instance.value.mods).toEqual([mod('A')]);
-    expect(instance.value.downloads).toEqual({ kind: 'unresolved', reason });
+    expect(instance.value.downloadedFiles).toEqual({ kind: 'unresolved', reason });
     expect(instance.value.paths.downloadsDir).toBeUndefined();
   });
 });
@@ -744,7 +744,7 @@ describe('Instance — game folder and the archives the game loads', () => {
   });
 
   it('names the mod manager and its mod-order file as the adapter does rather than as the value spells them, before the first read too', () => {
-    const names = { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' };
+    const names = { manager: 'Another Manager', modOrderFile: 'order.txt', downloadedFileMetadataFile: 'order.metadata' };
     const { instance } = loader({}, (adapter) => ({ ...adapter, names }));
 
     expect(instance.value.managerNames).toEqual(names);

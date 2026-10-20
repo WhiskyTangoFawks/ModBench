@@ -1,5 +1,5 @@
 import type {
-  ArchiveReader, DownloadedFile, GameFolder, InstanceAdapter, InstanceReading, ModlistEntry, OriginFiles, PluginEntry, Subscription,
+  InstallationFileReader, DownloadedFile, GameFolder, InstanceAdapter, InstanceReading, ModlistEntry, OriginFiles, PluginEntry, Subscription,
 } from '../../instanceAdapter/instanceAdapter';
 import type { DownloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
 import type { Mo2Context } from '../../instanceAdapter/mo2/mo2Context';
@@ -12,7 +12,7 @@ import type { ReadingSource } from '../../instanceAdapter/instanceReading';
 import { readingSource } from '../../instanceAdapter/mo2/mo2Reads';
 import type { PluginCommands, pluginCommands } from '../../pluginCommands/plugins';
 import { pluginCommandsWith } from '../pluginCommandsWith';
-import { fakeArchiveReader } from '../fakeArchiveReader';
+import { fakeInstallationFileReader } from '../fakeInstallationFileReader';
 import { NO_DETECTORS } from '../noDetectors';
 import { fixedGameFolderSetting } from '../gameFolderSetting';
 
@@ -21,8 +21,8 @@ export interface AdapterAnswers {
   /** Where the game is, for each read of the settings. */
   gameFolder?: GameFolder | (() => Promise<GameFolder>);
   downloadsFolder?: Awaited<ReturnType<DownloadsDirectoryResolver>>;
-  /** What every archive holds; none when the test fixes no reader. */
-  archives?: ArchiveReader;
+  /** What every installation file holds; none when the test fixes no reader. */
+  installationFileReader?: InstallationFileReader;
   /** The setting that names the game's folder. */
   gameFolderSettingValue?: string;
   gameFolderSettingChanged?: (listener: () => void) => Subscription;
@@ -52,7 +52,7 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
 export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(contextOver(root, answers));
 
 export const adapterOver = (root: string, answers: AdapterAnswers = {}): InstanceAdapter =>
-  mo2InstanceAdapter({ instanceRoot: root, archives: answers.archives ?? fakeArchiveReader([]), context: contextOver(root, answers) });
+  mo2InstanceAdapter({ instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), context: contextOver(root, answers) });
 
 /** What a test reads back after a command wrote, through the adapter's own reads, so a test never
  *  re-derives a file format of its own. */

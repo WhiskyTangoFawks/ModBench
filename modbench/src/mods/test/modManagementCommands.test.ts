@@ -35,7 +35,7 @@ const commands = {
   uninstallMods: vi.fn(), deleteSeparators: vi.fn(), renameMod: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
   createEmptyMod: vi.fn(), setModsEnabled: vi.fn(), moveMods: vi.fn(), moveSeparators: vi.fn(), markFiles: vi.fn(),
   newModNameRefusal: vi.fn(), separatorNameRefusal: vi.fn(), renameModNameRefusal: vi.fn(), installMod: vi.fn(), upgradeLoss: vi.fn(),
-  names: { manager: 'MO2', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
+  names: { manager: 'MO2', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
 } satisfies Record<keyof ModCommands, unknown>;
 const {
   uninstallMods, deleteSeparators, renameMod, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators, markFiles,
@@ -127,7 +127,7 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     showInputBox.mockResolvedValueOnce('New Mod');
     createEmptyMod.mockResolvedValueOnce({ applied: true, wrote: false, lineRefusal: 'disk full' });
     const reporter = recordingReporter();
-    const another = { ...commands, names: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' } };
+    const another = { ...commands, names: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadedFileMetadataFile: 'order.metadata' } };
 
     registerCreateEmptyModCommand(another, instance, reporter);
     await invoke('modbench.mod.createEmpty');
@@ -238,7 +238,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
   };
   const trash = vi.fn(() => Promise.resolve());
   const log = vi.fn();
-  const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true, archiveFilename: 'mod-a.7z' });
+  const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true, installationFileName: 'mod-a.7z' });
   const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
 
   it('asks one modal naming the mod, then uninstalls it once confirmed', async () => {
@@ -1175,14 +1175,14 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
   it('takes the domain from the game the mod\'s metadata names, not the instance\'s', async () => {
     registerViewOnNexusCommand(instance, recordingReporter(), () => undefined);
     await invoke('modbench.mod.viewOnNexus', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42', gameName: 'Starfield' }));
-    await invoke('modbench.mod.viewOnNexus', { nexusModId: '123', nexusGame: 'Fallout 4' });
+    await invoke('modbench.mod.viewOnNexus', { nexusModId: '123', gameName: 'Fallout 4' });
 
     expect(opened()).toEqual(['https://www.nexusmods.com/starfield/mods/42', 'https://www.nexusmods.com/fallout4/mods/123']);
   });
 
   it.each([
     ['a mod', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, nexusId: '42', gameName: 'EnderalSE' })],
-    ['a downloaded file', { nexusModId: '42', nexusGame: 'EnderalSE' }],
+    ['a downloaded file', { nexusModId: '42', gameName: 'EnderalSE' }],
   ])('opens no page for %s of a game the registry holds no domain for, and names the game', async (_row, row) => {
     const reporter = recordingReporter();
 
@@ -1571,7 +1571,7 @@ describe('the mod gestures, called by the agent', () => {
       activeProfile: 'Default',
       profiles: ['Default', 'Secondary'],
       mods: [
-        { kind: 'mod', name: 'Mod A', enabled: true, archiveFilename: 'mod-a.7z' },
+        { kind: 'mod', name: 'Mod A', enabled: true, installationFileName: 'mod-a.7z' },
         { kind: 'mod', name: 'Mod B', enabled: true },
         { kind: 'separator', name: 'Group', enabled: true },
       ],
@@ -1745,7 +1745,7 @@ describe('the mod gestures, called by the agent', () => {
       expect(ask.asked).toEqual([]);
     });
 
-    it('answers each part of a landed mod that failed as a partial failure, the unmarked download as a log one', async () => {
+    it('answers each part of a landed mod that failed as a partial failure, the unmarked downloaded file as a log one', async () => {
       uninstallMods.mockResolvedValue({ applied: true, outcome: { refused: [], landed: [
         { name: 'Mod A', sourceRefusal: 'in use', lineRefusal: 'disk full' }, { name: 'Mod B', markRefusal: 'gone' },
       ] } });

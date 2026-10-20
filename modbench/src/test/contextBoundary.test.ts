@@ -165,7 +165,7 @@ describe('Mods, Downloads and Toolbox never see a record (target-architecture.md
   });
 
   it('prose in a comment is exempt', () => {
-    expect(domainVocabIn('// installationFile records which download it came from\nexport const x = 1;\n')).toEqual([]);
+    expect(domainVocabIn('// installationFile records which downloaded file it came from\nexport const x = 1;\n')).toEqual([]);
   });
 });
 
