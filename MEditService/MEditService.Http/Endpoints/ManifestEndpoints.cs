@@ -31,7 +31,8 @@ internal static class ManifestEndpoints
                 "the extension's trash; it writes no other file. A " +
                 "mod lands, is skipped naming what it lacks and each installation file, game file and submodule the request did not hand, or is " +
                 "named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, " +
-                "which names the request's gesture.")
+                "which names the request's gesture. A request that asksWhatItLacks is sent before the files its mods' manifests name are handed: " +
+                "its NotFound answers are not logged as skips.")
             .Produces<RestoreFromManifestResult>()
             .ProducesProblem(400);
 
@@ -107,7 +108,7 @@ internal static class ManifestEndpoints
 
         return EndpointMapping.Answered(
             "Restore from manifest", loggerFactory.CreateLogger(nameof(ManifestEndpoints)), result,
-            refusal => !(req.AsksWhatItLacks && refusal == RestoreRefusal.NotFound));
+            refusal => !req.AsksWhatItLacks || refusal != RestoreRefusal.NotFound);
     }
 
     internal static IResult WhatRestoreDestroys(ModFoldersRequest req, IModFolderRepository repository)
@@ -198,7 +199,7 @@ internal sealed record UpdateManifestModRequest(
     : IModRequest;
 
 /// <summary>The mods to restore from their manifests, with the instance's facts (ADR-0013). AsksWhatItLacks marks a request
-/// sent before the manifests' files are handed: its NotFound answers ask for them, and are not logged.</summary>
+/// sent before the manifests' files are handed: its NotFound answers ask for them.</summary>
 internal sealed record RestoreFromManifestRequest(
     IReadOnlyList<RestoreFromManifestModRequest> Mods, string StatCache, string ExclusionMark, ArchiveVariantsRequest? Archives,
     GameFolderRequest? GameFolder, string? Gesture, bool AsksWhatItLacks = false);

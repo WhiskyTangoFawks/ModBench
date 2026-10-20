@@ -143,7 +143,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), or builds a mod whose manifest names its submodule at the commit the instance repository pins, which git clones when it is absent, skipping it at another commit, and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks and each installation file, game file and submodule the request did not hand, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. */
+        /** @description Writes each file a mod's manifest names whose bytes differ, from the installation files and game files it names (ADR-0022), or builds a mod whose manifest names its submodule at the commit the instance repository pins, which git clones when it is absent, skipping it at another commit, and names each file no line names, for the extension's trash; it writes no other file. A mod lands, is skipped naming what it lacks and each installation file, game file and submodule the request did not hand, or is named not finished when a write failed part way. Progress is the restore-from-manifest-progress notification, which names the request's gesture. A request that asksWhatItLacks is sent before the files its mods' manifests name are handed: its NotFound answers are not logged as skips. */
         post: operations["RestoreFromManifest"];
         delete?: never;
         options?: never;
