@@ -4,13 +4,11 @@
 import type { LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
-/** The slice of the instance value put load order sends. */
-export interface LoadOrderSource {
-  readonly loadOrderSnapshot:
-    | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine' | 'archives' | 'stringsFiles' | 'places' | 'mods' | 'statCache'> & { readonly dataFolder: string })
-    | { readonly refusal: string }
-    | undefined;
-}
+/** What the loader read of the instance for put load order to send. */
+export type LoadOrderSource =
+  | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine' | 'archives' | 'stringsFiles' | 'places' | 'mods' | 'statCache'> & { readonly dataFolder: string })
+  | { readonly refusal: string }
+  | undefined;
 
 /** Nothing is sent without a game folder found: there is no Data folder to key the load order on.
  *  A refusal is the loader's, to tell once: a partial snapshot would unregister what it left out. */
@@ -19,11 +17,11 @@ export type PutLoadOrderResult =
   | { sent: true; snapshot: LoadOrderSnapshot; outcome: LoadOrderOutcome };
 
 export async function putLoadOrder(
-  client: Pick<MEditClient, 'sendLoadOrder'>, adapter: Pick<InstanceAdapter, 'gameRelease'>, instanceRoot: string, value: LoadOrderSource, stringsLanguage: string,
+  client: Pick<MEditClient, 'sendLoadOrder'>, adapter: Pick<InstanceAdapter, 'gameRelease'>, instanceRoot: string, source: LoadOrderSource, stringsLanguage: string,
 ): Promise<PutLoadOrderResult> {
-  if (!value.loadOrderSnapshot) return { sent: false };
-  if ('refusal' in value.loadOrderSnapshot) return { sent: false, refusal: value.loadOrderSnapshot.refusal };
-  const { plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, dataFolder } = value.loadOrderSnapshot;
+  if (!source) return { sent: false };
+  if ('refusal' in source) return { sent: false, refusal: source.refusal };
+  const { plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, dataFolder } = source;
   const snapshot: LoadOrderSnapshot = {
     plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, gameDirectory: dataFolder, instanceRoot, gameRelease: await adapter.gameRelease(), stringsLanguage,
   };
