@@ -5,6 +5,7 @@ import { existsSync, watch, type FSWatcher } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
+import { errnoCode } from './errno';
 import { ignoreSkippedLink, listFolders } from './files';
 
 export interface HeldFolderWatch {
@@ -42,19 +43,12 @@ function reasonOf(error: unknown): string {
   return message.endsWith(naming) ? message.slice(0, -naming.length) : message;
 }
 
-async function foldersIn(folder: string): Promise<string[]> {
-  try {
-    return (await listFolders(folder, ignoreSkippedLink)).map((name) => join(folder, name));
-  } catch {
-    return [];
-  }
-}
-
 function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): HeldFolderWatch {
   const createdFolders = new Set<string>();
   const watched = new Map<string, { watcher: FSWatcher; real: string }>();
   const watchedReal = new Set<string>();
   const failed = new Map<string, string>();
+  const listingFailed = new Map<string, string>();
   let isOpen = false;
 
   const forget = (folder: string): void => {
@@ -71,6 +65,7 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
     for (const folder of watched.keys()) if (isWithin(folder, path)) forget(folder);
     for (const folder of createdFolders) if (isWithin(folder, path)) createdFolders.delete(folder);
     for (const folder of failed.keys()) if (isWithin(folder, path)) failed.delete(folder);
+    for (const folder of listingFailed.keys()) if (isWithin(folder, path)) listingFailed.delete(folder);
   };
 
   const fail = (folder: string, error: unknown): void => {
@@ -92,8 +87,26 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
 
   const passedOver = (folder: string): boolean => !isOpen || watched.has(folder);
 
+  const isGone = (error: unknown): boolean => ['ENOENT', 'ENOTDIR'].includes(errnoCode(error) ?? '');
+
+  const foldersIn = async (folder: string): Promise<string[]> => {
+    try {
+      const names = await listFolders(folder, ignoreSkippedLink);
+      listingFailed.delete(folder);
+      return names.map((name) => join(folder, name));
+    } catch (error) {
+      if (isGone(error)) return [];
+      listingFailed.set(folder, reasonOf(error));
+      onFailure();
+      return [];
+    }
+  };
+
   const realOf = async (folder: string): Promise<string | undefined> =>
-    passedOver(folder) || !holds(folder) ? undefined : realpath(folder).catch(() => undefined);
+    passedOver(folder) || !holds(folder) ? undefined : realpath(folder).catch((error: unknown) => {
+        if (!isGone(error)) fail(folder, error);
+        return undefined;
+      });
 
   const register = (folder: string, real: string): boolean => {
     try {
@@ -143,7 +156,8 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
       isOpen = false;
       for (const folder of watched.keys()) forget(folder);
       failed.clear();
+      listingFailed.clear();
     },
-    failures: () => [...new Set(failed.values())],
+    failures: () => [...new Set([...failed.values(), ...listingFailed.values()])],
   };
 }
