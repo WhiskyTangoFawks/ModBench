@@ -174,7 +174,7 @@ export type DataFolderArchives =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
-/** Where a mod's files come from: an archive, extracted, or a folder, copied and left as it was. */
+/** Where a mod's files come from: an installation file, extracted, or a folder, copied and left as it was. */
 export type InstallPackage = { readonly kind: 'archive'; readonly path: string } | { readonly kind: 'folder'; readonly path: string };
 
 /** Which mod an install fills, settled by the caller: the folder on disk is checked against the

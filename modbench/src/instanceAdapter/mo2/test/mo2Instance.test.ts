@@ -517,7 +517,7 @@ describe('the MO2 Instance adapter', () => {
       expect(skipped).toEqual([join(root, 'profiles', 'Broken')]);
     });
 
-    it('answers a downloaded archive that is a link to a file, and hands over one that links to nothing', async () => {
+    it('answers a downloaded file that is a link to a file, and hands over one that links to nothing', async () => {
       await writeFile(join(root, 'elsewhere.7z'), '');
       await symlink(join(root, 'elsewhere.7z'), join(root, 'downloads', 'Linked-1-0.7z'));
       await symlink(join(root, 'nowhere.7z'), join(root, 'downloads', 'Broken-1-0.7z'));

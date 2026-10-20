@@ -162,7 +162,7 @@ describe('installMod', () => {
 
   it.each([
     ['a folder', { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'folder', path: '/elsewhere/Loose' }, {}],
-    ['an archive, recording its file name', INSTALLATION_FILE, INSTALLATION_FILE, { installationFileName: 'Freshly-1-0.7z' }],
+    ['an installation file, recording its file name', INSTALLATION_FILE, INSTALLATION_FILE, { installationFileName: 'Freshly-1-0.7z' }],
     ['a downloaded file, recording its name, Nexus ids and version', DOWNLOADED_FILE, { kind: 'archive', path: DOWNLOADED_FILE_PATH },
       { installationFileName: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFileKeys: ['111:222'] }],
     ['an archive that is a downloaded file, recording what the file\'s metadata holds', { kind: 'archive', path: DOWNLOADED_FILE_PATH }, { kind: 'archive', path: DOWNLOADED_FILE_PATH },
@@ -179,7 +179,7 @@ describe('installMod', () => {
     expect(calls[0]).toMatchObject({ verb: 'install', keys: { installationFileName: 'Freshly-1-0.7z', nexusId: undefined, installedFileKeys: undefined } });
   });
 
-  it('marks a downloaded file installed once it landed, and marks no file for an archive, though a downloaded file bears its name', async () => {
+  it('marks a downloaded file installed once it landed, and marks no file for an installation file, though a downloaded file bears its name', async () => {
     expect((await install(DOWNLOADED_FILE)).calls.map((call) => call.verb)).toEqual(['install', 'changeModOrder', 'markDownloadedFile']);
     expect((await install(DOWNLOADED_FILE)).calls[2]).toEqual({ verb: 'markDownloadedFile', name: DOWNLOADED_FILE.name, mark: 'Installed' });
     expect((await install({ kind: 'archive', path: DOWNLOADED_FILE_PATH })).calls[2]).toEqual({ verb: 'markDownloadedFile', name: DOWNLOADED_FILE.name, mark: 'Installed' });

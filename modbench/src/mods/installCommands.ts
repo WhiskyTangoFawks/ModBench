@@ -103,7 +103,7 @@ async function pickPackage(): Promise<{ kind: 'archive' | 'folder'; path: string
   return uri ? { kind: picked.packageKind, path: uri.fsPath, name: uri.path.slice(uri.path.lastIndexOf('/') + 1) } : undefined;
 }
 
-// modbench.mod.install: with no package, as from the Mods menu, it asks archive-or-folder first,
+// modbench.mod.install: with no package, as from the Mods menu, it asks installation-file-or-folder first,
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { commands, instance, reporterFor, ask, warnIfFomod, downloadedFileInstallReporting } = deps;

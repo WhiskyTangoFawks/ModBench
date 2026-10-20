@@ -14,7 +14,7 @@ import { messageLine } from '../drivingLib/messageLine';
 import type { DownloadedFileArgument } from '../drivingLib/argument';
 
 // Mirrors the reference tool's own colour-coded Status cell. The icon is always set explicitly so
-// the file-icon theme never takes over; a colour is affordable because every row is an archive.
+// the file-icon theme never takes over; a colour is affordable because every row is a downloaded file.
 function downloadedFileStatusIcon(status: DownloadedFileStatus): vscode.ThemeIcon {
   switch (status) {
     case 'Downloaded':
@@ -34,7 +34,7 @@ function downloadedFileDescription(row: DownloadedFileRow): string {
   return [version, status].filter((s): s is string => !!s).join(' ');
 }
 
-// A manually-dropped archive with no metadata file still gets a valid, minimal tooltip.
+// A manually-dropped downloaded file with no metadata file still gets a valid, minimal tooltip.
 function downloadedFileTooltip(row: DownloadedFileRow): vscode.MarkdownString {
   const lines = [
     `**${row.name}**`,
@@ -79,8 +79,8 @@ interface DownloadsProviderOptions {
   instance: InstanceView;
 }
 
-/** Flat: downloads have no grouping or reorder concept, so every row is a leaf. One row per
- *  archive, from the Instance value alone (ADR-0015). */
+/** Flat: downloaded files have no grouping or reorder concept, so every row is a leaf. One row per
+ *  downloaded file, from the Instance value alone (ADR-0015). */
 export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeNode>, vscode.Disposable {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadsTreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;

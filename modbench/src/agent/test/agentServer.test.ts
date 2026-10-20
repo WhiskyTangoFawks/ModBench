@@ -988,7 +988,7 @@ describe('the agent server, running a gesture', () => {
 
     it.each([
       ['a downloaded file', rocks],
-      ['an archive outside the downloads', outside],
+      ['an installation file outside the downloaded files', outside],
       ['a folder outside the downloads', { kind: 'folder' as const, path: '/elsewhere/a' }],
     ])('fires install with %s as the source and the new mod\'s name as an Option', async (_, source) => {
       await fire('mod_install', { argument: [source], options: { name: 'New' } });

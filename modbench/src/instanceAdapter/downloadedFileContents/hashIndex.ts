@@ -53,7 +53,7 @@ function keptAt(line: string): { kind: IndexedKind; path: string; stamp: FileSta
   }
 }
 
-// An extraction is a whole archive, so one a crash left behind would hold its space for good.
+// An extraction is a whole installation file, so one a crash left behind would hold its space for good.
 async function removeLeftoverExtractions(folder: string): Promise<void> {
   const names = await listDir(folder).catch(() => []);
   await Promise.all(names.filter((name) => name.name.startsWith(EXTRACTION_PREFIX)).map((name) => remove(join(folder, name.name))));
@@ -94,7 +94,7 @@ export function hashIndex(folder: string, installationFileReader: InstallationFi
   const hashedAlone = async (path: string, stamp: FileStamp): Promise<HashedDownloadedFile> =>
     ({ size: Number(stamp.size), hash: await digestOf(path), entries: [] });
 
-  // One extraction at a time: each is a whole archive on disk.
+  // One extraction at a time: each is a whole installation file on disk.
   const hashedWithEntries = (path: string, stamp: FileStamp): Promise<HashedDownloadedFile> => withLock(join(folder, EXTRACTION_PREFIX), async () => {
     const listed = await installationFileReader.list(path);
     refuseCaseCollisions(listed);

@@ -125,7 +125,7 @@ export function registerDownloadsMultiRowCommands(
 }
 
 // Sorting and excluded-row filtering already happen inside DownloadsProvider's load(), so these
-// take the provider rather than the instance root as the per-archive commands above do.
+// take the provider rather than the instance root as the per-downloaded-file commands above do.
 
 // Filetime descending, last, is the default DownloadsProvider already starts at, so leaving it
 // unpicked changes nothing.

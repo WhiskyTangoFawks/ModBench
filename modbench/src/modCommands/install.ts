@@ -11,8 +11,8 @@ import type { CommandResult } from '../coreLib/commandResult';
 import type { ModStatus, ReadModStatus } from '../client';
 import { failureReason, isReadFailed } from '../wire/readFailed';
 
-/** What a mod is installed from: an archive or a folder the user picked, or a downloaded file by its name. An
- *  archive that is one of the downloaded files installs as that file. */
+/** What a mod is installed from: an installation file or a folder the user picked, or a downloaded file by its name. An
+ *  installation file that is one of the downloaded files installs as that file. */
 export type ModPackage = InstallPackage | { readonly kind: 'downloadedFile'; readonly name: string };
 
 interface Resolved {
@@ -21,7 +21,7 @@ interface Resolved {
 }
 
 // The downloaded file a package is, with the Nexus ids and version its metadata holds; none for a folder or an
-// archive outside the downloaded files.
+// installation file outside the downloaded files.
 async function resolve(adapter: InstanceAdapter, installed: ModPackage): Promise<Resolved> {
   if (installed.kind === 'folder') return { extracted: installed, file: undefined };
   const listed = await adapter.downloadedFiles();
