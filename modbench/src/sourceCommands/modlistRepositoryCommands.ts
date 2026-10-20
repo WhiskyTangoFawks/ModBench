@@ -160,12 +160,17 @@ const sentence = (reason: string): string => ` ${reason.charAt(0).toUpperCase()}
 
 async function namedGameFiles(
   adapter: Adapter, folder: NamedGameFolder | string, notFound: readonly NotFound[],
-): Promise<{ found: readonly GameFile[]; unread: string }> {
-  const paths = [...new Set(notFound.flatMap(({ gameFiles }) => gameFiles))];
-  if (paths.length === 0) return { found: [], unread: '' };
-  if (typeof folder === 'string') return { found: [], unread: sentence(folder) };
-  const found = await adapter.gameFiles(folder.dataFolder, paths);
-  return found.kind === 'read' ? { found: found.answer, unread: '' } : { found: [], unread: ` The game files could not be read: ${found.reason}.` };
+): Promise<{ found: readonly GameFile[]; unread: (mod: string) => string }> {
+  const found = new Map<string, GameFile>();
+  const unread = new Map<string, string>();
+  for (const { mod, gameFiles } of notFound) {
+    if (gameFiles.length === 0) continue;
+    if (typeof folder === 'string') { unread.set(mod, sentence(folder)); continue; }
+    const read = await adapter.gameFiles(folder.dataFolder, gameFiles);
+    if (read.kind === 'unreadable') { unread.set(mod, ` The game files could not be read: ${read.reason}.`); continue; }
+    for (const file of read.answer) found.set(file.path.toLowerCase(), file);
+  }
+  return { found: [...found.values()], unread: (mod) => unread.get(mod) ?? '' };
 }
 
 async function namedDownloadedFiles(adapter: Adapter, notFound: readonly NotFound[]): Promise<{
@@ -320,7 +325,7 @@ async function restoreFolders(
   const second = await restoreOnce(client, again, { ...facts, gameFolder: wireGameFolder(folder, named.found), asksWhatItLacks: false }, restoring);
   if (!second.applied) return { ...second, landed: first.landed };
   const unreadFor = new Map(second.notFound.map(({ mod, installationFile, submodule }) =>
-    [mod, named.unread + downloaded.unread(installationFile) + submodules.unread(submodule)]));
+    [mod, named.unread(mod) + downloaded.unread(installationFile) + submodules.unread(submodule)]));
   return {
     applied: true,
     landed: [...first.landed, ...second.landed],

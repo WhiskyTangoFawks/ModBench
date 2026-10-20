@@ -704,7 +704,7 @@ describe('the MO2 adapter\'s game files', () => {
     expect(found).toEqual({ kind: 'read', answer: [{ path: 'Meshes/A.nif', hash: HASH_OF_AAAA }] });
   });
 
-  it('answers unreadable, with why, when a folder on the path cannot be listed, not that the file is absent', async () => {
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) answers unreadable, with why, when a folder on the path cannot be listed, not that the file is absent', async () => {
     const adapter = await instance();
     await put('game/Data/Meshes/a.nif', 'aaaa');
     const meshes = join(root, 'game', 'Data', 'Meshes');
