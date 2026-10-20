@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
-import { isTestSupport, MO2_CONSTRUCTION as MO2_CONSTRUCTION_SITE, MO2_NAMES, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
+import { isTestSupport, MO2_CONSTRUCTION as MO2_CONSTRUCTION_SITE, MANIFEST, MO2_NAMES, SOURCE_ROOTS, SRC, WALKTHROUGH, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 const ADAPTER = 'instanceAdapter';
@@ -70,6 +70,10 @@ describe('no extension file names MO2 outside its implementation of the Instance
 
   it('scans clean outside the implementation', () => {
     expect(findOffenders(SOURCE_ROOTS)).toEqual({});
+  });
+
+  it('scans package.json and the walkthrough clean', () => {
+    expect([MANIFEST, WALKTHROUGH].map((path) => managerMentions(readFileSync(path, 'utf8')))).toEqual([[], []]);
   });
 
   it('scans the implementation\'s files and not its interface\'s, the construction\'s or a neutral file\'s as the implementation', () => {

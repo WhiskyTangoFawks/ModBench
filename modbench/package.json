@@ -22,7 +22,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
-      "description": "Modbench writes to your MO2 instance and runs its own service, so it needs the folder trusted."
+      "description": "Modbench writes to your mod manager's instance and runs its own service, so it needs the folder trusted."
     }
   },
   "extensionDependencies": [
@@ -34,12 +34,12 @@
       {
         "id": "gettingStarted",
         "title": "Get started with Modbench",
-        "description": "From an MO2 instance to your first edited plugin.",
+        "description": "From your mod manager's instance to your first edited plugin.",
         "steps": [
           {
             "id": "openInstance",
-            "title": "Open your MO2 instance",
-            "description": "Open the folder that holds ModOrganizer.ini, mods/ and profiles/, and trust it when VS Code asks.\n[Open Folder](command:workbench.action.files.openFolder)",
+            "title": "Open your mod manager's instance",
+            "description": "Open the folder where your mod manager keeps this instance, and trust it when VS Code asks.\n[Open Folder](command:workbench.action.files.openFolder)",
             "media": {
               "markdown": "walkthrough/getting-started.md"
             },
@@ -50,7 +50,7 @@
           {
             "id": "views",
             "title": "Your mods, plugins and downloads",
-            "description": "The Mods, Plugins and Downloads views show your instance as MO2 does: mod order, plugin order and the downloads folder. A change on disk shows up with no refresh.\n[Show the Mods view](command:modbench.modList.focus)",
+            "description": "The Mods, Plugins and Downloads views show your instance as your mod manager does: mod order, plugin order and the downloads folder. A change on disk shows up with no refresh.\n[Show the Mods view](command:modbench.modList.focus)",
             "media": {
               "markdown": "walkthrough/getting-started.md"
             },
@@ -105,7 +105,7 @@
           {
             "id": "build",
             "title": "Build the plugin",
-            "description": "Build Mod writes each plugin from its plugin source. The game, MO2 and xEdit load the plugin.\n[Build Mod](command:modbench.mod.build)",
+            "description": "Build Mod writes each plugin from its plugin source. The game, your mod manager and xEdit load the plugin.\n[Build Mod](command:modbench.mod.build)",
             "media": {
               "markdown": "walkthrough/getting-started.md"
             },

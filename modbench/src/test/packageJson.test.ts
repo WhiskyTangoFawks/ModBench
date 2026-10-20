@@ -22,6 +22,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
+import { MANIFEST } from './scanSource';
 import { NO_MOD_STATUSES } from './noModStatuses';
 import { FakeInstance } from './mo2/fakeInstance';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
@@ -156,7 +157,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
 
 const REPOSITORY = 'https://github.com/WhiskyTangoFawks/ModBench';
 const pkg = parsePackageManifest(
-  JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')),
+  JSON.parse(readFileSync(MANIFEST, 'utf8')),
 );
 
 type Context = Parameters<typeof holds>[1];
@@ -236,7 +237,7 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
 
   it('says, in a folder not trusted, that Modbench needs it trusted (story 4)', () => {
     expect(pkg.capabilities.untrustedWorkspaces).toEqual({
-      supported: false, description: 'Modbench writes to your MO2 instance and runs its own service, so it needs the folder trusted.',
+      supported: false, description: "Modbench writes to your mod manager's instance and runs its own service, so it needs the folder trusted.",
     });
   });
 });
