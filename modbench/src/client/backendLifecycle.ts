@@ -209,10 +209,9 @@ export class BackendLifecycle {
     }
   }
 
-  // Closing stdin is the graceful stop on both platforms; Node's SIGTERM kills a Windows process
-  // at once. A backend mid a long request won't notice, so this escalates to SIGKILL and waits
-  // for a real 'exit'. Accepted race: stop() clears `this.child` first, so a start() within the
-  // grace period (up to stopGracePeriodMs) can spawn a second child.
+  // Closing stdin stops the backend gracefully on both platforms; Node's SIGTERM kills on Windows.
+  // Escalates to SIGKILL after the grace period. Accepted race: a start() during the wait
+  // can spawn a second child.
   private stopAndConfirmExit(child: BackendProcess): Promise<void> {
     return new Promise((resolve) => {
       // A container, not a `let`, so it exists (as `undefined`) before onExit is even defined.
