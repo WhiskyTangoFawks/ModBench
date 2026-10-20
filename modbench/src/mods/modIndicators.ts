@@ -3,6 +3,7 @@
 import * as vscode from 'vscode';
 import type { InstanceValue, InstanceView, OriginFile } from '../instanceLoader/instance';
 import { fileOrderConflictOf, modOrigin, outranksACopy, winsPath } from '../instanceLoader/fileConflictIndex';
+import { onSettingChange } from '../drivingLib/setting';
 import type { WorkspaceSettings } from './workspaceSettings';
 
 /** Each indicator in the order mods.md's table lists them, with its name there.
@@ -84,9 +85,7 @@ class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vsco
     private readonly carried: (uri: vscode.Uri) => readonly ModIndicator[] | undefined,
     private readonly settings: WorkspaceSettings,
   ) {
-    this.subscription = settings.onDidChangeConfiguration((change) => {
-      if (PARTS.some((part) => change.affectsConfiguration(indicatorSetting(indicator.id, part)))) this.refresh();
-    });
+    this.subscription = onSettingChange(settings.onDidChangeConfiguration, PARTS.map((part) => indicatorSetting(indicator.id, part)), () => { this.refresh(); });
   }
 
   refresh(): void {

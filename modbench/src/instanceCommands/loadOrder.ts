@@ -16,10 +16,11 @@ export type PutLoadOrderResult =
   | { sent: true; snapshot: LoadOrderSnapshot; outcome: LoadOrderOutcome };
 
 export async function putLoadOrder(
-  client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, source: LoadOrderSource, stringsLanguage: string,
+  client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, source: LoadOrderSource, stringsLanguage: string | undefined,
 ): Promise<PutLoadOrderResult> {
   if (!source) return { sent: false };
   if ('refusal' in source) return { sent: false, refusal: source.refusal };
+  if (stringsLanguage === undefined) throw new Error('The strings language has no value: package.json declares its default.');
   const { plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, gameRelease, dataFolder } = source;
   const snapshot: LoadOrderSnapshot = {
     plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, dataFolder, instanceRoot, gameRelease, stringsLanguage,

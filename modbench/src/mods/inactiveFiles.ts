@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, InstanceView, OriginFile, OriginFolder } from '../instanceLoader/instance';
 import { fileOrderConflictOf, modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { fileRowUri } from './modFiles';
+import { onSettingChange } from '../drivingLib/setting';
 import type { WorkspaceSettings } from './workspaceSettings';
 
 /** The setting that switches the grey, on by default (mods.md, Indicators).
@@ -55,9 +56,7 @@ export class InactiveFileDecorationProvider implements vscode.FileDecorationProv
         this.inactive = undefined;
         this.changed.fire(undefined);
       }),
-      setting.onDidChangeConfiguration((change) => {
-        if (change.affectsConfiguration(GREY_INACTIVE_FILES_SETTING)) this.changed.fire(undefined);
-      }),
+      onSettingChange(setting.onDidChangeConfiguration, GREY_INACTIVE_FILES_SETTING, () => { this.changed.fire(undefined); }),
     ];
   }
 

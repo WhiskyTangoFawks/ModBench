@@ -20,7 +20,7 @@ export interface EditingFlow {
   /** The launch with the extension, shown until the first read settles and the value it landed,
    *  if any, is told. */
   enter(firstRead: Promise<unknown>): Promise<void>;
-  onRecompute(source: LoadOrderSource, stringsLanguage: string): void;
+  onRecompute(source: LoadOrderSource, stringsLanguage: string | undefined): void;
   dispose(): void;
 }
 
