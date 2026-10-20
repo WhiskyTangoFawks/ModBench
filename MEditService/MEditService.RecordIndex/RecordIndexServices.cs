@@ -17,18 +17,20 @@ public static class RecordIndexServices
     {
         services.AddSingleton<IQueries>(sp =>
         {
+            var filter = new FilterInForce(sp.GetRequiredService<ILogger<FilterInForce>>(), sp.GetService<INotificationPublisher>());
             var index = new Indexer(
                 sp.GetRequiredService<LoadOrderHolder>(),
                 sp.GetRequiredService<UnsavedDocuments>(),
                 sp.GetRequiredService<IPluginAdapter>(),
                 sp.GetRequiredService<ISourceAdapter>(),
                 sp.GetRequiredService<SchemaReflector>(),
+                filter,
                 sp.GetRequiredService<ILoggerFactory>(),
                 sp.GetService<INotificationPublisher>(),
                 sp.GetRequiredService<TimeProvider>());
             index.Subscribe();
             return new RecordQueries(
-                index, sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<SchemaReflector>(),
+                index, filter, sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<SchemaReflector>(),
                 sp.GetRequiredService<ISourceAdapter>(), sp.GetRequiredService<ILogger<RecordQueries>>());
         });
         services.AddHostedService<IndexAtStartup>();

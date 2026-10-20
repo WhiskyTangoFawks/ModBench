@@ -1,12 +1,8 @@
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
-using MEditService.RecordIndex.Queries;
-using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -17,8 +13,7 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.RecordIndex;
 
 /// <summary>Brings the Store to the load order (ADR-0013), then validates every plugin against its
-/// system of record (ADR-0003). It holds the open plugins, the progress, the Store's scope and the
-/// filter in force.</summary>
+/// system of record (ADR-0003). It holds the open plugins, the progress and the Store's scope.</summary>
 internal sealed class Indexer : IDisposable
 {
     private readonly LoadOrderHolder _holder;
@@ -42,6 +37,7 @@ internal sealed class Indexer : IDisposable
         IPluginAdapter adapter,
         ISourceAdapter source,
         SchemaReflector schemaReflector,
+        FilterInForce filter,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null)
@@ -50,10 +46,10 @@ internal sealed class Indexer : IDisposable
         _unsaved = unsaved;
         _adapter = adapter;
         _source = source;
+        _filter = filter;
         _notifications = notifications;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = loggerFactory?.CreateLogger<Indexer>() ?? NullLogger<Indexer>.Instance;
-        _filter = new FilterInForce(_logger, notifications);
         _storeFactory = new StoreFactory(
             schemaReflector, new TableDdlBuilder(schemaReflector), adapter, source, _gate, _filter, notifications,
             loggerFactory?.CreateLogger<StoreFactory>(), timeProvider);
@@ -165,22 +161,6 @@ internal sealed class Indexer : IDisposable
     private OpenScope RequireScope()
     {
         lock (_lock) return _scope ?? throw new NoLoadOrderException();
-    }
-
-    // Runs the action under the lock that disposing the scope takes, so the record index cannot be closed
-    // beneath it. False, having run nothing, with no scope held.
-    private bool UnderScope<T>(Func<Store, IndexScope, T> action, [MaybeNullWhen(false)] out T result)
-    {
-        lock (_lock)
-        {
-            if (_scope is not { } scope)
-            {
-                result = default;
-                return false;
-            }
-            result = action(scope.Store, IndexScope.Of(scope.Held));
-            return true;
-        }
     }
 
     /// <summary>Assembled from live state rather than cached, so it cannot drift from the reconcile
@@ -400,7 +380,7 @@ internal sealed class Indexer : IDisposable
             arrivals = _holder.Arrivals;
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug("Reconciling load order. GameDir={GameDir} Instance={Instance} Plugins={Count} Game={Game}",
+                _logger.LogDebug("Reconciling load order. DataFolder={DataFolder} Instance={Instance} Plugins={Count} Game={Game}",
                     snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.Plugins.Count, snapshot.GameRelease);
             }
 
@@ -1133,55 +1113,30 @@ internal sealed class Indexer : IDisposable
         return read;
     });
 
-    /// <summary>The filter in force and the source its SQL came from, read together so a
-    /// concurrent set never pairs one filter's SQL with another's source.</summary>
-    public (string Sql, string Source)? ActiveFilter => _filter.Current;
-
-    /// <summary>Answers why the SQL cannot be a filter, such as no form_key column. Throws
-    /// <see cref="NoLoadOrderException"/> with no store to hold it.</summary>
-    public string? SetFilter(string sql, string source) => ApplyFilter((sql, source));
-
-    public void ClearFilter() => ApplyFilter(null);
-
-    /// <summary>The rows of one SELECT over the views of every plugin the record index holds, once the whole set is read.</summary>
-    public Answer<JsonElement[], string> Select(string sql)
+    /// <summary>Runs <paramref name="write"/> on the store in force inside the write gate, then the scope, so it
+    /// races no write and no reconcile closes the store beneath it. With no store, runs
+    /// <paramref name="noStore"/> there instead.</summary>
+    internal T InForce<T>(Func<GatedStore, T> write, Func<T> noStore)
     {
-        var reads = RequireWholeSetReads();
-        using (_gate.Enter())
-            UnderScope((store, _) => { store.CreateRecordTypeViews(); return true; }, out _);
-        return reads.Select(sql);
-    }
-
-    private string? ApplyFilter((string Sql, string Source)? filter)
-    {
-        // Materializing the filter is an index write, and the filter box is live while an edit runs, so
-        // racing an in-flight edit is the ordinary case: gated like every write.
         using var _ = _gate.Enter();
-
-        if (UnderScope((store, scope) => _filter.Set(store, scope, filter), out var rejection)) return rejection;
-
-        // A filter kept through a rebuild outlives the store it was materialized in.
-        if (filter is not null) throw new NoLoadOrderException();
-        _filter.Clear();
-        return null;
+        lock (_lock) return _scope is { } scope ? write(new GatedStore(scope.Store, IndexScope.Of(scope.Held))) : noStore();
     }
 
-    /// <summary>ADR-0010: drops the record index file, floors its sequence at what this process
-    /// handed out, and refills it off the caller's thread. A file another window holds, or a read
-    /// that never ended, is refused.</summary>
-    public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
+    /// <summary>Hands <paramref name="whileClosed"/> the file with the store closed, then reconciles the load
+    /// order held unless it refuses. False, having run nothing, when a read outlived the close: the store is
+    /// reconciled back as it was.</summary>
+    internal bool WhileClosed(Func<ClosedStore, string?> whileClosed, out string? refusal)
     {
-        var previousSequence = Sequence;
+        refusal = null;
+        var handedOut = Sequence;
         if (!Close())
         {
             StartReconcile();
-            return new(StoreRebuildRefusal.StillServingReads,
-                IndexWriteGate.NotDrained("mEdit's record index was not rebuilt", "It is reopened as it was."));
+            return false;
         }
-        if (_storeFactory.Rebuild(gameRelease, instanceRoot, previousSequence) is { } heldElsewhere)
-            return new(StoreRebuildRefusal.HeldByAnotherWindow, heldElsewhere);
-        StartReconcile();
-        return null;
+        refusal = whileClosed(new ClosedStore(_storeFactory, handedOut));
+        if (refusal is null) StartReconcile();
+        return true;
     }
 
     public void Subscribe()
