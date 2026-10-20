@@ -56,7 +56,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
     private sealed class RealFixtureScratch : IDisposable
     {
-        private readonly ScratchDirectory _gameDirectory = new("medit-diagnosis-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-diagnosis-data-");
         private readonly LoadOrderSnapshot _loadOrder;
         private const string Origin = "DiagnosisFixtureMod";
 
@@ -67,7 +67,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
             plugin.WriteInto(ModFolder);
             var pluginPath = Path.Combine(ModFolder, plugin.FileName);
 
-            _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, Origin, _gameDirectory);
+            _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, Origin, _dataFolder);
         }
 
         public async Task<PluginDecompiledAndCommitted> DecompileAndCommitAsync() =>
@@ -76,7 +76,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
         public void Dispose()
         {
             ModFolder.Dispose();
-            _gameDirectory.Dispose();
+            _dataFolder.Dispose();
         }
     }
 }

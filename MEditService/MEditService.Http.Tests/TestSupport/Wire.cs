@@ -17,7 +17,7 @@ internal static class Wire
 
     internal static Task<HttpResponseMessage> PutLoadOrder(
         this HttpClient client, ScatteredFixtureData fx, IEnumerable<LoadOrderEntry> plugins) =>
-        client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins));
+        client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, plugins));
 
     /// <summary>What Modbench sends once its watch sees a change: the snapshot again, whose arrival
     /// validates every file (ADR-0003).</summary>
@@ -43,7 +43,7 @@ internal static class Wire
             : fx.Plugins.Where(p => p.LoadedWithNoLine || origins.Contains(p.Origin, StringComparer.Ordinal));
 
     internal static Task<HttpResponseMessage> PutLoadOrderIn(this HttpClient client, ScatteredFixtureData fx, string stringsLanguage) =>
-        client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, fx.Plugins, stringsLanguage: stringsLanguage));
+        client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, fx.Plugins, stringsLanguage: stringsLanguage));
 
     internal static Task<HttpResponseMessage> SetFilter(this HttpClient client) =>
         client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" });

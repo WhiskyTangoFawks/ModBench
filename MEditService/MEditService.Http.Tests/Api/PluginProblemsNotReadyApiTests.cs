@@ -18,7 +18,7 @@ public sealed class PluginProblemsNotReadyApiTests : HostedTests
         var fx = Owned(new PluginFixtureBuilder("api-plugin-problems-not-ready")
             .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("Base"), origin: "BaseMod")
             .BuildScattered());
-        (await Client.PutAsJsonAsync("/load-order", SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, fx.Plugins)))
+        (await Client.PutAsJsonAsync("/load-order", SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, fx.Plugins)))
             .EnsureSuccessStatusCode();
 
         var response = await Client.GetAsync(new Uri("/plugins/problems", UriKind.Relative));
