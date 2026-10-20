@@ -202,7 +202,7 @@ function reportCancelRefused(reporter: Reporter, { cancelRefusal }: { readonly c
 
 const quoted = (label: Label, mods: readonly string[]): string => mods.map((mod) => `"${label(mod)}"`).join(', ');
 
-const uncommittedWarnings = (landed: Restored): string[] => landed.filter(({ uncommitted }) => uncommitted === true)
+const uncommittedWarnings = (landed: Restored): string[] => landed.filter(({ uncommitted }) => uncommitted)
   .map(({ mod }) => `${mod}: its submodule holds changes no commit holds, so the commit the instance repository pins does not rebuild these bytes`);
 
 const leftDetachedWarnings = (landed: Restored): string[] =>

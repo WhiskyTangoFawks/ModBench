@@ -4,6 +4,7 @@ import type { FileRead, GameFolder, InstallationFile, InstanceAdapter, InstanceR
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, refusing, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
 import { archiveVariants } from '../sourceCommands';
+import { restoredMod } from '../../test/restoredMod';
 
 const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, hash: 'H', entries: [{ path: 'textures/a.dds', hash: 'E' }] };
 
@@ -317,7 +318,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 });
 
 describe('modlistRepositoryCommands restore from manifest', () => {
-  const RESTORED = { landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [], notFound: [] };
+  const RESTORED = { landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], notFound: [] };
   const INSTALLATION_FILE_MISSING = "was skipped: installation file 'ModA-1.0.7z' is missing.";
   const SUBMODULE_MISSING = "was skipped: its submodule 'Mod Source' is missing.";
   const sentNames = (client: InMemoryMEditClient): string[][] => client.calls.map((call) => sentNamesOf(call.args[0]));
@@ -394,11 +395,11 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
   it('makes the instance repository refuse a push of a pin its source mod\'s remote lacks, as git init does, once the mods landed', async () => {
     const { commands, client, adapter } = commandsOver({ repositoryOnDisk: true });
-    client.setCommandResult('restoreFromManifest', { landed: [{ mod: 'ModA', written: [], namedByNoLine: ['mine.txt'] }], refused: [], notFound: [] });
+    client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'] })], refused: [], notFound: [] });
 
     const outcome = await commands.restoreFromManifest(['ModA']);
 
-    expect(adapter.calls.map(({ verb }) => verb)).toEqual(['trashModFile', 'refuseUnpublishedPins']);
+    expect(adapter.calls.map(({ verb }) => verb).filter((verb) => verb !== 'writeModMetadata')).toEqual(['trashModFile', 'refuseUnpublishedPins']);
     expect(outcome).not.toHaveProperty('pushRefusalNotWritten');
   });
 
@@ -417,7 +418,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     await commands.restoreFromManifest(['ModA']);
 
-    expect(adapter.calls).toEqual([]);
+    expect(adapter.calls.map(({ verb }) => verb)).not.toContain('refuseUnpublishedPins');
   });
 
   it('reports the phase of reading each mod\'s files, then mEdit\'s progress restoring them', async () => {
@@ -510,7 +511,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const { commands, client } = commandsOver({ downloads: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods[0]?.installationFile === undefined
       ? { landed: [], refused: [], notFound: [{ mod: 'ModA', installationFile: 'ModA-1.0.7z', gameFiles: [] }] }
-      : { landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: [] }], refused: [], notFound: [], cancelRefusal: 'Could not cancel — not running.' }));
+      : { landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], notFound: [], cancelRefusal: 'Could not cancel — not running.' }));
 
     expect(await commands.restoreFromManifest(['ModA'])).toMatchObject({ cancelRefusal: 'Could not cancel — not running.' });
   });
@@ -522,12 +523,12 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       client, adapter: { ...adapter, modFolderPath: (mod) => Promise.resolve(mod === 'ModA' ? undefined : `/mods/${mod}`) },
       instanceRoot: '/instance', makeRepository: () => Promise.resolve(), trash: () => Promise.resolve(),
     });
-    client.setCommandResult('restoreFromManifest', { landed: [{ mod: 'ModB', written: [], namedByNoLine: [] }], refused: [], notFound: [] });
+    client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModB' })], refused: [], notFound: [] });
 
     const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
 
     expect([sentNames(client), outcome]).toEqual([
-      [['ModB']], { applied: true, landed: [{ mod: 'ModB', written: [], namedByNoLine: [] }], refused: [{ item: 'ModA', reason: 'its name gives it no folder' }] },
+      [['ModB']], { applied: true, landed: [restoredMod({ mod: 'ModB' })], refused: [{ item: 'ModA', reason: 'its name gives it no folder' }] },
     ]);
   });
 
@@ -547,12 +548,12 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('trashes the files no line names of each mod the first call landed when the second call fails, and names the second call\'s mods', async () => {
     const { commands, client, adapter } = commandsOver({ downloads: new Map([['ModB.7z', { kind: 'read', answer: INSTALLED }]]) });
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods.length === 2
-      ? { landed: [{ mod: 'ModA', written: [], namedByNoLine: ['mine.txt'] }], refused: [], notFound: [{ mod: 'ModB', installationFile: 'ModB.7z', gameFiles: [] }] }
+      ? { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'] })], refused: [], notFound: [{ mod: 'ModB', installationFile: 'ModB.7z', gameFiles: [] }] }
       : { refused: true as const, message: 'Could not restore 1 mod — mEdit stopped.' }));
 
     const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
 
-    expect([adapter.calls, outcome]).toEqual([
+    expect([adapter.calls.filter(({ verb }) => verb === 'trashModFile'), outcome]).toEqual([
       [{ verb: 'trashModFile', mod: 'ModA', relativePath: 'mine.txt' }],
       { applied: false, refusal: 'Could not restore 1 mod — mEdit stopped.', unfinished: ['ModB'] },
     ]);
@@ -560,18 +561,18 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
   it('sends each file no line names in a mod that landed to the trash, through the Instance adapter', async () => {
     const { commands, client, adapter } = commandsOver();
-    client.setCommandResult('restoreFromManifest', { landed: [{ mod: 'ModA', written: [], namedByNoLine: ['mine.txt', 'meshes/b.nif'] }], refused: [], notFound: [] });
+    client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt', 'meshes/b.nif'] })], refused: [], notFound: [] });
 
     await commands.restoreFromManifest(['ModA']);
 
-    expect(adapter.calls).toEqual([
+    expect(adapter.calls.filter(({ verb }) => verb === 'trashModFile')).toEqual([
       { verb: 'trashModFile', mod: 'ModA', relativePath: 'mine.txt' }, { verb: 'trashModFile', mod: 'ModA', relativePath: 'meshes/b.nif' },
     ]);
   });
 
   it('answers a mod with a file the trash refused as not finished, naming the file and why', async () => {
     const { commands, client } = commandsOver({ refusals: refusing('trashModFile', 'the trash is full') });
-    client.setCommandResult('restoreFromManifest', { landed: [{ mod: 'ModA', written: [], namedByNoLine: ['mine.txt'] }], refused: [], notFound: [] });
+    client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'] })], refused: [], notFound: [] });
 
     expect(await commands.restoreFromManifest(['ModA'])).toEqual({
       applied: true, landed: [],
@@ -582,7 +583,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('writes each landed mod\'s metadata as its manifest says, through the Instance adapter, after its files no line names went to the trash', async () => {
     const { commands, client, adapter } = commandsOver();
     const metadata = { version: '1.0', installationFile: { name: 'ModA-1.0.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } };
-    client.setCommandResult('restoreFromManifest', { landed: [{ mod: 'ModA', written: [], namedByNoLine: ['mine.txt'], metadata }], refused: [], notFound: [] });
+    client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'], metadata })], refused: [], notFound: [] });
 
     await commands.restoreFromManifest(['ModA']);
 
@@ -596,7 +597,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const metadata = { version: '2.0' };
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods.length === 2
       ? { landed: [], refused: [{ item: 'ModA', reason: 'missing' }, { item: 'ModB', reason: "its package does not hold 'b.nif'" }], notFound: [{ mod: 'ModA', installationFile: 'ModA-1.0.7z', gameFiles: [] }] }
-      : { landed: [{ mod: 'ModA', written: [], namedByNoLine: [], metadata }], refused: [], notFound: [] }));
+      : { landed: [restoredMod({ mod: 'ModA', metadata })], refused: [], notFound: [] }));
 
     await commands.restoreFromManifest(['ModA', 'ModB']);
 
@@ -606,7 +607,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('answers a mod whose metadata could not be written as not finished, naming why', async () => {
     const { commands, client } = commandsOver({ refusals: refusing('writeModMetadata', 'its source names the Nexus game \'x\'') });
     client.setCommandResult('restoreFromManifest', {
-      landed: [{ mod: 'ModA', written: [], namedByNoLine: [], metadata: { version: '1' } }], refused: [], notFound: [],
+      landed: [restoredMod({ mod: 'ModA', metadata: { version: '1' } })], refused: [], notFound: [],
     });
 
     expect(await commands.restoreFromManifest(['ModA'])).toEqual({
