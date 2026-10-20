@@ -207,14 +207,7 @@ export interface ModlistCallOptions<P = ModlistProgress> {
   readonly signal?: AbortSignal;
 }
 
-interface UpdatedMod {
-  mod: string;
-  manifestWritten: boolean;
-  /** Each file its package does not hold, by its path in the mod folder. */
-  notInPackage: readonly string[];
-  /** Why the stat cache could not keep what the update read. */
-  statCacheNotWritten?: string | null;
-}
+type UpdatedMod = components['schemas']['ModUpdated'];
 
 /** Update manifest's answer: each mod updated, or refused with its reason. */
 export interface UpdateManifestOutcome {
@@ -248,21 +241,7 @@ export interface WhatRestoreDestroys {
   manifests: readonly components['schemas']['ManifestMetadataResponse'][];
 }
 
-interface RestoredMod {
-  mod: string;
-  /** Each file written to bring the mod back, by its path in the mod folder. */
-  written: readonly string[];
-  /** Each file no line names, by its path in the mod folder, for the trash. */
-  namedByNoLine: readonly string[];
-  /** Why the stat cache could not keep what the restore read. */
-  statCacheNotWritten?: string | null;
-  /** As a built mod's. */
-  uncommitted?: boolean;
-  /** Why the clone of its submodule is not on the branch it follows. */
-  leftDetached?: string | null;
-  /** What its manifest says of the mod's version and installation files, for the mod manager's metadata. */
-  metadata?: components['schemas']['ModMetadata'];
-}
+type RestoredMod = components['schemas']['ModRestored'];
 
 /** A skipped mod lacking an installation file or a submodule, by name, or game files, by their path in the mod folder, that
  *  the call did not hand. A call that hands them brings it back. */

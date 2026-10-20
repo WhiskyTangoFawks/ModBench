@@ -263,11 +263,10 @@ async function withFilesNoLineNamesTrashed(
   return { finished, unfinished };
 }
 
-const heldByAdapter = ({ version, installationFile }: NonNullable<Restored[number]['metadata']>): ModMetadata =>
+const heldByAdapter = ({ version, installationFile }: Restored[number]['metadata']): ModMetadata =>
   ({ version: version ?? undefined, installationFile: installationFile ? { name: installationFile.name, page: installationFile.page ?? undefined } : undefined });
 
 async function metadataWrittenOrWhy(adapter: Adapter, mod: string, metadata: Restored[number]['metadata']): Promise<string | undefined> {
-  if (metadata === undefined) return undefined;
   try {
     await adapter.writeModMetadata(mod, heldByAdapter(metadata));
   } catch (err) {
