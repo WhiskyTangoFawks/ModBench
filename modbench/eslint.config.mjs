@@ -32,7 +32,7 @@ const MESSAGE_API_SITES = [
     `ObjectPattern > Property[key.name=${MESSAGE_API}]`,
 ];
 
-const PATHLESS_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'drivingLib', 'textDocuments', 'instanceLoader'];
+const PATHLESS_BOXES = ['toolbox', 'mods', 'plugins', 'downloads', 'editor', 'drivingLib', 'textDocuments', 'instanceLoader', 'sourceLanguage'];
 const PACKAGE_BOXES = ['client', 'sourceLanguage', 'agent'];
 const NOT_PRODUCTION = ['**/*.test.ts', '**/test/**'];
 

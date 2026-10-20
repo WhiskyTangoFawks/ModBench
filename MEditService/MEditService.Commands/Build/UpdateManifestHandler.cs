@@ -14,27 +14,33 @@ public sealed class UpdateManifestHandler
     internal UpdateManifestHandler(IModFolderRepository repository, INotificationPublisher notifications) =>
         (_repository, _notifications) = (repository, notifications);
 
-    public Task<SelectionResult<string, UpdateManifestRefusal, UpdatedMod>> UpdateManifestAsync(
-        IReadOnlyList<ModToUpdate> mods, InstanceToUpdate instance, string? gesture = null, CancellationToken cancel = default) =>
-        ModByMod.OverAsync(
+    public async Task<UpdateManifestResult> UpdateManifestAsync(
+        IReadOnlyList<ModToUpdate> mods, InstanceToUpdate instance, string? gesture = null, CancellationToken cancel = default)
+    {
+        var updated = await ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new UpdateManifestProgressNotification(progress)),
             (mod, _) => Task.FromResult(UpdateMod(mod, instance)), gesture, cancel);
+        return updated.ToResult(
+            landed => landed.Outcome,
+            refused => new UpdateManifestRefused(refused.Item, refused.Refusal, refused.Message),
+            (applied, refused) => new UpdateManifestResult(applied, refused));
+    }
 
-    private ItemAnswer<UpdateManifestRefusal, UpdatedMod> UpdateMod(ModToUpdate mod, InstanceToUpdate instance)
+    private ItemAnswer<UpdateManifestRefusal, ModUpdated> UpdateMod(ModToUpdate mod, InstanceToUpdate instance)
     {
         if (mod.IsSourceMod || NamesASource(mod)) return LeftToItsBuild(mod, instance);
 
         var installationFile = mod.InstallationFile;
         if (installationFile is not null && !_repository.InstallationFileExists(installationFile.Path))
         {
-            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
+            return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(
                 UpdateManifestRefusal.InstallationFileMissing,
                 $"was not updated: '{_repository.InstallationFileName(installationFile.Path)}' not in the downloads folder.");
         }
 
         if (installationFile is null && instance.GameFolder is null && NamesTheGameFolder(mod))
         {
-            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
+            return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(
                 UpdateManifestRefusal.GameFolderNotFound, "was not updated: its manifest names the game folder, and the game folder was not found.");
         }
 
@@ -48,11 +54,11 @@ public sealed class UpdateManifestHandler
         }
         catch (DirectoryNotFoundException)
         {
-            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(UpdateManifestRefusal.ModFolderMissing, "was not updated: its folder does not exist.");
+            return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(UpdateManifestRefusal.ModFolderMissing, "was not updated: its folder does not exist.");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
+            return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(
                 UpdateManifestRefusal.ModFilesUnreadable, $"was not updated: a file could not be read: {e.Message}");
         }
 
@@ -63,14 +69,14 @@ public sealed class UpdateManifestHandler
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
+            return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(
                 UpdateManifestRefusal.NotWritten, $"was not updated: its manifest could not be written: {e.Message}");
         }
 
         var statCacheNotWritten = _repository.KeepInStatCache(
             read, manifest, read.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal));
-        return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Landed(new UpdatedMod(
-            written, [.. manifest.Files.Where(file => file.Entry is PackageEntry.NotHeld).Select(file => file.Path).Order(StringComparer.Ordinal)],
+        return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Landed(new ModUpdated(
+            mod.Name, written, [.. manifest.Files.Where(file => file.Entry is PackageEntry.NotHeld).Select(file => file.Path).Order(StringComparer.Ordinal)],
             statCacheNotWritten));
     }
 
@@ -90,21 +96,21 @@ public sealed class UpdateManifestHandler
         }
     }
 
-    private ItemAnswer<UpdateManifestRefusal, UpdatedMod> LeftToItsBuild(ModToUpdate mod, InstanceToUpdate instance)
+    private ItemAnswer<UpdateManifestRefusal, ModUpdated> LeftToItsBuild(ModToUpdate mod, InstanceToUpdate instance)
     {
         var status = _repository.Status(mod.Folder, mod.Name, mod.MetadataFiles.ToHashSet(StringComparer.Ordinal), instance.StatCache);
         if (status.Unreadable is { } unreadable)
-            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(UpdateManifestRefusal.ModFilesUnreadable, $"was not updated: {unreadable.Why}.");
+            return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(UpdateManifestRefusal.ModFilesUnreadable, $"was not updated: {unreadable.Why}.");
         if (status.NoManifest)
         {
-            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
+            return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(
                 UpdateManifestRefusal.LeftToItsBuild, "was not updated: its build writes its manifest, and it has not written one.");
         }
         if (status.Differing.Count + status.NamedByNoLine.Count + status.Gone.Count > 0)
         {
-            return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Refused(
+            return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Refused(
                 UpdateManifestRefusal.LeftToItsBuild, "was not updated: its build writes its manifest, and its folder differs from what the build wrote.");
         }
-        return ItemAnswer<UpdateManifestRefusal, UpdatedMod>.Landed(new UpdatedMod(ManifestWritten: false, status.NotInPackage, status.StatCacheNotWritten));
+        return ItemAnswer<UpdateManifestRefusal, ModUpdated>.Landed(new ModUpdated(mod.Name, ManifestWritten: false, status.NotInPackage, status.StatCacheNotWritten));
     }
 }

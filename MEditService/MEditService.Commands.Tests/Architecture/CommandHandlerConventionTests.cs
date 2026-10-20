@@ -29,6 +29,8 @@ public sealed class CommandHandlerConventionTests
         typeof(CopyRecordChangesHandler),
         typeof(BuildModHandler),
         typeof(DecompileAndCommitModHandler),
+        typeof(UpdateManifestHandler),
+        typeof(RestoreFromManifestHandler),
     ];
 
     private static readonly Type[] HandlersThatWriteNothing =
@@ -60,6 +62,8 @@ public sealed class CommandHandlerConventionTests
         typeof(DeleteRecordResult),
         typeof(EditRecordChanges),
         typeof(ModBuilt),
+        typeof(ModRestored),
+        typeof(ModUpdated),
         typeof(MoveLastWrittenResult),
         typeof(PluginCreateRefusal),
         typeof(PluginCreateRefused),
@@ -72,6 +76,12 @@ public sealed class CommandHandlerConventionTests
         typeof(RenameSourceChanges),
         typeof(RenameSourceRefusal),
         typeof(RenameSourceResult),
+        typeof(RestoreFromManifestResult),
+        typeof(RestoreRefusal),
+        typeof(RestoreRefused),
+        typeof(UpdateManifestRefusal),
+        typeof(UpdateManifestRefused),
+        typeof(UpdateManifestResult),
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";

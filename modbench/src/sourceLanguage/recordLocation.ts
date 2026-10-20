@@ -3,6 +3,7 @@ import { errorMessage } from '../ports/errorMessage';
 import { copyDocument, recordDocument, type RecordDocumentClient } from '../textDocuments/recordDocument';
 import type { RecordCopy } from '../wire/recordCopy';
 import type { TextSpan } from './sourceText';
+import { heldText } from '../textDocuments/heldText';
 
 export interface RecordLocationDeps<Document> {
   client: RecordDocumentClient;
@@ -24,7 +25,7 @@ export async function locateRecord<Document extends { getText(): string }>(
   const opened = await recordDocument(client, record);
   if (!opened || 'refused' in opened) return opened;
   const document = await open(opened.uri);
-  const span = spanIn(document.getText(), record.formKey);
+  const span = spanIn(heldText(document), record.formKey);
   return span ? { uri: opened.uri, document, ...span } : { refused: `${opened.uri.path} states no ${record.formKey} member.` };
 }
 

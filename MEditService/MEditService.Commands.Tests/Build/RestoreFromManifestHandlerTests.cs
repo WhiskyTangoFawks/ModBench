@@ -81,7 +81,7 @@ public sealed class RestoreFromManifestHandlerTests
         _folders.WithFile(Mod, "a.nif", "edited").WithFile(Mod, "b.nif", "b").WithFile(Mod, "nonCompiledPlugin.txt", "mine").WithFile(Mod, "meta.ini", "[General]");
         Manifested(Mod, downloadedFile, Line("a.nif", new PackageEntry.Held()), Line("b.nif", new PackageEntry.Held()));
 
-        var restored = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod, downloadedFile)], Instance())).Landed).Outcome;
+        var restored = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod, downloadedFile)], Instance())).Applied);
 
         Assert.Equal(["a.nif"], restored.Written);
         Assert.Equal(["nonCompiledPlugin.txt"], restored.NamedByNoLine);
@@ -95,7 +95,7 @@ public sealed class RestoreFromManifestHandlerTests
         _folders.WithFile(Mod, "meta.ini", "[General]");
         _folders.Manifests[Mod] = new Manifest(null, []);
 
-        var restored = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Landed).Outcome;
+        var restored = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Applied);
 
         Assert.Empty(restored.Written.Concat(restored.NamedByNoLine));
         Assert.Empty(_folders.Written);
@@ -123,7 +123,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var result = await Handler.RestoreAsync([ModFrom(Mod, downloadedFile)], Instance());
 
-        Assert.Equal("stat-cache is read-only", Assert.Single(result.Landed).Outcome.StatCacheNotWritten);
+        Assert.Equal("stat-cache is read-only", Assert.Single(result.Applied).StatCacheNotWritten);
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var result = await Handler.RestoreAsync([ModFrom(Mod, downloadedFile)], Instance());
 
-        var metadata = Assert.Single(result.Landed).Outcome.Metadata;
+        var metadata = Assert.Single(result.Applied).Metadata;
         Assert.Equal("1.2", metadata.Version);
         Assert.Equal(new MetadataInstallationFile("Mod.zip", "nexus:fallout4:7;7:9"), metadata.InstallationFile);
     }
@@ -149,7 +149,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var result = await Handler.RestoreAsync([ModFrom(Mod, downloadedFile)], Instance());
 
-        Assert.Empty(Assert.Single(result.Landed).Outcome.Written);
+        Assert.Empty(Assert.Single(result.Applied).Written);
         Assert.Equal(0, _folders.Opens);
     }
 
@@ -205,10 +205,10 @@ public sealed class RestoreFromManifestHandlerTests
         var result = await Handler.RestoreAsync([handed, AnotherModThatLands()], Instance());
 
         var skipped = Assert.Single(result.Refused);
-        Assert.Equal(("Mod", refusal), (skipped.Item, skipped.Refusal.Kind));
+        Assert.Equal(("Mod", refusal), (skipped.Item, skipped.Refusal));
         Assert.Equal($"was skipped: {lack}.", skipped.Message);
         Assert.Empty(WrittenIn(Mod));
-        Assert.Equal("Other", Assert.Single(result.Landed).Item);
+        Assert.Equal("Other", Assert.Single(result.Applied).Mod);
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
 
-        Assert.Equal((RestoreRefusal.Lacking, "was skipped: 'a.nif' names no installation file."), (skipped.Refusal.Kind, skipped.Message));
+        Assert.Equal((RestoreRefusal.Lacking, "was skipped: 'a.nif' names no installation file."), (skipped.Refusal, skipped.Message));
     }
 
     [Fact]
@@ -230,8 +230,8 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
 
-        Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal.Kind);
-        Assert.Equal("Mod.zip", skipped.Refusal.InstallationFileNotFound);
+        Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal);
+        Assert.Equal("Mod.zip", skipped.InstallationFileNotFound);
     }
 
     [Fact]
@@ -281,10 +281,10 @@ public sealed class RestoreFromManifestHandlerTests
         var result = await Handler.RestoreAsync([ModFrom(Mod, downloadedFile), AnotherModThatLands()], Instance());
 
         var unfinished = Assert.Single(result.Refused);
-        Assert.Equal(RestoreRefusal.NotFinished, unfinished.Refusal.Kind);
+        Assert.Equal(RestoreRefusal.NotFinished, unfinished.Refusal);
         Assert.StartsWith("was not finished: 'Mod.zip' is not an archive restore from manifest can read:", unfinished.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("again", unfinished.Message, StringComparison.Ordinal);
-        Assert.Equal("Other", Assert.Single(result.Landed).Item);
+        Assert.Equal("Other", Assert.Single(result.Applied).Mod);
     }
 
     [Fact]
@@ -307,7 +307,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
 
-        Assert.Equal((RestoreRefusal.NoManifest, "was skipped: it has no manifest."), (skipped.Refusal.Kind, skipped.Message));
+        Assert.Equal((RestoreRefusal.NoManifest, "was skipped: it has no manifest."), (skipped.Refusal, skipped.Message));
     }
 
     [Fact]
@@ -318,7 +318,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
 
-        Assert.Equal((RestoreRefusal.ManifestUnreadable, "was skipped: its manifest cannot be read at line 1."), (skipped.Refusal.Kind, skipped.Message));
+        Assert.Equal((RestoreRefusal.ManifestUnreadable, "was skipped: its manifest cannot be read at line 1."), (skipped.Refusal, skipped.Message));
     }
 
     [Fact]
@@ -334,9 +334,9 @@ public sealed class RestoreFromManifestHandlerTests
         var unfinished = Assert.Single(result.Refused);
         Assert.Equal(
             (RestoreRefusal.NotFinished, "was not finished: b.nif is held by another process. Restoring it again finishes it."),
-            (unfinished.Refusal.Kind, unfinished.Message));
+            (unfinished.Refusal, unfinished.Message));
         Assert.Equal("a", WrittenText(Mod, "a.nif"));
-        Assert.Equal("Other", Assert.Single(result.Landed).Item);
+        Assert.Equal("Other", Assert.Single(result.Applied).Mod);
     }
 
     [Fact]
@@ -365,7 +365,7 @@ public sealed class RestoreFromManifestHandlerTests
         _folders.WithFile(Mod, "meshes/a.nif", "edited").WithFile(Mod, "b.dds", "b");
         GameFolderModManifested(("meshes/a.nif", "a"), ("b.dds", "b"));
 
-        var restored = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], InstanceWithGameFiles(("Meshes/A.nif", "a"), ("b.dds", "b")))).Landed).Outcome;
+        var restored = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], InstanceWithGameFiles(("Meshes/A.nif", "a"), ("b.dds", "b")))).Applied);
 
         Assert.Equal(["meshes/a.nif"], restored.Written);
         Assert.Equal("a", WrittenText(Mod, "meshes/a.nif"));
@@ -380,8 +380,8 @@ public sealed class RestoreFromManifestHandlerTests
 
         var refused = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
 
-        Assert.Equal(RestoreRefusal.NotFound, refused.Refusal.Kind);
-        Assert.Equal(["a.nif", "b.dds"], refused.Refusal.GameFilesNotFound);
+        Assert.Equal(RestoreRefusal.NotFound, refused.Refusal);
+        Assert.Equal(["a.nif", "b.dds"], refused.GameFilesNotFound);
         Assert.Empty(WrittenIn(Mod));
     }
 
@@ -393,7 +393,7 @@ public sealed class RestoreFromManifestHandlerTests
 
         var refused = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], InstanceWithGameFiles(("a.nif", "newer")))).Refused);
 
-        Assert.Equal(RestoreRefusal.Lacking, refused.Refusal.Kind);
+        Assert.Equal(RestoreRefusal.Lacking, refused.Refusal);
         Assert.Contains("'Fallout 4'", refused.Message);
         Assert.Contains("other bytes", refused.Message);
         Assert.Empty(WrittenIn(Mod));

@@ -397,7 +397,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   it('getModStatus posts the mods and the stat cache and reads each mod\'s status', async () => {
     const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'] }];
     const status = [{ mod: 'ModA', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: [] }];
-    const { result, request } = await exchange((c) => c.getModStatus(mods, '/instance/stat-cache'), answers(200, { mods: status }));
+    const { result, request } = await exchange((c) => c.getModStatus(mods, '/instance/stat-cache'), answers(200, status));
 
     expect(new URL(request.url).pathname).toBe('/mod-status');
     expect(await request.json()).toEqual({ mods, statCache: '/instance/stat-cache' });
