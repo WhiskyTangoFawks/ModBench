@@ -28,7 +28,7 @@ public sealed class EditRecordTraceTests : HostedTests
         var fx = TwoMods();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         foreach (var origin in compiledPlugin)
-            (await Client.Init(origin)).EnsureSuccessStatusCode();
+            (await Client.DecompileAndCommit(origin)).EnsureSuccessStatusCode();
         if (compiledPlugin.Length == 0) return fx;
 
         await Client.NextSnapshot(fx);
@@ -205,7 +205,7 @@ public sealed class EditRecordTraceTests : HostedTests
             .WithPlugin(NonCompiledPlugin, mod => mod.Npcs.AddNew("NonCompiledPluginNpc"), origin: NonCompiledPluginOrigin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Init(OtherOrigin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(OtherOrigin)).EnsureSuccessStatusCode();
         return fx;
     }
 

@@ -8,14 +8,14 @@ namespace MEditService.Commands.Tests.RealData;
 public sealed class SubrecordInventoryRoundTripGateTests
 {
     [Fact]
-    public async Task InitAsync_OfAShortRdatRegionPlugin_RefusesNamingTheRegionItsDroppedSignaturesAndTheDiagnosisOfTheMalformedSubrecord()
+    public async Task DecompileAndCommit_OfAShortRdatRegionPlugin_RefusesNamingTheRegionItsDroppedSignaturesAndTheDiagnosisOfTheMalformedSubrecord()
     {
         using var scratch = new ShortRdatScratch();
 
-        var result = await scratch.InitAsync();
+        var result = await scratch.DecompileAndCommitAsync();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains("REGN", result.Message);
         Assert.Contains("01000800", result.Message);
@@ -45,8 +45,8 @@ public sealed class SubrecordInventoryRoundTripGateTests
             _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, "ShortRdatMod", _gameDirectory);
         }
 
-        public async Task<PluginInit> InitAsync() =>
-            (await InitEveryPluginOf.ModAsync(_loadOrder, "ShortRdatMod")).Only();
+        public async Task<PluginDecompiledAndCommitted> DecompileAndCommitAsync() =>
+            (await DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, "ShortRdatMod")).Only();
 
         public void Dispose()
         {

@@ -1,12 +1,12 @@
 import {
-  isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type InitMod, type InitOutcome, type DecompileAndCommitProgress, type MEditClient, type WriteRefused,
+  isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress, type MEditClient, type WriteRefused,
 } from '../client';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'init' | 'latestLoadOrder'>;
+  client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'latestLoadOrder'>;
   adapter: Pick<InstanceAdapter,
     'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder' | 'sourceHost'>;
 }
@@ -49,8 +49,8 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
     /** A mod whose name gives it no source folder is refused here, naming why, and mEdit decompiles and commits the rest. */
     decompileAndCommit: async (
       mods: readonly string[], options: { onProgress?: (status: DecompileAndCommitProgress) => void } = {},
-    ): Promise<InitOutcome | WriteRefused> => {
-      const sent: InitMod[] = [];
+    ): Promise<DecompileAndCommitOutcome | WriteRefused> => {
+      const sent: DecompileAndCommitMod[] = [];
       const refused: ItemRefusal<string>[] = [];
       for (const mod of mods) {
         const sourceFolder = adapter.sourceFolder(mod);
@@ -59,7 +59,7 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
       }
       if (sent.length === 0) return { landed: [], refused };
       await client.latestLoadOrder();
-      const outcome = await client.init(sent, options);
+      const outcome = await client.decompileAndCommit(sent, options);
       return isRefused(outcome) ? outcome : { landed: outcome.landed, refused: [...outcome.refused, ...refused] };
     },
   };

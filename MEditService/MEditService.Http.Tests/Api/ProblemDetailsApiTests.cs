@@ -115,7 +115,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [Theory]
     [InlineData("createPlugin", 503)]
     [InlineData("getFilter", 503)]
-    [InlineData("init", 503)]
+    [InlineData("decompile-and-commit", 503)]
     [InlineData("deleteRecordChanges", 503)]
     [InlineData("setFilter", 503)]
     [InlineData("getReferences", 503)]
@@ -159,7 +159,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "getWorldspaceBlocks" => await client.GetAsync("/plugins/New.esp/worldspaces/000800%3ANew.esp/blocks?origin=NoLoadOrderMod"),
             "getCellChildRecords" => await client.GetAsync("/plugins/New.esp/cells/000800%3ANew.esp/children?origin=NoLoadOrderMod"),
             "getInteriorCells" => await client.GetAsync("/plugins/New.esp/interior-cells?origin=NoLoadOrderMod"),
-            "init" => await client.Init("NoLoadOrderMod"),
+            "decompile-and-commit" => await client.DecompileAndCommit("NoLoadOrderMod"),
             "deleteRecordChanges" => await client.PostAsJsonAsync("/records/delete-changes", new
             {
                 records = new[] { new { formKey = "000800:New.esp", plugin = new { name = "New.esp", origin = "NoLoadOrderMod" } } }
@@ -173,7 +173,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     }
 
     [Theory]
-    [InlineData("init")]
+    [InlineData("decompile-and-commit")]
     [InlineData("decompile")]
     [InlineData("compile")]
     [InlineData("createPlugin")]
@@ -191,7 +191,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
 
         var response = gesture switch
         {
-            "init" => await client.Init("NoLoadOrderMod"),
+            "decompile-and-commit" => await client.DecompileAndCommit("NoLoadOrderMod"),
             "decompile" => await client.Decompile([("New.esp", "NoLoadOrderMod")]),
             "compile" => await client.Compile([("New.esp", "NoLoadOrderMod")]),
             "createPlugin" => await client.PostAsJsonAsync(

@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.RealData;
 
-public sealed class InitRoundTripGateTests(CompiledPluginCutDownFixture fixture)
+public sealed class DecompileAndCommitRoundTripGateTests(CompiledPluginCutDownFixture fixture)
     : IClassFixture<CompiledPluginCutDownFixture>
 {
     private static JsonNode RequireNode(JsonNode? node, string what) =>
@@ -18,7 +18,7 @@ public sealed class InitRoundTripGateTests(CompiledPluginCutDownFixture fixture)
             : throw new InvalidOperationException("Expected a FormKey member.");
 
     [Fact]
-    public void Init_OfTheRealFixture_WritesEveryQuestDescendantInlineInItsQuestsDocument_InTheBinarysOrder()
+    public void DecompileAndCommit_OfTheRealFixture_WritesEveryQuestDescendantInlineInItsQuestsDocument_InTheBinarysOrder()
     {
         using var original = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
@@ -72,7 +72,7 @@ public sealed class InitRoundTripGateTests(CompiledPluginCutDownFixture fixture)
     }
 
     [Fact]
-    public void Init_OfTheRealFixture_WritesTheNonZeroTimestampsOfCell03C0F0()
+    public void DecompileAndCommit_OfTheRealFixture_WritesTheNonZeroTimestampsOfCell03C0F0()
     {
         var cellText = fixture.Documents().Single(document => document.FormKey.Contains("03C0F0", StringComparison.Ordinal)).Body;
 
@@ -81,7 +81,7 @@ public sealed class InitRoundTripGateTests(CompiledPluginCutDownFixture fixture)
     }
 
     [Fact]
-    public void Init_OfTheRealFixture_WritesTheNonDefaultConditionUnknown1PadOfAFallout4EsmResponse()
+    public void DecompileAndCommit_OfTheRealFixture_WritesTheNonDefaultConditionUnknown1PadOfAFallout4EsmResponse()
     {
         var topicDocumentText = fixture.Documents()
             .Single(document => document.Body.Contains("\"FormKey\": \"01AACD:Fallout4.esm\"", StringComparison.Ordinal)).Body;
@@ -91,7 +91,7 @@ public sealed class InitRoundTripGateTests(CompiledPluginCutDownFixture fixture)
     [Theory]
     [InlineData("\"MasterReferences\"")]
     [InlineData("\"NumRecords\"")]
-    public void Init_OfTheRealFixture_WritesNoValueThePluginDerives(string member)
+    public void DecompileAndCommit_OfTheRealFixture_WritesNoValueThePluginDerives(string member)
     {
         Assert.DoesNotContain(fixture.Documents(), document => document.Body.Contains(member, StringComparison.Ordinal));
     }

@@ -12,7 +12,7 @@ public sealed class BuildModTraceTests : HostedTests
 {
     private const string Plugin = "Built.esp";
     private const string SecondPlugin = "AlsoBuilt.esp";
-    private const string Origin = "BuiltMod";
+    private const string Origin = "ModBuildOutcome";
     private const string NonCompiledPlugin = "NonCompiledPlugin.esp";
     private const string NonCompiledPluginOrigin = "NonSourceMod";
 
@@ -36,7 +36,7 @@ public sealed class BuildModTraceTests : HostedTests
         File.Move(second.Path, movedTo, overwrite: true);
         (await Client.PutLoadOrder(_instance, _instance.Plugins.Select(p => p == second ? p with { Path = movedTo } : p)))
             .EnsureSuccessStatusCode();
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
     }
 
     private static async Task<JsonElement> Answer(HttpResponseMessage response)
@@ -157,12 +157,12 @@ public sealed class BuildModTraceTests : HostedTests
     public static TheoryData<string, string> NotARequestToBuild => new()
     {
         { "no mod", "{\"mods\": [], \"excludedSuffix\": \".mohidden\"}" },
-        { "no folder", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\"}], \"excludedSuffix\": \".mohidden\"}" },
-        { "no suffix", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"statCache\": \"c\"}" },
-        { "no stat cache", "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"excludedSuffix\": \".mohidden\"}" },
+        { "no folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\"}], \"excludedSuffix\": \".mohidden\"}" },
+        { "no suffix", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"statCache\": \"c\"}" },
+        { "no stat cache", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"excludedSuffix\": \".mohidden\"}" },
         {
             "a variant both a BA2 and a BSA",
-            "{\"mods\": [{\"name\": \"BuiltMod\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"excludedSuffix\": \".mohidden\", \"statCache\": \"c\", " +
+            "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"excludedSuffix\": \".mohidden\", \"statCache\": \"c\", " +
             "\"archives\": {\"general\": {\"ba2\": {\"version\": 1, \"compressed\": true}, \"bsa\": {\"version\": 105, \"archiveFlags\": 3, \"fileFlags\": 0}}, " +
             "\"textures\": {\"ba2\": {\"version\": 1, \"compressed\": true}}}}"
         },

@@ -118,7 +118,7 @@ public sealed class RestoreASourceModTests : IDisposable
         written.WriteToBinary(plugin);
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: new PluginProvider.FromMod(ModName, ModFolder, remote))]));
-        Assert.Single((await TestEditService.InitModHandler(_holder).InitAsync([new ModToInit(ModName, remote, [])])).Landed);
+        Assert.Single((await TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync([new ModToDecompileAndCommit(ModName, remote, [])])).Value().Applied);
         Git(_submodule.Instance, "config", "-f", ".gitmodules", "submodule.Mod.url", remote);
         _folders.WriteManifest(ModFolder, ModName, new Manifest(
             new ManifestPackage.SourceRepository(ModName, IsSubmodule: true), [new ManifestFile("Fixture.esp", new PackageEntry.Held())]));

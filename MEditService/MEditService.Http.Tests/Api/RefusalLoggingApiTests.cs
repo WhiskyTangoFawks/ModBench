@@ -17,7 +17,7 @@ public sealed class RefusalLoggingApiTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("HeldNpc"), origin: Origin)
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
     }
 
     private void AssertLoggedOnce(string start, string refusal)

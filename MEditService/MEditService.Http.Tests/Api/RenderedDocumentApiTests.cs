@@ -58,7 +58,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
         var formKey = recordType is null ? $"000000:{Plugin}" : await Client.FormKeyNamed(Plugin, Origin, recordType, editorId.Require());
         var (fileName, text) = await RenderedOk(formKey);
 
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
 
         var written = Directory.EnumerateFiles(
             ModFolderOf(fx), editorId is null ? "000000_*.json" : $"{editorId} - *.json", SearchOption.AllDirectories).Single();
@@ -72,7 +72,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
         var fx = await NonCompiledPlugin();
         var (_, text) = await RenderedOk(await Client.FormKeyNamed(Plugin, Origin, "cell", "RenderedRoom"));
 
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
 
         var written = Directory.EnumerateFiles(ModFolderOf(fx), "*.json", SearchOption.AllDirectories)
             .Single(file => File.ReadAllText(file).Contains("\"RenderedRoom\"", StringComparison.Ordinal));
@@ -85,7 +85,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
     {
         var fx = await NonCompiledPlugin();
         var npc = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc");
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         var written = Directory.EnumerateFiles(ModFolderOf(fx), "RenderedNpc - *.json", SearchOption.AllDirectories).Single();
@@ -100,7 +100,7 @@ public sealed class RenderedDocumentApiTests : HostedTests
     {
         var fx = await NonCompiledPlugin();
         var npc = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc");
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         var written = Directory.EnumerateFiles(ModFolderOf(fx), "RenderedNpc - *.json", SearchOption.AllDirectories).Single();

@@ -1,8 +1,10 @@
 import type { NotificationEvent } from '../apiClient';
 import type { PluginAddress, PluginMetadata, PluginRecordTypeCount, RecordSummary } from '../index';
-import type { CompiledPlugin } from '../apiClient';
+import type { components } from '../../wire/generated/api';
 import type { InMemoryMEditClient } from './InMemoryMEditClient';
 import { isReadFailed } from '../../wire/readFailed';
+
+type CompiledPlugin = components['schemas']['CompiledPlugin'];
 
 /** A `PluginMetadata` with every required wire member at its neutral value — a test naming only
  *  the fields it cares about needs no cast to reach the wire type. */

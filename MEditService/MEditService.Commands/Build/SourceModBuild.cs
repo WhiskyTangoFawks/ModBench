@@ -24,7 +24,7 @@ internal sealed class SourceModBuild
 
     /// <summary>Compiled against the held load order. Everything that refuses the mod is checked before its first write
     /// (mods.md, Build, story 4).</summary>
-    internal async Task<ItemAnswer<BuildRefusal, BuiltMod>> BuildAsync(ModToBuild mod, InstanceToBuild instance)
+    internal async Task<ItemAnswer<BuildRefusal, ModBuildOutcome>> BuildAsync(ModToBuild mod, InstanceToBuild instance)
     {
         if (_compile.WhyNoPluginCompiles() is { } none) return Refused(WholeCompileRefused(none.Refusal), none.Message);
         var loadOrder = _loadOrder.Require();
@@ -61,7 +61,7 @@ internal sealed class SourceModBuild
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or SharpCompressException)
         {
-            return ItemAnswer<BuildRefusal, BuiltMod>.Landed(new BuiltMod(
+            return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome(
                 [], [], [], [.. written.Overwritten.Order(StringComparer.Ordinal)],
                 $"The build stopped before compiling, as a file could not be read or written: {e.Message}"));
         }
@@ -76,7 +76,7 @@ internal sealed class SourceModBuild
             made.Add(written.PathOf(archive), vouched: archivesRefused.All(refusal => refusal.Item != archive));
 
         var (manifest, failure) = WriteManifest(mod, instance, new ManifestPackage.SourceRepository(_modFolders.FolderName(mod.SourceFolder), mod.IsSubmodule), made);
-        return ItemAnswer<BuildRefusal, BuiltMod>.Landed(new BuiltMod(
+        return ItemAnswer<BuildRefusal, ModBuildOutcome>.Landed(new ModBuildOutcome(
             landed, refused, archivesRefused, [.. written.Overwritten.Order(StringComparer.Ordinal)], failure, source.Uncommitted, source.Unpushed, manifest));
     }
 
@@ -221,6 +221,6 @@ internal sealed class SourceModBuild
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A compile refuses a whole selection only for want of a load order or of git."),
     };
 
-    private static ItemAnswer<BuildRefusal, BuiltMod> Refused(BuildRefusal refusal, string why) =>
-        ItemAnswer<BuildRefusal, BuiltMod>.Refused(refusal, $"was not built: {why}");
+    private static ItemAnswer<BuildRefusal, ModBuildOutcome> Refused(BuildRefusal refusal, string why) =>
+        ItemAnswer<BuildRefusal, ModBuildOutcome>.Refused(refusal, $"was not built: {why}");
 }

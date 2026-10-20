@@ -50,7 +50,7 @@ public sealed class InstanceCatalogTests
 
         foreach (var mod in entries.Where(e => e.Provider is PluginProvider.FromMod).GroupBy(e => e.Origin))
         {
-            var init = await client.Init(mod.Key);
+            var init = await client.DecompileAndCommit(mod.Key);
             var answer = await init.Content.ReadFromJsonAsync<JsonElement>();
             var messages = init.IsSuccessStatusCode
                 ? answer.GetProperty("refused").EnumerateArray().SelectMany(r => Text(r, "message").Split('\n'))

@@ -1,6 +1,6 @@
 import type { components } from '../wire/generated/api';
 import {
-  type CompiledPlugin, type CompileDiagnostic,
+  type CompileDiagnostic,
   type ChangedPlugin,
   type PluginMetadata, type PluginDiagnosisReport,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
@@ -152,19 +152,16 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 
 export type { PluginAddress };
 
-interface InitializedMod {
-  mod: string;
-  plugins: readonly PluginAddress[];
-}
+type DecompiledAndCommittedMod = components['schemas']['DecompiledAndCommittedMod'];
 
-/** Init's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
-export interface InitOutcome {
-  landed: readonly InitializedMod[];
+/** Decompile and commit's answer: each mod landed with the plugins its commit holds, or refused, as a mod, with its reason. */
+export interface DecompileAndCommitOutcome {
+  landed: readonly DecompiledAndCommittedMod[];
   refused: readonly ItemRefusal<string>[];
 }
 
-/** A mod to init, with its installation files and the mod manager's own files in its folder (ADR-0013). */
-export type InitMod = components['schemas']['InitModRequest'];
+/** A mod to decompile and commit, with its installation files and the mod manager's own files in its folder (ADR-0013). */
+export type DecompileAndCommitMod = components['schemas']['DecompileAndCommitModRequest'];
 
 /** A mod to build: the source folder whose build configuration names it, its folder and its installation files
  *  (ADR-0013). */
@@ -173,21 +170,14 @@ export type BuildMod = components['schemas']['BuildModRequest'];
 /** The instance's facts every mod's build needs: the suffix of an excluded name, and the release's archive variants. */
 export type BuildFacts = Omit<components['schemas']['BuildRequest'], 'mods'>;
 
-interface BuiltMod {
-  mod: string;
-  compiled: readonly CompiledPlugin[];
+// The generated mod, with each refusal as `ItemRefusal` and each unset flag absent: mEdit sends null and false.
+type BuiltMod = Omit<components['schemas']['ModBuilt'], 'refused' | 'archivesRefused' | 'failure' | 'uncommitted' | 'unpushed'> & {
   refused: readonly ItemRefusal<PluginAddress>[];
-  /** Each archive not packed, by its path in the mod folder; it stays as it was. */
   archivesRefused: readonly ItemRefusal<string>[];
-  /** Each file the build replaced that held other bytes, by its path in the mod folder. */
-  overwritten: readonly string[];
-  /** What stopped the build after it began writing; the files it overwrote so far are named. */
   failure?: string;
-  /** Its shared source holds changes no commit holds, so its manifest's commit does not rebuild these bytes. */
   uncommitted?: true;
-  /** Its remote, as last fetched, lacks the commit its manifest names. */
   unpushed?: true;
-}
+};
 
 /** Build's answer: each mod built, with the plugins it compiled and the plugins it refused, or
  *  refused as a mod with its reason. */
@@ -328,7 +318,7 @@ export interface MEditClient {
   // Moves what Modbench last wrote, filed under `treeName`, to the plugin's new name, once the source rename is applied and saved.
   moveLastWritten(plugin: PluginAddress, treeName: string, newName: string): Promise<{ moved: true } | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
-  init(mods: readonly InitMod[], options?: { onProgress?: (status: DecompileAndCommitProgress) => void }): Promise<InitOutcome | WriteRefused>;
+  decompileAndCommit(mods: readonly DecompileAndCommitMod[], options?: { onProgress?: (status: DecompileAndCommitProgress) => void }): Promise<DecompileAndCommitOutcome | WriteRefused>;
   // Over the unsaved documents mEdit holds. A WriteRefused is the call failing or mEdit refusing. Nothing is written.
   getCreateChanges(
     plugin: PluginAddress, recordType: string,

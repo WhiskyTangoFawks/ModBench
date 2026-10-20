@@ -43,7 +43,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         WritePlugin(_nonSourceMod, "Other.esp");
 
         Apply(Old.Name);
-        TestEditService.InitModHandler(_holder).InitAsync(ToInit.In(_holder.Held?.Snapshot, SourceModName)).GetAwaiter().GetResult();
+        TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync(ToDecompileAndCommit.In(_holder.Held?.Snapshot, SourceModName)).GetAwaiter().GetResult().Value();
         WritePlugin(_sourceMod, "Loose.esp");
         Apply(Old.Name);
     }

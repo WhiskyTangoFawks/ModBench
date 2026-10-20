@@ -72,14 +72,14 @@ internal static class EndpointMapping
     internal static IResult Refusal(SelectionRefusal<RecordEditRefusal> refusal) =>
         RecordEditProblem(refusal.Refusal, refusal.Message, path: null);
 
-    /// <summary>Init's refusal of a whole selection, mapped as Build's is (ADR-0019); every other refusal is a mod's,
+    /// <summary>Decompile and commit's refusal of a whole selection, mapped as Build's is (ADR-0019); every other refusal is a mod's,
     /// in the answer.</summary>
-    internal static IResult Refusal(SelectionRefusal<InitRefusal> refusal) => Problem(
-        refusal.Refusal, InitRefusal.NoLoadOrder, refusal.Message,
+    internal static IResult Refusal(SelectionRefusal<DecompileAndCommitRefusal> refusal) => Problem(
+        refusal.Refusal, DecompileAndCommitRefusal.NoLoadOrder, refusal.Message,
         r => r switch
         {
             // The request is sound; the machine lacks git.
-            InitRefusal.GitUnavailable => 500,
+            DecompileAndCommitRefusal.GitUnavailable => 500,
             _ => 422,
         });
 
@@ -223,28 +223,6 @@ internal static class EndpointMapping
         foreach (var item in answered.Refused)
             LogRefusal(logger, gesture, item.Refusal, item.Message, item.Item);
         return Results.Ok(answered);
-    }
-
-    /// <summary>A gesture over a selection answers 200 with what landed and what was refused, or the
-    /// refusal of the whole selection (ADR-0019).</summary>
-    internal static async Task<IResult> Answered<TItem, TRefusal, TOutcome, TLanded, TRefused>(
-        string gesture, ILogger logger,
-        Task<SelectionResult<TItem, TRefusal, TOutcome>> answer,
-        Func<SelectionRefusal<TRefusal>, IResult> refusal,
-        Func<ItemLanded<TItem, TOutcome>, TLanded> landed,
-        Func<ItemRefused<TItem, TRefusal>, TRefused> refused,
-        Func<IReadOnlyList<TLanded>, IReadOnlyList<TRefused>, object> response)
-    {
-        var result = await answer;
-        if (result.SelectionRefusal is { } selectionRefusal)
-        {
-            LogRefusal(logger, gesture, selectionRefusal.Refusal, selectionRefusal.Message);
-            return refusal(selectionRefusal);
-        }
-
-        foreach (var item in result.Refused)
-            LogRefusal(logger, gesture, item.Refusal, item.Message, item.Item);
-        return Results.Ok(response([.. result.Landed.Select(landed)], [.. result.Refused.Select(refused)]));
     }
 
     /// <summary>A gesture on one record answers 200 with its answer, or the refusal that left the source as it was

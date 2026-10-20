@@ -15,7 +15,7 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Build;
 
-public sealed class InitModTests
+public sealed class DecompileAndCommitModTests
 {
     [Fact]
     public async Task InitMod_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
@@ -23,11 +23,10 @@ public sealed class InitModTests
         using var gameDir = new ScratchDirectory("medit-init-noorigin-game-");
         var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], [], [], [], Language.English);
 
-        var result = await InitEveryPluginOf.ModAsync(loadOrder, "NoSuchMod");
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "NoSuchMod")).Value();
 
-        Assert.Null(result.SelectionRefusal);
         var refusal = Assert.Single(result.Refused);
-        Assert.Equal(("NoSuchMod", InitRefusal.ModProvidesNoPlugin), (refusal.Item, refusal.Refusal));
+        Assert.Equal(("NoSuchMod", DecompileAndCommitRefusal.ModProvidesNoPlugin), (refusal.Item, refusal.Refusal));
         Assert.Contains("NoSuchMod", refusal.Message, StringComparison.Ordinal);
     }
 
@@ -50,11 +49,11 @@ public sealed class InitModTests
             new LoadOrderEntry("Locked.esp", existingFileTheAdapterCannotRead, "FixtureMod", 1, Enabled: true, Winning: true),
         ]);
 
-        var result = await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", new LockedPluginAdapter("Locked.esp"));
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", new LockedPluginAdapter("Locked.esp"))).Value();
 
-        Assert.Empty(result.Landed);
+        Assert.Empty(result.Applied);
         var refusal = Assert.Single(result.Refused);
-        Assert.Equal(("FixtureMod", InitRefusal.RoundTripFailed), (refusal.Item, refusal.Refusal));
+        Assert.Equal(("FixtureMod", DecompileAndCommitRefusal.RoundTripFailed), (refusal.Item, refusal.Refusal));
         Assert.Contains("Locked.esp", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("cannot be read", refusal.Message, StringComparison.Ordinal);
         Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
@@ -85,7 +84,7 @@ public sealed class InitModTests
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-        await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
+        await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
         Assert.True(TestAdapters.Source().IsSourceMod(modFolder));
 
@@ -119,10 +118,10 @@ public sealed class InitModTests
 
         byte[] notAPluginSoAnyDeepParseFails = [0x00, 0x01, 0x02, 0x03];
         File.WriteAllBytes(pluginPath, notAPluginSoAnyDeepParseFails);
-        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.AlreadyInitialized, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.AlreadyInitialized, result.Refusal);
     }
 
     [Fact]
@@ -146,9 +145,9 @@ public sealed class InitModTests
             new LoadOrderEntry("Same.esp", pathB, "ModB", Line: 1, Enabled: true, Winning: true),
         ]);
 
-        var result = await InitEveryPluginOf.ModAsync(loadOrder, "ModA");
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "ModA")).Value();
 
-        Assert.Equal([new PluginAddress("Same.esp", "ModA")], Assert.Single(result.Landed).Outcome.Plugins);
+        Assert.Equal([new PluginAddress("Same.esp", "ModA")], Assert.Single(result.Applied).Plugins);
         Assert.True(TestAdapters.Source().IsSourceMod(modA));
         Assert.False(TestAdapters.Source().IsSourceMod(modB));
     }
@@ -176,7 +175,7 @@ public sealed class InitModTests
             ]);
 
         var notifications = new InMemoryNotificationPublisher();
-        await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", notifications: notifications);
+        await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", notifications: notifications);
 
         var observed = notifications.Notifications.OfType<DecompileAndCommitProgressNotification>().ToList();
         Assert.Equal(
@@ -210,10 +209,10 @@ public sealed class InitModTests
 
         var adapter = new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc);
 
-        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains(npc.FormKey.ToString(), result.Message);
         Assert.Contains("OriginalName", result.Message);
@@ -245,10 +244,10 @@ public sealed class InitModTests
 
         var adapter = new ForgedTreeWriteAdapter(DeserializeThenMutateTheFloat);
 
-        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains(npc.FormKey.ToString(), result.Message);
         Assert.Contains("Npc", result.Message);
@@ -278,7 +277,7 @@ public sealed class InitModTests
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
 
-        await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
+        await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
         Assert.True(TestAdapters.Source().IsSourceMod(modFolder));
     }
@@ -322,10 +321,10 @@ public sealed class InitModTests
 
         var adapter = new ForgedTreeWriteAdapter(DeserializeThenCorrupt);
 
-        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains($"TES4 header field '{fieldName}'", result.Message);
         Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
@@ -345,10 +344,10 @@ public sealed class InitModTests
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.DoesNotContain("is missing", result.Message);
         Assert.DoesNotContain("FNAM", result.Message);
@@ -374,7 +373,7 @@ public sealed class InitModTests
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true,
                 NamedProvider: new PluginProvider.FromMod("FixtureMod", modFolder, sourceFolder))]);
-        await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
+        await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
         Assert.True(TestAdapters.Source().IsSourceMod(sourceFolder));
 
@@ -395,10 +394,10 @@ public sealed class InitModTests
         var loadOrder = SnapshotPlugins.Snapshot(
             gameDir, gameDir, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.MissingLocalizationStrings, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.MissingLocalizationStrings, result.Refusal);
 
         const string stringsFileNamedByIsoLanguageCodeNotByLanguageName = "Fixture_en.STRINGS";
         Assert.Equal(
@@ -419,9 +418,9 @@ public sealed class InitModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
-        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
-        Assert.Equal((false, InitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal((false, DecompileAndCommitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
         Assert.Equal(
             $"Fixture.esp does not round-trip through its own source: NPC_ {npc} is flagged Deleted " +
             "and still holds fields, which Mutagen does not write for a deleted record.",
@@ -441,9 +440,9 @@ public sealed class InitModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
-        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
-        Assert.Equal((false, InitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal((false, DecompileAndCommitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
         Assert.Equal(
             $"Fixture.esp does not round-trip through its own source: MISC {dropped} is absent from the rewrite, " +
             "so its records cannot be proven intact.",
@@ -467,9 +466,9 @@ public sealed class InitModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
-        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
-        Assert.Equal((false, InitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal((false, DecompileAndCommitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
         Assert.Equal(
             "Fixture.esp cannot become source: NPC_ 00000000 holds the null FormID, so the plugin is malformed.",
             result.Message);
@@ -497,9 +496,9 @@ public sealed class InitModTests
 
         var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
-        var result = (await InitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
+        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
-        Assert.Equal((false, InitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
+        Assert.Equal((false, DecompileAndCommitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
         Assert.Equal(
             "Fixture.esp cannot become source: NPC_ 000000:Fixture.esp holds object ID 000000, " +
             "the FormKey its plugin header's source holds.",

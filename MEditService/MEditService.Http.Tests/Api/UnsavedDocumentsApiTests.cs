@@ -19,7 +19,7 @@ public sealed class UnsavedDocumentsApiTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         var formKey = await Client.FirstFormKey(Plugin, Origin);
@@ -43,7 +43,7 @@ public sealed class UnsavedDocumentsApiTests : HostedTests
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.Init(Origin)).EnsureSuccessStatusCode();
+        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         var document = OtherTool.SourceDocumentCarrying(OtherTool.ModFolderOf(fx, Origin), Plugin, Npc);

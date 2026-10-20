@@ -24,9 +24,6 @@ export type CompareRecordsResponse = Schemas['CompareRecordsResponse'];
 export type CopyText = Schemas['CopyText'];
 
 export type ChangedPlugin = Schemas['ChangedPlugin'];
-
-/** A plugin a build compiled, with the diagnostics the reference check left. */
-export type CompiledPlugin = Schemas['CompiledPlugin'];
 export type CompileDiagnostic = Schemas['CompileDiagnostic'];
 
 /** ADR-0012. */

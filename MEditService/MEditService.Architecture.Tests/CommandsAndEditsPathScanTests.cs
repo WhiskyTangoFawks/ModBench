@@ -53,18 +53,18 @@ public sealed class CommandsAndEditsPathScanTests
             "var tree = Path.Combine(modFolder, root);\n");
         Directory.CreateDirectory(Path.Combine(root, "MEditService.Commands"));
         File.WriteAllText(
-            Path.Combine(root, "MEditService.Commands", "InitModHandler.cs"),
+            Path.Combine(root, "MEditService.Commands", "DecompileAndCommitModHandler.cs"),
             "var bytes = File.ReadAllBytes(plugin.Path);\n");
 
         var counts = Counts(root, ScannedRoots);
 
         Assert.Equal(
             [
+                "MEditService.Commands/DecompileAndCommitModHandler.cs: File.ReadAllBytes: 1",
                 "MEditService.Commands/Edits/PluginCompileService.cs: File.ReadAllBytes: 1",
                 "MEditService.Commands/Edits/PluginCompileService.cs: Path.Combine: 2",
                 "MEditService.Commands/Edits/PluginCompileService.cs: new FileInfo: 1",
                 "MEditService.Commands/Edits/PluginCompileService.cs: new System.IO.DirectoryInfo: 1",
-                "MEditService.Commands/InitModHandler.cs: File.ReadAllBytes: 1",
             ],
             counts);
     }

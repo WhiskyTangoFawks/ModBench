@@ -9,14 +9,14 @@ namespace MEditService.Commands.Tests.RealData;
 public sealed class PluginDiagnosisRoundTripGateTests
 {
     [Fact]
-    public async Task InitAsync_OfAMisshapedPerkPlugin_NamesThePerkRecordClassUnknown()
+    public async Task DecompileAndCommit_OfAMisshapedPerkPlugin_NamesThePerkRecordClassUnknown()
     {
         using var scratch = new RealFixtureScratch(MisshapedPerkPlugin.Plugin);
 
-        var result = await scratch.InitAsync();
+        var result = await scratch.DecompileAndCommitAsync();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains("Perk", result.Message);
         Assert.Contains(MisshapedPerkPlugin.FormKey, result.Message);
@@ -26,14 +26,14 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task InitAsync_OfAMismatchedFnamPlugin_NamesOnlyThePluginWhenMutagenReportsNoRecordIdentity()
+    public async Task DecompileAndCommit_OfAMismatchedFnamPlugin_NamesOnlyThePluginWhenMutagenReportsNoRecordIdentity()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
 
-        var result = await scratch.InitAsync();
+        var result = await scratch.DecompileAndCommitAsync();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains("All FNAM strings should be the same", result.Message);
         Assert.DoesNotContain("EditorID", result.Message);
@@ -41,14 +41,14 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task InitAsync_OfAMismatchedFnamPlugin_NamesTheUpstreamMutagenIssueInstead()
+    public async Task DecompileAndCommit_OfAMismatchedFnamPlugin_NamesTheUpstreamMutagenIssueInstead()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
 
-        var result = await scratch.InitAsync();
+        var result = await scratch.DecompileAndCommitAsync();
 
         Assert.False(result.Applied);
-        Assert.Equal(InitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains("blocked upstream: Mutagen #687", result.Message);
         Assert.DoesNotContain($"— {PluginDiagnosis.UnknownClass}:", result.Message);
@@ -70,8 +70,8 @@ public sealed class PluginDiagnosisRoundTripGateTests
             _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, Origin, _gameDirectory);
         }
 
-        public async Task<PluginInit> InitAsync() =>
-            (await InitEveryPluginOf.ModAsync(_loadOrder, Origin)).Only();
+        public async Task<PluginDecompiledAndCommitted> DecompileAndCommitAsync() =>
+            (await DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, Origin)).Only();
 
         public void Dispose()
         {

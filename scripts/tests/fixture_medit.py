@@ -149,8 +149,8 @@ def source_folder(instance: pathlib.Path, mod: str) -> pathlib.Path:
     return instance / 'source' / mod
 
 
-def init_mod(fixture: Fixture, mod: str) -> None:
-    call('POST', fixture.url + '/init', {'mods': [
+def decompile_and_commit_mod(fixture: Fixture, mod: str) -> None:
+    call('POST', fixture.url + '/decompile-and-commit', {'mods': [
         {'name': mod, 'sourceFolder': str(source_folder(fixture.instance, mod)), 'installationFiles': [], 'metadataFiles': []}]})
 
 
