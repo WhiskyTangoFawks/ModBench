@@ -449,6 +449,8 @@ export interface InstanceAdapter {
   modOrder(): Promise<TakenNames>;
   /** The downloaded files now, without the rest of the instance. */
   downloadedFiles(): Promise<DownloadedFiles>;
+  /** The downloaded file `path` names, however the path is spelled; undefined when it names none. */
+  downloadedFileAt(path: string): Promise<DownloadedFile | undefined>;
   /** Every source mod now. */
   sourceMods(): Promise<SourceMods>;
   readonly names: ManagerNames;

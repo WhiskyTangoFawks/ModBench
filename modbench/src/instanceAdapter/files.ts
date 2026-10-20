@@ -123,6 +123,18 @@ export async function stampOf(path: string): Promise<FileStamp> {
   return { size: info.size, modifiedNs: info.mtimeNs, changedNs: info.ctimeNs };
 }
 
+/** Whether two paths are one file on disk, however each is spelled: through a symlink, a hard link or a
+ *  case-folding file system. A path where nothing is names no file. */
+export async function sameFile(a: string, b: string): Promise<boolean> {
+  try {
+    const [first, second] = await Promise.all([stat(a, { bigint: true }), stat(b, { bigint: true })]);
+    return first.dev === second.dev && first.ino === second.ino;
+  } catch (err) {
+    if (errnoCode(err) !== 'ENOENT') throw err;
+    return false;
+  }
+}
+
 /** Reads `path` as text. Pass `ifMissing` to read a missing file as that text instead of
  *  rejecting. */
 export function get(path: string, ifMissing?: string): Promise<string> {

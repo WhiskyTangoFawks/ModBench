@@ -192,6 +192,36 @@ describe('the MO2 Instance adapter', () => {
 
         expect(downloadedFiles.kind === 'listed' && downloadedFiles.files?.map(({ name }) => name)).toEqual(['Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z']);
       });
+
+      describe('the downloaded file a path names', () => {
+        const listed = join('downloads', DOWNLOADED_FILE);
+
+        it('answers the file for the path it is listed at', async () => {
+          expect((await adapter.downloadedFileAt(join(root, listed)))?.name).toBe(DOWNLOADED_FILE);
+        });
+
+        it('answers the file through a symlink to it', async () => {
+          await symlink(join(root, listed), join(root, 'link.7z'));
+
+          expect((await adapter.downloadedFileAt(join(root, 'link.7z')))?.name).toBe(DOWNLOADED_FILE);
+        });
+
+        it('answers the file for a path that reaches it through a folder link', async () => {
+          await symlink(join(root, 'downloads'), join(root, 'dl'));
+
+          expect((await adapter.downloadedFileAt(join(root, 'dl', DOWNLOADED_FILE)))?.name).toBe(DOWNLOADED_FILE);
+        });
+
+        it('answers nothing for a file that is not listed', async () => {
+          await writeFile(join(root, 'Other.7z'), 'other');
+
+          expect(await adapter.downloadedFileAt(join(root, 'Other.7z'))).toBeUndefined();
+        });
+
+        it('answers nothing for a path where nothing is', async () => {
+          expect(await adapter.downloadedFileAt(join(root, 'nowhere.7z'))).toBeUndefined();
+        });
+      });
     });
 
     describe('the plugins provided, as a change to the plugin order over them reads them', () => {

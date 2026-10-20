@@ -11,7 +11,7 @@ import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/
 import { gameOfSettings } from './mo2Game';
 import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
-import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, type SkippedLink, stampOf, isOwnTemp } from '../files';
+import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, sameFile, type SkippedLink, stampOf, isOwnTemp } from '../files';
 import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolders } from '../instanceAdapter';
 import { DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile } from './layout';
 import { mo2Archives } from './mo2Archives';
@@ -130,11 +130,19 @@ export function readingSource(context: Mo2Context): ReadingSource {
 
 export function mo2Reads(
   context: Mo2Context, source: ReadingSource,
-): Pick<InstanceAdapter, 'modFolderPath' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceMods'> {
+): Pick<InstanceAdapter, 'modFolderPath' | 'sourceFolder' | 'fileStamp' | 'entryKey' | 'profiles' | 'modOrder' | 'downloadedFiles' | 'downloadedFileAt' | 'sourceMods'> {
   const { instanceRoot } = context;
   return {
     profiles: () => source.profiles(ignoreSkippedLink),
     downloadedFiles: async () => (await source.settings()).downloadedFiles(ignoreSkippedLink),
+    async downloadedFileAt(path) {
+      const listed = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
+      if (listed.kind !== 'listed') return undefined;
+      for (const file of listed.files ?? []) {
+        if (await sameFile(file.path, path)) return file;
+      }
+      return undefined;
+    },
     modOrder: async () => ({ mods: await source.modOrder((await source.settings()).profile), modFolders: await listModFolders(context, ignoreSkippedLink) }),
     sourceMods: () => source.sourceMods(),
     modFolderPath: (name) => modFolderNamed(context, name, 'list'),

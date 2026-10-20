@@ -189,6 +189,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     profiles: () => unreadable('profiles', current.profiles),
     modOrder: () => unreadable('modOrder', { mods: current.mods, modFolders: current.modFolders?.all }),
     downloadedFiles: () => unreadable('downloadedFiles', current.downloadedFiles),
+    downloadedFileAt: async (path) => {
+      const listed = await unreadable('downloadedFiles', current.downloadedFiles);
+      return listed.kind === 'listed' ? listed.files?.find((file) => file.path === path) : undefined;
+    },
     sourceMods: () => unreadable('sourceMods', current.sourceMods),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
     modFolderPath: (mod) => Promise.resolve(answers.foldersAbsent?.has(mod) ? undefined : `/mods/${mod}`),
