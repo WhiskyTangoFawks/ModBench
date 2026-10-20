@@ -16,7 +16,7 @@ public sealed class CompilePluginMastersTests : IDisposable
     private const string CharlieName = "Charlie.esm";
     private const string DeltaName = "Delta.esm";
     private readonly ScratchDirectory _modFolder = new("medit-masters-");
-    private readonly ScratchDirectory _gameDirectory = new("medit-masters-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-masters-data-");
     private readonly List<LoadOrderEntry> _entries;
     private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginAddress _plugin = new(PluginName, "MastersMod");
@@ -29,18 +29,18 @@ public sealed class CompilePluginMastersTests : IDisposable
 
     public CompilePluginMastersTests()
     {
-        var bravoPath = Path.Combine(_gameDirectory, BravoName);
+        var bravoPath = Path.Combine(_dataFolder, BravoName);
         var bravoMod = new Fallout4Mod(ModKey.FromFileName(BravoName), Fallout4Release.Fallout4);
         var bravoKeyword = bravoMod.Keywords.AddNew("BravoKeyword");
         _bravoRace = bravoMod.Races.AddNew("BravoRace").FormKey;
         bravoMod.WriteToBinary(bravoPath);
 
-        var charliePath = Path.Combine(_gameDirectory, CharlieName);
+        var charliePath = Path.Combine(_dataFolder, CharlieName);
         var charlieMod = new Fallout4Mod(ModKey.FromFileName(CharlieName), Fallout4Release.Fallout4);
         var charlieKeyword = charlieMod.Keywords.AddNew("CharlieKeyword");
         charlieMod.WriteToBinary(charliePath);
 
-        var deltaPath = Path.Combine(_gameDirectory, DeltaName);
+        var deltaPath = Path.Combine(_dataFolder, DeltaName);
         var deltaMod = new Fallout4Mod(ModKey.FromFileName(DeltaName), Fallout4Release.Fallout4);
         var deltaKeyword = deltaMod.Keywords.AddNew("DeltaKeyword");
         deltaMod.WriteToBinary(deltaPath);
@@ -65,7 +65,7 @@ public sealed class CompilePluginMastersTests : IDisposable
             new LoadOrderEntry(DeltaName, deltaPath, PluginOrigin.DataDirectory, Line: 2, Enabled: true, Winning: true),
             new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin, Line: 3, Enabled: true, Winning: true),
         ];
-        _loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, _entries);
+        _loadOrder = SnapshotPlugins.Snapshot(_dataFolder, instanceRoot: null, GameRelease.Fallout4, _entries);
 
         DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, _plugin.Origin)
             .GetAwaiter().GetResult();
@@ -74,7 +74,7 @@ public sealed class CompilePluginMastersTests : IDisposable
     public void Dispose()
     {
         _modFolder.Dispose();
-        _gameDirectory.Dispose();
+        _dataFolder.Dispose();
     }
 
     private CompilePluginHandler CompileService() =>
@@ -95,7 +95,7 @@ public sealed class CompilePluginMastersTests : IDisposable
     public async Task Compile_WhenTheLoadOrderLacksAMasterTheSourceReferences_IsRefusedNamingIt_AndLeavesTheBinary()
     {
         var binary = File.ReadAllBytes(Path.Combine(_modFolder, PluginName));
-        var withoutBravo = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, _entries.Where(entry => entry.Name != BravoName));
+        var withoutBravo = SnapshotPlugins.Snapshot(_dataFolder, instanceRoot: null, GameRelease.Fallout4, _entries.Where(entry => entry.Name != BravoName));
 
         var answer = (await CompileServices.Over(withoutBravo).CompileAsync([_plugin])).Value();
 

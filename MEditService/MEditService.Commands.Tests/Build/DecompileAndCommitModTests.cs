@@ -20,8 +20,8 @@ public sealed class DecompileAndCommitModTests
     [Fact]
     public async Task InitMod_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
     {
-        using var gameDir = new ScratchDirectory("medit-init-noorigin-game-");
-        var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], [], [], [], [], Language.English);
+        using var dataFolder = new ScratchDirectory("medit-init-noorigin-data-");
+        var loadOrder = new LoadOrderSnapshot(dataFolder, null, GameRelease.Fallout4, [], [], [], [], [], [], Language.English);
 
         var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "NoSuchMod")).Value();
 
@@ -34,7 +34,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_RefusesTheWholeMod_WhenOnePluginCannotBeRead_WritingNothing()
     {
         using var modFolder = new ScratchDirectory("medit-init-unopened-");
-        using var gameDir = new ScratchDirectory("medit-init-unopened-game-");
+        using var dataFolder = new ScratchDirectory("medit-init-unopened-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("FirstNpc");
@@ -43,7 +43,7 @@ public sealed class DecompileAndCommitModTests
         var existingFileTheAdapterCannotRead = Path.Combine(modFolder, "Locked.esp");
         new Fallout4Mod(ModKey.FromFileName("Locked.esp"), Fallout4Release.Fallout4).WriteToBinary(existingFileTheAdapterCannotRead);
 
-        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+        var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
         [
             new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true),
             new LoadOrderEntry("Locked.esp", existingFileTheAdapterCannotRead, "FixtureMod", 1, Enabled: true, Winning: true),
@@ -74,7 +74,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_RealLoadOrder_InitsTheMod_HoldingEachRecordWithoutCarriageReturns()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-");
-        using var gameDir = new ScratchDirectory("medit-initservice-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc1 = mod.Npcs.AddNew("FirstNpc");
@@ -82,7 +82,7 @@ public sealed class DecompileAndCommitModTests
         mod.WriteToBinary(pluginPath);
 
         var loadOrder = SnapshotPlugins.Snapshot(
-            gameDir, gameDir, GameRelease.Fallout4,
+            dataFolder, dataFolder, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
         await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
 
@@ -106,14 +106,14 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_OfAPluginInAModWithARepository_RefusesBeforeParsingIt()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-alreadysource-");
-        using var gameDir = new ScratchDirectory("medit-initservice-alreadysource-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-alreadysource-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("SomeNpc");
         CompiledPluginTemplates.WriteCompiledPlugin(modFolder, mod);
 
         var loadOrder = SnapshotPlugins.Snapshot(
-            gameDir, gameDir, GameRelease.Fallout4,
+            dataFolder, dataFolder, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
 
         byte[] notAPluginSoAnyDeepParseFails = [0x00, 0x01, 0x02, 0x03];
@@ -129,7 +129,7 @@ public sealed class DecompileAndCommitModTests
     {
         using var modA = new ScratchDirectory("medit-initservice-twomods-a-");
         using var modB = new ScratchDirectory("medit-initservice-twomods-b-");
-        using var gameDir = new ScratchDirectory("medit-initservice-twomods-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-twomods-data-");
         var pathA = Path.Combine(modA, "Same.esp");
         var pathB = Path.Combine(modB, "Same.esp");
         foreach (var path in new[] { pathA, pathB })
@@ -139,7 +139,7 @@ public sealed class DecompileAndCommitModTests
             mod.WriteToBinary(path);
         }
 
-        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+        var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
         [
             new LoadOrderEntry("Same.esp", pathA, "ModA", Line: 0, Enabled: true, Winning: false),
             new LoadOrderEntry("Same.esp", pathB, "ModB", Line: 1, Enabled: true, Winning: true),
@@ -156,7 +156,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_OverTwoPluginsOfOneOrigin_ProgressNamesTheModAndEachPhase_AndEndsAtRest()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-progress-");
-        using var gameDir = new ScratchDirectory("medit-initservice-progress-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-progress-data-");
         var firstPluginPath = Path.Combine(modFolder, "First.esp");
         var firstMod = new Fallout4Mod(ModKey.FromFileName("First.esp"), Fallout4Release.Fallout4);
         firstMod.Npcs.AddNew("OnlyNpc");
@@ -168,7 +168,7 @@ public sealed class DecompileAndCommitModTests
         secondMod.WriteToBinary(secondPluginPath);
 
         var loadOrder = SnapshotPlugins.Snapshot(
-            gameDir, gameDir, GameRelease.Fallout4,
+            dataFolder, dataFolder, GameRelease.Fallout4,
             [
                 new LoadOrderEntry("First.esp", firstPluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry("Second.esp", secondPluginPath, "FixtureMod", Line: 1, Enabled: true, Winning: true),
@@ -190,14 +190,14 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-badroundtrip-");
-        using var gameDir = new ScratchDirectory("medit-initservice-badroundtrip-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-badroundtrip-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew("OriginalName");
         mod.WriteToBinary(pluginPath);
 
         var loadOrder = SnapshotPlugins.Snapshot(
-            gameDir, gameDir, GameRelease.Fallout4,
+            dataFolder, dataFolder, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
 
         static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken ct)
@@ -223,7 +223,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_WithAFloatFieldThatFailsToRoundTrip_RefusesNamingTheRecordAndTheField()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-floatroundtrip-");
-        using var gameDir = new ScratchDirectory("medit-initservice-floatroundtrip-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-floatroundtrip-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew("SomeNpc");
@@ -232,7 +232,7 @@ public sealed class DecompileAndCommitModTests
         mod.WriteToBinary(pluginPath);
 
         var loadOrder = SnapshotPlugins.Snapshot(
-            gameDir, gameDir, GameRelease.Fallout4,
+            dataFolder, dataFolder, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
 
         static async Task<IMod> DeserializeThenMutateTheFloat(string folder, CancellationToken ct)
@@ -259,7 +259,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_WithOpaqueTes4HeaderSubrecordsSet_Lands()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-opaqueheader-");
-        using var gameDir = new ScratchDirectory("medit-initservice-opaqueheader-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-opaqueheader-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("SomeNpc");
@@ -274,7 +274,7 @@ public sealed class DecompileAndCommitModTests
         mod.WriteToBinary(pluginPath);
 
         var loadOrder = SnapshotPlugins.Snapshot(
-            gameDir, gameDir, GameRelease.Fallout4,
+            dataFolder, dataFolder, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
 
         await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
@@ -301,7 +301,7 @@ public sealed class DecompileAndCommitModTests
         string fieldName, Action<Fallout4ModHeader> setBaseline, Action<Fallout4ModHeader> corrupt)
     {
         using var modFolder = new ScratchDirectory($"medit-initservice-header-{fieldName}-");
-        using var gameDir = new ScratchDirectory($"medit-initservice-header-{fieldName}-game-");
+        using var dataFolder = new ScratchDirectory($"medit-initservice-header-{fieldName}-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("SomeNpc");
@@ -309,7 +309,7 @@ public sealed class DecompileAndCommitModTests
         mod.WriteToBinary(pluginPath);
 
         var loadOrder = SnapshotPlugins.Snapshot(
-            gameDir, gameDir, GameRelease.Fallout4,
+            dataFolder, dataFolder, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
 
         async Task<IMod> DeserializeThenCorrupt(string folder, CancellationToken ct)
@@ -334,7 +334,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_WithARecordThatOnlyGainsSubrecordsOnRewrite_RefusesNamingTheRealFieldNotSubrecordInventory()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-furn-insert-");
-        using var gameDir = new ScratchDirectory("medit-initservice-furn-insert-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-furn-insert-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Furniture.AddNew("TestFurn");
@@ -342,7 +342,7 @@ public sealed class DecompileAndCommitModTests
         await File.WriteAllBytesAsync(pluginPath, PluginBinaryForge.WithoutSubrecords(await File.ReadAllBytesAsync(pluginPath), "FURN", "FNAM", "MNAM"));
 
         var loadOrder = SnapshotPlugins.Snapshot(
-            gameDir, gameDir, GameRelease.Fallout4,
+            dataFolder, dataFolder, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
         var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
@@ -362,7 +362,7 @@ public sealed class DecompileAndCommitModTests
     {
         using var modFolder = new ScratchDirectory("medit-initservice-localized-");
         using var sourceFolder = new ScratchDirectory("medit-initservice-localized-source-");
-        using var gameDir = new ScratchDirectory("medit-initservice-localized-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-localized-data-");
         var (pluginPath, door) = WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(modFolder);
 
         var anyBa2MakesMutagenResolveArchivePriorityNeedingWindowsPluginListings =
@@ -370,7 +370,7 @@ public sealed class DecompileAndCommitModTests
         File.WriteAllBytes(anyBa2MakesMutagenResolveArchivePriorityNeedingWindowsPluginListings, []);
 
         var loadOrder = SnapshotPlugins.Snapshot(
-            gameDir, gameDir, GameRelease.Fallout4,
+            dataFolder, dataFolder, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true,
                 NamedProvider: new PluginProvider.FromMod("FixtureMod", modFolder, sourceFolder))]);
         await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
@@ -385,14 +385,14 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_LocalizedPluginMissingItsStringsFile_RefusesNamingTheMissingFile_SinceMutagenLookupOfAMissingFileDoesNotThrow()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-localized-missing-");
-        using var gameDir = new ScratchDirectory("medit-initservice-localized-missing-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-localized-missing-data-");
         var (pluginPath, _) = WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(modFolder);
 
         var stringsFolderAsIfItNeverShippedWithTheDownload = Path.Combine(modFolder, "Strings");
         Directory.Delete(stringsFolderAsIfItNeverShippedWithTheDownload, recursive: true);
 
         var loadOrder = SnapshotPlugins.Snapshot(
-            gameDir, gameDir, GameRelease.Fallout4,
+            dataFolder, dataFolder, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
         var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
@@ -411,12 +411,12 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_ADeletedRecordStillHoldingFields_RefusesNamingIt_SinceMutagenWritesADeletedRecordAsItsHeader()
     {
         using var modFolder = new ScratchDirectory("medit-init-deleted-fields-");
-        using var gameDir = new ScratchDirectory("medit-init-deleted-fields-game-");
+        using var dataFolder = new ScratchDirectory("medit-init-deleted-fields-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var npc = new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800);
         DeletedNpcPlugin.WriteHoldingEveryField(pluginPath, npc);
 
-        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+        var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
         var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
@@ -432,13 +432,13 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_ARecordInAGroupMutagenDrops_RefusesNamingIt_SinceTheRewriteLacksIt()
     {
         using var modFolder = new ScratchDirectory("medit-init-dropped-group-");
-        using var gameDir = new ScratchDirectory("medit-init-dropped-group-game-");
+        using var dataFolder = new ScratchDirectory("medit-init-dropped-group-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = ModKey.FromFileName("Fixture.esp");
         var dropped = new FormKey(mod, 0x801);
         UnknownGroupPlugin.Write(pluginPath, new FormKey(mod, 0x800), dropped);
 
-        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+        var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
         var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
@@ -454,7 +454,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_ARecordWithANullFormId_RefusesNamingIt_SinceThePluginIsMalformed()
     {
         using var modFolder = new ScratchDirectory("medit-init-null-formid-");
-        using var gameDir = new ScratchDirectory("medit-init-null-formid-game-");
+        using var dataFolder = new ScratchDirectory("medit-init-null-formid-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("NullGuy");
@@ -464,7 +464,7 @@ public sealed class DecompileAndCommitModTests
         BitConverter.GetBytes(0u).CopyTo(bytes, bytes.AsSpan().LastIndexOf("NPC_"u8) + formIdOffset);
         File.WriteAllBytes(pluginPath, bytes);
 
-        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+        var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
         var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
@@ -479,7 +479,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_ARecordOfObjectIdZero_RefusesNamingIt_SinceItsFormKeyIsTheHeaders()
     {
         using var modFolder = new ScratchDirectory("medit-init-object-id-zero-");
-        using var gameDir = new ScratchDirectory("medit-init-object-id-zero-game-");
+        using var dataFolder = new ScratchDirectory("medit-init-object-id-zero-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Master.esm") });
@@ -494,7 +494,7 @@ public sealed class DecompileAndCommitModTests
         BitConverter.GetBytes(ownObjectIdZero).CopyTo(bytes, bytes.AsSpan().LastIndexOf("NPC_"u8) + formIdOffset);
         File.WriteAllBytes(pluginPath, bytes);
 
-        var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
+        var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
         var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 

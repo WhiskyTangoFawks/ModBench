@@ -49,7 +49,7 @@ public sealed class ModStatusTraceTests : HostedTests
 
     private async Task PutLoadOrder(ScatteredFixtureData fx) =>
         (await Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(
-            fx.GameDirectory, fx.InstanceRoot, fx.Plugins, mods: Mods(), statCache: StatCache))).EnsureSuccessStatusCode();
+            fx.DataFolder, fx.InstanceRoot, fx.Plugins, mods: Mods(), statCache: StatCache))).EnsureSuccessStatusCode();
 
     private async Task<Dictionary<string, JsonElement>> ModStatus()
     {

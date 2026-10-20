@@ -11,7 +11,7 @@ public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixtur
     private readonly HttpClient _client = loaded.Client;
 
     private Task<HttpResponseMessage> Put(ScatteredFixtureData fx, IEnumerable<LoadOrderEntry> plugins) =>
-        _client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins));
+        _client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, plugins));
 
     [Fact]
     public async Task PutLoadOrder_APluginTheSnapshotDoesNotListAsActive_ComesBackOutsideTheLoadOrder_ReadOnly()

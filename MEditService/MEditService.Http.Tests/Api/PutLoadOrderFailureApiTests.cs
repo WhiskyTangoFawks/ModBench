@@ -18,7 +18,7 @@ public sealed class PutLoadOrderFailureApiTests : HostedTests
             .BuildScattered());
         Services.GetRequiredService<LoadOrderHolder>().Arrived += (_, _) => throw new InvalidOperationException("A subscriber failed.");
 
-        var response = await Client.PutAsJsonAsync("/load-order", SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, fx.Plugins));
+        var response = await Client.PutAsJsonAsync("/load-order", SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, fx.Plugins));
 
         await response.AssertIsProblem(HttpStatusCode.InternalServerError);
     }

@@ -75,7 +75,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         private const string DestinationPluginName = "Destination.esp";
         private const string DestinationOrigin = "DestinationMod";
 
-        private readonly ScratchDirectory _gameDirectory = new("medit-copyfail-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-copyfail-data-");
         private readonly ScratchDirectory _sourceModFolder = new("medit-copyfail-source-");
         private readonly ScratchDirectory _destinationModFolder = new("medit-copyfail-dest-");
         private readonly string _sourcePath;
@@ -96,7 +96,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             {
                 foreach (var master in overlay.ModHeader.MasterReferences)
                 {
-                    var stubPath = Path.Combine(_gameDirectory, master.Master.FileName);
+                    var stubPath = Path.Combine(_dataFolder, master.Master.FileName);
                     new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(stubPath);
                     inputs.Add(new LoadOrderEntry(master.Master.FileName, stubPath, "Stubs", inputs.Count, Enabled: true, Winning: true));
                 }
@@ -109,7 +109,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             destination.WriteToBinary(destinationPath);
             inputs.Add(new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, inputs.Count, Enabled: true, Winning: true));
 
-            var loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, _gameDirectory, GameRelease.Fallout4, inputs);
+            var loadOrder = SnapshotPlugins.Snapshot(_dataFolder, _dataFolder, GameRelease.Fallout4, inputs);
             DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, DestinationOrigin).GetAwaiter().GetResult();
 
             holder.Apply(loadOrder);
@@ -124,7 +124,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         {
             _sourceModFolder.Dispose();
             _destinationModFolder.Dispose();
-            _gameDirectory.Dispose();
+            _dataFolder.Dispose();
         }
     }
 }

@@ -17,20 +17,20 @@ public sealed class RenameSourceHandlerTests : IDisposable
     private const string MasterName = "Master.esm";
     private static readonly PluginAddress Old = new("Old.esp", SourceModName);
     private readonly ScratchDirectory _root = new("medit-rename-source-");
-    private readonly string _game;
+    private readonly string _dataFolder;
     private readonly string _sourceMod;
     private readonly string _nonSourceMod;
     private readonly LoadOrderHolder _holder = new();
 
     public RenameSourceHandlerTests()
     {
-        _game = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
+        _dataFolder = Directory.CreateDirectory(Path.Combine(_root, "Data")).FullName;
         _sourceMod = Directory.CreateDirectory(Path.Combine(_root, "mods", SourceModName)).FullName;
         _nonSourceMod = Directory.CreateDirectory(Path.Combine(_root, "mods", NonSourceModName)).FullName;
 
         var master = new Fallout4Mod(ModKey.FromFileName(MasterName), Fallout4Release.Fallout4);
         var masterNpc = master.Npcs.AddNew("MasterNpc");
-        master.WriteToBinary(Path.Combine(_game, MasterName));
+        master.WriteToBinary(Path.Combine(_dataFolder, MasterName));
 
         var old = new Fallout4Mod(ModKey.FromFileName(Old.Name), Fallout4Release.Fallout4);
         ContainerModPlugin.AddTo(old);
@@ -94,7 +94,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
     public void RenameSource_ToANameThatIsNoPluginFile_IsRefusedNamingTheExtensionsTheReleaseTakes(GameRelease release, string expected)
     {
         var holder = new LoadOrderHolder();
-        holder.Apply(SnapshotPlugins.Snapshot(_game, _root, release, []));
+        holder.Apply(SnapshotPlugins.Snapshot(_dataFolder, _root, release, []));
 
         var result = new Read(TestEditService.Over(holder).GetRequiredService<RenameSourceChangesHandler>().RenameSource(Old, "New.txt"));
 
@@ -243,13 +243,13 @@ public sealed class RenameSourceHandlerTests : IDisposable
     {
         List<LoadOrderEntry> entries =
         [
-            new(MasterName, Path.Combine(_game, MasterName), PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
+            new(MasterName, Path.Combine(_dataFolder, MasterName), PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
             new(compiledPlugin, Path.Combine(_sourceMod, compiledPlugin), SourceModName, 1, Enabled: true, Winning: true),
             new("Other.esp", Path.Combine(_nonSourceMod, "Other.esp"), NonSourceModName, 2, Enabled: true, Winning: true),
         ];
         if (File.Exists(Path.Combine(_sourceMod, "Loose.esp")))
             entries.Add(new("Loose.esp", Path.Combine(_sourceMod, "Loose.esp"), SourceModName, 3, Enabled: true, Winning: true));
-        _holder.Apply(SnapshotPlugins.Snapshot(_game, _root, GameRelease.Fallout4, entries));
+        _holder.Apply(SnapshotPlugins.Snapshot(_dataFolder, _root, GameRelease.Fallout4, entries));
     }
 
     private static void WritePlugin(string modFolder, string name)

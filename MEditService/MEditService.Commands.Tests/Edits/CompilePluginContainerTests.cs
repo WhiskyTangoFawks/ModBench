@@ -24,7 +24,7 @@ public sealed class CompilePluginContainerTests : IDisposable
     private const string QuestRecordType = "quest";
 
     private readonly ScratchDirectory _modFolder = new("medit-container-compile-");
-    private readonly ScratchDirectory _gameDirectory = new("medit-container-compile-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-container-compile-data-");
     private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginAddress _plugin = new(PluginName, Origin);
 
@@ -113,14 +113,14 @@ public sealed class CompilePluginContainerTests : IDisposable
         (_questA, _questB) = (questA.FormKey, questB.FormKey);
 
         _loadOrder = SnapshotPlugins.Snapshot(
-            _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
+            _dataFolder, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(PluginName, pluginPath, Origin, Line: 0, Enabled: true, Winning: true)]);
     }
 
     public void Dispose()
     {
         _modFolder.Dispose();
-        _gameDirectory.Dispose();
+        _dataFolder.Dispose();
     }
 
     private CompilePluginHandler CompileService() => CompileServices.Over(_loadOrder);

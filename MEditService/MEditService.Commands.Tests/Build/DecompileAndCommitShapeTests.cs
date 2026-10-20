@@ -20,12 +20,12 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
     private const string ModName = "TwoPluginMod";
     private readonly ScratchDirectory _root = new("medit-init-shape-");
     private readonly string _modFolder;
-    private readonly string _gameDir;
+    private readonly string _dataFolder;
 
     public DecompileAndCommitShapeTests()
     {
         _modFolder = Directory.CreateDirectory(Path.Combine(_root, ModName)).FullName;
-        _gameDir = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
+        _dataFolder = Directory.CreateDirectory(Path.Combine(_root, "Data")).FullName;
     }
 
     public void Dispose() => _root.Dispose();
@@ -227,7 +227,7 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
             .Order(StringComparer.Ordinal)
             .Select((path, line) => new LoadOrderEntry(Path.GetFileName(path), path, ModName, line, Enabled: true, Winning: true))
             .ToList();
-        return SnapshotPlugins.Snapshot(_gameDir, _gameDir, GameRelease.Fallout4, entries);
+        return SnapshotPlugins.Snapshot(_dataFolder, _dataFolder, GameRelease.Fallout4, entries);
     }
 
 }

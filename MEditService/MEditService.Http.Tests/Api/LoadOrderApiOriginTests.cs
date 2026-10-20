@@ -19,7 +19,7 @@ public sealed class LoadOrderApiOriginTests(LoadedApiFixture<TestPluginFixture> 
 
         var response = await _client.PutLoadOrderAndAwaitReady(new
         {
-            dataFolder = fx.GameDirectory,
+            dataFolder = fx.DataFolder,
             instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Select(p => (p with { Origin = "SomeMod" }).Wire),
             active = SnapshotPlugins.Active(fx.Plugins.Select(p => p with { Origin = "SomeMod" })),

@@ -24,7 +24,7 @@ public sealed class QueriedPluginsFixture : IApiPluginFixture<QueriedPluginsFixt
         .WithPlugin(HeldPlugin, HeldByAnotherRecord, origin: HeldMod)
         .BuildScattered();
 
-    public string DataFolder => Data.GameDirectory;
+    public string DataFolder => Data.DataFolder;
     public IReadOnlyList<LoadOrderEntry> Plugins => Data.Plugins;
     public string InstanceRoot => Data.InstanceRoot;
 

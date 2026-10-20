@@ -57,7 +57,7 @@ public sealed class CreatePluginApiTests : HostedTests
     }
 
     private Task<HttpResponseMessage> PutWithPlaces(ScatteredFixtureData fx, IEnumerable<LoadOrderEntry> plugins, params object[] places) =>
-        Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins, places: places));
+        Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, plugins, places: places));
 
     private Task<HttpResponseMessage> CreateInMod(string origin, string name) =>
         Client.PostAsJsonAsync("/plugins/create-in-mod", new { origin, name });
