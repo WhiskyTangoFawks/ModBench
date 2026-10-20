@@ -231,7 +231,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
         var stamps = repository.StampsOf(Plugin).ByFormKey;
         Assert.Equal(
-            SourceRepository.ContentStamp(WithEditorId("RenamedNpc")),
+            TestAdapters.Source().ContentStamp(WithEditorId("RenamedNpc")),
             stamps[NpcFormKey]);
     }
 

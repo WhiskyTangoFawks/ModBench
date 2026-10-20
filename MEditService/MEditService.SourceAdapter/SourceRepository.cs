@@ -10,7 +10,7 @@ namespace MEditService.SourceAdapter;
 /// <summary>Documents by identity over one source mod folder (ADR-0014), and ADR-0007's
 /// git verbs beneath them. Every verb tolerates the folder having vanished since last observed:
 /// another tool can delete it.</summary>
-public sealed class SourceRepository : ISourceRepository
+internal sealed class SourceRepository : ISourceRepository
 {
     private readonly string _sourceFolder;
     private readonly string _modName;
@@ -58,10 +58,6 @@ public sealed class SourceRepository : ISourceRepository
 
     private static bool IsSourceMod(PluginProvider.FromMod mod) => mod.SourceFolder is { } sourceFolder && IsSourceMod(sourceFolder);
 
-    /// <summary>The refusal naming the instance root when it is not there; null when it is.</summary>
-    public static string? InstanceRootNotFound(string? instanceRoot) =>
-        Directory.Exists(instanceRoot) ? null : $"Instance root not found: {instanceRoot}";
-
     /// <summary>Whether the plugin's source reads: its mod is a source mod and holds one tree for it. A source mod
     /// holds none for a plugin another tool put there or whose source was deleted.</summary>
     internal static bool SourceReads(RegisteredPlugin plugin) =>
@@ -93,10 +89,6 @@ public sealed class SourceRepository : ISourceRepository
 
     /// <summary>Why git cannot be run here, so no repository can be made or written; null when it can.</summary>
     internal static SourceFailure? WhyGitCannotRun() => SourceFailure.Answer(GitCli.EnsureOnPath);
-
-    /// <summary>The stamp of one document's text, as the UTF-8 the record index stores: every side hashes
-    /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
-    public static string ContentStamp(string text) => TreeStamps.ContentStamp(text);
 
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
     /// asked; the body is the tree's answer, spliced out of another record's document when that is

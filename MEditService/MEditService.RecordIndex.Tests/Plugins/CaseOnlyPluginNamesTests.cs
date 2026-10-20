@@ -35,43 +35,11 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
         [.. index.Status.Failures.Select(f => f.Name).Order(StringComparer.Ordinal)];
 
     [Fact]
-    public void Reconcile_TwoNamesDifferingOnlyInCase_FailsBothNamingTheOtherAndIndexesTheRest()
+    public void Reconcile_TwoNamesDifferingOnlyInCase_FailsBothAndIndexesTheRest()
     {
         using var index = Reconciled(Named("Dup.esp"), Twin, Named("Fine.esp"));
 
-        var failures = index.Status.Failures;
         Assert.Equal(["Dup.esp", "dup.esp"], FailedNames(index));
-        Assert.Equal(
-            "Its name differs only in case from dup.esp from ModA, so no one can tell which the game loads. None is read.",
-            failures.Single(f => f.Name == "Dup.esp").Reason);
-        Assert.Equal(
-            "Its name differs only in case from Dup.esp from ModA, so no one can tell which the game loads. None is read.",
-            failures.Single(f => f.Name == "dup.esp").Reason);
-        Assert.Equal(["Fine.esp"], IndexedNames(index));
-    }
-
-    [Fact]
-    public void Reconcile_TwoOriginsDifferingOnlyInCase_FailsBothSayingTheOriginCollides()
-    {
-        var upper = Named("Dup.esp");
-        var lower = upper with { Origin = Origin.ToLowerInvariant(), Winning = false };
-
-        using var index = Reconciled(upper, lower, Named("Fine.esp"));
-
-        Assert.All(index.Status.Failures, f => Assert.StartsWith("Its origin differs only in case from ", f.Reason));
-        Assert.Equal(2, index.Status.Failures.Count);
-        Assert.Equal(["Fine.esp"], IndexedNames(index));
-    }
-
-    [Fact]
-    public void Reconcile_ThreeNamesDifferingOnlyInCase_FailsEachNamingBothOthers()
-    {
-        using var index = Reconciled(Named("Dup.esp"), Twin, Inactive("DUP.esp"), Named("Fine.esp"));
-
-        Assert.Equal(["DUP.esp", "Dup.esp", "dup.esp"], FailedNames(index));
-        Assert.Equal(
-            "Its name differs only in case from Dup.esp from ModA, DUP.esp from ModA, so no one can tell which the game loads. None is read.",
-            index.Status.Failures.Single(f => f.Name == "dup.esp").Reason);
         Assert.Equal(["Fine.esp"], IndexedNames(index));
     }
 

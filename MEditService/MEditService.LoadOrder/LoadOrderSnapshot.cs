@@ -78,7 +78,25 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// <summary>The plugins whose address another plugin's differs from only in case. Nothing can
     /// tell which of them the game loads, so they are in none of the other lists. Linux can hold such
     /// a pair; Windows cannot.</summary>
-    public IReadOnlyList<RegisteredPlugin> CaseOnlyCollisions { get; }
+    internal IReadOnlyList<RegisteredPlugin> CaseOnlyCollisions { get; }
+
+    /// <summary>Why each of <see cref="CaseOnlyCollisions"/> is read by no one: what differs only in case, and from which
+    /// plugins.</summary>
+    public IReadOnlyList<(RegisteredPlugin Plugin, string Reason)> CollisionReasons() =>
+    [
+        .. CaseOnlyCollisions.GroupBy(p => p.Key, PluginAddress.Comparer).SelectMany(twins => twins.Select(plugin =>
+        {
+            var others = twins.Where(other => other != plugin).ToList();
+            var differing = (others.Any(o => o.Name != plugin.Name), others.Any(o => o.Origin != plugin.Origin)) switch
+            {
+                (true, true) => "name and origin",
+                (true, false) => "name",
+                _ => "origin",
+            };
+            return (plugin, $"Its {differing} differs only in case from {string.Join(", ", others.Select(o => $"{o.Name} from {o.Origin}"))}, "
+                + "so no one can tell which the game loads. None is read.");
+        })),
+    ];
 
     /// <summary>The active plugins, in load order (ADR-0013).</summary>
     public IReadOnlyList<RegisteredPlugin> Active { get; }

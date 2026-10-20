@@ -45,7 +45,6 @@ CS_PROJECTS = {
     "MEditService/MEditService.RecordIndex.Tests": "MEditService.RecordIndex.Tests",
     "MEditService/MEditService.LoadOrder.Tests": "MEditService.LoadOrder.Tests",
     "MEditService/MEditService.PluginAdapter.Tests": "MEditService.PluginAdapter.Tests",
-    "MEditService/MEditService.Ports.Tests": "MEditService.Ports.Tests",
     "MEditService/MEditService.SourceAdapter.Tests": "MEditService.SourceAdapter.Tests",
     "MEditService/MEditService.TestSupport": "MEditService.TestSupport",
 }

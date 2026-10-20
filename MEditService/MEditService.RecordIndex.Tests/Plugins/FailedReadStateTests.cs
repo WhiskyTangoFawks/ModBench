@@ -646,6 +646,8 @@ public sealed class FailedReadStateTests : IDisposable
 
         public string? InstanceRootNotFound(string? instanceRoot) => _inner.InstanceRootNotFound(instanceRoot);
 
+        public string ContentStamp(string text) => _inner.ContentStamp(text);
+
         public SourceFailure? Init(
             string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
             IReadOnlyList<Asset> assets) =>

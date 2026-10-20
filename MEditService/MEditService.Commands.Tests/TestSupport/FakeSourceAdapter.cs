@@ -80,6 +80,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public string? InstanceRootNotFound(string? instanceRoot) => throw Unreached();
 
+    public string ContentStamp(string text) => throw Unreached();
+
     public SourceFailure? Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets)

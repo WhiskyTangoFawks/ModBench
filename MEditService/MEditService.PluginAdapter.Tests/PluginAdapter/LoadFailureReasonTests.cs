@@ -1,14 +1,14 @@
-namespace MEditService.Ports.Tests.Plugins;
+namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
-public sealed class PluginLoadFailureReasonTests
+public sealed class LoadFailureReasonTests
 {
     [Fact]
-    public void ReasonFor_NestedException_ContainsEveryMessageInTheChain_OutermostFirst()
+    public void NestedException_ReasonHoldsEveryMessageInTheChain_OutermostFirst()
     {
         var inner = new FormatException("inner boom");
         var outer = new InvalidOperationException("outer boom", inner);
 
-        var reason = PluginLoadFailure.ReasonFor(outer);
+        var reason = LoadFailureReason.Of(outer);
 
         Assert.Contains("outer boom", reason);
         Assert.Contains("inner boom", reason);
@@ -17,20 +17,20 @@ public sealed class PluginLoadFailureReasonTests
     }
 
     [Fact]
-    public void ReasonFor_NestedException_IncludesExceptionTypeNames()
+    public void NestedException_ReasonNamesEveryExceptionType()
     {
         var outer = new InvalidOperationException("outer boom", new FormatException("inner boom"));
 
-        var reason = PluginLoadFailure.ReasonFor(outer);
+        var reason = LoadFailureReason.Of(outer);
 
         Assert.Contains(nameof(InvalidOperationException), reason);
         Assert.Contains(nameof(FormatException), reason);
     }
 
     [Fact]
-    public void ReasonFor_SingleException_IsNotBlank()
+    public void SingleException_ReasonHoldsItsMessage()
     {
-        var reason = PluginLoadFailure.ReasonFor(new InvalidOperationException("only one"));
+        var reason = LoadFailureReason.Of(new InvalidOperationException("only one"));
 
         Assert.Contains("only one", reason);
     }

@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -14,6 +15,7 @@ internal sealed class StoreFactory(
     SchemaReflector schemaReflector,
     TableDdlBuilder ddlBuilder,
     IPluginAdapter plugins,
+    ISourceAdapter source,
     IndexWriteGate gate,
     FilterInForce filter,
     INotificationPublisher? notifications,
@@ -71,7 +73,7 @@ internal sealed class StoreFactory(
         // ADR-0010: a rebuild's whole job on an opened file, which the open already refused if
         // another process held it.
         if (atLeastSequence is not null) store.RebuildFile();
-        store.Initialize(gameRelease);
+        store.Initialize(gameRelease, source.ContentStamp);
         if (atLeastSequence is { } floor) store.SeedSequence(floor);
         return store;
     }

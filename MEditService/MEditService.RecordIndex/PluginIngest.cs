@@ -5,7 +5,6 @@ using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.RecordIndex.Queries;
-using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
@@ -16,14 +15,17 @@ namespace MEditService.RecordIndex;
 /// come from the same code a fresh ingest uses.</summary>
 internal sealed class PluginIngest
 {
+    private readonly Func<string, string> _contentStamp;
+
     private readonly DuckDBConnection _connection;
     private readonly ILogger _logger;
     private readonly ContainerDocuments _containers;
     private readonly RecordTypes _types;
     private readonly GameRelease _release;
 
-    public PluginIngest(DuckDBConnection connection, ILogger logger, GameRelease release)
+    public PluginIngest(DuckDBConnection connection, ILogger logger, GameRelease release, Func<string, string> contentStamp)
     {
+        _contentStamp = contentStamp;
         _connection = connection;
         _logger = logger;
         _containers = new ContainerDocuments(release);
@@ -62,7 +64,7 @@ internal sealed class PluginIngest
         if (schemas.ContainsKey(PluginHeader.RecordType))
         {
             using var headerAppender = _connection.CreateAppender(TableDdlBuilder.MirrorSchema, "records");
-            HeaderIndexer.Index(documents.Header, plugin, origin, headerAppender);
+            HeaderIndexer.Index(documents.Header, plugin, origin, headerAppender, _contentStamp);
         }
         WriteTypeFailures(plugin, origin, documents.Failures);
         return new Ingested(records, timer.ElapsedMilliseconds, counters.PrepareMs, counters.AppendMs);
@@ -272,7 +274,7 @@ internal sealed class PluginIngest
         // tree's file against.
         return new PreparedRecord(
             document.RecordType, document.FormKey, ContainerDocumentEdits.WithChildSlotsCut(document.Text, document.RecordType, _release),
-            SourceRepository.ContentStamp(document.Text), refs,
+            _contentStamp(document.Text), refs,
             RecordMasters.Of(pluginFileName, document.FormKey, refs.Select(r => r.TargetFormKey)), holdings, cellLocations, editorId, document.ParseDiagnosis);
     }
 

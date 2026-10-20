@@ -55,7 +55,7 @@ internal sealed class Indexer : IDisposable
         _logger = loggerFactory?.CreateLogger<Indexer>() ?? NullLogger<Indexer>.Instance;
         _filter = new FilterInForce(_logger, notifications);
         _storeFactory = new StoreFactory(
-            schemaReflector, new TableDdlBuilder(schemaReflector), adapter, _gate, _filter, notifications,
+            schemaReflector, new TableDdlBuilder(schemaReflector), adapter, source, _gate, _filter, notifications,
             loggerFactory?.CreateLogger<StoreFactory>(), timeProvider);
     }
 
@@ -599,7 +599,7 @@ internal sealed class Indexer : IDisposable
     private bool ReconcileProgressively(OpenScope scope, LoadOrderSnapshot snapshot, CancellationToken token)
     {
         var (held, store) = (scope.Held, scope.Store);
-        FailCollisions(snapshot.CaseOnlyCollisions);
+        FailCollisions(snapshot.CollisionReasons());
         _readLanguage = snapshot.StringsLanguage;
         var resolved = snapshot.Plugins;
         // A hash is kept only for a file the load order names, or the kept hashes grow by every path
@@ -775,29 +775,15 @@ internal sealed class Indexer : IDisposable
         catch (Exception ex) when (FailsOnePlugin(ex, token))
         {
             _logger.LogWarning(ex, "Could not read {Plugin} ({Origin})", plugin.Name, plugin.Origin);
-            FailRead(scope, plugin.Key, ReadFailure(PluginLoadFailure.ReasonFor(ex), scope.Store.DerivationOf(plugin.Key)));
+            FailRead(scope, plugin.Key, ReadFailure(LoadFailureReason.Of(ex), scope.Store.DerivationOf(plugin.Key)));
         }
     }
 
     // plugins.md, A row, Plugin: each plugin of a case-only collision is that row's "Failed to read".
-    private void FailCollisions(IReadOnlyList<RegisteredPlugin> collided)
+    private void FailCollisions(IReadOnlyList<(RegisteredPlugin Plugin, string Reason)> collisions)
     {
         IReadOnlyList<PluginLoadFailure> failures =
-        [
-            .. collided.GroupBy(p => p.Key, PluginAddress.Comparer).SelectMany(twins => twins.Select(plugin =>
-            {
-                var others = twins.Where(other => other != plugin).ToList();
-                var differing = (others.Any(o => o.Name != plugin.Name), others.Any(o => o.Origin != plugin.Origin)) switch
-                {
-                    (true, true) => "name and origin",
-                    (true, false) => "name",
-                    _ => "origin",
-                };
-                return new PluginLoadFailure(plugin.Name, plugin.Origin,
-                    $"Its {differing} differs only in case from {string.Join(", ", others.Select(o => $"{o.Name} from {o.Origin}"))}, "
-                    + "so no one can tell which the game loads. None is read.");
-            })),
-        ];
+            [.. collisions.Select(c => new PluginLoadFailure(c.Plugin.Name, c.Plugin.Origin, c.Reason))];
         lock (_lock)
         {
             if (failures.SequenceEqual(_collisionFailures)) return;
@@ -1044,7 +1030,7 @@ internal sealed class Indexer : IDisposable
         {
             _logger.LogWarning(ex, "Could not validate {Plugin} ({Origin})", key.Name, key.Origin);
             // A re-read that failed has named its own failure.
-            if (!held.IsHeldWithAFailure(key)) FailRead(scope, key, ValidationFailure(holdsTree, PluginLoadFailure.ReasonFor(ex)));
+            if (!held.IsHeldWithAFailure(key)) FailRead(scope, key, ValidationFailure(holdsTree, LoadFailureReason.Of(ex)));
             return false;
         }
     }
@@ -1128,7 +1114,7 @@ internal sealed class Indexer : IDisposable
         }
         catch (Exception ex)
         {
-            FailRead(scope, key, ReadFailure(PluginLoadFailure.ReasonFor(ex), scope.Store.DerivationOf(key)));
+            FailRead(scope, key, ReadFailure(LoadFailureReason.Of(ex), scope.Store.DerivationOf(key)));
             throw;
         }
         if (outcome.Failure is { } failure)

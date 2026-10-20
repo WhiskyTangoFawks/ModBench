@@ -214,14 +214,14 @@ internal sealed class Store : IDisposable
 
     /// <summary>Discards a file written under another <see cref="IndexVersion"/> (whole-file rebuild,
     /// never partial), then creates the fixed tables and stamps the version they were built under.</summary>
-    public void Initialize(GameRelease release)
+    public void Initialize(GameRelease release, Func<string, string> contentStamp)
     {
         var indexVersion = IndexVersion.For(_schemaReflector, release);
         DiscardFileWrittenUnderAnotherVersion(indexVersion);
         _schemas = _schemaReflector.GetSchemas(release);
         Release = release;
-        _pluginIngest = new PluginIngest(Connection, _logger, release);
-        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release);
+        _pluginIngest = new PluginIngest(Connection, _logger, release, contentStamp);
+        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release, contentStamp);
         TableDdlBuilder.CreateTables(Connection);
         DuckDbSql.Execute(Connection, $"DELETE FROM {IndexVersionRelation}");
         DuckDbSql.Execute(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);

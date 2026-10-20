@@ -82,7 +82,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         var stamps = Repository.StampsOf(Recased);
 
         Assert.Empty(stamps.Unreadable);
-        Assert.Equal(SourceRepository.ContentStamp(NpcBody), stamps.ByFormKey[NpcFormKey]);
+        Assert.Equal(TestAdapters.Source().ContentStamp(NpcBody), stamps.ByFormKey[NpcFormKey]);
     }
 
     [Fact]

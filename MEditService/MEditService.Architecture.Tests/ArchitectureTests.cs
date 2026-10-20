@@ -23,7 +23,7 @@ public sealed class ArchitectureTests
         typeof(IPluginAdapter).Assembly,
         typeof(INotificationPublisher).Assembly,
         typeof(IQueries).Assembly,
-        typeof(SourceRepository).Assembly,
+        typeof(ISourceAdapter).Assembly,
     ];
 
     private static readonly (Assembly Assembly, string Namespace)[] ReadModelAndWireRecordNamespaces =

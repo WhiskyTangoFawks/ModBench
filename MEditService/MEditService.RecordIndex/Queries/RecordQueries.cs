@@ -461,12 +461,10 @@ internal sealed class RecordQueries(
         return $"{given} means more than one thing: {string.Join("; ", listed)}.";
     }
 
-    public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
-    {
-        if (SourceRepository.InstanceRootNotFound(instanceRoot) is { } notFound)
-            return new(StoreRebuildRefusal.InstanceRootNotFound, notFound);
-        return _index.RebuildStore(gameRelease, instanceRoot);
-    }
+    public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot) =>
+        source.InstanceRootNotFound(instanceRoot) is { } notFound
+            ? new(StoreRebuildRefusal.InstanceRootNotFound, notFound)
+            : _index.RebuildStore(gameRelease, instanceRoot);
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,
