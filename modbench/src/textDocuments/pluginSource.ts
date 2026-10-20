@@ -7,12 +7,11 @@ export type IsPluginSource = (path: string) => boolean;
 export const isPluginSourceDocument = ({ scheme, fsPath }: vscode.Uri, isPluginSource: IsPluginSource): boolean =>
   CONTAINER_SCHEMES.has(scheme) && isPluginSource(fsPath);
 
-export const openDocument = (uri: vscode.Uri): Thenable<vscode.TextDocument> => vscode.workspace.openTextDocument(uri);
+export const openPluginSourceDocument = (uri: vscode.Uri): Thenable<vscode.TextDocument> => vscode.workspace.openTextDocument(uri);
 
-export const readHeldText = async (file: string): Promise<string> => heldText(await openDocument(vscode.Uri.file(file)));
+export const readHeldText = async (file: string): Promise<string> => heldText(await openPluginSourceDocument(vscode.Uri.file(file)));
 
-/** Each unsaved plugin-source file's text by absolute path. A child record's document holds its
- *  container's whole text, the one its file's document holds. */
+/** A child record's document holds its container's whole text, the one its file's document holds. */
 export function unsavedPluginSource(isPluginSource: IsPluginSource): { path: string; text: string }[] {
   const held = new Map<string, string>();
   for (const document of vscode.workspace.textDocuments) {
@@ -21,8 +20,7 @@ export function unsavedPluginSource(isPluginSource: IsPluginSource): { path: str
   return [...held].map(([path, text]) => ({ path, text }));
 }
 
-/** Calls back whenever a plugin-source document changes, opens or closes: a save, a revert, a close
- *  without saving and a move each end or begin an unsaved document. */
+/** A save, a revert, a close without saving and a move each end or begin an unsaved document. */
 export function onPluginSourceChanged(isPluginSource: IsPluginSource, changed: () => void): vscode.Disposable {
   const changedFor = ({ uri }: vscode.TextDocument) => { if (isPluginSourceDocument(uri, isPluginSource)) changed(); };
   return vscode.Disposable.from(

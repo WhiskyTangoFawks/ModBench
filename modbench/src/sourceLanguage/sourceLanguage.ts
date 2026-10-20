@@ -4,7 +4,7 @@ import type { Reporter } from '../ports/reporter';
 import { isPluginSourcePath, PLUGIN_SOURCE_GLOB } from '../instanceAdapter/instanceAdapter';
 import type { RecordDocumentClient } from '../textDocuments/recordDocument';
 import { heldText } from '../textDocuments/heldText';
-import { openDocument, readHeldText } from '../textDocuments/pluginSource';
+import { openPluginSourceDocument, readHeldText } from '../textDocuments/pluginSource';
 import { hoverAt } from './formKeyHover';
 import { definitionsOf } from './formKeyDefinition';
 import { referencesOf } from './formKeyReferences';
@@ -54,7 +54,7 @@ function sourceProblems(deps: SourceLanguageDeps): vscode.Disposable {
 /** A record's FormKey in its document, where Referenced By anchors its list. */
 export function formKeyLocation(client: RecordDocumentClient) {
   return async (record: Parameters<typeof locateRecord>[1]): Promise<vscode.Location | { refused: string } | undefined> => {
-    const found = await locateRecord({ client, open: openDocument }, record, formKeyValue);
+    const found = await locateRecord({ client, open: openPluginSourceDocument }, record, formKeyValue);
     return found && ('refused' in found ? found : locationOf(found));
   };
 }
@@ -86,7 +86,7 @@ export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposabl
       return new vscode.CompletionList(items, found.isIncomplete);
     },
   });
-  const definitionAt = definitionsOf({ client, reporter: deps.reporter, open: openDocument });
+  const definitionAt = definitionsOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
   const definition = vscode.languages.registerDefinitionProvider(pluginSource, {
     async provideDefinition(document, position) {
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
@@ -94,14 +94,14 @@ export function createSourceLanguage(deps: SourceLanguageDeps): vscode.Disposabl
       return found && locationOf(found);
     },
   });
-  const referencesAt = referencesOf({ client, reporter: deps.reporter, open: openDocument });
+  const referencesAt = referencesOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
   const references = vscode.languages.registerReferenceProvider(pluginSource, {
     async provideReferences(document, position) {
       if (!isPluginSourcePath(document.uri.fsPath)) return undefined;
       return (await referencesAt(heldText(document), document.offsetAt(position))).map(locationOf);
     },
   });
-  const workspace = workspaceSymbolsOf({ client, reporter: deps.reporter, open: openDocument });
+  const workspace = workspaceSymbolsOf({ client, reporter: deps.reporter, open: openPluginSourceDocument });
   const symbolProvider: vscode.WorkspaceSymbolProvider<RecordSymbolInformation> = {
     async provideWorkspaceSymbols(query) {
       return (await workspace.symbolsFor(query)).map((record) => new RecordSymbolInformation(record));

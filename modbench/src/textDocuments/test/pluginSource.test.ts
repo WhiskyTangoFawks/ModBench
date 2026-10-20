@@ -30,12 +30,14 @@ const MOVED = '/source/ModA/plugin-source/A.esp/Cells/Moved.json';
 const document = (scheme: string, fsPath: string, text: string, isDirty = true): FakeDocument =>
   ({ uri: { scheme, fsPath, toString: () => `${scheme}:${fsPath}` }, isDirty, getText: () => text });
 
-function handing() {
-  const handed: { path: string; text: string }[][] = [];
-  onPluginSourceChanged(isPluginSource, () => { handed.push(unsavedPluginSource(isPluginSource)); });
-  return handed;
+function unsavedAtEachChange() {
+  const seen: { path: string; text: string }[][] = [];
+  onPluginSourceChanged(isPluginSource, () => { seen.push(unsavedPluginSource(isPluginSource)); });
+  return seen;
 }
-const changed = (doc: FakeDocument) => { for (const listener of h.handlers.change) listener({ document: doc }); };
+const changed = (doc: FakeDocument) => { h.handlers.change.forEach((listener) => { listener({ document: doc }); }); };
+const opened = (doc: FakeDocument) => { h.handlers.open.forEach((listener) => { listener(doc); }); };
+const closed = (doc: FakeDocument) => { h.handlers.close.forEach((listener) => { listener(doc); }); };
 
 beforeEach(() => {
   h.workspace.textDocuments = [];
@@ -43,52 +45,68 @@ beforeEach(() => {
 });
 
 describe('the unsaved plugin source Text documents holds', () => {
-  it('hands a dirty child-record document as its container file\'s text', () => {
+  it('reports a dirty child-record document as its container file\'s text', () => {
     const child = document('modbench-child-record', FILE, 'child text');
     h.workspace.textDocuments = [child];
-    const handed = handing();
+    const seen = unsavedAtEachChange();
 
     changed(child);
 
-    expect(handed.at(-1)).toEqual([{ path: FILE, text: 'child text' }]);
+    expect(seen.at(-1)).toEqual([{ path: FILE, text: 'child text' }]);
   });
 
-  it('hands a file once when its own document and a child record\'s are both unsaved', () => {
+  it('reports a file once when its own document and a child record\'s are both unsaved', () => {
     const file = document('file', FILE, 'unsaved text');
     const child = document('modbench-child-record', FILE, 'unsaved text');
     h.workspace.textDocuments = [file, child];
-    const handed = handing();
+    const seen = unsavedAtEachChange();
 
     changed(child);
 
-    expect(handed.at(-1)).toEqual([{ path: FILE, text: 'unsaved text' }]);
+    expect(seen.at(-1)).toEqual([{ path: FILE, text: 'unsaved text' }]);
   });
 
-  it('hands over again when a dirty document is moved, which closes it at one path and opens it at another', () => {
+  it('reports again when a dirty document is moved, which closes it at one path and opens it at another', () => {
     const before = document('file', FILE, 'moved text');
     h.workspace.textDocuments = [before];
-    const handed = handing();
+    const seen = unsavedAtEachChange();
 
     const after = document('file', MOVED, 'moved text');
     h.workspace.textDocuments = [after];
-    for (const listener of h.handlers.close) listener(before);
-    for (const listener of h.handlers.open) listener(after);
+    closed(before);
+    opened(after);
 
-    expect(handed.at(-1)).toEqual([{ path: MOVED, text: 'moved text' }]);
+    expect(seen.at(-1)).toEqual([{ path: MOVED, text: 'moved text' }]);
   });
 
   it.each([
     ['a file outside plugin source', 'file', '/mods/ModA/readme.txt'],
     ['a version-control document of plugin source', 'git', FILE],
-  ])('hands nothing over for %s changing, opening or closing', (_name, scheme, path) => {
+  ])('reports nothing for %s changing, opening or closing', (_name, scheme, path) => {
     const other = document(scheme, path, 'typed');
     h.workspace.textDocuments = [other];
-    const handed = handing();
+    const seen = unsavedAtEachChange();
 
     changed(other);
-    for (const listener of h.handlers.open) listener(other);
-    for (const listener of h.handlers.close) listener(other);
+    opened(other);
+    closed(other);
 
-    expect(handed).toEqual([]);
+    expect(seen).toEqual([]);
+  });
+
+  it('holds back a dirty file outside plugin source and a version-control document of plugin source', () => {
+    h.workspace.textDocuments = [
+      document('file', '/mods/ModA/readme.txt', 'typed'),
+      document('git', FILE, 'typed'),
+      document('file', FILE, 'unsaved text'),
+    ];
+
+    expect(unsavedPluginSource(isPluginSource)).toEqual([{ path: FILE, text: 'unsaved text' }]);
+  });
+
+  it('holds back a document that is saved', () => {
+    h.workspace.textDocuments = [document('file', FILE, 'saved text', false)];
+
+    expect(unsavedPluginSource(isPluginSource)).toEqual([]);
   });
 });
