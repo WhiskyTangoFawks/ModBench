@@ -1,2 +1,4 @@
-/** Makes one folder a repository. The host's git belongs to the host, so the composition root implements it. */
-export type MakeRepository = (folder: string) => Promise<void>;
+export interface HostGit<Folder> {
+  extension(): { activate(): PromiseLike<{ getAPI(version: 1): { init(folder: Folder): PromiseLike<unknown> } }> } | undefined;
+  folderOf(path: string): Folder;
+}

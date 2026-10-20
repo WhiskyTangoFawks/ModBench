@@ -1,6 +1,7 @@
 import { delimiter } from 'node:path';
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
+import { onSettingChange } from '../drivingLib/setting';
 
 /** Replaces PYTHONPATH rather than prepending to it: a prepend leaves an empty entry when the terminal
  *  inherits none, and Python reads an empty entry as the working directory. */
@@ -32,7 +33,5 @@ function inheritedPythonPath(): string | undefined {
 }
 
 function onTerminalEnvChange(listener: () => void): vscode.Disposable {
-  return vscode.workspace.onDidChangeConfiguration((change) => {
-    if (change.affectsConfiguration(`terminal.integrated.${terminalEnvSetting()}`)) listener();
-  });
+  return onSettingChange(vscode.workspace.onDidChangeConfiguration, `terminal.integrated.${terminalEnvSetting()}`, listener);
 }

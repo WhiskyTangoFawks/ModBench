@@ -42,7 +42,7 @@ export function registerSyncCommands(
 type LoadOrderPut = (value: InstanceValue) => void;
 
 export function loadOrderPutHandler(
-  editing: { onRecompute(source: InstanceValue['loadOrderSnapshot'], stringsLanguage: string): void }, stringsLanguage: () => string,
+  editing: { onRecompute(source: InstanceValue['loadOrderSnapshot'], stringsLanguage: string | undefined): void }, stringsLanguage: () => string | undefined,
 ): LoadOrderPut {
   return (value) => { editing.onRecompute(value.loadOrderSnapshot, stringsLanguage()); };
 }

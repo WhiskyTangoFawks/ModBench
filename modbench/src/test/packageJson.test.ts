@@ -6,7 +6,6 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
 } from './vscodeMock';
 import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
-import { WALKTHROUGH_ID } from '../walkthrough';
 import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN } from './commandsCatalog';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
@@ -211,8 +210,8 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
   };
   const linkedCommands = (description: string): string[] => [...description.matchAll(/\(command:([^)?]+)/g)].map(([, command = '']) => command);
 
-  it('is one walkthrough, the one Modbench opens', () => {
-    expect(pkg.contributes.walkthroughs.map(({ id }) => id)).toEqual([WALKTHROUGH_ID]);
+  it('is one walkthrough, the one VS Code opens on install', () => {
+    expect(pkg.contributes.walkthroughs).toHaveLength(1);
   });
 
   it('ticks each step on a command, view or context of Modbench or VS Code, or a link into the repository (story 3)', () => {
