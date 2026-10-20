@@ -14,6 +14,7 @@ namespace MEditService.RecordIndex.Queries;
 /// the whole set is the refusal it answers.</summary>
 internal sealed class RecordQueries(
     Indexer index,
+    FilterInForce filter,
     LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
     ISourceAdapter source,
@@ -54,7 +55,7 @@ internal sealed class RecordQueries(
                 _index.LaterReadFailure(plugin.Key)?.Select(SourceProblem.StoppedAt).ToList());
         }
 
-        if (_index.ActiveFilter is null)
+        if (filter.Current is null)
             return [.. rows.Select(c => ToRow(c, hasMatchingRecords: true))];
 
         // plugins.md: a record filter prunes records and record types, never
@@ -415,17 +416,17 @@ internal sealed class RecordQueries(
     public Answer<(string Sql, string Source)?, IndexRefused> GetFilter() => IndexAnswer.Of(() =>
     {
         RequireReads();
-        return _index.ActiveFilter;
+        return filter.Current;
     });
 
     public IndexRefused? SetFilter(string sql, string source) => IndexAnswer.Refusing(() =>
-        _index.SetFilter(sql, source) is { } rejection ? new IndexRefused(IndexRefusal.FilterRejected, rejection) : null);
+        filter.Set(_index, sql, source) is { } rejection ? new IndexRefused(IndexRefusal.FilterRejected, rejection) : null);
 
-    public void ClearFilter() => _index.ClearFilter();
+    public void ClearFilter() => filter.Clear(_index);
 
     public Answer<JsonElement[], IndexRefused> SelectRows(string sql) => IndexAnswer.Flat<JsonElement[]>(() =>
     {
-        if (_index.Select(sql).Holds(out var rows, out var rejection)) return rows;
+        if (SqlDoor.Select(_index, sql).Holds(out var rows, out var rejection)) return rows;
         return new IndexRefused(IndexRefusal.SelectRejected, rejection);
     });
 
@@ -461,10 +462,18 @@ internal sealed class RecordQueries(
         return $"{given} means more than one thing: {string.Join("; ", listed)}.";
     }
 
-    public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot) =>
-        source.InstanceRootNotFound(instanceRoot) is { } notFound
-            ? new(StoreRebuildRefusal.InstanceRootNotFound, notFound)
-            : _index.RebuildStore(gameRelease, instanceRoot);
+    /// <summary>ADR-0010: drops the record index file and refills it off the caller's thread. A file another
+    /// window holds, or a read that never ended, is refused.</summary>
+    public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
+    {
+        if (source.InstanceRootNotFound(instanceRoot) is { } notFound) return new(StoreRebuildRefusal.InstanceRootNotFound, notFound);
+        if (!_index.WhileClosed(file => file.Rebuild(gameRelease, instanceRoot), out var heldElsewhere))
+        {
+            return new(StoreRebuildRefusal.StillServingReads,
+                IndexWriteGate.NotDrained("mEdit's record index was not rebuilt", "It is reopened as it was."));
+        }
+        return heldElsewhere is null ? null : new(StoreRebuildRefusal.HeldByAnotherWindow, heldElsewhere);
+    }
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,

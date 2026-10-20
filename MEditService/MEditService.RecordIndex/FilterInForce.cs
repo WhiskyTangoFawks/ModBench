@@ -16,24 +16,26 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
         get { lock (_lock) return _current is { } filter ? (filter.Sql, filter.Source) : null; }
     }
 
-    /// <summary>Materializes <paramref name="filter"/> in <paramref name="store"/> and holds it for
-    /// <paramref name="scope"/>; null clears both. Answers why the SQL cannot be a filter, leaving the one in
-    /// force.</summary>
-    public string? Set(Store store, IndexScope scope, (string Sql, string Source)? filter)
+    /// <summary>Answers why the SQL cannot be a filter, such as no form_key column, leaving the one in force.
+    /// Throws <see cref="NoLoadOrderException"/> with no store to hold it.</summary>
+    public string? Set(Indexer index, string sql, string source) =>
+        index.InForce(store => Materialize(store, (sql, source)), () => throw new NoLoadOrderException());
+
+    /// <summary>A filter that is reported must clear, store or no store.</summary>
+    public void Clear(Indexer index) => index.InForce(store => Materialize(store, null), () =>
+    {
+        lock (_lock) _current = null;
+        return null;
+    });
+
+    private string? Materialize(GatedStore store, (string Sql, string Source)? filter)
     {
         lock (_lock)
         {
-            if (store.Filter.Set(filter?.Sql) is { } rejection) return rejection;
-            _current = filter is { } set ? (set.Sql, set.Source, scope) : null;
+            if (store.SetFilter(filter?.Sql) is { } rejection) return rejection;
+            _current = filter is { } set ? (set.Sql, set.Source, store.Scope) : null;
             return null;
         }
-    }
-
-    /// <summary>Clears the filter with no index to clear it in: one that is reported must clear, store
-    /// or no store.</summary>
-    public void Clear()
-    {
-        lock (_lock) _current = null;
     }
 
     public void DropWhenOutside(LoadOrderSnapshot snapshot)
