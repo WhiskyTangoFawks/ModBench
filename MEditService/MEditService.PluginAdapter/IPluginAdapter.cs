@@ -43,7 +43,6 @@ public interface IPluginAdapter
     /// <summary>The hash and malformed-record diagnoses from one fresh read of the file.</summary>
     Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease);
 
-
     /// <summary>The loose strings files and archives a read of the localized plugin under <paramref name="loadOrder"/>
     /// takes its strings from.</summary>
     Answer<IReadOnlyList<string>, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings);

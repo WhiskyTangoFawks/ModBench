@@ -672,7 +672,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
   };
 
-  it('PUTs every plugin with its line, the active plugins, the archives and strings files, the game directory and the instance root', async () => {
+  it('PUTs every plugin with its line, the active plugins, the archives and strings files, the Data folder and the instance root', async () => {
     let putBody: unknown;
     const { response, push } = pushableStreamResponse();
     const fetch = routedFetch([

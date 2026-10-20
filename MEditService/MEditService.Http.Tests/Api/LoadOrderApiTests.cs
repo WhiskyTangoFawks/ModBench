@@ -213,7 +213,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Fact]
-    public async Task PutLoadOrder_MissingGameDirectory_Returns400()
+    public async Task PutLoadOrder_MissingDataFolder_Returns400()
     {
         var body = Body();
         body["dataFolder"] = "/no-such-dir";

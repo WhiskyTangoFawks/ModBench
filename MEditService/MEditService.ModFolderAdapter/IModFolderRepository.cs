@@ -42,8 +42,7 @@ public interface IModFolderRepository
 
     bool DataFolderExists(string dataFolder);
 
-    /// <summary>The name the mod manager gives a file or folder named <paramref name="name"/> that a build leaves
-    /// out: <paramref name="name"/> with <paramref name="excludedSuffix"/> after it.</summary>
+    /// <summary>The name the mod manager gives a file or folder that a build leaves out.</summary>
     string ExcludedName(string name, string excludedSuffix);
 
     Stream OpenInstallationFile(string path);
