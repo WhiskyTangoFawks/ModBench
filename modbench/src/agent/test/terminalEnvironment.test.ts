@@ -1,5 +1,5 @@
 import { delimiter } from 'node:path';
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
 type ConfigListener = (change: { affectsConfiguration(section: string): boolean }) => void;
 let configListener: ConfigListener | undefined;
@@ -40,6 +40,9 @@ function pythonPathOf(): string | undefined {
 describe('reachMEditFromTerminals', () => {
   const platform = process.platform;
   const hostPythonPath = process.env.PYTHONPATH;
+  beforeEach(() => {
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+  });
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: platform });
     if (hostPythonPath === undefined) delete process.env.PYTHONPATH;
