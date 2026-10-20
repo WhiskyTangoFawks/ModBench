@@ -51,7 +51,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 
     public ScatteredFixtureData BuildScattered()
     {
-        // The game's masters load with no plugins.txt line; their files live in the game directory, never a mod folder.
+        // The game's masters load with no plugins.txt line; their files live in the Data folder, never a mod folder.
         var loadedWithNoLine = Implicits.Get(GameRelease.Fallout4).Listings
             .Select(l => l.FileName.ToString())
             .Where(name => _plugins.Exists(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
@@ -59,8 +59,8 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 
         var data = new ScatteredFixtureData($"{_prefix}-scatter-");
         var root = data.Root;
-        var gameDir = data.DataFolder;
-        Directory.CreateDirectory(gameDir);
+        var dataFolder = data.DataFolder;
+        Directory.CreateDirectory(dataFolder);
 
         var builtMods = new List<Fallout4Mod>();
         var explicitPlugins = new List<LoadOrderEntry>();
@@ -73,7 +73,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
             string targetPath;
             if (loadedWithNoLine.Contains(name, StringComparer.OrdinalIgnoreCase))
             {
-                targetPath = Path.Combine(gameDir, name);
+                targetPath = Path.Combine(dataFolder, name);
             }
             else
             {
@@ -90,7 +90,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         }
 
         List<LoadOrderEntry> forced = [.. loadedWithNoLine.Select((name, line) => new LoadOrderEntry(
-            name, Path.Combine(gameDir, name), PluginOrigin.DataDirectory, line, Enabled: true, Winning: true,
+            name, Path.Combine(dataFolder, name), PluginOrigin.DataDirectory, line, Enabled: true, Winning: true,
             LoadedWithNoLine: true))];
         data.Plugins = [.. forced, .. OneWinnerPerFilename(explicitPlugins)];
         return data;
@@ -145,9 +145,7 @@ public sealed class ScatteredFixtureData(string prefix) : IDisposable
 
     public string InstanceRoot => Root;
 
-    public string DataFolder => Path.Combine(Root, "GameDir");
-
-    public string GameDirectory => DataFolder;
+    public string DataFolder => Path.Combine(Root, "Data");
 
     public IReadOnlyList<LoadOrderEntry> Plugins { get; set; } = [];
 

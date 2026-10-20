@@ -279,7 +279,7 @@ describe('layout names', () => {
   });
 
   it('does not flag a name inside a longer path segment, or one only in prose', () => {
-    expect(layoutLeaks("const msg = 'Cannot deploy: mods/ and the game directory differ';\n", 'x.ts')).toEqual([]);
+    expect(layoutLeaks("const msg = 'Cannot deploy: mods/ and the game folder differ';\n", 'x.ts')).toEqual([]);
     expect(layoutLeaks("const key = 'modbench.mods.gameFolder';\n", 'x.ts')).toEqual([]);
   });
 

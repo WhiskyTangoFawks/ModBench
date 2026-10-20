@@ -28,7 +28,7 @@ public class PluginFixtureBuilderTests
     }
 
     [Fact]
-    public void BuildScattered_TheGamesMasters_LoadFirst_FromTheGameDirectory()
+    public void BuildScattered_TheGamesMasters_LoadFirst_FromTheDataFolder()
     {
         using var data = new PluginFixtureBuilder()
             .WithPlugin("UserMod.esp", origin: "UserMod")
@@ -38,7 +38,7 @@ public class PluginFixtureBuilderTests
         Assert.Equal(
             ["Fallout4.esm", "UserMod.esp"],
             SnapshotPlugins.Active(data.Plugins).Select(p => p.Name));
-        Assert.Equal(Path.Combine(data.GameDirectory, "Fallout4.esm"), data.Plugins.Single(p => p.Name == "Fallout4.esm").Path);
+        Assert.Equal(Path.Combine(data.DataFolder, "Fallout4.esm"), data.Plugins.Single(p => p.Name == "Fallout4.esm").Path);
     }
 
     [Fact]

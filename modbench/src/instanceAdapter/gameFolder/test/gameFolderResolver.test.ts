@@ -95,7 +95,7 @@ describe('the game folder resolver', () => {
   });
 
   async function gameFolder(name = 'Stock Game Folder'): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
+    const dir = await mkdtemp(join(tmpdir(), 'medit-gamefolder-'));
     dirs.push(dir);
     const root = join(dir, name);
     await mkdir(join(root, 'Data'), { recursive: true });
@@ -127,7 +127,7 @@ describe('the game folder resolver', () => {
   });
 
   it('answers not found, naming only the setting, when the explicit setting has no Data/ subfolder, not falling through to the game path the manager names, which would resolve a folder the user did not name', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
+    const dir = await mkdtemp(join(tmpdir(), 'medit-gamefolder-'));
     dirs.push(dir);
     const gameRoot = join(dir, 'Stock Game Folder');
     await mkdir(gameRoot, { recursive: true });
@@ -214,7 +214,7 @@ describe('the game folder resolver', () => {
   });
 
   it('refuses, naming the folder, when the manager names a game folder with no Data/, rather than falling through to a Steam install', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
+    const dir = await mkdtemp(join(tmpdir(), 'medit-gamefolder-'));
     dirs.push(dir);
     const staleGameRoot = join(dir, 'Stale Game Folder');
     await mkdir(staleGameRoot, { recursive: true });

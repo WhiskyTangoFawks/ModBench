@@ -20,7 +20,7 @@ const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, 
 
 const recording = (file: InstallationFile): FileRead<InstallationFile> => ({ kind: 'read', answer: file });
 const FOUND: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
-const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'modbench.gameDirectory' };
+const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameFolder' };
 const readingOf = (sourceFolders: Record<string, string> = {}, gameFolder: GameFolder = FOUND, modFolders?: ModFolders): Partial<InstanceReading> =>
   ({ gameFolder, sourceMods: sourceModsOf(sourceFolders), modFolders });
 const GAME_FOLDER = { name: 'Fallout4', dataFolder: '/game/Data', files: [] };
