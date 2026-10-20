@@ -5,6 +5,7 @@ import { existsSync, watch, type FSWatcher } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
+import { errnoCode } from './errno';
 import { ignoreSkippedLink, listFolders } from './files';
 
 export interface HeldFolderWatch {
@@ -40,14 +41,6 @@ function reasonOf(error: unknown): string {
   if (typeof error.syscall !== 'string' || typeof error.path !== 'string') return message;
   const naming = `, ${error.syscall} '${error.path}'`;
   return message.endsWith(naming) ? message.slice(0, -naming.length) : message;
-}
-
-async function foldersIn(folder: string): Promise<string[]> {
-  try {
-    return (await listFolders(folder, ignoreSkippedLink)).map((name) => join(folder, name));
-  } catch {
-    return [];
-  }
 }
 
 function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): HeldFolderWatch {
@@ -92,8 +85,18 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
 
   const passedOver = (folder: string): boolean => !isOpen || watched.has(folder);
 
+  // A folder gone is not a failure; any other reason a folder cannot be read leaves it unheard.
+  const unlessGone = <T>(folder: string, instead: T) => (error: unknown): T => {
+    if (errnoCode(error) !== 'ENOENT') fail(folder, error);
+    return instead;
+  };
+
+  const foldersIn = async (folder: string): Promise<string[]> =>
+    (await listFolders(folder, ignoreSkippedLink).catch(unlessGone(folder, [])))
+      .map((name) => join(folder, name));
+
   const realOf = async (folder: string): Promise<string | undefined> =>
-    passedOver(folder) || !holds(folder) ? undefined : realpath(folder).catch(() => undefined);
+    passedOver(folder) || !holds(folder) ? undefined : realpath(folder).catch(unlessGone(folder, undefined));
 
   const register = (folder: string, real: string): boolean => {
     try {

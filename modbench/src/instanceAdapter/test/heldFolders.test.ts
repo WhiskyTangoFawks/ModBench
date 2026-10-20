@@ -7,12 +7,14 @@ import { present } from '../../ports/present';
 import { eventually, writtenAndHeard } from '../../test/eventually';
 
 let slowRealpath: string | undefined;
+let unresolvable: string | undefined;
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return {
     ...actual,
     realpath: async (path: string) => {
+      if (path === unresolvable) throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
       if (path === slowRealpath) await new Promise((r) => setTimeout(r, 100));
       return actual.realpath(path);
     },
@@ -30,6 +32,7 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     heard = [];
     failures = 0;
     slowRealpath = undefined;
+    unresolvable = undefined;
     held = present(heldFolderWatchFor('**', { onChange: (path) => { heard.push(path); }, holds: () => true, onFailure: () => { failures++; } }), 'a held-folder watch on Linux');
     await held.open();
   });
@@ -178,5 +181,35 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     expect(answered).toEqual(['EACCES: permission denied']);
     expect(failures).toBe(2);
     expect(held.failures()).toEqual([]);
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) answers the reason a created folder cannot be listed, signalling the failure', async () => {
+    const created = join(root, 'Created');
+    await mkdir(created, { recursive: true });
+    await chmod(created, 0o000);
+
+    await held.created(created);
+    await chmod(created, 0o755);
+
+    expect(held.failures()).toEqual(['EACCES: permission denied']);
+    expect(failures).toBe(1);
+  });
+
+  it('answers nothing for a created folder already gone', async () => {
+    await held.created(join(root, 'Gone'));
+
+    expect(held.failures()).toEqual([]);
+    expect(failures).toBe(0);
+  });
+
+  it('answers the reason a listed folder cannot be resolved, signalling the failure', async () => {
+    const created = join(root, 'Created');
+    unresolvable = join(created, 'Held');
+    await mkdir(unresolvable, { recursive: true });
+
+    await held.created(created);
+
+    expect(held.failures()).toEqual(['EIO: i/o error']);
+    expect(failures).toBe(1);
   });
 });
