@@ -1,6 +1,6 @@
 import type { components } from '../wire/generated/api';
 import {
-  type CompiledPlugin, type CompileDiagnostic,
+  type CompileDiagnostic,
   type ChangedPlugin,
   type PluginMetadata, type PluginDiagnosisReport,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
@@ -170,7 +170,7 @@ export type BuildMod = components['schemas']['BuildModRequest'];
 /** The instance's facts every mod's build needs: the suffix of an excluded name, and the release's archive variants. */
 export type BuildFacts = Omit<components['schemas']['BuildRequest'], 'mods'>;
 
-/** The generated mod, with each refusal as `ItemRefusal` and each unset flag absent: mEdit sends null and false. */
+// The generated mod, with each refusal as `ItemRefusal` and each unset flag absent: mEdit sends null and false.
 type BuiltMod = Omit<components['schemas']['ModBuilt'], 'refused' | 'archivesRefused' | 'failure' | 'uncommitted' | 'unpushed'> & {
   refused: readonly ItemRefusal<PluginAddress>[];
   archivesRefused: readonly ItemRefusal<string>[];
