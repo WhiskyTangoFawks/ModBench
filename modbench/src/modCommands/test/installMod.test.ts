@@ -15,7 +15,7 @@ const UPGRADED = { kind: 'upgrade', name: 'Harder VATS' } as const;
 const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z' } as const;
 const DOWNLOADED_PATH = '/downloads/Freshly-1-0.7z';
 const downloadedFile = (name: string, path: string, meta?: Partial<DownloadMeta>): DownloadedFile =>
-  ({ name, path, metaPath: `${path}.meta`, size: 1, mtimeMs: 1, excluded: false, meta: meta && { status: 'Downloaded', ...meta } });
+  ({ name, path, metadataPath: `${path}.meta`, size: 1, mtimeMs: 1, excluded: false, meta: meta && { status: 'Downloaded', ...meta } });
 const FRESHLY = downloadedFile(DOWNLOADED.name, DOWNLOADED_PATH, { modID: '111', installedKey: '111:222', version: '3.0.0' });
 
 function install(

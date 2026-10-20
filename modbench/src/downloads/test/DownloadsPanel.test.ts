@@ -162,7 +162,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     ]);
   });
 
-  it('open .meta: opens the sidecar in the editor and asks nothing', async () => {
+  it('open metadata: opens the sidecar in the editor and asks nothing', async () => {
     const root = await makeInstanceRoot();
     const meta = await writeMeta(root, 'foo.7z');
 
@@ -175,13 +175,13 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(showQuickPick).not.toHaveBeenCalled();
   });
 
-  it('open .meta: is a no-op when invoked with no node', async () => {
+  it('open metadata: is a no-op when invoked with no node', async () => {
     registerDownloadsSingleRowCommands(recordingReporter(), () => []);
     await invoke('modbench.downloadedFile.openMeta', undefined);
     expect(showTextDocument).not.toHaveBeenCalled();
   });
 
-  it('open .meta: on failure, logs and surfaces an error notification naming the action and row', async () => {
+  it('open metadata: on failure, logs and surfaces an error notification naming the action and row', async () => {
     const root = await makeInstanceRoot();
     await writeMeta(root, 'foo.7z');
     showTextDocument.mockRejectedValueOnce(new Error('file changed on disk'));
@@ -192,7 +192,7 @@ describe('registerDownloadsSingleRowCommands', () => {
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([
-      { severity: 'error', message: 'Open Meta File for "foo.7z" failed.', detail: 'file changed on disk' },
+      { severity: 'error', message: 'Open Metadata for "foo.7z" failed.', detail: 'file changed on disk' },
     ]);
   });
 });
@@ -599,7 +599,7 @@ describe('the Downloads gestures from the palette, handed no row, act on the vie
     expect(calledFsPath(openExternal)).toBe(archive);
   });
 
-  it('open .meta opens the one selected file\'s .meta', async () => {
+  it('open metadata opens the one selected file\'s metadata', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');

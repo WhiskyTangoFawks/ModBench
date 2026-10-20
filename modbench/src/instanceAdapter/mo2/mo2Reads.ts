@@ -35,7 +35,7 @@ async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLin
       readOrAbsent<string | undefined>(() => get(metaPath), undefined),
     ]);
     const parsed = metaText === undefined ? undefined : parseDownloadMeta(metaText);
-    return { name, path, metaPath, size: facts.size, mtimeMs: facts.mtimeMs, excluded: parsed?.hidden ?? false, meta: parsed?.meta };
+    return { name, path, metadataPath: metaPath, size: facts.size, mtimeMs: facts.mtimeMs, excluded: parsed?.hidden ?? false, meta: parsed?.meta };
   }));
 }
 

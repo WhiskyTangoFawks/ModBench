@@ -103,8 +103,8 @@ export function registerDownloadsSingleRowCommands(
     registerGesture('modbench.downloadedFile.openMeta', viewSelection, async (entry) => {
       const row = singularArgument(entry, 'downloadedFile')?.argument.row;
       if (!row) return;
-      await reportFailure(reporter, `Open Meta File for "${row.name}" failed.`, async () => {
-        await vscode.window.showTextDocument(vscode.Uri.file(row.sidecarPath));
+      await reportFailure(reporter, `Open Metadata for "${row.name}" failed.`, async () => {
+        await vscode.window.showTextDocument(vscode.Uri.file(row.metadataPath));
       });
     }),
   ];

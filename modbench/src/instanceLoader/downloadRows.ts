@@ -27,7 +27,7 @@ export interface DownloadRow {
 /** A downloaded file's row with the two paths a view opens or reveals, so that no view joins one. */
 export interface DownloadFile extends DownloadRow {
   readonly path: string;
-  readonly sidecarPath: string;
+  readonly metadataPath: string;
 }
 
 // Archive filenames come from two places and are compared, never displayed, so they are folded: a
@@ -111,7 +111,7 @@ export function buildDownloadRows(
       author: meta?.author,
       upgrades: upgradeCandidates(mods, { name: file.name, modID: meta?.modID, installedKey: meta?.installedKey }),
       path: file.path,
-      sidecarPath: file.metaPath,
+      metadataPath: file.metadataPath,
     };
   });
 }

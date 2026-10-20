@@ -26,7 +26,7 @@ describe('what the Downloads palette entries, handed no row, read off the select
     expect(downloadsKeyContext([new ErrorNode('unreadable')]).singleFile).toBe(false);
   });
 
-  it('open .meta sees exactly one selected file that has a .meta', () => {
+  it('open metadata sees exactly one selected file that has metadata', () => {
     expect(downloadsKeyContext([withMeta]).singleFileWithMeta).toBe(true);
     expect(downloadsKeyContext([plain]).singleFileWithMeta).toBe(false);
     expect(downloadsKeyContext([withMeta, excluded]).singleFileWithMeta).toBe(false);

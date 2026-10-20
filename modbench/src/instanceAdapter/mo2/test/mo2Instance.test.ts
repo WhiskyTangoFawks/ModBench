@@ -468,7 +468,7 @@ describe('the MO2 Instance adapter', () => {
       expect(byName.get('manual.zip')?.meta).toBeUndefined();
       expect(byName.get('manual.zip')?.size).toBe(3);
       expect(byName.get('manual.zip')?.path).toBe(join(root, 'downloads', 'manual.zip'));
-      expect(byName.get('manual.zip')?.metaPath).toBe(join(root, 'downloads', 'manual.zip.meta'));
+      expect(byName.get('manual.zip')?.metadataPath).toBe(join(root, 'downloads', 'manual.zip.meta'));
     });
 
     it('answers metadata that is there but empty as metadata, so a file whose metadata is there to open does not show none', async () => {
