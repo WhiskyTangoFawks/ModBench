@@ -234,4 +234,18 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
 
     expect(held.failures()).toEqual([]);
   });
+
+  it.skipIf(process.getuid?.() === 0)('(root reads every folder) forgets a reason a created folder could not be listed once a file replaces it', async () => {
+    const created = join(root, 'Created');
+    await mkdir(created, { recursive: true });
+    await chmod(created, 0o000);
+    await held.created(created);
+
+    await chmod(created, 0o755);
+    await rm(created, { recursive: true });
+    await writeFile(created, '');
+    await held.created(created);
+
+    expect(held.failures()).toEqual([]);
+  });
 });
