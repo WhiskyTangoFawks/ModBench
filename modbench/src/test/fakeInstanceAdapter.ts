@@ -243,9 +243,15 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     selectProfile: (profile) => record({ verb: 'selectProfile', profile }, { wrote: profile !== current.profile }),
     createModFolder: (mod) => record({ verb: 'createModFolder', mod }, undefined),
     renameModFolder: (from, to) => record({ verb: 'renameModFolder', from, to }, undefined),
+    originFile: (origin, relativePath) => {
+      const gone = answers.goneOriginFiles?.some((one) => originKey(one.origin) === originKey(origin) && one.relativePath === relativePath);
+      const listed = (origin.kind === 'mod' ? current.modFiles.get(origin.name) : current.runtimeOutput)?.files.find((file) => file.relativePath === relativePath);
+      const unmarked = relativePath.split('/').map((segment) => segment.replace(EXCLUDED_SUFFIX, '')).join('/');
+      return Promise.resolve(gone ? undefined : listed ?? { ...fileIn('/origin', relativePath), includedPath: unmarked });
+    },
     markOriginFile: (origin, relativePath, mark) =>
       record<OriginFileMarked>({ verb: 'markOriginFile', origin, relativePath, mark },
-        answers.goneOriginFiles?.some((gone) => originKey(gone.origin) === originKey(origin) && gone.relativePath === relativePath) ? { gone: true } : { gone: false, wrote: true, relativePath, includedPath: relativePath.split('/').map((segment) => segment.replace(EXCLUDED_SUFFIX, '')).join('/') }),
+        answers.goneOriginFiles?.some((gone) => originKey(gone.origin) === originKey(origin) && gone.relativePath === relativePath) ? { gone: true } : { gone: false, wrote: true, relativePath }),
     entryKey,
     excludedSuffix: EXCLUDED_SUFFIX,
     originHoldsPlugin: (origin, name) => Promise.resolve((answers.heldPlugins ?? []).some((held) =>

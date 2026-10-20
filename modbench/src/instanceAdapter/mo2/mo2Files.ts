@@ -34,10 +34,13 @@ const childOf = (dir: string, name: string): string => dir + sep + name;
 // MO2 keeps from the game every entry whose name, or a folder's above it, carries its suffix.
 const isExcluded = (relativePath: string): boolean => relativePath.split('/').some(isExcludedName);
 
+export const originFileOf = (relativePath: string, path: string, sourcePath: string = path): OriginFile =>
+  ({ relativePath, path, sourcePath, excluded: isExcluded(relativePath), markedExcluded: isExcludedName(relativePath), includedPath: includedPathOf(relativePath) });
+
 function keep(walk: Walk, path: string, sourcePath: string = path): void {
   const relativePath = relativeUnder(walk.root, path);
   if (walk.notContent.has(relativePath)) return;
-  walk.files.push({ relativePath, path, sourcePath, excluded: isExcluded(relativePath), markedExcluded: isExcludedName(relativePath), includedPath: includedPathOf(relativePath) });
+  walk.files.push(originFileOf(relativePath, path, sourcePath));
 }
 
 const keepFolder = (walk: Walk, path: string): void => {

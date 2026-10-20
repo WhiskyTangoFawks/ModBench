@@ -263,11 +263,11 @@ type DownloadedFileTrashed = { readonly gone: true } | { readonly gone: false; r
 
 type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
-/** A mark on a file of an origin, with the path it has once marked and the path it has when nothing
- *  excludes it, or why it was refused before anything changed. */
+/** A mark on a file of an origin, with the path it has once marked, or why it was refused before
+ *  anything changed. */
 export type OriginFileMarked =
   | { readonly gone: true }
-  | { readonly gone: false; readonly wrote: boolean; readonly relativePath: string; readonly includedPath: string }
+  | { readonly gone: false; readonly wrote: boolean; readonly relativePath: string }
   | { readonly gone: false; readonly refusal: string };
 
 /** Every repository in the source folder, listed in the mod order or not, by the mod its build configuration
@@ -548,6 +548,9 @@ export interface InstanceAdapter {
   /** Renames the folder that holds `from` to `to`, in place. Refuses when none holds `from`, and a
    *  folder already there under another name, matched as the manager matches names. */
   renameModFolder(from: string, to: string): Promise<void>;
+  /** The file at `relativePath` as the origin's listing holds it, or `undefined` when none is there.
+   *  Rejects a path outside the origin. */
+  originFile(origin: FileOrigin, relativePath: string): Promise<OriginFile | undefined>;
   /** Marks a file or folder by its own name; a mark already true changes nothing. Refuses an
    *  include on an unmarked name a folder excludes, and a mark replacing a file. Rejects a path
    *  outside the origin. */
