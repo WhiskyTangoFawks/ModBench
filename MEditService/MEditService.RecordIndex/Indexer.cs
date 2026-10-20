@@ -1124,7 +1124,7 @@ internal sealed class Indexer : IDisposable
 
     /// <summary>Hands <paramref name="whileClosed"/> the file with the store closed and no reconcile running, then
     /// reconciles the load order held unless it refuses. False, having run nothing, when a read outlived the
-    /// close: the store is reconciled back as it was.</summary>
+    /// close: the store is reconciled back.</summary>
     internal bool WhileClosed(Func<ClosedStore, string?> whileClosed, out string? refusal)
     {
         refusal = null;
