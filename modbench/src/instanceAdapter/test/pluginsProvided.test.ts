@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { filesWinningFirst, pluginsProvidedOf } from '../pluginsProvided';
-import type { DataFolderPlugins, ModlistEntry, OriginFile } from '../instanceAdapter';
+import { pluginsProvidedOf } from '../pluginsProvided';
+import { filesWinningFirst, type DataFolderPlugins, type ModlistEntry, type OriginFile } from '../instanceAdapter';
 
 const file = (relativePath: string, overrides: Partial<OriginFile> = {}): OriginFile =>
   ({ relativePath, path: `/x/${relativePath}`, sourcePath: `/x/${relativePath}`, excluded: false, excludedByName: false, ...overrides });
