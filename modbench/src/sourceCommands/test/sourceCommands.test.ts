@@ -95,7 +95,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
 
-    await sourceCommands({ client, adapter: fakeAdapter({}, 'SkyrimSE') }).build(['ModA']);
+    await sourceCommands({ client, adapter: fakeAdapter({}, 'SkyrimSE'), saveUnsaved: savedAll }).build(['ModA']);
 
     expect(client.calls.map((call) => call.args[1])).toEqual([{ excludedSuffix: '.excluded', archives: null, statCache: '/instance/stat-cache' }]);
   });
@@ -149,7 +149,7 @@ describe('sourceCommands decompileAndCommit', () => {
   it('refuses a mod whose name gives it no source folder, naming why', async () => {
     const client = new InMemoryMEditClient();
 
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter({ unsourcedMods: new Set(['Mods/ModA']) , saveUnsaved: savedAll }) }).decompileAndCommit(['Mods/ModA']);
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter({ unsourcedMods: new Set(['Mods/ModA']) }), saveUnsaved: savedAll }).decompileAndCommit(['Mods/ModA']);
 
     expect(client.calls).toEqual([]);
     expect(outcome).toEqual({ landed: [], refused: [{ item: 'Mods/ModA', reason: 'its name gives it no source folder' }] });
