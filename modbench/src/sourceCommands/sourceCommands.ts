@@ -21,30 +21,33 @@ export const metadataUnreadable = (reason: string): string => `its metadata coul
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,
  *  which lacks a snapshot still waiting to be put, so each first waits for the newest to reconcile. */
 export function sourceCommands({ client, adapter, saveUnsaved }: SourceCommandsDeps) {
+  const buildMod = async (mod: string, sourceFolder: string | undefined): Promise<BuildMod | ItemRefusal<string>> => {
+    const unsaved = sourceFolder === undefined ? [] : await saveUnsaved(sourceFolder, isPluginSourcePath);
+    if (unsaved.length > 0) return unsavedRefusal(mod, unsaved);
+    const folder = await adapter.modFolderPath(mod);
+    const metadata = await adapter.modMetadata(mod);
+    const host = sourceFolder === undefined ? undefined : await adapter.sourceHost(sourceFolder);
+    if (sourceFolder === undefined || host === undefined) return { item: mod, reason: 'no repository in the source folder builds it' };
+    if (folder === undefined) return { item: mod, reason: 'its name gives it no folder' };
+    if (metadata.kind === 'unreadable') return { item: mod, reason: metadataUnreadable(metadata.reason) };
+    if (host.kind === 'unreadable') return { item: mod, reason: `its remote could not be read: ${host.reason}` };
+    return {
+      name: mod, sourceFolder, folder, metadataFiles: [...adapter.metadataFilesInModFolder],
+      version: metadata.answer.version, isSubmodule: host.answer.kind === 'host',
+    };
+  };
+
   return {
-    /** A mod no repository builds, or whose folder or metadata the Instance adapter cannot answer, is
-     *  refused here, naming why, and mEdit builds the rest with the release's archive variants. */
+    /** A mod with plugin source VS Code leaves unsaved, no repository that builds it, or a folder or metadata
+     *  the Instance adapter cannot answer is refused here, naming why, and mEdit builds the rest with the release's archive variants. */
     build: async (mods: readonly string[]): Promise<BuildOutcome | WriteRefused> => {
       const sourceMods = await adapter.sourceMods();
       const sent: BuildMod[] = [];
       const refused: ItemRefusal<string>[] = [];
       for (const mod of mods) {
-        const sourceFolder = sourceMods.folderOf(mod);
-        const unsaved = sourceFolder === undefined ? [] : await saveUnsaved(sourceFolder, isPluginSourcePath);
-        if (unsaved.length > 0) { refused.push(unsavedRefusal(mod, unsaved)); continue; }
-        const folder = await adapter.modFolderPath(mod);
-        const metadata = await adapter.modMetadata(mod);
-        const host = sourceFolder === undefined ? undefined : await adapter.sourceHost(sourceFolder);
-        if (sourceFolder === undefined || host === undefined) refused.push({ item: mod, reason: 'no repository in the source folder builds it' });
-        else if (folder === undefined) refused.push({ item: mod, reason: 'its name gives it no folder' });
-        else if (metadata.kind === 'unreadable') refused.push({ item: mod, reason: metadataUnreadable(metadata.reason) });
-        else if (host.kind === 'unreadable') refused.push({ item: mod, reason: `its remote could not be read: ${host.reason}` });
-        else {
-          sent.push({
-            name: mod, sourceFolder, folder, metadataFiles: [...adapter.metadataFilesInModFolder],
-            version: metadata.answer.version, isSubmodule: host.answer.kind === 'host',
-          });
-        }
+        const decided = await buildMod(mod, sourceMods.folderOf(mod));
+        if ('reason' in decided) refused.push(decided);
+        else sent.push(decided);
       }
       if (sent.length === 0) return { landed: [], refused };
       await client.latestLoadOrder();

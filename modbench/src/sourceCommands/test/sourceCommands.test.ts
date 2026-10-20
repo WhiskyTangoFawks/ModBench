@@ -21,7 +21,7 @@ describe('sourceCommands build', () => {
       hosts: new Map([['/instance/source/ModA', { kind: 'read', answer: { kind: 'host', url: 'https://example.test/a.git' } }]]),
     });
 
-    await sourceCommands({ client, adapter , saveUnsaved: savedAll }).build(['ModA', 'ModB']);
+    await sourceCommands({ client, adapter, saveUnsaved: savedAll }).build(['ModA', 'ModB']);
 
     const ba2 = { ba2: { version: 1, compressed: true } };
     expect(client.calls).toEqual([{
@@ -49,13 +49,14 @@ describe('sourceCommands build', () => {
     expect(client.calls.map((call) => call.method)).toEqual(['build']);
   });
 
-  it('saves each mod\'s source folder before it builds, and refuses a mod whose file VS Code leaves unsaved, naming the file, while the rest build', async () => {
+  it('saves each mod\'s source folder, and refuses a mod whose file VS Code leaves unsaved, naming the file, while the rest build', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
     const saved: string[] = [];
     const saveUnsaved = (folder: string, isPluginSource: (path: string) => boolean) => {
       saved.push(folder);
       expect(isPluginSource('/instance/source/ModA/plugin-source/A.esp/Cell.json')).toBe(true);
+      expect(isPluginSource('/instance/source/ModA/assets/Notes.json')).toBe(false);
       return Promise.resolve(folder.endsWith('Old ModB') ? ['/instance/source/Old ModB/plugin-source/B.esp/Cell.json'] : []);
     };
 
@@ -74,7 +75,7 @@ describe('sourceCommands build', () => {
     client.setCommandResult('build', BUILT);
     const adapter = fakeAdapter({ unreadableMetadata: new Map([['ModA', 'EISDIR: meta.ini']]) });
 
-    const outcome = await sourceCommands({ client, adapter , saveUnsaved: savedAll }).build(['ModA', 'ModB']);
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll }).build(['ModA', 'ModB']);
 
     expect(client.calls).toMatchObject([{ args: [[{ name: 'ModB' }], expect.anything()] }]);
     expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'its metadata could not be read: EISDIR: meta.ini' }] });
@@ -85,7 +86,7 @@ describe('sourceCommands build', () => {
     client.setCommandResult('build', BUILT);
     const adapter = fakeAdapter({ hosts: new Map([['/instance/source/ModA', { kind: 'unreadable', reason: 'git remote failed' }]]) });
 
-    const outcome = await sourceCommands({ client, adapter , saveUnsaved: savedAll }).build(['ModA', 'ModB']);
+    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll }).build(['ModA', 'ModB']);
 
     expect(client.calls).toMatchObject([{ args: [[{ name: 'ModB' }], expect.anything()] }]);
     expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'its remote could not be read: git remote failed' }] });
@@ -104,7 +105,7 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
 
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter() , saveUnsaved: savedAll }).build(['ModA', 'ModC']);
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll }).build(['ModA', 'ModC']);
 
     expect(client.calls).toEqual([{ method: 'build', args: [[expect.objectContaining({ name: 'ModA' })], expect.anything()] }]);
     expect(outcome).toEqual({
@@ -119,7 +120,7 @@ describe('sourceCommands decompileAndCommit', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('decompileAndCommit', { landed: [{ mod: 'ModA', plugins: [] }, { mod: 'ModB', plugins: [] }], refused: [] });
 
-    await sourceCommands({ client, adapter: fakeAdapter() , saveUnsaved: savedAll }).decompileAndCommit(['ModA', 'ModB']);
+    await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll }).decompileAndCommit(['ModA', 'ModB']);
 
     expect(client.calls).toEqual([{
       method: 'decompileAndCommit',

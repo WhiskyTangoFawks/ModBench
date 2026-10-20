@@ -43,7 +43,6 @@ interface SourceGestureDeps {
   pluginsView: string;
   /** The Plugins view's message line, where decompile and commit says its phase. */
   say: (message: string | undefined) => void;
-  /** Saves a mod's unsaved plugin source; answers the paths VS Code left unsaved. */
   /** Registers the source mods' repositories once a decompile and commit landed. */
   registerRepositories: () => Promise<void>;
 }
