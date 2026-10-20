@@ -19,7 +19,7 @@ import { oneAtATime } from './textDocuments/oneAtATime';
 import { Instance } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
 import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
-import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
+import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2/mo2Instance';
 import { downloadedFileReader, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { serveAgent } from './agent/agentServer';
 import { agentPort } from './agent/agentPort';

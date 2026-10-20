@@ -7,7 +7,7 @@ import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pluginSyncOver, type PluginSyncRun } from '../../pluginCommands/plugins';
 import { withLock } from '../../instanceAdapter/files';
-import { pluginsFile } from '../../instanceAdapter/layout';
+import { pluginsFile } from '../../instanceAdapter/mo2/layout';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_LOAD_ORDER, DEFAULT_PLUGINS, snapshotTree,
 } from './corpusFixture';

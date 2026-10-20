@@ -1,6 +1,7 @@
 import { watch } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { vi } from 'vitest';
 
 /** Runs `step` until `done` holds, or two seconds pass; whether it held. */
 export async function eventually(done: () => boolean, step: () => Promise<unknown> | undefined = () => undefined): Promise<boolean> {
@@ -22,4 +23,13 @@ export async function writtenAndHeard(folder: string): Promise<void> {
   await heard;
   await new Promise((r) => setImmediate(r));
   own.close();
+}
+
+/** Settles once code under fake timers has armed a wait. */
+export async function settleWaitArmed(): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (vi.getTimerCount() === 0) {
+    if (Date.now() >= deadline) throw new Error('no settle wait was armed on the fake clock');
+    await new Promise((resolve) => setImmediate(resolve));
+  }
 }

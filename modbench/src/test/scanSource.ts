@@ -10,7 +10,7 @@ export const MO2_NAMES = {
   anywhere: [/mo2/i, /modorganizer/i, /\bMod Organizer\b/i],
 } as const;
 
-export const MO2_CONSTRUCTION = { file: 'extension.ts', module: join('instanceAdapter', 'mo2Instance') };
+export const MO2_CONSTRUCTION = { file: 'extension.ts', module: join('instanceAdapter', 'mo2', 'mo2Instance') };
 
 /** `relativePath` is relative to a source root, so a test directory above the root counts for nothing. */
 export const isTestSupport = (relativePath: string): boolean =>

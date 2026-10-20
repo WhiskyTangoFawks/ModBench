@@ -2,12 +2,12 @@
 // taking changes in domain words. Each mod manager is one implementation of it, beside it in this
 // box, and names itself through `names`.
 
+import { join } from 'node:path';
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
+import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
-export { fileInFolder, isPluginSourcePath, PLUGIN_SOURCE_GLOB } from './layout';
-export { filesWinningFirst } from './pluginsProvided';
 export { dataFolderFile } from './gameFolder/dataFolder';
 
 export type { ArchiveReader } from './downloadedFileContents/archiveReader';
@@ -581,4 +581,45 @@ export interface InstanceAdapter {
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's
    *  plugins, where the last read of the settings resolved them. */
   subscribe(listener: () => void): Subscription;
+}
+
+/** A file inside `folder`, by the relative path a source tree names it with. */
+export const fileInFolder = (folder: string, relativePath: string): string => join(folder, relativePath);
+
+/** The folder beside `mods/` that holds a source mod's repository, each under its mod's name (ADR-0007). */
+export const SOURCE_MODS_FOLDER = 'source';
+
+// Matched without case, as Windows matches a name, on every platform alike.
+const named = (name: string | undefined, as: string): boolean => name?.toLowerCase() === as;
+
+/** Whether `path` is a file inside a mod's plugin source: `source/<mod>/plugin-source/…`. */
+export const isPluginSourcePath = (path: string): boolean => {
+  const folders = path.split(/[\\/]/).slice(0, -1);
+  return folders.some((name, i) => named(name, PLUGIN_SOURCE_FOLDER) && named(folders[i - 2], SOURCE_MODS_FOLDER));
+};
+
+/** A glob that matches `text` as Windows matches a name. A glob matches case, and another tool spells a
+ *  plugin's extension or a game's file in any case, so each letter is a class. */
+export const anyCase = (text: string): string => text.replace(/./g, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`);
+
+/** Every file inside a mod's plugin source, as `isPluginSourcePath` takes it. */
+export const PLUGIN_SOURCE_GLOB = `**/${anyCase(SOURCE_MODS_FOLDER)}/*/${anyCase(PLUGIN_SOURCE_FOLDER)}/**`;
+
+export interface OriginProvides {
+  readonly origin: FileOrigin;
+  readonly files: readonly OriginFile[];
+}
+
+const provides = (origin: FileOrigin, files: readonly OriginFile[]): OriginProvides =>
+  ({ origin, files: files.filter((file) => !file.excluded) });
+
+/** The origins the game gets a file from, winning-first: Overwrite, then each enabled mod in mod
+ *  order, each with the files nothing excludes. */
+export function filesWinningFirst(
+  mods: readonly ModlistEntry[], runtimeOutput: readonly OriginFile[], filesOf: (mod: string) => readonly OriginFile[],
+): OriginProvides[] {
+  return [
+    provides({ kind: 'runtimeOutput' }, runtimeOutput),
+    ...mods.flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? [provides({ kind: 'mod', name: entry.name }, filesOf(entry.name))] : [])),
+  ];
 }

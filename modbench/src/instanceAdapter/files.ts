@@ -2,21 +2,39 @@
 // `instanceadapter` box). The adapter splices a command's change through the file's codec and
 // writes the file whole.
 
+import { randomBytes } from 'node:crypto';
 import { constants, type Dirent } from 'node:fs';
 import {
   access, appendFile, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
 } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import {
-  isOwnTemp, repositoryGitDir, tempOwner, tempWritePath,
-} from './layout';
 import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead, FileStamp } from './instanceAdapter';
 
 /** ADR-0007, answered without the backend. */
 export function isRepository(sourceFolder: string): Promise<boolean> {
-  return exists(repositoryGitDir(sourceFolder));
+  return exists(join(sourceFolder, GIT_DIR));
+}
+
+/** The git directory whose presence is what "source mod" means (ADR-0007). */
+export const GIT_DIR = '.git';
+
+const TEMP_PREFIX = '.medit_tmp_';
+
+/** Whether `name` is a temp that Modbench or mEdit left in an instance folder: never a mod's file. */
+export const isOwnTemp = (name: string): boolean => name.startsWith(TEMP_PREFIX);
+
+// The prefix of a temp this process names, `.medit_tmp_<pid>_`: the process id lets any writer tell a leftover from a live temp.
+export const ownTempPrefix = (folder: string, kind: string): string => join(folder, `${TEMP_PREFIX}${process.pid}_${kind}`);
+
+function tempOwner(tempName: string): number | undefined {
+  const id = Number(tempName.slice(TEMP_PREFIX.length).split('_')[0] || Number.NaN);
+  return Number.isInteger(id) && id > 0 ? id : undefined;
+}
+
+function tempWritePath(path: string): string {
+  return `${ownTempPrefix(dirname(path), '')}${randomBytes(6).toString('hex')}.tmp`;
 }
 
 // One chain per path in flight: a file with no writer pending costs nothing, and two different
