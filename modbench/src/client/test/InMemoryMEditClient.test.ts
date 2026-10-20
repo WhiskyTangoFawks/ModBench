@@ -18,15 +18,15 @@ describe('InMemoryMEditClient — recorded calls', () => {
   });
 });
 
-describe('InMemoryMEditClient — unscripted queries reject', () => {
-  it('rejects a query with no scripted answer, rather than answering empty', async () => {
+describe('InMemoryMEditClient — unscripted queries fail', () => {
+  it('fails a query with no scripted answer, naming it, rather than answering empty', async () => {
     const client = new InMemoryMEditClient();
-    await expect(client.getPlugins()).rejects.toThrow(/getPlugins/);
+    await expect(client.getPlugins()).resolves.toEqual({ failed: 'refused', refusal: expect.stringContaining('getPlugins') });
   });
 
   it('does not fall back to an empty answer once scripted, only before, so a test that forgot to script it fails rather than rendering a plausible but wrong tree', async () => {
     const client = new InMemoryMEditClient();
-    await expect(client.getDiagnoses()).rejects.toThrow();
+    await expect(client.getDiagnoses()).resolves.toMatchObject({ failed: 'refused' });
     client.setQueryAnswer('getDiagnoses', []);
     await expect(client.getDiagnoses()).resolves.toEqual([]);
   });
