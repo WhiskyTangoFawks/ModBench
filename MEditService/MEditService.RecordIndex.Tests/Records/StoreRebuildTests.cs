@@ -275,6 +275,20 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Equal(bytesBeforeHold, bytesOnceTheHolderIsGoneAsWindowsLetsNothingReadAFileDuckDbHolds);
     }
 
+    [ForeignIndexHolderFact]
+    public void Rebuild_RefusedBecauseAnotherProcessHoldsIt_LeavesTheStatusHeldElsewhere_NamingTheFile()
+    {
+        var earlierHolder = new LoadOrderHolder();
+        using (var earlier = Indexes.Open(earlierHolder, _opens))
+            earlier.Reconcile(earlierHolder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        var indexPath = IndexFiles.In(_fixture.InstanceRoot);
+        using (ForeignIndexHolder.Hold(indexPath))
+            _index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        Assert.Equal(LoadOrderState.HeldElsewhere, _index.Status.State);
+        Assert.Contains(indexPath, _index.Status.Message);
+    }
+
     private static bool ReadMetAClosedScopeOrARefusal(Exception ex) =>
         ex is ObjectDisposedException or InvalidOperationException;
 

@@ -1141,7 +1141,14 @@ internal sealed class Indexer : IDisposable
         }
         finally { ExitExclusive(); }
         if (refusal is null) StartReconcile();
+        else HoldElsewhere(refusal);
         return true;
+    }
+
+    private void HoldElsewhere(string message)
+    {
+        lock (_lock) _heldElsewhereMessage = message;
+        PublishStatus();
     }
 
     public void Subscribe()
