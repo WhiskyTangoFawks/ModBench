@@ -2,6 +2,7 @@ using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -71,23 +72,22 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
         Assert.True(repository.FormKeysUsed(Plugin).Value().Contains($"000850:{PluginName}"));
     }
 
+    public static TheoryData<Func<ISourceRepository, Answer<IReadOnlySet<string>, SourceFailure>>> Queries { get; } =
+    [
+        repository => repository.FormKeysUsed(Plugin),
+        repository => repository.EditorIdsHeld(Plugin),
+    ];
+
     [PosixTheory]
-    [InlineData(Query.FormKeysUsed)]
-    [InlineData(Query.EditorIdsHeld)]
-    public void ADocumentTheTreeListsButCannotRead_StopsTheQuery_NamingIt_RatherThanFreeWhatItHolds(Query query)
+    [MemberData(nameof(Queries))]
+    public void ADocumentTheTreeListsButCannotRead_StopsTheQuery_NamingIt_RatherThanFreeWhatItHolds(
+        Func<ISourceRepository, Answer<IReadOnlySet<string>, SourceFailure>> query)
     {
         var (repository, relative) = UnreadableDocument();
 
-        var stopped = Assert.IsType<SourceFailure.Unreadable>(
-            query == Query.FormKeysUsed ? repository.FormKeysUsed(Plugin).Stopped() : repository.EditorIdsHeld(Plugin).Stopped());
+        var stopped = Assert.IsType<SourceFailure.Unreadable>(query(repository).Stopped());
 
         Assert.Equal(relative, stopped.File?.SourceRelativePath);
-    }
-
-    public enum Query
-    {
-        FormKeysUsed,
-        EditorIdsHeld,
     }
 
     [Fact]

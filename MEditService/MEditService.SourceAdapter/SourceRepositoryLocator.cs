@@ -497,7 +497,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            throw SourceStopException.UnreadableIn(_sourceFolder, path, "it could not be read");
+            throw SourceStopException.UnreadableIn(_sourceFolder, path, $"it could not be read: {ex.Message}");
         }
     }
 

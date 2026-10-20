@@ -20,7 +20,7 @@ internal static class DocumentText
     {
         try
         {
-            return StripUtf8Bom(files.ReadAllBytes(path));
+            return files.FileExists(path) ? StripUtf8Bom(files.ReadAllBytes(path)) : null;
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
