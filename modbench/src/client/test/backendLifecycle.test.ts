@@ -83,7 +83,7 @@ describe('BackendLifecycle', () => {
     const silent = createNetServer((socket) => { sockets.push(socket); });
     await new Promise<void>((resolve) => silent.listen(0, 'localhost', resolve));
     const lifecycle = new BackendLifecycle({
-      attachPort: (silent.address() as AddressInfo).port, pollIntervalMs: 10, pollTimeoutMs: 100,
+      attachPort: addressInfo(silent.address()).port, pollIntervalMs: 10, pollTimeoutMs: 100,
     });
 
     await lifecycle.start();
