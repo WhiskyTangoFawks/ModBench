@@ -16,18 +16,18 @@ import { DownloadsProvider, DownloadedFileNode, type DownloadsTreeNode } from '.
 import { downloadedFileNodeFixture } from '../../test/mo2/downloadedFileNodeFixture';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
-import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
+import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import type { DownloadFile, DownloadRow, InstanceValue } from '../../instanceLoader/instance';
+import type { LocatedDownloadedFileRow, DownloadedFileRow, InstanceValue } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 
 const rowNamesOfDownloadedFileNodes = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadedFileNode).argument.row.name);
 
-const row = (extra: Partial<DownloadRow> = {}): DownloadFile => downloadRowFixture(extra.name ?? 'foo.zip', extra);
+const row = (extra: Partial<DownloadedFileRow> = {}): LocatedDownloadedFileRow => downloadedFileRowFixture(extra.name ?? 'foo.zip', extra);
 
-function valueOf(downloads: DownloadFile[]): InstanceValue {
-  return instanceValueFixture({ downloads: { kind: 'listed', rows: downloads } });
+function valueOf(downloads: LocatedDownloadedFileRow[]): InstanceValue {
+  return instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: downloads } });
 }
 
 const SEQUENCE_NOT_READ_YET = 0;
@@ -38,7 +38,7 @@ const explicitFailureIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): 
 ]);
 
 const makeProviderOverRowsNeverOnDisk = (
-  downloads: DownloadFile[],
+  downloads: LocatedDownloadedFileRow[],
   extra: Partial<{ instance: FakeInstance }> = {},
 ): DownloadsProvider => {
   const instance = extra.instance ?? new FakeInstance(valueOf(downloads));
@@ -144,14 +144,14 @@ describe('DownloadedFileNode', () => {
     expect(downloadedFileNodeFixture(r).argument.row).toBe(r);
   });
 
-  it('carries its sidecar\'s modID as the Nexus mod id view on Nexus opens, and none without one', () => {
+  it('carries its metadata file\'s modID as the Nexus mod id view on Nexus opens, and none without one', () => {
     expect(downloadedFileNodeFixture(row({ modID: '123' })).nexusModId).toBe('123');
     expect(downloadedFileNodeFixture(row()).nexusModId).toBeUndefined();
   });
 
-  it('carries its sidecar\'s game as the game view on Nexus opens the page of, and none without one', () => {
-    expect(downloadedFileNodeFixture(row({ gameName: 'SkyrimSE' })).nexusGame).toBe('SkyrimSE');
-    expect(downloadedFileNodeFixture(row()).nexusGame).toBeUndefined();
+  it('carries its metadata file\'s game as the game view on Nexus opens the page of, and none without one', () => {
+    expect(downloadedFileNodeFixture(row({ gameName: 'SkyrimSE' })).gameName).toBe('SkyrimSE');
+    expect(downloadedFileNodeFixture(row()).gameName).toBeUndefined();
   });
 });
 
@@ -380,7 +380,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
 describe('DownloadsProvider — a configured downloads folder Modbench cannot resolve shows the "Failed to load:" state', () => {
   const REASON = 'download_directory "D:\\Games\\downloads" could not be resolved: '
     + "Cannot translate Wine drive letter 'D:' in 'D:\\Games\\downloads': only Z: and C: are translated";
-  const unresolvedValue = () => instanceValueFixture({ downloads: { kind: 'unresolved', reason: REASON } });
+  const unresolvedValue = () => instanceValueFixture({ downloadedFiles: { kind: 'unresolved', reason: REASON } });
 
   it('renders one error row naming the reason, even though the instance read itself landed', async () => {
     const provider = makeProviderOverRowsNeverOnDisk([], { instance: new FakeInstance(unresolvedValue(), 1) });

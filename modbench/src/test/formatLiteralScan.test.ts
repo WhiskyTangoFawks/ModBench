@@ -284,7 +284,7 @@ describe('layout names', () => {
   });
 
   it('does not flag a module specifier', () => {
-    expect(layoutLeaks("import { parseDownloadMeta } from './codecs/downloads';\n", 'x.ts')).toEqual([]);
+    expect(layoutLeaks("import { parseDownloadedFileMeta } from './codecs/downloads';\n", 'x.ts')).toEqual([]);
   });
 
   it('does not flag a literal type, which can never be a path', () => {

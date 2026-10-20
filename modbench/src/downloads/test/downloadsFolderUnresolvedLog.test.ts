@@ -9,8 +9,8 @@ const REASON_D_DRIVE = "download_directory \"D:\\Games\\downloads\" could not be
 const REASON_NO_PREFIX = 'download_directory "C:\\Games\\downloads" could not be resolved: '
   + "Cannot translate Wine path 'C:\\Games\\downloads': the Proton prefix could not be determined";
 
-const LISTED = instanceValueFixture({ downloads: { kind: 'listed', rows: [] } });
-const UNRESOLVED = instanceValueFixture({ downloads: { kind: 'unresolved', reason: REASON_D_DRIVE } });
+const LISTED = instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [] } });
+const UNRESOLVED = instanceValueFixture({ downloadedFiles: { kind: 'unresolved', reason: REASON_D_DRIVE } });
 
 function logged(instance: FakeInstance): string[] {
   const lines: string[] = [];
@@ -62,7 +62,7 @@ describe('the downloads folder unresolved, in the Output', () => {
   it('is a new line when the reason changes', () => {
     const instance = new FakeInstance(LISTED);
     const lines = logged(instance);
-    const differently = instanceValueFixture({ downloads: { kind: 'unresolved', reason: REASON_NO_PREFIX } });
+    const differently = instanceValueFixture({ downloadedFiles: { kind: 'unresolved', reason: REASON_NO_PREFIX } });
 
     instance.publish(UNRESOLVED);
     instance.publish(differently);

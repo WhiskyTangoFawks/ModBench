@@ -108,11 +108,11 @@ const BOUND_COMMAND_BOXES = {
     toolbox: ['instanceCommands/instanceCommands', 'sourceCommands/modlistRepositoryCommands'],
     plugins: ['pluginCommands/plugins', 'pluginCommands/renamePlugin', 'sourceCommands/sourceCommands'],
 };
-/** Mods reaches the Instance adapter for the archive extensions install extracts, and for the
+/** Mods reaches the Instance adapter for the installation file extensions install extracts, and for the
  *  file reads open-conflicts draws it asking for. */
 /** @type {Record<string, string[]>} */
 const ADAPTER_NAMES_A_VIEW_MAY_IMPORT = {
-    mods: ['ARCHIVE_EXTENSIONS', 'FileRead', 'FileStamp', 'HashedFile', 'InstanceAdapter'],
+    mods: ['INSTALLATION_FILE_EXTENSIONS', 'FileRead', 'FileStamp', 'HashedFile', 'InstanceAdapter'],
 };
 /** @param {string} view */
 const boundCommandImports = (view) => ['error', {
@@ -125,7 +125,7 @@ const boundCommandImports = (view) => ['error', {
         {
             group: ['**/instanceAdapter/**'],
             ...(ADAPTER_NAMES_A_VIEW_MAY_IMPORT[view] ? { allowImportNames: ADAPTER_NAMES_A_VIEW_MAY_IMPORT[view] } : {}),
-            message: 'A view holds bound commands, and Mods reaches the Instance adapter for nothing but the archive extensions and the file reads of a conflict table.',
+            message: 'A view holds bound commands, and Mods reaches the Instance adapter for nothing but the installation file extensions and the file reads of a conflict table.',
         },
     ],
 }];

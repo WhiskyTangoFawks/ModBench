@@ -2,10 +2,10 @@
 // each trusted while its file's stamp is the one it was hashed at.
 
 import { join } from 'node:path';
-import type { ArchiveReader } from './archiveReader';
+import type { InstallationFileReader } from './installationFileReader';
 import { digestOf } from './contentDigest';
 import { append, ensureDir, get, listDir, makeTempDir, readOrReason, remove, stampOf, withLock } from '../files';
-import type { FileRead, FileStamp, HashedDownload, HashedFile, InstanceAdapter } from '../instanceAdapter';
+import type { FileRead, FileStamp, HashedDownloadedFile, HashedFile, InstanceAdapter } from '../instanceAdapter';
 
 const INDEX_FILE = 'hashes.jsonl';
 const EXTRACTION_PREFIX = 'entries-';
@@ -14,12 +14,12 @@ const EXTRACTION_PREFIX = 'entries-';
 // clock is not this machine's: a stamp this recent may not change for a write that follows it.
 const SETTLED_AFTER_MS = 2_000;
 
-type Kind = 'origin' | 'game' | 'download';
+type Kind = 'origin' | 'game' | 'downloadedFile';
 type IndexedKind = Exclude<Kind, 'origin'>;
 
 interface Kept {
   readonly stamp: FileStamp;
-  readonly hashed: Promise<FileRead<HashedDownload>>;
+  readonly hashed: Promise<FileRead<HashedDownloadedFile>>;
 }
 
 const sameStamp = (a: FileStamp, b: FileStamp): boolean =>
@@ -28,7 +28,7 @@ const sameStamp = (a: FileStamp, b: FileStamp): boolean =>
 const settledBefore = (stamp: FileStamp, readFromMs: number): boolean =>
   stamp.changedNs < BigInt(readFromMs - SETTLED_AFTER_MS) * 1_000_000n;
 
-const lineOf = (kind: IndexedKind, path: string, stamp: FileStamp, { hash, entries }: HashedDownload): string =>
+const lineOf = (kind: IndexedKind, path: string, stamp: FileStamp, { hash, entries }: HashedDownloadedFile): string =>
   `${JSON.stringify([
     kind, path, String(stamp.size), String(stamp.modifiedNs), String(stamp.changedNs), hash,
     ...entries.flatMap((entry) => [entry.path, entry.hash]),
@@ -38,9 +38,9 @@ type Line = [IndexedKind, string, string, string, string, string, ...string[]];
 
 const isLine = (fields: unknown): fields is Line =>
   Array.isArray(fields) && fields.length >= 6 && fields.length % 2 === 0
-  && fields.every((field) => typeof field === 'string') && (fields[0] === 'game' || fields[0] === 'download');
+  && fields.every((field) => typeof field === 'string') && (fields[0] === 'game' || fields[0] === 'downloadedFile');
 
-function keptAt(line: string): { kind: IndexedKind; path: string; stamp: FileStamp; hashed: HashedDownload } | undefined {
+function keptAt(line: string): { kind: IndexedKind; path: string; stamp: FileStamp; hashed: HashedDownloadedFile } | undefined {
   try {
     const fields: unknown = JSON.parse(line);
     if (!isLine(fields)) return undefined;
@@ -53,7 +53,7 @@ function keptAt(line: string): { kind: IndexedKind; path: string; stamp: FileSta
   }
 }
 
-// An extraction is a whole archive, so one a crash left behind would hold its space for good.
+// An extraction is a whole installation file, so one a crash left behind would hold its space for good.
 async function removeLeftoverExtractions(folder: string): Promise<void> {
   const names = await listDir(folder).catch(() => []);
   await Promise.all(names.filter((name) => name.name.startsWith(EXTRACTION_PREFIX)).map((name) => remove(join(folder, name.name))));
@@ -75,12 +75,12 @@ export interface HashIndex extends Pick<InstanceAdapter, 'originFileHash'> {
   /** A game file's size and hash, the hash as mEdit's manifest carries it, kept in the record index (ADR-0013). */
   gameFileHash(path: string): Promise<FileRead<HashedFile>>;
   /** The size and hash of the downloaded file at `path`, and of each of its entries, kept in the hash index. */
-  downloadedFileHash(path: string): Promise<FileRead<HashedDownload>>;
+  downloadedFileHash(path: string): Promise<FileRead<HashedDownloadedFile>>;
 }
 
-export function hashIndex(folder: string, archives: ArchiveReader): HashIndex {
+export function hashIndex(folder: string, installationFileReader: InstallationFileReader): HashIndex {
   const indexFile = join(folder, INDEX_FILE);
-  const kept: Record<Kind, Map<string, Kept>> = { origin: new Map(), game: new Map(), download: new Map() };
+  const kept: Record<Kind, Map<string, Kept>> = { origin: new Map(), game: new Map(), downloadedFile: new Map() };
   let loaded: Promise<void> | undefined;
 
   // The record index only spares a read: one that cannot be read or written costs a read again, never a wrong hash.
@@ -91,17 +91,17 @@ export function hashIndex(folder: string, archives: ArchiveReader): HashIndex {
     }
   }, () => undefined));
 
-  const hashedAlone = async (path: string, stamp: FileStamp): Promise<HashedDownload> =>
+  const hashedAlone = async (path: string, stamp: FileStamp): Promise<HashedDownloadedFile> =>
     ({ size: Number(stamp.size), hash: await digestOf(path), entries: [] });
 
-  // One extraction at a time: each is a whole archive on disk.
-  const hashedWithEntries = (path: string, stamp: FileStamp): Promise<HashedDownload> => withLock(join(folder, EXTRACTION_PREFIX), async () => {
-    const listed = await archives.list(path);
+  // One extraction at a time: each is a whole installation file on disk.
+  const hashedWithEntries = (path: string, stamp: FileStamp): Promise<HashedDownloadedFile> => withLock(join(folder, EXTRACTION_PREFIX), async () => {
+    const listed = await installationFileReader.list(path);
     refuseCaseCollisions(listed);
     await ensureDir(folder);
     const extraction = await makeTempDir(join(folder, EXTRACTION_PREFIX));
     try {
-      await archives.extract(path, extraction);
+      await installationFileReader.extract(path, extraction);
       const entries = [];
       for (const entry of listed) entries.push({ path: entry, hash: await digestOf(join(extraction, entry)) });
       return { ...(await hashedAlone(path, stamp)), entries };
@@ -110,7 +110,7 @@ export function hashIndex(folder: string, archives: ArchiveReader): HashIndex {
     }
   });
 
-  async function keep(kind: Kind, path: string, entry: Kept, read: FileRead<HashedDownload>, readFromMs: number): Promise<void> {
+  async function keep(kind: Kind, path: string, entry: Kept, read: FileRead<HashedDownloadedFile>, readFromMs: number): Promise<void> {
     if (kept[kind].get(path) !== entry) return;
     if (read.kind === 'unreadable' || !settledBefore(entry.stamp, readFromMs)) {
       kept[kind].delete(path);
@@ -120,7 +120,7 @@ export function hashIndex(folder: string, archives: ArchiveReader): HashIndex {
     await ensureDir(folder).then(() => append(indexFile, lineOf(kind, path, entry.stamp, read.answer))).catch(() => undefined);
   }
 
-  async function hashOf(kind: Kind, path: string): Promise<FileRead<HashedDownload>> {
+  async function hashOf(kind: Kind, path: string): Promise<FileRead<HashedDownloadedFile>> {
     await load();
     const stamped = await readOrReason(() => stampOf(path));
     if (stamped.kind === 'unreadable') return stamped;
@@ -130,7 +130,7 @@ export function hashIndex(folder: string, archives: ArchiveReader): HashIndex {
     const readFromMs = Date.now();
     const entry: Kept = {
       stamp,
-      hashed: readOrReason(() => (kind === 'download' ? hashedWithEntries(path, stamp) : hashedAlone(path, stamp)))
+      hashed: readOrReason(() => (kind === 'downloadedFile' ? hashedWithEntries(path, stamp) : hashedAlone(path, stamp)))
         .then(async (read) => {
           await keep(kind, path, entry, read, readFromMs);
           return read;
@@ -140,7 +140,7 @@ export function hashIndex(folder: string, archives: ArchiveReader): HashIndex {
     return entry.hashed;
   }
 
-  const hashAlone = async (kind: Kind, path: string): Promise<FileRead<Omit<HashedDownload, 'entries'>>> => {
+  const hashAlone = async (kind: Kind, path: string): Promise<FileRead<Omit<HashedDownloadedFile, 'entries'>>> => {
     const read = await hashOf(kind, path);
     return read.kind === 'read' ? { kind: 'read', answer: { size: read.answer.size, hash: read.answer.hash } } : read;
   };
@@ -148,6 +148,6 @@ export function hashIndex(folder: string, archives: ArchiveReader): HashIndex {
   return {
     originFileHash: (path) => hashAlone('origin', path),
     gameFileHash: (path) => hashAlone('game', path),
-    downloadedFileHash: (path) => hashOf('download', path),
+    downloadedFileHash: (path) => hashOf('downloadedFile', path),
   };
 }

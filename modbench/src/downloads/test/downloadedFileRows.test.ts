@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { downloadedFileContextValue, sortDownloadedFileRows } from '../downloadRows';
-import type { DownloadRow } from '../../instanceLoader/instance';
+import { downloadedFileContextValue, sortDownloadedFileRows } from '../downloadedFileRows';
+import type { DownloadedFileRow } from '../../instanceLoader/instance';
 
-const row = (name: string, mtimeMs: number, excluded = false): DownloadRow => ({
+const row = (name: string, mtimeMs: number, excluded = false): DownloadedFileRow => ({
   name,
   displayName: name,
   status: 'Downloaded',
@@ -29,7 +29,7 @@ describe('sortDownloadedFileRows', () => {
   });
 
   it('sorts by name using the label, not the raw filename, which sorts the opposite way', () => {
-    const rows: DownloadRow[] = [
+    const rows: DownloadedFileRow[] = [
       { ...row('z-file.zip', 1), displayName: 'Alpha' },
       { ...row('a-file.zip', 2), displayName: 'Zeta' },
     ];
@@ -38,7 +38,7 @@ describe('sortDownloadedFileRows', () => {
   });
 
   it('is a stable sort by name (label) in both directions: ties keep their relative order', () => {
-    const rows: DownloadRow[] = [
+    const rows: DownloadedFileRow[] = [
       { ...row('a.zip', 1), displayName: 'Same' },
       { ...row('b.zip', 2), displayName: 'Same' },
       { ...row('c.zip', 3), displayName: 'Other' },
@@ -48,7 +48,7 @@ describe('sortDownloadedFileRows', () => {
   });
 
   it('is a stable sort: ties in the sorted column keep their relative order', () => {
-    const rows: DownloadRow[] = [
+    const rows: DownloadedFileRow[] = [
       { ...row('a', 1), status: 'Downloaded' },
       { ...row('b', 2), status: 'Downloaded' },
       { ...row('c', 3), status: 'Installed' },
@@ -57,7 +57,7 @@ describe('sortDownloadedFileRows', () => {
   });
 
   it('is a stable sort descending too: ties in the sorted column keep their relative order', () => {
-    const rows: DownloadRow[] = [
+    const rows: DownloadedFileRow[] = [
       { ...row('a', 1), status: 'Downloaded' },
       { ...row('b', 2), status: 'Downloaded' },
       { ...row('c', 3), status: 'Installed' },
@@ -67,14 +67,14 @@ describe('sortDownloadedFileRows', () => {
 });
 
 describe('downloadedFileContextValue, the space-separated flag string the view/item/context when clauses match', () => {
-  const plain: DownloadRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, excluded: false, upgrades: [] };
+  const plain: DownloadedFileRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, excluded: false, upgrades: [] };
 
   it('is the base "downloadedFile" token alone when no optional flag applies', () => {
     expect(downloadedFileContextValue(plain)).toBe('downloadedFile');
   });
 
   it('appends hasModID, hasMeta and excluded, in that order, when all three are set', () => {
-    const row: DownloadRow = { ...plain, hasMeta: true, excluded: true, modID: '12345' };
+    const row: DownloadedFileRow = { ...plain, hasMeta: true, excluded: true, modID: '12345' };
     expect(downloadedFileContextValue(row)).toBe('downloadedFile hasModID hasMeta excluded');
   });
 

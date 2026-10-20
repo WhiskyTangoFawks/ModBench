@@ -59,7 +59,7 @@ interface ModsViewDeps {
   trash: MoveToTrash;
   extensionUri: vscode.Uri;
   warnIfFomod: (name: string, isFomod: boolean) => void;
-  downloadInstall: Parameters<typeof registerModInstallCommands>[0]['downloadInstall'];
+  downloadedFileInstallReporting: Parameters<typeof registerModInstallCommands>[0]['downloadedFileInstallReporting'];
   /** The one selected mod row with a Nexus id in the focused Mods or Downloads view, for the palette. */
   nexusRow: () => NexusModRow | undefined;
   /** Mod sync, whose failure the view's message line says. */
@@ -145,7 +145,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
     ...registerConflictTable(instance, (files) => sameCopies(deps.copyReads, files), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     ...registerModInstallCommands({
-      commands, instance, reporterFor, ask, warnIfFomod: deps.warnIfFomod, downloadInstall: deps.downloadInstall,
+      commands, instance, reporterFor, ask, warnIfFomod: deps.warnIfFomod, downloadedFileInstallReporting: deps.downloadedFileInstallReporting,
     }),
     registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), deps.nexusRow),
     ...registerSortDirectionToggle('mod', provider),

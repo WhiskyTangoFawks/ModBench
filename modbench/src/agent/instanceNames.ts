@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from '../drivingLib/refusal';
-import { downloadsNamed, filesNamed, type FileName } from './names';
+import { downloadedFilesNamed, filesNamed, type FileName } from './names';
 
 function refusing<T>(refusals: string[], otherwise: T, work: () => T): T {
   try {
@@ -26,7 +26,7 @@ export const RESOLVE_INSTANCE_NAMES = {
   },
   of: (value: InstanceValue, { downloads = [], files = [] }: { downloads?: string[]; files?: FileName[] }) => {
     const refusals: string[] = [];
-    const named = { downloads: refusing(refusals, [], () => downloadsNamed(value.downloads, downloads)), files: refusing(refusals, [], () => filesNamed(value, files)) };
+    const named = { downloads: refusing(refusals, [], () => downloadedFilesNamed(value.downloadedFiles, downloads)), files: refusing(refusals, [], () => filesNamed(value, files)) };
     if (refusals.length > 0) throw new Refusal(refusals.join(' '));
     return named;
   },

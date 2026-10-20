@@ -1,12 +1,12 @@
 // Row rendering only: which column the rows are ordered by and which of them show live in
-// downloadRows.ts, the same split ModListProvider makes for modlist.txt.
+// downloadedFileRows.ts, the same split ModListProvider makes for modlist.txt.
 
 import * as vscode from 'vscode';
 import {
   downloadedFileContextValue, filterExcludedRows, sortDownloadedFileRows, type DownloadedFileSortColumn,
-} from './downloadRows';
+} from './downloadedFileRows';
 import {
-  instanceMessages, type DownloadFile, type DownloadRow, type DownloadStatus, type InstanceValue, type InstanceView,
+  instanceMessages, type LocatedDownloadedFileRow, type DownloadedFileRow, type DownloadedFileStatus, type InstanceValue, type InstanceView,
 } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
@@ -14,8 +14,8 @@ import { messageLine } from '../drivingLib/messageLine';
 import type { DownloadedFileArgument } from '../drivingLib/argument';
 
 // Mirrors the reference tool's own colour-coded Status cell. The icon is always set explicitly so
-// the file-icon theme never takes over; a colour is affordable because every row is an archive.
-function downloadedFileStatusIcon(status: DownloadStatus): vscode.ThemeIcon {
+// the file-icon theme never takes over; a colour is affordable because every row is a downloaded file.
+function downloadedFileStatusIcon(status: DownloadedFileStatus): vscode.ThemeIcon {
   switch (status) {
     case 'Downloaded':
       return new vscode.ThemeIcon('archive', new vscode.ThemeColor('charts.green'));
@@ -28,14 +28,14 @@ function downloadedFileStatusIcon(status: DownloadStatus): vscode.ThemeIcon {
 
 // `v%1` is the reference tool's own version display convention. The icon always carries status, so
 // the description repeats it only for a state other than the Downloaded default.
-function downloadedFileDescription(row: DownloadRow): string {
+function downloadedFileDescription(row: DownloadedFileRow): string {
   const version = row.version ? `v${row.version}` : undefined;
   const status = row.status === 'Downloaded' ? undefined : row.status;
   return [version, status].filter((s): s is string => !!s).join(' ');
 }
 
-// A manually-dropped archive with no sidecar still gets a valid, minimal tooltip.
-function downloadedFileTooltip(row: DownloadRow): vscode.MarkdownString {
+// A manually-dropped downloaded file with no metadata file still gets a valid, minimal tooltip.
+function downloadedFileTooltip(row: DownloadedFileRow): vscode.MarkdownString {
   const lines = [
     `**${row.name}**`,
     row.modName && `Mod: ${row.modName}`,
@@ -55,13 +55,13 @@ export class DownloadedFileNode extends vscode.TreeItem {
   readonly kind = 'downloadedFile' as const;
   /** The Argument view on Nexus reads, which the Mods row supplies under the same name. */
   readonly nexusModId: string | undefined;
-  readonly nexusGame: string | undefined;
+  readonly gameName: string | undefined;
   readonly argument: DownloadedFileArgument;
-  constructor(row: DownloadFile) {
+  constructor(row: LocatedDownloadedFileRow) {
     super(row.displayName, vscode.TreeItemCollapsibleState.None);
     this.argument = { kind: 'downloadedFile', row };
     this.nexusModId = row.modID;
-    this.nexusGame = row.gameName;
+    this.gameName = row.gameName;
     this.id = row.name;
     this.iconPath = downloadedFileStatusIcon(row.status);
     this.description = downloadedFileDescription(row);
@@ -79,8 +79,8 @@ interface DownloadsProviderOptions {
   instance: InstanceView;
 }
 
-/** Flat: downloads have no grouping or reorder concept, so every row is a leaf. One row per
- *  archive, from the Instance value alone (ADR-0015). */
+/** Flat: downloaded files have no grouping or reorder concept, so every row is a leaf. One row per
+ *  downloaded file, from the Instance value alone (ADR-0015). */
 export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeNode>, vscode.Disposable {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadsTreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -149,8 +149,8 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   /** The all-excluded empty state (downloads.md, States, story 2), distinct from the name
    *  filter's own no-match state. */
   allExcluded(): boolean {
-    if (this.showExcluded || this.instanceValue.downloads.kind !== 'listed') return false;
-    const { rows } = this.instanceValue.downloads;
+    if (this.showExcluded || this.instanceValue.downloadedFiles.kind !== 'listed') return false;
+    const { rows } = this.instanceValue.downloadedFiles;
     return rows.length > 0 && rows.every((row) => row.excluded);
   }
 
@@ -178,14 +178,14 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
     // A folder Modbench cannot resolve is not the folder the mod manager names — no rows, so no
     // command has anything to act on (common.md, States, story 2; scoped to this view alone).
-    if (this.instanceValue.downloads.kind === 'unresolved') return [new ErrorNode(this.instanceValue.downloads.reason)];
-    this.cache ??= this.build(this.instanceValue.downloads.rows);
+    if (this.instanceValue.downloadedFiles.kind === 'unresolved') return [new ErrorNode(this.instanceValue.downloadedFiles.reason)];
+    this.cache ??= this.build(this.instanceValue.downloadedFiles.rows);
     if (!this.filterLower) return this.cache;
     return this.cache.filter((n) => n.argument.row.displayName.toLowerCase().includes(this.filterLower));
   }
 
-  private build(downloads: readonly DownloadFile[]): DownloadedFileNode[] {
-    const rows = sortDownloadedFileRows(filterExcludedRows(downloads, this.showExcluded), this.sortColumn, this.sortDescending);
+  private build(downloadedFiles: readonly LocatedDownloadedFileRow[]): DownloadedFileNode[] {
+    const rows = sortDownloadedFileRows(filterExcludedRows(downloadedFiles, this.showExcluded), this.sortColumn, this.sortDescending);
     return rows.map((row) => new DownloadedFileNode(row));
   }
 }

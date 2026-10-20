@@ -55,7 +55,7 @@ vi.mock('vscode', () => ({
 import type { Instance, InstanceView } from '../../instanceLoader/instance';
 import { createDownloadsView } from '../downloadsView';
 import { downloadedFileNodeFixture } from '../../test/mo2/downloadedFileNodeFixture';
-import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
+import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import { present } from '../../ports/present';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -74,8 +74,8 @@ const downloadsViewDeps = (instance: InstanceView & Pick<Instance, 'refresh'>): 
 const command = commandInvoker(h.state);
 const currentBox = currentBoxOf(h.state);
 
-const instanceOver = (...rows: ReturnType<typeof downloadRowFixture>[]) =>
-  new FakeInstance(instanceValueFixture({ downloads: { kind: 'listed', rows } }));
+const instanceOver = (...rows: ReturnType<typeof downloadedFileRowFixture>[]) =>
+  new FakeInstance(instanceValueFixture({ downloadedFiles: { kind: 'listed', rows } }));
 const viewOver = (instance: FakeInstance) => createDownloadsView(downloadsViewDeps(instance));
 const downloadsTree = () => present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
 
@@ -89,7 +89,7 @@ beforeEach(() => {
 
 describe('the Downloads filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
-    const instance = instanceOver(downloadRowFixture('other.7z'));
+    const instance = instanceOver(downloadedFileRowFixture('other.7z'));
     const { nameFilter: downloadsFilter } = viewOver(instance);
     const downloadsView = downloadsTree();
 
@@ -98,7 +98,7 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
     await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
     expect(downloadsView.message).toBe('No matches for "zzznomatch".');
 
-    instance.publish(instanceValueFixture({ downloads: { kind: 'listed', rows: [downloadRowFixture('zzznomatch.7z')] } }));
+    instance.publish(instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('zzznomatch.7z')] } }));
     await waitForMessage(downloadsView, (m) => m === undefined, 'the message clearing once a matching downloaded file lands');
     expect(downloadsView.message).toBeUndefined();
 
@@ -110,7 +110,7 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
 
 describe('the Downloads filter follows a toggle with no new instance value', () => {
   it('recomputes the no-match message off Show excluded, in both directions', async () => {
-    const { nameFilter: downloadsFilter } = viewOver(instanceOver(downloadRowFixture('zzznomatch.7z', { excluded: true })));
+    const { nameFilter: downloadsFilter } = viewOver(instanceOver(downloadedFileRowFixture('zzznomatch.7z', { excluded: true })));
     const downloadsView = downloadsTree();
 
     downloadsFilter.open();
@@ -133,7 +133,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
   const contextValue = () => h.state.contextKeys.get(KEY);
 
   it('is true once the one downloaded file is excluded, and follows Show excluded both ways', async () => {
-    viewOver(instanceOver(downloadRowFixture('a.7z', { excluded: true })));
+    viewOver(instanceOver(downloadedFileRowFixture('a.7z', { excluded: true })));
 
     await vi.waitFor(() => expect(contextValue()).toBe(true));
 
@@ -145,7 +145,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
   });
 
   it('stays false while at least one downloaded file is not excluded', async () => {
-    viewOver(instanceOver(downloadRowFixture('a.7z'), downloadRowFixture('b.7z', { excluded: true })));
+    viewOver(instanceOver(downloadedFileRowFixture('a.7z'), downloadedFileRowFixture('b.7z', { excluded: true })));
 
     await vi.waitFor(() => expect(contextValue()).toBe(false));
   });
@@ -159,7 +159,7 @@ describe('the Downloads decoration provider follows a rows change', () => {
     const fired = vi.fn();
     present(provider, 'the registered decoration provider').onDidChangeFileDecorations?.(fired);
 
-    instance.publish(instanceValueFixture({ downloads: { kind: 'listed', rows: [downloadRowFixture('zzznew.7z')] } }));
+    instance.publish(instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('zzznew.7z')] } }));
 
     await vi.waitFor(() => expect(fired).toHaveBeenCalled());
   });
@@ -177,7 +177,7 @@ describe('the Downloads view tells its palette entries, which are handed no row,
   it('sets each key off the selection as it changes', () => {
     const { view: downloadsView } = viewOver(instanceOver());
 
-    select(downloadsView, [downloadedFileNodeFixture(downloadRowFixture('a.7z', { hasMeta: true }))]);
+    select(downloadsView, [downloadedFileNodeFixture(downloadedFileRowFixture('a.7z', { hasMeta: true }))]);
     expect(keys()).toEqual({
       'modbench.downloadedFile.singleFile': true, 'modbench.downloadedFile.singleFileWithMeta': true,
       'modbench.downloadedFile.holdsFile': true, 'modbench.downloadedFile.holdsIncluded': true,
@@ -185,7 +185,7 @@ describe('the Downloads view tells its palette entries, which are handed no row,
     });
 
     select(downloadsView, [
-      downloadedFileNodeFixture(downloadRowFixture('b.7z', { excluded: true })), downloadedFileNodeFixture(downloadRowFixture('c.7z', { excluded: true })),
+      downloadedFileNodeFixture(downloadedFileRowFixture('b.7z', { excluded: true })), downloadedFileNodeFixture(downloadedFileRowFixture('c.7z', { excluded: true })),
     ]);
     expect(keys()).toEqual({
       'modbench.downloadedFile.singleFile': false, 'modbench.downloadedFile.singleFileWithMeta': false,
@@ -202,7 +202,7 @@ describe('the Downloads view writes the unresolved folder to the Output', () => 
     const lines: string[] = [];
     createDownloadsView({ ...downloadsViewDeps(instance), logUnresolved: (line) => lines.push(line) });
 
-    instance.publish(instanceValueFixture({ downloads: { kind: 'unresolved', reason: 'no folder' } }));
+    instance.publish(instanceValueFixture({ downloadedFiles: { kind: 'unresolved', reason: 'no folder' } }));
 
     expect(lines).toEqual(['no folder']);
   });

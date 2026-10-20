@@ -3,8 +3,8 @@
 
 import { basename, dirname } from 'node:path';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
-import { isArchiveName } from '../downloadedFileContents/archiveNames';
-import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
+import { isInstallationFileName } from '../downloadedFileContents/installationFileNames';
+import { METADATA_FILE_SUFFIX, parseDownloadedFileMeta } from './codecs/downloads';
 import { type MetaIni, modMetaOf, parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
 import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
@@ -13,7 +13,7 @@ import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
 import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, type SkippedLink, stampOf, isOwnTemp } from '../files';
 import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolders } from '../instanceAdapter';
-import { DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadSidecarFile, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile } from './layout';
+import { DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile } from './layout';
 import { mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
 import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context } from './mo2Context';
@@ -25,16 +25,16 @@ async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLin
   const dirents = await readOrAbsent(() => listEntries(downloadsDir, skippedLink), undefined);
   if (dirents === undefined) return undefined;
   const names = dirents
-    .filter((d) => d.isFile && isArchiveName(d.name) && !isOwnTemp(d.name))
+    .filter((d) => d.isFile && isInstallationFileName(d.name) && !isOwnTemp(d.name))
     .map((d) => d.name);
   return Promise.all(names.map(async (name) => {
-    const path = downloadFile(downloadsDir, name);
-    const metadataPath = downloadSidecarFile(downloadsDir, name);
+    const path = downloadedFilePath(downloadsDir, name);
+    const metadataPath = downloadedFileMetadataPath(downloadsDir, name);
     const [facts, metaText] = await Promise.all([
       factsOf(path),
       readOrAbsent<string | undefined>(() => get(metadataPath), undefined),
     ]);
-    const parsed = metaText === undefined ? undefined : parseDownloadMeta(metaText);
+    const parsed = metaText === undefined ? undefined : parseDownloadedFileMeta(metaText);
     return { name, path, metadataPath, size: facts.size, mtimeMs: facts.mtimeMs, excluded: parsed?.hidden ?? false, meta: parsed?.meta };
   }));
 }
@@ -49,7 +49,7 @@ function gamePathOf(iniText: string): string | undefined {
   }
 }
 
-const MO2_NAMES: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };
+const MO2_NAMES: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadedFileMetadataFile: METADATA_FILE_SUFFIX };
 
 /** A mod's meta.ini as it reads, `{}` for a separator, a mod with no folder and a meta that is gone. */
 export async function readMetaIni(context: Mo2Context, mod: string, folders: ModFolders | undefined | 'list'): Promise<MetaIni> {

@@ -1520,7 +1520,7 @@ describe('modbench.downloads tree', () => {
   before(() => mkdirSync(downloadsDir, { recursive: true }));
   after(() => rmSync(downloadsDir, { recursive: true, force: true }));
 
-  it('reflects a new archive dropped into downloads/ via the file-watcher, with no manual refresh', async () => {
+  it('reflects a new downloaded file dropped into downloads/ via the file-watcher, with no manual refresh', async () => {
     await probeUntilListed(downloadsDir, 'dropped');
   });
 

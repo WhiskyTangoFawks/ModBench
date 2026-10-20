@@ -1,11 +1,11 @@
 import { join } from 'node:path';
-import type { DownloadFile, DownloadRow } from '../../instanceLoader/instance';
+import type { LocatedDownloadedFileRow, DownloadedFileRow } from '../../instanceLoader/instance';
 
-/** A `DownloadFile` with every required member at its neutral value, the two paths named as a
+/** A `LocatedDownloadedFileRow` with every required member at its neutral value, the two paths named as a
  *  recompute over `instanceRoot` names them. */
-export function downloadRowFixture(
-  name: string, overrides: Partial<DownloadRow> = {}, instanceRoot = '/instance',
-): DownloadFile {
+export function downloadedFileRowFixture(
+  name: string, overrides: Partial<DownloadedFileRow> = {}, instanceRoot = '/instance',
+): LocatedDownloadedFileRow {
   return {
     name,
     displayName: name,

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { downloadsNamed, filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
+import { downloadedFilesNamed, filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
 import type { MEditClient } from '../client/MEditClient';
 import { Refusal } from '../drivingLib/refusal';
 import { formKeysNamed } from './recordNames';
@@ -102,11 +102,11 @@ const FILES = gestureInput(
     ({ kind: 'file', origin: { kind: 'mod', name: mod }, relativePath: file })), {}),
 );
 
-const DOWNLOADS = gestureInput(
+const DOWNLOADED_FILES = gestureInput(
   'argument: the downloaded files, each { name } as list_downloads names it',
   z.object({ argument: z.array(z.object({ name: z.string() })) }),
   (value, { argument }) => new AgentCall(
-    downloadsNamed(value.downloads, argument.map(({ name }) => name)).map((name) => ({ kind: 'downloadedFile' as const, name })), {}),
+    downloadedFilesNamed(value.downloadedFiles, argument.map(({ name }) => name)).map((name) => ({ kind: 'downloadedFile' as const, name })), {}),
 );
 
 const INSTALL_SOURCE = z.union([
@@ -123,7 +123,7 @@ const INSTALL = gestureInput(
   }),
   (value, { argument, options: { name, target, force } }) => new AgentCall(
     argument.map((source) => (source.kind === 'downloadedFile'
-      ? { kind: source.kind, name: downloadsNamed(value.downloads, [source.name])[0] ?? source.name }
+      ? { kind: source.kind, name: downloadedFilesNamed(value.downloadedFiles, [source.name])[0] ?? source.name }
       : source)),
     { name, target: target === undefined ? undefined : modsNamed(value, [{ name: target, kind: 'mod' }])[0]?.name, force },
   ),
@@ -222,9 +222,9 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.excludeFile', FILES],
   ['modbench.mod.includeFile', FILES],
   ['modbench.mod.install', INSTALL],
-  ['modbench.downloadedFile.exclude', DOWNLOADS],
-  ['modbench.downloadedFile.include', DOWNLOADS],
-  ['modbench.downloadedFile.delete', DOWNLOADS],
+  ['modbench.downloadedFile.exclude', DOWNLOADED_FILES],
+  ['modbench.downloadedFile.include', DOWNLOADED_FILES],
+  ['modbench.downloadedFile.delete', DOWNLOADED_FILES],
   ['modbench.separator.add', ADD_SEPARATOR],
   ['modbench.separator.rename', RENAME_SEPARATOR],
   ['modbench.separator.delete', DELETE_SEPARATORS],

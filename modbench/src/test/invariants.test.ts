@@ -22,11 +22,11 @@ describe('every MO2 text-file write command has a corpus test', () => {
     expect(writeVerbs).toContain('switchProfile');
     expect(writeVerbs).not.toContain('refresh');
     for (const verb of ['setPluginsParticipation', 'setPluginsEnabled', 'reorderPlugins']) expect(writeVerbs).toContain(verb);
-    expect(writeVerbs).toContain('excludeDownloads');
-    expect(writeVerbs).toContain('includeDownloads');
+    expect(writeVerbs).toContain('excludeDownloadedFiles');
+    expect(writeVerbs).toContain('includeDownloadedFiles');
     expect(writeVerbs).toContain('modSyncOver');
     expect(writeVerbs).toContain('pluginSyncOver');
-    expect(writeVerbs).toContain('deleteDownloads');
+    expect(writeVerbs).toContain('deleteDownloadedFiles');
     expect(writeVerbs).toContain('installMod');
   });
 
@@ -36,17 +36,17 @@ describe('every MO2 text-file write command has a corpus test', () => {
 });
 
 describe('only the Instance adapter touches a downloaded file\'s .meta', () => {
-  const importsTheSidecarPath = (source: string): boolean =>
-    [...source.matchAll(/import\s*\{([^}]*)\}\s*from/g)].some((m) => /\bdownloadSidecarFile\b/.test(m[1] ?? ''));
+  const importsTheMetadataPath = (source: string): boolean =>
+    [...source.matchAll(/import\s*\{([^}]*)\}\s*from/g)].some((m) => /\bdownloadedFileMetadataPath\b/.test(m[1] ?? ''));
 
-  it('sees the sidecar path among an import\'s names, the form any other touch of the .meta takes', () => {
-    expect(importsTheSidecarPath("import { downloadFile, downloadSidecarFile } from '../instanceAdapter/mo2/layout';")).toBe(true);
-    expect(importsTheSidecarPath("import {\n  downloadSidecarFile,\n} from './layout';")).toBe(true);
-    expect(importsTheSidecarPath("import { downloadFile } from '../instanceAdapter/mo2/layout';")).toBe(false);
+  it('sees the metadata path among an import\'s names, the form any other touch of the .meta takes', () => {
+    expect(importsTheMetadataPath("import { downloadedFilePath, downloadedFileMetadataPath } from '../instanceAdapter/mo2/layout';")).toBe(true);
+    expect(importsTheMetadataPath("import {\n  downloadedFileMetadataPath,\n} from './layout';")).toBe(true);
+    expect(importsTheMetadataPath("import { downloadedFilePath } from '../instanceAdapter/mo2/layout';")).toBe(false);
   });
 
   it('is imported nowhere outside the Instance adapter', () => {
-    const offenders = sourceFiles().filter((f) => !f.startsWith('instanceAdapter/') && importsTheSidecarPath(read(f)));
+    const offenders = sourceFiles().filter((f) => !f.startsWith('instanceAdapter/') && importsTheMetadataPath(read(f)));
     expect(offenders).toEqual([]);
   });
 });

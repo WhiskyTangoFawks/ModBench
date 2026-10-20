@@ -35,7 +35,7 @@ import { registerModInstallCommands } from '../installCommands';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { modCommands } from '../../modCommands/modCommands';
-import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
+import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { present } from '../../ports/present';
@@ -56,19 +56,19 @@ type ModInstallDeps = Parameters<typeof registerModInstallCommands>[0];
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     commands: COMMANDS,
-    instance: { value: instanceValueFixture({ downloads: { kind: 'listed', rows: [downloadRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
+    instance: { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
     ask: vi.fn(),
     warnIfFomod: vi.fn(),
-    downloadInstall: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
+    downloadedFileInstallReporting: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     ...over,
   };
 }
 
-describe('modbench.mod.install: archive or folder, asked first', () => {
+describe('modbench.mod.install: installation file or folder, asked first', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('Esc at the archive-or-folder pick installs nothing', async () => {
+  it('Esc at the installation-file-or-folder pick installs nothing', async () => {
     showQuickPick.mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps());
@@ -77,7 +77,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(showOpenDialog).not.toHaveBeenCalled();
   });
 
-  it('asks archive or folder before either OS picker opens', async () => {
+  it('asks installation file or folder before either OS picker opens', async () => {
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce(undefined);
 
@@ -93,7 +93,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(quickPickOrder).toBeLessThan(openDialogOrder);
   });
 
-  it('archive: Esc at the OS picker installs nothing', async () => {
+  it('installation file: Esc at the OS picker installs nothing', async () => {
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce(undefined);
 
@@ -103,7 +103,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(installMod).not.toHaveBeenCalled();
   });
 
-  it('archive: the OS picker offers install\'s own archive extensions rather than a list of its own that would drift', async () => {
+  it('installation file: the OS picker offers install\'s own installation file extensions rather than a list of its own that would drift', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([uriFile('/somewhere/foo.zip')]);
@@ -117,15 +117,15 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     }));
   });
 
-  it('archive: one of the instance\'s downloaded files is handed on as the archive picked, for the command to know as that file', async () => {
-    const row = downloadRowFixture('foo.7z', { modID: '111', version: '2.0' });
+  it('installation file: one of the instance\'s downloaded files is handed on as the installation file picked, for the command to know as that file', async () => {
+    const row = downloadedFileRowFixture('foo.7z', { modID: '111', version: '2.0' });
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([uriFile(row.path)]);
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
     registerModInstallCommands(deps({
-      instance: { value: instanceValueFixture({ downloads: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() },
+      instance: { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() },
     }));
     await invoke('modbench.mod.install');
 
@@ -135,8 +135,8 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     );
   });
 
-  it('archive: one of the instance\'s downloaded files that installs but cannot be marked is one Output line, not a failure', async () => {
-    const row = downloadRowFixture('foo.7z');
+  it('installation file: one of the instance\'s downloaded files that installs but cannot be marked is one Output line, not a failure', async () => {
+    const row = downloadedFileRowFixture('foo.7z');
     const log = vi.fn();
     const reporter = recordingReporter();
     showInputBox.mockResolvedValueOnce('New Mod');
@@ -145,9 +145,9 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false, downloadedFile: 'foo.7z', downloadedFileRefusal: 'locked' });
 
     registerModInstallCommands(deps({
-      instance: { value: instanceValueFixture({ downloads: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() },
+      instance: { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() },
       reporterFor: () => reporter,
-      downloadInstall: { reporter: recordingReporter(), log, progressViewId: 'modbench.downloads' },
+      downloadedFileInstallReporting: { reporter: recordingReporter(), log, progressViewId: 'modbench.downloads' },
     }));
     await invoke('modbench.mod.install');
 
@@ -155,7 +155,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('archive: one outside the downloads folder, though it shares a downloaded file\'s name, installs as an archive under the name prompted', async () => {
+  it('installation file: one outside the downloads folder, though it shares a downloaded file\'s name, installs as an installation file under the name prompted', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([uriFile('/archive/foo.7z')]);
@@ -169,7 +169,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     );
   });
 
-  it('archive: a cancelled name prompt installs nothing', async () => {
+  it('installation file: a cancelled name prompt installs nothing', async () => {
     showInputBox.mockResolvedValueOnce(undefined);
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([uriFile('/archive/foo.7z')]);
@@ -234,7 +234,7 @@ describe('modbench.mod.install: a failed install', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it.each([
-    ['archive', uriFile('/somewhere/foo.zip'), 'installFromArchive'],
+    ['archive', uriFile('/somewhere/foo.zip'), 'installFromInstallationFile'],
     ['folder', uriFile('/somewhere/foo'), 'installFromFolder'],
   ] as const)('from a %s is reported under the gesture, naming the mod', async (packageKind, picked, tag) => {
     const reporter = recordingReporter();
@@ -258,7 +258,7 @@ describe('modbench.mod.install: a downloaded file is its package', () => {
   it('installs the downloaded file the Argument carries, and asks no package', async () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
     showInputBox.mockResolvedValueOnce('Foo');
-    const row = downloadRowFixture('foo.7z');
+    const row = downloadedFileRowFixture('foo.7z');
 
     registerModInstallCommands(deps());
     await invoke('modbench.mod.install', { argument: { kind: 'downloadedFile', row } });
@@ -269,15 +269,15 @@ describe('modbench.mod.install: a downloaded file is its package', () => {
     expect(showOpenDialog).not.toHaveBeenCalled();
   });
 
-  it('reports a download install through the downloads reporter and log it was given, not the mod list\'s', async () => {
+  it('reports a downloaded file install through the downloads reporter and log it was given, not the mod list\'s', async () => {
     const reporter = recordingReporter();
     const log = vi.fn();
     showInputBox.mockResolvedValue('Foo');
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false, downloadedFile: 'foo.7z', downloadedFileRefusal: 'locked' });
     installMod.mockResolvedValueOnce({ applied: false, refusal: 'disk full' });
-    const argument = { argument: { kind: 'downloadedFile', row: downloadRowFixture('foo.7z') } };
+    const argument = { argument: { kind: 'downloadedFile', row: downloadedFileRowFixture('foo.7z') } };
 
-    registerModInstallCommands(deps({ downloadInstall: { reporter, log, progressViewId: 'modbench.downloads' }, reporterFor: () => recordingReporter() }));
+    registerModInstallCommands(deps({ downloadedFileInstallReporting: { reporter, log, progressViewId: 'modbench.downloads' }, reporterFor: () => recordingReporter() }));
     await invoke('modbench.mod.install', argument);
     await invoke('modbench.mod.install', argument);
 
@@ -285,7 +285,7 @@ describe('modbench.mod.install: a downloaded file is its package', () => {
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'disk full' }]);
   });
 
-  it('a mod row as Argument is no package, so it asks archive or folder', async () => {
+  it('a mod row as Argument is no package, so it asks installation file or folder', async () => {
     showQuickPick.mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps());
@@ -299,7 +299,7 @@ describe('modbench.mod.install: a downloaded file is its package', () => {
 describe('modbench.mod.install called by the agent', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const outsideArchive = { kind: 'archive' as const, path: '/elsewhere/bar.zip' };
+  const outsideInstallationFile = { kind: 'archive' as const, path: '/elsewhere/bar.zip' };
   const install = (argument: AgentCall['argument'], options: object) => invoke('modbench.mod.install', new AgentCall(argument, options));
   const nothingAsked = () => {
     expect(showQuickPick).not.toHaveBeenCalled();
@@ -308,14 +308,14 @@ describe('modbench.mod.install called by the agent', () => {
   };
 
   it('installs the downloaded file named as a new mod under the name given, asking nothing, and answers the mod written', async () => {
-    const row = downloadRowFixture('foo.7z', { modID: '111', version: '2.0' });
+    const row = downloadedFileRowFixture('foo.7z', { modID: '111', version: '2.0' });
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
     const warnIfFomod = vi.fn();
     const reporter = recordingReporter();
 
     registerModInstallCommands(deps({
-      instance: { value: instanceValueFixture({ downloads: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() },
-      warnIfFomod, downloadInstall: { reporter, log: vi.fn(), progressViewId: 'modbench.downloads' },
+      instance: { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() },
+      warnIfFomod, downloadedFileInstallReporting: { reporter, log: vi.fn(), progressViewId: 'modbench.downloads' },
     }));
     const answered = await install([{ kind: 'downloadedFile', name: 'foo.7z' }], { name: 'Foo' });
 
@@ -327,20 +327,20 @@ describe('modbench.mod.install called by the agent', () => {
     nothingAsked();
   });
 
-  it('installs an archive outside the downloads as an archive, and a folder as a folder', async () => {
+  it('installs an installation file outside the downloads as an installation file, and a folder as a folder', async () => {
     installMod.mockResolvedValue({ applied: true, isFomod: false });
 
     registerModInstallCommands(deps());
-    await install([outsideArchive], { name: 'Bar' });
+    await install([outsideInstallationFile], { name: 'Bar' });
     await install([{ kind: 'folder', path: '/elsewhere/Loose' }], { name: 'Loose' });
 
-    expect(installMod).toHaveBeenNthCalledWith(1, outsideArchive, { kind: 'new', name: 'Bar' }, false);
+    expect(installMod).toHaveBeenNthCalledWith(1, outsideInstallationFile, { kind: 'new', name: 'Bar' }, false);
     expect(installMod).toHaveBeenNthCalledWith(2, { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'new', name: 'Loose' }, false);
     nothingAsked();
   });
 
-  it('hands on an archive that is a downloaded file as the archive given, for the command to know as that file', async () => {
-    const row = downloadRowFixture('foo.7z');
+  it('hands on an installation file that is a downloaded file as the installation file given, for the command to know as that file', async () => {
+    const row = downloadedFileRowFixture('foo.7z');
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
     registerModInstallCommands(deps());
@@ -353,9 +353,9 @@ describe('modbench.mod.install called by the agent', () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
     registerModInstallCommands(deps());
-    const answered = await install([outsideArchive], { target: 'Harder VATS' });
+    const answered = await install([outsideInstallationFile], { target: 'Harder VATS' });
 
-    expect(installMod).toHaveBeenCalledWith(outsideArchive, { kind: 'upgrade', name: 'Harder VATS' }, false);
+    expect(installMod).toHaveBeenCalledWith(outsideInstallationFile, { kind: 'upgrade', name: 'Harder VATS' }, false);
     expect(answered).toMatchObject({ outcome: { landed: [{ name: 'Harder VATS' }] } });
   });
 
@@ -363,9 +363,9 @@ describe('modbench.mod.install called by the agent', () => {
     installMod.mockResolvedValue({ applied: true, isFomod: false });
 
     registerModInstallCommands(deps());
-    await install([outsideArchive], { target: 'Harder VATS', force: true });
+    await install([outsideInstallationFile], { target: 'Harder VATS', force: true });
 
-    expect(installMod).toHaveBeenCalledWith(outsideArchive, { kind: 'upgrade', name: 'Harder VATS' }, true);
+    expect(installMod).toHaveBeenCalledWith(outsideInstallationFile, { kind: 'upgrade', name: 'Harder VATS' }, true);
   });
 
   it.each([
@@ -374,7 +374,7 @@ describe('modbench.mod.install called by the agent', () => {
   ])('refuses a call that carries %s, asking for exactly one', async (_, options) => {
     registerModInstallCommands(deps());
 
-    await expect(install([outsideArchive], options)).rejects.toThrow('exactly one');
+    await expect(install([outsideInstallationFile], options)).rejects.toThrow('exactly one');
     expect(installMod).not.toHaveBeenCalled();
   });
 
@@ -382,17 +382,17 @@ describe('modbench.mod.install called by the agent', () => {
     installMod.mockResolvedValueOnce({ applied: false, refusal: 'would lose files' });
 
     registerModInstallCommands(deps());
-    const answered = await install([outsideArchive], { target: 'Harder VATS' });
+    const answered = await install([outsideInstallationFile], { target: 'Harder VATS' });
 
     expect(answered).toEqual({ applied: false, refusal: 'Failed to install "Harder VATS".', detail: 'would lose files' });
   });
 
-  it('answers a FOMOD archive as one, warning nothing itself', async () => {
+  it('answers a FOMOD installation file as one, warning nothing itself', async () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: true });
     const warnIfFomod = vi.fn();
 
     registerModInstallCommands(deps({ warnIfFomod }));
-    const answered = await install([outsideArchive], { name: 'Bar' });
+    const answered = await install([outsideInstallationFile], { name: 'Bar' });
 
     expect(answered).toMatchObject({ outcome: { landed: [{ name: 'Bar', isFomod: true }] } });
     expect(warnIfFomod).not.toHaveBeenCalled();
@@ -402,7 +402,7 @@ describe('modbench.mod.install called by the agent', () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false, lineRefusal: 'locked' });
 
     registerModInstallCommands(deps());
-    const answered = await install([outsideArchive], { name: 'Bar' });
+    const answered = await install([outsideInstallationFile], { name: 'Bar' });
 
     expect(answered).toMatchObject({
       applied: true,
@@ -414,7 +414,7 @@ describe('modbench.mod.install called by the agent', () => {
     const log = vi.fn();
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false, downloadedFile: 'foo.7z', downloadedFileRefusal: 'locked' });
 
-    registerModInstallCommands(deps({ downloadInstall: { reporter: recordingReporter(), log, progressViewId: 'modbench.downloads' } }));
+    registerModInstallCommands(deps({ downloadedFileInstallReporting: { reporter: recordingReporter(), log, progressViewId: 'modbench.downloads' } }));
     const answered = await install([{ kind: 'downloadedFile', name: 'foo.7z' }], { name: 'Foo' });
 
     expect(answered).toMatchObject({
@@ -432,7 +432,7 @@ describe('modbench.mod.install called by the agent', () => {
     const reporter = recordingReporter();
 
     registerModInstallCommands(deps({ reporterFor: () => reporter }));
-    const answered = await install([outsideArchive], { name: 'Bar' });
+    const answered = await install([outsideInstallationFile], { name: 'Bar' });
 
     expect(answered).toEqual({ applied: false, refusal: 'Failed to install "Bar".', detail });
     expect(reporter.reports).toEqual([]);
@@ -444,14 +444,14 @@ describe('modbench.mod.install called by the agent', () => {
   ])('refuses %s, installing nothing', async (_, options) => {
     registerModInstallCommands(deps());
 
-    await expect(install([outsideArchive], options)).rejects.toBeInstanceOf(Refusal);
+    await expect(install([outsideInstallationFile], options)).rejects.toBeInstanceOf(Refusal);
 
     expect(installMod).not.toHaveBeenCalled();
   });
 
   it.each([
     ['no package', []],
-    ['two packages', [outsideArchive, { kind: 'folder', path: '/elsewhere/Loose' }]],
+    ['two packages', [outsideInstallationFile, { kind: 'folder', path: '/elsewhere/Loose' }]],
     ['a mod', [{ kind: 'mod', name: 'Some Mod' }]],
   ] as const)('refuses %s, installing nothing', async (_, argument) => {
     registerModInstallCommands(deps());
@@ -464,7 +464,7 @@ describe('modbench.mod.install called by the agent', () => {
   it('names what it installs as a package when it refuses two', async () => {
     registerModInstallCommands(deps());
 
-    await expect(install([outsideArchive, { kind: 'folder', path: '/elsewhere/Loose' }], { name: 'Bar' }))
+    await expect(install([outsideInstallationFile, { kind: 'folder', path: '/elsewhere/Loose' }], { name: 'Bar' }))
       .rejects.toThrow(/carries one package/);
   });
 });

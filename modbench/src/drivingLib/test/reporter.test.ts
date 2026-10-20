@@ -68,27 +68,27 @@ describe('makeReporter', () => {
   });
 
   describe('a selection\'s outcome', () => {
-    interface Download { name: string; bytes: number }
-    const download = (name: string): Download => ({ name, bytes: 1 });
-    const nameOf = (d: Download) => d.name;
+    interface DownloadedFile { name: string; bytes: number }
+    const downloadedFile = (name: string): DownloadedFile => ({ name, bytes: 1 });
+    const nameOf = (d: DownloadedFile) => d.name;
 
     it('reports two refusals among three landings as one error toast naming each and why, and one Output line', () => {
       const channel = fakeChannelOfEveryLevel();
-      const outcome: SelectionOutcome<Download> = {
-        landed: [download('A.7z'), download('B.7z'), download('C.7z')],
+      const outcome: SelectionOutcome<DownloadedFile> = {
+        landed: [downloadedFile('A.7z'), downloadedFile('B.7z'), downloadedFile('C.7z')],
         refused: [
-          { item: download('D.7z'), reason: 'in use' },
-          { item: download('E.7z'), reason: 'gone from disk' },
+          { item: downloadedFile('D.7z'), reason: 'in use' },
+          { item: downloadedFile('E.7z'), reason: 'gone from disk' },
         ],
       };
 
-      makeReporter(channel, 'downloads.delete').selectionOutcome('Could not delete 2 downloads.', outcome, nameOf);
+      makeReporter(channel, 'downloadedFile.delete').selectionOutcome('Could not delete 2 downloaded files.', outcome, nameOf);
 
       expect(showErrorMessage.mock.calls).toEqual([
-        ['Could not delete 2 downloads. — "D.7z" (in use), "E.7z" (gone from disk)'],
+        ['Could not delete 2 downloaded files. — "D.7z" (in use), "E.7z" (gone from disk)'],
       ]);
       expect(channelWrites(channel)).toEqual([
-        ['[downloads.delete] Could not delete 2 downloads. — "D.7z" (in use), "E.7z" (gone from disk)'],
+        ['[downloadedFile.delete] Could not delete 2 downloaded files. — "D.7z" (in use), "E.7z" (gone from disk)'],
       ]);
       expect(showWarningMessage).not.toHaveBeenCalled();
       expect(showInformationMessage).not.toHaveBeenCalled();
@@ -97,8 +97,8 @@ describe('makeReporter', () => {
     it('raises no failure notification and writes nothing for a fully landed outcome', () => {
       const channel = fakeChannelOfEveryLevel();
 
-      makeReporter(channel, 'downloads.delete').selectionOutcome(
-        'Could not delete any download.', { landed: [download('A.7z'), download('B.7z')], refused: [] }, nameOf);
+      makeReporter(channel, 'downloadedFile.delete').selectionOutcome(
+        'Could not delete any downloaded file.', { landed: [downloadedFile('A.7z'), downloadedFile('B.7z')], refused: [] }, nameOf);
 
       expect(showErrorMessage).not.toHaveBeenCalled();
       expect(showWarningMessage).not.toHaveBeenCalled();

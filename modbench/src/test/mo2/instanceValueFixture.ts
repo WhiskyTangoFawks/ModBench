@@ -7,7 +7,7 @@ import { nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
 
 /** A whole `InstanceValue` at its neutral value, every field overridable — so a test caring
- *  about one field (`.plugins`, `.downloads`, …) states only that one, typed, with no cast. */
+ *  about one field (`.plugins`, `.downloadedFiles`, …) states only that one, typed, with no cast. */
 export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): InstanceValue {
   const base: Omit<InstanceValue, 'modGroups' | 'modNames'> = {
     mods: [],
@@ -20,9 +20,9 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     filesByMod: new Map(),
     foldersByMod: new Map(),
     plugins: [],
-    downloads: { kind: 'listed', rows: [] },
+    downloadedFiles: { kind: 'listed', rows: [] },
     activeProfile: 'Default',
-    managerNames: { manager: 'MO2', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
+    managerNames: { manager: 'MO2', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
     managerRunning: { kind: 'notRunning' },
     gameName: 'Fallout 4',
     nexusDomainOf: nexusDomainForMetaGame,

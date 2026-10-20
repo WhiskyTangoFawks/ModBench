@@ -37,11 +37,11 @@ import type { ReadingSource } from '../../instanceReading';
 import { readingSource } from '../mo2Reads';
 import { OVERWRITE_ORIGIN } from '../../../wire/pluginAddress';
 import type {
-  ArchiveReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided, Subscription,
+  InstallationFileReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided, Subscription,
 } from '../../instanceAdapter';
 import { setIniValue } from '../codecs/qSettingsIni';
 import { ownTempPrefix } from '../../files';
-import { fakeArchiveReader } from '../../../test/fakeArchiveReader';
+import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { runningProgram } from '../../../test/runningProgram';
 import { adapterOver, contextOver } from '../../../test/mo2/adapterOver';
 import {
@@ -49,13 +49,13 @@ import {
 } from '../../../test/mo2/corpusFixture';
 
 const INI = 'ModOrganizer.ini';
-const DOWNLOAD = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
+const DOWNLOADED_FILE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
 const adapterAt = (
   instanceRoot: string, gameFolderSettingValue?: string, gameFolderSettingChanged?: (listener: () => void) => Subscription,
-  archives: ArchiveReader = fakeArchiveReader([]),
+  installationFileReader: InstallationFileReader = fakeInstallationFileReader([]),
 ): InstanceAdapter => mo2InstanceAdapter({
-  instanceRoot, gameFolderSetting: fixedGameFolderSetting(gameFolderSettingValue, gameFolderSettingChanged), detectors: NO_DETECTORS, archives,
+  instanceRoot, gameFolderSetting: fixedGameFolderSetting(gameFolderSettingValue, gameFolderSettingChanged), detectors: NO_DETECTORS, installationFileReader,
 });
 
 const watchedOver = (context: Mo2Context): ReadingSource & Pick<InstanceAdapter, 'subscribe'> =>
@@ -64,20 +64,20 @@ const watchedOver = (context: Mo2Context): ReadingSource & Pick<InstanceAdapter,
 const sourceAt = (instanceRoot: string, gameFolderSettingValue?: string): ReadingSource => readingSource(contextOver(instanceRoot, { gameFolderSettingValue }));
 
 async function installHeld(root: string, target: InstallTarget): Promise<{ extraction: string; settle: () => Promise<void> }> {
-  const release = fakeArchiveReader(['New.esp']);
+  const release = fakeInstallationFileReader(['New.esp']);
   let extracted: (path: string) => void = () => {};
   const extraction = new Promise<string>((resolve) => { extracted = resolve; });
   let letGo: () => void = () => {};
   const held = new Promise<void>((resolve) => { letGo = resolve; });
-  const archives: ArchiveReader = {
+  const installationFileReader: InstallationFileReader = {
     ...release,
-    extract: async (archivePath, destDir) => {
-      await release.extract(archivePath, destDir);
+    extract: async (installationFilePath, destDir) => {
+      await release.extract(installationFilePath, destDir);
       extracted(destDir);
       await held;
     },
   };
-  const installing = adapterAt(root, undefined, undefined, archives).install({ kind: 'archive', path: '/elsewhere/New.7z' }, target, {});
+  const installing = adapterAt(root, undefined, undefined, installationFileReader).install({ kind: 'archive', path: '/elsewhere/New.7z' }, target, {});
   return {
     extraction: await extraction,
     settle: () => {
@@ -188,9 +188,9 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('answers the downloaded files now', async () => {
-        const downloads = await adapter.downloadedFiles();
+        const downloadedFiles = await adapter.downloadedFiles();
 
-        expect(downloads.kind === 'listed' && downloads.files?.map(({ name }) => name)).toEqual(['Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z']);
+        expect(downloadedFiles.kind === 'listed' && downloadedFiles.files?.map(({ name }) => name)).toEqual(['Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z']);
       });
     });
 
@@ -293,7 +293,7 @@ describe('the MO2 Instance adapter', () => {
         ]);
         expect(mods[0]).toMatchObject({ version: '1.0.0', nexusId: '99001' });
         expect(mods[2]).toMatchObject({
-          version: '21.0.0.0', nexusId: '29227', archiveFilename: 'SKKFastStartNewGame_021-29227-021-1745492845.zip',
+          version: '21.0.0.0', nexusId: '29227', installationFileName: 'SKKFastStartNewGame_021-29227-021-1745492845.zip',
         });
       });
 
@@ -354,7 +354,7 @@ describe('the MO2 Instance adapter', () => {
 
         expect([...folderMeta.keys()]).toContain('DragIn Manual Extract');
         expect(folderMeta.get('Unofficial Fallout 4 Patch')).toEqual({
-          version: '2.1.5.0', nexusId: '4598', archiveFilename: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
+          version: '2.1.5.0', nexusId: '4598', installationFileName: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
         });
       });
 
@@ -394,7 +394,7 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('names MO2 and the file it keeps mod order in', () => {
-      expect(adapter.names).toEqual({ manager: 'MO2', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' });
+      expect(adapter.names).toEqual({ manager: 'MO2', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' });
     });
 
     it.each(['Morrowind', 'Oblivion', 'Skyrim'])('refuses an instance of %s, which Modbench does not support, naming it', async (game) => {
@@ -449,7 +449,7 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    it('lists only the files install can take, with their metadata parsed: no folder, no partial download, no lone metadata', async () => {
+    it('lists only the files install can take, with their metadata parsed: no folder, no partial downloaded file, no lone metadata', async () => {
       await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
       await mkdir(join(root, 'downloads', 'a folder'));
       await mkdir(join(root, 'downloads', 'a folder.zip'));
@@ -457,14 +457,14 @@ describe('the MO2 Instance adapter', () => {
       await writeFile(join(root, 'downloads', 'big.rar.unfinished'), 'half');
       await writeFile(join(root, 'downloads', 'gone.zip.meta'), '[General]\r\n');
 
-      const downloads = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
+      const downloadedFiles = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
 
-      if (downloads.kind !== 'listed') throw new Error(`expected listed, got ${downloads.reason}`);
-      expect(downloads.downloadsDir).toBe(join(root, 'downloads'));
-      const byName = new Map((downloads.files ?? []).map((file) => [file.name, file]));
-      expect([...byName.keys()].sort()).toEqual([DOWNLOAD, 'manual.zip']);
-      expect(byName.get(DOWNLOAD)?.meta).toMatchObject({ status: 'Installed', modID: '4598' });
-      expect(byName.get(DOWNLOAD)?.excluded).toBe(false);
+      if (downloadedFiles.kind !== 'listed') throw new Error(`expected listed, got ${downloadedFiles.reason}`);
+      expect(downloadedFiles.downloadsDir).toBe(join(root, 'downloads'));
+      const byName = new Map((downloadedFiles.files ?? []).map((file) => [file.name, file]));
+      expect([...byName.keys()].sort()).toEqual([DOWNLOADED_FILE, 'manual.zip']);
+      expect(byName.get(DOWNLOADED_FILE)?.meta).toMatchObject({ status: 'Installed', modID: '4598' });
+      expect(byName.get(DOWNLOADED_FILE)?.excluded).toBe(false);
       expect(byName.get('manual.zip')?.meta).toBeUndefined();
       expect(byName.get('manual.zip')?.size).toBe(3);
       expect(byName.get('manual.zip')?.path).toBe(join(root, 'downloads', 'manual.zip'));
@@ -475,10 +475,10 @@ describe('the MO2 Instance adapter', () => {
       await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
       await writeFile(join(root, 'downloads', 'manual.zip.meta'), '');
 
-      const downloads = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
+      const downloadedFiles = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
 
-      if (downloads.kind !== 'listed') throw new Error(`expected listed, got ${downloads.reason}`);
-      expect(downloads.files?.find((file) => file.name === 'manual.zip')?.meta).toMatchObject({ status: 'Downloaded' });
+      if (downloadedFiles.kind !== 'listed') throw new Error(`expected listed, got ${downloadedFiles.reason}`);
+      expect(downloadedFiles.files?.find((file) => file.name === 'manual.zip')?.meta).toMatchObject({ status: 'Downloaded' });
     });
 
     it('answers no files, rather than none, when the downloads folder is not there', async () => {
@@ -493,9 +493,9 @@ describe('the MO2 Instance adapter', () => {
       await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n'
         + '[Settings]\r\ndownload_directory=@ByteArray(elsewhere)\r\n');
 
-      const downloads = await settings.downloadedFiles(ignoreSkippedLink);
+      const downloadedFiles = await settings.downloadedFiles(ignoreSkippedLink);
 
-      expect(downloads).toMatchObject({ kind: 'listed', downloadsDir: join(root, 'downloads') });
+      expect(downloadedFiles).toMatchObject({ kind: 'listed', downloadsDir: join(root, 'downloads') });
     });
 
     it('answers every profile, and no stray file beside them', async () => {
@@ -517,15 +517,15 @@ describe('the MO2 Instance adapter', () => {
       expect(skipped).toEqual([join(root, 'profiles', 'Broken')]);
     });
 
-    it('answers a downloaded archive that is a link to a file, and hands over one that links to nothing', async () => {
+    it('answers a downloaded file that is a link to a file, and hands over one that links to nothing', async () => {
       await writeFile(join(root, 'elsewhere.7z'), '');
       await symlink(join(root, 'elsewhere.7z'), join(root, 'downloads', 'Linked-1-0.7z'));
       await symlink(join(root, 'nowhere.7z'), join(root, 'downloads', 'Broken-1-0.7z'));
       const skipped: string[] = [];
 
-      const downloads = await (await source.settings()).downloadedFiles((link) => skipped.push(link));
+      const downloadedFiles = await (await source.settings()).downloadedFiles((link) => skipped.push(link));
 
-      expect(downloads.kind === 'listed' && downloads.files?.map(({ name }) => name)).toContain('Linked-1-0.7z');
+      expect(downloadedFiles.kind === 'listed' && downloadedFiles.files?.map(({ name }) => name)).toContain('Linked-1-0.7z');
       expect(skipped).toEqual([join(root, 'downloads', 'Broken-1-0.7z')]);
     });
 
@@ -554,7 +554,7 @@ describe('the MO2 Instance adapter', () => {
       expect(await source.modMeta('Unofficial Fallout 4 Patch', 'list')).toMatchObject({
         version: '2.1.5.0',
         nexusId: '4598',
-        archiveFilename: DOWNLOAD,
+        installationFileName: DOWNLOADED_FILE,
       });
     });
 
@@ -1192,7 +1192,7 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    it('follows the downloads folder the last read of the settings resolved, signalling once when it moves, not the one where the instance began, so a download landing in the folder the settings name now is heard', async () => {
+    it('follows the downloads folder the last read of the settings resolved, signalling once when it moves, not the one where the instance began, so a downloaded file landing in the folder the settings name now is heard', async () => {
       let signals = 0;
       const watched = watchedOver(contextOver(root));
       watched.subscribe(() => { signals++; });
@@ -1698,11 +1698,11 @@ describe('the MO2 Instance adapter', () => {
       const ENTRY = 'textures/a.dds';
 
       it('answers the downloaded file its meta names, in the downloads folder, with its size and hash and each entry\'s', async () => {
-        const answer = await adapterAt(root, undefined, undefined, fakeArchiveReader([ENTRY])).installationFile('Unofficial Fallout 4 Patch');
+        const answer = await adapterAt(root, undefined, undefined, fakeInstallationFileReader([ENTRY])).installationFile('Unofficial Fallout 4 Patch');
 
         expect(answer).toEqual({
           kind: 'read',
-          answer: { path: join(root, 'downloads', DOWNLOAD), page: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] },
+          answer: { path: join(root, 'downloads', DOWNLOADED_FILE), page: 'https://www.nexusmods.com/fallout4/mods/4598', size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: ENTRY, hash: 'q7ZLRnu1+Os=' }] },
         });
       });
 
@@ -1713,7 +1713,7 @@ describe('the MO2 Instance adapter', () => {
         const FILES = '\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\n2\\modid=9\r\n2\\fileid=78\r\nsize=2\r\n';
         const sourceOf = async (general: string, installedFiles = ''): Promise<string | undefined> => {
           await writeFile(
-            join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\n${general}installationFile=${DOWNLOAD}\r\n${installedFiles}`,
+            join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\n${general}installationFile=${DOWNLOADED_FILE}\r\n${installedFiles}`,
           );
           const answer = await adapter.installationFile('Unofficial Fallout 4 Patch');
           return answer.kind === 'read' ? answer.answer?.page : undefined;
@@ -1722,7 +1722,7 @@ describe('the MO2 Instance adapter', () => {
         it('answers, for a meta read through the reading, the page of the file whose mod id is not the meta\'s own', async () => {
           await writeFile(
             join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'),
-            `[General]\r\ngameName=Fallout4\r\nmodid=4598\r\ninstallationFile=${DOWNLOAD}\r\n\r\n[installedFiles]\r\n1\\modid=9\r\n1\\fileid=78\r\nsize=1\r\n`,
+            `[General]\r\ngameName=Fallout4\r\nmodid=4598\r\ninstallationFile=${DOWNLOADED_FILE}\r\n\r\n[installedFiles]\r\n1\\modid=9\r\n1\\fileid=78\r\nsize=1\r\n`,
           );
           const entry = (await adapter.reading()).mods.find((e) => e.name === 'Unofficial Fallout 4 Patch');
 
@@ -1733,7 +1733,7 @@ describe('the MO2 Instance adapter', () => {
 
         it('names no page for a game the registry has no Nexus domain for, and says which game', async () => {
           await writeFile(
-            join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\ngameName=EnderalSE\r\nmodid=4598\r\ninstallationFile=${DOWNLOAD}\r\n`,
+            join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), `[General]\r\ngameName=EnderalSE\r\nmodid=4598\r\ninstallationFile=${DOWNLOADED_FILE}\r\n`,
           );
 
           const answer = await adapter.installationFile('Unofficial Fallout 4 Patch');
@@ -1765,16 +1765,16 @@ describe('the MO2 Instance adapter', () => {
         const CHROME = 'comments=mine\r\ncolor=@Variant(\\0\\0\\0\\x43\\x1\\xff\\xff\\0\\0\\0\\0\\0\\0\\0\\0)\r\n';
         const patchMeta = (general: string): Promise<void> => writeFile(metaOf(PATCH), `[General]\r\ngameName=Fallout4\r\nmodid=4598\r\nversion=2.1.5.0\r\n${CHROME}${general}`);
         const mo2Written = (version: string): string =>
-          `[General]\r\ngameName=Fallout4\r\nmodid=0\r\nversion=${version}\r\nnewestVersion=\r\ncategory="-1,"\r\ninstallationFile=${DOWNLOAD}\r\n${CHROME}\r\n[installedFiles]\r\nsize=0\r\n`;
+          `[General]\r\ngameName=Fallout4\r\nmodid=0\r\nversion=${version}\r\nnewestVersion=\r\ncategory="-1,"\r\ninstallationFile=${DOWNLOADED_FILE}\r\n${CHROME}\r\n[installedFiles]\r\nsize=0\r\n`;
         const holding = async (text: string): Promise<string> => {
           await writeFile(metaOf(PATCH), text);
           return text;
         };
 
         it('answers the version, and each installation file by its name with where it comes from', async () => {
-          await patchMeta(`installationFile=${DOWNLOAD}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
+          await patchMeta(`installationFile=${DOWNLOADED_FILE}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
 
-          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFile: { name: DOWNLOAD, page: PAGE } }));
+          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFile: { name: DOWNLOADED_FILE, page: PAGE } }));
         });
 
         it('names an installation file recorded by its whole path by its name', async () => {
@@ -1811,8 +1811,8 @@ describe('the MO2 Instance adapter', () => {
         });
 
         it.each([
-          ['no version and the installation file it holds', { installationFile: { name: DOWNLOAD } }],
-          ['a page it holds no id for', { installationFile: { name: DOWNLOAD, page: 'https://www.nexusmods.com/fallout4/mods/0' } }],
+          ['no version and the installation file it holds', { installationFile: { name: DOWNLOADED_FILE } }],
+          ['a page it holds no id for', { installationFile: { name: DOWNLOADED_FILE, page: 'https://www.nexusmods.com/fallout4/mods/0' } }],
         ])('leaves metadata MO2 wrote byte for byte when the manifest says %s', async (_name, metadata) => {
           const held = await holding(mo2Written(''));
 
@@ -1824,15 +1824,15 @@ describe('the MO2 Instance adapter', () => {
         it('leaves metadata byte for byte when the manifest says the version it holds', async () => {
           const held = await holding(mo2Written('2.0'));
 
-          await adapter.writeModMetadata(PATCH, { version: '2.0', installationFile: { name: DOWNLOAD } });
+          await adapter.writeModMetadata(PATCH, { version: '2.0', installationFile: { name: DOWNLOADED_FILE } });
 
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
         });
 
         it('leaves metadata byte for byte when the manifest names the file the metadata names among several', async () => {
-          const held = await holding(`[General]\r\ngameName=Fallout4\r\nmodid=4598\r\ninstallationFile=${DOWNLOAD}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\n2\\modid=4598\r\n2\\fileid=78\r\nsize=2\r\n`);
+          const held = await holding(`[General]\r\ngameName=Fallout4\r\nmodid=4598\r\ninstallationFile=${DOWNLOADED_FILE}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\n2\\modid=4598\r\n2\\fileid=78\r\nsize=2\r\n`);
 
-          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOAD, page: PAGE } });
+          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page: PAGE } });
 
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
         });
@@ -1840,21 +1840,21 @@ describe('the MO2 Instance adapter', () => {
         it('changes only the value that differs', async () => {
           const held = await holding(mo2Written('1.0'));
 
-          await adapter.writeModMetadata(PATCH, { version: '2.0', installationFile: { name: DOWNLOAD } });
+          await adapter.writeModMetadata(PATCH, { version: '2.0', installationFile: { name: DOWNLOADED_FILE } });
 
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held.replace('version=1.0', 'version=2.0'));
         });
 
         it('keeps the version the manifest lacks', async () => {
-          await patchMeta(`installationFile=${DOWNLOAD}\r\n`);
+          await patchMeta(`installationFile=${DOWNLOADED_FILE}\r\n`);
 
-          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOAD } });
+          await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE } });
 
-          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFile: { name: DOWNLOAD, page: 'https://www.nexusmods.com/fallout4/mods/4598' } }));
+          expect(await adapter.modMetadata(PATCH)).toEqual(read({ version: '2.1.5.0', installationFile: { name: DOWNLOADED_FILE, page: 'https://www.nexusmods.com/fallout4/mods/4598' } }));
         });
 
         it('gives a file the manifest names another name no page of the file it replaces, and keeps every other key', async () => {
-          await patchMeta(`installationFile=${DOWNLOAD}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
+          await patchMeta(`installationFile=${DOWNLOADED_FILE}\r\n\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
 
           await adapter.writeModMetadata(PATCH, { installationFile: { name: 'Patch-3.7z' } });
 
@@ -1925,21 +1925,21 @@ describe('the MO2 Instance adapter', () => {
         });
 
         it('answers the file of its name in the downloads folder once it is gone, as MO2 reinstalls it', async () => {
-          await recordingInstalledFrom(join(root, 'elsewhere', DOWNLOAD));
+          await recordingInstalledFrom(join(root, 'elsewhere', DOWNLOADED_FILE));
 
           const answer = await adapter.installationFile('Unofficial Fallout 4 Patch');
 
-          expect(answer).toEqual({ kind: 'read', answer: { path: join(root, 'downloads', DOWNLOAD), size: 28, hash: 'yMPjZVarjmw=', entries: [] } });
+          expect(answer).toEqual({ kind: 'read', answer: { path: join(root, 'downloads', DOWNLOADED_FILE), size: 28, hash: 'yMPjZVarjmw=', entries: [] } });
         });
       });
 
       it('answers unreadable, naming the downloaded file and why, when it is gone', async () => {
-        await rm(join(root, 'downloads', DOWNLOAD));
+        await rm(join(root, 'downloads', DOWNLOADED_FILE));
 
         const answer = await adapter.installationFile('Unofficial Fallout 4 Patch');
 
         expect(answer.kind === 'unreadable' && answer.reason).toContain('ENOENT');
-        expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOAD);
+        expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOADED_FILE);
       });
 
       it('answers unreadable, naming the downloaded file and why, when the downloads folder cannot be resolved', async () => {
@@ -1947,17 +1947,17 @@ describe('the MO2 Instance adapter', () => {
 
         const answer = await adapter.installationFile('Unofficial Fallout 4 Patch');
 
-        expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOAD);
+        expect(answer.kind === 'unreadable' && answer.reason).toContain(DOWNLOADED_FILE);
         expect(answer.kind === 'unreadable' && answer.reason).toContain(INI);
       });
     });
 
     describe('a downloaded file by its name', () => {
       it('answers the file of that name in the downloads folder, with its size and hash and each entry\'s', async () => {
-        const answer = await adapterAt(root, undefined, undefined, fakeArchiveReader(['textures/a.dds'])).downloadedFile(DOWNLOAD);
+        const answer = await adapterAt(root, undefined, undefined, fakeInstallationFileReader(['textures/a.dds'])).downloadedFile(DOWNLOADED_FILE);
 
         expect(answer).toEqual({
-          kind: 'read', answer: { path: join(root, 'downloads', DOWNLOAD), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] },
+          kind: 'read', answer: { path: join(root, 'downloads', DOWNLOADED_FILE), size: 28, hash: 'yMPjZVarjmw=', entries: [{ path: 'textures/a.dds', hash: 'q7ZLRnu1+Os=' }] },
         });
       });
 
@@ -2761,10 +2761,10 @@ describe('the MO2 Instance adapter', () => {
   });
 
   describe('a downloaded file\'s metadata', () => {
-    const downloads = (): string => join(root, 'downloads');
+    const downloadsFolder = (): string => join(root, 'downloads');
     const metaOf = (name: string): Promise<string> => text(root, join('downloads', `${name}.meta`));
 
-    beforeEach(() => writeFile(join(downloads(), 'manual.zip'), 'zip'));
+    beforeEach(() => writeFile(join(downloadsFolder(), 'manual.zip'), 'zip'));
 
     it('marks a downloaded file installed, creating its metadata when it has none', async () => {
       expect(await adapter.markDownloadedFile('manual.zip', 'Installed')).toEqual({ gone: false, wrote: true });
@@ -2775,26 +2775,26 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('marks a downloaded file uninstalled beside its installed mark', async () => {
-      await adapter.markDownloadedFile(DOWNLOAD, 'Uninstalled');
+      await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Uninstalled');
 
-      expect(await metaOf(DOWNLOAD)).toMatch(/^uninstalled=true\r$/m);
-      expect(await metaOf(DOWNLOAD)).toMatch(/^installed=true\r$/m);
+      expect(await metaOf(DOWNLOADED_FILE)).toMatch(/^uninstalled=true\r$/m);
+      expect(await metaOf(DOWNLOADED_FILE)).toMatch(/^installed=true\r$/m);
     });
 
     it('marks a downloaded file excluded, and then included again', async () => {
-      await adapter.markDownloadedFile(DOWNLOAD, 'Excluded');
-      expect(await metaOf(DOWNLOAD)).toMatch(/removed=true/);
+      await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Excluded');
+      expect(await metaOf(DOWNLOADED_FILE)).toMatch(/removed=true/);
 
-      await adapter.markDownloadedFile(DOWNLOAD, 'Included');
-      expect(await metaOf(DOWNLOAD)).toMatch(/removed=false/);
+      await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Included');
+      expect(await metaOf(DOWNLOADED_FILE)).toMatch(/removed=false/);
     });
 
     it('rewrites nothing for a mark already set, whether excluded or included over a removed=false key', async () => {
-      await adapter.markDownloadedFile(DOWNLOAD, 'Excluded');
-      expect(await adapter.markDownloadedFile(DOWNLOAD, 'Excluded')).toEqual({ gone: false, wrote: false });
+      await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Excluded');
+      expect(await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Excluded')).toEqual({ gone: false, wrote: false });
 
-      await adapter.markDownloadedFile(DOWNLOAD, 'Included');
-      expect(await adapter.markDownloadedFile(DOWNLOAD, 'Included')).toEqual({ gone: false, wrote: false });
+      await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Included');
+      expect(await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Included')).toEqual({ gone: false, wrote: false });
     });
 
     it('keeps both marks of two writes racing, rather than the second writer dropping the first key', async () => {
@@ -2807,17 +2807,17 @@ describe('the MO2 Instance adapter', () => {
     it('writes no metadata for a file already included, so a file at rest does not gain metadata', async () => {
       expect(await adapter.markDownloadedFile('manual.zip', 'Included')).toEqual({ gone: false, wrote: false });
 
-      expect(await isThere(join(downloads(), 'manual.zip.meta'))).toBe(false);
+      expect(await isThere(join(downloadsFolder(), 'manual.zip.meta'))).toBe(false);
     });
 
     it('marks nothing for a downloaded file that is gone, as MO2 never writes a metadata file beside no downloaded file', async () => {
       expect(await adapter.markDownloadedFile('gone.zip', 'Installed')).toEqual({ gone: true });
 
-      expect(await isThere(join(downloads(), 'gone.zip.meta'))).toBe(false);
+      expect(await isThere(join(downloadsFolder(), 'gone.zip.meta'))).toBe(false);
     });
 
     it('sweeps the leftover temp of a dead writer when it trashes a file, even one with no metadata, as a crash during a first write leaves its temp beside no metadata at all', async () => {
-      const leftover = join(downloads(), '.medit_tmp_2147483646_0123456789ab.tmp');
+      const leftover = join(downloadsFolder(), '.medit_tmp_2147483646_0123456789ab.tmp');
       await writeFile(leftover, 'half written');
 
       expect(await adapter.trashDownloadedFile('manual.zip', () => Promise.resolve())).toEqual({ gone: false });
@@ -2832,10 +2832,10 @@ describe('the MO2 Instance adapter', () => {
         return Promise.resolve();
       };
 
-      expect(await adapter.trashDownloadedFile(DOWNLOAD, trash)).toEqual({ gone: false });
+      expect(await adapter.trashDownloadedFile(DOWNLOADED_FILE, trash)).toEqual({ gone: false });
       expect(await adapter.trashDownloadedFile('manual.zip', trash)).toEqual({ gone: false });
 
-      expect(trashed).toEqual([join(downloads(), DOWNLOAD), join(downloads(), `${DOWNLOAD}.meta`), join(downloads(), 'manual.zip')]);
+      expect(trashed).toEqual([join(downloadsFolder(), DOWNLOADED_FILE), join(downloadsFolder(), `${DOWNLOADED_FILE}.meta`), join(downloadsFolder(), 'manual.zip')]);
     });
 
     it('answers a downloaded file already gone as gone, trashing nothing', async () => {
@@ -2853,15 +2853,15 @@ describe('the MO2 Instance adapter', () => {
         return Promise.reject(new Error('EPERM'));
       };
 
-      await expect(adapter.trashDownloadedFile(DOWNLOAD, trash)).rejects.toThrow('EPERM');
+      await expect(adapter.trashDownloadedFile(DOWNLOADED_FILE, trash)).rejects.toThrow('EPERM');
 
-      expect(trashed).toEqual([join(downloads(), DOWNLOAD)]);
+      expect(trashed).toEqual([join(downloadsFolder(), DOWNLOADED_FILE)]);
     });
 
     it('answers the reason when the file landed in the trash but its metadata could not', async () => {
       const trash = (path: string): Promise<void> => (path.endsWith('.meta') ? Promise.reject(new Error('EPERM')) : Promise.resolve());
 
-      expect(await adapter.trashDownloadedFile(DOWNLOAD, trash)).toEqual({ gone: false, metadataLeftBehind: 'EPERM' });
+      expect(await adapter.trashDownloadedFile(DOWNLOADED_FILE, trash)).toEqual({ gone: false, metadataLeftBehind: 'EPERM' });
     });
   });
 

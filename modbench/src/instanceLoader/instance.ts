@@ -11,7 +11,7 @@ import { withMetadataRead } from '../wire/modByFolder';
 import { OVERWRITE_ORIGIN } from '../wire/pluginAddress';
 import { modNameOf, modNamesOf } from './modName';
 import { present } from '../ports/present';
-import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from './downloadRows';
+import { buildDownloadedFileRows, modsByInstallationFileName, type LocatedDownloadedFileRow } from './downloadedFileRows';
 import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
   type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
@@ -24,8 +24,8 @@ import { errorMessage } from '../ports/errorMessage';
  *  publishes it, never through the codec that parsed the file behind it. */
 export { sameEntry } from '../instanceAdapter/instanceAdapter';
 export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
-export type { DownloadFile, DownloadRow, UpgradeCandidate, UpgradeTier } from './downloadRows';
-export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
+export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, UpgradeTier } from './downloadedFileRows';
+export type { DownloadedFileStatus } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
@@ -33,8 +33,8 @@ const SETTLE_MS = 200;
 
 type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes' | 'managerRunning';
 
-type DownloadsResult =
-  | { readonly kind: 'listed'; readonly rows: readonly DownloadFile[] }
+type DownloadedFilesResult =
+  | { readonly kind: 'listed'; readonly rows: readonly LocatedDownloadedFileRow[] }
   | { readonly kind: 'unresolved'; readonly reason: string };
 
 interface InstancePaths {
@@ -81,7 +81,7 @@ export interface InstanceValue {
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   /** The downloaded files' rows, their metadata folded in — status and excluded included; or the
    *  reason their folder could not be resolved. */
-  readonly downloads: DownloadsResult;
+  readonly downloadedFiles: DownloadedFilesResult;
   /** The profile the mod manager's configuration selects. */
   readonly activeProfile: string;
   /** How a message names the mod manager and its mod-order file: the adapter's answer, before any
@@ -92,7 +92,7 @@ export interface InstanceValue {
   readonly entryKey: (entry: EntryRef) => string;
   /** The game as the mod manager's configuration names it. */
   readonly gameName: string;
-  /** The Nexus domain of a game as a mod's or a download's metadata names it, so a view linking to a mod page holds no
+  /** The Nexus domain of a game as a mod's or a downloaded file's metadata names it, so a view linking to a mod page holds no
    *  game table; undefined when the tables hold none. */
   readonly nexusDomainOf: (game: string) => string | undefined;
   /** The setting, then the mod manager's configuration, then detection; or each place looked when
@@ -197,7 +197,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>, gameFo
   filesByMod: new Map(),
   foldersByMod: new Map(),
   plugins: [],
-  downloads: { kind: 'listed', rows: [] },
+  downloadedFiles: { kind: 'listed', rows: [] },
   activeProfile: '',
   managerNames: adapter.names,
   managerRunning: { kind: 'notRunning' },
@@ -409,7 +409,7 @@ export class Instance implements Subscription {
     const { adapter, log } = this.options;
     const reading = await adapter.reading();
     const {
-      profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadsOutcome, gameFolder, dataFolderPlugins,
+      profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadedFilesOutcome, gameFolder, dataFolderPlugins,
       creationClubList: creationClub, dataFolderArchives, runtimeOutput, modFolders, profiles, sourceMods,
     } = reading;
     this.tellReading(reading);
@@ -419,12 +419,12 @@ export class Instance implements Subscription {
     // Installed reads every mod folder, not one profile's mod order: a folder no profile has synced
     // into its mod order yet still owns its meta's claim. A separator is never installed from a
     // downloaded file.
-    const installedInto = modsByArchiveFilename(
-      [...reading.folderMeta].map(([name, meta]) => ({ name, archiveFilename: meta.archiveFilename })),
+    const installedInto = modsByInstallationFileName(
+      [...reading.folderMeta].map(([name, meta]) => ({ name, installationFileName: meta.installationFileName })),
     );
     const modFolderList = modFolders?.all;
     const modNames = modNamesOf(entries, modFolders);
-    const paths = pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders, sourceMods);
+    const paths = pathsOf(runtimeOutput, downloadedFilesOutcome, entries, modFolders, sourceMods);
     const archiveSources: ArchiveSources = {
       gameRelease, listed: reading.archiveList, inData: dataFolderArchives, files: index.files,
       filesByOrigin: new Map([...index.filesByMod, [OVERWRITE_ORIGIN, runtimeOutput.files]]),
@@ -447,11 +447,11 @@ export class Instance implements Subscription {
       filesByMod: index.filesByMod,
       foldersByMod: index.foldersByMod,
       plugins,
-      downloads: downloadsOutcome.kind === 'unresolved'
-        ? { kind: 'unresolved', reason: downloadsOutcome.reason }
+      downloadedFiles: downloadedFilesOutcome.kind === 'unresolved'
+        ? { kind: 'unresolved', reason: downloadedFilesOutcome.reason }
         : {
           kind: 'listed',
-          rows: downloadsOutcome.files ? buildDownloadRows(downloadsOutcome.files, installedInto, entries) : [],
+          rows: downloadedFilesOutcome.files ? buildDownloadedFileRows(downloadedFilesOutcome.files, installedInto, entries) : [],
         },
       activeProfile: profile,
       managerNames: adapter.names,
