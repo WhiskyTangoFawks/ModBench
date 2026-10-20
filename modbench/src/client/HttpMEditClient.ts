@@ -580,8 +580,7 @@ class HttpMEditClient implements MEditClient {
   // ── reads ────────────────────────────────────────────────────────────────
 
   // A read that does not land answers a ReadFailed, never an empty list (common.md, States, story 2).
-  // The transport's verb, path and status go to the log alone (ADR-0019), one line per failed read:
-  // the views that show the failure do not log it again.
+  // This is the one log line per failed read, with the transport's detail (ADR-0019); views do not repeat it.
   private async read<D, A>(
     what: string,
     call: (api: ApiClient, signal: AbortSignal) => Promise<{ data?: D; error?: unknown; response: Response }>,

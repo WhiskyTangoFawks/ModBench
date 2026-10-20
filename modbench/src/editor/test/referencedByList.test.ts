@@ -63,6 +63,7 @@ describe('the Referenced By list — states', () => {
 
   it('says the list may be incomplete while mEdit is still indexing plugins, beside none found', async () => {
     const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', []);
     client.setQueryAnswer('getReferences', []);
     expect((await listOf(client)).message).toBe('No references found. mEdit is still indexing plugins: this list may not be complete.');
     client.setQueryAnswer('getReferences', [reference({ formKey: '000002:Fallout4.esm' })]);
