@@ -582,7 +582,7 @@ class HttpMEditClient implements MEditClient {
   ): Promise<A | ReadFailed> {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const settled = call(controller.signal).then(({ data, error, response }): A | ReadFailed => {
+    const settled = (async () => call(controller.signal))().then(({ data, error, response }): A | ReadFailed => {
       if (absent && response.status === absent.status) return absent.answers;
       if (!response.ok) {
         const text = errorText(error);

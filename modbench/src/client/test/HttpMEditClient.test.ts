@@ -879,6 +879,18 @@ describe('HttpMEditClient — a read the request never reaches mEdit with', () =
   });
 });
 
+describe('HttpMEditClient — a read before mEdit has started', () => {
+  it('fails as unreachable, and files the reason in the log alone', async () => {
+    const log = leveledLog();
+    const fetch = vi.fn();
+    const client = createMEditClient({ backendLog: fakeLogChannel(), fetch, log });
+
+    await expect(client.getPlugins()).resolves.toEqual({ failed: 'unreachable' });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(log.lines.error).toEqual([expect.stringContaining('mEdit has not started')]);
+  });
+});
+
 describe('HttpMEditClient — read timeout, checked through getRecordTypes, standing in for the read verbs that share the race', () => {
   it('fails a hung read after the configured timeout, aborting the request', async () => {
     let sawSignal: AbortSignal | undefined;
