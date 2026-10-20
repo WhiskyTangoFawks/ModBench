@@ -96,8 +96,6 @@ const instanceValueFields = (): ReadonlyMap<string, string> => {
   return fields;
 };
 
-// A field is copied when a property or a parameter bears its name and its type as written.
-// Names such as `plugins` or `files` recur in legitimate Arguments, and carry another type there.
 const slicedFieldsIn = (source: string, fields: ReadonlyMap<string, string>): string[] => {
   const found: string[] = [];
   const visit = (node: ts.Node): void => {
@@ -115,7 +113,7 @@ describe('no command takes a slice of the instance value', () => {
     expect([...instanceValueFields().keys()]).toContain('activeProfile');
   });
 
-  it('no command module declares a type that carries a field of the instance value', () => {
+  it('no command module declares a property or parameter that copies a field of the instance value, by name and type as written', () => {
     const fields = instanceValueFields();
     const offenders: Record<string, string[]> = {};
     for (const path of commandModules()) {
