@@ -968,6 +968,10 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ActiveFilter: {
+            sql: string;
+            source: string;
+        };
         /** @enum {string} */
         ArchiveRefusal: "None" | "VariantNotWritten" | "FileNotPackable" | "NotWritten";
         ArchiveRefused: {
@@ -1075,12 +1079,12 @@ export interface components {
             isInOverwrite: boolean;
             column?: string | null;
         };
-        CompareRecordsRequest: {
-            copies: components["schemas"]["RecordCopy"][];
-        };
-        CompareRecordsResponse: {
+        CompareRecordsAnswer: {
             compare?: components["schemas"]["CompareResult"] | null;
             missing: components["schemas"]["CopyMissing"][];
+        };
+        CompareRecordsRequest: {
+            copies: components["schemas"]["RecordCopy"][];
         };
         CompareResult: {
             overrides: components["schemas"]["CompareOverride"][];
@@ -1313,10 +1317,6 @@ export interface components {
             sql: string;
             source: string;
         };
-        FilterResponse: {
-            sql?: string | null;
-            source?: string | null;
-        };
         FormKeyResolution: {
             state: components["schemas"]["FormKeyResolutionState"];
             recordType?: string | null;
@@ -1526,7 +1526,7 @@ export interface components {
             name: string;
             origin: string;
         };
-        PluginDependantsResponse: {
+        PluginDependants: {
             dependants: components["schemas"]["PluginAddress"][];
             unreadable: components["schemas"]["PluginAddress"][];
         };
@@ -1733,9 +1733,6 @@ export interface components {
         ResolveNamesRequest: {
             names: components["schemas"]["NameQuery"][];
         };
-        ResolveNamesResponse: {
-            named: components["schemas"]["NamedObject"][];
-        };
         RestoreFromManifestModRequest: {
             name: string;
             folder: string;
@@ -1775,7 +1772,7 @@ export interface components {
         SelectRequest: {
             sql: string;
         };
-        SelectResponse: {
+        SelectedRows: {
             rows: unknown[];
         };
         SequenceAwaitResponse: {
@@ -1984,8 +1981,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FilterResponse"];
+                    "application/json": components["schemas"]["ActiveFilter"];
                 };
+            };
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Service Unavailable */
             503: {
@@ -2011,14 +2015,12 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["FilterResponse"];
-                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {
@@ -2693,7 +2695,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PluginDependantsResponse"];
+                    "application/json": components["schemas"]["PluginDependants"];
                 };
             };
             /** @description Bad Request */
@@ -3545,7 +3547,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SelectResponse"];
+                    "application/json": components["schemas"]["SelectedRows"];
                 };
             };
             /** @description Bad Request */
@@ -3587,7 +3589,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResolveNamesResponse"];
+                    "application/json": components["schemas"]["NamedObject"][];
                 };
             };
             /** @description Bad Request */
@@ -3762,7 +3764,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CompareRecordsResponse"];
+                    "application/json": components["schemas"]["CompareRecordsAnswer"];
                 };
             };
             /** @description Bad Request */

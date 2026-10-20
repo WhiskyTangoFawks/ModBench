@@ -6,7 +6,7 @@ import {
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellChildRecords, type CellSummary,
   type ChildRecordSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
-  type PluginLoadFailure, type CompareResult, type CompareRecordsResponse, type CopyText,
+  type PluginLoadFailure, type CompareResult, type CompareRecordsAnswer, type CopyText,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { PluginAddress } from '../wire/pluginAddress';
@@ -134,7 +134,7 @@ export const UNLIMITED_RECORDS = 2147483647;
 
 /** The plugins that list a plugin's file name as a master, and the plugins whose masters mEdit could
  *  not read. */
-export type PluginDependants = components['schemas']['PluginDependantsResponse'];
+export type PluginDependants = components['schemas']['PluginDependants'];
 /** What is wrong in a compiled, active plugin's source, per plugin: each problem names the referring
  *  record and its source file relative to the mod's source folder. */
 export type PluginProblems = components['schemas']['PluginProblems'];
@@ -351,7 +351,7 @@ export interface MEditClient {
   getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null | ReadFailed>;
   /** Several records side by side: one column per copy, in order, with no conflict state; `documentText`
    *  spells a copy in place of its plugin's. With no `compare`, `missing` names each copy no plugin gave and why. */
-  getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsResponse | ReadFailed>;
+  getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsAnswer | ReadFailed>;
   /** What each name means, in order, or why one cannot be: mEdit's refusal names every name it could not resolve, with each
    *  match of an ambiguous one. A name with an origin names a plugin. */
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed>;
@@ -439,5 +439,5 @@ export type {
   PluginMetadata, PluginDiagnosisReport,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, CompileDiagnostic,
-  LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsResponse,
+  LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsAnswer,
 };
