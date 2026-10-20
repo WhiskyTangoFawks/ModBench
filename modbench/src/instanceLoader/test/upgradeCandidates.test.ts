@@ -9,7 +9,7 @@ const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): I
   ...over,
 });
 
-const download = (over: { modID?: string; fileID?: string; name?: string }): DownloadedFile => {
+const download = (over: { modID?: string; installedKey?: string; name?: string }): DownloadedFile => {
   const { name = 'foo.7z', ...ids } = over;
   return {
     name, path: `/downloads/${name}`, metaPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1, excluded: false,
@@ -39,18 +39,25 @@ describe('the upgrade candidates of a download', () => {
     expect(offered(value, download({}))).toEqual([]);
   });
 
-  it('flags an installedFiles file-id match as tier fileId', () => {
+  it('flags an installed-file key match as tier fileId', () => {
     const value = [
-      mod({ name: 'Harder VATS', nexusId: '111', version: '2.0', installedFiles: [{ nexusId: '111', fileId: '999' }] }),
+      mod({ name: 'Harder VATS', nexusId: '111', version: '2.0', installedFileKeys: ['key-999'] }),
     ];
-    expect(offered(value, download({ modID: '111', fileID: '999' }))).toEqual([
+    expect(offered(value, download({ modID: '111', installedKey: 'key-999' }))).toEqual([
       ['Harder VATS', 'fileId'],
+    ]);
+  });
+
+  it('takes no fileId tier from a key of another mod\'s file, which shares only the file id', () => {
+    const value = [mod({ name: 'Harder VATS', nexusId: '111', version: '2.0', installedFileKeys: ['other-mod-999'] })];
+    expect(offered(value, download({ modID: '111', installedKey: 'this-mod-999' }))).toEqual([
+      ['Harder VATS', undefined],
     ]);
   });
 
   it('lists a mod sharing only the mod id as unmarked, still a candidate', () => {
     const value = [mod({ name: 'Harder VATS A', nexusId: '111', version: '1.0' })];
-    expect(offered(value, download({ modID: '111', fileID: '999' }))).toEqual([
+    expect(offered(value, download({ modID: '111', installedKey: 'key-999' }))).toEqual([
       ['Harder VATS A', undefined],
     ]);
   });
@@ -58,9 +65,9 @@ describe('the upgrade candidates of a download', () => {
   it('sorts a file-id match first, unmarked mods after', () => {
     const value = [
       mod({ name: 'No Match', nexusId: '111', version: '1.0' }),
-      mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFiles: [{ nexusId: '111', fileId: '999' }] }),
+      mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFileKeys: ['key-999'] }),
     ];
-    expect(offered(value, download({ modID: '111', fileID: '999' }))).toEqual([
+    expect(offered(value, download({ modID: '111', installedKey: 'key-999' }))).toEqual([
       ['The Match', 'fileId'],
       ['No Match', undefined],
     ]);
@@ -95,19 +102,19 @@ describe('the upgrade candidates of a download', () => {
   it('drops the archiveFilename tier, listing the mod unmarked, when a fileId match exists elsewhere in the pool', () => {
     const value = [
       mod({ name: 'By Name', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
-      mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ nexusId: '111', fileId: '999' }] }),
+      mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFileKeys: ['key-999'] }),
     ];
-    expect(offered(value, download({ modID: '111', fileID: '999', name: 'foo.7z' }))).toEqual([
+    expect(offered(value, download({ modID: '111', installedKey: 'key-999', name: 'foo.7z' }))).toEqual([
       ['By File Id', 'fileId'],
       ['By Name', undefined],
     ]);
   });
 
-  it('takes no fileId tier from an archiveFilename that matches the download name when its fileID is absent from installedFiles, and still flags archiveFilename', () => {
+  it('takes no fileId tier from an archiveFilename that matches the download name when its key is absent from the installed files of the mod, and still flags archiveFilename', () => {
     const value = [
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'harder-vats-v1.7z' }),
     ];
-    expect(offered(value, download({ modID: '111', fileID: '999', name: 'harder-vats-v1.7z' }))).toEqual([
+    expect(offered(value, download({ modID: '111', installedKey: 'key-999', name: 'harder-vats-v1.7z' }))).toEqual([
       ['Harder VATS', 'archiveFilename'],
     ]);
   });

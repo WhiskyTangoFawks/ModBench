@@ -45,20 +45,14 @@ export type GameFolder =
     readonly setting: string;
   };
 
-/** A Nexus mod and file id pair recorded as installed into a mod. */
-export interface InstalledFileId {
-  nexusId: string;
-  fileId: string;
-}
-
 /** What a mod's metadata says; a field is undefined when absent or empty. */
 export interface ModMeta {
   gameName?: string;
   version?: string;
   nexusId?: string;
   archiveFilename?: string;
-  /** In index order; undefined when none are recorded. */
-  installedFiles?: readonly InstalledFileId[];
+  /** The keys, as a downloaded file's `installedKey` spells them, of the files it was installed from; undefined when none are recorded. */
+  installedFileKeys?: readonly string[];
 }
 
 export interface Mod extends ModMeta {
@@ -122,17 +116,8 @@ export type MovePlace =
 /** Where moved separators land: beside a separator and its mods, or at an end of mod order. */
 export type SeparatorsPlace = Extract<MovePlace, { kind: 'separator' | 'modOrder' }>;
 
-/** The metadata keys Modbench writes into a mod's meta. */
-export interface OwnedMetaKeys {
-  gameName: string;
-  nexusId?: string;
-  version?: string;
-  archiveFilename?: string;
-  installedFiles?: readonly InstalledFileId[];
-}
-
 /** What the caller supplies for the record an install leaves with the mod; the adapter adds what it knows of the instance. */
-export type InstallKeys = Pick<OwnedMetaKeys, 'nexusId' | 'version' | 'archiveFilename' | 'installedFiles'>;
+export type InstallKeys = Pick<ModMeta, 'nexusId' | 'version' | 'archiveFilename' | 'installedFileKeys'>;
 
 export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 
@@ -141,12 +126,13 @@ export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 export interface DownloadMeta {
   status: DownloadStatus;
   modID?: string;
-  fileID?: string;
   name?: string;
   version?: string;
   modName?: string;
   gameName?: string;
   author?: string;
+  /** The key a mod's `installedFileKeys` holds for this file, minted by the adapter; undefined when the metadata names no file. */
+  installedKey?: string;
 }
 
 /** A downloaded file, with its metadata parsed; `meta` is undefined when it has none. `excluded` is a separate
@@ -423,8 +409,8 @@ export interface InstanceReading extends InstanceGame {
   readonly profiles: readonly string[];
   /** Undefined when there is no folder for mods at all. */
   readonly modFolders: ModFolders | undefined;
-  /** Each link read as a folder or a file that cannot be followed, by path, with why. */
-  readonly skippedLinks: ReadonlyMap<string, string>;
+  /** Each link read as a folder or a file that cannot be followed, left unread, with its path and why. */
+  readonly linkNotes: readonly string[];
   /** The files the game wrote at run time. */
   readonly runtimeOutput: OriginFiles;
   /** Each listed mod's own files, by mod name. */
