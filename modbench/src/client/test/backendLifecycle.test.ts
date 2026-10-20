@@ -4,7 +4,8 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { createServer, type Server } from 'node:http';
 import { spawn as nodeSpawn } from 'node:child_process';
-import type { AddressInfo } from 'node:net';
+import { createServer as createNetServer } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
 
 import { BackendLifecycle } from '../backendLifecycle';
 import type { BackendStatus } from '../MEditClient';
@@ -65,6 +66,31 @@ describe('BackendLifecycle', () => {
 
     expect(statuses).toContain('disconnected');
     expect(lifecycle.status).toBe('disconnected');
+  });
+
+  it('reports disconnected at the deadline when a health check never settles', async () => {
+    const lifecycle = new BackendLifecycle({
+      attachPort: 5172, pollIntervalMs: 10, pollTimeoutMs: 100, checkHealth: () => new Promise<boolean>(() => {}),
+    });
+
+    await lifecycle.start();
+
+    expect(lifecycle.status).toBe('disconnected');
+  });
+
+  it('reports disconnected when a backend accepts the connection and never answers', async () => {
+    const sockets: Socket[] = [];
+    const silent = createNetServer((socket) => { sockets.push(socket); });
+    await new Promise<void>((resolve) => silent.listen(0, 'localhost', resolve));
+    const lifecycle = new BackendLifecycle({
+      attachPort: (silent.address() as AddressInfo).port, pollIntervalMs: 10, pollTimeoutMs: 100,
+    });
+
+    await lifecycle.start();
+
+    expect(lifecycle.status).toBe('disconnected');
+    sockets.forEach((socket) => socket.destroy());
+    silent.close();
   });
 });
 

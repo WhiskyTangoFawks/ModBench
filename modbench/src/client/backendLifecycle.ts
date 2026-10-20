@@ -249,7 +249,7 @@ export class BackendLifecycle {
       const attempt = async () => {
         const abandoned = () => gen !== this.generation || (child !== undefined && this.child !== child);
         if (abandoned()) { resolve(); return; }
-        const healthy = await this.checkHealthFn();
+        const healthy = await this.withinDeadline(this.checkHealthFn(), deadline);
         if (abandoned()) { resolve(); return; }
         if (healthy) {
           this.setStatus('running');
@@ -269,6 +269,19 @@ export class BackendLifecycle {
 
       void attempt();
     });
+  }
+
+  // A check that never settles counts as unhealthy once the deadline passes.
+  private async withinDeadline(check: Promise<boolean>, deadline: number): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), Math.max(0, deadline - Date.now()));
+    });
+    try {
+      return await Promise.race([check, expired]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private checkHealthOverHttp(): Promise<boolean> {
