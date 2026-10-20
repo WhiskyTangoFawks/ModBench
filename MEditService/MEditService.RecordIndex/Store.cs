@@ -49,7 +49,7 @@ internal sealed class Store : IDisposable
     /// <summary>Every read the record index answers.</summary>
     public RelationReads Reads { get; }
 
-    public RecordFilter Filter { get; }
+    public FilterMatches Filter { get; }
 
     public GameRelease Release { get; private set; }
 
@@ -82,7 +82,7 @@ internal sealed class Store : IDisposable
         _plugins = plugins;
         _timeProvider = timeProvider ?? TimeProvider.System;
         Reads = new RelationReads(this, openedPlugins, indexed);
-        Filter = new RecordFilter(this);
+        Filter = new FilterMatches(this);
     }
 
     /// <summary>Opens the file, or the in-memory database when no path was given. Another window

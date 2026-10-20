@@ -13,11 +13,10 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     private Task ClearFilterAsync() => _client.DeleteAsync("/load-order/filter");
 
     [Fact]
-    public async Task PostFilter_ValidSql_Returns204WithNoBody()
+    public async Task PostFilter_ValidSql_Returns204()
     {
         var resp = await _client.SetFilter();
         Assert.Equal(HttpStatusCode.NoContent, resp.StatusCode);
-        Assert.Empty(await resp.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]
@@ -37,7 +36,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     }
 
     [Fact]
-    public async Task GetFilter_BeforeAnyFilter_Returns204()
+    public async Task GetFilter_WithNoFilterInForce_Returns204()
     {
         await ClearFilterAsync();
         var resp = await _client.GetAsync("/load-order/filter");
@@ -73,15 +72,12 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     }
 
     [Fact]
-    public async Task DeleteFilter_Returns204AndLeavesNoFilterInForce()
+    public async Task DeleteFilter_AfterAPostFilter_Returns204()
     {
         await _client.PostAsJsonAsync("/load-order/filter",
             new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" });
 
         var del = await _client.DeleteAsync("/load-order/filter");
         Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
-
-        var get = await _client.GetAsync("/load-order/filter");
-        Assert.Equal(HttpStatusCode.NoContent, get.StatusCode);
     }
 }

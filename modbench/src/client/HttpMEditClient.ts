@@ -686,8 +686,7 @@ class HttpMEditClient implements MEditClient {
   }
 
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed> {
-    return this.read('resolveNames', (signal) => this.apiClient.POST('/names/resolve', { body: { names: [...names] }, signal }),
-      (data) => (data ?? NO_ANSWER));
+    return this.read('resolveNames', (signal) => this.apiClient.POST('/names/resolve', { body: { names: [...names] }, signal }), noBodyFails);
   }
 
   getWhatRestoreDestroys(mods: readonly ModByFolder[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed> {

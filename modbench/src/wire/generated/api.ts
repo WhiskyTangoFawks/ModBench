@@ -968,10 +968,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ActiveFilter: {
-            sql: string;
-            source: string;
-        };
         /** @enum {string} */
         ArchiveRefusal: "None" | "VariantNotWritten" | "FileNotPackable" | "NotWritten";
         ArchiveRefused: {
@@ -1081,7 +1077,7 @@ export interface components {
         };
         CompareRecordsAnswer: {
             compare?: components["schemas"]["CompareResult"] | null;
-            missing: components["schemas"]["CopyMissing"][];
+            readonly missing: components["schemas"]["CopyMissing"][];
         };
         CompareRecordsRequest: {
             copies: components["schemas"]["RecordCopy"][];
@@ -1312,10 +1308,6 @@ export interface components {
             metadata: components["schemas"]["FieldMetadata"];
             value?: unknown;
             checkError?: string | null;
-        };
-        FilterRequest: {
-            sql: string;
-            source: string;
         };
         FormKeyResolution: {
             state: components["schemas"]["FormKeyResolutionState"];
@@ -1676,6 +1668,10 @@ export interface components {
             path: components["schemas"]["PathHop"][];
             value?: unknown;
         };
+        RecordFilter: {
+            sql: string;
+            source: string;
+        };
         RecordFilterClearedNotification: {
             source: string;
             reason: string;
@@ -1981,7 +1977,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ActiveFilter"];
+                    "application/json": components["schemas"]["RecordFilter"];
                 };
             };
             /** @description No Content */
@@ -2011,7 +2007,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["FilterRequest"];
+                "application/json": components["schemas"]["RecordFilter"];
             };
         };
         responses: {

@@ -389,8 +389,6 @@ internal sealed record CreatePluginRequest(string Origin, string Name, string Fo
 /// <summary>The mod that provides the plugin (ADR-0012) and its file name.</summary>
 internal sealed record CreatePluginInModRequest(string Origin, string Name);
 
-/// <summary>The plugins that list the plugin as a master, and those whose masters could not be read.</summary>
-
 /// <summary>The plugin by its origin and file name (ADR-0012), and the file name its source takes.</summary>
 internal sealed record RenameSourceChangesRequest(string Origin, string Name, string NewName);
 

@@ -8,8 +8,6 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Http;
 
-internal sealed record FilterRequest(string Sql, string Source);
-
 internal sealed record SelectRequest(string Sql);
 internal sealed record ResolveNamesRequest(IReadOnlyList<NameQuery> Names);
 

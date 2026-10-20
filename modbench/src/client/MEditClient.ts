@@ -280,7 +280,7 @@ export type NamedObject = components['schemas']['NamedObject'];
 export type ReferenceResult = components['schemas']['ReferenceResult'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
  *  (plugins.md, Record filter). */
-export type RecordFilter = components['schemas']['FilterRequest'];
+export type RecordFilter = components['schemas']['RecordFilter'];
 
 /** A change to a source mod's build configuration: the output folder's new name, and paths in the mod folder to
  *  exclude or include. */

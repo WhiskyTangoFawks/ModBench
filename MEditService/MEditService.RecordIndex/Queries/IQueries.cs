@@ -48,8 +48,7 @@ public interface IQueries
     long GetSequence();
     Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout);
 
-    // Null when no filter is in force.
-    Answer<ActiveFilter?, IndexRefused> GetFilter();
+    Answer<RecordFilter?, IndexRefused> GetFilter();
     // Why the SQL cannot be a filter, or no load order to hold it; null once it is in force.
     IndexRefused? SetFilter(string sql, string source);
     void ClearFilter();

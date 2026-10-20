@@ -171,7 +171,7 @@ internal sealed class RecordQueries(
         columns.Insert(before, overridden);
     }
 
-    private static CopyMissing MissingCopyOf(RelationReads reads, RecordCopy copy) =>
+    private static CopyMissing CopyMissingFor(RelationReads reads, RecordCopy copy) =>
         reads.IsHeldByAnyPlugin(copy.FormKey)
             ? new CopyMissing(copy.FormKey, copy.Plugin, CopyMissingReason.NotInPlugin, $"{copy.FormKey} is not in {copy.Plugin.Name} ({copy.Plugin.Origin}).")
             : new CopyMissing(copy.FormKey, copy.Plugin, CopyMissingReason.RecordGone, $"{copy.FormKey} is held by no plugin.");
@@ -195,7 +195,7 @@ internal sealed class RecordQueries(
             else documents.Add(document);
         }
         if (missing.Count > 0)
-            return CompareRecordsAnswer.NotFound([.. missing.Select(c => MissingCopyOf(reads, c))]);
+            return CompareRecordsAnswer.CopiesMissing([.. missing.Select(c => CopyMissingFor(reads, c))]);
 
         var records = documents.ConvertAll(ToRecordDetail);
         // Two copies may come from one plugin, so a column is named by its place as well.
@@ -418,7 +418,7 @@ internal sealed class RecordQueries(
         return new SequenceAwaitResponse(reached, _index.Sequence);
     }
 
-    public Answer<ActiveFilter?, IndexRefused> GetFilter() => IndexAnswer.Of(() =>
+    public Answer<RecordFilter?, IndexRefused> GetFilter() => IndexAnswer.Of(() =>
     {
         RequireReads();
         return filter.Current;

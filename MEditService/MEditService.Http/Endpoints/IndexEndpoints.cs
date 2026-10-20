@@ -35,7 +35,7 @@ internal static class IndexEndpoints
         app.MapGet("/load-order/filter", GetFilter)
             .WithName("GetFilter")
             .WithTags(LoadOrderTag)
-            .Produces<ActiveFilter>()
+            .Produces<RecordFilter>()
             .Produces(204)
             .ProducesProblem(503);
 
@@ -85,7 +85,7 @@ internal static class IndexEndpoints
         return Results.Ok(await svc.AwaitSequence(atLeast, TimeSpan.FromMilliseconds(timeoutMs)));
     }
 
-    private static IResult SetFilter(FilterRequest req, IQueries svc, ILoggerFactory loggerFactory)
+    private static IResult SetFilter(RecordFilter req, IQueries svc, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         if (logger.IsEnabled(LogLevel.Information))

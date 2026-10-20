@@ -319,11 +319,19 @@ public sealed record NamedObject(PluginAddress? Plugin, string? FormKey, string?
 
 /// <summary>The comparison of every copy given, or, with any copy missing, the copies no plugin gave, in the
 /// order given (ADR-0019): <c>Compare</c> is null exactly when <c>Missing</c> is not empty.</summary>
-public sealed record CompareRecordsAnswer(CompareResult? Compare, IReadOnlyList<CopyMissing> Missing)
+public sealed record CompareRecordsAnswer
 {
-    internal static CompareRecordsAnswer Compared(CompareResult compare) => new(compare, []);
+    private CompareRecordsAnswer()
+    {
+    }
 
-    internal static CompareRecordsAnswer NotFound(IReadOnlyList<CopyMissing> missing) => new(null, missing);
+    public CompareResult? Compare { get; private set; }
+
+    public IReadOnlyList<CopyMissing> Missing { get; private set; } = [];
+
+    internal static CompareRecordsAnswer Compared(CompareResult compare) => new() { Compare = compare };
+
+    internal static CompareRecordsAnswer CopiesMissing(IReadOnlyList<CopyMissing> missing) => new() { Missing = missing };
 }
 
 // A tri-state rather than two booleans: the states are mutually exclusive. Deleted is absent
@@ -368,4 +376,4 @@ public sealed record PluginProblems(
 public sealed record PluginDependants(IReadOnlyList<PluginAddress> Dependants, IReadOnlyList<PluginAddress> Unreadable);
 
 /// <summary>The record filter in force: the SQL that narrows the listings, and the file or document it was written in.</summary>
-public sealed record ActiveFilter(string Sql, string Source);
+public sealed record RecordFilter(string Sql, string Source);
