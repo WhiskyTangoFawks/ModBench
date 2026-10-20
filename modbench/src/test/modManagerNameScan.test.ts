@@ -104,19 +104,6 @@ describe('no extension file names MO2 outside its implementation of the Instance
     }
   });
 
-  it('fails an import of mo2/ from any file but the construction', async () => {
-    const dir = await plantedTree({
-      [join('mods', 'reach.ts')]: "import { x } from '../instanceAdapter/mo2/layout';\nexport const y = x;\n",
-      [join(ADAPTER, 'reach.ts')]: "import { x } from './mo2/layout';\nexport const y = x;\n",
-      [join(ADAPTER, 'mo2', 'inside.ts')]: "import { x } from './layout';\nexport const y = x;\n",
-    });
-    try {
-      expect(Object.keys(findOffenders([dir])).sort()).toEqual([join('mods', 'reach.ts'), join(ADAPTER, 'reach.ts')].sort());
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-
   it('catches the name in a comment, a literal or an identifier', async () => {
     const dir = await plantedTree({
       [join('mods', 'comment.ts')]: '// MO2 sorts these by date.\nexport const x = 1;\n',
@@ -127,6 +114,7 @@ describe('no extension file names MO2 outside its implementation of the Instance
       [join('mods', 'test', 'fixture.ts')]: "export const ini = 'ModOrganizer.ini';\n",
       [join(ADAPTER, 'mo2', 'mo2Instance.ts')]: "export const manager = 'MO2';\n",
       [ADAPTER_INTERFACE]: '// MO2 is one implementation.\n',
+      [join(ADAPTER, 'files.ts')]: "import { x } from './mo2/layout';\nexport const y = x;\n",
     });
     try {
       expect(findOffenders([dir])).toEqual({
@@ -136,6 +124,7 @@ describe('no extension file names MO2 outside its implementation of the Instance
         [join('plugins', 'command.ts')]: ['mo2'],
         [join('views', 'mo2Trees.ts')]: ['file name'],
         [ADAPTER_INTERFACE]: ['mo2'],
+        [join(ADAPTER, 'files.ts')]: ['mo2'],
       });
     } finally {
       await rm(dir, { recursive: true, force: true });

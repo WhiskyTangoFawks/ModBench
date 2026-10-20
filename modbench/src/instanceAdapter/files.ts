@@ -259,8 +259,7 @@ export interface ResolvedEntry {
   readonly isDirectory: boolean;
 }
 
-/** The entries directly in `path`, following links as the manager does.
- *  A link whose target cannot be checked is skipped, and handed to `skippedLink`. */
+/** The entries directly in `path`, each link as what it links to. */
 export async function listEntries(
   path: string, skippedLink: SkippedLink,
 ): Promise<ResolvedEntry[]> {
