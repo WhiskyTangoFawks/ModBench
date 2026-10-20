@@ -64,7 +64,9 @@ describe('sourceCommands build', () => {
     expect(saved).toEqual(['/instance/source/ModA', '/instance/source/Old ModB']);
     expect(client.calls).toHaveLength(1);
     expect(client.calls[0]?.args[0]).toMatchObject([{ name: 'ModA' }]);
-    expect(outcome).toMatchObject({ refused: [{ item: 'ModB', reason: expect.stringContaining('/instance/source/Old ModB/plugin-source/B.esp/Cell.json') }] });
+    expect(outcome).toMatchObject({
+      refused: [{ item: 'ModB', reason: 'VS Code did not save its plugin source: /instance/source/Old ModB/plugin-source/B.esp/Cell.json' }],
+    });
   });
 
   it('refuses a mod whose metadata cannot be read, naming why, and builds the rest', async () => {
