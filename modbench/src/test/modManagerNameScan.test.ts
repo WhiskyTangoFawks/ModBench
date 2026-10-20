@@ -13,7 +13,7 @@ const MO2_CONSTRUCTION = MO2_CONSTRUCTION_SITE.file;
 const MO2_ENTRY = `./${MO2_CONSTRUCTION_SITE.module.split(sep).join('/')}`;
 
 const isMo2Implementation = (relPath: string): boolean =>
-  relPath.startsWith(ADAPTER + sep) && relPath !== ADAPTER_INTERFACE && relPath !== MO2_CONSTRUCTION;
+  relPath.startsWith(join(ADAPTER, 'mo2') + sep);
 
 function constructionImport(sourceText: string, fileName: string): { text: string; bindings: string[] } | undefined {
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
@@ -72,11 +72,12 @@ describe('no extension file names MO2 outside its implementation of the Instance
     expect(findOffenders(SOURCE_ROOTS)).toEqual({});
   });
 
-  it('scans the implementation\'s files and not its interface\'s or the construction\'s as the implementation', () => {
+  it('scans the implementation\'s files and not its interface\'s, the construction\'s or a neutral file\'s as the implementation', () => {
     expect(isMo2Implementation(join(ADAPTER, 'mo2', 'mo2Instance.ts'))).toBe(true);
     expect(isMo2Implementation(join(ADAPTER, 'mo2', 'codecs', 'modlistText.ts'))).toBe(true);
     expect(isMo2Implementation(ADAPTER_INTERFACE)).toBe(false);
     expect(isMo2Implementation(MO2_CONSTRUCTION)).toBe(false);
+    expect(isMo2Implementation(join(ADAPTER, 'files.ts'))).toBe(false);
   });
 
   it('the construction\'s exemption is load-bearing: the file imports MO2\'s implementation', () => {
@@ -113,6 +114,7 @@ describe('no extension file names MO2 outside its implementation of the Instance
       [join('mods', 'test', 'fixture.ts')]: "export const ini = 'ModOrganizer.ini';\n",
       [join(ADAPTER, 'mo2', 'mo2Instance.ts')]: "export const manager = 'MO2';\n",
       [ADAPTER_INTERFACE]: '// MO2 is one implementation.\n',
+      [join(ADAPTER, 'files.ts')]: "import { x } from './mo2/layout';\nexport const y = x;\n",
     });
     try {
       expect(findOffenders([dir])).toEqual({
@@ -122,6 +124,7 @@ describe('no extension file names MO2 outside its implementation of the Instance
         [join('plugins', 'command.ts')]: ['mo2'],
         [join('views', 'mo2Trees.ts')]: ['file name'],
         [ADAPTER_INTERFACE]: ['mo2'],
+        [join(ADAPTER, 'files.ts')]: ['mo2'],
       });
     } finally {
       await rm(dir, { recursive: true, force: true });

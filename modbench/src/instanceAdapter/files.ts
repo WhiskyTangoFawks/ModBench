@@ -259,8 +259,7 @@ export interface ResolvedEntry {
   readonly isDirectory: boolean;
 }
 
-/** The entries directly in `path`, following links as MO2 does (QDir without NoSymLinks).
- *  A link whose target cannot be checked is skipped, as MO2 skips it, and handed to `skippedLink`. */
+/** The entries directly in `path`, each link as what it links to. */
 export async function listEntries(
   path: string, skippedLink: SkippedLink,
 ): Promise<ResolvedEntry[]> {
