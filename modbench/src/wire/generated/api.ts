@@ -1019,7 +1019,7 @@ export interface components {
         };
         BuildRequest: {
             mods: components["schemas"]["BuildModRequest"][];
-            excludedSuffix: string;
+            exclusionMark: string;
             archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
             statCache: string;
         };
@@ -1746,7 +1746,7 @@ export interface components {
         RestoreFromManifestRequest: {
             mods: components["schemas"]["RestoreFromManifestModRequest"][];
             statCache: string;
-            excludedSuffix: string;
+            exclusionMark: string;
             archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
             gameFolder?: components["schemas"]["GameFolderRequest"] | null;
             gesture?: string | null;

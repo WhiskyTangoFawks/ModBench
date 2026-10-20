@@ -97,7 +97,7 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public bool DataFolderExists(string dataFolder) => Directory.Exists(dataFolder);
 
-    public string ExcludedName(string name, string excludedSuffix) => name + excludedSuffix;
+    public string ExcludedName(string name, string exclusionMark) => name + exclusionMark;
 
     public string FolderName(string modFolder) => modFolder[(modFolder.LastIndexOf('/') + 1)..];
 

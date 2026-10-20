@@ -138,7 +138,7 @@ export interface FakeInstanceAdapter {
   readonly subscribers: number;
 }
 
-const EXCLUDED_SUFFIX = '.excluded';
+const EXCLUSION_MARK = '.excluded';
 
 const entryKey = (entry: EntryRef): string => (entry.kind === 'separator' ? `${entry.name}_separator` : entry.name).toLowerCase();
 const originKey = (origin: FileOrigin): string => (origin.kind === 'mod' ? `mod:${origin.name}` : origin.kind);
@@ -250,14 +250,14 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       if (unread !== undefined) return Promise.reject(new Error(unread));
       const gone = answers.goneOriginFiles?.some((one) => originKey(one.origin) === originKey(origin) && one.relativePath === relativePath);
       const listed = (origin.kind === 'mod' ? current.modFiles.get(origin.name) : current.runtimeOutput)?.files.find((file) => file.relativePath === relativePath);
-      const unmarked = relativePath.split('/').map((segment) => segment.replace(EXCLUDED_SUFFIX, '')).join('/');
+      const unmarked = relativePath.split('/').map((segment) => segment.replace(EXCLUSION_MARK, '')).join('/');
       return Promise.resolve(gone ? undefined : listed ?? { ...fileIn('/origin', relativePath), includedPath: unmarked });
     },
     markOriginFile: (origin, relativePath, mark) =>
       record<OriginFileMarked>({ verb: 'markOriginFile', origin, relativePath, mark },
         answers.goneOriginFiles?.some((gone) => originKey(gone.origin) === originKey(origin) && gone.relativePath === relativePath) ? { gone: true } : { gone: false, wrote: true, relativePath }),
     entryKey,
-    excludedSuffix: EXCLUDED_SUFFIX,
+    exclusionMark: EXCLUSION_MARK,
     originHoldsPlugin: (origin, name) => Promise.resolve((answers.heldPlugins ?? []).some((held) =>
       originKey(held.origin) === originKey(origin) && pluginKey(held.name) === pluginKey(name))),
     renamePlugin: (origin, from, to) => record({ verb: 'renamePlugin', origin, from, to }, undefined),

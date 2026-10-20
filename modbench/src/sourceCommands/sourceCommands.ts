@@ -8,7 +8,7 @@ import { ba2VersionsOf } from '../tables/gamePaths';
 interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'latestLoadOrder'>;
   adapter: Pick<InstanceAdapter,
-    'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder' | 'sourceHost'>;
+    'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
   saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
 }
@@ -52,7 +52,7 @@ export function sourceCommands({ client, adapter, saveUnsaved }: SourceCommandsD
       if (sent.length === 0) return { landed: [], refused };
       await client.latestLoadOrder();
       const outcome = await client.build(
-        sent, { excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(await adapter.gameRelease()), statCache: adapter.statCacheFolder });
+        sent, { exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()), statCache: adapter.statCacheFolder });
       return isRefused(outcome) ? outcome : { landed: outcome.landed, refused: [...outcome.refused, ...refused] };
     },
 

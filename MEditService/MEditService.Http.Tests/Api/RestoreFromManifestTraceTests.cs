@@ -86,7 +86,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         };
         if (gesture == "restore-from-manifest")
         {
-            request["excludedSuffix"] = ".mohidden";
+            request["exclusionMark"] = ".mohidden";
         }
         return request;
     }
@@ -409,7 +409,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
 
     [Theory]
     [InlineData("statCache")]
-    [InlineData("excludedSuffix")]
+    [InlineData("exclusionMark")]
     public async Task RestoringWithAFieldMissing_Is400(string field)
     {
         var request = Request("restore-from-manifest", "Mod.zip");

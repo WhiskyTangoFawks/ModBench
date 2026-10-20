@@ -557,8 +557,8 @@ export interface InstanceAdapter {
   markOriginFile(origin: FileOrigin, relativePath: string, mark: OriginFileMark): Promise<OriginFileMarked>;
   /** How the manager matches an entry's name; two entries with one key are one name to it. */
   entryKey(entry: EntryRef): string;
-  /** The suffix the manager gives an excluded file's or folder's name. */
-  readonly excludedSuffix: string;
+  /** The manager's exclusion mark. mEdit's build writes it after each name a source mod's build configuration excludes. */
+  readonly exclusionMark: string;
   /** Whether the origin's folder holds a file of the name now on disk, compared as the game compares plugin names. */
   originHoldsPlugin(origin: FileOrigin, name: string): Promise<boolean>;
   /** Renames plugin `from` of `origin`, its named files and its line in every profile, in one

@@ -2077,7 +2077,7 @@ describe('the MO2 Instance adapter', () => {
       await put(join(root, folder, 'Textures', 'a.dds'), 'pixels');
 
       expect(await adapter.markOriginFile(origin, 'Textures/a.dds', 'Excluded')).toEqual({ gone: false, wrote: true, relativePath: 'Textures/a.dds.mohidden' });
-      expect(adapter.excludedSuffix).toBe('.mohidden');
+      expect(adapter.exclusionMark).toBe('.mohidden');
       expect(await isThere(join(root, folder, 'Textures', 'a.dds'))).toBe(false);
       expect(await text(root, join(folder, 'Textures', 'a.dds.mohidden'))).toBe('pixels');
 

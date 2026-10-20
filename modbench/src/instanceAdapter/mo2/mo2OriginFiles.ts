@@ -8,7 +8,7 @@ import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName } from './l
 import { originFileOf } from './mo2Files';
 import { originFolder, type Mo2Context } from './mo2Context';
 
-type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'trashModFile' | 'excludedSuffix'>;
+type Mo2OriginFiles = Pick<InstanceAdapter, 'originFile' | 'markOriginFile' | 'trashModFile' | 'exclusionMark'>;
 
 function fileUnder(folder: string | undefined, relativePath: string): string | undefined {
   const reachesOut = relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
@@ -63,6 +63,6 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
       await trash(file);
     },
 
-    excludedSuffix: EXCLUDED_SUFFIX,
+    exclusionMark: EXCLUDED_SUFFIX,
   };
 }

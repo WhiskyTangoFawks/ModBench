@@ -43,7 +43,7 @@ public interface IModFolderRepository
     bool DataFolderExists(string dataFolder);
 
     /// <summary>The name the mod manager gives a file or folder that a build leaves out.</summary>
-    string ExcludedName(string name, string excludedSuffix);
+    string ExcludedName(string name, string exclusionMark);
 
     Stream OpenInstallationFile(string path);
 

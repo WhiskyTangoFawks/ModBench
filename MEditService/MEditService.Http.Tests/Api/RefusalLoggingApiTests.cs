@@ -112,7 +112,7 @@ public sealed class RefusalLoggingApiTests : HostedTests
         {
             mods = new[] { new { name = "Bare", folder, metadataFiles = Array.Empty<string>() } },
             statCache = Path.Combine(instance, "stat-cache"),
-            excludedSuffix = ".mohidden",
+            exclusionMark = ".mohidden",
         });
 
         AssertLoggedOnce("Refused Restore from manifest of Bare:", "NoManifest");

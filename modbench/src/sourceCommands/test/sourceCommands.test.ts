@@ -13,7 +13,7 @@ const savedAll = () => Promise.resolve([]);
 const BUILT = { landed: [{ mod: 'ModA', compiled: [], refused: [], archivesRefused: [], overwritten: [] }], refused: [] };
 
 describe('sourceCommands build', () => {
-  it('hands mEdit each mod with the source folder that builds it, whether that is a submodule, its folder and its metadata files, the release\'s archive variants and the stat cache\'s folder', async () => {
+  it('hands mEdit each mod with the source folder that builds it, whether that is a submodule, its folder and its metadata files, the exclusion mark, the release\'s archive variants and the stat cache\'s folder', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
     const adapter = fakeAdapter({
@@ -29,7 +29,7 @@ describe('sourceCommands build', () => {
       args: [[
         { name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], version: '1.2.3', isSubmodule: true },
         { name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], isSubmodule: false },
-      ], { excludedSuffix: '.excluded', archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache' }],
+      ], { exclusionMark: '.excluded', archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache' }],
     }]);
   });
 
@@ -98,7 +98,7 @@ describe('sourceCommands build', () => {
 
     await sourceCommands({ client, adapter: fakeAdapter({}, 'SkyrimSE'), saveUnsaved: savedAll }).build(['ModA']);
 
-    expect(client.calls.map((call) => call.args[1])).toEqual([{ excludedSuffix: '.excluded', archives: null, statCache: '/instance/stat-cache' }]);
+    expect(client.calls.map((call) => call.args[1])).toEqual([{ exclusionMark: '.excluded', archives: null, statCache: '/instance/stat-cache' }]);
   });
 
   it('refuses a mod no repository builds, naming why, and builds the rest', async () => {

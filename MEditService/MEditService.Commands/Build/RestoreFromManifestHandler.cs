@@ -115,7 +115,7 @@ public sealed class RestoreFromManifestHandler
 
         var answer = await _build.BuildAsync(
             new ModToBuild(mod.Name, submodule.Folder, mod.Folder, mod.MetadataFiles, version, IsSubmodule: true),
-            new InstanceToBuild(instance.ExcludedSuffix, instance.Archives, instance.StatCache));
+            new InstanceToBuild(instance.ExclusionMark, instance.Archives, instance.StatCache));
         if (answer is ItemAnswer<BuildRefusal, ModBuildOutcome>.Refusing refusing)
             return ItemAnswer<RestoreSkip, ModRestored>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, refusing.Refusal), refusing.Message);
         var outcome = ((ItemAnswer<BuildRefusal, ModBuildOutcome>.Wrote)answer).Outcome;
