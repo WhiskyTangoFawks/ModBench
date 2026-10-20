@@ -210,10 +210,9 @@ export class BackendLifecycle {
     }
   }
 
-  // Closing stdin is the graceful stop on both platforms: Node's SIGTERM terminates a Windows
-  // process at once. A backend mid a long synchronous request won't notice, so this escalates to SIGKILL
-  // and waits for a real 'exit'. Accepted race: stop() clears `this.child` first, so a start()
-  // racing the wait can spawn a second child.
+  // Closing stdin is the graceful stop on both platforms; Node's SIGTERM kills a Windows process
+  // at once. A backend mid a long request won't notice, so this escalates to SIGKILL and waits
+  // for a real 'exit'. Accepted race: a start() racing the wait can spawn a second child.
   private killAndConfirmExit(child: BackendProcess): Promise<void> {
     return new Promise((resolve) => {
       // A container, not a `let`, so it exists (as `undefined`) before onExit is even defined —

@@ -849,7 +849,8 @@ describe('HttpMEditClient — sendLoadOrder', () => {
       })],
     ]);
     const child = Object.assign(new EventEmitter(), {
-      kill: () => { abortedAtKill = putSignal?.aborted; child.emit('exit', 0); },
+      kill: () => undefined,
+      stdin: { end: () => { abortedAtKill = putSignal?.aborted; child.emit('exit', 0); } },
     });
     const client = createMEditClient({
       backend: {
