@@ -192,7 +192,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     downloadedFileAt: async (path) => {
       const listed = await unreadable('downloadedFiles', current.downloadedFiles);
       if (listed.kind === 'unresolved') return { kind: 'unreadable', reason: listed.reason };
-      return { kind: 'read', answer: listed.kind === 'listed' ? listed.files?.find((file) => file.path === path) : undefined };
+      return { kind: 'read', answer: listed.files?.find((file) => file.path === path) };
     },
     sourceMods: () => unreadable('sourceMods', current.sourceMods),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
