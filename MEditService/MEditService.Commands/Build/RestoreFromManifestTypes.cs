@@ -50,7 +50,7 @@ public enum RestoreRefusal
 
 /// <summary>Why a mod was skipped. A NotFound mod names the installation file, the game files and the submodule it lacks, as a
 /// request hands them; a NotBuilt mod, its build's refusal (ADR-0019).</summary>
-public sealed record RestoreSkip(RestoreRefusal Kind, BuildRefusal Build = BuildRefusal.None)
+internal sealed record RestoreSkip(RestoreRefusal Kind, BuildRefusal Build = BuildRefusal.None)
 {
     public string? InstallationFileNotFound { get; init; }
 
@@ -59,8 +59,7 @@ public sealed record RestoreSkip(RestoreRefusal Kind, BuildRefusal Build = Build
     public IReadOnlyList<string> GameFilesNotFound { get; init; } = [];
 }
 
-/// <summary>A mod whose files are as its manifest says: the files written, each file no line names, why the stat cache did
-/// not keep the read, its manifest's metadata, and Uncommitted and LeftDetached from its rebuild.</summary>
-public sealed record RestoredMod(
+/// <summary>What a landed mod's restore made of it, as <see cref="ModRestored"/> says.</summary>
+internal sealed record ModRestoreOutcome(
     IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata, bool Uncommitted = false,
     string? LeftDetached = null);

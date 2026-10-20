@@ -42,6 +42,5 @@ public enum UpdateManifestRefusal
     LeftToItsBuild,
 }
 
-/// <summary>A mod whose manifest is as its folder says. ManifestWritten is false when the manifest was already so.
-/// NotInPackage names each file its package does not hold. StatCacheNotWritten is why the stat cache failed, or null.</summary>
-public sealed record UpdatedMod(bool ManifestWritten, IReadOnlyList<string> NotInPackage, string? StatCacheNotWritten);
+/// <summary>What a landed mod's update made of it, as <see cref="ModUpdated"/> says.</summary>
+internal sealed record ModUpdateOutcome(bool ManifestWritten, IReadOnlyList<string> NotInPackage, string? StatCacheNotWritten);

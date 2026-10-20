@@ -1447,14 +1447,14 @@ export interface components {
             namedByNoLine: string[];
             metadataDiffers: boolean;
         };
-        ModRestoreRefusal: {
-            item: string;
-            refusal: components["schemas"]["RestoreRefusal"];
-            message: string;
-            installationFileNotFound?: string | null;
-            gameFilesNotFound: string[];
-            buildRefusal: components["schemas"]["BuildRefusal"];
-            submoduleNotFound?: string | null;
+        ModRestored: {
+            mod: string;
+            written: string[];
+            namedByNoLine: string[];
+            statCacheNotWritten?: string | null;
+            metadata: components["schemas"]["ModMetadata"];
+            uncommitted: boolean;
+            leftDetached?: string | null;
         };
         ModStatus: {
             mod: string;
@@ -1468,17 +1468,15 @@ export interface components {
             metadataDiffers: boolean;
             noHost: boolean;
         };
-        ModStatusResponse: {
-            mods: components["schemas"]["ModStatus"][];
-        };
         ModUnreadable: {
             manifest: boolean;
             why: string;
         };
-        ModUpdateManifestRefusal: {
-            item: string;
-            refusal: components["schemas"]["UpdateManifestRefusal"];
-            message: string;
+        ModUpdated: {
+            mod: string;
+            manifestWritten: boolean;
+            notInPackage: string[];
+            statCacheNotWritten?: string | null;
         };
         ModlistProgress: {
             gesture?: string | null;
@@ -1753,20 +1751,20 @@ export interface components {
             gameFolder?: components["schemas"]["GameFolderRequest"] | null;
             gesture?: string | null;
         };
-        RestoreFromManifestResponse: {
-            applied: components["schemas"]["RestoredModResponse"][];
-            refused: components["schemas"]["ModRestoreRefusal"][];
+        RestoreFromManifestResult: {
+            applied: components["schemas"]["ModRestored"][];
+            refused: components["schemas"]["RestoreRefused"][];
         };
         /** @enum {string} */
         RestoreRefusal: "None" | "NoManifest" | "ManifestUnreadable" | "Lacking" | "NoHost" | "NotFound" | "Unreadable" | "NotFinished" | "SourceUnavailable" | "SourceAtAnotherCommit" | "NotBuilt";
-        RestoredModResponse: {
-            mod: string;
-            written: string[];
-            namedByNoLine: string[];
-            statCacheNotWritten?: string | null;
-            metadata: components["schemas"]["ModMetadata"];
-            uncommitted: boolean;
-            leftDetached?: string | null;
+        RestoreRefused: {
+            item: string;
+            refusal: components["schemas"]["RestoreRefusal"];
+            message: string;
+            installationFileNotFound?: string | null;
+            gameFilesNotFound: string[];
+            buildRefusal: components["schemas"]["BuildRefusal"];
+            submoduleNotFound?: string | null;
         };
         ScriptCopyRequest: {
             record: components["schemas"]["RecordAt"];
@@ -1822,25 +1820,24 @@ export interface components {
         };
         /** @enum {string} */
         UpdateManifestRefusal: "None" | "InstallationFileMissing" | "ModFolderMissing" | "GameFolderNotFound" | "ModFilesUnreadable" | "NotWritten" | "LeftToItsBuild";
+        UpdateManifestRefused: {
+            item: string;
+            refusal: components["schemas"]["UpdateManifestRefusal"];
+            message: string;
+        };
         UpdateManifestRequest: {
             mods: components["schemas"]["UpdateManifestModRequest"][];
             statCache: string;
             gameFolder?: components["schemas"]["GameFolderRequest"] | null;
             gesture?: string | null;
         };
-        UpdateManifestResponse: {
-            applied: components["schemas"]["UpdatedModResponse"][];
-            refused: components["schemas"]["ModUpdateManifestRefusal"][];
-        };
-        UpdatedModResponse: {
-            mod: string;
-            manifestWritten: boolean;
-            notInPackage: string[];
-            statCacheNotWritten?: string | null;
+        UpdateManifestResult: {
+            applied: components["schemas"]["ModUpdated"][];
+            refused: components["schemas"]["UpdateManifestRefused"][];
         };
         WhatRestoreDestroysResponse: {
             mods: components["schemas"]["ModRestoreDestroys"][];
-            refused: components["schemas"]["ModRestoreRefusal"][];
+            refused: components["schemas"]["RestoreRefused"][];
             manifests: components["schemas"]["ManifestMetadataResponse"][];
         };
         /** @enum {string} */
@@ -2199,7 +2196,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UpdateManifestResponse"];
+                    "application/json": components["schemas"]["UpdateManifestResult"];
                 };
             };
             /** @description Bad Request */
@@ -2232,7 +2229,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RestoreFromManifestResponse"];
+                    "application/json": components["schemas"]["RestoreFromManifestResult"];
                 };
             };
             /** @description Bad Request */
@@ -2298,7 +2295,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ModStatusResponse"];
+                    "application/json": components["schemas"]["ModStatus"][];
                 };
             };
             /** @description Bad Request */

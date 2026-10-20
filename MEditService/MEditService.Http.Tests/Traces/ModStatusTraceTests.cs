@@ -55,7 +55,7 @@ public sealed class ModStatusTraceTests : HostedTests
     {
         var response = await Client.PostAsJsonAsync("/mod-status", new JsonObject { ["mods"] = Mods(), ["statCache"] = StatCache });
         response.EnsureSuccessStatusCode();
-        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("mods").EnumerateArray()
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray()
             .ToDictionary(mod => mod.GetProperty("mod").GetString() ?? "", StringComparer.Ordinal);
     }
 

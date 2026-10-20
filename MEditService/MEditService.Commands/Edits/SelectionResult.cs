@@ -19,14 +19,14 @@ internal sealed class SameRecord : IEqualityComparer<RecordAt>
 
 /// <summary>An item of a selection that wrote, and what the write made of it: a duplicate's
 /// FormKey, a compile's diagnostics, <see cref="NoOutcome"/> for a write that makes nothing.</summary>
-public sealed record ItemLanded<TItem, TOutcome>(TItem Item, TOutcome Outcome);
+internal sealed record ItemLanded<TItem, TOutcome>(TItem Item, TOutcome Outcome);
 
 /// <summary>The outcome of a write that makes nothing.</summary>
 internal readonly record struct NoOutcome;
 
 /// <summary>An item of a selection that wrote nothing, with the typed refusal and the message naming
 /// the way out.</summary>
-public sealed record ItemRefused<TItem, TRefusal>(TItem Item, TRefusal Refusal, string Message);
+internal sealed record ItemRefused<TItem, TRefusal>(TItem Item, TRefusal Refusal, string Message);
 
 /// <summary>A cause no item of a selection escapes.</summary>
 public sealed record SelectionRefusal<TRefusal>(TRefusal Refusal, string Message);
@@ -50,7 +50,7 @@ public interface IItemRefused<out TRefusal>
 /// <summary>A gesture over a selection (commands.md, A selection is one gesture): the items that
 /// landed, each refused item with its reason, and a cause no item escapes as
 /// <see cref="SelectionRefusal"/> (ADR-0019).</summary>
-public sealed class SelectionResult<TItem, TRefusal, TOutcome>
+internal sealed class SelectionResult<TItem, TRefusal, TOutcome>
 {
     private SelectionResult(
         IReadOnlyList<ItemLanded<TItem, TOutcome>> landed, IReadOnlyList<ItemRefused<TItem, TRefusal>> refused,
@@ -64,9 +64,9 @@ public sealed class SelectionResult<TItem, TRefusal, TOutcome>
     internal static SelectionResult<TItem, TRefusal, TOutcome> WholeSelectionRefused(TRefusal refusal, string message) =>
         new([], [], new SelectionRefusal<TRefusal>(refusal, message));
 
-    public IReadOnlyList<ItemLanded<TItem, TOutcome>> Landed { get; }
+    internal IReadOnlyList<ItemLanded<TItem, TOutcome>> Landed { get; }
 
-    public IReadOnlyList<ItemRefused<TItem, TRefusal>> Refused { get; }
+    internal IReadOnlyList<ItemRefused<TItem, TRefusal>> Refused { get; }
 
     internal SelectionRefusal<TRefusal>? SelectionRefusal { get; }
 
@@ -76,6 +76,13 @@ public sealed class SelectionResult<TItem, TRefusal, TOutcome>
         Func<IReadOnlyList<TApplied>, IReadOnlyList<TRefused>, TAnswer> answer)
     {
         if (SelectionRefusal is { } whole) return whole;
-        return answer([.. Landed.Select(applied)], [.. Refused.Select(refused)]);
+        return ToResult(applied, refused, answer);
     }
+
+    /// <summary>For a gesture no cause refuses whole: every item lands or is refused on its own.</summary>
+    internal TAnswer ToResult<TApplied, TRefused, TAnswer>(
+        Func<ItemLanded<TItem, TOutcome>, TApplied> applied,
+        Func<ItemRefused<TItem, TRefusal>, TRefused> refused,
+        Func<IReadOnlyList<TApplied>, IReadOnlyList<TRefused>, TAnswer> answer) =>
+        answer([.. Landed.Select(applied)], [.. Refused.Select(refused)]);
 }
