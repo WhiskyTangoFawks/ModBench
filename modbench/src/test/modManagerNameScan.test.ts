@@ -7,6 +7,7 @@ import ts from 'typescript';
 import { isTestSupport, MO2_CONSTRUCTION as MO2_CONSTRUCTION_SITE, MO2_NAMES, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
+const MANIFEST = join(SRC, '..', 'package.json');
 const ADAPTER = 'instanceAdapter';
 const ADAPTER_INTERFACE = join(ADAPTER, 'instanceAdapter.ts');
 const MO2_CONSTRUCTION = MO2_CONSTRUCTION_SITE.file;
@@ -70,6 +71,10 @@ describe('no extension file names MO2 outside its implementation of the Instance
 
   it('scans clean outside the implementation', () => {
     expect(findOffenders(SOURCE_ROOTS)).toEqual({});
+  });
+
+  it('holds the manifest the user reads to the rule', () => {
+    expect(managerMentions(readFileSync(MANIFEST, 'utf8'))).toEqual([]);
   });
 
   it('scans the implementation\'s files and not its interface\'s, the construction\'s or a neutral file\'s as the implementation', () => {

@@ -236,7 +236,7 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
 
   it('says, in a folder not trusted, that Modbench needs it trusted (story 4)', () => {
     expect(pkg.capabilities.untrustedWorkspaces).toEqual({
-      supported: false, description: 'Modbench writes to your MO2 instance and runs its own service, so it needs the folder trusted.',
+      supported: false, description: "Modbench writes to your mod manager's instance and runs its own service, so it needs the folder trusted.",
     });
   });
 });
