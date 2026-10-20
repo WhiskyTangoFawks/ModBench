@@ -1,9 +1,11 @@
 // What MO2's implementation lets the instance repository hold, and which game files a mod's files take.
 
 import { join } from 'node:path';
+import { errnoCode } from '../errno';
+import { errorMessage } from '../../ports/errorMessage';
 import { exists, ignoreSkippedLink, listEntries, remove, type ResolvedEntry, write } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
-import type { GameFile, InstanceAdapter } from '../instanceAdapter';
+import type { FileRead, GameFile, InstanceAdapter } from '../instanceAdapter';
 import { ignoreListFile, WHITELIST_IGNORE_LIST } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
@@ -14,21 +16,27 @@ const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry>
 
 // The game's folder is as case-sensitive as its file system, and a mod's paths are the game's, which ignores case.
 function caseBlindFinder(dataFolder: string) {
-  const listings = new Map<string, Promise<Map<string, ResolvedEntry>>>();
-  const listingOf = (folder: string): Promise<Map<string, ResolvedEntry>> => {
-    const kept = listings.get(folder) ?? listEntries(folder, ignoreSkippedLink).then(lowerCased, () => new Map<string, ResolvedEntry>());
+  const listings = new Map<string, Promise<FileRead<Map<string, ResolvedEntry>>>>();
+  const listingOf = (folder: string): Promise<FileRead<Map<string, ResolvedEntry>>> => {
+    const kept = listings.get(folder) ?? listEntries(folder, ignoreSkippedLink).then(
+      (entries): FileRead<Map<string, ResolvedEntry>> => ({ kind: 'read', answer: lowerCased(entries) }),
+      (err: unknown): FileRead<Map<string, ResolvedEntry>> => errnoCode(err) === 'ENOENT'
+        ? { kind: 'read', answer: new Map() } : { kind: 'unreadable', reason: errorMessage(err) },
+    );
     listings.set(folder, kept);
     return kept;
   };
-  return async (path: string): Promise<string[] | undefined> => {
+  return async (path: string): Promise<FileRead<string[] | undefined>> => {
     const found: string[] = [];
     const segments = path.split('/');
     for (const [i, segment] of segments.entries()) {
-      const entry = (await listingOf(join(dataFolder, ...found))).get(segment.toLowerCase());
-      if (entry === undefined || entry.isDirectory === (i === segments.length - 1)) return undefined;
+      const listing = await listingOf(join(dataFolder, ...found));
+      if (listing.kind === 'unreadable') return listing;
+      const entry = listing.answer.get(segment.toLowerCase());
+      if (entry === undefined || entry.isDirectory === (i === segments.length - 1)) return { kind: 'read', answer: undefined };
       found.push(entry.name);
     }
-    return found;
+    return { kind: 'read', answer: found };
   };
 }
 
@@ -41,10 +49,12 @@ export function mo2Repository(
     const files = new Map<string, GameFile>();
     for (const modFilePath of modFilePaths) {
       const found = await find(modFilePath);
-      if (found === undefined || files.has(found.join('/').toLowerCase())) continue;
-      const hashed = await gameFileHash(join(dataFolder, ...found));
+      if (found.kind === 'unreadable') return found;
+      const names = found.answer;
+      if (names === undefined || files.has(names.join('/').toLowerCase())) continue;
+      const hashed = await gameFileHash(join(dataFolder, ...names));
       if (hashed.kind === 'unreadable') return hashed;
-      files.set(found.join('/').toLowerCase(), { path: found.join('/'), hash: hashed.answer.hash });
+      files.set(names.join('/').toLowerCase(), { path: names.join('/'), hash: hashed.answer.hash });
     }
     return { kind: 'read', answer: [...files.values()] };
   };
