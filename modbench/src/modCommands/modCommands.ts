@@ -9,7 +9,7 @@ import {
 import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, type EntryKey } from './nameRefusals';
 import type { TailOf } from '../coreLib/boundCommand';
-import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
+import { type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import { isRefused, type MEditClient, type ReadModStatus } from '../client';
 import { installMod, upgradeLoss } from './install';
 export type { SelectionResult };
@@ -185,9 +185,8 @@ async function configureEach(
 
 const notPutBack = (reason: string | undefined): string => (reason === undefined ? '' : ` Its mark could not be taken back: ${reason}`);
 
-// `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own, then a source mod's build
-// configuration written from the paths the adapter answered. A configuration that cannot be written takes its files'
-// marks back, so the folder and the configuration agree.
+// `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked, then a source mod's build configuration
+// written from the paths the adapter answered. A configuration that cannot be written takes its files' marks back.
 async function markFiles(
   { adapter, mEdit }: SourceModWriters, files: readonly OriginFileRef[], mark: OriginFileMark,
 ): Promise<SelectionResult<OriginFileRef>> {
