@@ -315,17 +315,20 @@ public sealed class CreateRecordChangesHandlerTests
     }
 
     [PosixFact]
-    public void CreateRecord_WhenADocumentHoldingTheNextObjectIdCannotBeRead_RefusesAsAParseFailure_NotMintingItAgain()
+    public void CreateRecord_WhenADocumentHoldingTheNextObjectIdCannotBeRead_RefusesAndWritesNothing()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
         var held = Path.Combine(mod.ModFolder, PluginSourceRoot.For(mod.Plugin.Name), "Npcs", "RenamedByHand.json");
         Directory.CreateDirectory(Path.GetDirectoryName(held).Require());
         File.WriteAllText(held, $"{{\"FormKey\": \"{FixtureNextObjectId}\", \"EditorID\": \"Hidden\"}}");
+        var before = SourceModTree.Records(mod.ModFolder, mod.Plugin);
         FileModes.Set(held, "000");
 
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
 
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        FileModes.Set(held, "644");
+        Assert.False(result.Applied);
+        Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
     [Fact]

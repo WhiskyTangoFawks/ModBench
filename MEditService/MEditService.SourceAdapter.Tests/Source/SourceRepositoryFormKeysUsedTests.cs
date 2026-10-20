@@ -71,24 +71,23 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
         Assert.True(repository.FormKeysUsed(Plugin).Value().Contains($"000850:{PluginName}"));
     }
 
-    [PosixFact]
-    public void ADocumentTheTreeListsButCannotRead_StopsFormKeysUsed_NamingIt_RatherThanFreeWhatItHolds()
+    [PosixTheory]
+    [InlineData(Query.FormKeysUsed)]
+    [InlineData(Query.EditorIdsHeld)]
+    public void ADocumentTheTreeListsButCannotRead_StopsTheQuery_NamingIt_RatherThanFreeWhatItHolds(Query query)
     {
         var (repository, relative) = UnreadableDocument();
 
-        var stopped = Assert.IsType<SourceFailure.Unreadable>(repository.FormKeysUsed(Plugin).Stopped());
+        var stopped = Assert.IsType<SourceFailure.Unreadable>(
+            query == Query.FormKeysUsed ? repository.FormKeysUsed(Plugin).Stopped() : repository.EditorIdsHeld(Plugin).Stopped());
 
         Assert.Equal(relative, stopped.File?.SourceRelativePath);
     }
 
-    [PosixFact]
-    public void ADocumentTheTreeListsButCannotRead_StopsEditorIdsHeld_NamingIt_RatherThanFreeWhatItHolds()
+    public enum Query
     {
-        var (repository, relative) = UnreadableDocument();
-
-        var stopped = Assert.IsType<SourceFailure.Unreadable>(repository.EditorIdsHeld(Plugin).Stopped());
-
-        Assert.Equal(relative, stopped.File?.SourceRelativePath);
+        FormKeysUsed,
+        EditorIdsHeld,
     }
 
     [Fact]

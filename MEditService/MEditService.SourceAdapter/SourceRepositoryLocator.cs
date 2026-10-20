@@ -472,7 +472,8 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         var documents = new List<SourceDocument>();
         foreach (var path in _files.FilesIn(root, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories))
         {
-            if (DocumentText.ReadListed(_files, _sourceFolder, path) is not { } text) continue;
+            if (ListedBytes(path) is not { } bytes) continue;
+            var text = Encoding.UTF8.GetString(bytes);
             var relativePath = Path.GetRelativePath(_sourceFolder, path);
             RequireParsedFormKey(relativePath, text, plugin.Name);
             if (ReadableDocumentAt(relativePath, text, plugin.Name) is not { } document) continue;
@@ -484,6 +485,20 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
             documents.Add(document);
         }
         return documents;
+    }
+
+    // A file the listing named that is gone is no document; one that is there and unreadable still
+    // holds its keys, so it stops the read.
+    private byte[]? ListedBytes(string path)
+    {
+        try
+        {
+            return DocumentText.BytesIfPresent(_files, path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw SourceStopException.UnreadableIn(_sourceFolder, path, "it could not be read");
+        }
     }
 
     internal void RequireParsedFormKey(string relativePath, string text, string pluginFileName)

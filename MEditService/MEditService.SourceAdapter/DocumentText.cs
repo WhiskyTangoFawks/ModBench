@@ -6,7 +6,8 @@ using Mutagen.Bethesda;
 namespace MEditService.SourceAdapter;
 
 /// <summary>What a document's text and bytes declare, read as text rather than through the codec. A
-/// file may vanish or lock since a listing named it, so a failed read answers null.</summary>
+/// file may vanish or lock since a listing named it: the OrNull readers answer null for either, and
+/// <see cref="BytesIfPresent"/> for a vanished file alone.</summary>
 internal static class DocumentText
 {
     private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
@@ -14,11 +15,25 @@ internal static class DocumentText
     internal static byte[] StripUtf8Bom(byte[] bytes) =>
         bytes.AsSpan(0, Math.Min(bytes.Length, Utf8Bom.Length)).SequenceEqual(Utf8Bom) ? bytes[Utf8Bom.Length..] : bytes;
 
+    /// <summary>The file's bytes: null when it is gone, and the file system's exception when it is there
+    /// and cannot be read.</summary>
+    internal static byte[]? BytesIfPresent(ISourceFiles files, string path)
+    {
+        try
+        {
+            return StripUtf8Bom(files.ReadAllBytes(path));
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
+    }
+
     internal static byte[]? BytesOrNull(ISourceFiles files, string path)
     {
         try
         {
-            return files.FileExists(path) ? StripUtf8Bom(files.ReadAllBytes(path)) : null;
+            return BytesIfPresent(files, path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -28,20 +43,6 @@ internal static class DocumentText
 
     internal static string? ReadOrNull(ISourceFiles files, string path) =>
         BytesOrNull(files, path) is { } bytes ? Encoding.UTF8.GetString(bytes) : null;
-
-    /// <summary>The text of a file a listing named: null when it is gone, and a stop naming it when
-    /// it is there and cannot be read, for what it holds is still held.</summary>
-    internal static string? ReadListed(ISourceFiles files, string sourceFolder, string path)
-    {
-        try
-        {
-            return files.FileExists(path) ? Encoding.UTF8.GetString(StripUtf8Bom(files.ReadAllBytes(path))) : null;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            throw SourceStopException.UnreadableIn(sourceFolder, path, $"it could not be read: {ex.Message}");
-        }
-    }
 
     /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
     /// owner's, since the file is the owner's document. Null when it cannot be read or declares
