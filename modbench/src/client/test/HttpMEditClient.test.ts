@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { leveledLog } from '../../test/leveledLog';
 import { createMEditClient } from '../HttpMEditClient';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
-import { Readable } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
 import { restoredMod } from '../../test/restoredMod';
 
@@ -848,10 +848,8 @@ describe('HttpMEditClient — sendLoadOrder', () => {
         req.signal.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')));
       })],
     ]);
-    const child = Object.assign(new EventEmitter(), {
-      kill: () => undefined,
-      stdin: { end: () => { abortedAtKill = putSignal?.aborted; child.emit('exit', 0); } },
-    });
+    const child = Object.assign(new EventEmitter(), { kill: () => undefined, stdin: new PassThrough() });
+    child.stdin.on('finish', () => { abortedAtKill = putSignal?.aborted; child.emit('exit', 0); });
     const client = createMEditClient({
       backend: {
         freePort: () => Promise.resolve(5172), spawn: () => child, executablePath: '/x/backend',
