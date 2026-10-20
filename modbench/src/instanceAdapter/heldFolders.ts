@@ -85,9 +85,9 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
 
   const passedOver = (folder: string): boolean => !isOpen || watched.has(folder);
 
-  // A folder gone is not a failure; any other reason a folder cannot be read leaves it unheard.
+  // A folder gone, or made a file, is not a failure; any other reason a folder cannot be read leaves it unheard.
   const unlessGone = <T>(folder: string, instead: T) => (error: unknown): T => {
-    if (errnoCode(error) !== 'ENOENT') fail(folder, error);
+    if (!['ENOENT', 'ENOTDIR'].includes(errnoCode(error) ?? '')) fail(folder, error);
     return instead;
   };
 
