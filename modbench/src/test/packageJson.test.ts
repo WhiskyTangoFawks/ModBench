@@ -775,7 +775,7 @@ describe('package.json Downloads row menu order', () => {
     expect(offeredIn(downloadedFileRowMenu(), { view: 'modbench.downloads', viewItem })).toEqual(commands);
   });
 
-  it('orders the row in strictly increasing slots: install, view on Nexus, open, open .meta, exclude/include sharing one, copy value, delete', () => {
+  it('orders the row in strictly increasing slots: install, view on Nexus, open, open metadata, exclude/include sharing one, copy value, delete', () => {
     const entries = downloadedFileRowMenu();
     const slotOf = (command: string): number => {
       const group = present(entries.find((e) => e.command === command), `a ${command} row-menu entry`).group ?? '';
@@ -1324,6 +1324,8 @@ describe('package.json registers every command under its catalog Command ID', ()
   });
 });
 
+const TITLE_WORD_OF: Record<string, string> = { meta: 'metadata' };
+
 const wordsOf = (camel: string): string[] => camel.split(/(?=[A-Z])/).map((w) => w.toLowerCase());
 
 function expectTitleNamesVerbAndObject(id: string, title: string): void {
@@ -1337,7 +1339,8 @@ function expectTitleNamesVerbAndObject(id: string, title: string): void {
   const titleWords = title.replace('…', '').toLowerCase().split(/\s+/);
   const objectWords = wordsOf(object);
   const noun = present(objectWords.pop(), `the noun of ${object}`);
-  expect(titleWords, `the title of ${id} names the verb`).toEqual(expect.arrayContaining(wordsOf(verb)));
+  const verbWordsInTitle = wordsOf(verb).map((w) => TITLE_WORD_OF[w] ?? w);
+  expect(titleWords, `the title of ${id} names the verb`).toEqual(expect.arrayContaining(verbWordsInTitle));
   expect(titleWords, `the title of ${id} names the object`).toEqual(expect.arrayContaining(objectWords));
   expect(titleWords.some((w) => w === noun || w === `${noun}s`), `the title of ${id} names the ${noun}`).toBe(true);
 }

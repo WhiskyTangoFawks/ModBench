@@ -5,7 +5,7 @@ import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from '../
 const metaOf = (fields: Partial<DownloadMeta> = {}): DownloadMeta => ({ status: 'Downloaded', ...fields });
 
 const file = (name: string, mtimeMs: number, meta?: DownloadMeta, excluded = false): DownloadedFile => ({
-  name, path: `/downloads/${name}`, metaPath: `/downloads/${name}.meta`, size: 123, mtimeMs, excluded, meta,
+  name, path: `/downloads/${name}`, metadataPath: `/downloads/${name}.meta`, size: 123, mtimeMs, excluded, meta,
 });
 
 function soleRow(rows: readonly DownloadFile[]): DownloadFile {
@@ -29,7 +29,7 @@ describe('buildDownloadRows', () => {
       excluded: false,
       upgrades: [],
       path: '/downloads/foo.zip',
-      sidecarPath: '/downloads/foo.zip.meta',
+      metadataPath: '/downloads/foo.zip.meta',
     }]);
   });
 
