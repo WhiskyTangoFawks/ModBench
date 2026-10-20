@@ -47,10 +47,14 @@ async function pageChanges(carried: MetaIni, page: string, context: Mo2Context):
   if (gameName === undefined) return { unwritable: `its page names the Nexus game '${nexus.game}', which Modbench has no game for` };
   const carriedFile = installedFileOf(carried);
   const sameFile = nexus.fileId === undefined ? carriedFile === undefined : carriedFile?.fileId === nexus.fileId && carriedFile.nexusId === nexus.modId;
+  const installedFiles = sameFile ? carried.installedFiles : nexus.fileId === undefined ? undefined : [{ nexusId: nexus.modId, fileId: nexus.fileId }];
+  const answered = (await nexusPageOf({ ...carried, installedFiles }, context)).page;
+  const agrees = answered === formatNexusPage(nexus);
+  const heldGame = carried.gameName ?? readGameName(await get(settingsFile(context.instanceRoot)));
   return {
-    ...(carried.gameName !== undefined && nexusDomainForMetaGame(carried.gameName) === nexus.game ? {} : { gameName }),
-    ...(nexus.modId === carried.nexusId ? {} : { nexusId: nexus.modId }),
-    ...(sameFile ? {} : { installedFiles: nexus.fileId === undefined ? undefined : [{ nexusId: nexus.modId, fileId: nexus.fileId }] }),
+    ...(nexusDomainForMetaGame(heldGame) === nexus.game ? {} : { gameName }),
+    ...((agrees && sameFile) || nexus.modId === carried.nexusId ? {} : { nexusId: nexus.modId }),
+    ...(sameFile ? {} : { installedFiles }),
   };
 }
 
