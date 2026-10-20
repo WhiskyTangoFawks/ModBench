@@ -67,10 +67,10 @@ internal static class Indexes
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         ISourceAdapter? source = null) =>
-        Reconciled(fixture.GameDirectory, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications, source);
+        Reconciled(fixture.DataFolder, fixture.Plugins, instanceRoot, adapter, loggerFactory, notifications, source);
 
     internal static OpenedIndex Reconciled(
-        string gameDirectory,
+        string dataFolder,
         IReadOnlyList<LoadOrderEntry> plugins,
         string? instanceRoot = null,
         IPluginAdapter? adapter = null,
@@ -80,7 +80,7 @@ internal static class Indexes
     {
         var holder = new LoadOrderHolder();
         var index = Open(holder, adapter, loggerFactory, notifications, source: source);
-        index.Reconcile(holder, gameDirectory, plugins, GameRelease.Fallout4, instanceRoot);
+        index.Reconcile(holder, dataFolder, plugins, GameRelease.Fallout4, instanceRoot);
         // The door turns a refusal into status; a fixture built over one is not the fixture asked for.
         if (index.Status.State is LoadOrderState.HeldElsewhere or LoadOrderState.Failed)
         {

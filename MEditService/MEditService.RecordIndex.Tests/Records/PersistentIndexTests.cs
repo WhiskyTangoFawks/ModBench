@@ -10,12 +10,12 @@ namespace MEditService.RecordIndex.Tests.Records;
 public sealed class PersistentIndexTests : IDisposable
 {
     private readonly ScratchDirectory _root = new("medit-index-");
-    private readonly string _gameDirectory;
+    private readonly string _dataFolder;
     private readonly string _instanceRoot;
 
     public PersistentIndexTests()
     {
-        _gameDirectory = Directory.CreateDirectory(Path.Combine(_root.Path, "GameDir")).FullName;
+        _dataFolder = Directory.CreateDirectory(Path.Combine(_root.Path, "Data")).FullName;
         _instanceRoot = Directory.CreateDirectory(Path.Combine(_root.Path, "instance")).FullName;
     }
 
@@ -34,12 +34,12 @@ public sealed class PersistentIndexTests : IDisposable
 
     private sealed class Launch : IDisposable
     {
-        public Launch(string gameDirectory, string instanceRoot, IReadOnlyList<LoadOrderEntry> plugins, DiskSaysAdapter? disk)
+        public Launch(string dataFolder, string instanceRoot, IReadOnlyList<LoadOrderEntry> plugins, DiskSaysAdapter? disk)
         {
             var holder = new LoadOrderHolder();
             Opens = new GatedPluginAdapter(inner: disk);
             Index = Indexes.Open(holder, Opens);
-            Index.Reconcile(holder, gameDirectory, plugins, GameRelease.Fallout4, instanceRoot);
+            Index.Reconcile(holder, dataFolder, plugins, GameRelease.Fallout4, instanceRoot);
         }
 
         public OpenedIndex Index { get; }
@@ -53,7 +53,7 @@ public sealed class PersistentIndexTests : IDisposable
     }
 
     private Launch Launched(IReadOnlyList<LoadOrderEntry> plugins, DiskSaysAdapter? disk = null) =>
-        new(_gameDirectory, _instanceRoot, plugins, disk);
+        new(_dataFolder, _instanceRoot, plugins, disk);
 
     [Fact]
     public void TheIndexFile_HoldsDuckDbToAGigabyte_WhateverTheMachineHas()
@@ -74,7 +74,7 @@ public sealed class PersistentIndexTests : IDisposable
         Directory.Move(_instanceRoot, moved);
         var movedAlpha = alpha with { Path = alpha.Path.Replace(_instanceRoot, moved, StringComparison.Ordinal) };
 
-        using var second = new Launch(_gameDirectory, moved, [movedAlpha], disk: null);
+        using var second = new Launch(_dataFolder, moved, [movedAlpha], disk: null);
 
         Assert.Equal(0, second.Opens.OpenedTotal);
         Assert.NotEmpty(second.Index.ListedIn(movedAlpha.KeyOf()));

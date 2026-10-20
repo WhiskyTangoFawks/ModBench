@@ -82,7 +82,7 @@ public sealed class HeldPluginsTests
         var overridden = fx.Plugins.Single(p => p.Origin == "ModB");
         File.WriteAllBytes(overridden.Path, [0xDE, 0xAD, 0xBE, 0xEF]);
 
-        using var held = Indexes.Reconciled(fx.GameDirectory, [winner, overridden]);
+        using var held = Indexes.Reconciled(fx.DataFolder, [winner, overridden]);
 
         Assert.Equal("ModA", Assert.Single(Opened(held).Keys).Origin);
         var failure = Assert.Single(held.Status.Failures);

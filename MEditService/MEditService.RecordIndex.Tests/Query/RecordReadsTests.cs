@@ -206,7 +206,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
 
         foreach (var winner in new[] { "ModA", "ModB" })
         {
-            var stack = index.WithWinner(holder, fixture.GameDirectory, fixture.Plugins, winner).StackOf(npcFormKey.ToString());
+            var stack = index.WithWinner(holder, fixture.DataFolder, fixture.Plugins, winner).StackOf(npcFormKey.ToString());
             Assert.Equal(winner, Assert.Single(stack).Origin);
         }
     }

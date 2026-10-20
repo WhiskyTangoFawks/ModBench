@@ -34,7 +34,7 @@ public sealed class ValidationFaultTests : IDisposable
     {
         var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
         var index = Indexes.Open(_holder, loggerFactory: _loggerFactory, notifications: notifications, timeProvider: clock);
-        index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         return index;
     }
 

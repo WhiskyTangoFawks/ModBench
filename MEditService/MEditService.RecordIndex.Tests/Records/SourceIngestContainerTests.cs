@@ -11,7 +11,7 @@ public sealed class SourceIngestContainerTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private OpenedIndex Reloaded() => Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
+    private OpenedIndex Reloaded() => Indexes.Reconciled(_fixture.DataFolder, [_fixture.Entry]);
 
     private SourceProblem TheOneSourceProblemOf(OpenedIndex index)
     {

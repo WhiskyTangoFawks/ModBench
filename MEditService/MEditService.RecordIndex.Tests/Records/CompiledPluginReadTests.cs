@@ -19,7 +19,7 @@ public sealed class CompiledPluginReadTests : IDisposable
     {
         SourceMods.Init(_fixture.Plugins.Single(p => p.Name == CompiledPlugin.Name));
         _index = Indexes.Open(_holder);
-        _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
+        _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
     }
 
     public void Dispose()
@@ -50,7 +50,7 @@ public sealed class CompiledPluginReadTests : IDisposable
     public void ALoadOrderNamingACompiledPluginInAnotherCase_StillReadsItAsDerivedFromItsTree()
     {
         var recased = new PluginAddress("COMPILEDPLUGIN.ESP", "sourcemod");
-        _index.Reconcile(_holder, _fixture.GameDirectory,
+        _index.Reconcile(_holder, _fixture.DataFolder,
             [.. _fixture.Plugins.Select(p => p.Name == CompiledPlugin.Name ? p with { Name = recased.Name, Origin = recased.Origin } : p)],
             GameRelease.Fallout4);
 
@@ -60,7 +60,7 @@ public sealed class CompiledPluginReadTests : IDisposable
     [Fact]
     public void ACompiledPluginTheSnapshotStoppedNaming_IsAbsent()
     {
-        _index.Reconcile(_holder, _fixture.GameDirectory, [.. _fixture.Plugins.Where(p => p.Name != CompiledPlugin.Name)], GameRelease.Fallout4);
+        _index.Reconcile(_holder, _fixture.DataFolder, [.. _fixture.Plugins.Where(p => p.Name != CompiledPlugin.Name)], GameRelease.Fallout4);
 
         Assert.Null(_index.PluginResponseOf(CompiledPlugin));
     }

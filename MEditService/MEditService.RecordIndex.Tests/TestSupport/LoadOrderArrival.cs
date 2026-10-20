@@ -11,10 +11,10 @@ namespace MEditService.RecordIndex.Tests;
 internal static class LoadOrderArrival
 {
     internal static LoadOrderHolder Reconcile(
-        this OpenedIndex index, LoadOrderHolder holder, string gameDirectory,
+        this OpenedIndex index, LoadOrderHolder holder, string dataFolder,
         IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null)
     {
-        index.Receive(holder, Snapshot(gameDirectory, instanceRoot, gameRelease, plugins));
+        index.Receive(holder, Snapshot(dataFolder, instanceRoot, gameRelease, plugins));
         return holder;
     }
 
@@ -30,8 +30,8 @@ internal static class LoadOrderArrival
     }
 
     internal static LoadOrderSnapshot Snapshot(
-        string gameDirectory, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> plugins) =>
-        SnapshotPlugins.Snapshot(gameDirectory, instanceRoot, gameRelease, plugins);
+        string dataFolder, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> plugins) =>
+        SnapshotPlugins.Snapshot(dataFolder, instanceRoot, gameRelease, plugins);
 
     internal static void AwaitVersion(this OpenedIndex index, long version) =>
         Waits.Reached(() => index.Status.Version >= version, $"the status answering version {version}");

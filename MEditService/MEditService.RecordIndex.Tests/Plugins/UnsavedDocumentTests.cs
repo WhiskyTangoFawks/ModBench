@@ -143,7 +143,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         using var reopened = Indexes.Open(holder);
         reopened.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved"))]);
 
-        reopened.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        reopened.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
         Assert.True(reopened.ReadFromItsPluginSource(_compiledPlugin.KeyOf()));
         Assert.Equal(Relative(_file), Assert.Single(LaterReadFailureOf(reopened) ?? []).SourceRelativePath);

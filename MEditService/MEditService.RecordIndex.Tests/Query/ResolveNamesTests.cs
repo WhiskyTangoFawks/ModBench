@@ -157,7 +157,7 @@ public class ResolveNamesTests(TestPluginFixture fixture)
     {
         var holder = new LoadOrderHolder();
         using var shared = SharedFilename("names-renamed");
-        using var index = Indexes.Open(holder).WithWinner(holder, shared.GameDirectory, shared.Plugins, "ModA");
+        using var index = Indexes.Open(holder).WithWinner(holder, shared.DataFolder, shared.Plugins, "ModA");
 
         var named = Assert.Single(index.Queries.ResolveNames([Name("FromModA")]).Value());
 
@@ -171,7 +171,7 @@ public class ResolveNamesTests(TestPluginFixture fixture)
     {
         var holder = new LoadOrderHolder();
         using var shared = SharedFilename("names-winner-changes");
-        using var index = Indexes.Open(holder).WithWinner(holder, shared.GameDirectory, shared.Plugins, "ModB");
+        using var index = Indexes.Open(holder).WithWinner(holder, shared.DataFolder, shared.Plugins, "ModB");
 
         var named = Assert.Single(index.Queries.ResolveNames([Name("FromModB")]).Value());
 
@@ -185,7 +185,7 @@ public class ResolveNamesTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         using var shared = SharedFilename("names-inactive");
         using var index = Indexes.Open(holder);
-        index.Reconcile(holder, shared.GameDirectory, [.. shared.Plugins.Select(p => p with { Enabled = false })], GameRelease.Fallout4);
+        index.Reconcile(holder, shared.DataFolder, [.. shared.Plugins.Select(p => p with { Enabled = false })], GameRelease.Fallout4);
 
         Assert.Equal("FromModA", Assert.Single(index.Queries.ResolveNames([Name("FromModA")]).Value()).EditorId);
         Assert.Equal(IndexRefusal.NameRefused, index.Queries.ResolveNames([Name("FromModB")]).Refused().Refusal);
@@ -198,7 +198,7 @@ public class ResolveNamesTests(TestPluginFixture fixture)
         using var shared = SharedFilename("names-active-over-inactive");
         using var index = Indexes.Open(holder);
         index.Reconcile(
-            holder, shared.GameDirectory,
+            holder, shared.DataFolder,
             [.. shared.Plugins.Select(p => p with { Enabled = p.Origin == "ModB", Winning = p.Origin == "ModB" })], GameRelease.Fallout4);
 
         Assert.Equal("FromModB", Assert.Single(index.Queries.ResolveNames([Name("FromModB")]).Value()).EditorId);

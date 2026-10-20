@@ -77,7 +77,7 @@ public sealed class PluginAddressComparisonTests : IDisposable
         var entry = _fixture.Plugins.Single();
         Indexes.Reconciled(_fixture, _fixture.InstanceRoot).Dispose();
 
-        using var reopened = Indexes.Reconciled(_fixture.GameDirectory,
+        using var reopened = Indexes.Reconciled(_fixture.DataFolder,
             [entry with { Name = OtherCase.Name, Origin = OtherCase.Origin }], _fixture.InstanceRoot);
 
         Assert.Equal(1, reopened.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Total);

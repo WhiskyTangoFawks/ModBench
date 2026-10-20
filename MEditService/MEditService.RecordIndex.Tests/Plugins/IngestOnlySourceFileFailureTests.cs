@@ -9,7 +9,7 @@ public sealed class IngestOnlySourceFileFailureTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private OpenedIndex Reloaded() => Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
+    private OpenedIndex Reloaded() => Indexes.Reconciled(_fixture.DataFolder, [_fixture.Entry]);
 
     private static bool AProblemIsNamed(OpenedIndex index) => index.Queries.GetProblems().Value() is [{ Problems: [_, ..] }];
 

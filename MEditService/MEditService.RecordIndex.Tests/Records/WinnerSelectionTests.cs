@@ -43,7 +43,7 @@ public sealed class WinnerSelectionTests : IDisposable
     }
 
     private void Reconcile(IReadOnlyList<LoadOrderEntry> plugins) =>
-        _index.Reconcile(_holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4);
+        _index.Reconcile(_holder, _fixture.DataFolder, plugins, GameRelease.Fallout4);
 
     private PluginAddress? WinnerOf(string formKey) =>
         _index.Queries.GetRecord(formKey).Value() is { } winner ? new PluginAddress(winner.Plugin, winner.Origin) : null;

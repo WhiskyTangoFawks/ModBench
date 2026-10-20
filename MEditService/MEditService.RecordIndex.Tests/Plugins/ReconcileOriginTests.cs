@@ -19,7 +19,7 @@ public sealed class ReconcileOriginTests
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
         using var index = OpenIndex(holder);
-        index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, withOrigin, GameRelease.Fallout4);
 
         var opened = index.Queries.GetPlugins().Value().Single(row => row.Name == "A.esp");
         Assert.Equal("SomeMod", opened.Origin);
@@ -35,7 +35,7 @@ public sealed class ReconcileOriginTests
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
         using var index = OpenIndex(holder);
-        index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, withOrigin, GameRelease.Fallout4);
 
         var result = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value();
 

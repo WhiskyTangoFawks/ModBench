@@ -18,7 +18,7 @@ public sealed class SequenceTrailsAnnouncementTests : IDisposable
     private volatile bool _holding;
     private readonly LoadOrderHolder _holder = new();
     private readonly OpenedIndex _index;
-    private readonly ScratchDirectory _gameDirectory = new("medit-trail-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-trail-data-");
     private readonly ScratchDirectory _instanceRoot = new("medit-trail-instance-");
     private readonly string _pluginPath;
 
@@ -34,7 +34,7 @@ public sealed class SequenceTrailsAnnouncementTests : IDisposable
     {
         _released.TrySetResult();
         _index.Dispose();
-        _gameDirectory.Dispose();
+        _dataFolder.Dispose();
         _instanceRoot.Dispose();
     }
 
@@ -45,7 +45,7 @@ public sealed class SequenceTrailsAnnouncementTests : IDisposable
         mod.Npcs.AddNew("WatchedNpc");
         mod.WriteToBinary(_pluginPath);
         var entry = new LoadOrderEntry(PluginName, _pluginPath, Origin, 0, Enabled: true, Winning: true);
-        _index.Reconcile(_holder, _gameDirectory, [entry], GameRelease.Fallout4, _instanceRoot);
+        _index.Reconcile(_holder, _dataFolder, [entry], GameRelease.Fallout4, _instanceRoot);
         var before = _index.Sequence;
         _released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 

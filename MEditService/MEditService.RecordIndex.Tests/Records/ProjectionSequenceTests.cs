@@ -46,7 +46,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     }
 
     private void Reconcile(IReadOnlyList<LoadOrderEntry> plugins) =>
-        _index.Reconcile(_holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4);
+        _index.Reconcile(_holder, _fixture.DataFolder, plugins, GameRelease.Fallout4);
 
     [Fact]
     public void FreshIndex_SequenceIsZero() => Assert.Equal(0, _index.Sequence);

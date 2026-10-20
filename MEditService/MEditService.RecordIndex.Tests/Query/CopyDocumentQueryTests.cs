@@ -62,7 +62,7 @@ public sealed class CopyDocumentQueryTests : IDisposable
     public void ACompiledPluginCopyInAPluginThatIsNotActive_IsItsFile()
     {
         SourceMods.Init(Entry);
-        using var index = Indexes.Reconciled(_fixture.GameDirectory, [Entry with { Enabled = false }]);
+        using var index = Indexes.Reconciled(_fixture.DataFolder, [Entry with { Enabled = false }]);
 
         Assert.Equal(new CopyDocument(CopyDocumentKind.OwnFile, NpcFile), index.Queries.GetCopyDocument(Plugin, Npc).Value());
     }

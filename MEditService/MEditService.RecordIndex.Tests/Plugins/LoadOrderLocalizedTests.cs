@@ -63,10 +63,10 @@ public sealed class LoadOrderLocalizedTests
         {
             var overwriteFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
             File.WriteAllBytes(Path.Combine(overwriteFolder, "UnrelatedMod - Main.ba2"), []);
-            Assert.False(Directory.Exists(Path.Combine(fx.GameDirectory, "Strings")), "the fixture must carry no Data/Strings to fall back to");
+            Assert.False(Directory.Exists(Path.Combine(fx.DataFolder, "Strings")), "the fixture must carry no Data/Strings to fall back to");
 
             using var index = Indexes.Open(holder);
-            index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+            index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
 
             Assert.Empty(index.Status.Failures);
 
@@ -314,7 +314,7 @@ public sealed class LoadOrderLocalizedTests
         index.Settled();
         var before = index.Sequence;
 
-        index.Receive(index.Holder, SnapshotPlugins.Snapshot(fx.GameDirectory, null, GameRelease.Fallout4, fx.Plugins, stringsLanguage: Language.German));
+        index.Receive(index.Holder, SnapshotPlugins.Snapshot(fx.DataFolder, null, GameRelease.Fallout4, fx.Plugins, stringsLanguage: Language.German));
 
         Waits.Reached(() => index.Sequence > before, "the sequence moving");
     }

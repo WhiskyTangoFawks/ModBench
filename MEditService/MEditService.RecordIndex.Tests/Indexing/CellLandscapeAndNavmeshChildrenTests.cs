@@ -93,11 +93,11 @@ public sealed class CellLandscapeAndNavmeshChildrenTests : IDisposable
 
         Assert.Equal(
             ["land"],
-            index.WithWinner(holder, plugins.GameDirectory, plugins.Plugins, first.Origin)
+            index.WithWinner(holder, plugins.DataFolder, plugins.Plugins, first.Origin)
                 .Queries.GetCellChildRecords(first, cellKey).Value().Temporary.Select(t => t.RecordType));
         Assert.Equal(
             ["land", "navm"],
-            index.WithWinner(holder, plugins.GameDirectory, plugins.Plugins, second.Origin)
+            index.WithWinner(holder, plugins.DataFolder, plugins.Plugins, second.Origin)
                 .Queries.GetCellChildRecords(second, cellKey).Value().Temporary.Select(t => t.RecordType));
     }
 

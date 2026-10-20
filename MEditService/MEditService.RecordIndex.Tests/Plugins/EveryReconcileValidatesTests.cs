@@ -50,7 +50,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     private void Reconcile() =>
-        _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
     private void ArrivalAnnouncing(Predicate<INotification> announced)
     {
@@ -107,7 +107,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         using (new FileStream(_nonCompiledPlugin.Path, FileMode.Open, FileAccess.Read, FileShare.None))
             Assert.NotNull(_disk.HashOf(_nonCompiledPlugin.Path));
 
-        _index.Reconcile(_holder, _fixture.GameDirectory, [_compiledPlugin], GameRelease.Fallout4, _fixture.InstanceRoot);
+        _index.Reconcile(_holder, _fixture.DataFolder, [_compiledPlugin], GameRelease.Fallout4, _fixture.InstanceRoot);
 
         using var held = new FileStream(_nonCompiledPlugin.Path, FileMode.Open, FileAccess.Read, FileShare.None);
         Assert.Null(_disk.HashOf(_nonCompiledPlugin.Path));
@@ -191,7 +191,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         loose.Npcs.AddNew("LooseNpc");
         loose.WriteToBinary(loosePath);
         LoadOrderEntry[] plugins = [.. _fixture.Plugins, new("Loose.esp", loosePath, _compiledPlugin.Origin, 2, Enabled: true, Winning: true)];
-        _index.Reconcile(_holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        _index.Reconcile(_holder, _fixture.DataFolder, plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         Assert.Contains(
             _index.ListedIn(new PluginAddress("Loose.esp", _compiledPlugin.Origin)), row => row.EditorId == "LooseNpc");
 
@@ -267,10 +267,10 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         ];
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
-        index.Reconcile(holder, _fixture.GameDirectory, NamingSourceFolder(null), GameRelease.Fallout4);
+        index.Reconcile(holder, _fixture.DataFolder, NamingSourceFolder(null), GameRelease.Fallout4);
         SourceMods.Init(_nonCompiledPlugin);
 
-        index.Reconcile(holder, _fixture.GameDirectory, NamingSourceFolder(folder), GameRelease.Fallout4);
+        index.Reconcile(holder, _fixture.DataFolder, NamingSourceFolder(folder), GameRelease.Fallout4);
 
         Assert.True(index.ReadFromItsPluginSource(_nonCompiledPlugin.KeyOf()));
     }

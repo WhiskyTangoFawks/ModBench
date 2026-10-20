@@ -11,9 +11,9 @@ internal static class WinningCopies
     /// filename that wins it. Reconciles <paramref name="plugins"/> with <paramref name="origin"/>'s
     /// copies winning.</summary>
     internal static OpenedIndex WithWinner(
-        this OpenedIndex index, LoadOrderHolder holder, string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, string origin)
+        this OpenedIndex index, LoadOrderHolder holder, string dataFolder, IReadOnlyList<LoadOrderEntry> plugins, string origin)
     {
-        index.Reconcile(holder, gameDirectory, Winning(plugins, origin), GameRelease.Fallout4);
+        index.Reconcile(holder, dataFolder, Winning(plugins, origin), GameRelease.Fallout4);
         return index;
     }
 

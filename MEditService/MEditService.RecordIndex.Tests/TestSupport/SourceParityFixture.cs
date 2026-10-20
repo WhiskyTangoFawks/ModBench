@@ -12,7 +12,7 @@ public sealed class SourceParityFixture : IDisposable
     private readonly ScratchDirectory _modFolder = new("medit-source-parity-");
     private readonly ScratchDirectory _binaryInstance = new("medit-source-parity-binary-");
     private readonly ScratchDirectory _sourceInstance = new("medit-source-parity-source-");
-    private readonly ScratchDirectory _game = new("medit-source-parity-game-");
+    private readonly ScratchDirectory _data = new("medit-source-parity-data-");
 
     public string ModFolder => _modFolder.Path;
 
@@ -25,7 +25,7 @@ public sealed class SourceParityFixture : IDisposable
 
     public PluginAddress Plugin { get; } = new(RealDataPlugin.PluginFileName, Origin);
 
-    private string _gameDirectory => _game.Path;
+    private string _dataFolder => _data.Path;
 
     public SourceParityFixture()
     {
@@ -39,7 +39,7 @@ public sealed class SourceParityFixture : IDisposable
 
     private OpenedIndex NewIndex(string pluginPath, string instanceRoot) =>
         Indexes.Reconciled(
-            _gameDirectory,
+            _dataFolder,
             [new LoadOrderEntry(RealDataPlugin.PluginFileName, pluginPath, Origin, Line: 0, Enabled: true, Winning: true)],
             instanceRoot);
 
@@ -48,7 +48,7 @@ public sealed class SourceParityFixture : IDisposable
         FromSource.Dispose();
         FromBinary.Dispose();
         _modFolder.Dispose();
-        _game.Dispose();
+        _data.Dispose();
         _binaryInstance.Dispose();
         _sourceInstance.Dispose();
     }
