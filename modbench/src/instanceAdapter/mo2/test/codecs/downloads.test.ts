@@ -74,8 +74,8 @@ describe('setInstalledInText', () => {
 
   it('clears an earlier uninstall, so a reinstalled download reads Installed again, MO2\'s markInstalled writing uninstalled=false beside installed=true and a reader taking uninstalled first', () => {
     const uninstalled = setUninstalledInText('[General]\r\ninstalled=true\r\n');
-    expect(parseDownloadMeta(uninstalled).status).toBe('Uninstalled');
-    expect(parseDownloadMeta(setInstalledInText(uninstalled)).status).toBe('Installed');
+    expect(metaOf(uninstalled).status).toBe('Uninstalled');
+    expect(metaOf(setInstalledInText(uninstalled)).status).toBe('Installed');
   });
 
 });
