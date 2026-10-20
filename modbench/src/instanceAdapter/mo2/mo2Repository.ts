@@ -1,6 +1,8 @@
 // What MO2's implementation lets the instance repository hold, and which game files a mod's files take.
 
 import { join } from 'node:path';
+import { errnoCode } from '../errno';
+import { errorMessage } from '../../ports/errorMessage';
 import { exists, ignoreSkippedLink, listEntries, remove, type ResolvedEntry, write } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
 import type { GameFile, InstanceAdapter } from '../instanceAdapter';
@@ -16,7 +18,10 @@ const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry>
 function caseBlindFinder(dataFolder: string) {
   const listings = new Map<string, Promise<Map<string, ResolvedEntry>>>();
   const listingOf = (folder: string): Promise<Map<string, ResolvedEntry>> => {
-    const kept = listings.get(folder) ?? listEntries(folder, ignoreSkippedLink).then(lowerCased, () => new Map<string, ResolvedEntry>());
+    const kept = listings.get(folder) ?? listEntries(folder, ignoreSkippedLink).then(lowerCased, (err: unknown) => {
+      if (errnoCode(err) === 'ENOENT') return new Map<string, ResolvedEntry>();
+      throw err;
+    });
     listings.set(folder, kept);
     return kept;
   };
@@ -40,11 +45,13 @@ export function mo2Repository(
     const find = caseBlindFinder(dataFolder);
     const files = new Map<string, GameFile>();
     for (const modFilePath of modFilePaths) {
-      const found = await find(modFilePath);
-      if (found === undefined || files.has(found.join('/').toLowerCase())) continue;
-      const hashed = await gameFileHash(join(dataFolder, ...found));
+      const found = await find(modFilePath).then((path) => ({ path }), (err: unknown) => ({ err }));
+      if ('err' in found) return { kind: 'unreadable', reason: errorMessage(found.err) };
+      const names = found.path;
+      if (names === undefined || files.has(names.join('/').toLowerCase())) continue;
+      const hashed = await gameFileHash(join(dataFolder, ...names));
       if (hashed.kind === 'unreadable') return hashed;
-      files.set(found.join('/').toLowerCase(), { path: found.join('/'), hash: hashed.answer.hash });
+      files.set(names.join('/').toLowerCase(), { path: names.join('/'), hash: hashed.answer.hash });
     }
     return { kind: 'read', answer: [...files.values()] };
   };
