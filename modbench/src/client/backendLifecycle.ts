@@ -10,12 +10,10 @@ import type { BackendStatus, LaunchOutcome } from './MEditClient';
 export type BackendStream = 'stdout' | 'stderr';
 
 interface BackendProcess {
-  /** Optional signal so stop() can send SIGTERM then escalate to SIGKILL. */
-  kill(signal?: NodeJS.Signals): void;
+  kill(signal: 'SIGKILL'): void;
   on(event: 'exit', cb: (code: number | null, signal: NodeJS.Signals | null) => void): void;
   on(event: 'error', cb: (err: Error) => void): void;
-  /** Present when spawned with piped stdio; absent on 'ignore'. */
-  stdin?: NodeJS.WritableStream | null;
+  stdin: NodeJS.WritableStream;
   stdout?: NodeJS.ReadableStream | null;
   stderr?: NodeJS.ReadableStream | null;
 }
@@ -41,7 +39,7 @@ export interface BackendLifecycleOptions {
   /** Read at the spawn from the Output channel's current level. The spawn path only — an attached
    *  backend never sees it. */
   serilogLevelArgs?: () => string[];
-  /** How long stop() waits after SIGTERM before escalating to SIGKILL. Defaults to 5s, matching
+  /** How long stop() waits after closing the backend's stdin before escalating to SIGKILL. Defaults to 5s, matching
    *  .NET's Generic Host shutdown budget (HostOptions.ShutdownTimeout). */
   stopGracePeriodMs?: number;
   /** Polled at `pollIntervalMs` while attaching/starting; defaults to a real GET `/health`
@@ -205,28 +203,27 @@ export class BackendLifecycle {
     const child = this.child;
     this.child = undefined;
     try {
-      if (child) await this.killAndConfirmExit(child);
+      if (child) await this.stopAndConfirmExit(child);
     } finally {
       if (this._status !== 'stopped') this.setStatus('stopped');
     }
   }
 
-  // A backend mid a long synchronous request won't notice SIGTERM, so this escalates to SIGKILL
-  // and waits for a real 'exit'. Accepted race: stop() clears `this.child` first, so a start()
-  // racing the wait can spawn a second child.
-  private killAndConfirmExit(child: BackendProcess): Promise<void> {
+  // Closing stdin stops the backend gracefully on both platforms; Node's SIGTERM kills on Windows.
+  // Escalates to SIGKILL after the grace period. Accepted race: a start() during the wait
+  // can spawn a second child.
+  private stopAndConfirmExit(child: BackendProcess): Promise<void> {
     return new Promise((resolve) => {
-      // A container, not a `let`, so it exists (as `undefined`) before onExit is even defined —
-      // safe even if 'exit' fired synchronously from kill().
+      // A container, not a `let`, so it exists (as `undefined`) before onExit is even defined.
       const escalateTimer: { current?: ReturnType<typeof setTimeout> } = {};
       const onExit = () => {
         clearTimeout(escalateTimer.current);
         resolve();
       };
       child.on('exit', onExit);
-      child.kill('SIGTERM');
+      child.stdin.end();
       escalateTimer.current = setTimeout(() => {
-        this.log.warn(`[backend] did not exit within ${this.stopGracePeriodMs}ms of SIGTERM — sending SIGKILL`);
+        this.log.warn(`[backend] did not exit within ${this.stopGracePeriodMs}ms of closing stdin — sending SIGKILL`);
         child.kill('SIGKILL');
       }, this.stopGracePeriodMs);
     });
