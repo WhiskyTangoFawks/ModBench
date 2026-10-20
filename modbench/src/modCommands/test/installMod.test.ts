@@ -16,7 +16,7 @@ const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z' } as const;
 const DOWNLOADED_PATH = '/downloads/Freshly-1-0.7z';
 const downloadedFile = (name: string, path: string, meta?: Partial<DownloadMeta>): DownloadedFile =>
   ({ name, path, metaPath: `${path}.meta`, size: 1, mtimeMs: 1, excluded: false, meta: meta && { status: 'Downloaded', ...meta } });
-const FRESHLY = downloadedFile(DOWNLOADED.name, DOWNLOADED_PATH, { modID: '111', fileID: '222', installedKey: '111:222', version: '3.0.0' });
+const FRESHLY = downloadedFile(DOWNLOADED.name, DOWNLOADED_PATH, { modID: '111', installedKey: '111:222', version: '3.0.0' });
 
 function install(
   installed: ModPackage, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadModStatus = unreadStatus,
