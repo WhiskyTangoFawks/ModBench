@@ -60,10 +60,10 @@ async function setGameFolder(dir: string): Promise<void> {
 }
 
 function gameFolderHolding(prefix: string, plugins: readonly string[]): string {
-  const gameDir = mkdtempSync(path.join(os.tmpdir(), prefix));
-  mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-  for (const name of plugins) writeFileSync(path.join(gameDir, 'Data', name), '');
-  return gameDir;
+  const gameFolder = mkdtempSync(path.join(os.tmpdir(), prefix));
+  mkdirSync(path.join(gameFolder, 'Data'), { recursive: true });
+  for (const name of plugins) writeFileSync(path.join(gameFolder, 'Data', name), '');
+  return gameFolder;
 }
 
 async function holdPluginsTxt(text: string): Promise<void> {
@@ -1754,20 +1754,20 @@ describe('modbench.plugin.create', () => {
 });
 
 describe('The Plugins view\'s keys, as VS Code runs them', () => {
-  let gameDir = '';
+  let gameFolder = '';
   let original = '';
 
   before(async () => {
     original = readFileSync(pluginsTxtPath, 'utf8');
-    gameDir = gameFolderHolding('medit-keys-', ['TestMod.esp', 'Other.esp']);
-    await setGameFolder(gameDir);
+    gameFolder = gameFolderHolding('medit-keys-', ['TestMod.esp', 'Other.esp']);
+    await setGameFolder(gameFolder);
   });
 
   after(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     await setGameFolder(FIXTURE_GAME_FOLDER);
     writeFileSync(pluginsTxtPath, original);
-    rmSync(gameDir, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
+    rmSync(gameFolder, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
   });
 
   it('Space disables the selected plugin', async () => {
@@ -1818,7 +1818,7 @@ describe('Modbench, launching mEdit with the extension, puts the load order befo
 });
 
 describe('An instance change sends a fresh load order snapshot (ADR-0013)', () => {
-  let gameDir = '';
+  let gameFolder = '';
   let swapped = false;
   const putCount = () => requestLog.filter((l) => l === 'PUT /load-order').length;
 
@@ -1836,15 +1836,15 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   }
 
   before(async () => {
-    gameDir = gameFolderHolding('medit-reconcile-', ['TestMod.esp', 'Second.esp']);
-    await setGameFolder(gameDir);
+    gameFolder = gameFolderHolding('medit-reconcile-', ['TestMod.esp', 'Second.esp']);
+    await setGameFolder(gameFolder);
     await holdPluginsTxt('*TestMod.esp\n*Second.esp\n');
   });
 
   after(async () => {
     await setGameFolder(FIXTURE_GAME_FOLDER);
     writeFileSync(pluginsTxtPath, '');
-    rmSync(gameDir, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
+    rmSync(gameFolder, { recursive: true, force: true, maxRetries: RETRIES_WHILE_THE_MOVED_AWAY_GAME_FOLDER_WATCHER_HOLDS_IT });
   });
 
   it('a plugins.txt write is followed by a fresh PUT /load-order, no command required', async () => {

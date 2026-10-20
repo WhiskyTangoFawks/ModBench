@@ -5,6 +5,7 @@ import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, refusing, so
 import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
 import { archiveVariants } from '../sourceCommands';
 import type { HostGit } from '../../ports/repository';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { restoredMod } from '../../test/restoredMod';
 
 const hostGitMaking = (made: string[] = []): HostGit<string> => ({
@@ -20,7 +21,6 @@ const INSTALLED: InstallationFile = { path: '/downloads/ModA-1.0.7z', size: 10, 
 
 const recording = (file: InstallationFile): FileRead<InstallationFile> => ({ kind: 'read', answer: file });
 const FOUND: GameFolder = { kind: 'found', root: '/game', dataFolder: '/game/Data' };
-const NOT_FOUND: GameFolder = { kind: 'notFound', looked: [], setting: 'modbench.gameDirectory' };
 const readingOf = (sourceFolders: Record<string, string> = {}, gameFolder: GameFolder = FOUND, modFolders?: ModFolders): Partial<InstanceReading> =>
   ({ gameFolder, sourceMods: sourceModsOf(sourceFolders), modFolders });
 const GAME_FOLDER = { name: 'Fallout4', dataFolder: '/game/Data', files: [] };
@@ -197,7 +197,7 @@ describe('modlistRepositoryCommands update manifest', () => {
   });
 
   it('names a mod with no installation file when the game folder was not found, and sends no game folder', async () => {
-    const { commands, client } = commandsOver({ installations: new Map([['ModA', recording(INSTALLED)]]) }, new InMemoryMEditClient(), {}, readingOf({}, NOT_FOUND));
+    const { commands, client } = commandsOver({ installations: new Map([['ModA', recording(INSTALLED)]]) }, new InMemoryMEditClient(), {}, readingOf({}, GAME_FOLDER_NOT_FOUND));
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModA', 'ModB']);
@@ -211,7 +211,7 @@ describe('modlistRepositoryCommands update manifest', () => {
     const answers = { gameFilesTaken: new Map([['Source', unreadable], ['Group_separator', unreadable]]) };
     const folders = modFoldersOf('ModA', 'Source', { kind: 'separator', name: 'Group', modName: 'Group_separator' });
     const found = commandsOver(answers, new InMemoryMEditClient(), {}, readingOf({ Source: '/source/Source' }, FOUND, folders));
-    const notFound = commandsOver(answers, new InMemoryMEditClient(), {}, readingOf({ Source: '/source/Source' }, NOT_FOUND, folders));
+    const notFound = commandsOver(answers, new InMemoryMEditClient(), {}, readingOf({ Source: '/source/Source' }, GAME_FOLDER_NOT_FOUND, folders));
     found.client.setCommandResult('updateManifest', UPDATED);
     notFound.client.setCommandResult('updateManifest', UPDATED);
 
@@ -367,7 +367,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   });
 
   it('says why beside a mod still skipped for game files when the game folder was not found', async () => {
-    const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf({}, NOT_FOUND));
+    const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf({}, GAME_FOLDER_NOT_FOUND));
     client.setCommandResult('restoreFromManifest', {
       landed: [], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }], notFound: [{ mod: 'ModA', gameFiles: ['a.nif'] }],
     });
