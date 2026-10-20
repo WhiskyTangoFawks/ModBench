@@ -1835,12 +1835,23 @@ describe('the MO2 Instance adapter', () => {
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
         });
 
-        it.each([
+        const LEFT_ALONE = [
           ['the file it names among several', metaWith('gameName=Fallout4\r\nmodid=4598\r\n', [['4598', '77'], ['4598', '78']]), pageOf('4598', '77')],
           ['the pair its modid disagrees with', metaWith('gameName=Fallout4\r\nmodid=601\r\n', [['600', '901']]), pageOf('600', '901')],
           ['the pair its modid agrees with', metaWith('gameName=Fallout4\r\nmodid=600\r\n', [['600', '901']]), pageOf('600', '901')],
           ['the instance game it names no game of its own', metaWith('modid=600\r\n', [['600', '901']]), pageOf('600', '901')],
-        ])('leaves metadata byte for byte when the manifest page is %s', async (_name, text, page) => {
+        ] as const;
+        const WRITTEN = [
+          ['a fresh clone with no modid and no pair', metaWith('gameName=Fallout4\r\n', []), pageOf('600', '901'), '600', 1],
+          ['a fresh clone and a page with no file', metaWith('gameName=Fallout4\r\n', []), pageOf('1'), '1', 0],
+          ['the modid MO2 writes by default', metaWith('gameName=Fallout4\r\nmodid=0\r\n', []), pageOf('600', '901'), '600', 1],
+          ['a modid beside a pair the page does not name', metaWith('gameName=Fallout4\r\nmodid=601\r\n', [['600', '901']]), pageOf('700', '950'), '700', 1],
+          ['several pairs with the page naming the one the modid does not', metaWith('gameName=Fallout4\r\nmodid=4598\r\n', [['4598', '77'], ['9', '78']]), pageOf('9', '78'), '9', 1],
+          ['a page with no file beside a pair', metaWith('gameName=Fallout4\r\nmodid=601\r\n', [['600', '901']]), pageOf('600'), '600', 0],
+          ['a page with no file and a modid of another mod', metaWith('gameName=Fallout4\r\nmodid=601\r\n', []), pageOf('600'), '600', 0],
+        ] as const;
+
+        it.each(LEFT_ALONE)('leaves metadata byte for byte when the manifest page is %s', async (_name, text, page) => {
           const held = await holding(text);
 
           await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page } });
@@ -1848,13 +1859,7 @@ describe('the MO2 Instance adapter', () => {
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
         });
 
-        it.each([
-          ['a fresh clone with no modid and no pair', metaWith('gameName=Fallout4\r\n', []), pageOf('600', '901'), '600', 1],
-          ['the modid MO2 writes by default', metaWith('gameName=Fallout4\r\nmodid=0\r\n', []), pageOf('600', '901'), '600', 1],
-          ['a modid beside a pair the page does not name', metaWith('gameName=Fallout4\r\nmodid=601\r\n', [['600', '901']]), pageOf('700', '950'), '700', 1],
-          ['several pairs with the page naming the one the modid does not', metaWith('gameName=Fallout4\r\nmodid=4598\r\n', [['4598', '77'], ['9', '78']]), pageOf('9', '78'), '9', 1],
-          ['a page with no file beside a pair', metaWith('gameName=Fallout4\r\nmodid=601\r\n', [['600', '901']]), pageOf('600'), '600', 0],
-        ])('writes the modid the manifest page names over %s', async (_name, text, page, modId, pairs) => {
+        it.each(WRITTEN)('writes the modid the manifest page names over %s', async (_name, text, page, modId, pairs) => {
           await holding(text);
 
           await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page } });
@@ -1863,6 +1868,22 @@ describe('the MO2 Instance adapter', () => {
           expect(generalModId(written)).toBe(modId);
           expect(written.match(/^\d+\\modid=/gm) ?? []).toHaveLength(pairs);
         });
+
+        it.each([...LEFT_ALONE.map(([name, text, page]) => [name, text, page, false] as const), ...WRITTEN.map(([name, text, page]) => [name, text, page, true] as const)])(
+          'reads the manifest page as held after restore, and writes only what it read as differing: %s', async (_name, text, page, differed) => {
+            const pageHeld = async (): Promise<boolean> => {
+              const read = await adapter.modMetadata(PATCH);
+              return read.kind === 'read' && read.answer.installationFile?.page === page;
+            };
+            const held = await holding(text);
+            expect(await pageHeld()).toBe(!differed);
+
+            await adapter.writeModMetadata(PATCH, { installationFile: { name: DOWNLOADED_FILE, page } });
+
+            expect(await pageHeld()).toBe(true);
+            expect((await readFile(metaOf(PATCH), 'utf8')) === held).toBe(!differed);
+          },
+        );
 
         it('changes only the value that differs', async () => {
           const held = await holding(mo2Written('1.0'));
