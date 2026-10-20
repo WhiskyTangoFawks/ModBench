@@ -20,7 +20,7 @@ public sealed class DecompileAndCommitModTests
     [Fact]
     public async Task InitMod_OfAModThatProvidesNoPlugin_RefusesThatModWithoutThrowing()
     {
-        using var dataFolder = new ScratchDirectory("medit-init-noorigin-game-");
+        using var dataFolder = new ScratchDirectory("medit-init-noorigin-data-");
         var loadOrder = new LoadOrderSnapshot(dataFolder, null, GameRelease.Fallout4, [], [], [], [], [], [], Language.English);
 
         var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "NoSuchMod")).Value();
@@ -34,7 +34,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_RefusesTheWholeMod_WhenOnePluginCannotBeRead_WritingNothing()
     {
         using var modFolder = new ScratchDirectory("medit-init-unopened-");
-        using var dataFolder = new ScratchDirectory("medit-init-unopened-game-");
+        using var dataFolder = new ScratchDirectory("medit-init-unopened-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("FirstNpc");
@@ -74,7 +74,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_RealLoadOrder_InitsTheMod_HoldingEachRecordWithoutCarriageReturns()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc1 = mod.Npcs.AddNew("FirstNpc");
@@ -106,7 +106,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_OfAPluginInAModWithARepository_RefusesBeforeParsingIt()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-alreadysource-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-alreadysource-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-alreadysource-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("SomeNpc");
@@ -129,7 +129,7 @@ public sealed class DecompileAndCommitModTests
     {
         using var modA = new ScratchDirectory("medit-initservice-twomods-a-");
         using var modB = new ScratchDirectory("medit-initservice-twomods-b-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-twomods-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-twomods-data-");
         var pathA = Path.Combine(modA, "Same.esp");
         var pathB = Path.Combine(modB, "Same.esp");
         foreach (var path in new[] { pathA, pathB })
@@ -156,7 +156,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_OverTwoPluginsOfOneOrigin_ProgressNamesTheModAndEachPhase_AndEndsAtRest()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-progress-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-progress-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-progress-data-");
         var firstPluginPath = Path.Combine(modFolder, "First.esp");
         var firstMod = new Fallout4Mod(ModKey.FromFileName("First.esp"), Fallout4Release.Fallout4);
         firstMod.Npcs.AddNew("OnlyNpc");
@@ -190,7 +190,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-badroundtrip-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-badroundtrip-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-badroundtrip-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew("OriginalName");
@@ -223,7 +223,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_WithAFloatFieldThatFailsToRoundTrip_RefusesNamingTheRecordAndTheField()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-floatroundtrip-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-floatroundtrip-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-floatroundtrip-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew("SomeNpc");
@@ -259,7 +259,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_WithOpaqueTes4HeaderSubrecordsSet_Lands()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-opaqueheader-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-opaqueheader-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-opaqueheader-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("SomeNpc");
@@ -301,7 +301,7 @@ public sealed class DecompileAndCommitModTests
         string fieldName, Action<Fallout4ModHeader> setBaseline, Action<Fallout4ModHeader> corrupt)
     {
         using var modFolder = new ScratchDirectory($"medit-initservice-header-{fieldName}-");
-        using var dataFolder = new ScratchDirectory($"medit-initservice-header-{fieldName}-game-");
+        using var dataFolder = new ScratchDirectory($"medit-initservice-header-{fieldName}-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("SomeNpc");
@@ -334,7 +334,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_WithARecordThatOnlyGainsSubrecordsOnRewrite_RefusesNamingTheRealFieldNotSubrecordInventory()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-furn-insert-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-furn-insert-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-furn-insert-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Furniture.AddNew("TestFurn");
@@ -362,7 +362,7 @@ public sealed class DecompileAndCommitModTests
     {
         using var modFolder = new ScratchDirectory("medit-initservice-localized-");
         using var sourceFolder = new ScratchDirectory("medit-initservice-localized-source-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-localized-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-localized-data-");
         var (pluginPath, door) = WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(modFolder);
 
         var anyBa2MakesMutagenResolveArchivePriorityNeedingWindowsPluginListings =
@@ -385,7 +385,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_LocalizedPluginMissingItsStringsFile_RefusesNamingTheMissingFile_SinceMutagenLookupOfAMissingFileDoesNotThrow()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-localized-missing-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-localized-missing-game-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-localized-missing-data-");
         var (pluginPath, _) = WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(modFolder);
 
         var stringsFolderAsIfItNeverShippedWithTheDownload = Path.Combine(modFolder, "Strings");
@@ -411,7 +411,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_ADeletedRecordStillHoldingFields_RefusesNamingIt_SinceMutagenWritesADeletedRecordAsItsHeader()
     {
         using var modFolder = new ScratchDirectory("medit-init-deleted-fields-");
-        using var dataFolder = new ScratchDirectory("medit-init-deleted-fields-game-");
+        using var dataFolder = new ScratchDirectory("medit-init-deleted-fields-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var npc = new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800);
         DeletedNpcPlugin.WriteHoldingEveryField(pluginPath, npc);
@@ -432,7 +432,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_ARecordInAGroupMutagenDrops_RefusesNamingIt_SinceTheRewriteLacksIt()
     {
         using var modFolder = new ScratchDirectory("medit-init-dropped-group-");
-        using var dataFolder = new ScratchDirectory("medit-init-dropped-group-game-");
+        using var dataFolder = new ScratchDirectory("medit-init-dropped-group-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = ModKey.FromFileName("Fixture.esp");
         var dropped = new FormKey(mod, 0x801);
@@ -454,7 +454,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_ARecordWithANullFormId_RefusesNamingIt_SinceThePluginIsMalformed()
     {
         using var modFolder = new ScratchDirectory("medit-init-null-formid-");
-        using var dataFolder = new ScratchDirectory("medit-init-null-formid-game-");
+        using var dataFolder = new ScratchDirectory("medit-init-null-formid-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("NullGuy");
@@ -479,7 +479,7 @@ public sealed class DecompileAndCommitModTests
     public async Task InitMod_ARecordOfObjectIdZero_RefusesNamingIt_SinceItsFormKeyIsTheHeaders()
     {
         using var modFolder = new ScratchDirectory("medit-init-object-id-zero-");
-        using var dataFolder = new ScratchDirectory("medit-init-object-id-zero-game-");
+        using var dataFolder = new ScratchDirectory("medit-init-object-id-zero-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Master.esm") });

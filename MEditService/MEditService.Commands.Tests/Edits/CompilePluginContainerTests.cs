@@ -24,7 +24,7 @@ public sealed class CompilePluginContainerTests : IDisposable
     private const string QuestRecordType = "quest";
 
     private readonly ScratchDirectory _modFolder = new("medit-container-compile-");
-    private readonly ScratchDirectory _dataFolder = new("medit-container-compile-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-container-compile-data-");
     private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginAddress _plugin = new(PluginName, Origin);
 

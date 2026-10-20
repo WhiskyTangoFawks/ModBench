@@ -14,7 +14,7 @@ public sealed class DecompileChurnTests : IDisposable
 {
     private const string PluginName = "ChurnFixture.esp";
     private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
-    private readonly ScratchDirectory _dataFolder = new("medit-churn-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-churn-data-");
     private readonly ScratchDirectory _modFolder = new("medit-churn-");
     private readonly LoadOrderHolder _holder = new();
 

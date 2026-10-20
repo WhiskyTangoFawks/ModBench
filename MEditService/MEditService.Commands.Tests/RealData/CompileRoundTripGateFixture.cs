@@ -15,7 +15,7 @@ namespace MEditService.Commands.Tests.RealData;
 /// a later compile writes again.</summary>
 public sealed class CompileRoundTripGateFixture : IDisposable
 {
-    private readonly ScratchDirectory _dataFolder = new("medit-compile-roundtrip-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-compile-roundtrip-data-");
     private readonly ScratchDirectory _compiledFolder = new("medit-compile-roundtrip-compiled-");
 
     public PluginAddress Plugin { get; } = new(CutDownPluginFixture.PluginFileName, "FixtureMod");

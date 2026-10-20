@@ -26,7 +26,7 @@ public sealed class MasterPruningRoundTripGateTests
     {
         private readonly string _fixtureFileName;
         private readonly string _origin;
-        private readonly ScratchDirectory _dataFolder = new("medit-masterprune-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-masterprune-data-");
         private readonly LoadOrderSnapshot _loadOrder;
 
         public ScratchDirectory ModFolder { get; } = new("medit-masterprune-");

@@ -14,7 +14,7 @@ public sealed class CompilePluginLocalizedTests : IDisposable
     private const string Origin = "FixtureMod";
 
     private readonly ScratchDirectory _modFolder = new("medit-compile-localized-");
-    private readonly ScratchDirectory _dataFolder = new("medit-compile-localized-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-compile-localized-data-");
     private readonly LoadOrderSnapshot _loadOrder;
 
     public CompilePluginLocalizedTests()

@@ -75,7 +75,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         private const string DestinationPluginName = "Destination.esp";
         private const string DestinationOrigin = "DestinationMod";
 
-        private readonly ScratchDirectory _dataFolder = new("medit-copyfail-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-copyfail-data-");
         private readonly ScratchDirectory _sourceModFolder = new("medit-copyfail-source-");
         private readonly ScratchDirectory _destinationModFolder = new("medit-copyfail-dest-");
         private readonly string _sourcePath;

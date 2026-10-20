@@ -23,7 +23,7 @@ public abstract class LocalizedSourceCopyScenario : IDisposable
 
     private readonly ScratchDirectory _sourceModFolder = new("medit-copy-localized-source-");
     private readonly ScratchDirectory _destinationModFolder = new("medit-copy-localized-dest-");
-    private readonly ScratchDirectory _dataFolder = new("medit-copy-localized-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-copy-localized-data-");
     private readonly FormKey _door;
     private readonly FormKey _cell;
     private readonly FormKey _placedObject;

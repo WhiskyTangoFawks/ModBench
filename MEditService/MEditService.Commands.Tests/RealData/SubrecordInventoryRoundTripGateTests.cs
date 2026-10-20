@@ -31,7 +31,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
 
     private sealed class ShortRdatScratch : IDisposable
     {
-        private readonly ScratchDirectory _dataFolder = new("medit-shortrdat-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-shortrdat-data-");
         private readonly LoadOrderSnapshot _loadOrder;
 
         public ScratchDirectory ModFolder { get; } = new("medit-shortrdat-");

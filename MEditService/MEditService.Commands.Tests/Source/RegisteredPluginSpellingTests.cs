@@ -39,7 +39,7 @@ public sealed class RegisteredPluginSpellingTests
     private sealed class ModFolderUnderAnInstanceRootScratch : IDisposable
     {
         private readonly ScratchDirectory _instanceRoot = new("medit-spelling-instance-");
-        private readonly ScratchDirectory _dataFolder = new("medit-spelling-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-spelling-data-");
 
         public string ModFolder { get; }
         internal PluginAddress Plugin { get; } = new(PluginName, Origin);

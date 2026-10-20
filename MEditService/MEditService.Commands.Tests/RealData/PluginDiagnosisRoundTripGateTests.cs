@@ -56,7 +56,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
     private sealed class RealFixtureScratch : IDisposable
     {
-        private readonly ScratchDirectory _dataFolder = new("medit-diagnosis-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-diagnosis-data-");
         private readonly LoadOrderSnapshot _loadOrder;
         private const string Origin = "DiagnosisFixtureMod";
 

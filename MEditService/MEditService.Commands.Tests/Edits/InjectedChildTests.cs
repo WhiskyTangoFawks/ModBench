@@ -43,7 +43,7 @@ public sealed class InjectedChildTests : IDisposable
     {
         _baseModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", BaseOrigin)).FullName;
         _injectorModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", InjectorOrigin)).FullName;
-        _dataFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
+        _dataFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "Data")).FullName;
 
         var basePath = Path.Combine(_baseModFolder, BasePluginName);
         var baseMod = new Fallout4Mod(ModKey.FromFileName(BasePluginName), Fallout4Release.Fallout4);

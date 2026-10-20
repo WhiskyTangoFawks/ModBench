@@ -16,7 +16,7 @@ public sealed class CompilePluginMastersTests : IDisposable
     private const string CharlieName = "Charlie.esm";
     private const string DeltaName = "Delta.esm";
     private readonly ScratchDirectory _modFolder = new("medit-masters-");
-    private readonly ScratchDirectory _dataFolder = new("medit-masters-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-masters-data-");
     private readonly List<LoadOrderEntry> _entries;
     private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginAddress _plugin = new(PluginName, "MastersMod");

@@ -24,7 +24,7 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
             Origin,
             Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName,
             SourceFolder);
-        var dataFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
+        var dataFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "Data")).FullName;
 
         var pluginPath = Path.Combine(_mod.Folder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);

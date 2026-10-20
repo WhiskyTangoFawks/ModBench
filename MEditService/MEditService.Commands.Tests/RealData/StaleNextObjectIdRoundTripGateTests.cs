@@ -120,7 +120,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     private sealed class CompiledPluginScratch : IDisposable
     {
         internal LoadOrderHolder Holder { get; } = new();
-        private readonly ScratchDirectory _dataFolder = new("medit-stale-header-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-stale-header-data-");
         private readonly LoadOrderSnapshot _loadOrder;
 
         public ScratchDirectory ModFolder { get; } = new("medit-stale-header-");

@@ -25,7 +25,7 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
     public DecompileAndCommitShapeTests()
     {
         _modFolder = Directory.CreateDirectory(Path.Combine(_root, ModName)).FullName;
-        _dataFolder = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
+        _dataFolder = Directory.CreateDirectory(Path.Combine(_root, "Data")).FullName;
     }
 
     public void Dispose() => _root.Dispose();

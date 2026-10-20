@@ -21,7 +21,7 @@ public sealed class CompilePluginLinkTests : IDisposable
     private const string Dangling = "ABCDEF:LinkTarget.esp";
 
     private readonly ScratchDirectory _instanceRoot = new("medit-compile-links-");
-    private readonly ScratchDirectory _dataFolder = new("medit-compile-links-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-compile-links-data-");
     private readonly string _hostFolder;
     private readonly string _targetFolder;
     private readonly LoadOrderSnapshot _loadOrder;

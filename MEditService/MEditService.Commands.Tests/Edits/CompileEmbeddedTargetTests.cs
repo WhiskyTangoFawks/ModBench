@@ -16,7 +16,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     private const string ReferrerOrigin = "EmbeddedReferrerMod";
 
     private readonly ScratchDirectory _instanceRoot = new("medit-embedded-target-");
-    private readonly ScratchDirectory _dataFolder = new("medit-embedded-target-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-embedded-target-data-");
     private readonly string _targetFolder;
     private readonly string _referrerFolder;
     private readonly LoadOrderSnapshot _loadOrder;

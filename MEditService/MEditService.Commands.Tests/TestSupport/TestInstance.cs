@@ -33,7 +33,7 @@ public abstract class TestInstance : IDisposable
     protected TestInstance(GameRelease release = GameRelease.Fallout4, Language stringsLanguage = Language.English)
     {
         (_release, _stringsLanguage) = (release, stringsLanguage);
-        DataFolder = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
+        DataFolder = Directory.CreateDirectory(Path.Combine(_root, "Data")).FullName;
         _holder = new Lazy<LoadOrderHolder>(() =>
         {
             var holder = new LoadOrderHolder();

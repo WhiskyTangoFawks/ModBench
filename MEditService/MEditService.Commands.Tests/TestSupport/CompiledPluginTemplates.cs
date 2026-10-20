@@ -55,7 +55,7 @@ internal static class CompiledPluginTemplates
     internal static void InitAlone(string modFolder, string pluginName, GameRelease release = GameRelease.Fallout4)
     {
         const string origin = "TemplateMod";
-        using var dataFolder = new ScratchDirectory("medit-compiled-plugin-template-game-");
+        using var dataFolder = new ScratchDirectory("medit-compiled-plugin-template-data-");
         var loadOrder = SnapshotPlugins.Snapshot(dataFolder, instanceRoot: null, release,
             [new LoadOrderEntry(pluginName, Path.Combine(modFolder, pluginName), origin, Line: 0, Enabled: true, Winning: true)]);
         var result = DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, origin)
