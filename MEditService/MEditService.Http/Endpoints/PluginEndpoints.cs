@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
@@ -125,10 +124,8 @@ internal static class PluginEndpoints
             .ProducesProblem(422)
             .ProducesProblem(503);
 
-        app.MapGet("/plugins/creatable-extensions", (LoadOrderHolder loadOrder) =>
-            loadOrder.Held is { Snapshot: var held }
-                ? Results.Ok(CreatablePluginExtensions.Of(held.GameRelease))
-                : EndpointMapping.NoLoadOrder())
+        app.MapGet("/plugins/creatable-extensions", (IQueries svc) =>
+            EndpointMapping.Ok(svc.GetCreatablePluginExtensions()))
             .WithName("GetCreatablePluginExtensions")
             .WithTags(Tag)
             .WithDescription("The file extensions a new plugin may take in the held release.")

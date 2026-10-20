@@ -287,6 +287,9 @@ internal sealed class RecordQueries(
         return Choices(RecordTypes.For(_loadOrder.Require().GameRelease).Creatable, schemas);
     });
 
+    public Answer<IReadOnlyList<string>, IndexRefused> GetCreatablePluginExtensions() =>
+        IndexAnswer.Of(() => CreatablePluginExtensions.Of(_loadOrder.Require().GameRelease));
+
     public Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused> GetChildRecordTypes(PluginAddress plugin, string formKey) =>
         IndexAnswer.Of<IReadOnlyList<RecordTypeChoice>?>(() => ChildRecordTypesOf(plugin, formKey));
 

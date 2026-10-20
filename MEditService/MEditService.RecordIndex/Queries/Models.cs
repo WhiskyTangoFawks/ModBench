@@ -38,7 +38,6 @@ public sealed record PluginResponse(
     IReadOnlyList<string>? MissingMasters,
     // LateMasters: the active masters in this plugin's header that load after it. Null as MissingMasters is.
     IReadOnlyList<string>? LateMasters,
-    // InLoadOrder (ADR-0013): whether the plugin is active, which is LoadOrderIndex being set.
     bool InLoadOrder,
     // HasMatchingRecords (plugins.md): a record filter prunes records, never a
     // plugin row, so this is what a caller uses to decide whether to offer a chevron.
