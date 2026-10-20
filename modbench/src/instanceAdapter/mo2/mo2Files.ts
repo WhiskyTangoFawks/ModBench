@@ -8,7 +8,7 @@ import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { factsOf, listDir, isOwnTemp } from '../files';
 import type { FileOrigin, ModFolders, OriginFile, OriginFiles, OriginFolder } from '../instanceAdapter';
-import { isExcludedName, manifestFileName, overwriteDir } from './layout';
+import { includedName, isExcludedName, manifestFileName, overwriteDir } from './layout';
 import { originFolder, type Mo2Context } from './mo2Context';
 
 // The mod's metadata is MO2's and its manifest is Modbench's: neither is the mod's content.
@@ -34,10 +34,13 @@ const childOf = (dir: string, name: string): string => dir + sep + name;
 // MO2 keeps from the game every entry whose name, or a folder's above it, carries its suffix.
 const isExcluded = (relativePath: string): boolean => relativePath.split('/').some(isExcludedName);
 
+const includedPathOf = (relativePath: string): string =>
+  relativePath.split('/').map((segment) => (isExcludedName(segment) ? includedName(segment) : segment)).join('/');
+
 function keep(walk: Walk, path: string, sourcePath: string = path): void {
   const relativePath = relativeUnder(walk.root, path);
   if (walk.notContent.has(relativePath)) return;
-  walk.files.push({ relativePath, path, sourcePath, excluded: isExcluded(relativePath), excludedByName: isExcludedName(relativePath) });
+  walk.files.push({ relativePath, path, sourcePath, excluded: isExcluded(relativePath), markedExcluded: isExcludedName(relativePath), includedPath: includedPathOf(relativePath) });
 }
 
 const keepFolder = (walk: Walk, path: string): void => {

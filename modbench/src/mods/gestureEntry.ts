@@ -1,9 +1,10 @@
 import type { ModlistNode, ModNode } from './ModListProvider';
-import type { Instance } from '../instanceLoader/instance';
+import type { Instance, InstanceValue } from '../instanceLoader/instance';
 import { kindGuard, singularArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { argumentOfKind } from '../drivingLib/agentGesture';
 import type { EntryRef, OriginFileRef } from '../modCommands/modCommands';
+import { Refusal } from '../drivingLib/refusal';
 import type { Argument } from '../wire/argument';
 
 /** The `args` a Mods key passes, so a command other surfaces share knows the key is the Mods
@@ -22,9 +23,12 @@ export const entryRefOf = (argument: Argument): EntryRef => {
   return { kind, name };
 };
 
-export const fileRefOf = (argument: Argument): OriginFileRef => {
+export const fileRefOf = (argument: Argument, value: Pick<InstanceValue, 'filesByMod' | 'overwriteFiles'>): OriginFileRef => {
   const { origin, relativePath } = argumentOfKind(argument, 'file');
-  return { origin, relativePath };
+  const own = origin.kind === 'mod' ? value.filesByMod.get(origin.name) ?? [] : value.overwriteFiles;
+  const file = own.find((candidate) => candidate.relativePath === relativePath);
+  if (file === undefined) throw new Refusal(`Nothing is named "${relativePath}" in ${origin.kind === 'mod' ? `mod ${origin.name}` : 'Overwrite'}.`);
+  return { origin, relativePath, includedPath: file.includedPath };
 };
 
 const isRowOf = kindGuard<ModlistNode>();

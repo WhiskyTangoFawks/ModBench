@@ -457,7 +457,7 @@ describe('markFiles', () => {
   const OTHER = '/instance/source/ENBoost';
   const SOURCES = sourceMods(new Map([['Harder VATS', SOURCE]]));
   const TWO_SOURCES = sourceMods(new Map([['Harder VATS', SOURCE], ['ENBoost', OTHER]]));
-  const fileOf = (name: string, relativePath: string) => ({ origin: { kind: 'mod', name }, relativePath }) as const;
+  const fileOf = (name: string, relativePath: string, includedPath = relativePath) => ({ origin: { kind: 'mod', name }, relativePath, includedPath }) as const;
   const markOf = (file: ReturnType<typeof fileOf>, mark: OriginFileMark): AdapterCall =>
     ({ verb: 'markOriginFile', origin: file.origin, relativePath: file.relativePath, mark });
   const UNREACHABLE = { refused: true, message: 'Could not change the build configuration — mEdit could not be reached.', unreachable: true } as const;
@@ -468,7 +468,7 @@ describe('markFiles', () => {
   ] as const)('marks a file %s, and the build configuration\'s exclusion with it', async (mark, relativePath, change) => {
     const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
     mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
-    const file = fileOf('Harder VATS', relativePath);
+    const file = fileOf('Harder VATS', relativePath, 'Textures/a.dds');
 
     const outcome = await commands.markFiles([file], mark);
 

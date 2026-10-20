@@ -18,7 +18,7 @@ import { present } from '../../ports/present';
 
 const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true, version: '1.0' });
 const file = (relativePath: string): OriginFile =>
-  ({ relativePath, path: `/instance/mods/ModA/${relativePath}`, sourcePath: `/instance/mods/ModA/${relativePath}`, excluded: false, excludedByName: false });
+  ({ relativePath, path: `/instance/mods/ModA/${relativePath}`, sourcePath: `/instance/mods/ModA/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath });
 
 function providerOver(statuses: readonly ModStatus[], holdsRepository = true, over: Partial<InstanceValue> = {}) {
   const byMod = new Map(statuses.map((held) => [held.mod, held]));

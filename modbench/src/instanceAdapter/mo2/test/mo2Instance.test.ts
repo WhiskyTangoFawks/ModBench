@@ -1431,7 +1431,7 @@ describe('the MO2 Instance adapter', () => {
         const files = await source.originFiles(mod('Harder VATS'), 'list');
 
         expect(files.files.find((f) => f.relativePath === 'Linked.esp'))
-          .toEqual({ relativePath: 'Linked.esp', path: join(folder, 'Linked.esp'), sourcePath: await realpath(target), excluded: false, excludedByName: false });
+          .toEqual({ relativePath: 'Linked.esp', path: join(folder, 'Linked.esp'), sourcePath: await realpath(target), excluded: false, markedExcluded: false, includedPath: 'Linked.esp' });
         expect(relativePaths(files.files)).not.toContain('Broken.esp');
         expect(files.notes.join('\n')).toMatch(/Broken\.esp/);
       });
@@ -1479,7 +1479,7 @@ describe('the MO2 Instance adapter', () => {
         expect(['Textures.mohidden', 'Textures.mohidden/Armour'].map((path) => excludedOf(files.folders, path))).toEqual([true, true]);
       });
 
-      it('says which files are excluded by their own name, apart from their folder', async () => {
+      it('says which files their own mark excludes, apart from their folder, and the path each has unmarked', async () => {
         await mkdir(join(root, 'mods', 'Harder VATS', 'Textures.mohidden'), { recursive: true });
         await writeFile(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'), '');
         await writeFile(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'b.dds.mohidden'), '');
@@ -1487,10 +1487,11 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, 'mods', 'Harder VATS', 'Kept.esp'), '');
 
         const { files } = await source.originFiles(mod('Harder VATS'), 'list');
-        const byNameOf = (relativePath: string) => files.find((file) => file.relativePath === relativePath)?.excludedByName;
+        const named = (relativePath: string) => files.find((file) => file.relativePath === relativePath);
+        const paths = ['Textures.mohidden/a.dds', 'Textures.mohidden/b.dds.mohidden', 'Hidden.esp.MOHIDDEN', 'Kept.esp'];
 
-        expect(['Textures.mohidden/a.dds', 'Textures.mohidden/b.dds.mohidden', 'Hidden.esp.MOHIDDEN', 'Kept.esp'].map(byNameOf))
-          .toEqual([false, true, true, false]);
+        expect(paths.map((path) => named(path)?.markedExcluded)).toEqual([false, true, true, false]);
+        expect(paths.map((path) => named(path)?.includedPath)).toEqual(['Textures/a.dds', 'Textures/b.dds', 'Hidden.esp', 'Kept.esp']);
       });
 
       it('follows a linked folder, its files keyed beneath the link\'s own name', async () => {
@@ -2138,15 +2139,6 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.markOriginFile(modOrigin, 'b.dds', 'Included')).toEqual({ gone: false, wrote: false, relativePath: 'b.dds' });
 
       assertOnlyChanged(before, await snapshotTree(root), new Set());
-    });
-
-    it.each([
-      ['a.dds', 'a.dds'],
-      ['Textures/a.dds.mohidden', 'Textures/a.dds'],
-      ['Textures.mohidden/a.dds.MOHIDDEN', 'Textures/a.dds'],
-      ['Textures.mohidden', 'Textures'],
-    ])('answers the path %s has when nothing excludes it: %s', (relativePath, included) => {
-      expect(adapter.includedPath(relativePath)).toBe(included);
     });
 
     it('answers gone for a file that is not there', async () => {

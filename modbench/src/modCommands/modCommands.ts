@@ -99,10 +99,11 @@ function moveSeparators(
     [{ kind: 'moveSeparators', separators: found, place, end }]);
 }
 
-/** A file of a mod or Overwrite, by its path in it. */
+/** A file of a mod or Overwrite, by its path in it and the path it has when nothing excludes it. */
 export interface OriginFileRef {
   readonly origin: FileOrigin;
   readonly relativePath: string;
+  readonly includedPath: string;
 }
 
 interface SourceModWriters {
@@ -191,7 +192,7 @@ async function markFiles(
     return refuse(err);
   }
   const change: ExclusionChange = (sourceFolder, of, to) =>
-    mEdit.changeBuildConfiguration(sourceFolder, exclusionChange(to, of.map((file) => adapter.includedPath(file.relativePath))));
+    mEdit.changeBuildConfiguration(sourceFolder, exclusionChange(to, of.map(({ includedPath }) => includedPath)));
   const groups = bySourceFolder(files, sourceMods);
   const configured = await configureEach(change, groups, mark);
   if ('unreachable' in configured) return { applied: false, refusal: configured.unreachable };

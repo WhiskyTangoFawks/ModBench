@@ -151,7 +151,7 @@ export function modFoldersOf(...entries: readonly (string | (EntryRef & { modNam
 }
 
 export const fileIn = (folder: string, relativePath: string): OriginFile =>
-  ({ relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`, excluded: false, excludedByName: false });
+  ({ relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath });
 
 /** The Instance adapter's second implementation: reads answer from the reading and the answers,
  *  each write is recorded, and a decision a caller hands over runs against the reading. */
@@ -247,7 +247,6 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       record<OriginFileMarked>({ verb: 'markOriginFile', origin, relativePath, mark },
         answers.goneOriginFiles?.some((gone) => originKey(gone.origin) === originKey(origin) && gone.relativePath === relativePath) ? { gone: true } : { gone: false, wrote: true, relativePath }),
     entryKey,
-    includedPath: (relativePath) => relativePath.split('/').map((segment) => segment.replace(EXCLUDED_SUFFIX, '')).join('/'),
     excludedSuffix: EXCLUDED_SUFFIX,
     originHoldsPlugin: (origin, name) => Promise.resolve((answers.heldPlugins ?? []).some((held) =>
       originKey(held.origin) === originKey(origin) && pluginKey(held.name) === pluginKey(name))),

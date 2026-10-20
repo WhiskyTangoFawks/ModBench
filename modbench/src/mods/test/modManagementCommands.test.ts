@@ -56,6 +56,7 @@ import { MODS_KEY_ARGS } from '../gestureEntry';
 import { FileNode, FolderNode } from '../modFiles';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
+import { fileIn } from '../../test/fakeInstanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { ModCommands } from '../../modCommands/modCommands';
 
@@ -1105,7 +1106,7 @@ describe('open folder: one command for a mod, the Overwrite row, a file and a fo
   });
 
   const myMod = new ModNode({ kind: 'mod', name: 'My Mod', enabled: true });
-  const linked = { relativePath: 'textures/a.dds', path: '/instance/mods/My Mod/textures/a.dds', sourcePath: '/elsewhere/a.dds', excluded: false, excludedByName: false };
+  const linked = { relativePath: 'textures/a.dds', path: '/instance/mods/My Mod/textures/a.dds', sourcePath: '/elsewhere/a.dds', excluded: false, markedExcluded: false, includedPath: 'textures/a.dds' };
   const folder = new FolderNode(myMod, { kind: 'mod', name: 'My Mod' },
     { relativePath: 'textures', path: '/instance/mods/My Mod/textures', excluded: false }, [linked], [], 'textures');
   const leaf = new FileNode(folder, folder.origin, linked, 'a.dds');
@@ -1276,7 +1277,7 @@ describe('modsCopyValueText, one line for each selected row copy value takes', (
 
   it('copies each selected file\'s and folder\'s path in its mod beside the mods\' names, from a click and from the key', () => {
     const armour = new ModNode({ kind: 'mod', name: 'Armour', enabled: true });
-    const file = { relativePath: 'textures/armour/a.dds', path: '/instance/mods/Armour/textures/armour/a.dds', sourcePath: '/instance/mods/Armour/textures/armour/a.dds', excluded: false, excludedByName: false };
+    const file = { relativePath: 'textures/armour/a.dds', path: '/instance/mods/Armour/textures/armour/a.dds', sourcePath: '/instance/mods/Armour/textures/armour/a.dds', excluded: false, markedExcluded: false, includedPath: 'textures/armour/a.dds' };
     const folder = new FolderNode(armour, { kind: 'mod', name: 'Armour' }, { relativePath: 'textures', path: '/instance/mods/Armour/textures', excluded: false }, [file], [], 'textures');
     const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
     const selection = [alpha, folder, leaf];
@@ -1297,11 +1298,11 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
   const modRow = new ModNode({ kind: 'mod', name: 'M', enabled: true });
   const origin = { kind: 'mod', name: 'M' } as const;
   const fileRow = (relativePath: string, excluded: boolean) => new FileNode(
-    modRow, origin, { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded, excludedByName: excluded },
+    modRow, origin, { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded, markedExcluded: excluded, includedPath: relativePath.replaceAll('.mohidden', '') },
     relativePath);
   const included = fileRow('a.dds', false);
   const excluded = fileRow('b.dds.mohidden', true);
-  const refOf = (row: FileNode) => ({ origin: row.origin, relativePath: row.file.relativePath });
+  const refOf = (row: FileNode) => ({ origin: row.origin, relativePath: row.file.relativePath, includedPath: row.file.includedPath });
   const instance = {
     ...instanceThatReads,
     value: instanceValueFixture({
@@ -1358,8 +1359,8 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
   ] as const)('%s takes a file its folder excludes by its own name, with the selection\'s others', async (verb, mark, clicked) => {
     const hidingFolder = new FolderNode(
       modRow, origin, { relativePath: 'x.mohidden', path: '/instance/mods/M/x.mohidden', excluded: true }, [], [], 'x.mohidden');
-    const inFolder = (relativePath: string, excludedByName: boolean) => new FileNode(hidingFolder, origin,
-      { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded: true, excludedByName },
+    const inFolder = (relativePath: string, markedExcluded: boolean) => new FileNode(hidingFolder, origin,
+      { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded: true, markedExcluded, includedPath: relativePath.replaceAll('.mohidden', '') },
       relativePath);
     markFiles.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
     const reporter = recordingReporter();
@@ -1368,7 +1369,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     await invoke(`modbench.mod.${verb}`, clicked, [clicked, inFolder('x.mohidden/c.dds', false), inFolder('x.mohidden/d.dds.mohidden', true)]);
 
     expect(markFiles).toHaveBeenCalledWith([
-      refOf(clicked), { origin, relativePath: 'x.mohidden/c.dds' }, { origin, relativePath: 'x.mohidden/d.dds.mohidden' },
+      refOf(clicked), { origin, relativePath: 'x.mohidden/c.dds', includedPath: 'x/c.dds' }, { origin, relativePath: 'x.mohidden/d.dds.mohidden', includedPath: 'x/d.dds' },
     ], mark);
     expect(reporter.reports).toEqual([]);
   });
@@ -1392,7 +1393,7 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
   const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
   const fileRow = new FileNode(
     modA, { kind: 'mod', name: 'Mod A' },
-    { relativePath: 'a.dds', path: '/a.dds', sourcePath: '/a.dds', excluded: false, excludedByName: false }, 'a.dds');
+    { relativePath: 'a.dds', path: '/a.dds', sourcePath: '/a.dds', excluded: false, markedExcluded: false, includedPath: 'a.dds' }, 'a.dds');
   const written = (write: ReturnType<typeof vi.fn>, result: unknown) =>
     write.mockImplementation(() => { progressSteps.push('write'); return Promise.resolve(result); });
   const landed = { applied: true, outcome: { landed: ['Mod A'], refused: [] } };
@@ -1470,7 +1471,7 @@ describe('a Mods gesture that writes ends on the Instance loader\'s read, with t
   it('excluding a file the view shows already excluded still writes, since the disk decides', async () => {
     const stale = new FileNode(
       modA, { kind: 'mod', name: 'Mod A' },
-      { relativePath: 'a.dds.mohidden', path: '/a', sourcePath: '/a', excluded: true, excludedByName: true }, 'a.dds.mohidden');
+      { relativePath: 'a.dds.mohidden', path: '/a', sourcePath: '/a', excluded: true, markedExcluded: true, includedPath: 'a.dds.mohidden' }, 'a.dds.mohidden');
     written(markFiles, { landed: [], refused: [] });
     registerFileExclusionCommands(commands, instance, () => [], reporter());
 
@@ -1837,17 +1838,22 @@ describe('the mod gestures, called by the agent', () => {
     ['modbench.mod.includeFile', 'Included'],
   ])('%s', (command, mark) => {
     const origin = { kind: 'mod', name: 'Mod A' } as const;
-    const inSelection = new FileNode(selected, origin, { relativePath: 'sel.dds', path: '/p/sel.dds', sourcePath: '/p/sel.dds', excluded: false, excludedByName: false }, 'sel.dds');
+    const inSelection = new FileNode(selected, origin, { relativePath: 'sel.dds', path: '/p/sel.dds', sourcePath: '/p/sel.dds', excluded: false, markedExcluded: false, includedPath: 'sel.dds' }, 'sel.dds');
+
+    const holding = {
+      ...instance,
+      value: instanceValueFixture({ filesByMod: new Map([['Mod A', [{ ...fileIn('/p', 'a.dds.mohidden'), includedPath: 'a.dds' }]]]) }),
+    };
 
     it('marks the files given, never the selection, and answers the outcome', async () => {
-      const outcome = { applied: true, outcome: { landed: [{ origin, relativePath: 'a.dds' }], refused: [] } };
+      const outcome = { applied: true, outcome: { landed: [{ origin, relativePath: 'a.dds.mohidden', includedPath: 'a.dds' }], refused: [] } };
       markFiles.mockResolvedValue(outcome);
       const reporter = recordingReporter();
-      registerFileExclusionCommands(commands, instance, () => [inSelection], reporter);
+      registerFileExclusionCommands(commands, holding, () => [inSelection], reporter);
 
-      const answered = await invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'a.dds' }], {}));
+      const answered = await invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'a.dds.mohidden' }], {}));
 
-      expect(markFiles).toHaveBeenCalledWith([{ origin, relativePath: 'a.dds' }], mark);
+      expect(markFiles).toHaveBeenCalledWith([{ origin, relativePath: 'a.dds.mohidden', includedPath: 'a.dds' }], mark);
       expect(answered).toEqual(outcome);
       expect(reporter.reports).toEqual([]);
       nothingOpened();
@@ -1855,15 +1861,23 @@ describe('the mod gestures, called by the agent', () => {
 
     it('answers a refusal of the whole selection as the failure the view reports', async () => {
       markFiles.mockResolvedValue({ applied: false, refusal: 'mEdit could not be reached.' });
-      registerFileExclusionCommands(commands, instance, () => [], recordingReporter());
+      registerFileExclusionCommands(commands, holding, () => [], recordingReporter());
 
-      const answered = await invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'a.dds' }], {}));
+      const answered = await invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'a.dds.mohidden' }], {}));
 
       expect(answered).toEqual({ applied: false, refusal: `Could not ${mark === 'Excluded' ? 'exclude' : 'include'} 1 files.`, detail: 'mEdit could not be reached.' });
     });
 
+    it('refuses a file the listing does not hold, writing nothing', async () => {
+      registerFileExclusionCommands(commands, holding, () => [], recordingReporter());
+
+      await expect(invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'missing.dds' }], {}))).rejects.toBeInstanceOf(Refusal);
+
+      expect(markFiles).not.toHaveBeenCalled();
+    });
+
     it('refuses an Argument that is not a file, writing nothing', async () => {
-      registerFileExclusionCommands(commands, instance, () => [], recordingReporter());
+      registerFileExclusionCommands(commands, holding, () => [], recordingReporter());
 
       await expect(invoke(command, ofMods('Mod A'))).rejects.toBeInstanceOf(Refusal);
 
