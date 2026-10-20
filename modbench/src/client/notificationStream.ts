@@ -7,6 +7,8 @@ import { errorMessage } from '../ports/errorMessage';
 // Dispatching for the one stream kind this file opens (SSE); `whenConnected`'s
 // default answer below is settled, which `SseNotificationSubscriber` overrides with its own.
 class NotificationListenerRegistry {
+  constructor(private readonly listenerLog: Log) {}
+
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
     'load-order-status': new Set(), 'decompile-and-commit-progress': new Set(), 'update-manifest-progress': new Set(), 'restore-from-manifest-progress': new Set(), 'external-change': new Set(),
     'plugin-source-unreadable': new Set(), 'record-filter-cleared': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
@@ -67,7 +69,13 @@ class NotificationListenerRegistry {
   }
 
   private deliver<K extends NotificationKind>(kind: K, payload: NotificationPayloads[K]): void {
-    for (const listener of this.typedListeners[kind]) listener(payload);
+    for (const listener of this.typedListeners[kind]) {
+      try {
+        listener(payload);
+      } catch (e) {
+        this.listenerLog.error(`[notifications] a ${kind} listener threw: ${errorMessage(e)}`);
+      }
+    }
   }
 }
 
@@ -163,8 +171,9 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
   private readonly reopenListeners = new Set<() => void>();
 
   constructor(private readonly deps: SseNotificationSubscriberDeps) {
-    super();
-    this.log = deps.log ?? SILENT_LOG;
+    const log = deps.log ?? SILENT_LOG;
+    super(log);
+    this.log = log;
     this.reconnectDelayMs = deps.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS;
   }
 

@@ -108,6 +108,24 @@ describe('SseNotificationSubscriber', () => {
     subscriber.stop();
   });
 
+  it('a throwing listener is logged as an error, the other listeners still hear the frame, and the stream stays open', async () => {
+    const event = rowsChanged(['000001:Test.esp']);
+    const openStream = vi.fn().mockResolvedValue(streamResponse([sseFrame(event)]));
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const subscriber = new SseNotificationSubscriber({ openStream, log, reconnectDelayMs: 1000 });
+    const heard: unknown[] = [];
+    subscriber.onNotification('rows-changed', () => { throw new Error('listener broke'); });
+    subscriber.onNotification('rows-changed', (p) => heard.push(p));
+
+    subscriber.start();
+    await vi.waitFor(() => expect(heard).toHaveLength(1));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('listener broke'));
+    expect(log.warn).not.toHaveBeenCalledWith(expect.stringContaining('stream dropped'));
+    subscriber.stop();
+  });
+
   it('reconnects after openStream itself rejects', async () => {
     const event = rowsChanged(['000001:Test.esp']);
     const openStream = vi.fn()
