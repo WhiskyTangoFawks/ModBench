@@ -4,6 +4,7 @@ import type { Reporter } from '../ports/reporter';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import type { RecordCopy } from '../wire/recordCopy';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
+import { heldText } from '../textDocuments/heldText';
 import { formKeyAt, referenceSpan } from './sourceText';
 import { answerOf } from '../wire/readFailed';
 
@@ -27,7 +28,7 @@ export function referencesOf<Document extends { getText(): string }>(
       [JSON.stringify([row.formKey, row.origin, row.plugin]), { formKey: row.formKey, plugin: pluginAddressOf(row) }]));
     const { found: located, leftOut } = await locateCopies(client, [...copies.values()], async (copy, uri) => {
       const document = await open(uri);
-      return { uri, document, ...referenceSpan(document.getText(), copy.formKey, formKey) };
+      return { uri, document, ...referenceSpan(heldText(document), copy.formKey, formKey) };
     });
     for (const why of leftOut) {
       reporter.shownOnSurface('warning', `Find All References on ${formKey} left out a copy it could not open.`, why);

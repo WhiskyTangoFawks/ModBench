@@ -4,6 +4,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressOf } from '../wire/pluginAddress';
 import type { RecordCopy } from '../wire/recordCopy';
+import { heldText } from '../textDocuments/heldText';
 import { locateCopies, type RecordLocation, type RecordLocationDeps } from './recordLocation';
 import { formKeyMember } from './sourceText';
 import { recordLabel } from '../wire/recordLabel';
@@ -48,7 +49,7 @@ export function workspaceSymbolsOf<Document extends { getText(): string }>({ cli
   const locate = async ({ name, formKey, uri }: RecordSymbol): Promise<RecordLocation<Document> | undefined> => {
     try {
       const document = await open(uri);
-      const member = formKeyMember(document.getText(), formKey);
+      const member = formKeyMember(heldText(document), formKey);
       if (!member) {
         reporter.shownOnSurface('warning', `${GESTURE} cannot open ${name}.`, `${uri.path} states no ${formKey} member.`);
         return undefined;
