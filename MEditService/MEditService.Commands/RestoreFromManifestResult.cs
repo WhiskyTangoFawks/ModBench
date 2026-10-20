@@ -8,9 +8,8 @@ namespace MEditService.Commands;
 public sealed record RestoreFromManifestResult(IReadOnlyList<ModRestored> Applied, IReadOnlyList<RestoreRefused> Refused)
     : ISelectionAnswer<RestoreRefused>;
 
-/// <summary>A mod whose files are as its manifest says: Written each file written, NamedByNoLine each file no line names,
-/// StatCacheNotWritten why the stat cache did not keep the read, Metadata its manifest's version and page, and
-/// Uncommitted and LeftDetached from its rebuild.</summary>
+/// <summary>A mod whose files are as its manifest says: the files written, each file no line names, why the stat cache
+/// did not keep the read, its manifest's metadata, and what its rebuild left.</summary>
 public sealed record ModRestored(
     string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata,
     bool Uncommitted, string? LeftDetached);
