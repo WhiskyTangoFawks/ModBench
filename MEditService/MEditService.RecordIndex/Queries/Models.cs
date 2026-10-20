@@ -319,19 +319,11 @@ public sealed record NamedObject(PluginAddress? Plugin, string? FormKey, string?
 
 /// <summary>The comparison of every copy given, or, with any copy missing, the copies no plugin gave, in the
 /// order given (ADR-0019): <c>Compare</c> is null exactly when <c>Missing</c> is not empty.</summary>
-public sealed record CompareRecordsAnswer
+public sealed record CompareRecordsAnswer(CompareResult? Compare, IReadOnlyList<CopyMissing> Missing)
 {
-    private CompareRecordsAnswer()
-    {
-    }
+    internal static CompareRecordsAnswer Compared(CompareResult compare) => new(compare, []);
 
-    public CompareResult? Compare { get; private set; }
-
-    public IReadOnlyList<CopyMissing> Missing { get; private set; } = [];
-
-    internal static CompareRecordsAnswer Compared(CompareResult compare) => new() { Compare = compare };
-
-    internal static CompareRecordsAnswer CopiesMissing(IReadOnlyList<CopyMissing> missing) => new() { Missing = missing };
+    internal static CompareRecordsAnswer CopiesMissing(IReadOnlyList<CopyMissing> missing) => new(null, missing);
 }
 
 // A tri-state rather than two booleans: the states are mutually exclusive. Deleted is absent

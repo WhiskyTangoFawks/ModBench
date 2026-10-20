@@ -1077,7 +1077,7 @@ export interface components {
         };
         CompareRecordsAnswer: {
             compare?: components["schemas"]["CompareResult"] | null;
-            readonly missing: components["schemas"]["CopyMissing"][];
+            missing: components["schemas"]["CopyMissing"][];
         };
         CompareRecordsRequest: {
             copies: components["schemas"]["RecordCopy"][];
