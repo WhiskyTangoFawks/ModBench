@@ -313,8 +313,7 @@ export interface OriginFolder {
 }
 
 /** A file in an origin, as a folder is, and where it is read from: a link's target. It carries
- *  the path it has when nothing excludes it, and `markedExcluded` holds when its own mark
- *  excludes it, whatever its folder's. */
+ *  the path it has when nothing excludes it; `markedExcluded` holds when its own mark excludes it. */
 export interface OriginFile extends OriginFolder {
   readonly sourcePath: string;
   readonly includedPath: string;

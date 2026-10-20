@@ -203,8 +203,8 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
 describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename the files they name and nothing else', () => {
   let dir: string;
-  const inMod = { origin: { kind: 'mod', name: 'DragIn Manual Extract' }, relativePath: 'textures/dummy.dds' } as const;
-  const inOverwrite = { origin: { kind: 'runtimeOutput' }, relativePath: 'F4SE/Plugins/SomePlugin.log' } as const;
+  const inMod = { origin: { kind: 'mod', name: 'DragIn Manual Extract' }, relativePath: 'textures/dummy.dds', includedPath: 'textures/dummy.dds' } as const;
+  const inOverwrite = { origin: { kind: 'runtimeOutput' }, relativePath: 'F4SE/Plugins/SomePlugin.log', includedPath: 'F4SE/Plugins/SomePlugin.log' } as const;
 
   beforeEach(() => {
     dir = cloneCorpusFixture();
@@ -234,8 +234,8 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
 
   it('refuses a file gone from disk by name, and an include its folder leaves undone with the instance\'s reason, while the rest land', async () => {
     const own = { ...inMod, relativePath: 'textures/dummy.dds.mohidden' };
-    const gone = { ...inMod, relativePath: 'Missing.esp' };
-    const byFolder = { ...inMod, relativePath: 'meshes.mohidden/a.nif' };
+    const gone = { ...inMod, relativePath: 'Missing.esp', includedPath: 'Missing.esp' };
+    const byFolder = { ...inMod, relativePath: 'meshes.mohidden/a.nif', includedPath: 'meshes/a.nif' };
     await modCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).markFiles([inMod], 'Excluded');
     await mkdir(join(dir, 'mods', 'DragIn Manual Extract', 'meshes.mohidden'));
     await writeFile(join(dir, 'mods', 'DragIn Manual Extract', 'meshes.mohidden', 'a.nif'), '');
