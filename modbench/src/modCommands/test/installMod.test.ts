@@ -200,6 +200,15 @@ describe('installMod', () => {
     expect(calls).toEqual([]);
   });
 
+  it('refuses, installing nothing, an installation file when the downloads folder cannot be resolved', async () => {
+    const fake = fakeInstanceAdapter(readingFixture({ downloadedFiles: { kind: 'unresolved', reason: 'the downloads folder is unresolvable' } }));
+
+    const result = await modCommands(fake.adapter, new InMemoryMEditClient(), unreadStatus).installMod(INSTALLATION_FILE, NEW_MOD, true);
+
+    expect(result).toEqual({ applied: false, refusal: 'the downloads folder is unresolvable' });
+    expect(fake.calls).toEqual([]);
+  });
+
   it('marks no downloaded file when nothing landed', async () => {
     const { calls } = await install(DOWNLOADED_FILE, NEW_MOD, { installed: { landed: false } });
 

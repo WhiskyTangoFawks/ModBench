@@ -72,6 +72,7 @@ describe('BackendLifecycle', () => {
 function makeChild() {
   return Object.assign(new EventEmitter(), {
     kill: vi.fn(),
+    stdin: new PassThrough(),
     stdout: new PassThrough(),
     stderr: new PassThrough(),
   });
@@ -439,7 +440,7 @@ describe('BackendLifecycle exit / stop', () => {
     expect(children).toHaveLength(1);
   });
 
-  it('stop() kills the child, and does not report "stopped" until exit is confirmed, so deactivate() awaiting it keeps a reload from building a replacement client before the old child is gone', async () => {
+  it('stop() closes the child\'s stdin, and does not report "stopped" until exit is confirmed, so deactivate() awaiting it keeps a reload from building a replacement client before the old child is gone', async () => {
     const state = { healthy: false };
     const child = makeChild();
     const spawn = vi.fn(() => { state.healthy = true; return child; });
@@ -451,7 +452,8 @@ describe('BackendLifecycle exit / stop', () => {
     const statuses = record(lifecycle);
 
     const stopped = lifecycle.stop();
-    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(child.stdin.writableEnded).toBe(true);
+    expect(child.kill).not.toHaveBeenCalled();
     expect(statuses).not.toContain('stopped');
 
     child.emit('exit', 0);
@@ -459,21 +461,6 @@ describe('BackendLifecycle exit / stop', () => {
 
     expect(statuses).toEqual(['stopped']);
     expect(spawn).toHaveBeenCalledTimes(1);
-    expect(lifecycle.status).toBe('stopped');
-  });
-
-  it('reports stopped even when killing the child throws, and still rejects the stop', async () => {
-    const state = { healthy: false };
-    const child = makeChild();
-    const spawn = vi.fn(() => { state.healthy = true; return child; });
-    const lifecycle = new BackendLifecycle({
-      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
-    });
-    await lifecycle.start();
-    child.kill.mockImplementation(() => { throw new Error('EPERM'); });
-
-    await expect(lifecycle.stop()).rejects.toThrow('EPERM');
-
     expect(lifecycle.status).toBe('stopped');
   });
 
@@ -490,12 +477,12 @@ describe('BackendLifecycle exit / stop', () => {
     const statuses = record(lifecycle);
 
     const stopped = lifecycle.stop();
-    expect(child.kill).toHaveBeenCalledTimes(1);
-    expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGTERM');
+    expect(child.stdin.writableEnded).toBe(true);
+    expect(child.kill).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(3000);
-    expect(child.kill).toHaveBeenCalledTimes(2);
-    expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL');
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
     expect(statuses).not.toContain('stopped');
 
     child.emit('exit', null);
