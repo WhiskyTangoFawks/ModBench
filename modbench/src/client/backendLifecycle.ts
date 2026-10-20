@@ -13,8 +13,7 @@ interface BackendProcess {
   kill(signal: 'SIGKILL'): void;
   on(event: 'exit', cb: (code: number | null, signal: NodeJS.Signals | null) => void): void;
   on(event: 'error', cb: (err: Error) => void): void;
-  /** Present when spawned with piped stdio; absent on 'ignore'. */
-  stdin?: NodeJS.WritableStream | null;
+  stdin: NodeJS.WritableStream;
   stdout?: NodeJS.ReadableStream | null;
   stderr?: NodeJS.ReadableStream | null;
 }
@@ -204,7 +203,7 @@ export class BackendLifecycle {
     const child = this.child;
     this.child = undefined;
     try {
-      if (child) await this.killAndConfirmExit(child);
+      if (child) await this.stopAndConfirmExit(child);
     } finally {
       if (this._status !== 'stopped') this.setStatus('stopped');
     }
@@ -212,18 +211,18 @@ export class BackendLifecycle {
 
   // Closing stdin is the graceful stop on both platforms; Node's SIGTERM kills a Windows process
   // at once. A backend mid a long request won't notice, so this escalates to SIGKILL and waits
-  // for a real 'exit'.
-  private killAndConfirmExit(child: BackendProcess): Promise<void> {
+  // for a real 'exit'. Accepted race: stop() clears `this.child` first, so a start() within the
+  // grace period (up to stopGracePeriodMs) can spawn a second child.
+  private stopAndConfirmExit(child: BackendProcess): Promise<void> {
     return new Promise((resolve) => {
-      // A container, not a `let`, so it exists (as `undefined`) before onExit is even defined —
-      // safe even if 'exit' fired synchronously from kill().
+      // A container, not a `let`, so it exists (as `undefined`) before onExit is even defined.
       const escalateTimer: { current?: ReturnType<typeof setTimeout> } = {};
       const onExit = () => {
         clearTimeout(escalateTimer.current);
         resolve();
       };
       child.on('exit', onExit);
-      child.stdin?.end();
+      child.stdin.end();
       escalateTimer.current = setTimeout(() => {
         this.log.warn(`[backend] did not exit within ${this.stopGracePeriodMs}ms of closing stdin — sending SIGKILL`);
         child.kill('SIGKILL');

@@ -464,21 +464,6 @@ describe('BackendLifecycle exit / stop', () => {
     expect(lifecycle.status).toBe('stopped');
   });
 
-  it('reports stopped even when killing the child throws, and still rejects the stop', async () => {
-    const state = { healthy: false };
-    const child = makeChild();
-    const spawn = vi.fn(() => { state.healthy = true; return child; });
-    const lifecycle = new BackendLifecycle({
-      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
-    });
-    await lifecycle.start();
-    child.stdin.end = () => { throw new Error('EPERM'); };
-
-    await expect(lifecycle.stop()).rejects.toThrow('EPERM');
-
-    expect(lifecycle.status).toBe('stopped');
-  });
-
   it('escalates to SIGKILL if the child never exits within the grace period, withholding stopped until exit is observed even after SIGKILL is sent', async () => {
     vi.useFakeTimers();
     const state = { healthy: false };

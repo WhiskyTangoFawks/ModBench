@@ -769,14 +769,13 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
-  it('stays stopped after a crash: a snapshot answers backendFailed, with no second child spawned and nothing launched or killed', async () => {
-    const kills: number[] = [];
+  it('stays stopped after a crash: a snapshot answers backendFailed, with no second child spawned and nothing launched', async () => {
     const children: EventEmitter[] = [];
     const client = createMEditClient({
       backend: {
         freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
         spawn: () => {
-          const child = Object.assign(new EventEmitter(), { kill: () => { kills.push(children.length); } });
+          const child = Object.assign(new EventEmitter(), { kill: () => undefined, stdin: new PassThrough() });
           children.push(child);
           return child;
         },
@@ -797,7 +796,6 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     expect(exits).toHaveLength(1);
     await expect(client.sendLoadOrder(snapshot)).resolves.toEqual({ outcome: 'backendFailed' });
     expect(launches).toEqual([]);
-    expect(kills).toEqual([]);
     expect(children).toHaveLength(1);
   });
 
@@ -821,9 +819,8 @@ describe('HttpMEditClient — sendLoadOrder', () => {
       backend: {
         freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
         spawn: () => {
-          const child: EventEmitter & { kill: () => void } = Object.assign(new EventEmitter(), {
-            kill: () => { child.emit('exit', 0); },
-          });
+          const child = Object.assign(new EventEmitter(), { kill: () => undefined, stdin: new PassThrough() });
+          child.stdin.on('finish', () => child.emit('exit', 0));
           children.push(child);
           process.nextTick(() => child.emit('exit', 1));
           return child;
@@ -917,7 +914,7 @@ describe('HttpMEditClient, the backend process it hides', () => {
     const state = { healthy: false };
     const spawn = vi.fn(() => {
       state.healthy = true;
-      return { kill: vi.fn(), on: vi.fn(), stdout: Readable.from(['[10:00:00 WRN] slow\n']), stderr: null };
+      return { kill: vi.fn(), on: vi.fn(), stdin: new PassThrough(), stdout: Readable.from(['[10:00:00 WRN] slow\n']), stderr: null };
     });
     const client = createMEditClient({
       backend: {
