@@ -11,7 +11,7 @@ import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote } from '../i
 import { ignoreListFile, sourceModPath, sourceRootDir, submodulesFile, withSourceModLines } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
-import { sourceModsIn } from '../sourceMods';
+import { sourceModsIn } from './sourceMods';
 
 type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'sourceHost' | 'submodule' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'>;
 

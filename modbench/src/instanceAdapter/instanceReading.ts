@@ -13,8 +13,8 @@ import { pluginsProvidedOf } from './pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
 
 export interface ArchiveReads {
-  /** The archives the game's INIs list, in load order: the release's default INI, then the profile's own INIs
-   *  or else the user's, a key's last value winning. `notes` says what was not read, and where it looked. */
+  /** The archives the game's INIs list, in load order, a key's last value winning. `notes` says what
+   *  was not read, and where it looked. */
   archiveList(
     profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
   ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;

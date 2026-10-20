@@ -40,7 +40,7 @@ import type {
   ArchiveReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided, Subscription,
 } from '../../instanceAdapter';
 import { setIniValue } from '../codecs/qSettingsIni';
-import { tempWritePath } from '../../files';
+import { ownTempPrefix } from '../../files';
 import { fakeArchiveReader } from '../../../test/fakeArchiveReader';
 import { runningProgram } from '../../../test/runningProgram';
 import { adapterOver, contextOver } from '../../../test/mo2/adapterOver';
@@ -1364,7 +1364,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(folder, 'Textures', 'Source'), { recursive: true });
         await writeFile(join(folder, 'Textures', 'a.dds'), '');
         await writeFile(join(folder, 'Textures', 'Source', 'kept.psc'), '');
-        await writeFile(tempWritePath(join(folder, 'Textures', 'b.dds')), '');
+        await writeFile(`${ownTempPrefix(join(folder, 'Textures'), '')}b.tmp`, '');
 
         const files = await source.originFiles(mod('Harder VATS'), 'list');
 
@@ -1561,7 +1561,7 @@ describe('the MO2 Instance adapter', () => {
       it('lists everything the game wrote at run time, under the reserved origin, without writes in flight', async () => {
         const folder = join(root, 'overwrite');
         await writeFile(join(folder, 'Stray.esp'), '');
-        await writeFile(tempWritePath(join(folder, 'Stray.esp')), '');
+        await writeFile(`${ownTempPrefix(folder, '')}stray.tmp`, '');
 
         const files = await source.originFiles({ kind: 'runtimeOutput' }, 'list');
 

@@ -3,13 +3,13 @@
 // which mod a source builds.
 
 import { join } from 'node:path';
-import { errnoCode } from './errno';
-import { errorMessage } from '../ports/errorMessage';
-import { get, ignoreSkippedLink, isRepository, listFolders, readOrAbsent } from './files';
-import type { SourceMods } from './instanceAdapter';
-import { BUILD_OUTPUT_KEY } from '../wire/sourceMod';
-import { buildConfigurationFile, modFolderName, sourceRootDir } from './mo2/layout';
-import { modNameKey } from './mo2/codecs/modlistText';
+import { errnoCode } from '../errno';
+import { errorMessage } from '../../ports/errorMessage';
+import { get, ignoreSkippedLink, isRepository, listFolders, readOrAbsent } from '../files';
+import type { SourceMods } from '../instanceAdapter';
+import { BUILD_OUTPUT_KEY } from '../../wire/sourceMod';
+import { buildConfigurationFile, modFolderName, sourceRootDir } from './layout';
+import { modNameKey } from './codecs/modlistText';
 
 async function outputOf(sourceFolder: string): Promise<{ output: string } | { reason: string }> {
   let text: string;

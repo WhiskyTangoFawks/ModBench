@@ -4,7 +4,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { write, putIfChanged, isRepository, makeDir, tempOwner } from '../files';
+import { write, putIfChanged, isRepository, makeDir } from '../files';
 
 let crashBeforeTheNextRenameLands = false;
 
@@ -122,6 +122,15 @@ describe('write', () => {
     expect(await readFile(path, 'utf8')).toBe('new');
     expect(await readFile(siblingTemp, 'utf8')).toBe('a sibling target\'s own in-flight write');
   });
+
+  it.each(['.medit_tmp__x.tmp', '.medit_tmp_0_x.tmp', '.medit_tmp_-3_x', '.medit_tmp_abc_x'])('leaves alone %s, which names no process', async (name) => {
+    await writeFile(path, 'original');
+    await writeFile(join(root, name), 'unowned');
+
+    await write(path, 'new');
+
+    expect(await readFile(join(root, name), 'utf8')).toBe('unowned');
+  });
 });
 
 describe('putIfChanged', () => {
@@ -215,15 +224,5 @@ describe('makeDir', () => {
 
     expect((await stat(join(parent, 'made'))).isDirectory()).toBe(true);
     await expect(makeDir(join(parent, 'no', 'parent'))).rejects.toMatchObject({ code: 'ENOENT' });
-  });
-});
-
-describe('tempOwner', () => {
-  it('reads the process id from the name', () => {
-    expect(tempOwner('.medit_tmp_4242_x.tmp')).toBe(4242);
-  });
-
-  it.each(['.medit_tmp__x.tmp', '.medit_tmp_0_x.tmp', '.medit_tmp_-3_x', '.medit_tmp_abc_x'])('reads no owner from %s', (name) => {
-    expect(tempOwner(name)).toBeUndefined();
   });
 });

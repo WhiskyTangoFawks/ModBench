@@ -5,7 +5,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { appendFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test/mo2/corpusFixture';
+import { cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
 import { readInstanceOf } from '../../test/mo2/adapterOver';
 
 describe('a line the instance repeats', () => {
@@ -18,7 +18,6 @@ describe('a line the instance repeats', () => {
     { what: 'mod, whatever its case', file: DEFAULT_MODLIST, line: '+PATCH MOD', note: 'modlist.txt lists the mod PATCH MOD' },
     { what: 'separator', file: DEFAULT_MODLIST, line: '+Unassigned (Modlist Development)_separator', note: 'modlist.txt lists the separator Unassigned (Modlist Development)' },
     { what: 'separator, whatever its case', file: DEFAULT_MODLIST, line: '-UNASSIGNED (MODLIST DEVELOPMENT)_separator', note: 'modlist.txt lists the separator UNASSIGNED (MODLIST DEVELOPMENT)' },
-    { what: 'plugin, whatever its case', file: DEFAULT_PLUGINS, line: 'NONASCIIRETEXTURE.ESP', note: 'plugins.txt lists the plugin NONASCIIRETEXTURE.ESP' },
   ])('is one $what in the reading, the first line holding, and a note names the repeat', async ({ file, line, note }) => {
     const before = await readInstanceOf(dir);
     await appendFile(join(dir, file), `${line}\n`);

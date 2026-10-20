@@ -28,14 +28,12 @@ export const isOwnTemp = (name: string): boolean => name.startsWith(TEMP_PREFIX)
 // The prefix of a temp this process names, `.medit_tmp_<pid>_`: the process id lets any writer tell a leftover from a live temp.
 export const ownTempPrefix = (folder: string, kind: string): string => join(folder, `${TEMP_PREFIX}${process.pid}_${kind}`);
 
-/** The id of the process that named `tempName`, when it carries one. */
-export function tempOwner(tempName: string): number | undefined {
+function tempOwner(tempName: string): number | undefined {
   const id = Number(tempName.slice(TEMP_PREFIX.length).split('_')[0] || Number.NaN);
   return Number.isInteger(id) && id > 0 ? id : undefined;
 }
 
-/** The temp path written to beside `path`, before its one rename onto it. */
-export function tempWritePath(path: string): string {
+function tempWritePath(path: string): string {
   return `${ownTempPrefix(dirname(path), '')}${randomBytes(6).toString('hex')}.tmp`;
 }
 

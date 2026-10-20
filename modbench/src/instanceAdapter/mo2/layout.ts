@@ -10,7 +10,7 @@ import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { PROFILE_SETTINGS_FILE_NAME } from './codecs/profileSettings';
 import { GIT_DIR, ownTempPrefix } from '../files';
 import { PLUGINS_FILE_NAME } from '../../loadOrderFileCodec/pluginsText';
-import { anyCase, SOURCE_MODS_FOLDER as SOURCE, type EntryRef } from '../instanceAdapter';
+import { anyCase, SOURCE_MODS_FOLDER, type EntryRef } from '../instanceAdapter';
 import { PLUGIN_EXTENSIONS } from '../../tables/pluginFile';
 import { BUILD_CONFIGURATION_FILE } from '../../wire/sourceMod';
 
@@ -124,11 +124,11 @@ export const downloadSidecarFile = (downloadsDir: string, name: string): string 
  *  gives it none. */
 export const modSourceDir = (instanceRoot: string, modName: string): string | undefined => {
   const folder = modFolderName(modName);
-  return folder === undefined ? undefined : join(instanceRoot, SOURCE, folder);
+  return folder === undefined ? undefined : join(instanceRoot, SOURCE_MODS_FOLDER, folder);
 };
 
 /** The folder beside `mods/` that holds every mod's source folder (ADR-0007). */
-export const sourceRootDir = (instanceRoot: string): string => join(instanceRoot, SOURCE);
+export const sourceRootDir = (instanceRoot: string): string => join(instanceRoot, SOURCE_MODS_FOLDER);
 
 /** The folder at the instance root that holds the adapter's index of hashes, which the adapter alone writes. */
 export const hashIndexDir = (instanceRoot: string): string => join(instanceRoot, HASH_INDEX);
@@ -144,7 +144,7 @@ export const ignoreListFile = (instanceRoot: string): string => join(instanceRoo
 export const submodulesFile = (instanceRoot: string): string => join(instanceRoot, SUBMODULES_FILE);
 
 /** A source mod's path in the instance repository, which is its submodule's path. */
-export const sourceModPath = (folderName: string): string => `${SOURCE}/${folderName}`;
+export const sourceModPath = (folderName: string): string => `${SOURCE_MODS_FOLDER}/${folderName}`;
 
 /** The file in a source folder that says what its build makes (ADR-0007). */
 export const buildConfigurationFile = (sourceFolder: string): string => join(sourceFolder, BUILD_CONFIGURATION_FILE);
@@ -155,7 +155,7 @@ export const REPOSITORY_WATCH_GLOB = GIT_DIR;
 // Watch patterns, POSIX-separated and relative to the instance root: a `RelativePattern` takes a
 // glob, never a platform path, so these are built as text rather than with `join`.
 export const MODS_GLOB = `${MODS}/**`;
-export const SOURCE_GLOB = `${SOURCE}/**`;
+export const SOURCE_GLOB = `${SOURCE_MODS_FOLDER}/**`;
 export const OVERWRITE_GLOB = `${OVERWRITE_DIR_NAME}/**`;
 export const MODLIST_GLOB = `${PROFILES}/*/${MODLIST_FILE_NAME}`;
 export const PLUGINS_GLOB = `${PROFILES}/*/${PLUGINS_FILE_NAME}`;
@@ -189,7 +189,7 @@ export function withSourceModLines(ignoreList: string, folderNames: readonly str
   const end = lines.indexOf(SOURCE_MODS_END);
   if ((begin === -1) !== (end === -1) || end < begin) return undefined;
   const block = folderNames.length === 0 ? [] : [
-    SOURCE_MODS_BEGIN, `!/${SOURCE}/`, `/${SOURCE}/*`, ...folderNames.map((name) => `!/${SOURCE}/${escapedForIgnoreList(name)}`), SOURCE_MODS_END,
+    SOURCE_MODS_BEGIN, `!/${SOURCE_MODS_FOLDER}/`, `/${SOURCE_MODS_FOLDER}/*`, ...folderNames.map((name) => `!/${SOURCE_MODS_FOLDER}/${escapedForIgnoreList(name)}`), SOURCE_MODS_END,
   ];
   if (begin === -1) lines.push(...block);
   else lines.splice(begin, end - begin + 1, ...block);

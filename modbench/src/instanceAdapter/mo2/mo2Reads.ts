@@ -18,7 +18,7 @@ import { mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
 import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
-import { sourceModsIn } from '../sourceMods';
+import { sourceModsIn } from './sourceMods';
 import { errorMessage } from '../../ports/errorMessage';
 
 async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLink): Promise<DownloadedFile[] | undefined> {

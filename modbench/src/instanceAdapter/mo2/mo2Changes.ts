@@ -14,7 +14,7 @@ import { spliceDownloadMeta, trashDownloadMeta } from './downloadMeta';
 import { ensureDir, exists, putIfChanged, withLock, write } from '../files';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
 import { downloadFile, pluginOrderFiles, settingsFile } from './layout';
-import { sourceModsIn } from '../sourceMods';
+import { sourceModsIn } from './sourceMods';
 import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
 

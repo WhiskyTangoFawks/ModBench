@@ -2,14 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>();
-  return { ...actual, readdir: vi.fn(actual.readdir) };
-});
 
-import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
+import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test/mo2/corpusFixture';
 import { sourceOver } from '../../test/mo2/adapterOver';
 import { readInstance, readPluginsProvided, type ReadingSource } from '../instanceReading';
 import { settleWaitArmed } from '../../test/eventually';
@@ -38,6 +34,16 @@ describe('the instance assembled from a manager\'s reading', () => {
     const { orderNotes } = await readInstance(other);
 
     expect(orderNotes).toEqual(['order.txt lists the mod Patch Mod on more than one line; the first line holds']);
+  });
+
+  it('keeps the first plugin line of a name the plugin order repeats in another case, and a note names the repeat', async () => {
+    const before = await readInstance(source);
+    await appendFile(join(dir, DEFAULT_PLUGINS), 'NONASCIIRETEXTURE.ESP\n');
+
+    const reading = await readInstance(source);
+
+    expect(reading.pluginOrder).toEqual(before.pluginOrder);
+    expect(reading.orderNotes).toEqual(['plugins.txt lists the plugin NONASCIIRETEXTURE.ESP on more than one line; the first line holds']);
   });
 
   it('reads the settings once, so one reading holds one generation of the ini', async () => {
@@ -122,23 +128,26 @@ describe('the instance assembled from a manager\'s reading', () => {
     }
   });
 
-  describe('listing mods/ for a read of every mod', () => {
-    const listingsOfMods = (): number => vi.mocked(readdir).mock.calls.filter(([path]) => String(path) === join(dir, 'mods')).length;
+  describe('listing the mod folders for a read of every mod', () => {
+    const listingsOf = (): { counting: ReadingSource; listings: () => number } => {
+      let listed = 0;
+      return { counting: { ...source, modFolders: (skippedLink) => { listed++; return source.modFolders(skippedLink); } }, listings: () => listed };
+    };
 
-    it('lists it once to read the instance whole', async () => {
-      vi.mocked(readdir).mockClear();
+    it('lists them once to read the instance whole', async () => {
+      const { counting, listings } = listingsOf();
 
-      await readInstance(source);
+      await readInstance(counting);
 
-      expect(listingsOfMods()).toBe(1);
+      expect(listings()).toBe(1);
     });
 
-    it('lists it once to read the plugins the mod order provides', async () => {
-      vi.mocked(readdir).mockClear();
+    it('lists them once to read the plugins the mod order provides', async () => {
+      const { counting, listings } = listingsOf();
 
-      await readPluginsProvided(source, 'Default');
+      await readPluginsProvided(counting, 'Default');
 
-      expect(listingsOfMods()).toBe(1);
+      expect(listings()).toBe(1);
     });
   });
 });
