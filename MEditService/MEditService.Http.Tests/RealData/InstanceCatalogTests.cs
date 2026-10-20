@@ -16,7 +16,7 @@ public sealed class InstanceCatalogTests
     {
         var instance = Required("MEDIT_CATALOG_INSTANCE");
         var profile = Path.Combine(instance, "profiles", Required("MEDIT_CATALOG_PROFILE"));
-        var dataFolder = Path.Combine(Required("MEDIT_CATALOG_GAME_DIR"), "Data");
+        var dataFolder = Path.Combine(Required("MEDIT_CATALOG_GAME_FOLDER"), "Data");
         var catalogPath = Required("MEDIT_CATALOG_OUT");
         var release = Enum.Parse<GameRelease>(Required("MEDIT_CATALOG_RELEASE"));
 

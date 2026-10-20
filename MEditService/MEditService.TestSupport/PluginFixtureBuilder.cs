@@ -51,7 +51,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 
     public ScatteredFixtureData BuildScattered()
     {
-        // The game's masters load with no plugins.txt line; their files live in the Data folder, never a mod folder.
+        // The game's masters load with no plugins.txt line; their files live in the Data folder.
         var loadedWithNoLine = Implicits.Get(GameRelease.Fallout4).Listings
             .Select(l => l.FileName.ToString())
             .Where(name => _plugins.Exists(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
