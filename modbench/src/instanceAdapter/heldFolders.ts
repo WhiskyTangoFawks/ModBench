@@ -6,7 +6,7 @@ import { realpath, stat } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import { errnoCode } from './errno';
-import { ignoreSkippedLink, listFolders } from './files';
+import { listFolders } from './files';
 
 export interface HeldFolderWatch {
   /** Watches each folder, at any depth, that `folder` holds, while open; settles once each is watched. */
@@ -92,7 +92,7 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
   };
 
   const foldersIn = async (folder: string): Promise<string[]> =>
-    (await listFolders(folder, ignoreSkippedLink).catch(unlessGone(folder, [])))
+    (await listFolders(folder, fail).catch(unlessGone(folder, [])))
       .map((name) => join(folder, name));
 
   const realOf = async (folder: string): Promise<string | undefined> =>

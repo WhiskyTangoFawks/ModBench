@@ -212,4 +212,19 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     expect(held.failures()).toEqual(['EIO: i/o error']);
     expect(failures).toBe(1);
   });
+
+  it('names each link to a folder that cannot be followed, a loop or a dangling link, signalling each', async () => {
+    const created = join(root, 'Created');
+    await mkdir(join(created, 'Held'), { recursive: true });
+    await symlink('Loop', join(created, 'Held', 'Loop'));
+    await symlink(join(root, 'Gone'), join(created, 'Dangling'));
+
+    await held.created(created);
+
+    expect(held.failures()).toEqual([
+      expect.stringContaining(join(created, 'Dangling')),
+      expect.stringContaining(join(created, 'Held', 'Loop')),
+    ]);
+    expect(failures).toBe(2);
+  });
 });
