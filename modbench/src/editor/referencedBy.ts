@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import type { MEditClient } from '../client';
-import type { Log } from '../ports/log';
 import type { Reporter } from '../ports/reporter';
 import { reportFailure } from '../drivingLib/reportFailure';
 import { recordArgumentOf, type RecordArgument } from '../drivingLib/recordArgument';
@@ -17,14 +16,13 @@ export type LocateRecord = (record: RecordArgument) => Promise<vscode.Location |
 
 export interface ReferencedByDeps {
   client: ReferencedByClient & Pick<MEditClient, 'getComparison' | 'searchRecords'>;
-  log: Log;
   reporter: Reporter;
   locateRecord: LocateRecord;
   recordInFocus: () => string | undefined;
 }
 
 async function titleOf(client: ReferencedByDeps['client'], formKey: string): Promise<string> {
-  const comparison = await client.getComparison(formKey).catch(() => undefined);
+  const comparison = await client.getComparison(formKey);
   const overrides = comparison && !isReadFailed(comparison) ? comparison.overrides : undefined;
   return `Referenced By: ${recordTitle(formKey, overrides)}`;
 }
@@ -65,7 +63,7 @@ export function registerReferencedBy(deps: ReferencedByDeps): vscode.Disposable 
         return;
       }
       const list = String(++lists);
-      view.setInput(referencedByInput(title, location, () => readReferencedBy(deps.client, deps.log, record.formKey, list)));
+      view.setInput(referencedByInput(title, location, () => readReferencedBy(deps.client, record.formKey, list)));
     });
   });
 }

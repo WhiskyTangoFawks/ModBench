@@ -1,5 +1,4 @@
 import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
-import { leveledLog } from '../../test/leveledLog';
 import { describe, it, expect, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon } from '../../test/vscodeMock';
 
@@ -39,12 +38,13 @@ function loadOrderStatus(conflictsComputed: boolean): NotificationEvent {
 function indexed(references: ReferenceResult[]): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getReferences', references);
+  client.setQueryAnswer('getPlugins', []);
   client.emit(loadOrderStatus(true));
   return client;
 }
 
 async function listOf(client: InMemoryMEditClient, list = 'a list') {
-  const read = await readReferencedBy(client, leveledLog(), TARGET, list);
+  const read = await readReferencedBy(client, TARGET, list);
   return { ...read, referrers: read.provider.getChildren() };
 }
 
@@ -69,20 +69,18 @@ describe('the Referenced By list — states', () => {
     expect((await listOf(client)).message).toBe('mEdit is still indexing plugins: this list may not be complete.');
   });
 
-  it('shows one error row naming the reason when the read fails, and logs it once', async () => {
-    const log = leveledLog();
+  it('shows one error row naming the reason when the read fails', async () => {
     const client = indexed([]);
     client.setQueryFailure('getReferences', { failed: 'refused', refusal: 'boom' });
-    const [error, ...rest] = (await readReferencedBy(client, log, TARGET, 'a list')).provider.getChildren();
+    const [error, ...rest] = (await readReferencedBy(client, TARGET, 'a list')).provider.getChildren();
     expect(rest).toEqual([]);
     expect(error?.label).toBe('Failed to load: boom');
     expect(error?.tooltip).toBe('boom');
-    expect(log.lines.error).toHaveLength(1);
   });
 
   it('is a snapshot: mEdit is asked once, however often the view asks for rows and whatever changes after', async () => {
     const client = indexed([reference({ formKey: '000002:Fallout4.esm' })]);
-    const { provider } = await readReferencedBy(client, leveledLog(), TARGET, 'a list');
+    const { provider } = await readReferencedBy(client, TARGET, 'a list');
     client.emit({ kind: 'rows-changed', plugin: '', origin: '', keys: [], sequence: 0 });
     provider.getChildren();
     provider.getChildren();
@@ -233,27 +231,21 @@ describe('the Referenced By list — what a plugin copy offers', () => {
     expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder']);
   });
 
-  it('offers nothing editable where the plugins cannot be read, and logs it', async () => {
+  it('offers nothing editable where the plugins cannot be read', async () => {
     const client = indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD })]);
     client.setQueryFailure('getPlugins', { failed: 'refused', refusal: 'no instance' });
-    const log = leveledLog();
-    const { provider } = await readReferencedBy(client, log, TARGET, 'a list');
+    const { provider } = await readReferencedBy(client, TARGET, 'a list');
     const [referrer] = provider.getChildren();
     expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder']);
-    expect(log.lines.warn).toHaveLength(1);
-    expect(log.lines.warn[0]).toContain('getPlugins');
   });
 
-  it('offers no create where what the record can hold cannot be read, and logs it', async () => {
+  it('offers no create where what the record can hold cannot be read', async () => {
     const client = indexed([reference({ formKey: '000002:Fallout4.esm', origin: EDITABLE_MOD })]);
     client.setQueryAnswer('getPlugins', [editablePlugin('Fallout4.esm')]);
     client.setQueryFailure('getChildRecordTypes', { failed: 'refused', refusal: 'boom' });
-    const log = leveledLog();
-    const { provider } = await readReferencedBy(client, log, TARGET, 'a list');
+    const { provider } = await readReferencedBy(client, TARGET, 'a list');
     const [referrer] = provider.getChildren();
     expect(provider.getChildren(present(referrer, 'the referrer')).map((h) => h.contextValue)).toEqual(['referencedByHolder editable']);
-    expect(log.lines.warn).toHaveLength(1);
-    expect(log.lines.warn[0]).toContain(`getChildRecordTypes(${EDITABLE_MOD}, Fallout4.esm, 000002:Fallout4.esm)`);
   });
 });
 

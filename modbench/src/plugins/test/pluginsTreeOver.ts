@@ -16,7 +16,6 @@ export function pluginsTreeOver(
     publishDiagnoses: () => undefined,
     publishChangedOutside: () => undefined,
     publishFailedToRead: () => undefined,
-    log: () => undefined,
     ...overrides,
   });
 }

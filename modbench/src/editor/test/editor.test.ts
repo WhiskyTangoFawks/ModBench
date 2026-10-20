@@ -350,6 +350,7 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
   function asking() {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]));
+    client.setQueryAnswer('getPlugins', []);
     client.setQueryAnswer('getReferences', [{
       formKey: '000900:A.esp', plugin: 'A.esp', origin: 'ModA', fieldPath: 'Keywords[0]', recordType: 'weap', recordTypeName: 'Weapon', editorId: 'Rifle',
     }]);
@@ -378,6 +379,7 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getComparison', null);
     client.setQueryAnswer('getChildRecordTypes', []);
+    client.setQueryAnswer('getPlugins', []);
     client.setQueryAnswer('getReferences', [{
       formKey: '000900:A.esp', plugin: 'A.esp', origin: 'ModA', fieldPath: 'Keywords[0]', recordType: 'weap', recordTypeName: 'Weapon', editorId: 'Rifle',
     }]);

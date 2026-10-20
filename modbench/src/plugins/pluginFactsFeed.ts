@@ -19,9 +19,6 @@ export interface PluginFactsFeedDeps {
   publishChangedOutside: (warnings: readonly PluginProblem[]) => void;
   /** A failed read's diagnosis, the defect in the plugin's bytes that stopped it: an error in the Problems panel. */
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
-  /** The feed states the severity (ADR-0019), so a background blip and a failed read land on
-   *  different channel levels. */
-  log: (level: 'info' | 'warn' | 'error', msg: string) => void;
 }
 
 export type PluginRowFacts = Pick<PluginFacts,
@@ -40,7 +37,6 @@ export class PluginFactsFeed implements vscode.Disposable {
   private generation = 0;
   // `refresh`' own order, apart from `generation` so a fact re-read never discards a hand-off.
   private refreshes = 0;
-  private loggedScanFailure?: string;
 
   readonly rows: PluginRowFacts = this.facts;
   readonly onDidChange = this.changed.event;
@@ -122,9 +118,7 @@ export class PluginFactsFeed implements vscode.Disposable {
       const shown = new Set(this.deps.shownPlugins().map(pluginAddressKey));
       return answerOf(await this.deps.client.getPlugins()).filter((p) => shown.has(pluginAddressKey(p)));
     } catch (err) {
-      const failure = errorMessage(err);
-      this.deps.log('error', `[PluginFactsFeed] reading mEdit's facts about each plugin failed: ${failure}`);
-      return { failure };
+      return { failure: errorMessage(err) };
     }
   }
 
@@ -139,16 +133,11 @@ export class PluginFactsFeed implements vscode.Disposable {
       const reports = answerOf(await this.deps.client.getDiagnoses());
       if (generation !== this.generation) return;
       // One derivation, two surfaces — the tree badge and the Problems panel cannot disagree.
-      this.loggedScanFailure = undefined;
       this.facts.diagnosed(reports);
       this.deps.publishDiagnoses(this.facts.problems().malformed);
       this.changed.fire();
     } catch (err) {
       const reason = errorMessage(err);
-      if (reason !== this.loggedScanFailure) {
-        this.loggedScanFailure = reason;
-        this.deps.log('warn', `[PluginFactsFeed] the malformed-plugin scan could not be read: ${reason}`);
-      }
       if (generation !== this.generation) return;
       this.facts.scanFailed(reason);
       this.changed.fire();
