@@ -92,7 +92,7 @@ public sealed class SourceRepository : ISourceRepository
 
     /// <summary>The stamp of one document's text, as the UTF-8 the record index stores: every side hashes
     /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
-    public static string ContentStamp(string text) => TreeStamps.ContentStamp(text);
+    internal static string ContentStamp(string text) => TreeStamps.ContentStamp(text);
 
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
     /// asked; the body is the tree's answer, spliced out of another record's document when that is

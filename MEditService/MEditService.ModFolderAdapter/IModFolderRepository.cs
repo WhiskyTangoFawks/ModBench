@@ -42,6 +42,8 @@ public interface IModFolderRepository
 
     bool DataFolderExists(string dataFolder);
 
+    bool InstanceRootExists(string? instanceRoot);
+
     /// <summary>The name the mod manager gives a file or folder that a build leaves out.</summary>
     string ExcludedName(string name, string excludedSuffix);
 

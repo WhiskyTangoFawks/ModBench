@@ -1171,6 +1171,8 @@ internal sealed class Indexer : IDisposable
     /// that never ended, is refused.</summary>
     public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
+        if (!Directory.Exists(instanceRoot))
+            return new(StoreRebuildRefusal.InstanceRootNotFound, $"Instance root not found: {instanceRoot}");
         var previousSequence = Sequence;
         if (!Close())
         {

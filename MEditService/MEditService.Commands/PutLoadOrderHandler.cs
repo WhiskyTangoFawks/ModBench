@@ -32,7 +32,7 @@ public sealed class PutLoadOrderHandler
     {
         if (!_modFolders.DataFolderExists(dataFolder))
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.DataFolderNotFound, $"Data folder not found: {dataFolder}");
-        if (!Directory.Exists(instanceRoot))
+        if (!_modFolders.InstanceRootExists(instanceRoot))
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InstanceRootNotFound, $"Instance root not found: {instanceRoot}");
 
         // Discovered here, synchronously, never inside a reconcile the caller cannot see — the
