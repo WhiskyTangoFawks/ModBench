@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { settled } from '../../test/settled';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
@@ -11,7 +12,7 @@ const STATUS: LoadOrderProgress = {
 };
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: STATUS };
 
-const NO_SNAPSHOT: LoadOrderSource = { gameName: 'Fallout 4', gameRelease: 'Fallout4', loadOrderSnapshot: undefined };
+const NO_SNAPSHOT: LoadOrderSource = { loadOrderSnapshot: undefined };
 const REFUSED: LoadOrderSource = { ...NO_SNAPSHOT, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } };
 
 function valueWith(name: string): LoadOrderSource {
@@ -45,7 +46,7 @@ function wired(status: 'running' | 'stopped' = 'running') {
   });
   const around: { entered: number; settled: boolean; told: number[] } = { entered: 0, settled: false, told: [] };
   const flow = editingFlow({
-    client, instanceRoot: '/instance', onPut: (put) => { tell(put); return Promise.resolve(); }, log: (line) => { logged.push(line); },
+    client, adapter: fakeInstanceAdapter().adapter, instanceRoot: '/instance', onPut: (put) => { tell(put); return Promise.resolve(); }, log: (line) => { logged.push(line); },
     around: async (entry) => { around.entered++; await entry(); around.settled = true; around.told.push(told.length); },
   });
   const putPluginNames = (): string[] => client.puts().map((put) => put.plugins.map((p) => p.name).join());
@@ -186,7 +187,7 @@ describe('telling a launch that threw', () => {
   it('reaches the Output once, naming the launch', async () => {
     const client = new ClientWhoseLaunchIsHeld();
     const logged: string[] = [];
-    editingFlow({ client, instanceRoot: '/instance', onPut: () => Promise.resolve(), log: (line) => { logged.push(line); }, around: (entry) => entry() });
+    editingFlow({ client, adapter: fakeInstanceAdapter().adapter, instanceRoot: '/instance', onPut: () => Promise.resolve(), log: (line) => { logged.push(line); }, around: (entry) => entry() });
 
     client.heard(Promise.reject(new Error('no kill')));
     await settled();

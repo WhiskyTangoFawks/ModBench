@@ -28,7 +28,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
       const picked = await pickWithMarked(items, items.find((i) => i.label === active), 'Switch profile');
       if (!picked || picked.label === active) return;
       await runWritingGesture(TOOLBOX_VIEW, instance, async () => {
-        const outcome = await commands.switchProfile(picked.label, profiles);
+        const outcome = await commands.switchProfile(picked.label);
         if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
       });
     }),
@@ -53,7 +53,7 @@ interface RefreshGestureDeps {
 export function registerRefreshCommand(deps: RefreshGestureDeps): vscode.Disposable {
   const run = async (): Promise<void> => {
     const refill = deps.nextRefill();
-    const outcome = await deps.commands.refresh(deps.instance.value);
+    const outcome = await deps.commands.refresh();
     if (!outcome.applied) {
       if (outcome.heldElsewhere) {
         // toolbox.md, Reporting story 1: the spec's own words, naming this instance.

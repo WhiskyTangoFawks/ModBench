@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import ts from 'typescript';
 import { CORE_BOXES } from './boxes';
 import { productionFiles, SRC } from './scanSource';
 
@@ -75,5 +76,48 @@ describe('a command probes the instance for none of its own inputs', () => {
     expect(probesIn('const all = await listProfiles(root);\n')).toEqual(['listProfiles']);
     expect(probesIn('const gameName = readGameName(await get(settingsFile(instanceRoot)));\n'))
       .toEqual(['readGameName']);
+  });
+});
+
+const instanceValueFields = (): Set<string> => {
+  const path = join(SRC, 'instanceLoader', 'instance.ts');
+  const file = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
+  const fields = new Set<string>();
+  file.forEachChild((node) => {
+    if (ts.isInterfaceDeclaration(node) && node.name.text === 'InstanceValue') {
+      for (const member of node.members) if (member.name) fields.add(member.name.getText());
+    }
+  });
+  return fields;
+};
+
+const slicedFieldsIn = (source: string, fields: ReadonlySet<string>): string[] => {
+  const found: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isPropertySignature(node) && fields.has(node.name.getText())) found.push(node.name.getText());
+    ts.forEachChild(node, visit);
+  };
+  visit(ts.createSourceFile('module.ts', source, ts.ScriptTarget.Latest, true));
+  return found;
+};
+
+describe('no command takes a slice of the instance value', () => {
+  it('reads InstanceValue from the loader, so the scan has fields to hold', () => {
+    expect(instanceValueFields()).toContain('gameRelease');
+  });
+
+  it('no command module declares a type that carries a field of the instance value', () => {
+    const fields = instanceValueFields();
+    const offenders: Record<string, string[]> = {};
+    for (const path of commandModules()) {
+      const found = slicedFieldsIn(readFileSync(path, 'utf8'), fields);
+      if (found.length > 0) offenders[path] = found;
+    }
+    expect(offenders).toEqual({});
+  });
+
+  it('flags a slice declared as a type of its own', () => {
+    const planted = 'interface InstanceGame { readonly gameName: string; readonly gameRelease: string | undefined }\n';
+    expect(slicedFieldsIn(planted, instanceValueFields())).toEqual(['gameName', 'gameRelease']);
   });
 });

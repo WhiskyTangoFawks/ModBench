@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { LoadOrderOutcome, LoadOrderProgress } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { putLoadOrder, type LoadOrderSource } from '../loadOrder';
 
 const READY_STATUS: LoadOrderProgress = {
@@ -19,13 +20,13 @@ const SENT_PLACES = [{ name: 'TestMod', folder: '/instance/mods/TestMod' }];
 const SENT_MODS = [{ name: 'TestMod', folder: '/instance/mods/TestMod', metadataFiles: ['meta.ini'] }];
 
 const VALUE: LoadOrderSource = {
-  gameName: 'Fallout 4',
-  gameRelease: 'Fallout4',
   loadOrderSnapshot: {
     plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
     places: SENT_PLACES, mods: SENT_MODS, statCache: '/instance/stat-cache', dataFolder: '/game/Data',
   },
 };
+
+const adapter = (gameRelease = 'Fallout4') => fakeInstanceAdapter(readingFixture({ gameRelease })).adapter;
 
 function attachedClient(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
@@ -38,7 +39,7 @@ describe('put load order', () => {
   it('hands the mEdit client the snapshot the value carries, keyed by the instance and its release', async () => {
     const client = attachedClient();
 
-    const result = await putLoadOrder(client, '/instance', VALUE, 'French');
+    const result = await putLoadOrder(client, adapter(), '/instance', VALUE, 'French');
 
     expect(client.puts()).toEqual([{
       plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
@@ -54,26 +55,18 @@ describe('put load order', () => {
     });
   });
 
-  it('sends the release the value holds, not one looked up from the game\'s name beside the Instance adapter\'s answer', async () => {
+  it('sends the release the Instance adapter answers', async () => {
     const client = attachedClient();
 
-    await putLoadOrder(client, '/instance', { ...VALUE, gameRelease: 'Fallout4VR' }, 'English');
+    await putLoadOrder(client, adapter('Fallout4VR'), '/instance', VALUE, 'English');
 
     expect(client.puts().map((put) => put.gameRelease)).toEqual(['Fallout4VR']);
-  });
-
-  it('sends the game as the instance names it when the value holds no release, so a guessed release does not answer about another game and the name is refused visibly', async () => {
-    const client = attachedClient();
-
-    await putLoadOrder(client, '/instance', { ...VALUE, gameName: 'Morrowind', gameRelease: undefined }, 'English');
-
-    expect(client.puts().map((put) => put.gameRelease)).toEqual(['Morrowind']);
   });
 
   it('sends nothing while the value carries no snapshot, which is the loader\'s answer to a game folder not found or not listable', async () => {
     const client = attachedClient();
 
-    const result = await putLoadOrder(client, '/instance', { ...VALUE, loadOrderSnapshot: undefined }, 'English');
+    const result = await putLoadOrder(client, adapter(), '/instance', { ...VALUE, loadOrderSnapshot: undefined }, 'English');
 
     expect(client.calls).toEqual([]);
     expect(result).toEqual({ sent: false });
@@ -85,7 +78,7 @@ describe('put load order, refused by the loader', () => {
     const client = attachedClient();
 
     const result = await putLoadOrder(
-      client, '/instance', { ...VALUE, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } }, 'English');
+      client, adapter(), '/instance', { ...VALUE, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } }, 'English');
 
     expect(client.calls).toEqual([]);
     expect(result).toEqual({ sent: false, refusal: 'a.esp has no mod folder' });

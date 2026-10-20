@@ -4,19 +4,16 @@ import type { MEditClient } from '../client';
 import { refuse } from '../coreLib/refuse';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import type { TailOf } from '../coreLib/boundCommand';
-import { releaseOf, type InstanceGame, type RefreshResult } from './loadOrder';
+import type { RefreshResult } from './loadOrder';
 
-// Refuses a name the value's `profiles` does not hold: selecting a profile whose directory is
-//  not there points the whole instance at files that do not exist, which no later read can tell
-//  from a corrupt ini.
-async function switchProfile(
-  adapter: InstanceAdapter, profile: string, profiles: readonly string[],
-): Promise<CommandResult> {
-  if (!profiles.includes(profile)) {
-    return { applied: false, refusal: `No such profile: ${profile}` };
-  }
+// Refuses a name the instance does not hold: selecting a profile whose directory is not there
+//  points the whole instance at files that do not exist, which no later read can tell from a
+//  corrupt ini.
+async function switchProfile(adapter: InstanceAdapter, profile: string): Promise<CommandResult> {
   try {
+    if (!(await adapter.profiles()).includes(profile)) {
+      return { applied: false, refusal: `No such profile: ${profile}` };
+    }
     const { wrote } = await adapter.selectProfile(profile);
     return { applied: true, wrote };
   } catch (err) {
@@ -25,9 +22,9 @@ async function switchProfile(
 }
 
 async function refresh(
-  client: Pick<MEditClient, 'rebuildIndex'>, instanceRoot: string, game: InstanceGame,
+  adapter: InstanceAdapter, client: Pick<MEditClient, 'rebuildIndex'>, instanceRoot: string,
 ): Promise<RefreshResult> {
-  const outcome = await client.rebuildIndex(instanceRoot, releaseOf(game));
+  const outcome = await client.rebuildIndex(instanceRoot, await adapter.gameRelease());
   if (outcome.rebuilt) return { applied: true };
   return outcome.heldElsewhere
     ? { applied: false, heldElsewhere: true }
@@ -39,8 +36,8 @@ export function instanceCommands(
   { adapter, client, instanceRoot }: { adapter: InstanceAdapter; client: Pick<MEditClient, 'rebuildIndex'>; instanceRoot: string },
 ) {
   return {
-    switchProfile: (...args: TailOf<typeof switchProfile>) => switchProfile(adapter, ...args),
-    refresh: (game: InstanceGame) => refresh(client, instanceRoot, game),
+    switchProfile: (profile: string) => switchProfile(adapter, profile),
+    refresh: () => refresh(adapter, client, instanceRoot),
   };
 }
 
