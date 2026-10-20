@@ -367,6 +367,25 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     expect(outcome).toEqual({ applied: true, landed: RESTORED.landed, refused: [] });
   });
 
+  it('reads each skipped mod\'s game files on their own, so a folder one mod needs cannot be listed and the other mod still lands', async () => {
+    const { commands, client } = commandsOver({
+      gameFiles: new Map([['meshes/b.nif', { path: 'Meshes/B.nif', hash: '#b' }]]),
+      unreadableGameFiles: new Map([['textures/a.dds', 'EACCES']]),
+    });
+    client.setCommandHandler('restoreFromManifest', (mods, facts) => Promise.resolve(facts.asksWhatItLacks
+      ? { landed: [], refused: mods.map(({ name }) => ({ item: name, reason: 'was skipped: game file is missing.' })),
+        notFound: [{ mod: 'ModA', gameFiles: ['textures/a.dds'] }, { mod: 'ModB', gameFiles: ['meshes/b.nif'] }] }
+      : { landed: facts.gameFolder?.files.length ? [restoredMod({ mod: 'ModB', written: ['b.nif'] })] : [],
+        refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }], notFound: [{ mod: 'ModA', gameFiles: ['textures/a.dds'] }] }));
+
+    const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
+
+    expect(outcome).toMatchObject({
+      landed: [{ mod: 'ModB' }],
+      refused: [{ item: 'ModA', reason: 'was skipped: game file is missing. The game files could not be read: EACCES.' }],
+    });
+  });
+
   it('says why beside a mod still skipped for game files when the game folder was not found', async () => {
     const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf({}, GAME_FOLDER_NOT_FOUND));
     client.setCommandResult('restoreFromManifest', {
