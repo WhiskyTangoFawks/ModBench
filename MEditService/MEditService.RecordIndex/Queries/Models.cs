@@ -38,6 +38,8 @@ public sealed record PluginResponse(
     IReadOnlyList<string>? MissingMasters,
     // LateMasters: the active masters in this plugin's header that load after it. Null as MissingMasters is.
     IReadOnlyList<string>? LateMasters,
+    // InLoadOrder (ADR-0013): whether the plugin is active, which is LoadOrderIndex being set.
+    bool InLoadOrder,
     // HasMatchingRecords (plugins.md): a record filter prunes records, never a
     // plugin row, so this is what a caller uses to decide whether to offer a chevron.
     bool HasMatchingRecords,
@@ -51,11 +53,7 @@ public sealed record PluginResponse(
     // source is missing or cannot be read. Null when the plugin source reads.
     UnreadableSource? PluginSourceUnreadable,
     // common.md, States, story 6: the files that stopped its last read, while its rows are the last good read's.
-    IReadOnlyList<SourceProblem>? LaterReadFailure)
-{
-    // InLoadOrder (ADR-0013).
-    public bool InLoadOrder => LoadOrderIndex is not null;
-}
+    IReadOnlyList<SourceProblem>? LaterReadFailure);
 
 public record RecordDetail(
     string FormKey,
