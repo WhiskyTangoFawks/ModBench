@@ -280,7 +280,7 @@ public sealed class StoreRebuildTests : IDisposable
     {
         var earlierHolder = new LoadOrderHolder();
         using (var earlier = Indexes.Open(earlierHolder, _opens))
-            earlier.Reconcile(earlierHolder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+            earlier.Reconcile(earlierHolder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         var indexPath = IndexFiles.In(_fixture.InstanceRoot);
         using (ForeignIndexHolder.Hold(indexPath))
             _index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
