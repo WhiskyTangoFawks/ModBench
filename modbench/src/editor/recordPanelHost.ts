@@ -18,6 +18,7 @@ import type { RecordCopy } from '../wire/recordCopy';
 import { errorMessage } from '../ports/errorMessage';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension, type ViewState } from '../wire/messages';
 import type { RecordPageGlobals } from '../wire/recordPage';
+import { WEBVIEW_SCRIPTS } from '../wire/webviewPages';
 import { failureReason, isReadFailed, localFailure, type ReadFailed } from '../wire/readFailed';
 
 export const RECORD_VIEW_TYPE = 'modbench.record';
@@ -185,7 +186,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
       const fail = (failure: ReadFailed): void => {
         if (!tab.awaitsRecord) return;
         if (failure.failed === 'no-load-order' && this.deps.routerDeps.loadOrderComing()) {
-          if (shownReason !== undefined) showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: 'main.js', globals: {} });
+          if (shownReason !== undefined) showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: WEBVIEW_SCRIPTS.RECORD_PANEL, globals: {} });
           shownReason = undefined;
           return;
         }
@@ -193,7 +194,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
         if (reason === shownReason) return;
         shownReason = reason;
         this.deps.channel.warn(`Failed to read ${fsPath}: ${reason}`);
-        showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: 'main.js', globals: { mEditLoadError: failure } satisfies RecordPageGlobals });
+        showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: WEBVIEW_SCRIPTS.RECORD_PANEL, globals: { mEditLoadError: failure } satisfies RecordPageGlobals });
       };
       try {
         const record = await this.deps.client.getRecordOfFile(fsPath);
@@ -260,7 +261,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
     tabs.focus(tab);
     tab.own(panel.onDidChangeViewState(() => { if (panel.active) tabs.focus(tab); }));
     showWebviewPage(panel.webview, context.extensionUri, {
-      script: 'main.js', globals: { mEditFormKey: formKey, mEditColumns: [...columns], ...(place && { mEditViewState: place }) } satisfies RecordPageGlobals,
+      script: WEBVIEW_SCRIPTS.RECORD_PANEL, globals: { mEditFormKey: formKey, mEditColumns: [...columns], ...(place && { mEditViewState: place }) } satisfies RecordPageGlobals,
     });
   }
 }
