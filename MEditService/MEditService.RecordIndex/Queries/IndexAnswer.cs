@@ -42,6 +42,8 @@ internal static class IndexAnswer
     {
         NoLoadOrderException => new IndexRefused(IndexRefusal.NoLoadOrder, ex.Message),
         IndexNotReadyException => new IndexRefused(IndexRefusal.IndexNotReady, ex.Message),
+        ObjectDisposedException => new IndexRefused(IndexRefusal.IndexNotReady, "mEdit's record index was reopening under this read."),
+        DuckDBException when Store.IsInvalidation(ex) => new IndexRefused(IndexRefusal.IndexNotReady, $"mEdit's record index is reopening: {ex.Message.Split('\n')[0]}"),
         // DuckDB's message goes on to advise tuning it, which is mEdit's to do and not the user's.
         DuckDBException { ErrorType: DuckDBErrorType.OutOfMemory } => new IndexRefused(
             IndexRefusal.OutOfMemory, $"mEdit's record index ran out of memory for this read: {ex.Message.Split('\n')[0]}"),

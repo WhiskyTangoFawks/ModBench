@@ -289,33 +289,25 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Contains(indexPath, _index.Status.Message);
     }
 
-    private static bool ReadMetAClosedScopeOrARefusal(Exception ex) =>
-        ex is ObjectDisposedException or InvalidOperationException;
-
     [Fact]
     public async Task ARebuildWithReadsInFlight_Completes_AndReadsThePluginAgain()
     {
         Reconcile(_fixture.InstanceRoot);
         using var rebuilding = new CancellationTokenSource();
         var answered = 0;
-        var readers = Enumerable.Range(0, 4).Select(_ => Task.Run(() =>
+        var readers = Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
         {
             while (!rebuilding.IsCancellationRequested)
             {
-                try
-                {
-                    if (_index.ListedIn(Key) is { Count: > 0 }) Interlocked.Increment(ref answered);
-                }
-                catch (Exception ex) when (ReadMetAClosedScopeOrARefusal(ex))
-                {
-                }
+                var answer = _index.Queries.GetPlugins();
+                if (answer.Holds(out var plugins, out IndexRefused? _) && plugins.Count > 0) Interlocked.Increment(ref answered);
             }
         })).ToArray();
 
         Assert.True(await Waits.Until(() => Volatile.Read(ref answered) > 0), "no read ever landed before the rebuild");
-        Rebuilt(_index, _fixture.InstanceRoot);
+        for (var rebuilds = 0; rebuilds < 25; rebuilds++) Rebuilt(_index, _fixture.InstanceRoot);
         await rebuilding.CancelAsync();
         await Task.WhenAll(readers);
-        Assert.Equal(2, _opens.OpenedTotal);
+        Assert.Equal(26, _opens.OpenedTotal);
     }
 }
