@@ -16,18 +16,18 @@ public sealed class InstanceCatalogTests
     {
         var instance = Required("MEDIT_CATALOG_INSTANCE");
         var profile = Path.Combine(instance, "profiles", Required("MEDIT_CATALOG_PROFILE"));
-        var gameDirectory = Required("MEDIT_CATALOG_GAME_DIR");
+        var dataFolder = Path.Combine(Required("MEDIT_CATALOG_GAME_DIR"), "Data");
         var catalogPath = Required("MEDIT_CATALOG_OUT");
         var release = Enum.Parse<GameRelease>(Required("MEDIT_CATALOG_RELEASE"));
 
         using var scratch = new ScratchDirectory("medit-catalog-");
-        var entries = ProfileWithPluginsCopiedTo(scratch.Path, instance, profile, Path.Combine(gameDirectory, "Data"), release);
+        var entries = ProfileWithPluginsCopiedTo(scratch.Path, instance, profile, dataFolder, release);
         await using var host = new MEditHost();
         var client = host.CreateClient();
         client.Timeout = TimeSpan.FromHours(2);
 
         var load = await client.PutLoadOrderAndAwaitReady(
-            SnapshotPlugins.Body(gameDirectory, scratch.Path, entries, release.ToString()), TimeSpan.FromHours(2));
+            SnapshotPlugins.Body(dataFolder, scratch.Path, entries, release.ToString()), TimeSpan.FromHours(2));
         Assert.True(load.IsSuccessStatusCode, await load.Content.ReadAsStringAsync());
 
         var lines = new List<string>();

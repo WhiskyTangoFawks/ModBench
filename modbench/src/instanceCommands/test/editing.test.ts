@@ -94,7 +94,7 @@ describe('a put the client makes again on its own', () => {
     client.reconnected();
     await toldCount(2);
 
-    expect(told[1]).toMatchObject({ sent: true, snapshot: { gameDirectory: '/game/Data' }, outcome: APPLIED });
+    expect(told[1]).toMatchObject({ sent: true, snapshot: { dataFolder: '/game/Data' }, outcome: APPLIED });
   });
 
   it('is told no more once the flow is disposed', async () => {

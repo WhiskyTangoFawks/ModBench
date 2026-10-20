@@ -22,7 +22,7 @@ export async function putLoadOrder(
   if ('refusal' in source) return { sent: false, refusal: source.refusal };
   const { plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, gameRelease, dataFolder } = source;
   const snapshot: LoadOrderSnapshot = {
-    plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, gameDirectory: dataFolder, instanceRoot, gameRelease, stringsLanguage,
+    plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, dataFolder, instanceRoot, gameRelease, stringsLanguage,
   };
   return { sent: true, snapshot, outcome: await client.sendLoadOrder(snapshot) };
 }

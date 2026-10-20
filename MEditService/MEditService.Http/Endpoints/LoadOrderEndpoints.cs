@@ -56,7 +56,7 @@ internal static class LoadOrderEndpoints
         }
 
         var result = handler.Put(
-            req.GameDirectory, req.InstanceRoot, gameRelease,
+            req.DataFolder, req.InstanceRoot, gameRelease,
             registered, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage,
             new SnapshotMods(req.Mods, req.StatCache));
         return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : EndpointMapping.Refusal(result);

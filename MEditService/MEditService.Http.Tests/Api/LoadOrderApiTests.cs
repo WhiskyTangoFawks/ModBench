@@ -213,14 +213,14 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Fact]
-    public async Task PutLoadOrder_MissingGameDirectory_Returns400()
+    public async Task PutLoadOrder_MissingDataFolder_Returns400()
     {
         var body = Body();
-        body["gameDirectory"] = "/no-such-dir";
+        body["dataFolder"] = "/no-such-dir";
 
         var response = await _client.PutAsJsonAsync("/load-order", body);
 
-        Assert.Equal("GameDirectoryNotFound", (await response.AssertIsProblem(HttpStatusCode.BadRequest)).GetProperty("refusal").GetString());
+        Assert.Equal("DataFolderNotFound", (await response.AssertIsProblem(HttpStatusCode.BadRequest)).GetProperty("refusal").GetString());
     }
 
     [Fact]

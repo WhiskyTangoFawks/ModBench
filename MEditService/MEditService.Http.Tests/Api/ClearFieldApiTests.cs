@@ -23,7 +23,7 @@ public sealed class ClearFieldApiTests(LoadedApiFixture<TestPluginFixture> loade
         var plugins = fx.Plugins.Where(p => p.Origin == Origin);
         (await _client.PutLoadOrderAndAwaitReady(new
         {
-            gameDirectory = fx.GameDirectory,
+            dataFolder = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
             plugins = plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(plugins),

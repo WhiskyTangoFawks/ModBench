@@ -94,7 +94,7 @@ public sealed class CompareGoldenApiFixture : IDisposable
         Client = App.CreateClient();
         var response = Client.PutLoadOrderAndAwaitReady(new
         {
-            gameDirectory = Fixture.DataFolder,
+            dataFolder = Fixture.DataFolder,
             instanceRoot = Fixture.InstanceRoot,
             plugins = Fixture.Plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(Fixture.Plugins),

@@ -19,7 +19,7 @@ function snapshot(name: string): LoadOrderSnapshot {
     stringsFiles: [],
     places: [], mods: [],
     statCache: '/instance/stat-cache',
-    gameDirectory: '/game/Data',
+    dataFolder: '/game/Data',
     instanceRoot: '/instance',
     gameRelease: 'Fallout4',
     stringsLanguage: 'English',

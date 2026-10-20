@@ -169,7 +169,7 @@ public static class CommandHandlers
             sp.GetRequiredService<LoadOrderHolder>()));
 
         services.AddSingleton(sp => new PutLoadOrderHandler(
-            sp.GetRequiredService<IPluginAdapter>(),
+            sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ISourceAdapter>(),

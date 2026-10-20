@@ -5,8 +5,8 @@ public enum PutLoadOrderRefusal
 {
     None,
 
-    /// <summary>The game folder the snapshot names is not on disk.</summary>
-    GameDirectoryNotFound,
+    /// <summary>The Data folder the snapshot names is not on disk.</summary>
+    DataFolderNotFound,
 
     /// <summary>No instance root, nowhere to keep the rows (ADR-0010).</summary>
     InstanceRootNotFound,

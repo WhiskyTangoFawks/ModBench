@@ -118,6 +118,10 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
             ? [.. Directory.EnumerateFiles(modFolder, "*", SearchOption.AllDirectories).Select(file => PathIn(modFolder, file)).Where(path => !TempName.HoldsTemp(path))]
             : [];
 
+    public bool DataFolderExists(string dataFolder) => Directory.Exists(dataFolder);
+
+    public string ExcludedName(string name, string excludedSuffix) => name + excludedSuffix;
+
     public string FolderName(string modFolder) => Path.GetFileName(Path.TrimEndingDirectorySeparator(modFolder));
 
     public string PathIn(string modFolder, string file) => Path.GetRelativePath(modFolder, file).Replace('\\', '/');
