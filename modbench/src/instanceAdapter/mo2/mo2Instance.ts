@@ -60,7 +60,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder: async () => (await source.settings()).gameFolder(),
-    ...mo2Reads(context, source), ...mo2Installation(context, hashes, source), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, archives, source), ...mo2Repository(context, hashes), ...mo2Submodules(context),
+    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, archives, source), ...mo2Repository(context, hashes), ...mo2Submodules(context),
     originFileHash: hashes.originFileHash,
     statCacheFolder: statCacheDir(instanceRoot),
     subscribe: (listener) => context.watch.subscribe(listener),

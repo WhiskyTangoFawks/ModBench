@@ -37,7 +37,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     dataFolderArchives: { kind: 'unresolved' },
     profiles: ['Default'],
     modFolders: undefined,
-    skippedLinks: new Map(),
+    linkNotes: [],
     runtimeOutput: { origin: 'overwrite', folder: undefined, files: [], folders: [], notes: [] },
     modFiles: noFilesFor(overrides.mods ?? []),
     folderMeta: new Map(),

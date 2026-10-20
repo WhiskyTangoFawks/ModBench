@@ -225,7 +225,7 @@ describe('Instance — the value', () => {
   });
 
   it('tells once rather than on every watched change that a link cannot be followed, without failing the recompute', async () => {
-    const { instance, logs, errorLines } = loader({ modFolders: modFoldersOf('Real Mod'), skippedLinks: new Map([['/inst/mods/Loop', 'too many levels']]) });
+    const { instance, logs, errorLines } = loader({ modFolders: modFoldersOf('Real Mod'), linkNotes: ['/inst/mods/Loop is a link Modbench cannot follow, so it is not read: too many levels'] });
 
     await instance.refresh();
     await instance.refresh();

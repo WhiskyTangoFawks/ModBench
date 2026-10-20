@@ -5,14 +5,14 @@ import { basename, dirname } from 'node:path';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
 import { isArchiveName } from '../downloadedFileContents/archiveNames';
 import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
-import { parseMetaIni } from './codecs/metaIni';
+import { type MetaIni, modMetaOf, parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
 import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { gameOfSettings } from './mo2Game';
 import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
 import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, type SkippedLink, stampOf, isOwnTemp } from '../files';
-import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning } from '../instanceAdapter';
+import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolders } from '../instanceAdapter';
 import { DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadSidecarFile, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile } from './layout';
 import { mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
@@ -50,6 +50,13 @@ function gamePathOf(iniText: string): string | undefined {
 }
 
 const MO2_NAMES: ManagerNames = { manager: 'MO2', modOrderFile: MODLIST_FILE_NAME, downloadMetadataFile: DOWNLOAD_SIDECAR_SUFFIX };
+
+/** A mod's meta.ini as it reads, `{}` for a separator, a mod with no folder and a meta that is gone. */
+export async function readMetaIni(context: Mo2Context, mod: string, folders: ModFolders | undefined | 'list'): Promise<MetaIni> {
+  if (entryNamed(mod).kind === 'separator') return {};
+  const folder = await modFolderNamed(context, mod, folders);
+  return folder === undefined ? {} : readOrAbsent(async () => parseMetaIni(await get(modMetaFileIn(folder))), {});
+}
 
 export function readingSource(context: Mo2Context): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
@@ -91,11 +98,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
       return parseModlist(await get(modlistFile(instanceRoot, profile)));
     },
 
-    async modMeta(mod, folders) {
-      if (entryNamed(mod).kind === 'separator') return {};
-      const folder = await modFolderNamed(context, mod, folders);
-      return folder === undefined ? {} : readOrAbsent(async () => parseMetaIni(await get(modMetaFileIn(folder))), {});
-    },
+    modMeta: async (mod, folders) => modMetaOf(await readMetaIni(context, mod, folders)),
 
     modFolders: async (skippedLink) => {
       const all = await listModFolders(context, skippedLink);

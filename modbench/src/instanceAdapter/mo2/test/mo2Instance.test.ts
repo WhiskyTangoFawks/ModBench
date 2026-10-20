@@ -369,15 +369,16 @@ describe('the MO2 Instance adapter', () => {
       it('hands over a link it cannot follow, by path', async () => {
         await symlink(join(root, 'nowhere'), join(root, 'mods', 'Dangling'));
 
-        expect([...(await adapter.reading()).skippedLinks.keys()]).toEqual([join(root, 'mods', 'Dangling')]);
+        expect((await adapter.reading()).linkNotes).toEqual([expect.stringContaining(join(root, 'mods', 'Dangling'))]);
       });
 
       it('hands over, with the mods\' link, a link in profiles/ or downloads/ it cannot follow', async () => {
         await symlink(join(root, 'nowhere'), join(root, 'profiles', 'Gone'));
         await symlink(join(root, 'nowhere.7z'), join(root, 'downloads', 'Gone-1-0.7z'));
 
-        expect([...(await adapter.reading()).skippedLinks.keys()].sort())
-          .toEqual([join(root, 'downloads', 'Gone-1-0.7z'), join(root, 'profiles', 'Gone')]);
+        expect((await adapter.reading()).linkNotes).toHaveLength(2);
+        expect((await adapter.reading()).linkNotes.join('\n')).toContain(join(root, 'downloads', 'Gone-1-0.7z'));
+        expect((await adapter.reading()).linkNotes.join('\n')).toContain(join(root, 'profiles', 'Gone'));
       });
 
       it('answers the game folder as not found, with its Data folder unresolved, when no game folder is found', async () => {

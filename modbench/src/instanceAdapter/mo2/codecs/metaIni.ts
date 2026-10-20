@@ -1,11 +1,27 @@
 // meta.ini is QSettings::IniFormat. `[installedFiles]` is a QSettings array whose key
 // order is not guaranteed, so it's read scoped to the section and keyed by index.
 
-import type { InstalledFileId, ModMeta, OwnedMetaKeys } from '../../instanceAdapter';
+import type { ModMeta } from '../../instanceAdapter';
 import { GENERAL_SECTION, readIniSection, replaceIniSection, setIniValue } from './qSettingsIni';
 
 /** A mod folder's metadata file. */
 export const MOD_META_FILE_NAME = 'meta.ini';
+
+/** A Nexus mod and file id pair `[installedFiles]` records. */
+export interface InstalledFileId {
+  nexusId: string;
+  fileId: string;
+}
+
+/** What meta.ini says, `[installedFiles]` as its pairs. */
+export interface MetaIni extends Omit<ModMeta, 'installedFileIds'> {
+  installedFiles?: readonly InstalledFileId[];
+}
+
+/** The keys Modbench writes into meta.ini. */
+export interface OwnedMetaKeys extends MetaIni {
+  gameName: string;
+}
 
 // The keys Modbench owns in meta.ini, each written only when present.
 type MetaKeys = Partial<OwnedMetaKeys>;
@@ -45,7 +61,7 @@ function parseInstalledFiles(text: string): InstalledFileId[] | undefined {
     .map(([, { modid, fileid }]) => ({ nexusId: modid ?? '', fileId: fileid ?? '' }));
 }
 
-export function parseMetaIni(text: string): ModMeta {
+export function parseMetaIni(text: string): MetaIni {
   const general = readIniSection(text, GENERAL_SECTION);
   const present = (key: string): string | undefined => general.get(key) || undefined; // blank == absent
   const modid = present('modid');
@@ -57,6 +73,14 @@ export function parseMetaIni(text: string): ModMeta {
     installedFiles: parseInstalledFiles(text),
   };
 }
+
+/** What meta.ini says of a mod, in the words every mod manager shares. */
+export const modMetaOf = ({ installedFiles, ...rest }: MetaIni): ModMeta =>
+  ({ ...rest, installedFileIds: installedFiles?.map(({ fileId }) => fileId) });
+
+/** The meta.ini a mod's meta says, each installed file recorded against the mod's own Nexus id. */
+export const metaIniOf = ({ installedFileIds, ...rest }: ModMeta): MetaIni =>
+  ({ ...rest, installedFiles: installedFileIds?.map((fileId) => ({ nexusId: rest.nexusId ?? '', fileId })) });
 
 function installedFilesBody(pairs: readonly InstalledFileId[] | undefined): string[] {
   if (!pairs || pairs.length === 0) return [];

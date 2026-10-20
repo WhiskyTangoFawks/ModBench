@@ -1,10 +1,10 @@
 // How MO2's implementation installs a mod: extracted inside the mod's own folder, then settled as
 // its contents. An upgrade keeps its folder, so every watcher armed on it survives the release.
 
-import { parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
+import { type MetaIni, metaIniOf, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
 import type { ArchiveReader } from '../downloadedFileContents/archiveReader';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from '../files';
-import { fileInFolder, type InstallPackage, InstanceAdapter, ModMeta, OwnedMetaKeys } from '../instanceAdapter';
+import { fileInFolder, type InstallPackage, InstanceAdapter } from '../instanceAdapter';
 import { manifestFileIn, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix } from './layout';
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
@@ -19,7 +19,7 @@ interface Extraction {
 }
 
 // A key the upgrade does not supply keeps the carried meta's own value.
-function keysOver(keys: OwnedMetaKeys, carried: ModMeta): OwnedMetaKeys {
+function keysOver(keys: OwnedMetaKeys, carried: MetaIni): OwnedMetaKeys {
   return {
     gameName: keys.gameName,
     nexusId: keys.nexusId ?? carried.nexusId,
@@ -101,7 +101,7 @@ export function mo2Landing(context: Mo2Context, archives: ArchiveReader, { setti
       try {
         await fill(installed, extraction.path);
         const { root, isFomod } = await releaseRoot(extraction.path);
-        await extraction.land(root, { ...keys, gameName });
+        await extraction.land(root, { ...metaIniOf(keys), gameName });
         return { landed: true, isFomod };
       } catch (err) {
         return abandonAfter(extraction, err);

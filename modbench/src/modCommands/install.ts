@@ -35,8 +35,7 @@ async function resolve(adapter: InstanceAdapter, installed: ModPackage): Promise
 function keysFor(installed: ModPackage, file: DownloadedFile | undefined): InstallKeys {
   if (file !== undefined) {
     const { modID, fileID, version } = file.meta ?? {};
-    const installedFiles = modID && fileID ? [{ nexusId: modID, fileId: fileID }] : undefined;
-    return { archiveFilename: file.name, nexusId: modID, version, installedFiles };
+    return { archiveFilename: file.name, nexusId: modID, version, installedFileIds: modID && fileID ? [fileID] : undefined };
   }
   return installed.kind === 'archive' ? { archiveFilename: basename(installed.path) } : {};
 }

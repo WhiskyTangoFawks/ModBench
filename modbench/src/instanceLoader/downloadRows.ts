@@ -46,7 +46,7 @@ export interface UpgradeCandidate {
 }
 
 const isFileIdMatch = (mod: Mod, fileID: string | undefined): boolean =>
-  fileID !== undefined && mod.installedFiles?.some((pair) => pair.fileId === fileID) === true;
+  fileID !== undefined && mod.installedFileIds?.includes(fileID) === true;
 
 const isArchiveFilenameMatch = (mod: Mod, downloadName: string): boolean =>
   mod.archiveFilename !== undefined && archiveKey(mod.archiveFilename) === archiveKey(downloadName);
