@@ -1742,6 +1742,7 @@ export interface components {
             archives?: components["schemas"]["ArchiveVariantsRequest"] | null;
             gameFolder?: components["schemas"]["GameFolderRequest"] | null;
             gesture?: string | null;
+            asksWhatItLacks: boolean;
         };
         RestoreFromManifestResult: {
             applied: components["schemas"]["ModRestored"][];

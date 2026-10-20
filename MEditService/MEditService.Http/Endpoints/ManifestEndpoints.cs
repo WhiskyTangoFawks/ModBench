@@ -105,7 +105,9 @@ internal static class ManifestEndpoints
                 mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.Submodule?.ToSubmodule()))],
             new InstanceToRestore(req.StatCache, req.ExclusionMark, variants, req.GameFolder?.ToGameFolder()), req.Gesture, running.Token);
 
-        return EndpointMapping.Answered("Restore from manifest", loggerFactory.CreateLogger(nameof(ManifestEndpoints)), result);
+        return EndpointMapping.Answered(
+            "Restore from manifest", loggerFactory.CreateLogger(nameof(ManifestEndpoints)), result,
+            refusal => !(req.AsksWhatItLacks && refusal == RestoreRefusal.NotFound));
     }
 
     internal static IResult WhatRestoreDestroys(ModFoldersRequest req, IModFolderRepository repository)
@@ -196,10 +198,11 @@ internal sealed record UpdateManifestModRequest(
     : IModRequest;
 
 /// <summary>The mods to restore from their manifests, with the instance's facts (ADR-0013): StatCache and GameFolder as update
-/// manifest's, ExclusionMark and Archives as build's. Gesture names it to a cancel and in its progress.</summary>
+/// manifest's, ExclusionMark and Archives as build's. Gesture names it to a cancel and in its progress. AsksWhatItLacks
+/// sends the mods before the files their manifests name are handed, so a mod it answers NotFound is asked for them, not skipped.</summary>
 internal sealed record RestoreFromManifestRequest(
     IReadOnlyList<RestoreFromManifestModRequest> Mods, string StatCache, string ExclusionMark, ArchiveVariantsRequest? Archives,
-    GameFolderRequest? GameFolder, string? Gesture);
+    GameFolderRequest? GameFolder, string? Gesture, bool AsksWhatItLacks = false);
 
 /// <summary>A mod, with the submodule its manifest names, none until a refusal names it.</summary>
 internal sealed record RestoreFromManifestModRequest(

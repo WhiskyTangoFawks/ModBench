@@ -59,7 +59,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         File.WriteAllText(Path.Combine(ModFolder, "nonCompiledPlugin.txt"), "mine");
     }
 
-    private JsonObject Request(string gesture, string downloadName, bool handsTheDownload = true, JsonObject? submodule = null)
+    private JsonObject Request(string gesture, string downloadName, bool handsTheDownload = true, JsonObject? submodule = null, bool asksWhatItLacks = false)
     {
         var installationFile = new JsonObject
         {
@@ -87,6 +87,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         if (gesture == "restore-from-manifest")
         {
             request["exclusionMark"] = ".mohidden";
+            if (asksWhatItLacks) request["asksWhatItLacks"] = true;
         }
         return request;
     }
@@ -267,6 +268,31 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         var skipped = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
         Assert.Equal("NotFound", skipped.GetProperty("refusal").GetString());
         Assert.Equal("Mod.zip", skipped.GetProperty("installationFileNotFound").GetString());
+    }
+
+    [Fact]
+    public async Task ARequestThatAsksWhatEachModLacks_LogsNoRefusalForAModThatLacksSomething_ButStillAnswersIt()
+    {
+        ModInstalledFromADownload();
+        await Post("update-manifest");
+
+        var response = await Client.PostAsJsonAsync(
+            "/restore-from-manifest", Request("restore-from-manifest", "Mod.zip", handsTheDownload: false, asksWhatItLacks: true));
+
+        var skipped = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
+        Assert.Equal("NotFound", skipped.GetProperty("refusal").GetString());
+        Assert.DoesNotContain(Logged, entry => entry.Message.StartsWith("Refused Restore from manifest", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ARequestThatDoesNotAsk_LogsTheModItSkippedForLackingAFile()
+    {
+        ModInstalledFromADownload();
+        await Post("update-manifest");
+
+        await Client.PostAsJsonAsync("/restore-from-manifest", Request("restore-from-manifest", "Mod.zip", handsTheDownload: false));
+
+        Assert.Single(Logged, entry => entry.Message.StartsWith($"Refused Restore from manifest of {Mod}: NotFound", StringComparison.Ordinal));
     }
 
     [Fact]
