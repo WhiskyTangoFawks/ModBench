@@ -3,7 +3,7 @@ namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 public sealed class LoadFailureReasonTests
 {
     [Fact]
-    public void ReasonFor_NestedException_ContainsEveryMessageInTheChain_OutermostFirst()
+    public void NestedException_ReasonHoldsEveryMessageInTheChain_OutermostFirst()
     {
         var inner = new FormatException("inner boom");
         var outer = new InvalidOperationException("outer boom", inner);
@@ -17,7 +17,7 @@ public sealed class LoadFailureReasonTests
     }
 
     [Fact]
-    public void ReasonFor_NestedException_IncludesExceptionTypeNames()
+    public void NestedException_ReasonNamesEveryExceptionType()
     {
         var outer = new InvalidOperationException("outer boom", new FormatException("inner boom"));
 
@@ -28,7 +28,7 @@ public sealed class LoadFailureReasonTests
     }
 
     [Fact]
-    public void ReasonFor_SingleException_IsNotBlank()
+    public void SingleException_ReasonHoldsItsMessage()
     {
         var reason = LoadFailureReason.Of(new InvalidOperationException("only one"));
 

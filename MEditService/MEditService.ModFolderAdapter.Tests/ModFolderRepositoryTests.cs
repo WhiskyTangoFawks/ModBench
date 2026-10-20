@@ -38,14 +38,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal("a.esp.mohidden", _repository.ExcludedName("a.esp", ".mohidden"));
 
     [Fact]
-    public void InstanceRootExists_AnswersWhetherTheFolderIsThere()
-    {
-        Assert.True(_repository.InstanceRootExists(_root));
-        Assert.False(_repository.InstanceRootExists(Path.Combine(_root, "no-such-instance")));
-        Assert.False(_repository.InstanceRootExists(null));
-    }
-
-    [Fact]
     public void DataFolderExists_AnswersWhetherTheFolderIsThere()
     {
         Assert.True(_repository.DataFolderExists(_root));

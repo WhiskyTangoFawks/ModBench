@@ -9,7 +9,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
-using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Strings;
@@ -38,7 +37,6 @@ internal sealed class Store : IDisposable
     private readonly INotificationPublisher? _notifications;
     private readonly Projection _projection;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
-    private readonly ISourceAdapter _source;
     private PluginIngest? _pluginIngest;
     private WorkingTreeOverlay? _workingTreeOverlay;
     private bool _recordTypeViewsCreated;
@@ -68,12 +66,11 @@ internal sealed class Store : IDisposable
     /// holds no header flag, master list or record count. The gate and the filter outlive the store,
     /// which a rebuild swaps beneath them.</summary>
     public Store(
-        ILogger logger, string? databasePath, string? instanceRoot, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder, IPluginAdapter plugins, ISourceAdapter source,
+        ILogger logger, string? databasePath, string? instanceRoot, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder, IPluginAdapter plugins,
         TimeProvider? timeProvider, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed,
         IndexWriteGate gate, FilterInForce filterInForce, INotificationPublisher? notifications)
     {
         _logger = logger;
-        _source = source;
         _gate = gate;
         _filterInForce = filterInForce;
         _notifications = notifications;
@@ -217,14 +214,14 @@ internal sealed class Store : IDisposable
 
     /// <summary>Discards a file written under another <see cref="IndexVersion"/> (whole-file rebuild,
     /// never partial), then creates the fixed tables and stamps the version they were built under.</summary>
-    public void Initialize(GameRelease release)
+    public void Initialize(GameRelease release, Func<string, string> contentStamp)
     {
         var indexVersion = IndexVersion.For(_schemaReflector, release);
         DiscardFileWrittenUnderAnotherVersion(indexVersion);
         _schemas = _schemaReflector.GetSchemas(release);
         Release = release;
-        _pluginIngest = new PluginIngest(Connection, _logger, release, _source);
-        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release, _source);
+        _pluginIngest = new PluginIngest(Connection, _logger, release, contentStamp);
+        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release, contentStamp);
         TableDdlBuilder.CreateTables(Connection);
         DuckDbSql.Execute(Connection, $"DELETE FROM {IndexVersionRelation}");
         DuckDbSql.Execute(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);

@@ -599,7 +599,7 @@ internal sealed class Indexer : IDisposable
     private bool ReconcileProgressively(OpenScope scope, LoadOrderSnapshot snapshot, CancellationToken token)
     {
         var (held, store) = (scope.Held, scope.Store);
-        FailCollisions(snapshot);
+        FailCollisions(snapshot.CollisionReasons());
         _readLanguage = snapshot.StringsLanguage;
         var resolved = snapshot.Plugins;
         // A hash is kept only for a file the load order names, or the kept hashes grow by every path
@@ -780,10 +780,10 @@ internal sealed class Indexer : IDisposable
     }
 
     // plugins.md, A row, Plugin: each plugin of a case-only collision is that row's "Failed to read".
-    private void FailCollisions(LoadOrderSnapshot snapshot)
+    private void FailCollisions(IReadOnlyList<(RegisteredPlugin Plugin, string Reason)> collisions)
     {
         IReadOnlyList<PluginLoadFailure> failures =
-            [.. snapshot.CaseOnlyCollisions.Select(plugin => new PluginLoadFailure(plugin.Name, plugin.Origin, snapshot.CollisionReasonOf(plugin)))];
+            [.. collisions.Select(c => new PluginLoadFailure(c.Plugin.Name, c.Plugin.Origin, c.Reason))];
         lock (_lock)
         {
             if (failures.SequenceEqual(_collisionFailures)) return;
@@ -1171,8 +1171,6 @@ internal sealed class Indexer : IDisposable
     /// that never ended, is refused.</summary>
     public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
-        if (!Directory.Exists(instanceRoot))
-            return new(StoreRebuildRefusal.InstanceRootNotFound, $"Instance root not found: {instanceRoot}");
         var previousSequence = Sequence;
         if (!Close())
         {

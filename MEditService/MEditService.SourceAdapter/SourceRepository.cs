@@ -90,10 +90,6 @@ internal sealed class SourceRepository : ISourceRepository
     /// <summary>Why git cannot be run here, so no repository can be made or written; null when it can.</summary>
     internal static SourceFailure? WhyGitCannotRun() => SourceFailure.Answer(GitCli.EnsureOnPath);
 
-    /// <summary>The stamp of one document's text, as the UTF-8 the record index stores: every side hashes
-    /// through here, so a file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
-    internal static string ContentStamp(string text) => TreeStamps.ContentStamp(text);
-
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
     /// asked; the body is the tree's answer, spliced out of another record's document when that is
     /// what carries it.</summary>

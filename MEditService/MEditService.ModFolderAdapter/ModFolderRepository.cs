@@ -120,8 +120,6 @@ public sealed class ModFolderRepository(TimeProvider time, Func<string, bool> fi
 
     public bool DataFolderExists(string dataFolder) => Directory.Exists(dataFolder);
 
-    public bool InstanceRootExists(string? instanceRoot) => Directory.Exists(instanceRoot);
-
     public string ExcludedName(string name, string excludedSuffix) => name + excludedSuffix;
 
     public string FolderName(string modFolder) => Path.GetFileName(Path.TrimEndingDirectorySeparator(modFolder));

@@ -462,7 +462,9 @@ internal sealed class RecordQueries(
     }
 
     public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot) =>
-        _index.RebuildStore(gameRelease, instanceRoot);
+        source.InstanceRootNotFound(instanceRoot) is { } notFound
+            ? new(StoreRebuildRefusal.InstanceRootNotFound, notFound)
+            : _index.RebuildStore(gameRelease, instanceRoot);
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,

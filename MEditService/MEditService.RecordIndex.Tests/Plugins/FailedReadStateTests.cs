@@ -644,6 +644,8 @@ public sealed class FailedReadStateTests : IDisposable
 
         public SourceFailure? WhyGitCannotRun() => _inner.WhyGitCannotRun();
 
+        public string? InstanceRootNotFound(string? instanceRoot) => _inner.InstanceRootNotFound(instanceRoot);
+
         public string ContentStamp(string text) => _inner.ContentStamp(text);
 
         public SourceFailure? Init(

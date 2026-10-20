@@ -327,22 +327,44 @@ public sealed class LoadOrderTests
         Assert.Equal([upper, lower], Order([upper, lower]).CaseOnlyCollisions);
     }
 
-    [Fact]
-    public void CollisionReasonOf_NamesWhatDiffersAndTheOthers()
+    public static TheoryData<string[][], string[]> CollisionCases => new()
     {
-        var upper = Registered("Dup.esp", "ModA");
-        var lower = Registered("dup.esp", "ModA");
-        var otherOrigin = Registered("Dup.esp", "moda");
+        {
+            [["Dup.esp", "ModA"], ["dup.esp", "ModA"]],
+            [
+                "Its name differs only in case from dup.esp from ModA, so no one can tell which the game loads. None is read.",
+                "Its name differs only in case from Dup.esp from ModA, so no one can tell which the game loads. None is read.",
+            ]
+        },
+        {
+            [["Dup.esp", "ModA"], ["Dup.esp", "moda"]],
+            [
+                "Its origin differs only in case from Dup.esp from moda, so no one can tell which the game loads. None is read.",
+                "Its origin differs only in case from Dup.esp from ModA, so no one can tell which the game loads. None is read.",
+            ]
+        },
+        {
+            [["Dup.esp", "ModA"], ["dup.esp", "ModA"], ["Dup.esp", "moda"]],
+            [
+                "Its name and origin differs only in case from dup.esp from ModA, Dup.esp from moda, so no one can tell which the game loads. None is read.",
+                "Its name and origin differs only in case from Dup.esp from ModA, Dup.esp from moda, so no one can tell which the game loads. None is read.",
+                "Its name and origin differs only in case from Dup.esp from ModA, dup.esp from ModA, so no one can tell which the game loads. None is read.",
+            ]
+        },
+    };
 
-        var pair = Order([upper, lower]);
-        var triple = Order([upper, lower, otherOrigin]);
+    [Theory]
+    [MemberData(nameof(CollisionCases))]
+    public void CollisionReasons_NameWhatDiffersAndTheOthers(string[][] plugins, string[] reasons)
+    {
+        var order = Order([.. plugins.Select(p => Registered(p[0], p[1]))]);
 
-        Assert.Equal(
-            "Its name differs only in case from dup.esp from ModA, so no one can tell which the game loads. None is read.",
-            pair.CollisionReasonOf(upper));
-        Assert.Equal(
-            "Its name and origin differs only in case from Dup.esp from ModA, dup.esp from ModA, so no one can tell which the game loads. None is read.",
-            triple.CollisionReasonOf(otherOrigin));
-        Assert.StartsWith("Its origin differs only in case from ", Order([upper, otherOrigin]).CollisionReasonOf(upper));
+        Assert.Equal(reasons, order.CollisionReasons().Select(c => c.Reason));
+    }
+
+    [Fact]
+    public void CollisionReasons_OfNoCollision_IsEmpty()
+    {
+        Assert.Empty(Order([Registered("A.esp", "ModA"), Registered("B.esp", "ModA")]).CollisionReasons());
     }
 }

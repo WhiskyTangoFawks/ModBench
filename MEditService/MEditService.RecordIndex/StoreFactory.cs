@@ -61,7 +61,7 @@ internal sealed class StoreFactory(
         long? atLeastSequence, out string? refusal)
     {
         var store = new Store(
-            _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), instanceRoot, schemaReflector, ddlBuilder, plugins, source,
+            _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), instanceRoot, schemaReflector, ddlBuilder, plugins,
             timeProvider, openedPlugins, indexed, gate, filter, notifications);
         refusal = store.Open();
         if (refusal is not null)
@@ -73,7 +73,7 @@ internal sealed class StoreFactory(
         // ADR-0010: a rebuild's whole job on an opened file, which the open already refused if
         // another process held it.
         if (atLeastSequence is not null) store.RebuildFile();
-        store.Initialize(gameRelease);
+        store.Initialize(gameRelease, source.ContentStamp);
         if (atLeastSequence is { } floor) store.SeedSequence(floor);
         return store;
     }
