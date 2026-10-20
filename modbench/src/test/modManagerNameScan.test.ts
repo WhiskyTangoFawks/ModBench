@@ -13,7 +13,7 @@ const MO2_CONSTRUCTION = MO2_CONSTRUCTION_SITE.file;
 const MO2_ENTRY = `./${MO2_CONSTRUCTION_SITE.module.split(sep).join('/')}`;
 
 const isMo2Implementation = (relPath: string): boolean =>
-  relPath.startsWith(ADAPTER + sep) && relPath !== ADAPTER_INTERFACE;
+  relPath.startsWith(ADAPTER + sep) && relPath !== ADAPTER_INTERFACE && relPath !== MO2_CONSTRUCTION;
 
 function constructionImport(sourceText: string, fileName: string): { text: string; bindings: string[] } | undefined {
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
@@ -72,10 +72,11 @@ describe('no extension file names MO2 outside its implementation of the Instance
     expect(findOffenders(SOURCE_ROOTS)).toEqual({});
   });
 
-  it('scans the implementation\'s files and not its interface\'s as the implementation', () => {
+  it('scans the implementation\'s files and not its interface\'s or the construction\'s as the implementation', () => {
     expect(isMo2Implementation(join(ADAPTER, 'mo2', 'mo2Instance.ts'))).toBe(true);
     expect(isMo2Implementation(join(ADAPTER, 'mo2', 'codecs', 'modlistText.ts'))).toBe(true);
     expect(isMo2Implementation(ADAPTER_INTERFACE)).toBe(false);
+    expect(isMo2Implementation(MO2_CONSTRUCTION)).toBe(false);
   });
 
   it('the construction\'s exemption is load-bearing: the file imports MO2\'s implementation', () => {
