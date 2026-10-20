@@ -1122,19 +1122,24 @@ internal sealed class Indexer : IDisposable
         lock (_lock) return _scope is { } scope ? write(new GatedStore(scope.Store, IndexScope.Of(scope.Held))) : noStore();
     }
 
-    /// <summary>Hands <paramref name="whileClosed"/> the file with the store closed, then reconciles the load
-    /// order held unless it refuses. False, having run nothing, when a read outlived the close: the store is
-    /// reconciled back as it was.</summary>
+    /// <summary>Hands <paramref name="whileClosed"/> the file with the store closed and no reconcile running, then
+    /// reconciles the load order held unless it refuses. False, having run nothing, when a read outlived the
+    /// close: the store is reconciled back as it was.</summary>
     internal bool WhileClosed(Func<ClosedStore, string?> whileClosed, out string? refusal)
     {
         refusal = null;
         var handedOut = Sequence;
-        if (!Close())
+        EnterExclusive();
+        try
         {
-            StartReconcile();
-            return false;
+            if (!Close())
+            {
+                StartReconcile();
+                return false;
+            }
+            refusal = whileClosed(new ClosedStore(_storeFactory, handedOut));
         }
-        refusal = whileClosed(new ClosedStore(_storeFactory, handedOut));
+        finally { ExitExclusive(); }
         if (refusal is null) StartReconcile();
         return true;
     }

@@ -208,6 +208,38 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
+    public async Task AnArrivalOnceARebuildClosesTheStore_LeavesTheRefilledRowsInTheFileTheNextIndexOpens()
+    {
+        using var gate = new GatedPluginAdapter();
+        var notifications = new InMemoryNotificationPublisher();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, gate, notifications: notifications);
+        index.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        PluginBinaries.Touch(_fixture.Plugins.Single().Path);
+        gate.ParkNextOpenOf(Key.Name);
+        Task? parked = null;
+        notifications.OnPublish = n =>
+        {
+            if (parked is not null || n is not LoadOrderStatusNotification { Status.State: LoadOrderState.None }) return;
+            holder.Apply(holder.Current);
+            parked = gate.WaitUntilParkedAsync();
+            Waits.ReachedWithin(() => parked.IsCompleted, TimeSpan.FromSeconds(2));
+        };
+
+        Assert.Null(await Task.Run(() => index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot)));
+        await (parked ?? Task.CompletedTask).WaitAsync(Waits.Patience);
+        gate.Release();
+        AwaitRefill(index);
+        index.Dispose();
+        var opened = gate.OpenedTotal;
+        using var next = Indexes.Open(holder, gate);
+        next.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+
+        Assert.Equal(opened, gate.OpenedTotal);
+        Assert.NotEmpty(next.ListedIn(Key));
+    }
+
+    [Fact]
     public void Rebuild_SeedsTheSequence_AtLeastTheValueAlreadyHandedOut()
     {
         Reconcile(_fixture.InstanceRoot);
