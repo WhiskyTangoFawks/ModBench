@@ -39,12 +39,12 @@ const lines = (order: string[], enabled: string[] = order): PluginEntry[] =>
 
 const runtimeOutput = (relativePath: string): OriginFile => {
   const path = join(OVERWRITE, ...relativePath.split('/'));
-  return { relativePath, path, sourcePath: path, excluded: false, excludedByName: false };
+  return { relativePath, path, sourcePath: path, excluded: false, markedExcluded: false, includedPath: relativePath };
 };
 
 const modFile = (mod: string, relativePath: string): OriginFile => {
   const path = `/mods/${mod}/${relativePath}`;
-  return { relativePath, path, sourcePath: path, excluded: false, excludedByName: false };
+  return { relativePath, path, sourcePath: path, excluded: false, markedExcluded: false, includedPath: relativePath };
 };
 
 const builtIndex = (filesByMod: Record<string, OriginFile[]>, overwrite: readonly OriginFile[]): FileConflictIndex =>
@@ -97,8 +97,8 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
     const fakeIndex = index(
       { 'Shared.esp': { winner: '/mods/A/Shared.esp', winnerMod: 'A', providers: ['A', 'B'] } },
       {
-        A: [{ relativePath: 'Shared.esp', path: '/mods/A/Shared.esp', sourcePath: '/mods/A/Shared.esp', excluded: false, excludedByName: false }],
-        B: [{ relativePath: 'Shared.esp', path: '/mods/B/Shared.esp', sourcePath: '/mods/B/Shared.esp', excluded: false, excludedByName: false }],
+        A: [{ relativePath: 'Shared.esp', path: '/mods/A/Shared.esp', sourcePath: '/mods/A/Shared.esp', excluded: false, markedExcluded: false, includedPath: 'Shared.esp' }],
+        B: [{ relativePath: 'Shared.esp', path: '/mods/B/Shared.esp', sourcePath: '/mods/B/Shared.esp', excluded: false, markedExcluded: false, includedPath: 'Shared.esp' }],
       },
     );
 
@@ -111,7 +111,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   it('a plugin file no plugins.txt line names is sent with no line, not enabled, winning if it is the sole provider', () => {
     const fakeIndex = index(
       { 'Stray.esp': { winner: '/mods/C/Stray.esp', winnerMod: 'C' } },
-      { C: [{ relativePath: 'Stray.esp', path: '/mods/C/Stray.esp', sourcePath: '/mods/C/Stray.esp', excluded: false, excludedByName: false }, { relativePath: 'textures/x.dds', path: '/mods/C/textures/x.dds', sourcePath: '/mods/C/textures/x.dds', excluded: false, excludedByName: false }] },
+      { C: [{ relativePath: 'Stray.esp', path: '/mods/C/Stray.esp', sourcePath: '/mods/C/Stray.esp', excluded: false, markedExcluded: false, includedPath: 'Stray.esp' }, { relativePath: 'textures/x.dds', path: '/mods/C/textures/x.dds', sourcePath: '/mods/C/textures/x.dds', excluded: false, markedExcluded: false, includedPath: 'Stray.esp' }] },
     );
 
     const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER, inDataFolder('Listed.esp'));
@@ -181,7 +181,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   });
 
   it('a disabled mod\'s own plugin is sent with no line, not enabled, not winning', () => {
-    const fakeIndex = index({}, { Disabled: [{ relativePath: 'Off.esp', path: '/mods/Disabled/Off.esp', sourcePath: '/mods/Disabled/Off.esp', excluded: false, excludedByName: false }] });
+    const fakeIndex = index({}, { Disabled: [{ relativePath: 'Off.esp', path: '/mods/Disabled/Off.esp', sourcePath: '/mods/Disabled/Off.esp', excluded: false, markedExcluded: false, includedPath: 'Off.esp' }] });
 
     const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
 
@@ -424,7 +424,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
 
   it('hands each copy, loaded or not, the strings files beside it: loose in its strings folder, and the archives named for it at its folder\'s root', () => {
     const file = (origin: string, relativePath: string, excluded = false): OriginFile =>
-      ({ relativePath, path: `/mods/${origin}/${relativePath}`, sourcePath: `/store/${origin}/${relativePath}`, excluded, excludedByName: excluded });
+      ({ relativePath, path: `/mods/${origin}/${relativePath}`, sourcePath: `/store/${origin}/${relativePath}`, excluded, markedExcluded: excluded, includedPath: relativePath });
     const archives: ArchiveSources = {
       ...NO_ARCHIVES,
       inData: { kind: 'listed', archives: ['D - Main.ba2', 'A - Main.ba2'], stringsFiles: ['Strings/D_en.STRINGS', 'Strings/A_en.STRINGS'] },

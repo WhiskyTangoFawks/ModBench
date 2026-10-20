@@ -2031,7 +2031,7 @@ describe('PluginsTreeProvider — load-failure decoration', () => {
   it('shows the failure of a line naming plugins whose names differ only in case, never "Still indexing…"', async () => {
     const files = new FileConflictLookup();
     files.set({ relativePath: 'Foo.esp', winner: '/mods/SomeMod/Foo.esp', winnerOrigin: modOrigin('SomeMod'), providers: [modOrigin('SomeMod')] });
-    const modFile = (relativePath: string) => ({ relativePath, path: `/mods/SomeMod/${relativePath}`, sourcePath: `/mods/SomeMod/${relativePath}`, excluded: false, excludedByName: false });
+    const modFile = (relativePath: string) => ({ relativePath, path: `/mods/SomeMod/${relativePath}`, sourcePath: `/mods/SomeMod/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath });
     const rows = buildLoadOrderRows(
       [{ name: 'FOO.esp', enabled: true }],
       { files, filesByMod: new Map([['SomeMod', [modFile('Foo.esp'), modFile('foo.esp')]]]), foldersByMod: new Map() },

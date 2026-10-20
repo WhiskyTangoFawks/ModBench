@@ -115,6 +115,8 @@ export interface InstanceAnswers {
   metadataLeftBehind?: string;
   /** A write that rejects with the message this returns for it, after it is recorded. */
   refusals?: (call: AdapterCall) => string | undefined;
+  /** The reason reading a file of an origin fails, or `undefined` when it reads. */
+  unreadOriginFile?: (file: { readonly origin: FileOrigin; readonly relativePath: string }) => string | undefined;
   /** Origin files that are gone: they get no mark. */
   goneOriginFiles?: readonly { readonly origin: FileOrigin; readonly relativePath: string }[];
   heldPlugins?: readonly { readonly origin: FileOrigin; readonly name: string }[];
@@ -151,7 +153,7 @@ export function modFoldersOf(...entries: readonly (string | (EntryRef & { modNam
 }
 
 export const fileIn = (folder: string, relativePath: string): OriginFile =>
-  ({ relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`, excluded: false, excludedByName: false });
+  ({ relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath });
 
 /** The Instance adapter's second implementation: reads answer from the reading and the answers,
  *  each write is recorded, and a decision a caller hands over runs against the reading. */
@@ -243,11 +245,18 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     selectProfile: (profile) => record({ verb: 'selectProfile', profile }, { wrote: profile !== current.profile }),
     createModFolder: (mod) => record({ verb: 'createModFolder', mod }, undefined),
     renameModFolder: (from, to) => record({ verb: 'renameModFolder', from, to }, undefined),
+    originFile: (origin, relativePath) => {
+      const unread = answers.unreadOriginFile?.({ origin, relativePath });
+      if (unread !== undefined) return Promise.reject(new Error(unread));
+      const gone = answers.goneOriginFiles?.some((one) => originKey(one.origin) === originKey(origin) && one.relativePath === relativePath);
+      const listed = (origin.kind === 'mod' ? current.modFiles.get(origin.name) : current.runtimeOutput)?.files.find((file) => file.relativePath === relativePath);
+      const unmarked = relativePath.split('/').map((segment) => segment.replace(EXCLUDED_SUFFIX, '')).join('/');
+      return Promise.resolve(gone ? undefined : listed ?? { ...fileIn('/origin', relativePath), includedPath: unmarked });
+    },
     markOriginFile: (origin, relativePath, mark) =>
       record<OriginFileMarked>({ verb: 'markOriginFile', origin, relativePath, mark },
         answers.goneOriginFiles?.some((gone) => originKey(gone.origin) === originKey(origin) && gone.relativePath === relativePath) ? { gone: true } : { gone: false, wrote: true, relativePath }),
     entryKey,
-    includedPath: (relativePath) => relativePath.split('/').map((segment) => segment.replace(EXCLUDED_SUFFIX, '')).join('/'),
     excludedSuffix: EXCLUDED_SUFFIX,
     originHoldsPlugin: (origin, name) => Promise.resolve((answers.heldPlugins ?? []).some((held) =>
       originKey(held.origin) === originKey(origin) && pluginKey(held.name) === pluginKey(name))),

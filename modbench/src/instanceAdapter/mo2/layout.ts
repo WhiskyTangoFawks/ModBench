@@ -78,6 +78,10 @@ export const excludedName = (name: string): string => name + EXCLUDED_SUFFIX;
 
 export const includedName = (name: string): string => name.slice(0, -EXCLUDED_SUFFIX.length);
 
+/** The path an origin's file or folder has when nothing excludes it. */
+export const includedPathOf = (relativePath: string): string =>
+  relativePath.split('/').map((segment) => (isExcludedName(segment) ? includedName(segment) : segment)).join('/');
+
 /** The prefix a new mod's extraction folder, inside the mod's folder, is named from. */
 export const newModExtractionPrefix = (modFolder: string): string => ownTempPrefix(modFolder, 'new-');
 

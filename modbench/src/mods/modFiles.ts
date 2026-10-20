@@ -103,7 +103,7 @@ export class FileNode extends vscode.TreeItem {
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
     fileRow(this, parent, origin, name, file.relativePath);
-    this.exclusion = FILE_MARKS[file.excludedByName ? 'Excluded' : 'Included'].state;
+    this.exclusion = FILE_MARKS[file.markedExcluded ? 'Excluded' : 'Included'].state;
     this.contextValue = ['file', conflict !== 'none' && 'conflict', conflict === 'loses' && 'losing', this.exclusion].filter(Boolean).join(' ');
     this.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file.path), { preview: true }] };
   }

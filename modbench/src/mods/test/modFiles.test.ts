@@ -24,7 +24,7 @@ import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
-const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath, excluded: false, excludedByName: false });
+const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath, excluded: false, markedExcluded: false, includedPath: relativePath });
 
 function foldersHoldingFiles(files: readonly OriginFile[]): OriginFolder[] {
   const byPath = new Map<string, OriginFolder>();
@@ -517,8 +517,8 @@ describe('a file row\'s context, which the File menu\'s go to mod and compare fi
 
 describe('a file row\'s context, which the File menu\'s exclude or include reads (mods.md, Menus and keys, story 7)', () => {
   const flags = (row: ModlistNode): string[] => row.contextValue?.split(' ') ?? [];
-  const excludedFile = (relativePath: string, excludedByName = true): OriginFile =>
-    ({ ...file(relativePath), excluded: true, excludedByName });
+  const excludedFile = (relativePath: string, markedExcluded = true): OriginFile =>
+    ({ ...file(relativePath), excluded: true, markedExcluded });
 
   it('flags a file the game may get included, and a file excluded by its own name excluded', async () => {
     const provider = providerOver([mod('M')], { M: [file('a.dds'), excludedFile('b.dds.mohidden')] });

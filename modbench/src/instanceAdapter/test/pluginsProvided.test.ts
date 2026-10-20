@@ -3,7 +3,7 @@ import { pluginsProvidedOf } from '../pluginsProvided';
 import { filesWinningFirst, type DataFolderPlugins, type ModlistEntry, type OriginFile } from '../instanceAdapter';
 
 const file = (relativePath: string, overrides: Partial<OriginFile> = {}): OriginFile =>
-  ({ relativePath, path: `/x/${relativePath}`, sourcePath: `/x/${relativePath}`, excluded: false, excludedByName: false, ...overrides });
+  ({ relativePath, path: `/x/${relativePath}`, sourcePath: `/x/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath, ...overrides });
 const mod = (name: string, enabled = true): ModlistEntry => ({ kind: 'mod', name, enabled });
 
 describe('filesWinningFirst', () => {
