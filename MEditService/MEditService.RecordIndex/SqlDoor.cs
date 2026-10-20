@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Text.Json;
 using DuckDB.NET.Data;
+using MEditService.RepositoriesLib;
 
 namespace MEditService.RecordIndex;
 
@@ -12,6 +13,18 @@ internal static class SqlDoor
 
     // Table functions that read no relation and run no string.
     private static readonly HashSet<string> RowSources = new(StringComparer.OrdinalIgnoreCase) { "unnest", "range", "generate_series" };
+
+    /// <summary>The rows of one SELECT over the views of every plugin the record index holds, once the whole set is read.</summary>
+    internal static Answer<JsonElement[], string> Select(Indexer index, string sql)
+    {
+        var reads = index.RequireWholeSetReads();
+        index.InForce(store =>
+        {
+            store.CreateRecordTypeViews();
+            return true;
+        }, () => false);
+        return reads.Select(sql);
+    }
 
     /// <summary>Why <paramref name="sql"/> may not pass the door, or null when it may.</summary>
     internal static string? RefusalOf(DuckDBConnection connection, string sql, string schema)
