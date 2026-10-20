@@ -347,7 +347,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
           { name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'] },
           { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'] },
         ],
-        { statCache: '/instance/stat-cache', exclusionMark: '.excluded', archives: archiveVariants('Fallout4'), gameFolder: GAME_FOLDER },
+        { statCache: '/instance/stat-cache', exclusionMark: '.excluded', archives: archiveVariants('Fallout4'), gameFolder: GAME_FOLDER, asksWhatItLacks: true },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
       ],
     }]);
@@ -362,7 +362,8 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const outcome = await commands.restoreFromManifest(['ModA']);
 
     expect(client.calls.map((call) => call.args[1])).toMatchObject([
-      { gameFolder: GAME_FOLDER }, { gameFolder: { ...GAME_FOLDER, files: [{ path: 'Meshes/A.nif', hash: '#a' }] } }]);
+      { gameFolder: GAME_FOLDER, asksWhatItLacks: true },
+      { gameFolder: { ...GAME_FOLDER, files: [{ path: 'Meshes/A.nif', hash: '#a' }] }, asksWhatItLacks: false }]);
     expect(outcome).toEqual({ applied: true, landed: RESTORED.landed, refused: [] });
   });
 

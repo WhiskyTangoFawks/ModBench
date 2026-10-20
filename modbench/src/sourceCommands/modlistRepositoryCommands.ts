@@ -297,7 +297,7 @@ async function restoreFolders(
   if (read.sent.length === 0) return { applied: true, landed: [], refused: read.refused };
   const sent: readonly RestoreMod[] = read.sent;
   const facts: RestoreFacts = {
-    statCache: adapter.statCacheFolder, exclusionMark: adapter.exclusionMark, archives: archiveVariants(gameRelease), gameFolder: wireGameFolder(folder, []),
+    statCache: adapter.statCacheFolder, exclusionMark: adapter.exclusionMark, archives: archiveVariants(gameRelease), gameFolder: wireGameFolder(folder, []), asksWhatItLacks: true,
   };
   const restoring = { onProgress: (progress: ModlistProgress): void => { onProgress?.({ phase: 'Restoring', ...progress }); }, signal };
   const first = await restoreOnce(client, sent, facts, restoring);
@@ -317,7 +317,7 @@ async function restoreFolders(
     return notFound === undefined
       ? [] : [{ ...mod, installationFile: downloaded.handed(notFound.installationFile), submodule: submodules.handed(notFound.submodule) }];
   });
-  const second = await restoreOnce(client, again, { ...facts, gameFolder: wireGameFolder(folder, named.found) }, restoring);
+  const second = await restoreOnce(client, again, { ...facts, gameFolder: wireGameFolder(folder, named.found), asksWhatItLacks: false }, restoring);
   if (!second.applied) return { ...second, landed: first.landed };
   const unreadFor = new Map(second.notFound.map(({ mod, installationFile, submodule }) =>
     [mod, named.unread + downloaded.unread(installationFile) + submodules.unread(submodule)]));
