@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  isHiddenInMeta,
   parseDownloadMeta,
   setHiddenInText,
   setInstalledInText,
@@ -26,14 +27,14 @@ describe('parseDownloadMeta', () => {
     expect(parseDownloadMeta('[General]\r\nfileID=0\r\n').fileID).toBeUndefined();
   });
 
-  it('is not excluded when removed is explicitly false', () => {
-    expect(parseDownloadMeta('[General]\r\nremoved=false\r\n').excluded).toBe(false);
+  it('is not hidden when removed is explicitly false', () => {
+    expect(isHiddenInMeta('[General]\r\nremoved=false\r\n')).toBe(false);
   });
 
   it('never conflates the Uninstalled Status with excluded: both flags coexist, orthogonal axes derived from different keys (uninstalled=true, removed=true)', () => {
-    const meta = parseDownloadMeta('[General]\r\nuninstalled=true\r\nremoved=true\r\n');
-    expect(meta.status).toBe('Uninstalled');
-    expect(meta.excluded).toBe(true);
+    const text = '[General]\r\nuninstalled=true\r\nremoved=true\r\n';
+    expect(parseDownloadMeta(text).status).toBe('Uninstalled');
+    expect(isHiddenInMeta(text)).toBe(true);
   });
 
   it('parses a hand-edited .meta with padded key=value spacing, which a writer never would, the same as the tight form', () => {

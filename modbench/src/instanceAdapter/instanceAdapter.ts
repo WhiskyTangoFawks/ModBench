@@ -140,8 +140,6 @@ export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
  *  corroborated against the mods. */
 export interface DownloadMeta {
   status: DownloadStatus;
-  /** A separate axis from `status`. */
-  excluded: boolean;
   modID?: string;
   fileID?: string;
   name?: string;
@@ -151,7 +149,8 @@ export interface DownloadMeta {
   author?: string;
 }
 
-/** A downloaded file, with its metadata parsed; `meta` is undefined when it has none. */
+/** A downloaded file, with its metadata parsed; `meta` is undefined when it has none. `excluded` is
+ *  the adapter's answer, a separate axis from the metadata's `status`. */
 export interface DownloadedFile {
   readonly name: string;
   readonly path: string;
@@ -159,6 +158,7 @@ export interface DownloadedFile {
   readonly metaPath: string;
   readonly size: number;
   readonly mtimeMs: number;
+  readonly excluded: boolean;
   readonly meta: DownloadMeta | undefined;
 }
 

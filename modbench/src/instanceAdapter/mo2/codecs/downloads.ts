@@ -8,6 +8,11 @@ import { GENERAL_SECTION, readIniSection, setIniValue } from './qSettingsIni';
 /** Appended to a download's filename to name its sidecar. */
 export const DOWNLOAD_SIDECAR_SUFFIX = '.meta';
 
+/** `removed` is MO2's hidden, a separate key from the `uninstalled` Status. */
+export function isHiddenInMeta(text: string): boolean {
+  return readIniSection(text, GENERAL_SECTION).get('removed') === 'true';
+}
+
 export function parseDownloadMeta(text: string): DownloadMeta {
   const values = readIniSection(text, GENERAL_SECTION);
   let status: DownloadStatus = 'Downloaded';
@@ -15,11 +20,8 @@ export function parseDownloadMeta(text: string): DownloadMeta {
   else if (values.get('installed') === 'true') status = 'Installed';
   const modID = values.get('modID');
   const fileID = values.get('fileID');
-  // `removed` is MO2's hidden — a separate key/axis from the `uninstalled` Status above.
-  const excluded = values.get('removed') === 'true';
   return {
     status,
-    excluded,
     modID: modID && modID !== '0' ? modID : undefined,
     fileID: fileID && fileID !== '0' ? fileID : undefined,
     name: values.get('name'),

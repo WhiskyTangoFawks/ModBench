@@ -94,34 +94,44 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
   const passedOver = (folder: string): boolean => !isOpen || watched.has(folder);
 
   const watchHeldBy = async (folder: string): Promise<void> => {
-    await Promise.all((await foldersIn(folder)).map(watchFolder));
+    await watchAll(await foldersIn(folder));
   };
 
   // Watched before it is listed, so a folder made inside it meanwhile is heard or listed. A link back to a folder
   // already watched is not watched again, or a loop of links would be watched without end.
-  const watchFolder = async (folder: string): Promise<void> => {
-    if (passedOver(folder) || !holds(folder)) return;
+  const watchOne = async (folder: string): Promise<boolean> => {
+    if (passedOver(folder) || !holds(folder)) return false;
     const real = await realpath(folder).catch(() => undefined);
-    if (real === undefined || passedOver(folder) || watchedReal.has(real)) return;
+    if (real === undefined || passedOver(folder) || watchedReal.has(real)) return false;
     try {
       const watcher = watch(folder, { persistent: false }, (_event, name) => { heardIn(folder, name); });
       watcher.on('error', (error) => { fail(folder, error); });
       watched.set(folder, { watcher, real });
       watchedReal.add(real);
       failed.delete(folder);
+      return true;
     } catch (error) {
       fail(folder, error);
-      return;
+      return false;
     }
-    await watchHeldBy(folder);
   };
+
+  // A folder reached by two paths is watched under the shallower, and under the first listed of equal depth,
+  // whatever the timing of the disk.
+  const watchAll = async (folders: readonly string[]): Promise<void> => {
+    const fresh: string[] = [];
+    for (const folder of folders) if (await watchOne(folder)) fresh.push(folder);
+    for (const folder of fresh) await watchHeldBy(folder);
+  };
+
+  const watchFolder = (folder: string): Promise<void> => watchAll([folder]);
 
   return {
     async created(folder) {
       if (!isOpen) return;
       const held = await foldersIn(folder);
       if (held.length > 0) createdFolders.add(folder);
-      await Promise.all(held.map(watchFolder));
+      await watchAll(held);
     },
     removed,
     async open() {

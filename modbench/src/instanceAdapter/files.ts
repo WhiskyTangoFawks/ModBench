@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead, FileStamp } from './instanceAdapter';
+import { TEMP_PREFIX } from '../wire/tempName';
 
 /** ADR-0007, answered without the backend. */
 export function isRepository(sourceFolder: string): Promise<boolean> {
@@ -19,8 +20,6 @@ export function isRepository(sourceFolder: string): Promise<boolean> {
 
 /** The git directory whose presence is what "source mod" means (ADR-0007). */
 export const GIT_DIR = '.git';
-
-const TEMP_PREFIX = '.medit_tmp_';
 
 /** Whether `name` is a temp that Modbench or mEdit left in an instance folder: never a mod's file. */
 export const isOwnTemp = (name: string): boolean => name.startsWith(TEMP_PREFIX);

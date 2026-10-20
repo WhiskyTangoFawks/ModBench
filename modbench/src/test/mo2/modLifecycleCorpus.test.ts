@@ -10,7 +10,7 @@ import { modCommands } from '../../modCommands/modCommands';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree,
 } from './corpusFixture';
-import { adapterOver, readDownloadedFileMeta, readModlistEntries } from './adapterOver';
+import { adapterOver, readDownloadedFile, readModlistEntries } from './adapterOver';
 import { fakeArchiveReader } from '../fakeArchiveReader';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
@@ -95,6 +95,6 @@ describe('mod lifecycle corpus (install)', () => {
     expect(outcome).toEqual({ applied: true, isFomod: false, downloadedFile: MANUAL });
     assertOnlyChanged(before, after, new Set(['mods/Manual/Manual.esp', 'mods/Manual/meta.ini', 'profiles/Default/modlist.txt', `downloads/${MANUAL}.meta`]));
     expect(await readFile(join(dir, 'profiles', 'Default', 'modlist.txt'), 'utf8')).toContain('-Manual');
-    expect(await readDownloadedFileMeta(dir, MANUAL)).toMatchObject({ status: 'Installed' });
+    expect(await readDownloadedFile(dir, MANUAL)).toMatchObject({ meta: { status: 'Installed' } });
   });
 });

@@ -1,10 +1,23 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { heldFolderWatchFor, type HeldFolderWatch } from '../heldFolders';
 import { present } from '../../ports/present';
 import { eventually, writtenAndHeard } from '../../test/eventually';
+
+let slowRealpath: string | undefined;
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...actual,
+    realpath: async (path: string) => {
+      if (path === slowRealpath) await new Promise((r) => setTimeout(r, 100));
+      return actual.realpath(path);
+    },
+  };
+});
 
 describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher misses them only on Linux) the watch of the folders a folder created already held', () => {
   let root: string;
@@ -16,7 +29,8 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     root = await mkdtemp(join(tmpdir(), 'held-folders-'));
     heard = [];
     failures = 0;
-    held = present(heldFolderWatchFor('**', { onChange: (path) => { heard.push(path); }, holds: () => true, onFailure: () => { failures++; } }), 'a held-folder watch on Linux');
+    slowRealpath = undefined;
+    held =present(heldFolderWatchFor('**', { onChange: (path) => { heard.push(path); }, holds: () => true, onFailure: () => { failures++; } }), 'a held-folder watch on Linux');
     await held.open();
   });
 
@@ -55,6 +69,7 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     await mkdir(join(created, 'Held'), { recursive: true });
     await symlink(outside, join(created, 'Linked'));
     await symlink(created, join(created, 'Held', 'Back'));
+    slowRealpath = join(created, 'Linked');
 
     await held.created(created);
     const inHeld = join(created, 'Held', 'Gun.json');
