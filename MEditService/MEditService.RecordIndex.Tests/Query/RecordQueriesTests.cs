@@ -883,6 +883,18 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
+    public void GetCreatablePluginExtensions_AreTheHeldReleasesExtensions()
+    {
+        Assert.Equal([".esm", ".esl", ".esp"], _svc.GetCreatablePluginExtensions().Value());
+    }
+
+    [Fact]
+    public void GetCreatablePluginExtensions_WithNoLoadOrder_Refuses()
+    {
+        Assert.Equal(IndexRefusal.NoLoadOrder, Unloaded().Queries.GetCreatablePluginExtensions().Refused().Refusal);
+    }
+
+    [Fact]
     public void GetCreatableRecordTypes_NamesAFlatTypeAsXEditDoes()
     {
         Assert.Equal("Non-Player Character", Assert.Single(_svc.GetCreatableRecordTypes().Value(), r => r.Type == "npc_").DisplayName);
