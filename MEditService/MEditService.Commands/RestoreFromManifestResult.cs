@@ -12,7 +12,7 @@ public sealed record RestoreFromManifestResult(IReadOnlyList<ModRestored> Applie
 /// did not keep the read, its manifest's metadata, and what its rebuild left.</summary>
 public sealed record ModRestored(
     string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata,
-    bool Uncommitted, string? LeftDetached);
+    bool Uncommitted = false, string? LeftDetached = null);
 
 /// <summary>A skipped mod. A NotFound mod names the installation file, the game files and the submodule it lacks, for a request
 /// to hand. A NotBuilt mod names its build's refusal.</summary>

@@ -42,7 +42,7 @@ public sealed class DecompileAndCommitModHandler
         var decompiled = await ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new DecompileAndCommitProgressNotification(progress, Phase: null)),
             (mod, at) => DecompileAndCommitModAsync(loadOrder, mod, ProvidedBy(loadOrder, mod.Name), at, cancel), gesture: null, cancel);
-        return decompiled.ToAnswer(
+        return decompiled.ToResult(
             landed => new DecompiledAndCommittedMod(landed.Item, landed.Outcome),
             refused => new DecompileAndCommitRefused(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new DecompileAndCommitResult(applied, refused));

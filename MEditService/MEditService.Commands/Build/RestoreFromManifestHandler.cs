@@ -25,16 +25,14 @@ public sealed class RestoreFromManifestHandler
             mods, mod => mod.Name, progress => _notifications.Publish(new RestoreFromManifestProgressNotification(progress)),
             (mod, _) => RestoreModAsync(mod, instance, cancel), gesture, cancel);
         return restored.ToResult(
-            landed => new ModRestored(
-                landed.Item, landed.Outcome.Written, landed.Outcome.NamedByNoLine, landed.Outcome.StatCacheNotWritten, landed.Outcome.Metadata,
-                landed.Outcome.Uncommitted, landed.Outcome.LeftDetached),
+            landed => landed.Outcome,
             refused => new RestoreRefused(
                 refused.Item, refused.Refusal.Kind, refused.Message, refused.Refusal.InstallationFileNotFound, refused.Refusal.GameFilesNotFound,
                 refused.Refusal.Build, refused.Refusal.SubmoduleNotFound),
             (applied, refused) => new RestoreFromManifestResult(applied, refused));
     }
 
-    private async Task<ItemAnswer<RestoreSkip, ModRestoreOutcome>> RestoreModAsync(ModToRestore mod, InstanceToRestore instance, CancellationToken cancel)
+    private async Task<ItemAnswer<RestoreSkip, ModRestored>> RestoreModAsync(ModToRestore mod, InstanceToRestore instance, CancellationToken cancel)
     {
         Manifest manifest;
         try
@@ -81,22 +79,22 @@ public sealed class RestoreFromManifestHandler
         }
         catch (InvalidDataException e)
         {
-            return ItemAnswer<RestoreSkip, ModRestoreOutcome>.Refused(
+            return ItemAnswer<RestoreSkip, ModRestored>.Refused(
                 new RestoreSkip(RestoreRefusal.NotFinished), $"was not finished: {e.Message.TrimEnd('.')}.");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return ItemAnswer<RestoreSkip, ModRestoreOutcome>.Refused(
+            return ItemAnswer<RestoreSkip, ModRestored>.Refused(
                 new RestoreSkip(RestoreRefusal.NotFinished), $"was not finished: {e.Message.TrimEnd('.')}. Restoring it again finishes it.");
         }
         var statCacheNotWritten = _repository.KeepInStatCache(
             read, manifest, resolved.Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal));
-        return ItemAnswer<RestoreSkip, ModRestoreOutcome>.Landed(new ModRestoreOutcome([.. differing.Select(file => file.Path)], namedByNoLine, statCacheNotWritten, ModMetadata.Of(manifest)));
+        return ItemAnswer<RestoreSkip, ModRestored>.Landed(new ModRestored(mod.Name, [.. differing.Select(file => file.Path)], namedByNoLine, statCacheNotWritten, ModMetadata.Of(manifest)));
     }
 
     // modlist-repository.md, Restore from manifest, stories 3 and 5: what the build makes comes back as the build makes it,
     // and only at the commit the instance repository pins.
-    private async Task<ItemAnswer<RestoreSkip, ModRestoreOutcome>> RebuildAsync(
+    private async Task<ItemAnswer<RestoreSkip, ModRestored>> RebuildAsync(
         ModToRestore mod, InstanceToRestore instance, Submodule submodule, string? version, CancellationToken cancel)
     {
         if (!_source.CommitAtHead(submodule, cancel).Holds(out var checkedOut, out var failure))
@@ -119,13 +117,13 @@ public sealed class RestoreFromManifestHandler
             new ModToBuild(mod.Name, submodule.Folder, mod.Folder, mod.MetadataFiles, version, IsSubmodule: true),
             new InstanceToBuild(instance.ExcludedSuffix, instance.Archives, instance.StatCache));
         if (answer is ItemAnswer<BuildRefusal, ModBuildOutcome>.Refusing refusing)
-            return ItemAnswer<RestoreSkip, ModRestoreOutcome>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, refusing.Refusal), refusing.Message);
+            return ItemAnswer<RestoreSkip, ModRestored>.Refused(new RestoreSkip(RestoreRefusal.NotBuilt, refusing.Refusal), refusing.Message);
         var outcome = ((ItemAnswer<BuildRefusal, ModBuildOutcome>.Wrote)answer).Outcome;
         List<string> leftAsItWas = [.. outcome.Refused.Select(plugin => plugin.Message), .. outcome.ArchivesRefused.Select(archive => archive.Message)];
         if (outcome.Failure is { } stopped) leftAsItWas.Insert(0, stopped);
         if (leftAsItWas.Count > 0)
         {
-            return ItemAnswer<RestoreSkip, ModRestoreOutcome>.Refused(
+            return ItemAnswer<RestoreSkip, ModRestored>.Refused(
                 new RestoreSkip(RestoreRefusal.NotFinished),
                 $"was not finished: {string.Join("; ", leftAsItWas.Select(why => why.TrimEnd('.')))}.");
         }
@@ -134,14 +132,15 @@ public sealed class RestoreFromManifestHandler
         {
             var after = HashesIn(mod, metadataFiles, instance);
             var manifest = outcome.Manifest ?? throw new InvalidOperationException("A build that stopped nowhere wrote its manifest.");
-            return ItemAnswer<RestoreSkip, ModRestoreOutcome>.Landed(new ModRestoreOutcome(
+            return ItemAnswer<RestoreSkip, ModRestored>.Landed(new ModRestored(
+                mod.Name,
                 [.. after.Where(file => before.GetValueOrDefault(file.Key) != file.Value).Select(file => file.Key).Order(StringComparer.Ordinal)],
                 _repository.NamedByNoLine(mod.Folder, mod.Name, manifest, metadataFiles), StatCacheNotWritten: null, ModMetadata.Of(manifest), outcome.Uncommitted,
                 checkedOut.LeftDetached));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            return ItemAnswer<RestoreSkip, ModRestoreOutcome>.Refused(
+            return ItemAnswer<RestoreSkip, ModRestored>.Refused(
                 new RestoreSkip(RestoreRefusal.NotFinished), $"was not finished: {e.Message.TrimEnd('.')}. Restoring it again finishes it.");
         }
     }
@@ -149,7 +148,7 @@ public sealed class RestoreFromManifestHandler
     private Dictionary<string, string> HashesIn(ModToRestore mod, IReadOnlySet<string> metadataFiles, InstanceToRestore instance) =>
         _repository.Files(mod.Folder, mod.Name, metadataFiles, instance.StatCache).Files.ToDictionary(file => file.Path, file => file.Hash, StringComparer.Ordinal);
 
-    private static ItemAnswer<RestoreSkip, ModRestoreOutcome> Lacked(IReadOnlyList<PackageContents.Lack> lacks)
+    private static ItemAnswer<RestoreSkip, ModRestored> Lacked(IReadOnlyList<PackageContents.Lack> lacks)
     {
         var why = string.Join("; ", lacks.Select(lack => lack.Text));
         if (lacks.Any(lack => lack is PackageContents.Lack.NoHost)) return Skipped(RestoreRefusal.NoHost, why);
@@ -162,9 +161,9 @@ public sealed class RestoreFromManifestHandler
             why);
     }
 
-    private static ItemAnswer<RestoreSkip, ModRestoreOutcome> Skipped(RestoreRefusal refusal, string why) =>
+    private static ItemAnswer<RestoreSkip, ModRestored> Skipped(RestoreRefusal refusal, string why) =>
         Skipped(new RestoreSkip(refusal), why);
 
-    private static ItemAnswer<RestoreSkip, ModRestoreOutcome> Skipped(RestoreSkip skip, string why) =>
-        ItemAnswer<RestoreSkip, ModRestoreOutcome>.Refused(skip, $"was skipped: {why}.");
+    private static ItemAnswer<RestoreSkip, ModRestored> Skipped(RestoreSkip skip, string why) =>
+        ItemAnswer<RestoreSkip, ModRestored>.Refused(skip, $"was skipped: {why}.");
 }

@@ -41,6 +41,3 @@ public enum UpdateManifestRefusal
     /// (modlist-repository.md, Update manifest, story 5).</summary>
     LeftToItsBuild,
 }
-
-/// <summary>What a landed mod's update made of it, as <see cref="ModUpdated"/> says.</summary>
-internal sealed record ModUpdateOutcome(bool ManifestWritten, IReadOnlyList<string> NotInPackage, string? StatCacheNotWritten);

@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using MEditService.ModFolderAdapter;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
@@ -58,8 +57,3 @@ internal sealed record RestoreSkip(RestoreRefusal Kind, BuildRefusal Build = Bui
 
     public IReadOnlyList<string> GameFilesNotFound { get; init; } = [];
 }
-
-/// <summary>What a landed mod's restore made of it, as <see cref="ModRestored"/> says.</summary>
-internal sealed record ModRestoreOutcome(
-    IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata, bool Uncommitted = false,
-    string? LeftDetached = null);

@@ -76,10 +76,14 @@ internal sealed class SelectionResult<TItem, TRefusal, TOutcome>
         Func<IReadOnlyList<TApplied>, IReadOnlyList<TRefused>, TAnswer> answer)
     {
         if (SelectionRefusal is { } whole) return whole;
-        return ToResult(applied, refused, answer);
+        return new PerItemResult<TItem, TRefusal, TOutcome>(Landed, Refused).ToResult(applied, refused, answer);
     }
+}
 
-    /// <summary>For a gesture no cause refuses whole: every item lands or is refused on its own.</summary>
+/// <summary>A gesture over a selection that no cause refuses whole: every item lands or is refused on its own.</summary>
+internal sealed record PerItemResult<TItem, TRefusal, TOutcome>(
+    IReadOnlyList<ItemLanded<TItem, TOutcome>> Landed, IReadOnlyList<ItemRefused<TItem, TRefusal>> Refused)
+{
     internal TAnswer ToResult<TApplied, TRefused, TAnswer>(
         Func<ItemLanded<TItem, TOutcome>, TApplied> applied,
         Func<ItemRefused<TItem, TRefusal>, TRefused> refused,
