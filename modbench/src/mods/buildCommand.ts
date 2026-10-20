@@ -20,8 +20,6 @@ export interface BuildDeps {
   reporter: Reporter;
   problems: BuildProblems;
   sourceFiles: SourceFilesOf;
-  /** Saves the mod's unsaved plugin source; answers the paths VS Code left unsaved. */
-  saveUnsaved: (mod: string) => Promise<string[]>;
   modOfOrigin: (origin: string) => string | undefined;
   sourceModNames: () => Iterable<string>;
   /** The Plugins view's id, whose bar a gesture from a plugin row runs under. */
@@ -58,8 +56,6 @@ async function pickSourceMods(sourceModNames: Iterable<string>): Promise<string[
 async function buildMods(deps: BuildDeps, { mods, refusedRows, invokedFrom }: ModsGiven): Promise<Built> {
   const { commands, instance } = deps;
   if (mods.length === 0) return { applied: true, outcome: { landed: [], refused: refusedRows } };
-  const unsaved = await savedFirst(deps, mods);
-  if (unsaved !== undefined) return unsaved;
   return runWritingGesture(invokedFrom, instance, async (): Promise<Built> => {
     const outcome = await commands.build(mods);
     if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
@@ -78,16 +74,6 @@ function reportBuildResult(reporter: Reporter, result: Built): void {
   if (!result.applied) { reporter.report('error', result.refusal, result.detail); return; }
   reportBuilt(reporter, result.outcome);
   reportPartial(reporter, result.partial);
-}
-
-// mods.md, Build, story 5: the plugins are built from what the user sees, so each mod's unsaved
-// plugin source is saved first, and a file VS Code does not save refuses the build before anything
-// is written.
-async function savedFirst(deps: BuildDeps, mods: readonly string[]): Promise<Built | undefined> {
-  const unsaved: string[] = [];
-  for (const mod of mods) unsaved.push(...(await deps.saveUnsaved(mod)));
-  if (unsaved.length === 0) return undefined;
-  return { applied: false, refusal: 'Could not build: VS Code did not save its plugin source.', detail: unsaved.join('\n') };
 }
 
 function diagnosticsWords(count: number): string {

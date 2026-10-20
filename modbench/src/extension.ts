@@ -10,7 +10,7 @@ import { selectionInFocusedView, nexusRowInFocusedView } from './drivingLib/inFo
 import { createFocusedView, type FocusedView } from './drivingLib/focusedView';
 import { createEditor, loadOrderComing, sourceModRepositoriesOver, type Editor } from './editor';
 import { createSourceLanguage, formKeyLocation } from './sourceLanguage';
-import { saveModPluginSource } from './sourceLanguage/dirtyPluginSource';
+import { saveUnsavedPluginSource } from './textDocuments/saveUnsavedPluginSource';
 import { registerFilterCommands as registerNameFilterCommands } from './drivingLib/nameFilter';
 import { registerCopyValueCommand, type CopyValueAdapter } from './drivingLib/copyValue';
 import type { SourceEditing } from './textDocuments/sourceEditing';
@@ -156,8 +156,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     },
     nexusRow: nexusRowInFocusedView(own, deps.focusedView, [MODS_KEY_ARGS.view, DOWNLOADS_KEY_ARGS.view], 'modbench.mod.nexusRowIn'),
     sourceGestures: {
-      commands: sourceCommands({ client, adapter }), rows: sourceGestureRows, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
-      saveUnsavedPluginSource: (mod) => saveModPluginSource((origin) => sourceFiles(instance.value, origin), mod),
+      commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource }), rows: sourceGestureRows, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
       registerRepositories: deps.registerRepositories,
     },
     manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: toolbox.say, focusedView: deps.focusedView },

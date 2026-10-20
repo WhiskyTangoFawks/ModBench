@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
-import { relative, isAbsolute } from 'node:path';
 import { CONTAINER_SCHEMES } from '../textDocuments/recordDocument';
 import { isPluginSourcePath } from '../instanceAdapter/instanceAdapter';
-import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
 
 export const isPluginSourceDocument = ({ scheme, fsPath }: vscode.Uri): boolean =>
   CONTAINER_SCHEMES.has(scheme) && isPluginSourcePath(fsPath);
@@ -15,25 +13,4 @@ export function dirtyPluginSource(): { path: string; text: string }[] {
     if (document.isDirty && isPluginSourceDocument(document.uri)) held.set(document.uri.fsPath, document.getText());
   }
   return [...held].map(([path, text]) => ({ path, text }));
-}
-
-const isUnder = (folder: string, path: string): boolean => {
-  const inside = relative(folder.toLowerCase(), path.toLowerCase());
-  return inside !== '' && !inside.startsWith('..') && !isAbsolute(inside);
-};
-
-// Saves each unsaved plugin-source document under `folder` and answers the paths VS Code left unsaved.
-async function saveDirtyPluginSource(folder: string): Promise<string[]> {
-  const inFolder = () => vscode.workspace.textDocuments.filter(
-    (document) => document.isDirty && isPluginSourceDocument(document.uri) && isUnder(folder, document.uri.fsPath));
-  for (const document of inFolder()) {
-    if (document.isDirty) await document.save();
-  }
-  return [...new Set(inFolder().map((document) => document.uri.fsPath))];
-}
-
-/** Saves a mod's unsaved plugin source; a mod with no source folder has none. */
-export async function saveModPluginSource(sourceFiles: SourceFilesOf, mod: string): Promise<string[]> {
-  const files = sourceFiles(mod);
-  return files ? saveDirtyPluginSource(files.file('')) : [];
 }
