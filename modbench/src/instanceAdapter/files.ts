@@ -123,6 +123,18 @@ export async function stampOf(path: string): Promise<FileStamp> {
   return { size: info.size, modifiedNs: info.mtimeNs, changedNs: info.ctimeNs };
 }
 
+/** `path`'s device and inode, which name its file whatever the path's spelling; undefined where nothing is, and
+ *  where the file system reports no inode (0), which names no file. */
+export async function identityOf(path: string): Promise<string | undefined> {
+  try {
+    const { dev, ino } = await stat(path, { bigint: true });
+    return ino === 0n ? undefined : `${dev}:${ino}`;
+  } catch (err) {
+    if (errnoCode(err) !== 'ENOENT') throw err;
+    return undefined;
+  }
+}
+
 /** Reads `path` as text. Pass `ifMissing` to read a missing file as that text instead of
  *  rejecting. */
 export function get(path: string, ifMissing?: string): Promise<string> {
