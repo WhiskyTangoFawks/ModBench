@@ -4,7 +4,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { write, putIfChanged, isRepository, makeDir } from '../files';
+import { write, putIfChanged, isRepository, makeDir, tempOwner } from '../files';
 
 let crashBeforeTheNextRenameLands = false;
 
@@ -215,5 +215,15 @@ describe('makeDir', () => {
 
     expect((await stat(join(parent, 'made'))).isDirectory()).toBe(true);
     await expect(makeDir(join(parent, 'no', 'parent'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+describe('tempOwner', () => {
+  it('reads the process id from the name', () => {
+    expect(tempOwner('.medit_tmp_4242_x.tmp')).toBe(4242);
+  });
+
+  it.each(['.medit_tmp__x.tmp', '.medit_tmp_0_x.tmp', '.medit_tmp_-3_x', '.medit_tmp_abc_x'])('reads no owner from %s', (name) => {
+    expect(tempOwner(name)).toBeUndefined();
   });
 });

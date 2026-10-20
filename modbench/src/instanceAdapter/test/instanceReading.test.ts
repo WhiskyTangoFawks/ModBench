@@ -2,28 +2,143 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, readdir: vi.fn(actual.readdir) };
+});
 
-import { appendFile, rm } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
 import { sourceOver } from '../../test/mo2/adapterOver';
-import { readInstance } from '../instanceReading';
+import { readInstance, readPluginsProvided, type ReadingSource } from '../instanceReading';
+import { settleWaitArmed } from '../../test/eventually';
+
+const INI = 'ModOrganizer.ini';
 
 describe('the instance assembled from a manager\'s reading', () => {
   let dir: string;
-  beforeEach(() => { dir = cloneCorpusFixture(); });
+  let source: ReadingSource;
+  beforeEach(() => {
+    dir = cloneCorpusFixture();
+    source = sourceOver(dir);
+  });
   afterEach(() => rm(dir, { recursive: true, force: true }));
+
+  const text = (relative: string): Promise<string> => readFile(join(dir, relative), 'utf8');
 
   it('names the manager\'s mod order file in a repeat note, and takes the manager\'s key for what repeats', async () => {
     await appendFile(join(dir, DEFAULT_MODLIST), '-Patch Mod\n+PATCH MOD\n');
-    const source = {
-      ...sourceOver(dir),
+    const other = {
+      ...source,
       names: { manager: 'Other', modOrderFile: 'order.txt', downloadMetadataFile: '.sidecar' },
       modLineKey: ({ kind, name }: { kind: string; name: string }) => `${kind}:${name}`,
     };
 
-    const { orderNotes } = await readInstance(source);
+    const { orderNotes } = await readInstance(other);
 
     expect(orderNotes).toEqual(['order.txt lists the mod Patch Mod on more than one line; the first line holds']);
+  });
+
+  it('reads the settings once, so one reading holds one generation of the ini', async () => {
+    let reads = 0;
+    const counting = { ...source, settings: () => { reads++; return source.settings(); } };
+
+    await readInstance(counting);
+
+    expect(reads).toBe(1);
+  });
+
+  it('answers every fact against the ini as it read it, even when the ini is rewritten mid-reading', async () => {
+    const rewriting = {
+      ...source,
+      settings: async () => {
+        const settings = await source.settings();
+        await writeFile(join(dir, INI), (await text(INI)).replace('gameName=Fallout 4', 'gameName=Skyrim VR'));
+        return settings;
+      },
+    };
+
+    const reading = await readInstance(rewriting);
+
+    expect(reading.gameName).toBe('Fallout 4');
+    expect((await readInstance(source)).gameName).toBe('Skyrim VR');
+  });
+
+  it('reads each listed mod\'s meta once, so one reading holds one answer for it', async () => {
+    const reads: string[] = [];
+    const counting = { ...source, modMeta: (mod: string) => { reads.push(mod); return source.modMeta(mod, 'list'); } };
+
+    const reading = await readInstance(counting);
+
+    const listed = reading.mods.filter((e) => e.kind === 'mod').map((e) => e.name);
+    expect(reads.filter((mod) => listed.includes(mod)).sort()).toEqual([...listed].sort());
+  });
+
+  it('does not read the meta of a folder the mod order does not list while the downloads are unresolved, so an unreadable one does not fail the reading', async () => {
+    await mkdir(join(dir, 'mods', 'Unlisted'));
+    const unreadable = {
+      ...source,
+      settings: async () => ({
+        ...(await source.settings()),
+        downloadedFiles: () => Promise.resolve({ kind: 'unresolved' as const, reason: 'no downloads' }),
+      }),
+      modMeta: (mod: string) => (mod === 'Unlisted' ? Promise.reject(new Error('EACCES')) : source.modMeta(mod, 'list')),
+    };
+
+    await expect(readInstance(unreadable)).resolves.toMatchObject({ downloadedFiles: { kind: 'unresolved' } });
+  });
+
+  it('reads a mod order that parses to no entries again after a settle, believing the second read', async () => {
+    const path = join(dir, DEFAULT_MODLIST);
+    const complete = await text(DEFAULT_MODLIST);
+    await writeFile(path, '');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const reading = readInstance(source);
+      await settleWaitArmed();
+      await writeFile(path, complete);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      const mods = (await reading).mods;
+      expect(mods.length).toBeGreaterThan(0);
+      expect(mods.map((e) => e.name)).toEqual((await source.modOrder('Default')).map((e) => e.name));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('believes a mod order that is still empty after the settle', async () => {
+    await writeFile(join(dir, DEFAULT_MODLIST), '');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const reading = readInstance(source);
+      await settleWaitArmed();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect((await reading).mods).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  describe('listing mods/ for a read of every mod', () => {
+    const listingsOfMods = (): number => vi.mocked(readdir).mock.calls.filter(([path]) => String(path) === join(dir, 'mods')).length;
+
+    it('lists it once to read the instance whole', async () => {
+      vi.mocked(readdir).mockClear();
+
+      await readInstance(source);
+
+      expect(listingsOfMods()).toBe(1);
+    });
+
+    it('lists it once to read the plugins the mod order provides', async () => {
+      vi.mocked(readdir).mockClear();
+
+      await readPluginsProvided(source, 'Default');
+
+      expect(listingsOfMods()).toBe(1);
+    });
   });
 });

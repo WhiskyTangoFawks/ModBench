@@ -15,7 +15,7 @@ interface Codec {
 const codecsIn = (dir: string, testDir: string, names: readonly string[]): Codec[] =>
   names.map((name) => ({ file: join(dir, `${name}.ts`), test: join(testDir, `${name}.test.ts`) }));
 
-const ADAPTER_CODECS = join('instanceAdapter', 'codecs');
+const ADAPTER_CODECS = join('instanceAdapter', 'mo2', 'codecs');
 const LOAD_ORDER_FILE_CODEC = join('loadOrderFileCodec', 'pluginsText.ts');
 
 interface Format {
@@ -24,7 +24,7 @@ interface Format {
 }
 
 const MANAGER_FORMATS: Format = {
-  codecs: codecsIn(ADAPTER_CODECS, join('instanceAdapter', 'test', 'codecs'), ['modlistText', 'metaIni', 'modOrganizerIni', 'downloads']),
+  codecs: codecsIn(ADAPTER_CODECS, join('instanceAdapter', 'mo2', 'test', 'codecs'), ['modlistText', 'metaIni', 'modOrganizerIni', 'downloads']),
   tokens: [
     '+', '-', '*', '_separator', '[General]', 'selected_profile', 'gameName', 'gamePath',
     'download_directory', 'installed', 'uninstalled', 'removed',
@@ -45,15 +45,15 @@ interface LayoutName {
 }
 
 const LAYOUT: Record<string, LayoutName> = {
-  profiles: { owners: [join('instanceAdapter', 'layout.ts')] },
-  mods: { owners: [join('instanceAdapter', 'layout.ts')] },
-  downloads: { owners: [join('instanceAdapter', 'layout.ts')] },
+  profiles: { owners: [join('instanceAdapter', 'mo2', 'layout.ts')] },
+  mods: { owners: [join('instanceAdapter', 'mo2', 'layout.ts')] },
+  downloads: { owners: [join('instanceAdapter', 'mo2', 'layout.ts')] },
   overwrite: { owners: [join(ADAPTER_CODECS, 'modlistText.ts'), join('wire', 'pluginAddress.ts')] },
   'modlist.txt': { owners: [join(ADAPTER_CODECS, 'modlistText.ts')], matchedWithinLiterals: true },
   'ModOrganizer.ini': { owners: [join(ADAPTER_CODECS, 'modOrganizerIni.ts')], matchedWithinLiterals: true },
   'meta.ini': { owners: [join(ADAPTER_CODECS, 'metaIni.ts')], matchedWithinLiterals: true },
   '.meta': { owners: [join(ADAPTER_CODECS, 'downloads.ts')], matchedWithinLiterals: true },
-  '.mohidden': { owners: [join('instanceAdapter', 'layout.ts')], matchedWithinLiterals: true },
+  '.mohidden': { owners: [join('instanceAdapter', 'mo2', 'layout.ts')], matchedWithinLiterals: true },
   'plugins.txt': { owners: [LOAD_ORDER_FILE_CODEC] },
 };
 const LAYOUT_NAMES = Object.keys(LAYOUT);
@@ -176,25 +176,25 @@ describe('format literals, scanned over the extension and webview trees against 
   });
 
   it('allows a codec module’s own test file its own format\'s tokens', () => {
-    expect(allowedTokens(join('src', 'instanceAdapter', 'test', 'codecs', 'modlistText.test.ts'))).toEqual(new Set(MANAGER_FORMATS.tokens));
+    expect(allowedTokens(join('src', 'instanceAdapter', 'mo2', 'test', 'codecs', 'modlistText.test.ts'))).toEqual(new Set(MANAGER_FORMATS.tokens));
     expect(allowedTokens(join('src', 'loadOrderFileCodec', 'test', 'pluginsText.test.ts'))).toEqual(new Set(GAME_FORMAT.tokens));
   });
 
   it('allows no token to a file in a codec box that is not a codec module or its test', () => {
-    expect(allowedTokens(join('src', 'instanceAdapter', 'test', 'layout.test.ts'))).toEqual(new Set());
-    expect(allowedTokens(join('src', 'instanceAdapter', 'mo2Instance.ts'))).toEqual(new Set());
+    expect(allowedTokens(join('src', 'instanceAdapter', 'mo2', 'test', 'layout.test.ts'))).toEqual(new Set());
+    expect(allowedTokens(join('src', 'instanceAdapter', 'mo2', 'mo2Instance.ts'))).toEqual(new Set());
   });
 
   it('the Instance adapter holds no plugins.txt codec of its own, which would put the game\'s format inside one mod manager\'s implementation', () => {
-    expect(allowedTokens(join('src', 'instanceAdapter', 'codecs', 'pluginsText.ts'))).toEqual(new Set());
+    expect(allowedTokens(join('src', 'instanceAdapter', 'mo2', 'codecs', 'pluginsText.ts'))).toEqual(new Set());
   });
 
   it('catches MO2\'s markers planted in the game\'s codec', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-format-literal-scan-'));
     try {
-      await mkdir(join(dir, 'instanceAdapter', 'codecs'), { recursive: true });
+      await mkdir(join(dir, 'instanceAdapter', 'mo2', 'codecs'), { recursive: true });
       await mkdir(join(dir, 'loadOrderFileCodec'));
-      const managerCodec = join(dir, 'instanceAdapter', 'codecs', 'modlistText.ts');
+      const managerCodec = join(dir, 'instanceAdapter', 'mo2', 'codecs', 'modlistText.ts');
       const gameCodec = join(dir, 'loadOrderFileCodec', 'pluginsText.ts');
       await writeFile(managerCodec, "export const marks = ['+'];\n");
       await writeFile(gameCodec, "export const marks = ['*', '+', '_separator'];\n");
@@ -308,7 +308,7 @@ describe('layout names', () => {
   });
 
   it('the Instance adapter spells the directory names and no file name of a codec’s, a codec\'s file name spelled in the layout too being how one name gets two spellers without either scan noticing', () => {
-    const path = join(SRC, 'instanceAdapter', 'layout.ts');
+    const path = join(SRC, 'instanceAdapter', 'mo2', 'layout.ts');
     expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toEqual(['profiles', 'mods', 'downloads', '.mohidden']);
   });
 });

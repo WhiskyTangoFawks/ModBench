@@ -1,15 +1,15 @@
 import type {
   ArchiveReader, DownloadMeta, GameFolder, InstanceAdapter, InstanceReading, ModlistEntry, OriginFiles, PluginEntry, Subscription,
 } from '../../instanceAdapter/instanceAdapter';
-import type { DownloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
-import type { Mo2Context } from '../../instanceAdapter/mo2Context';
-import { downloadsDirectoryResolver } from '../../instanceAdapter/downloadsDirectory';
+import type { DownloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
+import type { Mo2Context } from '../../instanceAdapter/mo2/mo2Context';
+import { downloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
 import { gameFolderResolver, type GameDetectors } from '../../instanceAdapter/gameFolder/gameFolderResolver';
-import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
-import { mo2Watch } from '../../instanceAdapter/mo2Watch';
+import { mo2InstanceAdapter } from '../../instanceAdapter/mo2/mo2Instance';
+import { mo2Watch } from '../../instanceAdapter/mo2/mo2Watch';
 import { myGamesResolver } from '../../instanceAdapter/gameFolder/myGames';
 import type { ReadingSource } from '../../instanceAdapter/instanceReading';
-import { readingSource } from '../../instanceAdapter/mo2Reads';
+import { readingSource } from '../../instanceAdapter/mo2/mo2Reads';
 import type { PluginCommands, pluginCommands } from '../../pluginCommands/plugins';
 import { pluginCommandsWith } from '../pluginCommandsWith';
 import { fakeArchiveReader } from '../fakeArchiveReader';

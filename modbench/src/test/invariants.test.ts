@@ -40,9 +40,9 @@ describe('only the Instance adapter touches a downloaded file\'s .meta', () => {
     [...source.matchAll(/import\s*\{([^}]*)\}\s*from/g)].some((m) => /\bdownloadSidecarFile\b/.test(m[1] ?? ''));
 
   it('sees the sidecar path among an import\'s names, the form any other touch of the .meta takes', () => {
-    expect(importsTheSidecarPath("import { downloadFile, downloadSidecarFile } from '../instanceAdapter/layout';")).toBe(true);
+    expect(importsTheSidecarPath("import { downloadFile, downloadSidecarFile } from '../instanceAdapter/mo2/layout';")).toBe(true);
     expect(importsTheSidecarPath("import {\n  downloadSidecarFile,\n} from './layout';")).toBe(true);
-    expect(importsTheSidecarPath("import { downloadFile } from '../instanceAdapter/layout';")).toBe(false);
+    expect(importsTheSidecarPath("import { downloadFile } from '../instanceAdapter/mo2/layout';")).toBe(false);
   });
 
   it('is imported nowhere outside the Instance adapter', () => {

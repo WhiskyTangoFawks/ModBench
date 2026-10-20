@@ -2,7 +2,7 @@ import { FileConflictLookup } from '../../instanceLoader/fileConflictIndex';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { groupModOrder } from '../../instanceAdapter/modGroups';
 import { modOfOrigin } from '../../instanceLoader/modOfOrigin';
-import { entryKey } from '../../instanceAdapter/mo2Context';
+import { entryKey } from '../../instanceAdapter/mo2/mo2Context';
 import { nexusDomainForMetaGame } from '../../tables/gamePaths';
 import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
 
