@@ -14,7 +14,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { SyncMessage } from '../drivingLib/syncFailureReport';
 import { blankIcon } from '../drivingLib/blankIcon';
 import { UNLIMITED_RECORDS } from '../client';
-import { answerOf } from '../wire/readFailed';
+import { answerOf, ReadFailedError } from '../wire/readFailed';
 
 // "Could not be read into its document" rather than "Mutagen could not parse it": ingest's one
 // catch spans the read, the reference walk and the codec write, and only the diagnosis knows which.
@@ -464,6 +464,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
     try {
       return await build();
     } catch (e) {
+      if (!(e instanceof ReadFailedError)) throw e;
       return [new ErrorNode(this.err(e))];
     }
   }

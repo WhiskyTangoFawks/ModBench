@@ -141,7 +141,6 @@ class HttpMEditClient implements MEditClient {
     return this.api.client;
   }
 
-  // Writes and the streams catch this throw; a read answers it as data instead.
   private get apiClient(): ApiClient {
     const client = this.startedApiClient;
     if (client === undefined) throw new Error('mEdit has not started');

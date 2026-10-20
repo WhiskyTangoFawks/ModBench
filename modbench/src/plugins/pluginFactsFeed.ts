@@ -3,7 +3,7 @@ import type { LoadOrderRefusal, MEditClient, PluginAddress, PluginDiagnosisRepor
 import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey } from '../wire/pluginAddress';
 import { PluginFacts, type PluginProblem } from './pluginFacts';
-import { answerOf } from '../wire/readFailed';
+import { answerOf, ReadFailedError } from '../wire/readFailed';
 
 /** The mEdit reads every plugin-keyed fact comes from, and the notification that names a plugin
  *  changed outside Modbench. */
@@ -118,6 +118,7 @@ export class PluginFactsFeed implements vscode.Disposable {
       const shown = new Set(this.deps.shownPlugins().map(pluginAddressKey));
       return answerOf(await this.deps.client.getPlugins()).filter((p) => shown.has(pluginAddressKey(p)));
     } catch (err) {
+      if (!(err instanceof ReadFailedError)) throw err;
       return { failure: errorMessage(err) };
     }
   }
@@ -137,6 +138,7 @@ export class PluginFactsFeed implements vscode.Disposable {
       this.deps.publishDiagnoses(this.facts.problems().malformed);
       this.changed.fire();
     } catch (err) {
+      if (!(err instanceof ReadFailedError)) throw err;
       const reason = errorMessage(err);
       if (generation !== this.generation) return;
       this.facts.scanFailed(reason);

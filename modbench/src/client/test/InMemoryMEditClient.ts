@@ -176,8 +176,9 @@ export class InMemoryMEditClient implements MEditClient {
     for (const listener of this.statusListeners) listener(status);
   }
 
-  // Every query starts rejecting, same as a real gone backend's read side.
+  // Every unscripted query starts answering unreachable, same as a real gone backend's read side.
   private reset(): void {
+    this.gone = true;
     this.queryAnswers = {};
     this.queryFailures.clear();
     this.queryQueues = {};
@@ -263,6 +264,8 @@ export class InMemoryMEditClient implements MEditClient {
     this.calls.push({ method, args });
   }
 
+  private gone = false;
+
   private query<K extends QueryMethod>(method: K, args: unknown[]): Promise<Answer<K>>;
   private query(method: QueryMethod, args: unknown[]): Promise<unknown> {
     this.record(method, args);
@@ -272,8 +275,9 @@ export class InMemoryMEditClient implements MEditClient {
     const failure = this.queryFailures.get(method);
     if (failure) return failed(failure);
     const scripted = this.queryAnswers[method]?.[0];
+    if (!scripted && this.gone) return Promise.resolve({ failed: 'unreachable' });
     if (!scripted) {
-      return Promise.reject(new Error(`InMemoryMEditClient: no scripted answer for query "${method}"`));
+      return Promise.resolve({ failed: 'refused', refusal: `InMemoryMEditClient: no scripted answer for query "${method}"` });
     }
     return Promise.resolve(scripted.value);
   }

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { PluginAddress, PluginDiagnosisReport, PluginMetadata } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
+import type { ReadFailed } from '../../wire/readFailed';
 import { EventEmitter } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({ EventEmitter }));
@@ -166,12 +167,27 @@ describe('PluginFactsFeed', () => {
     await feed.reconciled([]);
     await vi.waitFor(() => { expect(feed.rows.readFailureMessage()).toContain('503'); });
 
-    expect(feed.rows.readFailureMessage()).toContain('503');
-
     const before = changes.mock.calls.length;
     await feed.reconciled([]);
     await vi.waitFor(() => { expect(changes.mock.calls.length).toBeGreaterThan(before + 1); });
 
+    expect(feed.rows.readFailureMessage()).toBeUndefined();
+  });
+
+  it('drops a failed scan that a newer event superseded, and changes no facts', async () => {
+    const { feed, client, changes } = feedOver();
+    client.setQueryAnswer('getPlugins', [held()]);
+    const slowScan = deferred<PluginDiagnosisReport[] | ReadFailed>();
+    client.setQueryAnswerOnce('getDiagnoses', slowScan.promise);
+    await feed.reconciled([]);
+    feed.unreachable('gone');
+    const before = changes.mock.calls.length;
+
+    slowScan.resolve({ failed: 'refused', refusal: 'late' });
+    await slowScan.promise;
+    await Promise.resolve();
+
+    expect(changes.mock.calls.length).toBe(before);
     expect(feed.rows.readFailureMessage()).toBeUndefined();
   });
 

@@ -196,7 +196,7 @@ async function answerRecordLoad(
   const read = settled.status === 'rejected' ? localFailure(errorMessage(settled.reason)) : settled.value;
   if (isReadFailed(read)) {
     if (read.failed === 'no-load-order' && !deps.firstReadLanded() && deps.loadOrderComing()) return;
-    deps.channel.warn(`Failed to read ${m.formKey}: ${failureReason(read)}`);
+    if (read.failed === 'local') deps.channel.warn(`Failed to read ${m.formKey}: ${failureReason(read)}`);
     deps.reply({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: false, failure: read });
     return;
   }
@@ -233,24 +233,28 @@ async function readRecord(
 ): Promise<(RecordRead & { fileCopyAlone: boolean }) | ReadFailed> {
   const documentText = await deps.documentText(pluginActive);
   const own = { formKey: m.formKey, plugin: deps.plugin, documentText };
-  if (m.columns.length > 0) return withFileCopy(readOf(await deps.meditClient.getRecordsComparison([own, ...m.columns])), false);
+  if (m.columns.length > 0) return withFileCopy(readOf(deps, m.formKey, await deps.meditClient.getRecordsComparison([own, ...m.columns])), false);
   const text = documentText === undefined ? undefined
     : { plugin: deps.plugin, documentText, alone: !pluginActive && deps.modFacts.standingOf(deps.plugin).kind === 'disabled' };
   const compare = await deps.meditClient.getComparison(m.formKey, text);
   if (isReadFailed(compare)) return compare;
   if (compare) return { compare, fileCopyAlone: text?.alone ?? false };
   // Only the typed answer tells a record held by no plugin from one a disabled plugin holds.
-  return withFileCopy(readOf(await deps.meditClient.getRecordsComparison([own])), false);
+  return withFileCopy(readOf(deps, m.formKey, await deps.meditClient.getRecordsComparison([own])), false);
 }
 
 // Only a record no plugin holds is gone; a copy its plugin alone lacks refuses the read (editor.md, States, stories 2 and 4).
-function readOf(answer: CompareRecordsAnswer | ReadFailed): RecordRead | ReadFailed {
+function readOf(deps: RouteRecordPanelMessageDeps, formKey: string, answer: CompareRecordsAnswer | ReadFailed): RecordRead | ReadFailed {
   if (isReadFailed(answer)) return answer;
   const { compare, missing } = answer;
   if (compare) return { compare };
   const gone = [...new Set(missing.filter((c) => c.reason === 'RecordGone').map((c) => c.formKey))];
   const copiesLacking = missing.filter((c) => c.reason === 'NotInPlugin').map((c) => c.message);
-  if (gone.length === 0) return { failed: 'refused', refusal: copiesLacking.join(' ') };
+  if (gone.length === 0) {
+    const refusal = copiesLacking.join(' ');
+    deps.channel.warn(`Failed to read ${formKey}: ${refusal}`);
+    return { failed: 'refused', refusal };
+  }
   return { compare: null, gone, copiesLacking };
 }
 
