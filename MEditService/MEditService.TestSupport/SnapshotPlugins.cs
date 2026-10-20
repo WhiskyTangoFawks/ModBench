@@ -30,13 +30,13 @@ public static class SnapshotPlugins
 
     /// <summary>The PUT /load-order body.</summary>
     public static Dictionary<string, object> Body(
-        string gameDirectory, string instanceRoot, IEnumerable<LoadOrderEntry> entries, string gameRelease = "Fallout4",
+        string dataFolder, string instanceRoot, IEnumerable<LoadOrderEntry> entries, string gameRelease = "Fallout4",
         object? mods = null, object? places = null, string statCache = "stat-cache", string stringsLanguage = "English")
     {
         var list = entries.ToList();
         return new()
         {
-            ["gameDirectory"] = gameDirectory,
+            ["dataFolder"] = dataFolder,
             ["instanceRoot"] = instanceRoot,
             ["plugins"] = list.Select(p => p.Wire),
             ["active"] = Active(list),

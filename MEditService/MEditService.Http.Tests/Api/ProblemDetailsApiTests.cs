@@ -25,11 +25,11 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     }
 
     [Theory]
-    [InlineData("badGameDir", null, "Fallout4")]
+    [InlineData("badDataFolder", null, "Fallout4")]
     [InlineData(null, "badInstance", "Fallout4")]
     [InlineData(null, null, "NotAGame")]
     public async Task PutLoadOrder_InvalidInput_ReturnsProblemDetails400(
-        string? badGameDir, string? badInstance, string gameRelease)
+        string? badDataFolder, string? badInstance, string gameRelease)
     {
         var resp = await _client.PutAsJsonAsync("/load-order", new
         {
@@ -41,7 +41,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             mods = Array.Empty<object>(),
             places = Array.Empty<object>(),
             statCache = "stat-cache",
-            gameDirectory = badGameDir ?? _fixture.DataFolder,
+            dataFolder = badDataFolder ?? _fixture.DataFolder,
             instanceRoot = badInstance ?? _fixture.InstanceRoot,
             gameRelease,
         });
@@ -66,7 +66,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             mods = Array.Empty<object>(),
             places = Array.Empty<object>(),
             statCache = "stat-cache",
-            gameDirectory = _fixture.DataFolder,
+            dataFolder = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
             gameRelease = "Oblivion",
             stringsLanguage = "English",

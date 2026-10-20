@@ -66,13 +66,13 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     }
 
     [Fact]
-    public void Put_AGameDirectoryThatIsNotThere_RefusesWithoutApplying()
+    public void Put_ADataFolderThatIsNotThere_RefusesWithoutApplying()
     {
         var gone = Path.Combine(_dataFolder, "no-such-data");
 
         var result = Handler.Put(gone, _instanceRoot, GameRelease.Fallout4, [Plugin("A.esp")], [], [], [], [], [], Language.English, TestEditService.NoMods);
 
-        Assert.Equal(PutLoadOrderRefusal.GameDirectoryNotFound, result.Refusal);
+        Assert.Equal(PutLoadOrderRefusal.DataFolderNotFound, result.Refusal);
         Assert.Contains(gone, result.Message, StringComparison.Ordinal);
         Assert.Null(_holder.Held);
     }
@@ -105,6 +105,6 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
 
         var result = Handler.Put(gone, _instanceRoot, GameRelease.Oblivion, [Plugin("A.esp")], [], [], [], [], [], Language.English, TestEditService.NoMods);
 
-        Assert.Equal(PutLoadOrderRefusal.GameDirectoryNotFound, result.Refusal);
+        Assert.Equal(PutLoadOrderRefusal.DataFolderNotFound, result.Refusal);
     }
 }

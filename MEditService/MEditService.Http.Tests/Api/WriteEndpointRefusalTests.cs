@@ -32,7 +32,7 @@ public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture
     {
         var load = await _client.PutLoadOrderAndAwaitReady(new
         {
-            gameDirectory = fx.GameDirectory,
+            dataFolder = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(fx.Plugins),

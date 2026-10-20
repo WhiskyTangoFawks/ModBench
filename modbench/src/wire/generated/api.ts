@@ -1381,7 +1381,7 @@ export interface components {
             archives: components["schemas"]["StampedFile"][];
             stringsFiles: components["schemas"]["StampedFile"][];
             places: components["schemas"]["PluginPlace"][];
-            gameDirectory: string;
+            dataFolder: string;
             instanceRoot: string;
             gameRelease: string;
             stringsLanguage: string;

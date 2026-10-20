@@ -1,7 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Commands.Build;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
+using MEditService.ModFolderAdapter;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Strings;
@@ -13,7 +13,7 @@ namespace MEditService.Commands;
 /// itself.</summary>
 public sealed class PutLoadOrderHandler
 {
-    private readonly IPluginAdapter _plugins;
+    private readonly IModFolderRepository _modFolders;
     private readonly LoadOrderHolder _holder;
     private readonly SchemaReflector _schemaReflector;
     private readonly ISourceAdapter _source;
@@ -22,9 +22,9 @@ public sealed class PutLoadOrderHandler
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal PutLoadOrderHandler(
-        IPluginAdapter plugins, LoadOrderHolder holder, SchemaReflector schemaReflector, ISourceAdapter source,
+        IModFolderRepository modFolders, LoadOrderHolder holder, SchemaReflector schemaReflector, ISourceAdapter source,
         ExternalChangeCheck externalChanges, ModStatusCheck modStatus) =>
-        (_plugins, _holder, _schemaReflector, _source, _externalChanges, _modStatus) = (plugins, holder, schemaReflector, source, externalChanges, modStatus);
+        (_modFolders, _holder, _schemaReflector, _source, _externalChanges, _modStatus) = (modFolders, holder, schemaReflector, source, externalChanges, modStatus);
 
     public PutLoadOrderResult Put(
         string dataFolder, string? instanceRoot, GameRelease gameRelease,
@@ -32,8 +32,8 @@ public sealed class PutLoadOrderHandler
         IReadOnlyList<StampedFile> archives, IReadOnlyList<StampedFile> stringsFiles, IReadOnlyList<PluginPlace> places,
         Language stringsLanguage, SnapshotMods mods)
     {
-        if (!_plugins.GameFolderExists(dataFolder))
-            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.GameDirectoryNotFound, $"Game directory not found: {dataFolder}");
+        if (!_modFolders.DataFolderExists(dataFolder))
+            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.DataFolderNotFound, $"Data folder not found: {dataFolder}");
         if (_source.InstanceRootNotFound(instanceRoot) is { } notFound)
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InstanceRootNotFound, notFound);
 

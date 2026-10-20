@@ -120,7 +120,7 @@ def snapshot(instance: pathlib.Path, game: pathlib.Path) -> JsonRecord:
         'places': places(instance),
         'mods': [],
         'statCache': str(instance / 'stat-cache'),
-        'gameDirectory': str(game),
+        'dataFolder': str(game),
         'instanceRoot': str(instance),
         'gameRelease': 'Fallout4',
         'stringsLanguage': 'English',

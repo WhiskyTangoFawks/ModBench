@@ -90,8 +90,6 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         }
     }
 
-    public bool GameFolderExists(string gameFolder) => Directory.Exists(gameFolder);
-
     public Answer<IReadOnlyList<string>, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         PluginFailure.Answer(() => LocalizedStrings.PlacesOf(strings, loadOrder, modPath, loadOrder.GameRelease, loadOrder.StringsLanguage));
 

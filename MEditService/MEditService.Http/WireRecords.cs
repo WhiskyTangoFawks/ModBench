@@ -23,7 +23,7 @@ internal sealed record LoadOrderResponse(bool Applied, long Version = 0);
 internal sealed record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, IReadOnlyList<StampedFile> Archives, IReadOnlyList<StampedFile> StringsFiles,
-    IReadOnlyList<PluginPlace> Places, string GameDirectory, string InstanceRoot, string GameRelease, string StringsLanguage, IReadOnlyList<ModByFolder> Mods, string StatCache);
+    IReadOnlyList<PluginPlace> Places, string DataFolder, string InstanceRoot, string GameRelease, string StringsLanguage, IReadOnlyList<ModByFolder> Mods, string StatCache);
 internal sealed record LoadOrderPlugin(
     string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt, IReadOnlyList<StampedFile> Archives,
     IReadOnlyList<StampedFile> StringsFiles);
