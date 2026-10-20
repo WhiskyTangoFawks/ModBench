@@ -1128,10 +1128,10 @@ internal sealed class Indexer : IDisposable
     internal bool WhileClosed(Func<ClosedStore, string?> whileClosed, out string? refusal)
     {
         refusal = null;
-        var handedOut = Sequence;
         EnterExclusive();
         try
         {
+            var handedOut = Sequence;
             if (!Close())
             {
                 StartReconcile();

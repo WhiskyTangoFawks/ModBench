@@ -218,16 +218,19 @@ public sealed class StoreRebuildTests : IDisposable
         PluginBinaries.Touch(_fixture.Plugins.Single().Path);
         gate.ParkNextOpenOf(Key.Name);
         Task? parked = null;
+        bool? readWhileClosed = null;
         notifications.OnPublish = n =>
         {
             if (parked is not null || n is not LoadOrderStatusNotification { Status.State: LoadOrderState.None }) return;
             holder.Apply(holder.Current);
             parked = gate.WaitUntilParkedAsync();
-            Waits.ReachedWithin(() => parked.IsCompleted, TimeSpan.FromSeconds(2));
+            readWhileClosed = Waits.ReachedWithin(() => parked.IsCompleted, TimeSpan.FromSeconds(2));
         };
 
         Assert.Null(await Task.Run(() => index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot)));
-        await (parked ?? Task.CompletedTask).WaitAsync(Waits.Patience);
+        Assert.False(readWhileClosed);
+        Assert.NotNull(parked);
+        await parked.WaitAsync(Waits.Patience);
         gate.Release();
         AwaitRefill(index);
         index.Dispose();
