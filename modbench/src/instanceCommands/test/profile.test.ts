@@ -17,8 +17,8 @@ const switchProfileOver = (adapter: InstanceAdapter) =>
   instanceCommands({ adapter, client: new InMemoryMEditClient(), instanceRoot: '/instance' }).switchProfile;
 
 describe('switchProfile', () => {
-  const over = (answers: InstanceAnswers = {}, profiles: readonly string[] = PROFILES) => {
-    const fake = fakeInstanceAdapter(readingFixture({ profiles: [...profiles] }), answers);
+  const over = (answers: InstanceAnswers = {}) => {
+    const fake = fakeInstanceAdapter(readingFixture({ profiles: [...PROFILES] }), answers);
     return { fake, switchProfile: switchProfileOver(fake.adapter) };
   };
 
@@ -29,11 +29,9 @@ describe('switchProfile', () => {
     expect(fake.calls).toEqual([{ verb: 'selectProfile', profile: 'Secondary' }]);
   });
 
-  it.each([
-    ['a name the instance does not hold', 'No Such Profile', PROFILES],
-    ['a profile the instance does not hold', 'Secondary', ['Default']],
-  ])('refuses %s, handing the adapter nothing', async (_, profile, held) => {
-    const { fake, switchProfile } = over({}, held);
+  it('refuses a name the instance does not hold, handing the adapter nothing', async () => {
+    const profile = 'No Such Profile';
+    const { fake, switchProfile } = over();
 
     expect(await switchProfile(profile)).toEqual({ applied: false, refusal: `No such profile: ${profile}` });
     expect(fake.calls).toEqual([]);

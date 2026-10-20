@@ -79,22 +79,31 @@ describe('a command probes the instance for none of its own inputs', () => {
   });
 });
 
-const instanceValueFields = (): Set<string> => {
+const typeTextOf = (node: ts.PropertySignature | ts.ParameterDeclaration): string | undefined =>
+  node.type?.getText().replace(/\s+/g, ' ');
+
+const instanceValueFields = (): ReadonlyMap<string, string> => {
   const path = join(SRC, 'instanceLoader', 'instance.ts');
   const file = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
-  const fields = new Set<string>();
+  const fields = new Map<string, string>();
   file.forEachChild((node) => {
     if (ts.isInterfaceDeclaration(node) && node.name.text === 'InstanceValue') {
-      for (const member of node.members) if (member.name) fields.add(member.name.getText());
+      for (const member of node.members) {
+        if (ts.isPropertySignature(member) && member.type) fields.set(member.name.getText(), typeTextOf(member) ?? '');
+      }
     }
   });
   return fields;
 };
 
-const slicedFieldsIn = (source: string, fields: ReadonlySet<string>): string[] => {
+// A field is copied when a property or a parameter bears its name and its type as written.
+// Names such as `plugins` or `files` recur in legitimate Arguments, and carry another type there.
+const slicedFieldsIn = (source: string, fields: ReadonlyMap<string, string>): string[] => {
   const found: string[] = [];
   const visit = (node: ts.Node): void => {
-    if (ts.isPropertySignature(node) && fields.has(node.name.getText())) found.push(node.name.getText());
+    if ((ts.isPropertySignature(node) || ts.isParameter(node)) && typeTextOf(node) !== undefined && fields.get(node.name.getText()) === typeTextOf(node)) {
+      found.push(node.name.getText());
+    }
     ts.forEachChild(node, visit);
   };
   visit(ts.createSourceFile('module.ts', source, ts.ScriptTarget.Latest, true));
@@ -103,7 +112,7 @@ const slicedFieldsIn = (source: string, fields: ReadonlySet<string>): string[] =
 
 describe('no command takes a slice of the instance value', () => {
   it('reads InstanceValue from the loader, so the scan has fields to hold', () => {
-    expect(instanceValueFields()).toContain('gameRelease');
+    expect([...instanceValueFields().keys()]).toContain('activeProfile');
   });
 
   it('no command module declares a type that carries a field of the instance value', () => {
@@ -116,8 +125,12 @@ describe('no command takes a slice of the instance value', () => {
     expect(offenders).toEqual({});
   });
 
+  it('flags a profile list taken as a parameter, the form switch profile had', () => {
+    expect(slicedFieldsIn('function switchProfile(adapter: A, profile: string, profiles: readonly string[]) {}\n', instanceValueFields())).toEqual(['profiles']);
+  });
+
   it('flags a slice declared as a type of its own', () => {
-    const planted = 'interface InstanceSlice { readonly profiles: readonly string[]; readonly activeProfile: string }\n';
+    const planted = 'interface InstanceSlice { readonly profiles: readonly string[]; readonly activeProfile: string; readonly plugins: readonly string[] }\n';
     expect(slicedFieldsIn(planted, instanceValueFields())).toEqual(['profiles', 'activeProfile']);
   });
 });

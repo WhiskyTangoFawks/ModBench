@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { settled } from '../../test/settled';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
@@ -17,7 +16,7 @@ const REFUSED: LoadOrderSource = { refusal: 'a.esp has no mod folder' };
 
 function valueWith(name: string): LoadOrderSource {
   const plugin = { name, path: `/game/Data/${name}`, origin: 'Base Mod', provider: { kind: 'Game' as const }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] };
-  return { plugins: [plugin], active: [{ name, origin: 'Base Mod' }], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache', dataFolder: '/game/Data' };
+  return { plugins: [plugin], active: [{ name, origin: 'Base Mod' }], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache', dataFolder: '/game/Data', gameRelease: 'Fallout4' };
 }
 
 type Told = PutLoadOrderResult;
@@ -43,7 +42,7 @@ function wired(status: 'running' | 'stopped' = 'running') {
   });
   const around: { entered: number; settled: boolean; told: number[] } = { entered: 0, settled: false, told: [] };
   const flow = editingFlow({
-    client, adapter: fakeInstanceAdapter().adapter, instanceRoot: '/instance', onPut: (put) => { tell(put); return Promise.resolve(); }, log: (line) => { logged.push(line); },
+    client, instanceRoot: '/instance', onPut: (put) => { tell(put); return Promise.resolve(); }, log: (line) => { logged.push(line); },
     around: async (entry) => { around.entered++; await entry(); around.settled = true; around.told.push(told.length); },
   });
   const putPluginNames = (): string[] => client.puts().map((put) => put.plugins.map((p) => p.name).join());
@@ -184,7 +183,7 @@ describe('telling a launch that threw', () => {
   it('reaches the Output once, naming the launch', async () => {
     const client = new ClientWhoseLaunchIsHeld();
     const logged: string[] = [];
-    editingFlow({ client, adapter: fakeInstanceAdapter().adapter, instanceRoot: '/instance', onPut: () => Promise.resolve(), log: (line) => { logged.push(line); }, around: (entry) => entry() });
+    editingFlow({ client, instanceRoot: '/instance', onPut: () => Promise.resolve(), log: (line) => { logged.push(line); }, around: (entry) => entry() });
 
     client.heard(Promise.reject(new Error('no kill')));
     await settled();

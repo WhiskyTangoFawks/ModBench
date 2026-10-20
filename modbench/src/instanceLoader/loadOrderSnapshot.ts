@@ -63,6 +63,8 @@ export interface SnapshotModlist {
 /** ADR-0013's snapshot. */
 export interface LoadOrderSnapshotValue<F = StampedFile> {
   readonly dataFolder: string;
+  /** The release of the reading the snapshot was built from. */
+  readonly gameRelease: string;
   readonly plugins: SnapshotPlugin<F>[];
   readonly active: PluginAddress[];
   readonly loadedWithNoLine: PluginAddress[];
@@ -79,7 +81,7 @@ export interface LoadOrderSnapshotValue<F = StampedFile> {
 
 /** What the snapshot's archives and strings files are resolved from. */
 export interface ArchiveSources {
-  readonly gameRelease: string | undefined;
+  readonly gameRelease: string;
   /** The archives the game's INIs list, by name. */
   readonly listed: readonly string[];
   readonly inData: DataFolderArchives;
@@ -312,6 +314,7 @@ export function loadOrderSnapshotOf(value: {
   const active = [...loadedWithNoLine, ...fromLines].map(({ name, origin }) => ({ name, origin }));
   return {
     dataFolder,
+    gameRelease: value.archives.gameRelease,
     plugins: [...sent.values()],
     active,
     loadedWithNoLine: loadedWithNoLine.map(({ name, origin }) => ({ name, origin })),

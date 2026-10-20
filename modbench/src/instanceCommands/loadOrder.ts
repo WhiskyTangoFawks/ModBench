@@ -2,11 +2,10 @@
 // never pushed to a view from here.
 
 import type { LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
 /** What the loader read of the instance for put load order to send. */
 export type LoadOrderSource =
-  | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine' | 'archives' | 'stringsFiles' | 'places' | 'mods' | 'statCache'> & { readonly dataFolder: string })
+  | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine' | 'archives' | 'stringsFiles' | 'places' | 'mods' | 'statCache' | 'gameRelease'> & { readonly dataFolder: string })
   | { readonly refusal: string }
   | undefined;
 
@@ -17,13 +16,13 @@ export type PutLoadOrderResult =
   | { sent: true; snapshot: LoadOrderSnapshot; outcome: LoadOrderOutcome };
 
 export async function putLoadOrder(
-  client: Pick<MEditClient, 'sendLoadOrder'>, adapter: Pick<InstanceAdapter, 'gameRelease'>, instanceRoot: string, source: LoadOrderSource, stringsLanguage: string,
+  client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, source: LoadOrderSource, stringsLanguage: string,
 ): Promise<PutLoadOrderResult> {
   if (!source) return { sent: false };
   if ('refusal' in source) return { sent: false, refusal: source.refusal };
-  const { plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, dataFolder } = source;
+  const { plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, gameRelease, dataFolder } = source;
   const snapshot: LoadOrderSnapshot = {
-    plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, gameDirectory: dataFolder, instanceRoot, gameRelease: await adapter.gameRelease(), stringsLanguage,
+    plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, gameDirectory: dataFolder, instanceRoot, gameRelease, stringsLanguage,
   };
   return { sent: true, snapshot, outcome: await client.sendLoadOrder(snapshot) };
 }

@@ -25,11 +25,15 @@ async function switchProfile(adapter: InstanceAdapter, profile: string): Promise
 async function refresh(
   adapter: InstanceAdapter, client: Pick<MEditClient, 'rebuildIndex'>, instanceRoot: string,
 ): Promise<RefreshResult> {
-  const outcome = await client.rebuildIndex(instanceRoot, await adapter.gameRelease());
-  if (outcome.rebuilt) return { applied: true };
-  return outcome.heldElsewhere
-    ? { applied: false, heldElsewhere: true }
-    : { applied: false, heldElsewhere: false, refusal: outcome.detail };
+  try {
+    const outcome = await client.rebuildIndex(instanceRoot, await adapter.gameRelease());
+    if (outcome.rebuilt) return { applied: true };
+    return outcome.heldElsewhere
+      ? { applied: false, heldElsewhere: true }
+      : { applied: false, heldElsewhere: false, refusal: outcome.detail };
+  } catch (err) {
+    return { ...refuse(err), heldElsewhere: false };
+  }
 }
 
 /** The instance-wide commands, bound to one instance: each takes the gesture's arguments only. */

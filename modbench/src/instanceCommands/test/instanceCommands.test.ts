@@ -45,4 +45,14 @@ describe('refresh', () => {
     expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
     expect(result).toEqual({ applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' });
   });
+
+  it('returns a refusal, not a throw, when the release cannot be read', async () => {
+    const adapter = { ...fakeInstanceAdapter().adapter, gameRelease: () => Promise.reject(new Error('ModOrganizer.ini is unreadable')) };
+    const client = new InMemoryMEditClient();
+
+    const result = await instanceCommands({ adapter, client, instanceRoot: '/instance' }).refresh();
+
+    expect(result).toEqual({ applied: false, heldElsewhere: false, refusal: 'ModOrganizer.ini is unreadable' });
+    expect(client.calls).toEqual([]);
+  });
 });

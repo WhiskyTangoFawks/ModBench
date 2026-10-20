@@ -2,13 +2,11 @@
 // what came of each put comes back through `onPut`.
 
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
 import { putLoadOrder, type LoadOrderSource, type PutLoadOrderResult } from './loadOrder';
 
 export interface EditingDeps {
   client: Pick<MEditClient, 'sendLoadOrder' | 'onLoadOrderResent' | 'onLaunch' | 'latestLoadOrder'>;
-  adapter: Pick<InstanceAdapter, 'gameRelease'>;
   instanceRoot: string;
   /** Shows a launch, from its start until the snapshot it was for is told (plugins.md, States 2). */
   around: (entry: () => Promise<void>) => Promise<void>;
@@ -40,7 +38,7 @@ function pending(logThrown: (reason: string) => void) {
 }
 
 export function editingFlow(deps: EditingDeps): EditingFlow {
-  const { client, adapter, instanceRoot, around, onPut, log } = deps;
+  const { client, instanceRoot, around, onPut, log } = deps;
   const tells = pending((reason) => { log(`[loadOrder] handing mEdit the load order threw: ${reason}`); });
   const launches = pending((reason) => { log(`[loadOrder] telling the launch of mEdit threw: ${reason}`); });
   let entering = false;
@@ -83,7 +81,7 @@ export function editingFlow(deps: EditingDeps): EditingFlow {
         entering = false;
       }
     },
-    onRecompute: (source, stringsLanguage) => { tellPut(putLoadOrder(client, adapter, instanceRoot, source, stringsLanguage)); },
+    onRecompute: (source, stringsLanguage) => { tellPut(putLoadOrder(client, instanceRoot, source, stringsLanguage)); },
     dispose: () => { for (const unsubscribe of unsubscribes) unsubscribe(); },
   };
 }

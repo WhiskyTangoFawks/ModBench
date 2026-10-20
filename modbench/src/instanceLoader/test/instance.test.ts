@@ -129,7 +129,7 @@ describe('Instance — the value', () => {
     expect(value.modFolders?.map((f) => f.name)).toEqual([NONO, 'Hand Extracted Mod']);
     expect(value.activeProfile).toBe('Secondary');
     expect(value.profiles).toEqual(['Default', 'Secondary']);
-    expect([value.gameName, value.gameRelease]).toEqual(['Fallout 4', 'Fallout4']);
+    expect(value.gameName).toBe('Fallout 4');
     expect(value.gameFolder).toEqual(GAME_FOLDER);
   });
 

@@ -345,6 +345,10 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
   };
   const inGameFolder = (name: string): PluginWithNoLine => ({ name, origin: 'Data/', path: join('/game/Data', name) });
 
+  it('carries the release of the reading it was built from', () => {
+    expect(snapshotOf([], [], { ...NO_ARCHIVES, gameRelease: 'Fallout4VR' })?.gameRelease).toBe('Fallout4VR');
+  });
+
   it('is undefined — no put at all — while the game folder\'s plugins cannot be listed, as a snapshot lacking the game\'s masters is not sent', () => {
     expect(loadOrderSnapshotOf({
       plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: undefined, modFolders, sourceDirs, places: [], modlist: NO_MODLIST, archives: NO_ARCHIVES,
@@ -457,7 +461,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
         : { kind: 'read', answer: { size: BigInt(path.length), modifiedNs: 1n, changedNs: 2n } });
     };
     const value: Parameters<typeof stampedSnapshot>[0] = {
-      dataFolder: '/game/Data',
+      dataFolder: '/game/Data', gameRelease: 'Fallout4',
       places: [], mods: [],
       statCache: '/mo2/stat-cache',
       plugins: [{

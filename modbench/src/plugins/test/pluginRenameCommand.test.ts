@@ -58,9 +58,7 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
   const instanceAnswers: InstanceAnswers = { heldPlugins: [held('Patch.esp', 'ModA'), held('Taken.esp', 'ModA'), held('Elsewhere.esp', 'ModB')] };
   const fake = fakeInstanceAdapter(undefined, instanceAnswers);
   const instance = {
-    value: instanceValueFixture({
-      gameRelease: 'Fallout4',
-    }),
+    value: instanceValueFixture(),
     quiet: async <T>(work: () => Promise<T>): Promise<T> => {
       try {
         return await work();
