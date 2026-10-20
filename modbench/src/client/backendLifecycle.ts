@@ -10,8 +10,7 @@ import type { BackendStatus, LaunchOutcome } from './MEditClient';
 export type BackendStream = 'stdout' | 'stderr';
 
 interface BackendProcess {
-  /** Optional signal so stop() can send SIGTERM then escalate to SIGKILL. */
-  kill(signal?: NodeJS.Signals): void;
+  kill(signal: 'SIGKILL'): void;
   on(event: 'exit', cb: (code: number | null, signal: NodeJS.Signals | null) => void): void;
   on(event: 'error', cb: (err: Error) => void): void;
   /** Present when spawned with piped stdio; absent on 'ignore'. */
@@ -41,7 +40,7 @@ export interface BackendLifecycleOptions {
   /** Read at the spawn from the Output channel's current level. The spawn path only — an attached
    *  backend never sees it. */
   serilogLevelArgs?: () => string[];
-  /** How long stop() waits after SIGTERM before escalating to SIGKILL. Defaults to 5s, matching
+  /** How long stop() waits after closing the backend's stdin before escalating to SIGKILL. Defaults to 5s, matching
    *  .NET's Generic Host shutdown budget (HostOptions.ShutdownTimeout). */
   stopGracePeriodMs?: number;
   /** Polled at `pollIntervalMs` while attaching/starting; defaults to a real GET `/health`
@@ -211,7 +210,8 @@ export class BackendLifecycle {
     }
   }
 
-  // A backend mid a long synchronous request won't notice SIGTERM, so this escalates to SIGKILL
+  // Closing stdin is the graceful stop on both platforms: Node's SIGTERM terminates a Windows
+  // process at once. A backend mid a long synchronous request won't notice, so this escalates to SIGKILL
   // and waits for a real 'exit'. Accepted race: stop() clears `this.child` first, so a start()
   // racing the wait can spawn a second child.
   private killAndConfirmExit(child: BackendProcess): Promise<void> {
@@ -224,9 +224,9 @@ export class BackendLifecycle {
         resolve();
       };
       child.on('exit', onExit);
-      child.kill('SIGTERM');
+      child.stdin?.end();
       escalateTimer.current = setTimeout(() => {
-        this.log.warn(`[backend] did not exit within ${this.stopGracePeriodMs}ms of SIGTERM — sending SIGKILL`);
+        this.log.warn(`[backend] did not exit within ${this.stopGracePeriodMs}ms of closing stdin — sending SIGKILL`);
         child.kill('SIGKILL');
       }, this.stopGracePeriodMs);
     });
