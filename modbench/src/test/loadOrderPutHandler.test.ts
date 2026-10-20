@@ -4,7 +4,7 @@ import { instanceValueFixture } from './mo2/instanceValueFixture';
 
 describe('the load order put handler', () => {
   it('puts the value with the strings language the setting holds when the put is made', () => {
-    const puts: string[] = [];
+    const puts: (string | undefined)[] = [];
     let language = 'English';
     const put = loadOrderPutHandler({ onRecompute: (_source, stringsLanguage) => { puts.push(stringsLanguage); } }, () => language);
     const value = instanceValueFixture();

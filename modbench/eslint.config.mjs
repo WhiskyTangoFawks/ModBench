@@ -314,7 +314,7 @@ export default defineConfig(
         files: ['src/drivingLib/reporter.ts'],
         rules: { 'no-restricted-syntax': restrictedSyntax([...everywhereBut('message'), 'hostFs']) },
     },
-    // ADR-0014: the composition root decides nothing. Its one surfacing port is the dialog.
+    // The dialog is the one root file that surfaces to the user.
     {
         files: ['src/*.ts'],
         rules: { 'no-restricted-syntax': restrictedSyntax([...EVERYWHERE_IN_SRC, 'activation']) },

@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import type { GameFolderSetting } from './instanceAdapter/instanceAdapter';
-import { declaredSetting, onSettingChange } from './drivingLib/setting';
+import { onSettingChange } from './drivingLib/setting';
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
-const onConfigurationChange = (listener: Parameters<typeof vscode.workspace.onDidChangeConfiguration>[0]) => vscode.workspace.onDidChangeConfiguration(listener);
 
 const GAME_FOLDER_SETTING_KEY = 'mods.gameFolder';
 
@@ -12,14 +11,14 @@ const GAME_FOLDER_SETTING_KEY = 'mods.gameFolder';
 export const gameFolderSetting: GameFolderSetting = {
   id: `modbench.${GAME_FOLDER_SETTING_KEY}`,
   value: () => meditConfig().get<string>(GAME_FOLDER_SETTING_KEY),
-  changed: (listener) => onSettingChange(onConfigurationChange, `modbench.${GAME_FOLDER_SETTING_KEY}`, listener),
+  changed: (listener) => onSettingChange(vscode.workspace.onDidChangeConfiguration, `modbench.${GAME_FOLDER_SETTING_KEY}`, listener),
 };
 
 const STRINGS_LANGUAGE_SETTING = 'stringsLanguage';
 
-export const stringsLanguage = (): string => declaredSetting(`modbench.${STRINGS_LANGUAGE_SETTING}`, meditConfig().get<string>(STRINGS_LANGUAGE_SETTING));
+export const stringsLanguage = (): string | undefined => meditConfig().get<string>(STRINGS_LANGUAGE_SETTING);
 
 export const onStringsLanguageChange = (listener: () => void): vscode.Disposable =>
-  onSettingChange(onConfigurationChange, `modbench.${STRINGS_LANGUAGE_SETTING}`, listener);
+  onSettingChange(vscode.workspace.onDidChangeConfiguration, `modbench.${STRINGS_LANGUAGE_SETTING}`, listener);
 
 export const attachPort = (): number | null | undefined => meditConfig().get<number | null>('attachToBackendPort');

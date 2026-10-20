@@ -1,7 +1,7 @@
 import { beforeAll, describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { basename, join, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { basename, join } from 'node:path';
+import { ESLint, type Linter } from 'eslint';
 import ts from 'typescript';
 import { importSpecifiers, rootFiles, SRC } from './scanSource';
 import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../eslint-rules/activationDecides.mjs';
@@ -9,7 +9,7 @@ import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../
 
 const ACTIVATION = 'extension.ts';
 const WIRING = ['syncWiring.ts'];
-const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'instanceRepository.ts', 'trash.ts', 'workspaceConfig.ts'];
+const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'hostGit.ts', 'trash.ts', 'workspaceConfig.ts'];
 const ACTIVATION_EXPORTS = ['activate', 'deactivate'];
 
 const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =>
@@ -29,29 +29,19 @@ function restrictedSyntaxApplied(options: readonly unknown[], message: string): 
       && 'selector' in option && typeof option.selector === 'string' ? [option.selector] : []));
 }
 
-const ESLINT_CONFIG = join(SRC, '..', 'eslint.config.mjs');
+const MODBENCH = join(SRC, '..');
+const ESLINT_CONFIG = join(MODBENCH, 'eslint.config.mjs');
 
-async function flatConfigBlocks(path: string): Promise<unknown[]> {
-  const loaded: unknown = await import(pathToFileURL(path).href);
-  const blocks = typeof loaded === 'object' && loaded !== null && 'default' in loaded ? loaded.default : undefined;
-  return Array.isArray(blocks) ? blocks as unknown[] : [];
-}
-
-let LINT_CONFIG_BLOCKS: unknown[] = [];
+let LINT: ESLint;
 const LOADING_THE_WHOLE_LINT_TOOLCHAIN_MS = 60_000;
-beforeAll(async () => { LINT_CONFIG_BLOCKS = await flatConfigBlocks(ESLINT_CONFIG); }, LOADING_THE_WHOLE_LINT_TOOLCHAIN_MS);
+beforeAll(() => { LINT = new ESLint({ cwd: MODBENCH, overrideConfigFile: ESLINT_CONFIG }); }, LOADING_THE_WHOLE_LINT_TOOLCHAIN_MS);
 
-const namesFile = (block: unknown, file: string): boolean =>
-  typeof block === 'object' && block !== null && 'files' in block && Array.isArray(block.files) && block.files.includes(file);
-
-function restrictedSyntaxOf(blocks: readonly unknown[], file: string, message: string): string[] {
-  const path = join('src', file).split(sep).join('/');
-  const last = blocks.filter((block) => namesFile(block, path) || namesFile(block, 'src/*.ts'))
-    .map(restrictedSyntaxOptions)
-    .filter((options) => options !== undefined)
-    .at(-1);
-  return last === undefined ? [] : restrictedSyntaxApplied(last, message);
+async function decidingSelectorsApplied(lint: ESLint, file: string): Promise<string[]> {
+  const options = restrictedSyntaxOptions(await lint.calculateConfigForFile(join(SRC, file)));
+  return options === undefined ? [] : restrictedSyntaxApplied(options, ACTIVATION_DECIDES_MESSAGE);
 }
+
+const plantedLint = (...blocks: Linter.Config[]): ESLint => new ESLint({ cwd: MODBENCH, overrideConfigFile: true, overrideConfig: blocks });
 
 function exportedNames(source: ts.SourceFile): string[] {
   return source.statements.flatMap((statement) => {
@@ -75,19 +65,19 @@ describe('the composition root builds each box, registers it with VS Code and de
     expect(rootFiles().map((path) => basename(path)).sort()).toEqual([ACTIVATION, ...WIRING, ...PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API].sort());
   });
 
-  it.each(rootFiles().map((path) => basename(path)))('the lint config applies the deciding selectors to %s', (file) => {
-    expect(restrictedSyntaxOf(LINT_CONFIG_BLOCKS, file, ACTIVATION_DECIDES_MESSAGE)).toEqual(ACTIVATION_DECIDES_SELECTORS);
+  it.each(rootFiles().map((path) => basename(path)))('the lint config applies the deciding selectors to %s', async (file) => {
+    expect(await decidingSelectorsApplied(LINT, file)).toEqual(ACTIVATION_DECIDES_SELECTORS);
   });
 
-  it('a config block that names the root files without the deciding selectors is not the rule', () => {
-    const planted = [{ files: ['src/extension.ts'], rules: { 'no-restricted-syntax': ['error', { selector: 'IfStatement', message: 'other' }] } }];
-    expect(restrictedSyntaxOf(planted, ACTIVATION, ACTIVATION_DECIDES_MESSAGE)).toEqual([]);
+  it('a config block that names a root file without the deciding selectors is not the rule', async () => {
+    const planted = plantedLint({ files: ['src/*.ts'], rules: { 'no-restricted-syntax': ['error', { selector: 'IfStatement', message: 'other' }] } });
+    expect(await decidingSelectorsApplied(planted, ACTIVATION)).toEqual([]);
   });
 
-  it('a later block that names a root file and drops the deciding selectors is the one that applies', () => {
-    const deciding = { files: ['src/*.ts'], rules: { 'no-restricted-syntax': ['error', { selector: 'IfStatement', message: ACTIVATION_DECIDES_MESSAGE }] } };
-    const later = { files: ['src/dialog.ts'], rules: { 'no-restricted-syntax': ['error', { selector: 'Foo', message: 'other' }] } };
-    expect(restrictedSyntaxOf([deciding, later], 'dialog.ts', ACTIVATION_DECIDES_MESSAGE)).toEqual([]);
+  it('a later block that covers a root file and drops the deciding selectors is the one that applies', async () => {
+    const deciding = { files: ['src/*.ts'], rules: { 'no-restricted-syntax': ['error', { selector: 'IfStatement', message: ACTIVATION_DECIDES_MESSAGE }] } } satisfies Linter.Config;
+    const later = { files: ['src/**/*.ts'], rules: { 'no-restricted-syntax': ['error', { selector: 'Foo', message: 'other' }] } } satisfies Linter.Config;
+    expect(await decidingSelectorsApplied(plantedLint(deciding, later), ACTIVATION)).toEqual([]);
   });
 
   it.each(rootFiles().map((path) => basename(path)))('%s reaches the Editor only through its index and names no webview', (file) => {

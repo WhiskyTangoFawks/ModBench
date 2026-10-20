@@ -7,9 +7,11 @@ import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModMetadata
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
+import type { HostGit } from '../ports/repository';
 import type { MoveToTrash } from '../ports/trash';
 import { modWithMetadata, withMetadataRead } from '../wire/modByFolder';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
+import { initRepositoryIn } from './initRepositoryIn';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
@@ -20,8 +22,7 @@ interface ModlistRepositoryCommandsDeps {
   client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'getWhatRestoreDestroys' | 'getModStatus'>;
   adapter: Adapter;
   instanceRoot: string;
-  /** VS Code's git makes the instance folder a repository. */
-  makeRepository: () => Promise<void>;
+  hostGit: HostGit<unknown>;
   trash: MoveToTrash;
 }
 
@@ -356,7 +357,7 @@ async function submodulesWritten(adapter: Adapter): Promise<{ notes: readonly Mo
 
 /** The modlist gestures, bound to the mEdit client and handing it the instance's facts. */
 export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
-  const { client, adapter, instanceRoot, makeRepository } = deps;
+  const { client, adapter, instanceRoot, hostGit } = deps;
   const ignoreList = { what: 'the ignore list it wrote', undo: () => adapter.removeIgnoreList() };
   const repository = { what: 'the repository it made', undo: () => adapter.removeRepository() };
 
@@ -371,7 +372,7 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
         return refuse(err);
       }
       try {
-        await makeRepository();
+        await initRepositoryIn(hostGit, instanceRoot);
       } catch (err) {
         return { applied: false, refusal: await refusalTakenBack(err, [ignoreList]) };
       }
