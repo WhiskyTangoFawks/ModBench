@@ -10,6 +10,7 @@
     { "path": "../instanceAdapter" },
     { "path": "../ports" },
     { "path": "../tables" },
+    { "path": "../textDocuments" },
     { "path": "../wire" }
   ],
   "include": ["**/*.ts"],

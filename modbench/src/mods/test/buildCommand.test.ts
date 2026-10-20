@@ -40,7 +40,7 @@ describe('modbench.mod.build', () => {
     return new PluginRowStandIn(plugin);
   }
 
-  function registered(client: InMemoryMEditClient, options: { selection?: readonly unknown[]; unsaved?: Record<string, string[]> } = {}) {
+  function registered(client: InMemoryMEditClient, options: { selection?: readonly unknown[] } = {}) {
     const reporter = recordingReporter();
     const diagnostics = new FakeDiagnosticCollection();
     registerBuildCommand({
@@ -55,13 +55,6 @@ describe('modbench.mod.build', () => {
       reporter, problems: new BuildProblems(diagnostics),
       modOfOrigin: modOfOriginIn(...MOD_DIRS.keys()), sourceModNames: () => SOURCE_MODS, pluginsView: 'modbench.pluginListTree',
       sourceFiles: (origin) => sourceFiles(FILES, origin),
-      saveUnsaved: (mod) => {
-        const files = sourceFiles(FILES, mod);
-        if (files === undefined) return Promise.resolve([]);
-        const folder = files.file('');
-        progressSteps.push(`save ${folder}`);
-        return Promise.resolve(options.unsaved?.[folder] ?? []);
-      },
     }, () => options.selection ?? []);
     return {
       handler: present(handlers.get('modbench.mod.build'), 'the build command registerBuildCommand registers'),
@@ -79,7 +72,7 @@ describe('modbench.mod.build', () => {
 
     expect(builds).toEqual([['ModA']]);
     expect(progressSteps).toEqual([
-      `save ${normalize('/instance/source/ModA')}`, 'progress opens on modbench.modList', 'build', 'Instance loader: read every file again', 'progress closes',
+      'progress opens on modbench.modList', 'build', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(reporter.landings).toEqual(['Built "ModA".']);
     expect(reporter.reports).toEqual([]);
@@ -127,31 +120,6 @@ describe('modbench.mod.build', () => {
 
     expect(builds).toEqual([['ModS']]);
     expect(reporter.landings).toEqual(['Built "ModS".']);
-  });
-
-  it('refuses the build, naming each document VS Code did not save, and calls mEdit not at all', async () => {
-    const client = new InMemoryMEditClient();
-    const unsaved = normalize('/instance/source/ModA/plugin-source/MyPatch.esp/A.json');
-    const { handler, reporter } = registered(client, { unsaved: { [normalize('/instance/source/ModA')]: [unsaved] } });
-
-    await handler(new ModsRowStandIn('ModA'));
-
-    expect(builds).toEqual([]);
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not build: VS Code did not save its plugin source.', detail: unsaved }]);
-    expect(reporter.landings).toEqual([]);
-  });
-
-  it('saves every selected mod, refuses when one of them has a document left unsaved, and builds none', async () => {
-    const client = new InMemoryMEditClient();
-    const unsaved = normalize('/instance/source/ModB/plugin-source/Other.esp/B.json');
-    const { handler, reporter } = registered(client, { unsaved: { [normalize('/instance/source/ModB')]: [unsaved] } });
-    const rows = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
-
-    await handler(rows[0], rows);
-
-    expect(progressSteps).toEqual([`save ${normalize('/instance/source/ModA')}`, `save ${normalize('/instance/source/ModB')}`]);
-    expect(builds).toEqual([]);
-    expect(reporter.reports.map((r) => r.detail)).toEqual([unsaved]);
   });
 
   it('names each refused mod and why in one notification, and builds the rest', async () => {
@@ -475,16 +443,6 @@ describe('modbench.mod.build', () => {
         { message: 'Built 1 mod only in part.', detail: '"ModA" (the archive step failed)', severity: 'warning' },
         { message: 'Build overwrote 1 file that differed.', detail: '"Data/A.esp (ModA)"', severity: 'warning' },
       ] });
-    });
-
-    it('answers the refusal when VS Code leaves a plugin source unsaved, and builds nothing', async () => {
-      const client = new InMemoryMEditClient();
-      const unsaved = normalize('/instance/source/ModA/plugin-source/A.json');
-      const { handler, reporter } = registered(client, { unsaved: { [normalize('/instance/source/ModA')]: [unsaved] } });
-
-      expect(await handler(calling('ModA'))).toEqual({ applied: false, refusal: 'Could not build: VS Code did not save its plugin source.', detail: unsaved });
-      expect(builds).toEqual([]);
-      expect(reporter.reports).toEqual([]);
     });
   });
 });

@@ -1,7 +1,7 @@
 import {
   isRefused, type BuildFacts, type BuildMod, type BuildOutcome, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress, type MEditClient, type WriteRefused,
 } from '../client';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { isPluginSourcePath, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
 
@@ -9,13 +9,15 @@ interface SourceCommandsDeps {
   client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'latestLoadOrder'>;
   adapter: Pick<InstanceAdapter,
     'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'excludedSuffix' | 'statCacheFolder' | 'sourceHost'>;
+  /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
+  saveUnsaved: (folder: string, isPluginSource: (path: string) => boolean) => Promise<string[]>;
 }
 
 export const metadataUnreadable = (reason: string): string => `its metadata could not be read: ${reason}`;
 
 /** The source mod gestures, bound to the mEdit client. mEdit reads each mod's plugins in the load order it holds,
  *  which lacks a snapshot still waiting to be put, so each first waits for the newest to reconcile. */
-export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
+export function sourceCommands({ client, adapter, saveUnsaved }: SourceCommandsDeps) {
   return {
     /** A mod no repository builds, or whose folder or metadata the Instance adapter cannot answer, is
      *  refused here, naming why, and mEdit builds the rest with the release's archive variants. */
@@ -25,6 +27,11 @@ export function sourceCommands({ client, adapter }: SourceCommandsDeps) {
       const refused: ItemRefusal<string>[] = [];
       for (const mod of mods) {
         const sourceFolder = sourceMods.folderOf(mod);
+        const unsaved = sourceFolder === undefined ? [] : await saveUnsaved(sourceFolder, isPluginSourcePath);
+        if (unsaved.length > 0) {
+          refused.push({ item: mod, reason: `VS Code did not save its plugin source: ${unsaved.join(', ')}` });
+          continue;
+        }
         const folder = await adapter.modFolderPath(mod);
         const metadata = await adapter.modMetadata(mod);
         const host = sourceFolder === undefined ? undefined : await adapter.sourceHost(sourceFolder);
