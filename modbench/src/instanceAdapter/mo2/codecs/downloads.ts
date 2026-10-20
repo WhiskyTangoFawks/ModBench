@@ -8,18 +8,16 @@ import { GENERAL_SECTION, readIniSection, setIniValue } from './qSettingsIni';
 /** Appended to a download's filename to name its sidecar. */
 export const DOWNLOAD_SIDECAR_SUFFIX = '.meta';
 
-export function parseDownloadMeta(text: string): DownloadMeta {
+/** `removed` is MO2's hidden, a separate key from the `uninstalled` Status. */
+export function parseDownloadMeta(text: string): { meta: DownloadMeta; hidden: boolean } {
   const values = readIniSection(text, GENERAL_SECTION);
   let status: DownloadStatus = 'Downloaded';
   if (values.get('uninstalled') === 'true') status = 'Uninstalled';
   else if (values.get('installed') === 'true') status = 'Installed';
   const modID = values.get('modID');
   const fileID = values.get('fileID');
-  // `removed` is MO2's hidden — a separate key/axis from the `uninstalled` Status above.
-  const excluded = values.get('removed') === 'true';
-  return {
+  const meta: DownloadMeta = {
     status,
-    excluded,
     modID: modID && modID !== '0' ? modID : undefined,
     fileID: fileID && fileID !== '0' ? fileID : undefined,
     name: values.get('name'),
@@ -28,6 +26,7 @@ export function parseDownloadMeta(text: string): DownloadMeta {
     gameName: values.get('gameName'),
     author: values.get('author'),
   };
+  return { meta, hidden: values.get('removed') === 'true' };
 }
 
 // Writes the value verbatim, so `false` clears rather than deleting the key,

@@ -88,32 +88,42 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
     }
     const path = name === null ? folder : join(folder, name);
     onChange(path);
-    void stat(path).then((facts) => (facts.isDirectory() ? watchFolder(path) : undefined), () => { removed(path); });
+    void stat(path).then((facts) => (facts.isDirectory() ? watchLevel([path]) : undefined), () => { removed(path); });
   };
 
   const passedOver = (folder: string): boolean => !isOpen || watched.has(folder);
 
-  const watchHeldBy = async (folder: string): Promise<void> => {
-    await Promise.all((await foldersIn(folder)).map(watchFolder));
-  };
+  const realOf = async (folder: string): Promise<string | undefined> =>
+    passedOver(folder) || !holds(folder) ? undefined : realpath(folder).catch(() => undefined);
 
-  // Watched before it is listed, so a folder made inside it meanwhile is heard or listed. A link back to a folder
-  // already watched is not watched again, or a loop of links would be watched without end.
-  const watchFolder = async (folder: string): Promise<void> => {
-    if (passedOver(folder) || !holds(folder)) return;
-    const real = await realpath(folder).catch(() => undefined);
-    if (real === undefined || passedOver(folder) || watchedReal.has(real)) return;
+  const register = (folder: string, real: string): boolean => {
     try {
       const watcher = watch(folder, { persistent: false }, (_event, name) => { heardIn(folder, name); });
       watcher.on('error', (error) => { fail(folder, error); });
       watched.set(folder, { watcher, real });
       watchedReal.add(real);
       failed.delete(folder);
+      return true;
     } catch (error) {
       fail(folder, error);
-      return;
+      return false;
     }
-    await watchHeldBy(folder);
+  };
+
+  // A level is watched before the next, so a folder reached by two paths is watched under the shallower, and
+  // under the first listed of equal depth, whatever the timing of the disk.
+  const watchLevel = async (folders: readonly string[]): Promise<void> => {
+    if (folders.length === 0) return;
+    const reals = await Promise.all(folders.map(realOf));
+    const fresh = folders.filter((folder, i) => {
+      const real = reals[i];
+      return real !== undefined && !passedOver(folder) && !watchedReal.has(real) && register(folder, real);
+    });
+    await watchLevel((await Promise.all(fresh.map(foldersIn))).flat());
+  };
+
+  const watchHeldBy = async (folders: readonly string[]): Promise<void> => {
+    await watchLevel((await Promise.all(folders.map(foldersIn))).flat());
   };
 
   return {
@@ -121,12 +131,12 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
       if (!isOpen) return;
       const held = await foldersIn(folder);
       if (held.length > 0) createdFolders.add(folder);
-      await Promise.all(held.map(watchFolder));
+      await watchLevel(held);
     },
     removed,
     async open() {
       isOpen = true;
-      await Promise.all([...createdFolders].map(watchHeldBy));
+      await watchHeldBy([...createdFolders]);
     },
     close() {
       isOpen = false;

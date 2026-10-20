@@ -1,5 +1,5 @@
 import type {
-  ArchiveReader, DownloadMeta, GameFolder, InstanceAdapter, InstanceReading, ModlistEntry, OriginFiles, PluginEntry, Subscription,
+  ArchiveReader, DownloadedFile, GameFolder, InstanceAdapter, InstanceReading, ModlistEntry, OriginFiles, PluginEntry, Subscription,
 } from '../../instanceAdapter/instanceAdapter';
 import type { DownloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
 import type { Mo2Context } from '../../instanceAdapter/mo2/mo2Context';
@@ -66,11 +66,11 @@ export const readPluginLines = (root: string, profile = 'Default'): Promise<Plug
 
 export const readActiveProfile = async (root: string): Promise<string> => (await sourceOver(root).settings()).profile;
 
-/** A downloaded file's metadata; undefined when it has none. */
-export async function readDownloadedFileMeta(root: string, name: string): Promise<DownloadMeta | undefined> {
+/** A downloaded file as the adapter lists it; undefined when it is not listed. */
+export async function readDownloadedFile(root: string, name: string): Promise<DownloadedFile | undefined> {
   const { downloadedFiles } = await readInstanceOf(root);
   if (downloadedFiles.kind !== 'listed') throw new Error(`expected listed, got ${downloadedFiles.reason}`);
-  return downloadedFiles.files?.find((file) => file.name === name)?.meta;
+  return downloadedFiles.files?.find((file) => file.name === name);
 }
 
 /** Each listed mod's own files, as a reading holds them. */

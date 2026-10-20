@@ -460,7 +460,8 @@ describe('the MO2 Instance adapter', () => {
       expect(downloads.downloadsDir).toBe(join(root, 'downloads'));
       const byName = new Map((downloads.files ?? []).map((file) => [file.name, file]));
       expect([...byName.keys()].sort()).toEqual([DOWNLOAD, 'manual.zip']);
-      expect(byName.get(DOWNLOAD)?.meta).toMatchObject({ status: 'Installed', modID: '4598', excluded: false });
+      expect(byName.get(DOWNLOAD)?.meta).toMatchObject({ status: 'Installed', modID: '4598' });
+      expect(byName.get(DOWNLOAD)?.excluded).toBe(false);
       expect(byName.get('manual.zip')?.meta).toBeUndefined();
       expect(byName.get('manual.zip')?.size).toBe(3);
       expect(byName.get('manual.zip')?.path).toBe(join(root, 'downloads', 'manual.zip'));

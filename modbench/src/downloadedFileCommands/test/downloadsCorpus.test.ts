@@ -7,7 +7,7 @@ import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { downloadedFileCommands } from '../downloads';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
-import { adapterOver, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
+import { adapterOver, readDownloadedFile } from '../../test/mo2/adapterOver';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 
 const NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
@@ -26,7 +26,7 @@ describe('downloaded file commands over the committed corpus fixture: one path e
     assertSelectionOutcome(await downloadedFileCommands(adapterOver(dir)).excludeDownloads([NAME]), { landed: [NAME], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
-    expect((await readDownloadedFileMeta(dir, NAME))?.excluded).toBe(true);
+    expect((await readDownloadedFile(dir, NAME))?.excluded).toBe(true);
   });
 
   it('include writes one sidecar and nothing else, and the row reads back included', async () => {
@@ -36,7 +36,7 @@ describe('downloaded file commands over the committed corpus fixture: one path e
     assertSelectionOutcome(await downloadedFileCommands(adapterOver(dir)).includeDownloads([NAME]), { landed: [NAME], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
-    expect((await readDownloadedFileMeta(dir, NAME))?.excluded).toBe(false);
+    expect((await readDownloadedFile(dir, NAME))?.excluded).toBe(false);
   });
 
   it('delete trashes the archive and then the sidecar, and nothing else', async () => {

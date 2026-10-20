@@ -105,7 +105,7 @@ export function buildDownloadRows(
       size: file.size,
       mtimeMs: file.mtimeMs,
       hasMeta: meta !== undefined,
-      excluded: meta?.excluded ?? false,
+      excluded: file.excluded,
       modID: meta?.modID,
       fileID: meta?.fileID,
       version: meta?.version,
