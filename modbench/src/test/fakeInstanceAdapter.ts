@@ -90,6 +90,7 @@ export interface InstanceAnswers {
   gameFilesTaken?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>>>;
   /** The game files the game folder holds, by their lower-cased path; a path not there has none. */
   gameFiles?: ReadonlyMap<string, GameFile>;
+  unreadableGameFiles?: ReadonlyMap<string, string>;
   /** Why each mod's metadata cannot be read, by mod name. */
   unreadableMetadata?: ReadonlyMap<string, string>;
   /** Why each mod's metadata cannot hold the metadata a manifest says, by mod name. */
@@ -194,9 +195,12 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? { kind: 'read', answer: undefined }),
-    gameFiles: (_dataFolder, paths) => Promise.resolve({
-      kind: 'read', answer: paths.flatMap((path) => answers.gameFiles?.get(path.toLowerCase()) ?? []),
-    }),
+    gameFiles: (_dataFolder, paths) => {
+      const reason = paths.flatMap((path) => answers.unreadableGameFiles?.get(path.toLowerCase()) ?? [])[0];
+      return Promise.resolve(reason === undefined
+        ? { kind: 'read', answer: paths.flatMap((path) => answers.gameFiles?.get(path.toLowerCase()) ?? []) }
+        : { kind: 'unreadable', reason });
+    },
     gameFilesTakenBy: (_dataFolder, mod) => Promise.resolve(answers.gameFilesTaken?.get(mod) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } }),
     modMetadata: (mod) => {
       const reason = answers.unreadableMetadata?.get(mod);

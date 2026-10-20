@@ -2,7 +2,7 @@ import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
@@ -702,6 +702,20 @@ describe('the MO2 adapter\'s game files', () => {
     const found = await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif', 'linked.txt/a.nif']);
 
     expect(found).toEqual({ kind: 'read', answer: [{ path: 'Meshes/A.nif', hash: HASH_OF_AAAA }] });
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) answers unreadable, with why, when a folder on the path cannot be listed, not that the file is absent', async () => {
+    const adapter = await instance();
+    await put('game/Data/Meshes/a.nif', 'aaaa');
+    const meshes = join(root, 'game', 'Data', 'Meshes');
+    await chmod(meshes, 0o000);
+
+    try {
+      expect(await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif']))
+        .toEqual({ kind: 'unreadable', reason: expect.stringMatching(/EACCES/) as unknown });
+    } finally {
+      await chmod(meshes, 0o755);
+    }
   });
 
   it('hands the game files a mod\'s own files take, whichever profile holds the mod', async () => {
