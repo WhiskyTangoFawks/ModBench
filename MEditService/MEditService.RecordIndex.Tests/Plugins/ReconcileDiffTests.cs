@@ -108,7 +108,7 @@ public sealed class ReconcileDiffTests
 
         Assert.Equal(opened, opens.OpenedTotal);
         Assert.Empty(index.ListedIn(bKey));
-        Assert.NotNull(index.PluginRowOf(bKey));
+        Assert.NotNull(index.PluginResponseOf(bKey));
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
@@ -136,7 +136,7 @@ public sealed class ReconcileDiffTests
         var only = Assert.Single(index.StackOf("000800:Shared.esp"));
         Assert.Equal(modA, new PluginAddress(only.Plugin, only.Origin));
         Assert.True(only.IsWinner);
-        Assert.NotNull(index.PluginRowOf(modB));
+        Assert.NotNull(index.PluginResponseOf(modB));
 
         var opened = opens.OpenedTotal;
         var flipped = snapshot.Select(p => p with { Winning = p.Origin == "ModB" }).ToList();
@@ -162,7 +162,7 @@ public sealed class ReconcileDiffTests
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4);
 
-        Assert.Null(index.PluginRowOf(bKey));
+        Assert.Null(index.PluginResponseOf(bKey));
         Assert.Empty(index.ListedIn(bKey));
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "B.esp");
         Assert.Equal("A.esm", WinnerOf(index, npc));
@@ -170,7 +170,7 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);
-        Assert.NotNull(index.PluginRowOf(bKey));
+        Assert.NotNull(index.PluginResponseOf(bKey));
         Assert.Equal("B.esp", WinnerOf(index, npc));
     }
 
@@ -225,7 +225,7 @@ public sealed class ReconcileDiffTests
 
         Assert.Contains(index.Status.Failures, f => f.Name == "Bad.esp");
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.DoesNotContain(index.Queries.GetPlugins().Value(), row => row.Plugin.Name == "Bad.esp");
+        Assert.DoesNotContain(index.Queries.GetPlugins().Value(), row => row.Name == "Bad.esp");
 
         var sequence = index.Sequence;
         PluginBinaries.Touch(fx.Plugins[0].Path);
@@ -235,7 +235,7 @@ public sealed class ReconcileDiffTests
         new Fallout4Mod(ModKey.FromFileName("Bad.esp"), Fallout4Release.Fallout4).WriteToBinary(badPath);
         index.NextSnapshotUntil(() => index.Status.Failures.Count == 0, "the status without the recovered plugin's failure");
 
-        Assert.Contains(index.Queries.GetPlugins().Value(), row => row.Plugin.Name == "Bad.esp");
+        Assert.Contains(index.Queries.GetPlugins().Value(), row => row.Name == "Bad.esp");
     }
 
     [Fact]

@@ -37,6 +37,8 @@ internal static class Copies
     internal static IReadOnlyList<RecordSummary> ListedIn(this OpenedIndex index, PluginAddress plugin) =>
         index.Queries.GetRecords(types: null, plugin, search: null, limit: int.MaxValue, offset: 0).Value().Items;
 
-    internal static PluginRow? PluginRowOf(this OpenedIndex index, PluginAddress plugin) =>
-        index.Queries.GetPlugins().Value().SingleOrDefault(row => PluginAddress.Comparer.Equals(row.Plugin.Key, plugin));
+    internal static PluginResponse? PluginResponseOf(this OpenedIndex index, PluginAddress plugin) =>
+        index.Queries.GetPlugins().Value().SingleOrDefault(row => PluginAddress.Comparer.Equals(row.KeyOf(), plugin));
+
+    internal static PluginAddress KeyOf(this PluginResponse row) => new(row.Name, row.Origin);
 }

@@ -19,7 +19,7 @@ public class FilterTests(TestPluginFixture fixture)
         index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 100, offset: 0).Value();
 
     private static IEnumerable<PluginAddress> PluginsWithMatches(OpenedIndex index) =>
-        index.Queries.GetPlugins().Value().Where(row => row.HasMatchingRecords).Select(row => row.Plugin.Key);
+        index.Queries.GetPlugins().Value().Where(row => row.HasMatchingRecords).Select(row => row.KeyOf());
 
     [Fact]
     public void SetFilter_ValidSqlWithExtraColumns_FiltersByFormKey()

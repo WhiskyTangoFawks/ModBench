@@ -1,5 +1,5 @@
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -48,8 +48,8 @@ public sealed class IndexerTests
     private static string WinnerOf(OpenedIndex indexer, string formKey) =>
         indexer.StackOf(formKey).Single(copy => copy.IsWinner).Plugin;
 
-    private static IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins(OpenedIndex indexer) =>
-        indexer.Queries.GetPlugins().Value().ToDictionary(row => row.Plugin.Key, row => row.Content, PluginAddress.Comparer);
+    private static IReadOnlyDictionary<PluginAddress, PluginResponse> OpenedPlugins(OpenedIndex indexer) =>
+        indexer.Queries.GetPlugins().Value().ToDictionary(row => row.KeyOf(), row => row, PluginAddress.Comparer);
 
     [Fact]
     public async Task AReDerivationAfterASnapshotMovedTheWinners_TakesItsWinnersFromTheHolder_NotFromThePluginsItHasOpen()

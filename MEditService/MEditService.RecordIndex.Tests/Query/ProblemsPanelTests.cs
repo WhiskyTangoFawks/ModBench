@@ -122,7 +122,7 @@ public sealed class ProblemsPanelTests : IDisposable
     {
         var (index, document, backup) = BrokenReadFromItsTree_ThenStoppedByAClaimedFormKey();
         using var _ = index;
-        Assert.Null(index.PluginRowOf(Entry(Broken).KeyOf())?.PluginSourceUnreadable);
+        Assert.Null(index.PluginResponseOf(Entry(Broken).KeyOf())?.PluginSourceUnreadable);
 
         var answer = Assert.Single(Ready(index));
 
@@ -154,7 +154,7 @@ public sealed class ProblemsPanelTests : IDisposable
         Build(plugin);
         var (document, backup) = BackupClaimingTheFormKeyOf(plugin, "Referrer");
         using var index = Indexes.Reconciled(Fixture);
-        Assert.NotNull(index.PluginRowOf(Entry(plugin).KeyOf())?.PluginSourceUnreadable);
+        Assert.NotNull(index.PluginResponseOf(Entry(plugin).KeyOf())?.PluginSourceUnreadable);
 
         var answer = Assert.Single(Ready(index));
 
