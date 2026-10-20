@@ -23,7 +23,7 @@ describe('spawnPiped', () => {
     const exited = new Promise<number | null>((resolve) => child.on('exit', resolve));
 
     expect(child.stdin).not.toBeNull();
-    child.stdin?.end();
+    child.stdin.end();
 
     expect(await exited).toBe(7);
     expect(JSON.parse(out)).toEqual(['--ExitWhenStdinCloses', 'true']);
