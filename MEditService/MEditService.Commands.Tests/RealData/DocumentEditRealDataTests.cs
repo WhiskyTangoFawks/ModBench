@@ -21,7 +21,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
 
     private readonly ITestOutputHelper _output;
     private readonly ScratchDirectory _modFolder = new("medit-docedit-real-");
-    private readonly ScratchDirectory _gameDirectory = new("medit-docedit-real-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-docedit-real-data-");
     private readonly PluginAddress _plugin;
     private readonly TestEditor _editHandler;
 
@@ -31,7 +31,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
         CutDownPluginFixture.CompiledPluginInto(_modFolder);
         _plugin = new PluginAddress(CutDownPluginFixture.PluginFileName, "DocEditRealMod");
 
-        var loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
+        var loadOrder = SnapshotPlugins.Snapshot(_dataFolder, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName), _plugin.Origin, Line: 0, Enabled: true, Winning: true)]);
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
@@ -41,7 +41,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
     public void Dispose()
     {
         _modFolder.Dispose();
-        _gameDirectory.Dispose();
+        _dataFolder.Dispose();
     }
 
     public static TheoryData<string> RecordTypesOfferingGestures()

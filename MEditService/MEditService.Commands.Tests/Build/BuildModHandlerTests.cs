@@ -278,7 +278,7 @@ public sealed class BuildModHandlerTests : IDisposable
         await InitializedWithALocalizedPlugin();
         Directory.Delete(ModFolder, recursive: true);
         WriteInFolder(MetaIni, "[General]");
-        _holder.Apply(SnapshotPlugins.Snapshot(Path.Combine(_root, "game"), _root, GameRelease.Fallout4, []));
+        _holder.Apply(SnapshotPlugins.Snapshot(Path.Combine(_root, "Data"), _root, GameRelease.Fallout4, []));
 
         var built = Assert.Single((await TestEditService.BuildModHandler(_holder)
             .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null)], _noArchives)).Value().Applied);
@@ -311,7 +311,7 @@ public sealed class BuildModHandlerTests : IDisposable
         written.UsingLocalization = true;
         written.WriteToBinary(plugin);
         var provider = new PluginProvider.FromMod(ModName, ModFolder, SourceFolder);
-        _holder.Apply(SnapshotPlugins.Snapshot(Directory.CreateDirectory(Path.Combine(_root, "game")).FullName, _root, GameRelease.Fallout4,
+        _holder.Apply(SnapshotPlugins.Snapshot(Directory.CreateDirectory(Path.Combine(_root, "Data")).FullName, _root, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: provider)]));
         Assert.Single((await TestEditService.DecompileAndCommitModHandler(_holder).DecompileAndCommitAsync([new ModToDecompileAndCommit(ModName, SourceFolder, [])])).Value().Applied);
     }

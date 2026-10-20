@@ -26,9 +26,9 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         _nonSourceMod = Directory.CreateDirectory(Path.Combine(_root, "mods", NonSourceModName)).FullName;
         WritePlugin(_sourceMod, "First.esp", "FirstNpc");
         WritePlugin(_nonSourceMod, "Other.esp", "OtherNpc");
-        var game = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
-        WritePlugin(game, "Vanilla.esp", "VanillaNpc");
-        _holder.Apply(SnapshotPlugins.Snapshot(game, _root, GameRelease.Fallout4,
+        var dataFolder = Directory.CreateDirectory(Path.Combine(_root, "Data")).FullName;
+        WritePlugin(dataFolder, "Vanilla.esp", "VanillaNpc");
+        _holder.Apply(SnapshotPlugins.Snapshot(dataFolder, _root, GameRelease.Fallout4,
         [
             new LoadOrderEntry("First.esp", Path.Combine(_sourceMod, "First.esp"), SourceModName, 0, Enabled: true, Winning: true),
             new LoadOrderEntry("Other.esp", Path.Combine(_nonSourceMod, "Other.esp"), NonSourceModName, 2, Enabled: true, Winning: true),
@@ -38,12 +38,12 @@ public sealed class DecompilePluginHandlerTests : IDisposable
             .GetAwaiter().GetResult().Value();
         Assert.Equal([CompiledPlugin("First.esp")], Assert.Single(committed.Applied).Plugins);
         WritePlugin(_sourceMod, "Second.esp", "SecondNpc");
-        _holder.Apply(SnapshotPlugins.Snapshot(game, _root, GameRelease.Fallout4,
+        _holder.Apply(SnapshotPlugins.Snapshot(dataFolder, _root, GameRelease.Fallout4,
         [
             new LoadOrderEntry("First.esp", Path.Combine(_sourceMod, "First.esp"), SourceModName, 0, Enabled: true, Winning: true),
             new LoadOrderEntry("Second.esp", Path.Combine(_sourceMod, "Second.esp"), SourceModName, 1, Enabled: true, Winning: true),
             new LoadOrderEntry("Other.esp", Path.Combine(_nonSourceMod, "Other.esp"), NonSourceModName, 2, Enabled: true, Winning: true),
-            new LoadOrderEntry("Vanilla.esp", Path.Combine(_root, "game", "Vanilla.esp"), PluginOrigin.DataDirectory, 3, Enabled: true, Winning: true),
+            new LoadOrderEntry("Vanilla.esp", Path.Combine(_root, "Data", "Vanilla.esp"), PluginOrigin.DataDirectory, 3, Enabled: true, Winning: true),
         ]));
     }
 

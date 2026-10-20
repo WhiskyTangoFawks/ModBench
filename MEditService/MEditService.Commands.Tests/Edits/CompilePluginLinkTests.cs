@@ -21,7 +21,7 @@ public sealed class CompilePluginLinkTests : IDisposable
     private const string Dangling = "ABCDEF:LinkTarget.esp";
 
     private readonly ScratchDirectory _instanceRoot = new("medit-compile-links-");
-    private readonly ScratchDirectory _gameDirectory = new("medit-compile-links-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-compile-links-data-");
     private readonly string _hostFolder;
     private readonly string _targetFolder;
     private readonly LoadOrderSnapshot _loadOrder;
@@ -51,7 +51,7 @@ public sealed class CompilePluginLinkTests : IDisposable
         });
 
         _loadOrder = SnapshotPlugins.Snapshot(
-            _gameDirectory, _instanceRoot, GameRelease.Fallout4,
+            _dataFolder, _instanceRoot, GameRelease.Fallout4,
             [
                 new LoadOrderEntry(TargetName, targetPath, TargetOrigin, Line: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(HostName, hostPath, HostOrigin, Line: 1, Enabled: true, Winning: true),
@@ -63,7 +63,7 @@ public sealed class CompilePluginLinkTests : IDisposable
     public void Dispose()
     {
         _instanceRoot.Dispose();
-        _gameDirectory.Dispose();
+        _dataFolder.Dispose();
     }
 
     private ISourceRepository HostRepository() =>

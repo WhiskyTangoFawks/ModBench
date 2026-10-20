@@ -26,7 +26,7 @@ public sealed class InjectedChildTests : IDisposable
     private readonly ScratchDirectory _instanceRoot = new("medit-injection-instance-");
     private readonly string _baseModFolder;
     private readonly string _injectorModFolder;
-    private readonly string _gameDirectory;
+    private readonly string _dataFolder;
     private readonly LoadOrderSnapshot _loadOrder;
 
     private readonly PluginAddress _base = new(BasePluginName, BaseOrigin);
@@ -43,7 +43,7 @@ public sealed class InjectedChildTests : IDisposable
     {
         _baseModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", BaseOrigin)).FullName;
         _injectorModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", InjectorOrigin)).FullName;
-        _gameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
+        _dataFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "Data")).FullName;
 
         var basePath = Path.Combine(_baseModFolder, BasePluginName);
         var baseMod = new Fallout4Mod(ModKey.FromFileName(BasePluginName), Fallout4Release.Fallout4);
@@ -75,7 +75,7 @@ public sealed class InjectedChildTests : IDisposable
         (_injectedTopic, _injectedBranch, _injectedScene, _injectedResponse) =
             (injectedTopic.FormKey, injectedBranch.FormKey, injectedScene.FormKey, injectedResponse.FormKey);
 
-        _loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, _instanceRoot, GameRelease.Fallout4,
+        _loadOrder = SnapshotPlugins.Snapshot(_dataFolder, _instanceRoot, GameRelease.Fallout4,
 
             [
                 new LoadOrderEntry(BasePluginName, basePath, BaseOrigin, Line: 0, Enabled: true, Winning: true),

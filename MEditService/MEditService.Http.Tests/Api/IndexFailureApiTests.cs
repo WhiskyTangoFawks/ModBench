@@ -22,7 +22,7 @@ public sealed class IndexFailureApiTests : HostedTests
         var fx = Owned(new PluginFixtureBuilder("api-index-failure")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("HeldNpc"), origin: Origin)
             .BuildScattered());
-        var put = await Client.PutAsJsonAsync("/load-order", SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, fx.Plugins));
+        var put = await Client.PutAsJsonAsync("/load-order", SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, fx.Plugins));
         put.EnsureSuccessStatusCode();
     }
 
