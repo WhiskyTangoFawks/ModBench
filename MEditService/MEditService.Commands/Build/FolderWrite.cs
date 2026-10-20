@@ -17,7 +17,7 @@ internal sealed class FolderWrite(IModFolderRepository repository, string folder
         for (var depth = 1; depth <= segments.Length; depth++)
         {
             if (!_excluded.Contains(string.Join('/', segments[..depth]))) continue;
-            segments[depth - 1] += excludedSuffix;
+            segments[depth - 1] = repository.ExcludedName(segments[depth - 1], excludedSuffix);
             return string.Join('/', segments);
         }
 

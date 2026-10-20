@@ -43,7 +43,7 @@ public sealed class PluginDependantsApiTests : IDisposable
             mods = Array.Empty<object>(),
             places = Array.Empty<object>(),
             statCache = "stat-cache",
-            gameDirectory = fx.GameDirectory,
+            dataFolder = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
             gameRelease = "Fallout4",
             stringsLanguage = "English",

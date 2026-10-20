@@ -38,13 +38,13 @@ describe('put load order', () => {
 
     expect(client.puts()).toEqual([{
       plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
-      places: SENT_PLACES, mods: SENT_MODS, statCache: '/instance/stat-cache', gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'French',
+      places: SENT_PLACES, mods: SENT_MODS, statCache: '/instance/stat-cache', dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'French',
     }]);
     expect(result).toEqual({
       sent: true,
       snapshot: {
         plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, archives: SENT_ARCHIVES, stringsFiles: SENT_STRINGS_FILES,
-        places: SENT_PLACES, mods: SENT_MODS, statCache: '/instance/stat-cache', gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'French',
+        places: SENT_PLACES, mods: SENT_MODS, statCache: '/instance/stat-cache', dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'French',
       },
       outcome: APPLIED,
     });

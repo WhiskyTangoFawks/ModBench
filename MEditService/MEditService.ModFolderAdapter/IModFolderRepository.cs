@@ -40,6 +40,12 @@ public interface IModFolderRepository
     /// other bytes.</summary>
     bool WriteFile(string folder, string path, Action<Stream> write);
 
+    bool DataFolderExists(string dataFolder);
+
+    /// <summary>The name the mod manager gives a file or folder named <paramref name="name"/> that a build leaves
+    /// out: <paramref name="name"/> with <paramref name="excludedSuffix"/> after it.</summary>
+    string ExcludedName(string name, string excludedSuffix);
+
     Stream OpenInstallationFile(string path);
 
     /// <summary>The game file at the forward-slash <paramref name="path"/> under the game's <paramref name="dataFolder"/>.</summary>

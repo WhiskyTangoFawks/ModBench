@@ -35,7 +35,7 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
             mods = Array.Empty<object>(),
             places = Array.Empty<object>(),
             statCache = "stat-cache",
-            gameDirectory = Plugin.DataFolder,
+            dataFolder = Plugin.DataFolder,
             instanceRoot = Plugin.InstanceRoot,
             gameRelease = "Fallout4",
             stringsLanguage = "English",

@@ -41,7 +41,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             mods = Array.Empty<object>(),
             places = Array.Empty<object>(),
             statCache = "stat-cache",
-            gameDirectory = badGameDir ?? _fixture.DataFolder,
+            dataFolder = badGameDir ?? _fixture.DataFolder,
             instanceRoot = badInstance ?? _fixture.InstanceRoot,
             gameRelease,
         });
@@ -66,7 +66,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             mods = Array.Empty<object>(),
             places = Array.Empty<object>(),
             statCache = "stat-cache",
-            gameDirectory = _fixture.DataFolder,
+            dataFolder = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
             gameRelease = "Oblivion",
             stringsLanguage = "English",

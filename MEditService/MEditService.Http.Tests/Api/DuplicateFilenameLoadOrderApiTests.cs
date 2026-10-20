@@ -29,7 +29,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
         {
-            gameDirectory = fx.GameDirectory,
+            dataFolder = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
             plugins = plugins.Select(p => p.Wire),
             active = SnapshotPlugins.Active(plugins),

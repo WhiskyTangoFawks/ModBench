@@ -59,7 +59,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 
         var data = new ScatteredFixtureData($"{_prefix}-scatter-");
         var root = data.Root;
-        var gameDir = data.GameDirectory;
+        var gameDir = data.GameFolder;
         Directory.CreateDirectory(gameDir);
 
         var builtMods = new List<Fallout4Mod>();
@@ -145,7 +145,9 @@ public sealed class ScatteredFixtureData(string prefix) : IDisposable
 
     public string InstanceRoot => Root;
 
-    public string GameDirectory => Path.Combine(Root, "GameDir");
+    public string GameFolder => Path.Combine(Root, "GameDir");
+
+    public string GameDirectory => GameFolder;
 
     public IReadOnlyList<LoadOrderEntry> Plugins { get; set; } = [];
 

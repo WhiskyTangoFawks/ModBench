@@ -36,7 +36,6 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
 
     public virtual Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => inner.ClaimOf(pluginPath, gameRelease);
 
-    public virtual bool GameFolderExists(string gameFolder) => inner.GameFolderExists(gameFolder);
 
     public virtual Answer<IReadOnlyList<string>, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         inner.StringsPlacesOf(modPath, loadOrder, strings);
