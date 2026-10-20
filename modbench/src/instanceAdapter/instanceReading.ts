@@ -5,16 +5,16 @@ import { firstLines } from '../loadOrderFileCodec/firstLines';
 import { pluginKey, PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
 import { ignoreSkippedLink, type SkippedLink } from './files';
 import {
-  type DataFolderArchives, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder, type InstanceReading,
+  filesWinningFirst, type DataFolderArchives, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder, type InstanceReading,
   type ManagerNames, type ManagerRunning, type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided, type SourceMods,
 } from './instanceAdapter';
 import { groupModOrder } from './modGroups';
-import { filesWinningFirst, pluginsProvidedOf } from './pluginsProvided';
+import { pluginsProvidedOf } from './pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
 
 export interface ArchiveReads {
-  /** The archives the INIs list, in load order: the default INI, then the profile's own INIs or else My Games',
-   *  a key's last value winning. `notes` says what was not read, and where it looked. */
+  /** The archives the game's INIs list, in load order, a key's last value winning. `notes` says what
+   *  was not read, and where it looked. */
   archiveList(
     profile: string, gameFolder: GameFolder, gameRelease: string | undefined,
   ): Promise<{ readonly archives: readonly string[]; readonly notes: readonly string[] }>;

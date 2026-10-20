@@ -73,8 +73,8 @@ describe('no extension file names MO2 outside its implementation of the Instance
   });
 
   it('scans the implementation\'s files and not its interface\'s as the implementation', () => {
-    expect(isMo2Implementation(join(ADAPTER, 'mo2Instance.ts'))).toBe(true);
-    expect(isMo2Implementation(join(ADAPTER, 'codecs', 'modlistText.ts'))).toBe(true);
+    expect(isMo2Implementation(join(ADAPTER, 'mo2', 'mo2Instance.ts'))).toBe(true);
+    expect(isMo2Implementation(join(ADAPTER, 'mo2', 'codecs', 'modlistText.ts'))).toBe(true);
     expect(isMo2Implementation(ADAPTER_INTERFACE)).toBe(false);
   });
 
@@ -110,7 +110,7 @@ describe('no extension file names MO2 outside its implementation of the Instance
       [join('views', 'mo2Trees.ts')]: 'export const trees = [];\n',
       [join('mods', 'identifier.ts')]: 'export const modorganizerRoot = 1;\n',
       [join('mods', 'test', 'fixture.ts')]: "export const ini = 'ModOrganizer.ini';\n",
-      [join(ADAPTER, 'mo2Instance.ts')]: "export const manager = 'MO2';\n",
+      [join(ADAPTER, 'mo2', 'mo2Instance.ts')]: "export const manager = 'MO2';\n",
       [ADAPTER_INTERFACE]: '// MO2 is one implementation.\n',
     });
     try {

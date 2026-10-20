@@ -1,10 +1,8 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
-import type {
-  DecideModOrder, DecidePluginOrder, DownloadedFileMark, EntryRef, FileOrigin, FileRead, FileStamp, GameFile, HashedFile, InstallationFile,
-  InstallOutcome, InstallPackage, InstallTarget, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, OriginFiles, OriginFileMark, OriginFileMarked,
-  ModFolder, ModFolders, ModMetadata, SourceMods, OriginFile, InstallKeys, PluginOrderChange, Subscription } from '../instanceAdapter/instanceAdapter';
+import {
+  filesWinningFirst, type DecideModOrder, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type SourceMods, type OriginFile, type InstallKeys, type PluginOrderChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { groupModOrder } from '../instanceAdapter/modGroups';
-import { filesWinningFirst, pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
+import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 
