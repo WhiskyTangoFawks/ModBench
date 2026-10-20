@@ -308,9 +308,10 @@ internal sealed class Indexer : IDisposable
         bool changed;
         string? heldElsewhere = null;
         string? failure = null;
+        var versionAdvanced = false;
         try
         {
-            if (ReconcileOrRefuse(arrival, ref version, ref arrivals, ref heldElsewhere, ref failure) is not { } reconciled) return;
+            if (ReconcileOrRefuse(arrival, ref version, ref arrivals, ref heldElsewhere, ref failure, ref versionAdvanced) is not { } reconciled) return;
             changed = reconciled;
         }
         catch (OperationCanceledException ex)
@@ -321,12 +322,9 @@ internal sealed class Indexer : IDisposable
             _logger.LogInformation(ex, "Load order reconcile was superseded before it completed");
             return;
         }
-        // Max, not assign: the exclusive lock is released before this runs, so a newer version's
-        // own stamp can land first, and this one must never answer for it downward.
         lock (_lock)
         {
-            changed |= version > _version;
-            _version = Math.Max(_version, version);
+            changed |= versionAdvanced;
             if (heldElsewhere is null && failure is null) _arrivalReconciled = Math.Max(_arrivalReconciled, arrivals);
             _validating = false;
             if (changed) PublishStatus();
@@ -366,10 +364,11 @@ internal sealed class Indexer : IDisposable
     // resolved to none, and false when the reconcile changed nothing Status reports.
     private bool? ReconcileOrRefuse(
         Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version, ref long arrivals,
-        ref string? heldElsewhere, ref string? failure)
+        ref string? heldElsewhere, ref string? failure, ref bool versionAdvanced)
     {
         EnterExclusive();
         var token = CancellationToken.None;
+        var superseded = false;
         try
         {
             if (arrival() is not { } resolved) return null;
@@ -405,6 +404,11 @@ internal sealed class Indexer : IDisposable
             if (busy) arrivals = 0;
             return failure is not null || reconciled;
         }
+        catch (Exception ex) when (CancelledBy(ex, token))
+        {
+            superseded = true;
+            throw;
+        }
         catch (Exception ex) when (!CancelledBy(ex, token))
         {
             // Every type, out of memory included: nothing above observes a throw, so one left here
@@ -420,6 +424,11 @@ internal sealed class Indexer : IDisposable
             {
                 if (heldElsewhere is not null) _heldElsewhereMessage = heldElsewhere;
                 if (failure is not null) _failureMessage = failure;
+                if (!superseded)
+                {
+                    versionAdvanced = version > _version;
+                    _version = Math.Max(_version, version);
+                }
             }
             ExitExclusive();
         }
