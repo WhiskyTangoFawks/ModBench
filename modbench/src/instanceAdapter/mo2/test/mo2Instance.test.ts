@@ -192,6 +192,57 @@ describe('the MO2 Instance adapter', () => {
 
         expect(downloadedFiles.kind === 'listed' && downloadedFiles.files?.map(({ name }) => name)).toEqual(['Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z']);
       });
+
+      describe('the downloaded file a path names', () => {
+        const listed = join('downloads', DOWNLOADED_FILE);
+        const nameAt = async (path: string, over: InstanceAdapter = adapter): Promise<string | undefined> => {
+          const at = await over.downloadedFileAt(path);
+          if (at.kind !== 'read') throw new Error(at.reason);
+          return at.answer?.name;
+        };
+
+        it('answers the file for the path it is listed at', async () => {
+          expect(await nameAt(join(root, listed))).toBe(DOWNLOADED_FILE);
+        });
+
+        it('answers the file through a symlink to it', async () => {
+          await symlink(join(root, listed), join(root, 'link.7z'));
+
+          expect(await nameAt(join(root, 'link.7z'))).toBe(DOWNLOADED_FILE);
+        });
+
+        it('answers the file for a path that reaches it through a folder link', async () => {
+          await symlink(join(root, 'downloads'), join(root, 'dl'));
+
+          expect(await nameAt(join(root, 'dl', DOWNLOADED_FILE))).toBe(DOWNLOADED_FILE);
+        });
+
+        it('answers nothing for a file that is not listed', async () => {
+          await writeFile(join(root, 'Other.7z'), 'other');
+
+          expect(await nameAt(join(root, 'Other.7z'))).toBeUndefined();
+        });
+
+        it('answers nothing for a path where nothing is', async () => {
+          expect(await nameAt(join(root, 'nowhere.7z'))).toBeUndefined();
+        });
+
+        it('answers nothing for a file whose file system reports no inode, rather than the first listed file', async () => {
+          await writeFile(join(root, 'Other.7z'), 'other');
+          vi.mocked(stat).mockImplementation(async (path, ...rest) => {
+            const facts = await actualStat(path, ...rest);
+            return Object.assign(facts, { ino: 0n });
+          });
+
+          expect(await nameAt(join(root, 'Other.7z'))).toBeUndefined();
+        });
+
+        it('answers why the downloaded files could not be read when the downloads folder is unresolved', async () => {
+          const unresolved = adapterOver(root, { downloadsFolder: { kind: 'unresolved', reason: 'no such variable' } });
+
+          expect(await unresolved.downloadedFileAt(join(root, listed))).toEqual({ kind: 'unreadable', reason: 'no such variable' });
+        });
+      });
     });
 
     describe('the plugins provided, as a change to the plugin order over them reads them', () => {
