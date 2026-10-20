@@ -170,21 +170,14 @@ export type BuildMod = components['schemas']['BuildModRequest'];
 /** The instance's facts every mod's build needs: the suffix of an excluded name, and the release's archive variants. */
 export type BuildFacts = Omit<components['schemas']['BuildRequest'], 'mods'>;
 
-interface BuiltMod {
-  mod: string;
-  compiled: readonly CompiledPlugin[];
+/** The generated mod, with each refusal as `ItemRefusal` and each unset flag absent: mEdit sends null and false. */
+type BuiltMod = Omit<components['schemas']['ModBuilt'], 'refused' | 'archivesRefused' | 'failure' | 'uncommitted' | 'unpushed'> & {
   refused: readonly ItemRefusal<PluginAddress>[];
-  /** Each archive not packed, by its path in the mod folder; it stays as it was. */
   archivesRefused: readonly ItemRefusal<string>[];
-  /** Each file the build replaced that held other bytes, by its path in the mod folder. */
-  overwritten: readonly string[];
-  /** What stopped the build after it began writing; the files it overwrote so far are named. */
   failure?: string;
-  /** Its shared source holds changes no commit holds, so its manifest's commit does not rebuild these bytes. */
   uncommitted?: true;
-  /** Its remote, as last fetched, lacks the commit its manifest names. */
   unpushed?: true;
-}
+};
 
 /** Build's answer: each mod built, with the plugins it compiled and the plugins it refused, or
  *  refused as a mod with its reason. */

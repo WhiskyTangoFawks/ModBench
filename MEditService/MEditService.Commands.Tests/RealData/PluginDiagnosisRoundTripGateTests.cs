@@ -9,11 +9,11 @@ namespace MEditService.Commands.Tests.RealData;
 public sealed class PluginDiagnosisRoundTripGateTests
 {
     [Fact]
-    public async Task InitAsync_OfAMisshapedPerkPlugin_NamesThePerkRecordClassUnknown()
+    public async Task DecompileAndCommit_OfAMisshapedPerkPlugin_NamesThePerkRecordClassUnknown()
     {
         using var scratch = new RealFixtureScratch(MisshapedPerkPlugin.Plugin);
 
-        var result = await scratch.InitAsync();
+        var result = await scratch.DecompileAndCommitAsync();
 
         Assert.False(result.Applied);
         Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
@@ -26,11 +26,11 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task InitAsync_OfAMismatchedFnamPlugin_NamesOnlyThePluginWhenMutagenReportsNoRecordIdentity()
+    public async Task DecompileAndCommit_OfAMismatchedFnamPlugin_NamesOnlyThePluginWhenMutagenReportsNoRecordIdentity()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
 
-        var result = await scratch.InitAsync();
+        var result = await scratch.DecompileAndCommitAsync();
 
         Assert.False(result.Applied);
         Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
@@ -41,11 +41,11 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task InitAsync_OfAMismatchedFnamPlugin_NamesTheUpstreamMutagenIssueInstead()
+    public async Task DecompileAndCommit_OfAMismatchedFnamPlugin_NamesTheUpstreamMutagenIssueInstead()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
 
-        var result = await scratch.InitAsync();
+        var result = await scratch.DecompileAndCommitAsync();
 
         Assert.False(result.Applied);
         Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
@@ -70,7 +70,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
             _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, Origin, _gameDirectory);
         }
 
-        public async Task<PluginDecompiledAndCommitted> InitAsync() =>
+        public async Task<PluginDecompiledAndCommitted> DecompileAndCommitAsync() =>
             (await DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, Origin)).Only();
 
         public void Dispose()
