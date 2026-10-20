@@ -42,7 +42,6 @@ function reasonOf(error: unknown): string {
   return message.endsWith(naming) ? message.slice(0, -naming.length) : message;
 }
 
-// A link is followed as MO2 follows it, as `listFolders` lists it.
 async function foldersIn(folder: string): Promise<string[]> {
   try {
     return (await listFolders(folder, ignoreSkippedLink)).map((name) => join(folder, name));
