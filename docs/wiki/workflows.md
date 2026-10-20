@@ -1,12 +1,12 @@
 # Workflows
 
-Modbench keeps two kinds of git repository. The modlist repository is the instance folder: it holds each mod's manifest, the profiles and MO2's configuration. A source mod's repository, in `source/`, holds that mod's plugin source and its other files. Each workflow below is ordinary git on one of them. This page says where Modbench's gestures fit in, and [git's own documentation](https://git-scm.com/doc) teaches git.
+Modbench keeps two kinds of git repositories. The modlist repository in the Mod Manager instance folder, and a mod repository, for each decompiled mod. The modlist repository holds the mod manifests, the profiles and Mod Manager Instance configuration. A source mod's repository, in `source/`, holds that mod's plugin source and its assets. Understanding how to use git effectively as part of a standard software development workflow is key to using Modbench.
 
-## The rule
+## The 2 Step Process for Modlists Management in Git
 
-Git moves manifests and source. Modbench moves mods.
+Because a git repo can't hold gigabytes of files, Modbench is setup to commit a mod's manifest, which contains the list of installed files, the package they're installed from, and the host where the package can be retreived. This means we have a 2 step process for managing the modlist: 1- the git action, and 2- the modbench action to restore the mod from the manifest.
 
-- Before you commit the modlist, run Update Mod Manifest, so the manifests say what your mod folders hold.
+- Before you commit the modlist, run Update Mod Manifest, so the manifests say what your mod folders hold. This is how you track new modlist changes in git.
 - After a checkout, a pull or a merge of the modlist, run Restore Mod from Manifest…, so your mod folders hold what the manifests say.
 - After a source mod's source changes, run Build Mod, so its mod folder holds what its source says.
 
@@ -17,6 +17,8 @@ With no mod selected, Update Mod Manifest and Restore Mod from Manifest… act o
 ### Put a modlist in git
 
 Run Git Init Modlist. It makes the instance folder a repository, with an ignore list that keeps the mods' files out of git. Run Update Mod Manifest, then stage and commit in Source Control.
+
+GitIgnore is how the modlist knows which files to track, and what to ignore. It's setup with a default allow list, but can be managed by the user however they want. As the user, it is your responsibility to understand the limitations of git, and if you are going to publish this remotely, to only republish what you have permission to publish.
 
 ### Try a change on a branch
 
@@ -42,24 +44,6 @@ Clone the modlist repository: the clone is the instance folder. Put the installa
 
 Decompile and Commit Mod puts a mod under git. It makes a repository in `source/` that holds the mod's plugin source, every other file of the mod, and a build configuration, in one commit. You choose how the repository uses its `main` branch.
 
-### Author your own mod
-
-In the authored workflow, `main` is your work. Edit records in the record panel or in the plugin source, review and commit in Source Control, then run Build Mod. The build writes the mod's folder and its manifest.
-
-### Patch another author's mod
-
-In the vendored workflow, `main` holds the author's releases, and your edits live on the `edit` branch. Decompile and Commit Mod puts the release you have on `main`. Create `edit` from it, and make your changes there.
-
-When the author releases a new version:
-
-1. In the source mod's repository, check out `main`.
-2. Install the new release over the mod, so its files replace the old ones in the mod's folder.
-3. Run Decompile Plugin on each of its plugins.
-4. Copy the release's other files into the repository's `assets/` folder, and delete what the release dropped.
-5. Commit, check out `edit`, merge `main`, and run Build Mod.
-
-Each conflict lands in one record's file, except the plugin header's Next Object ID, which both branches move when they add records.
-
 ### Publish a source mod
 
 Give the source mod's repository a remote, and push it. The next Update Mod Manifest makes it a submodule of the modlist repository, pinned at its commit, and Source Control shows the change to commit.
@@ -69,3 +53,17 @@ Push the source mod before the modlist. A modlist repository made by Git Init Mo
 Restore never moves a source mod repository you have checked out at another commit. It skips that mod and names the commit.
 
 A source mod's repository with no remote stays out of the modlist repository. Its mod row says its package has no host, so you see what a clone cannot rebuild.
+
+## Workflows
+
+There are two standard workflows, one for mods you create, and one for editting another author's mods.
+
+### Authored
+
+For your own mods, you can use whatever workflow you want. Work directly on main, trunk based, whatever you want.
+
+### Vendored
+
+In the vendored workflow, `main` holds the author's releases, and your edits live on a branch. When the author updates the mod, you need to install the update, then decompile and commit to main, and rebase your edit branch. This allows you to maintain your own changes on top of another mod. Because git has a size limit of what is stored, and decompiling a mod stores it's assets as well, I recommend creating a custom patch mod, that contains the plugin as an override without the assets, to avoid unnessarily committing assets you don't need to manage.
+
+It is the users responsibility to understand the permissions for a vendored mod if you are going to publish the git repository. Publishing a mod's assets on git publicly when you do not have permission to do so is a violation of Nexus terms of service.
