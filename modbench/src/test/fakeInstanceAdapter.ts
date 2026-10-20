@@ -115,6 +115,8 @@ export interface InstanceAnswers {
   metadataLeftBehind?: string;
   /** A write that rejects with the message this returns for it, after it is recorded. */
   refusals?: (call: AdapterCall) => string | undefined;
+  /** The reason reading a file of an origin fails, or `undefined` when it reads. */
+  unreadOriginFile?: (file: { readonly origin: FileOrigin; readonly relativePath: string }) => string | undefined;
   /** Origin files that are gone: they get no mark. */
   goneOriginFiles?: readonly { readonly origin: FileOrigin; readonly relativePath: string }[];
   heldPlugins?: readonly { readonly origin: FileOrigin; readonly name: string }[];
@@ -244,6 +246,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     createModFolder: (mod) => record({ verb: 'createModFolder', mod }, undefined),
     renameModFolder: (from, to) => record({ verb: 'renameModFolder', from, to }, undefined),
     originFile: (origin, relativePath) => {
+      const unread = answers.unreadOriginFile?.({ origin, relativePath });
+      if (unread !== undefined) return Promise.reject(new Error(unread));
       const gone = answers.goneOriginFiles?.some((one) => originKey(one.origin) === originKey(origin) && one.relativePath === relativePath);
       const listed = (origin.kind === 'mod' ? current.modFiles.get(origin.name) : current.runtimeOutput)?.files.find((file) => file.relativePath === relativePath);
       const unmarked = relativePath.split('/').map((segment) => segment.replace(EXCLUDED_SUFFIX, '')).join('/');

@@ -577,16 +577,28 @@ describe('markFiles', () => {
     expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'] }], [SOURCE, { include: ['a.dds'] }]]);
   });
 
+  it('refuses a file the adapter cannot read, leaving it out of the configuration, and lands the rest', async () => {
+    const { mEdit, commands } = over(FIXTURE_ORDER, { unreadOriginFile: (file) => (file.relativePath === 'bad.dds' ? 'permission denied' : undefined) }, undefined, SOURCES);
+    mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
+    const unread = fileOf('Harder VATS', 'bad.dds');
+    const marked = fileOf('Harder VATS', 'a.dds');
+
+    const outcome = await commands.markFiles([unread, marked], 'Excluded');
+
+    expect(outcome).toEqual({ applied: true, outcome: { landed: [marked], refused: [{ item: unread, reason: 'permission denied' }] } });
+    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'] }]]);
+  });
+
   it('names both failures when the exclusion of a file that could not be marked cannot be taken back', async () => {
     const { mEdit, commands } = over(FIXTURE_ORDER, { refusals: refusing('markOriginFile', 'permission denied') }, undefined, SOURCES);
     mEdit.setCommandHandler('changeBuildConfiguration', (_, change) =>
       Promise.resolve(change.exclude === undefined ? { refused: true, message: 'the disk refused the write' } : { changed: true }));
-    const gone = fileOf('Harder VATS', 'gone.dds');
+    const refusedFile = fileOf('Harder VATS', 'a.dds');
 
-    const outcome = await commands.markFiles([gone], 'Excluded');
+    const outcome = await commands.markFiles([refusedFile], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: [
-      { item: gone, reason: 'permission denied Its change to the build configuration could not be taken back: the disk refused the write' },
+      { item: refusedFile, reason: 'permission denied Its change to the build configuration could not be taken back: the disk refused the write' },
     ] } });
   });
 });

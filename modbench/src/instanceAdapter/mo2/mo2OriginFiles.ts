@@ -3,7 +3,7 @@
 import { isAbsolute, relative, sep } from 'node:path';
 import { errnoCode } from '../errno';
 import { exists, factsOf, realPathIfThere, rename, withLock } from '../files';
-import { fileInFolder, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
+import { fileInFolder, type FileOrigin, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
 import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName } from './layout';
 import { originFileOf } from './mo2Files';
 import { originFolder, type Mo2Context } from './mo2Context';
@@ -15,11 +15,16 @@ function fileUnder(folder: string | undefined, relativePath: string): string | u
   return folder === undefined || reachesOut ? undefined : fileInFolder(folder, relativePath);
 }
 
+async function pathOf(context: Mo2Context, origin: FileOrigin, relativePath: string): Promise<string> {
+  const path = fileUnder(await originFolder(context, origin, 'list'), relativePath);
+  if (path === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${relativePath}"`);
+  return path;
+}
+
 export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
   return {
     async originFile(origin, relativePath) {
-      const path = fileUnder(await originFolder(context, origin, 'list'), relativePath);
-      if (path === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${relativePath}"`);
+      const path = await pathOf(context, origin, relativePath);
       try {
         const facts = await factsOf(path);
         return facts.kind === 'file' ? originFileOf(relativePath, path, facts.realPath) : undefined;
@@ -30,8 +35,7 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
     },
 
     async markOriginFile(origin, relativePath, mark: OriginFileMark) {
-      const from = fileUnder(await originFolder(context, origin, 'list'), relativePath);
-      if (from === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${relativePath}"`);
+      const from = await pathOf(context, origin, relativePath);
       return withLock(from, async (): Promise<OriginFileMarked> => {
         if (!(await exists(from))) return { gone: true };
         const ownMark = isExcludedName(relativePath);
