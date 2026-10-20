@@ -7,7 +7,7 @@ namespace MEditService.Commands.Build;
 /// Progress goes before each mod and at rest at the end. A cancel stops it after the mod in hand.</summary>
 internal static class ModByMod
 {
-    public static async Task<SelectionResult<string, TRefusal, TOutcome>> OverAsync<TMod, TRefusal, TOutcome>(
+    public static async Task<PerItemResult<string, TRefusal, TOutcome>> OverAsync<TMod, TRefusal, TOutcome>(
         IReadOnlyList<TMod> mods, Func<TMod, string> nameOf, Action<ModlistProgress> publish,
         Func<TMod, ModlistProgress, Task<ItemAnswer<TRefusal, TOutcome>>> each, string? gesture, CancellationToken cancel)
     {
@@ -36,6 +36,6 @@ internal static class ModByMod
         {
             publish(new ModlistProgress(gesture, null, 0, 0));
         }
-        return SelectionResult<string, TRefusal, TOutcome>.PerItem(landed, refused);
+        return new PerItemResult<string, TRefusal, TOutcome>(landed, refused);
     }
 }

@@ -697,7 +697,7 @@ class HttpMEditClient implements MEditClient {
 
   getModStatus(mods: readonly ModByFolder[], statCache: string): Promise<ModStatus[] | ReadFailed> {
     return this.read('getModStatus', (signal) => this.apiClient.POST('/mod-status', { body: { mods: [...mods], statCache }, signal }),
-      (data) => (data ? data.mods : NO_ANSWER));
+      (data) => (data ?? NO_ANSWER));
   }
 
   selectRows(sql: string): Promise<unknown[] | ReadFailed> {

@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Text;
 using MEditService.Commands.Build;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.ModFolderAdapter;
 using MEditService.Ports;
@@ -46,15 +45,15 @@ public sealed class UpdateManifestHandlerTests
 
     private ManifestFile FileOf(string folder, string path) => _folders.Manifests[folder].Files.Single(f => f.Path == path);
 
-    private Task<SelectionResult<string, UpdateManifestRefusal, UpdatedMod>> Update(
+    private Task<UpdateManifestResult> Update(
         IReadOnlyList<ModToUpdate> mods, string? gesture = null, CancellationToken cancel = default) =>
         Handler.UpdateManifestAsync(mods, new InstanceToUpdate("stat-cache"), gesture, cancel);
 
-    private async Task<UpdatedMod> Landed(params ModToUpdate[] mods)
+    private async Task<ModUpdated> Landed(params ModToUpdate[] mods)
     {
         var result = await Update(mods);
         Assert.Empty(result.Refused);
-        return result.Landed.Single().Outcome;
+        return result.Applied.Single();
     }
 
     private static byte[] Zip(params (string Path, string Text)[] entries)
@@ -143,7 +142,7 @@ public sealed class UpdateManifestHandlerTests
         Assert.Equal((UpdateManifestRefusal.GameFolderNotFound, "Mod"), (refused.Refusal, refused.Item));
         Assert.Contains("the game folder was not found", refused.Message);
         Assert.Same(named, _folders.Manifests[Mod]);
-        Assert.Equal(["Other"], result.Landed.Select(landed => landed.Item));
+        Assert.Equal(["Other"], result.Applied.Select(landed => landed.Mod));
     }
 
     [Fact]
@@ -221,7 +220,7 @@ public sealed class UpdateManifestHandlerTests
         Assert.Equal(("Lost", UpdateManifestRefusal.InstallationFileMissing), (refused.Item, refused.Refusal));
         Assert.Equal("was not updated: 'Lost.zip' not in the downloads folder.", refused.Message);
         Assert.False(_folders.Manifests.ContainsKey("mods/Lost"));
-        Assert.Equal(["Found"], result.Landed.Select(l => l.Item));
+        Assert.Equal(["Found"], result.Applied.Select(l => l.Mod));
     }
 
     [Fact]
@@ -255,7 +254,7 @@ public sealed class UpdateManifestHandlerTests
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Held", UpdateManifestRefusal.ModFilesUnreadable), (refused.Item, refused.Refusal));
         Assert.Contains("held.txt", refused.Message);
-        Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
+        Assert.Equal(["Fine"], result.Applied.Select(l => l.Mod));
     }
 
     [Fact]
@@ -268,7 +267,7 @@ public sealed class UpdateManifestHandlerTests
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(("Locked", UpdateManifestRefusal.NotWritten), (refused.Item, refused.Refusal));
-        Assert.Equal(["Fine"], result.Landed.Select(l => l.Item));
+        Assert.Equal(["Fine"], result.Applied.Select(l => l.Mod));
     }
 
     [Fact]
@@ -289,7 +288,7 @@ public sealed class UpdateManifestHandlerTests
 
         var result = await Update([ModFrom("Mod"), ModFrom("MOD")]);
 
-        Assert.Single(result.Landed);
+        Assert.Single(result.Applied);
     }
 
     [Fact]
@@ -313,7 +312,7 @@ public sealed class UpdateManifestHandlerTests
 
         var result = await Update([ModFrom("A"), ModFrom("B")], cancel: cancel.Token);
 
-        Assert.Equal(["A"], result.Landed.Select(landed => landed.Item));
+        Assert.Equal(["A"], result.Applied.Select(landed => landed.Mod));
         Assert.Empty(result.Refused);
         Assert.Equal(new ModlistProgress(null, null, 0, 0), Progress.Last());
     }
@@ -413,7 +412,7 @@ public sealed class UpdateManifestHandlerTests
         var result = await Handler.UpdateManifestAsync(
             [ModFrom("Mod")], new InstanceToUpdate("stat-cache", GameFolderHolding(("a.nif", "a"), ("other.nif", "new"), ("more.nif", "x"))));
 
-        Assert.False(result.Landed.Single().Outcome.ManifestWritten);
+        Assert.False(result.Applied.Single().ManifestWritten);
     }
 
     [Fact]

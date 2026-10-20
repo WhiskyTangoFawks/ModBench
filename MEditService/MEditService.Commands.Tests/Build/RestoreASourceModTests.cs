@@ -1,5 +1,4 @@
 using MEditService.Commands.Build;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
@@ -49,7 +48,7 @@ public sealed class RestoreASourceModTests : IDisposable
         Manifested();
         File.WriteAllText(Path.Combine(ModFolder, "notes.txt"), "mine");
 
-        var restored = Assert.Single((await Restore(_first)).Landed).Outcome;
+        var restored = Assert.Single((await Restore(_first)).Applied);
 
         Assert.Equal("first", File.ReadAllText(Path.Combine(ModFolder, "meshes", "c.nif")));
         Assert.Equal(_first, Git(SourceFolder, "rev-parse", "HEAD").Trim());
@@ -66,7 +65,7 @@ public sealed class RestoreASourceModTests : IDisposable
 
         Assert.Equal(
             (RestoreRefusal.NotFound, ModName, "was skipped: its submodule 'Mod' is missing."),
-            (skipped.Refusal.Kind, skipped.Refusal.SubmoduleNotFound, skipped.Message));
+            (skipped.Refusal, skipped.SubmoduleNotFound, skipped.Message));
     }
 
     [Fact]
@@ -77,7 +76,7 @@ public sealed class RestoreASourceModTests : IDisposable
 
         var skipped = Assert.Single((await Restore(_first)).Refused);
 
-        Assert.Equal((RestoreRefusal.NoHost, "was skipped: its package has no host."), (skipped.Refusal.Kind, skipped.Message));
+        Assert.Equal((RestoreRefusal.NoHost, "was skipped: its package has no host."), (skipped.Refusal, skipped.Message));
         Assert.False(Directory.Exists(SourceFolder));
     }
 
@@ -104,7 +103,7 @@ public sealed class RestoreASourceModTests : IDisposable
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: new PluginProvider.FromMod(ModName, ModFolder, null))]));
 
-        Assert.Single((await Restore(pin)).Landed);
+        Assert.Single((await Restore(pin)).Applied);
 
         Assert.NotEqual(changedBytes, File.ReadAllBytes(plugin));
     }
@@ -132,7 +131,7 @@ public sealed class RestoreASourceModTests : IDisposable
         File.WriteAllText(Path.Combine(SourceFolder, "assets", "meshes", "c.nif"), "changed");
         Manifested();
 
-        var restored = Assert.Single((await Restore(_first)).Landed).Outcome;
+        var restored = Assert.Single((await Restore(_first)).Applied);
 
         Assert.True(restored.Uncommitted);
         Assert.Equal("changed", File.ReadAllText(Path.Combine(ModFolder, "meshes", "c.nif")));
@@ -147,7 +146,7 @@ public sealed class RestoreASourceModTests : IDisposable
         Git(_submodule.Instance, "submodule", "deinit", "-q", "-f", "--", "source/Mod");
         Manifested();
 
-        var restored = Assert.Single((await Restore(_second, branch: "main")).Landed).Outcome;
+        var restored = Assert.Single((await Restore(_second, branch: "main")).Applied);
 
         Assert.StartsWith("its branch 'main' is at ", restored.LeftDetached, StringComparison.Ordinal);
     }
@@ -162,7 +161,7 @@ public sealed class RestoreASourceModTests : IDisposable
 
         Assert.Equal(
             (RestoreRefusal.SourceAtAnotherCommit, $"was skipped: its submodule is at {_second}, not at {_first}, the commit the instance repository pins."),
-            (skipped.Refusal.Kind, skipped.Message));
+            (skipped.Refusal, skipped.Message));
         Assert.False(File.Exists(Path.Combine(ModFolder, "meshes", "c.nif")));
     }
 
@@ -176,7 +175,7 @@ public sealed class RestoreASourceModTests : IDisposable
 
         Assert.Equal(
             (RestoreRefusal.SourceUnavailable, $"was skipped: its submodule could not be cloned or read: its remote holds no commit {Unpushed}."),
-            (skipped.Refusal.Kind, skipped.Message));
+            (skipped.Refusal, skipped.Message));
     }
 
     [Fact]
@@ -190,7 +189,7 @@ public sealed class RestoreASourceModTests : IDisposable
         Assert.Equal(
             (RestoreRefusal.NotBuilt, BuildRefusal.OutputNotThisMod,
                 "was not built: its build configuration names the output folder 'Other', not its folder 'Mod'."),
-            (skipped.Refusal.Kind, skipped.Refusal.Build, skipped.Message));
+            (skipped.Refusal, skipped.BuildRefusal, skipped.Message));
     }
 
     [Fact]
@@ -200,7 +199,7 @@ public sealed class RestoreASourceModTests : IDisposable
 
         var skipped = Assert.Single((await Restore(_first, source: new GitGoneSourceAdapter())).Refused);
 
-        Assert.Equal((RestoreRefusal.NotBuilt, BuildRefusal.GitUnavailable), (skipped.Refusal.Kind, skipped.Refusal.Build));
+        Assert.Equal((RestoreRefusal.NotBuilt, BuildRefusal.GitUnavailable), (skipped.Refusal, skipped.BuildRefusal));
         Assert.StartsWith("was not built: ", skipped.Message, StringComparison.Ordinal);
         Assert.Contains("PATH", skipped.Message, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(ModFolder, "meshes", "c.nif")));
@@ -229,7 +228,7 @@ public sealed class RestoreASourceModTests : IDisposable
 
         Assert.Equal(
             (RestoreRefusal.NotFinished, $"was not finished: 'Mod - Main.ba2' was not packed: Modbench packs no archive for this game."),
-            (unfinished.Refusal.Kind, unfinished.Message));
+            (unfinished.Refusal, unfinished.Message));
     }
 
     private void Manifested(string? version = null) =>
@@ -242,10 +241,10 @@ public sealed class RestoreASourceModTests : IDisposable
         return TestAdapters.Source().CommitAtHead(new Submodule(SourceFolder, pin, null), CancellationToken.None).Value().Commit;
     }
 
-    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(string? pin, string? branch = null, ISourceAdapter? source = null) =>
+    private Task<RestoreFromManifestResult> Restore(string? pin, string? branch = null, ISourceAdapter? source = null) =>
         Restore(pin, new InMemoryNotificationPublisher(), CancellationToken.None, branch, source);
 
-    private Task<SelectionResult<string, RestoreSkip, RestoredMod>> Restore(
+    private Task<RestoreFromManifestResult> Restore(
         string? pin, InMemoryNotificationPublisher notifications, CancellationToken cancel, string? branch = null, ISourceAdapter? source = null)
     {
         if (pin is not null) _submodule.Pin(pin);
