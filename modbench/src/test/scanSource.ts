@@ -3,6 +3,8 @@ import ts from 'typescript';
 import { tsFiles } from './tsFiles';
 
 export const SRC = join(__dirname, '..');
+export const MANIFEST = join(SRC, '..', 'package.json');
+export const WALKTHROUGH = join(SRC, '..', 'walkthrough', 'getting-started.md');
 export const WEBVIEW_SRC = join(SRC, '..', 'webview', 'src');
 export const SOURCE_ROOTS = [SRC, WEBVIEW_SRC];
 

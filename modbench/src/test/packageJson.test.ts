@@ -22,6 +22,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
+import { MANIFEST } from './scanSource';
 import { NO_MOD_STATUSES } from './noModStatuses';
 import { FakeInstance } from './mo2/fakeInstance';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
@@ -156,7 +157,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
 
 const REPOSITORY = 'https://github.com/WhiskyTangoFawks/ModBench';
 const pkg = parsePackageManifest(
-  JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')),
+  JSON.parse(readFileSync(MANIFEST, 'utf8')),
 );
 
 type Context = Parameters<typeof holds>[1];

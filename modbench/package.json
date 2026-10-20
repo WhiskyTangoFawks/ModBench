@@ -39,7 +39,7 @@
           {
             "id": "openInstance",
             "title": "Open your mod manager's instance",
-            "description": "Open your instance's folder and trust it when VS Code asks.\n[Open Folder](command:workbench.action.files.openFolder)",
+            "description": "Open the folder where your mod manager keeps this instance, and trust it when VS Code asks.\n[Open Folder](command:workbench.action.files.openFolder)",
             "media": {
               "markdown": "walkthrough/getting-started.md"
             },
