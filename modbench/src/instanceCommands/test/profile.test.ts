@@ -18,31 +18,36 @@ const switchProfileOver = (adapter: InstanceAdapter) =>
 
 describe('switchProfile', () => {
   const over = (answers: InstanceAnswers = {}) => {
-    const fake = fakeInstanceAdapter(readingFixture(), answers);
+    const fake = fakeInstanceAdapter(readingFixture({ profiles: [...PROFILES] }), answers);
     return { fake, switchProfile: switchProfileOver(fake.adapter) };
   };
 
   it('hands the adapter the profile', async () => {
     const { fake, switchProfile } = over();
 
-    expect(await switchProfile('Secondary', PROFILES)).toMatchObject({ applied: true });
+    expect(await switchProfile('Secondary')).toMatchObject({ applied: true });
     expect(fake.calls).toEqual([{ verb: 'selectProfile', profile: 'Secondary' }]);
   });
 
-  it.each([
-    ['a name the value does not list', 'No Such Profile', PROFILES],
-    ['a name absent from the list it is handed, whatever profiles the instance holds', 'Secondary', ['Default']],
-  ])('refuses %s, handing the adapter nothing', async (_, profile, listed) => {
+  it('refuses a name the instance does not hold, handing the adapter nothing', async () => {
+    const profile = 'No Such Profile';
     const { fake, switchProfile } = over();
 
-    expect(await switchProfile(profile, listed)).toEqual({ applied: false, refusal: `No such profile: ${profile}` });
+    expect(await switchProfile(profile)).toEqual({ applied: false, refusal: `No such profile: ${profile}` });
     expect(fake.calls).toEqual([]);
   });
 
   it('refuses rather than throwing when the adapter cannot select', async () => {
     const { switchProfile } = over({ refusals: refusing('selectProfile', 'ENOENT: no ModOrganizer.ini') });
 
-    expect(await switchProfile('Secondary', PROFILES)).toEqual({ applied: false, refusal: expect.stringMatching(/ENOENT/) as unknown });
+    expect(await switchProfile('Secondary')).toEqual({ applied: false, refusal: expect.stringMatching(/ENOENT/) as unknown });
+  });
+
+  it('refuses rather than throwing when the profiles cannot be read, handing the adapter nothing', async () => {
+    const { fake, switchProfile } = over({ unreadReads: { profiles: 'profiles/ is unreadable' } });
+
+    expect(await switchProfile('Secondary')).toEqual({ applied: false, refusal: expect.stringMatching(/unreadable/) as unknown });
+    expect(fake.calls).toEqual([]);
   });
 });
 
@@ -55,7 +60,7 @@ describe('switchProfile over the committed corpus fixture: the one path from the
   it('repoints ModOrganizer.ini and nothing else', async () => {
     const before = await snapshotTree(root);
 
-    const outcome = await switchProfileOver(adapterOver(root))('Secondary', PROFILES);
+    const outcome = await switchProfileOver(adapterOver(root))('Secondary');
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     assertOnlyChanged(before, await snapshotTree(root), new Set(['ModOrganizer.ini']));

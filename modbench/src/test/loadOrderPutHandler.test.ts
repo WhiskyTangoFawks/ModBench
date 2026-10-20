@@ -6,7 +6,7 @@ describe('the load order put handler', () => {
   it('puts the value with the strings language the setting holds when the put is made', () => {
     const puts: string[] = [];
     let language = 'English';
-    const put = loadOrderPutHandler({ onRecompute: (_value, stringsLanguage) => { puts.push(stringsLanguage); } }, () => language);
+    const put = loadOrderPutHandler({ onRecompute: (_source, stringsLanguage) => { puts.push(stringsLanguage); } }, () => language);
     const value = instanceValueFixture();
 
     put(value);

@@ -21,7 +21,7 @@ describe('profile corpus', () => {
 
   it('switchProfile repoints ModOrganizer.ini only, leaving every profile file untouched', async () => {
     const before = await snapshotTree(dir);
-    await instanceCommands({ adapter: adapterOver(dir), client: new InMemoryMEditClient(), instanceRoot: dir }).switchProfile('Secondary', ['Default', 'Secondary']);
+    await instanceCommands({ adapter: adapterOver(dir), client: new InMemoryMEditClient(), instanceRoot: dir }).switchProfile('Secondary');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([INI]));
 

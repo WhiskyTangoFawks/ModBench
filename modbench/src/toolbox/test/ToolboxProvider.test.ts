@@ -12,7 +12,6 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 const GAME_FOLDER = '/games/Fallout 4';
 const VALUE = instanceValueFixture({
   activeProfile: 'Survival',
-  gameRelease: 'Fallout 4',
   gameFolder: { kind: 'found', root: GAME_FOLDER, dataFolder: `${GAME_FOLDER}/Data` },
 });
 

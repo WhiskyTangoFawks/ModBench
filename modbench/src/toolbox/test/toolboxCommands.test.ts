@@ -107,7 +107,7 @@ describe('Switch profile', () => {
 
     await switchProfileChoosing('Modding');
 
-    expect(switchProfile).toHaveBeenCalledWith('Modding', ['Default', 'Modding', 'Survival']);
+    expect(switchProfile).toHaveBeenCalledWith('Modding');
   });
 
   it('writes the switch under the Toolbox\'s progress, which closes once the Instance loader has read again', async () => {
@@ -179,21 +179,6 @@ describe('Refresh', () => {
     });
     return { reporter, released, run: () => present(handlers.get('modbench.instance.refresh'), 'the refresh handler')() };
   }
-
-  it('asks instance commands to refresh the instance value\'s game', async () => {
-    const asked: unknown[] = [];
-    registerRefreshCommand({
-      commands: { refresh: (game) => { asked.push(game); return Promise.resolve({ applied: true }); } },
-      nextRefill: () => ({ ended: Promise.resolve(), release: () => {} }),
-      instance: { value, refresh: () => Promise.resolve(undefined) },
-      reporter: recordingReporter(),
-      instanceRoot: '/instance',
-    });
-
-    await present(handlers.get('modbench.instance.refresh'), 'the refresh handler')();
-
-    expect(asked).toEqual([value]);
-  });
 
   it('asks instance commands to refresh, then the Instance loader to read every file again, under the Toolbox\'s progress', async () => {
     const { reporter, run } = registerRefresh({ applied: true });

@@ -11,15 +11,12 @@ const STATUS: LoadOrderProgress = {
 };
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: STATUS };
 
-const NO_SNAPSHOT: LoadOrderSource = { gameName: 'Fallout 4', gameRelease: 'Fallout4', loadOrderSnapshot: undefined };
-const REFUSED: LoadOrderSource = { ...NO_SNAPSHOT, loadOrderSnapshot: { refusal: 'a.esp has no mod folder' } };
+const NO_SNAPSHOT: LoadOrderSource = undefined;
+const REFUSED: LoadOrderSource = { refusal: 'a.esp has no mod folder' };
 
 function valueWith(name: string): LoadOrderSource {
   const plugin = { name, path: `/game/Data/${name}`, origin: 'Base Mod', provider: { kind: 'Game' as const }, line: null, lineNamesIt: false, archives: [], stringsFiles: [] };
-  return {
-    ...NO_SNAPSHOT,
-    loadOrderSnapshot: { plugins: [plugin], active: [{ name, origin: 'Base Mod' }], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache', dataFolder: '/game/Data' },
-  };
+  return { plugins: [plugin], active: [{ name, origin: 'Base Mod' }], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache', dataFolder: '/game/Data', gameRelease: 'Fallout4' };
 }
 
 type Told = PutLoadOrderResult;

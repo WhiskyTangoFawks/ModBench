@@ -3,21 +3,11 @@
 
 import type { LoadOrderOutcome, LoadOrderSnapshot, MEditClient } from '../client';
 
-/** The game the instance is for. */
-export interface InstanceGame {
-  /** As the mod manager's configuration names it. */
-  readonly gameName: string;
-  /** Mutagen's release of that game; undefined when the tables hold none for it. */
-  readonly gameRelease: string | undefined;
-}
-
-/** The slice of the instance value put load order sends. */
-export interface LoadOrderSource extends InstanceGame {
-  readonly loadOrderSnapshot:
-    | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine' | 'archives' | 'stringsFiles' | 'places' | 'mods' | 'statCache'> & { readonly dataFolder: string })
-    | { readonly refusal: string }
-    | undefined;
-}
+/** What the loader read of the instance for put load order to send. */
+export type LoadOrderSource =
+  | (Pick<LoadOrderSnapshot, 'plugins' | 'active' | 'loadedWithNoLine' | 'archives' | 'stringsFiles' | 'places' | 'mods' | 'statCache' | 'gameRelease'> & { readonly dataFolder: string })
+  | { readonly refusal: string }
+  | undefined;
 
 /** Nothing is sent without a game folder found: there is no Data folder to key the load order on.
  *  A refusal is the loader's, to tell once: a partial snapshot would unregister what it left out. */
@@ -25,18 +15,14 @@ export type PutLoadOrderResult =
   | { sent: false; refusal?: string }
   | { sent: true; snapshot: LoadOrderSnapshot; outcome: LoadOrderOutcome };
 
-// A game with no release is sent as the mod manager names it rather than a guess: the backend then
-// rejects it visibly instead of quietly answering about the wrong game.
-export const releaseOf = (game: InstanceGame): string => game.gameRelease ?? game.gameName;
-
 export async function putLoadOrder(
-  client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, value: LoadOrderSource, stringsLanguage: string,
+  client: Pick<MEditClient, 'sendLoadOrder'>, instanceRoot: string, source: LoadOrderSource, stringsLanguage: string,
 ): Promise<PutLoadOrderResult> {
-  if (!value.loadOrderSnapshot) return { sent: false };
-  if ('refusal' in value.loadOrderSnapshot) return { sent: false, refusal: value.loadOrderSnapshot.refusal };
-  const { plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, dataFolder } = value.loadOrderSnapshot;
+  if (!source) return { sent: false };
+  if ('refusal' in source) return { sent: false, refusal: source.refusal };
+  const { plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, gameRelease, dataFolder } = source;
   const snapshot: LoadOrderSnapshot = {
-    plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, gameDirectory: dataFolder, instanceRoot, gameRelease: releaseOf(value), stringsLanguage,
+    plugins, active, loadedWithNoLine, archives, stringsFiles, places, mods, statCache, gameDirectory: dataFolder, instanceRoot, gameRelease, stringsLanguage,
   };
   return { sent: true, snapshot, outcome: await client.sendLoadOrder(snapshot) };
 }

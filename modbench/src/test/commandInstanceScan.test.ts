@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import ts from 'typescript';
 import { CORE_BOXES } from './boxes';
 import { productionFiles, SRC } from './scanSource';
 
@@ -75,5 +76,59 @@ describe('a command probes the instance for none of its own inputs', () => {
     expect(probesIn('const all = await listProfiles(root);\n')).toEqual(['listProfiles']);
     expect(probesIn('const gameName = readGameName(await get(settingsFile(instanceRoot)));\n'))
       .toEqual(['readGameName']);
+  });
+});
+
+const typeTextOf = (node: ts.PropertySignature | ts.ParameterDeclaration): string | undefined =>
+  node.type?.getText().replace(/\s+/g, ' ');
+
+const instanceValueFields = (): ReadonlyMap<string, string> => {
+  const path = join(SRC, 'instanceLoader', 'instance.ts');
+  const file = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
+  const fields = new Map<string, string>();
+  file.forEachChild((node) => {
+    if (ts.isInterfaceDeclaration(node) && node.name.text === 'InstanceValue') {
+      for (const member of node.members) {
+        if (ts.isPropertySignature(member) && member.type) fields.set(member.name.getText(), typeTextOf(member) ?? '');
+      }
+    }
+  });
+  return fields;
+};
+
+const slicedFieldsIn = (source: string, fields: ReadonlyMap<string, string>): string[] => {
+  const found: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if ((ts.isPropertySignature(node) || ts.isParameter(node)) && typeTextOf(node) !== undefined && fields.get(node.name.getText()) === typeTextOf(node)) {
+      found.push(node.name.getText());
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ts.createSourceFile('module.ts', source, ts.ScriptTarget.Latest, true));
+  return found;
+};
+
+describe('no command takes a slice of the instance value', () => {
+  it('reads InstanceValue from the loader, so the scan has fields to hold', () => {
+    expect([...instanceValueFields().keys()]).toContain('activeProfile');
+  });
+
+  it('no command module declares a property or parameter that copies a field of the instance value, by name and type as written', () => {
+    const fields = instanceValueFields();
+    const offenders: Record<string, string[]> = {};
+    for (const path of commandModules()) {
+      const found = slicedFieldsIn(readFileSync(path, 'utf8'), fields);
+      if (found.length > 0) offenders[path] = found;
+    }
+    expect(offenders).toEqual({});
+  });
+
+  it('flags a profile list taken as a parameter, the form switch profile had', () => {
+    expect(slicedFieldsIn('function switchProfile(adapter: A, profile: string, profiles: readonly string[]) {}\n', instanceValueFields())).toEqual(['profiles']);
+  });
+
+  it('flags a slice declared as a type of its own', () => {
+    const planted = 'interface InstanceSlice { readonly profiles: readonly string[]; readonly activeProfile: string; readonly plugins: readonly string[] }\n';
+    expect(slicedFieldsIn(planted, instanceValueFields())).toEqual(['profiles', 'activeProfile']);
   });
 });
