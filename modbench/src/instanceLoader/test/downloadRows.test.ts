@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import type { DownloadedFile, DownloadMeta } from '../../instanceAdapter/instanceAdapter';
 import { buildDownloadRows, modsByArchiveFilename, type DownloadFile } from '../downloadRows';
 
-const metaOf = (fields: Partial<DownloadMeta> = {}): DownloadMeta => ({ status: 'Downloaded', excluded: false, ...fields });
+const metaOf = (fields: Partial<DownloadMeta> = {}): DownloadMeta => ({ status: 'Downloaded', ...fields });
 
-const file = (name: string, mtimeMs: number, meta?: DownloadMeta): DownloadedFile => ({
-  name, path: `/downloads/${name}`, metaPath: `/downloads/${name}.meta`, size: 123, mtimeMs, meta,
+const file = (name: string, mtimeMs: number, meta?: DownloadMeta, excluded = false): DownloadedFile => ({
+  name, path: `/downloads/${name}`, metaPath: `/downloads/${name}.meta`, size: 123, mtimeMs, excluded, meta,
 });
 
 function soleRow(rows: readonly DownloadFile[]): DownloadFile {
@@ -44,7 +44,7 @@ describe('buildDownloadRows', () => {
   });
 
   it('carries the excluded flag through without filtering (filtering is a view concern)', () => {
-    const rows = rowsClaimedByNoMod([file('foo.zip', 100, metaOf({ excluded: true }))]);
+    const rows = rowsClaimedByNoMod([file('foo.zip', 100, undefined, true)]);
     expect(soleRow(rows)).toMatchObject({ name: 'foo.zip', excluded: true });
   });
 
