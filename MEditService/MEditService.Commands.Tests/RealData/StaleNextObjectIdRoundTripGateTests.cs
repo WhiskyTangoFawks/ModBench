@@ -120,7 +120,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     private sealed class CompiledPluginScratch : IDisposable
     {
         internal LoadOrderHolder Holder { get; } = new();
-        private readonly ScratchDirectory _gameDirectory = new("medit-stale-header-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-stale-header-game-");
         private readonly LoadOrderSnapshot _loadOrder;
 
         public ScratchDirectory ModFolder { get; } = new("medit-stale-header-");
@@ -133,7 +133,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             StaleHeaderPlugins.Named(fileName).WriteInto(ModFolder);
             Plugin = new PluginAddress(fileName, "FixtureMod");
 
-            _loadOrder = EmptyMasterStubs.LoadOrderOver(PluginPath, Plugin.Origin, _gameDirectory);
+            _loadOrder = EmptyMasterStubs.LoadOrderOver(PluginPath, Plugin.Origin, _dataFolder);
             Holder.Apply(_loadOrder);
         }
 
@@ -148,7 +148,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         public void Dispose()
         {
             ModFolder.Dispose();
-            _gameDirectory.Dispose();
+            _dataFolder.Dispose();
         }
     }
 }

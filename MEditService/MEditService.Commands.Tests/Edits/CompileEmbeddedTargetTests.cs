@@ -16,7 +16,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     private const string ReferrerOrigin = "EmbeddedReferrerMod";
 
     private readonly ScratchDirectory _instanceRoot = new("medit-embedded-target-");
-    private readonly ScratchDirectory _gameDirectory = new("medit-embedded-target-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-embedded-target-game-");
     private readonly string _targetFolder;
     private readonly string _referrerFolder;
     private readonly LoadOrderSnapshot _loadOrder;
@@ -53,7 +53,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         });
 
         _loadOrder = SnapshotPlugins.Snapshot(
-            _gameDirectory, _instanceRoot, GameRelease.Fallout4,
+            _dataFolder, _instanceRoot, GameRelease.Fallout4,
             [
                 Target(enabled: true),
                 Referrer,
@@ -82,7 +82,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     public void Dispose()
     {
         _instanceRoot.Dispose();
-        _gameDirectory.Dispose();
+        _dataFolder.Dispose();
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     public async Task Compile_ForALinkIntoACompiledPluginTheLoadOrderDoesNotLoad_ReportsItUnresolved()
     {
         var notLoaded = SnapshotPlugins.Snapshot(
-            _gameDirectory, _instanceRoot, GameRelease.Fallout4, [Target(enabled: false), Referrer]);
+            _dataFolder, _instanceRoot, GameRelease.Fallout4, [Target(enabled: false), Referrer]);
 
         var answer = (await CompileServices.Over(notLoaded).CompileAsync([_referrer])).Value();
 

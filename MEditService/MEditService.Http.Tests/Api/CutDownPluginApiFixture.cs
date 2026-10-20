@@ -16,7 +16,7 @@ public sealed class CutDownPluginApiFixture : IApiPluginFixture<CutDownPluginApi
 
     public CutDownPluginApiFixture()
     {
-        DataFolder = Directory.CreateDirectory(Path.Combine(InstanceRoot, "GameDir")).FullName;
+        DataFolder = Directory.CreateDirectory(Path.Combine(InstanceRoot, "Data")).FullName;
         Plugins =
         [
             new LoadOrderEntry(

@@ -33,7 +33,7 @@ public abstract class TestInstance : IDisposable
     protected TestInstance(GameRelease release = GameRelease.Fallout4, Language stringsLanguage = Language.English)
     {
         (_release, _stringsLanguage) = (release, stringsLanguage);
-        GameDirectory = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
+        DataFolder = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
         _holder = new Lazy<LoadOrderHolder>(() =>
         {
             var holder = new LoadOrderHolder();
@@ -43,7 +43,7 @@ public abstract class TestInstance : IDisposable
         _services = new Lazy<IServiceProvider>(() => TestEditService.Over(Holder));
     }
 
-    public string GameDirectory { get; }
+    public string DataFolder { get; }
 
     public LoadOrderHolder Holder => _holder.Value;
 
@@ -75,7 +75,7 @@ public abstract class TestInstance : IDisposable
     /// folders (ADR-0012).</summary>
     public string FolderOf(string origin) => origin switch
     {
-        PluginOrigin.DataDirectory => GameDirectory,
+        PluginOrigin.DataDirectory => DataFolder,
         PluginOrigin.Overwrite => Path.Combine(_root, "overwrite"),
         _ => Path.Combine(_root, "mods", origin),
     };
@@ -131,7 +131,7 @@ public abstract class TestInstance : IDisposable
             throw new InvalidOperationException($"Expected '{origin}' to init: {string.Join("; ", messages)}");
     }
 
-    private LoadOrderSnapshot Snapshot() => SnapshotPlugins.Snapshot(GameDirectory, _root, _release, _entries, stringsLanguage: _stringsLanguage);
+    private LoadOrderSnapshot Snapshot() => SnapshotPlugins.Snapshot(DataFolder, _root, _release, _entries, stringsLanguage: _stringsLanguage);
 
     /// <summary>Hands the handlers the load order again with <paramref name="plugin"/>'s entry changed, as
     /// Mod Management does after its line changes.</summary>

@@ -9,7 +9,7 @@ namespace MEditService.Commands.Tests.TestSupport;
 
 internal static class EmptyMasterStubs
 {
-    internal static LoadOrderSnapshot LoadOrderOver(string pluginPath, string origin, string gameDirectory)
+    internal static LoadOrderSnapshot LoadOrderOver(string pluginPath, string origin, string dataFolder)
     {
         var pluginName = Path.GetFileName(pluginPath);
         var inputs = new List<LoadOrderEntry>();
@@ -18,13 +18,13 @@ internal static class EmptyMasterStubs
         {
             foreach (var master in overlay.ModHeader.MasterReferences)
             {
-                var emptyMasterStubPath = Path.Combine(gameDirectory, master.Master.FileName);
+                var emptyMasterStubPath = Path.Combine(dataFolder, master.Master.FileName);
                 new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(emptyMasterStubPath);
                 inputs.Add(new LoadOrderEntry(master.Master.FileName, emptyMasterStubPath, "Stubs", Line: inputs.Count, Enabled: true, Winning: true));
             }
         }
         inputs.Add(new LoadOrderEntry(pluginName, pluginPath, origin, Line: inputs.Count, Enabled: true, Winning: true));
 
-        return SnapshotPlugins.Snapshot(gameDirectory, instanceRoot: null, GameRelease.Fallout4, inputs);
+        return SnapshotPlugins.Snapshot(dataFolder, instanceRoot: null, GameRelease.Fallout4, inputs);
     }
 }

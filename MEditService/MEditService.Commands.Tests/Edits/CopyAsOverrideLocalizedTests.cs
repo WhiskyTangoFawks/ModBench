@@ -23,7 +23,7 @@ public abstract class LocalizedSourceCopyScenario : IDisposable
 
     private readonly ScratchDirectory _sourceModFolder = new("medit-copy-localized-source-");
     private readonly ScratchDirectory _destinationModFolder = new("medit-copy-localized-dest-");
-    private readonly ScratchDirectory _gameDir = new("medit-copy-localized-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-copy-localized-game-");
     private readonly FormKey _door;
     private readonly FormKey _cell;
     private readonly FormKey _placedObject;
@@ -69,7 +69,7 @@ public abstract class LocalizedSourceCopyScenario : IDisposable
         destinationMod.WriteToBinary(destinationPath);
 
         _loadOrder = SnapshotPlugins.Snapshot(
-            _gameDir, _gameDir, GameRelease.Fallout4,
+            _dataFolder, _dataFolder, GameRelease.Fallout4,
 
             [
                 new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Line: 0, Enabled: true, Winning: true),
@@ -87,7 +87,7 @@ public abstract class LocalizedSourceCopyScenario : IDisposable
     {
         _sourceModFolder.Dispose();
         _destinationModFolder.Dispose();
-        _gameDir.Dispose();
+        _dataFolder.Dispose();
     }
 
     protected async Task<string> CopiedDoorBody()

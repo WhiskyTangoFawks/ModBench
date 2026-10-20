@@ -14,14 +14,14 @@ public sealed class DecompileChurnTests : IDisposable
 {
     private const string PluginName = "ChurnFixture.esp";
     private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
-    private readonly ScratchDirectory _gameDirectory = new("medit-churn-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-churn-game-");
     private readonly ScratchDirectory _modFolder = new("medit-churn-");
     private readonly LoadOrderHolder _holder = new();
 
     public DecompileChurnTests()
     {
         CompiledPluginTemplates.WriteCompiledPlugin(_modFolder, SmallMod());
-        _holder.Apply(SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
+        _holder.Apply(SnapshotPlugins.Snapshot(_dataFolder, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(Plugin.Name, Path.Combine(_modFolder, Plugin.Name), Plugin.Origin, Line: 0, Enabled: true, Winning: true)]));
     }
 
@@ -40,7 +40,7 @@ public sealed class DecompileChurnTests : IDisposable
     public void Dispose()
     {
         _modFolder.Dispose();
-        _gameDirectory.Dispose();
+        _dataFolder.Dispose();
     }
 
     [Fact]

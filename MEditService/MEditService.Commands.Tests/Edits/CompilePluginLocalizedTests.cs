@@ -14,7 +14,7 @@ public sealed class CompilePluginLocalizedTests : IDisposable
     private const string Origin = "FixtureMod";
 
     private readonly ScratchDirectory _modFolder = new("medit-compile-localized-");
-    private readonly ScratchDirectory _gameDir = new("medit-compile-localized-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-compile-localized-game-");
     private readonly LoadOrderSnapshot _loadOrder;
 
     public CompilePluginLocalizedTests()
@@ -27,7 +27,7 @@ public sealed class CompilePluginLocalizedTests : IDisposable
         mod.WriteToBinary(pluginPath);
 
         _loadOrder = SnapshotPlugins.Snapshot(
-            _gameDir, instanceRoot: null, GameRelease.Fallout4,
+            _dataFolder, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(PluginName, pluginPath, Origin, Line: 0, Enabled: true, Winning: true)]);
 
         DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, Origin)
@@ -37,7 +37,7 @@ public sealed class CompilePluginLocalizedTests : IDisposable
     public void Dispose()
     {
         _modFolder.Dispose();
-        _gameDir.Dispose();
+        _dataFolder.Dispose();
     }
 
     private static void RemoveStringsMutagenLeftAtTheTempWritePathSoTheByteCompareCannotPassVacuously(

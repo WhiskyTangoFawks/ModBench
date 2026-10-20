@@ -31,7 +31,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
 
     private sealed class ShortRdatScratch : IDisposable
     {
-        private readonly ScratchDirectory _gameDirectory = new("medit-shortrdat-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-shortrdat-game-");
         private readonly LoadOrderSnapshot _loadOrder;
 
         public ScratchDirectory ModFolder { get; } = new("medit-shortrdat-");
@@ -42,7 +42,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
             plugin.WriteInto(ModFolder);
             var pluginPath = Path.Combine(ModFolder, plugin.FileName);
 
-            _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, "ShortRdatMod", _gameDirectory);
+            _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, "ShortRdatMod", _dataFolder);
         }
 
         public async Task<PluginDecompiledAndCommitted> DecompileAndCommitAsync() =>
@@ -51,7 +51,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
         public void Dispose()
         {
             ModFolder.Dispose();
-            _gameDirectory.Dispose();
+            _dataFolder.Dispose();
         }
     }
 }

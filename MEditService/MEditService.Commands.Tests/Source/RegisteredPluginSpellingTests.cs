@@ -39,7 +39,7 @@ public sealed class RegisteredPluginSpellingTests
     private sealed class ModFolderUnderAnInstanceRootScratch : IDisposable
     {
         private readonly ScratchDirectory _instanceRoot = new("medit-spelling-instance-");
-        private readonly ScratchDirectory _gameDirectory = new("medit-spelling-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-spelling-game-");
 
         public string ModFolder { get; }
         internal PluginAddress Plugin { get; } = new(PluginName, Origin);
@@ -53,7 +53,7 @@ public sealed class RegisteredPluginSpellingTests
             mod.WriteToBinary(PluginPath);
 
             LoadOrder = SnapshotPlugins.Snapshot(
-                _gameDirectory, _instanceRoot, Release,
+                _dataFolder, _instanceRoot, Release,
                 [new LoadOrderEntry(PluginName, PluginPath, Origin, Line: 0, Enabled: true, Winning: true)]);
         }
 
@@ -62,7 +62,7 @@ public sealed class RegisteredPluginSpellingTests
         public void Dispose()
         {
             _instanceRoot.Dispose();
-            _gameDirectory.Dispose();
+            _dataFolder.Dispose();
         }
     }
 }

@@ -15,7 +15,7 @@ namespace MEditService.Commands.Tests.RealData;
 /// a later compile writes again.</summary>
 public sealed class CompileRoundTripGateFixture : IDisposable
 {
-    private readonly ScratchDirectory _gameDirectory = new("medit-compile-roundtrip-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-compile-roundtrip-game-");
     private readonly ScratchDirectory _compiledFolder = new("medit-compile-roundtrip-compiled-");
 
     public PluginAddress Plugin { get; } = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
@@ -38,7 +38,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
     public CompileRoundTripGateFixture()
     {
         CutDownPluginFixture.CompiledPluginInto(ModFolder);
-        Holder.Apply(SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
+        Holder.Apply(SnapshotPlugins.Snapshot(_dataFolder, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, PluginPath, Plugin.Origin, Line: 0, Enabled: true, Winning: true)]));
         SourceModTree = CutDownPluginFixture.ReadSourceTree(ModFolder);
 
@@ -82,6 +82,6 @@ public sealed class CompileRoundTripGateFixture : IDisposable
     {
         ModFolder.Dispose();
         _compiledFolder.Dispose();
-        _gameDirectory.Dispose();
+        _dataFolder.Dispose();
     }
 }

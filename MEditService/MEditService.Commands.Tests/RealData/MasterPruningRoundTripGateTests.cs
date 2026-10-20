@@ -26,7 +26,7 @@ public sealed class MasterPruningRoundTripGateTests
     {
         private readonly string _fixtureFileName;
         private readonly string _origin;
-        private readonly ScratchDirectory _gameDirectory = new("medit-masterprune-game-");
+        private readonly ScratchDirectory _dataFolder = new("medit-masterprune-game-");
         private readonly LoadOrderSnapshot _loadOrder;
 
         public ScratchDirectory ModFolder { get; } = new("medit-masterprune-");
@@ -37,7 +37,7 @@ public sealed class MasterPruningRoundTripGateTests
             _origin = origin;
             plugin.WriteInto(ModFolder);
 
-            _loadOrder = EmptyMasterStubs.LoadOrderOver(Path.Combine(ModFolder, _fixtureFileName), _origin, _gameDirectory);
+            _loadOrder = EmptyMasterStubs.LoadOrderOver(Path.Combine(ModFolder, _fixtureFileName), _origin, _dataFolder);
         }
 
         public IReadOnlyList<string> DeclaredMasters()
@@ -54,7 +54,7 @@ public sealed class MasterPruningRoundTripGateTests
         public void Dispose()
         {
             ModFolder.Dispose();
-            _gameDirectory.Dispose();
+            _dataFolder.Dispose();
         }
     }
 }

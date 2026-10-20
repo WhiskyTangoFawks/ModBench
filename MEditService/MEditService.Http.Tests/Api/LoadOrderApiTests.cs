@@ -23,7 +23,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .BuildScattered();
 
-        var response = await _client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, fx.Plugins));
+        var response = await _client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, fx.Plugins));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var plugins = await _client.GetFromJsonAsync<List<dynamic>>("/plugins");

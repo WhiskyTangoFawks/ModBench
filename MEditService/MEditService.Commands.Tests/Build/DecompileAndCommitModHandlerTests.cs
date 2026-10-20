@@ -24,14 +24,14 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
             Origin,
             Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName,
             SourceFolder);
-        var gameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
+        var dataFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
 
         var pluginPath = Path.Combine(_mod.Folder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("FixtureNpc");
         mod.WriteToBinary(pluginPath);
 
-        Snapshot = SnapshotPlugins.Snapshot(gameDirectory, _instanceRoot, GameRelease.Fallout4,
+        Snapshot = SnapshotPlugins.Snapshot(dataFolder, _instanceRoot, GameRelease.Fallout4,
             [new LoadOrderEntry(PluginName, pluginPath, Origin, 0, Enabled: true, Winning: true, NamedProvider: _mod)]);
     }
 
