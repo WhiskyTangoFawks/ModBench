@@ -1324,6 +1324,8 @@ describe('package.json registers every command under its catalog Command ID', ()
   });
 });
 
+const TITLE_WORD_OF: Record<string, string> = { meta: 'metadata' };
+
 const wordsOf = (camel: string): string[] => camel.split(/(?=[A-Z])/).map((w) => w.toLowerCase());
 
 function expectTitleNamesVerbAndObject(id: string, title: string): void {
@@ -1337,8 +1339,7 @@ function expectTitleNamesVerbAndObject(id: string, title: string): void {
   const titleWords = title.replace('…', '').toLowerCase().split(/\s+/);
   const objectWords = wordsOf(object);
   const noun = present(objectWords.pop(), `the noun of ${object}`);
-  const METADATA_ID_WORD = 'meta';
-  const verbWordsInTitle = wordsOf(verb).map((w) => (w === METADATA_ID_WORD && titleWords.includes('metadata') ? 'metadata' : w));
+  const verbWordsInTitle = wordsOf(verb).map((w) => TITLE_WORD_OF[w] ?? w);
   expect(titleWords, `the title of ${id} names the verb`).toEqual(expect.arrayContaining(verbWordsInTitle));
   expect(titleWords, `the title of ${id} names the object`).toEqual(expect.arrayContaining(objectWords));
   expect(titleWords.some((w) => w === noun || w === `${noun}s`), `the title of ${id} names the ${noun}`).toBe(true);

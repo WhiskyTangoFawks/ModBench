@@ -29,13 +29,13 @@ async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLin
     .map((d) => d.name);
   return Promise.all(names.map(async (name) => {
     const path = downloadFile(downloadsDir, name);
-    const metaPath = downloadSidecarFile(downloadsDir, name);
+    const metadataPath = downloadSidecarFile(downloadsDir, name);
     const [facts, metaText] = await Promise.all([
       factsOf(path),
-      readOrAbsent<string | undefined>(() => get(metaPath), undefined),
+      readOrAbsent<string | undefined>(() => get(metadataPath), undefined),
     ]);
     const parsed = metaText === undefined ? undefined : parseDownloadMeta(metaText);
-    return { name, path, metadataPath: metaPath, size: facts.size, mtimeMs: facts.mtimeMs, excluded: parsed?.hidden ?? false, meta: parsed?.meta };
+    return { name, path, metadataPath, size: facts.size, mtimeMs: facts.mtimeMs, excluded: parsed?.hidden ?? false, meta: parsed?.meta };
   }));
 }
 
