@@ -198,6 +198,46 @@ public sealed class UnsavedDocumentTests : IDisposable
     }
 
     [Fact]
+    public void AHandOverWhoseStatusCannotBePublished_PublishesTheFailedStatusOnceItCan()
+    {
+        var statusFault = Faults.InTurn(typeof(NotSupportedException));
+        var notifications = new InMemoryNotificationPublisher();
+        using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: notifications);
+        notifications.OnPublish = Faults.On(IsRowsChanged, Faults.Of(typeof(InvalidOperationException)))
+            + (notification => { if (notification is LoadOrderStatusNotification) statusFault(); });
+
+        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
+
+        Waits.Reached(
+            () => notifications.Notifications.OfType<LoadOrderStatusNotification>().Any(n => n.Status.State == LoadOrderState.Failed),
+            "the failed status published");
+    }
+
+    [Fact]
+    public async Task ADisposalDuringAHandOver_IsNotLoggedAsAFailure()
+    {
+        var log = new List<LogEntry>();
+        using var loggers = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(log)));
+        Task? disposing = null;
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "disposed"), loggerFactory: loggers, notifications: notifications);
+        notifications.OnPublish = notification =>
+        {
+            if (!IsRowsChanged(notification) || disposing is not null) return;
+            disposing = Task.Run(index.Dispose);
+            Thread.Sleep(TimeSpan.FromMilliseconds(300));
+            throw new OperationCanceledException();
+        };
+
+        index.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
+        Waits.Reached(() => disposing is not null, "the disposal under way");
+        await disposing.Require();
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+
+        lock (log) Assert.DoesNotContain(log, entry => entry.Message.Contains("failed unexpectedly", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void AHandOverThatValidatesCleanly_ClearsTheFailureAnEarlierHandOverSet()
     {
         var faults = new InMemoryNotificationPublisher { FaultsOn = IsRowsChanged };
