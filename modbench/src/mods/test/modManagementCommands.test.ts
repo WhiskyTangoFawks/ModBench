@@ -56,7 +56,6 @@ import { MODS_KEY_ARGS } from '../gestureEntry';
 import { FileNode, FolderNode } from '../modFiles';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
-import { fileIn } from '../../test/fakeInstanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { ModCommands } from '../../modCommands/modCommands';
 
@@ -1302,7 +1301,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     relativePath);
   const included = fileRow('a.dds', false);
   const excluded = fileRow('b.dds.mohidden', true);
-  const refOf = (row: FileNode) => ({ origin: row.origin, relativePath: row.file.relativePath, includedPath: row.file.includedPath });
+  const refOf = (row: FileNode) => ({ origin: row.origin, relativePath: row.file.relativePath });
   const instance = {
     ...instanceThatReads,
     value: instanceValueFixture({
@@ -1369,7 +1368,7 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     await invoke(`modbench.mod.${verb}`, clicked, [clicked, inFolder('x.mohidden/c.dds', false), inFolder('x.mohidden/d.dds.mohidden', true)]);
 
     expect(markFiles).toHaveBeenCalledWith([
-      refOf(clicked), { origin, relativePath: 'x.mohidden/c.dds', includedPath: 'x/c.dds' }, { origin, relativePath: 'x.mohidden/d.dds.mohidden', includedPath: 'x/d.dds' },
+      refOf(clicked), { origin, relativePath: 'x.mohidden/c.dds' }, { origin, relativePath: 'x.mohidden/d.dds.mohidden' },
     ], mark);
     expect(reporter.reports).toEqual([]);
   });
@@ -1840,20 +1839,15 @@ describe('the mod gestures, called by the agent', () => {
     const origin = { kind: 'mod', name: 'Mod A' } as const;
     const inSelection = new FileNode(selected, origin, { relativePath: 'sel.dds', path: '/p/sel.dds', sourcePath: '/p/sel.dds', excluded: false, markedExcluded: false, includedPath: 'sel.dds' }, 'sel.dds');
 
-    const holding = {
-      ...instance,
-      value: instanceValueFixture({ filesByMod: new Map([['Mod A', [{ ...fileIn('/p', 'a.dds.mohidden'), includedPath: 'a.dds' }]]]) }),
-    };
-
     it('marks the files given, never the selection, and answers the outcome', async () => {
-      const outcome = { applied: true, outcome: { landed: [{ origin, relativePath: 'a.dds.mohidden', includedPath: 'a.dds' }], refused: [] } };
+      const outcome = { applied: true, outcome: { landed: [{ origin, relativePath: 'a.dds' }], refused: [] } };
       markFiles.mockResolvedValue(outcome);
       const reporter = recordingReporter();
-      registerFileExclusionCommands(commands, holding, () => [inSelection], reporter);
+      registerFileExclusionCommands(commands, instance, () => [inSelection], reporter);
 
-      const answered = await invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'a.dds.mohidden' }], {}));
+      const answered = await invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'a.dds' }], {}));
 
-      expect(markFiles).toHaveBeenCalledWith([{ origin, relativePath: 'a.dds.mohidden', includedPath: 'a.dds' }], mark);
+      expect(markFiles).toHaveBeenCalledWith([{ origin, relativePath: 'a.dds' }], mark);
       expect(answered).toEqual(outcome);
       expect(reporter.reports).toEqual([]);
       nothingOpened();
@@ -1861,23 +1855,15 @@ describe('the mod gestures, called by the agent', () => {
 
     it('answers a refusal of the whole selection as the failure the view reports', async () => {
       markFiles.mockResolvedValue({ applied: false, refusal: 'mEdit could not be reached.' });
-      registerFileExclusionCommands(commands, holding, () => [], recordingReporter());
+      registerFileExclusionCommands(commands, instance, () => [], recordingReporter());
 
-      const answered = await invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'a.dds.mohidden' }], {}));
+      const answered = await invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'a.dds' }], {}));
 
       expect(answered).toEqual({ applied: false, refusal: `Could not ${mark === 'Excluded' ? 'exclude' : 'include'} 1 files.`, detail: 'mEdit could not be reached.' });
     });
 
-    it('refuses a file the listing does not hold, writing nothing', async () => {
-      registerFileExclusionCommands(commands, holding, () => [], recordingReporter());
-
-      await expect(invoke(command, new AgentCall([{ kind: 'file', origin, relativePath: 'missing.dds' }], {}))).rejects.toBeInstanceOf(Refusal);
-
-      expect(markFiles).not.toHaveBeenCalled();
-    });
-
     it('refuses an Argument that is not a file, writing nothing', async () => {
-      registerFileExclusionCommands(commands, holding, () => [], recordingReporter());
+      registerFileExclusionCommands(commands, instance, () => [], recordingReporter());
 
       await expect(invoke(command, ofMods('Mod A'))).rejects.toBeInstanceOf(Refusal);
 

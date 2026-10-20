@@ -245,7 +245,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     renameModFolder: (from, to) => record({ verb: 'renameModFolder', from, to }, undefined),
     markOriginFile: (origin, relativePath, mark) =>
       record<OriginFileMarked>({ verb: 'markOriginFile', origin, relativePath, mark },
-        answers.goneOriginFiles?.some((gone) => originKey(gone.origin) === originKey(origin) && gone.relativePath === relativePath) ? { gone: true } : { gone: false, wrote: true, relativePath }),
+        answers.goneOriginFiles?.some((gone) => originKey(gone.origin) === originKey(origin) && gone.relativePath === relativePath) ? { gone: true } : { gone: false, wrote: true, relativePath, includedPath: relativePath.split('/').map((segment) => segment.replace(EXCLUDED_SUFFIX, '')).join('/') }),
     entryKey,
     excludedSuffix: EXCLUDED_SUFFIX,
     originHoldsPlugin: (origin, name) => Promise.resolve((answers.heldPlugins ?? []).some((held) =>

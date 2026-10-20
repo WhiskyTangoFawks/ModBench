@@ -70,7 +70,7 @@ export function registerFileExclusionCommands(
         const refs = pluralArgument(entry, 'file').map((row) => row.ref);
         return refs.length === 0 ? undefined : refs;
       },
-      fromAgent: ({ argument }) => argument.map((one) => fileRefOf(one, instance.value)),
+      fromAgent: ({ argument }) => argument.map(fileRefOf),
       run: async (refs) => {
         const result = await runModsWriting(instance, () => commands.markFiles(refs, mark));
         return result.applied ? result : { applied: false, refusal: `Could not ${verb} ${refs.length} files.`, detail: result.refusal };

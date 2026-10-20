@@ -99,11 +99,10 @@ function moveSeparators(
     [{ kind: 'moveSeparators', separators: found, place, end }]);
 }
 
-/** A file of a mod or Overwrite, by its path in it and the path it has when nothing excludes it. */
+/** A file of a mod or Overwrite, by its path in it. */
 export interface OriginFileRef {
   readonly origin: FileOrigin;
   readonly relativePath: string;
-  readonly includedPath: string;
 }
 
 interface SourceModWriters {
@@ -115,41 +114,61 @@ const UNMARK: Record<OriginFileMark, OriginFileMark> = { Excluded: 'Included', I
 
 const exclusionChange = (mark: OriginFileMark, paths: string[]) => (mark === 'Excluded' ? { exclude: paths } : { include: paths });
 
-function markEach(adapter: InstanceAdapter, files: readonly OriginFileRef[], mark: OriginFileMark): Promise<SelectionOutcome<OriginFileRef>> {
-  return selectionOutcomeOf(files, async (file): Promise<CommandResult> => {
-    try {
-      const marked = await adapter.markOriginFile(file.origin, file.relativePath, mark);
-      if (marked.gone) return { applied: false, refusal: goneFromDisk(file.relativePath) };
-      if ('refusal' in marked) return { applied: false, refusal: marked.refusal };
-      return { applied: true, wrote: true };
-    } catch (err) {
-      return refuse(err);
-    }
-  }, (file) => file);
+interface MarkedFile {
+  readonly file: OriginFileRef;
+  readonly markedPath: string;
+  readonly includedPath: string;
+  readonly wrote: boolean;
 }
 
-type SourceGroups = ReadonlyMap<string | undefined, readonly OriginFileRef[]>;
-
-function bySourceFolder(files: readonly OriginFileRef[], sourceMods: SourceMods): SourceGroups {
-  const groups = new Map<string | undefined, OriginFileRef[]>();
+// Each file marked on its own; the adapter's answer names the path the build configuration's exclusion needs.
+async function markEach(
+  adapter: InstanceAdapter, files: readonly OriginFileRef[], mark: OriginFileMark,
+): Promise<{ marked: MarkedFile[]; refused: ItemRefusal<OriginFileRef>[] }> {
+  const marked: MarkedFile[] = [];
+  const refused: ItemRefusal<OriginFileRef>[] = [];
   for (const file of files) {
-    const sourceFolder = file.origin.kind === 'mod' ? sourceMods.folderOf(file.origin.name) : undefined;
-    groups.set(sourceFolder, [...(groups.get(sourceFolder) ?? []), file]);
+    try {
+      const answer = await adapter.markOriginFile(file.origin, file.relativePath, mark);
+      if (answer.gone) refused.push({ item: file, reason: goneFromDisk(file.relativePath) });
+      else if ('refusal' in answer) refused.push({ item: file, reason: answer.refusal });
+      else marked.push({ file, markedPath: answer.relativePath, includedPath: answer.includedPath, wrote: answer.wrote });
+    } catch (err) {
+      refused.push({ item: file, reason: refuse(err).refusal });
+    }
   }
-  return groups;
+  return { marked, refused };
 }
 
-type ExclusionChange = (sourceFolder: string, files: readonly OriginFileRef[], to: OriginFileMark) => ReturnType<MEditClient['changeBuildConfiguration']>;
+// The marks a failed configuration leaves behind, each put back; the reason one could not be.
+async function unmarkEach(
+  adapter: InstanceAdapter, marked: readonly MarkedFile[], mark: OriginFileMark,
+): Promise<Map<MarkedFile, string>> {
+  const failed = new Map<MarkedFile, string>();
+  for (const one of marked.filter(({ wrote }) => wrote)) {
+    try {
+      const answer = await adapter.markOriginFile(one.file.origin, one.markedPath, UNMARK[mark]);
+      if (answer.gone) failed.set(one, goneFromDisk(one.markedPath));
+      else if ('refusal' in answer) failed.set(one, answer.refusal);
+    } catch (err) {
+      failed.set(one, refuse(err).refusal);
+    }
+  }
+  return failed;
+}
+
+type SourceMarks = ReadonlyMap<string, readonly MarkedFile[]>;
+
+type ExclusionChange = (sourceFolder: string, files: readonly MarkedFile[], to: OriginFileMark) => ReturnType<MEditClient['changeBuildConfiguration']>;
 
 // Each source mod's refusal by its source folder; or, when mEdit cannot be reached, the whole selection's, with the
 // configurations already changed put back.
 async function configureEach(
-  change: ExclusionChange, groups: SourceGroups, mark: OriginFileMark,
+  change: ExclusionChange, sources: SourceMarks, mark: OriginFileMark,
 ): Promise<{ refusals: ReadonlyMap<string, string> } | { unreachable: string }> {
   const refusals = new Map<string, string>();
-  const configured: [string, readonly OriginFileRef[]][] = [];
-  for (const [sourceFolder, files] of groups) {
-    if (sourceFolder === undefined) continue;
+  const configured: [string, readonly MarkedFile[]][] = [];
+  for (const [sourceFolder, files] of sources) {
     const answer = await change(sourceFolder, files, mark);
     if (isRefused(answer) && answer.unreachable) {
       const notPutBack = await Promise.all(configured.map(async ([folder, of]) => {
@@ -164,24 +183,11 @@ async function configureEach(
   return { refusals };
 }
 
-// A file of a configured source mod that could not be marked has its change to the configuration taken back.
-async function markInSourceMod(
-  adapter: InstanceAdapter, change: ExclusionChange, sourceFolder: string, files: readonly OriginFileRef[], mark: OriginFileMark,
-): Promise<SelectionOutcome<OriginFileRef>> {
-  const outcome = await markEach(adapter, files, mark);
-  if (outcome.refused.length === 0) return outcome;
-  const takenBack = await change(sourceFolder, outcome.refused.map(({ item }) => item), UNMARK[mark]);
-  if (!isRefused(takenBack)) return outcome;
-  return {
-    landed: outcome.landed,
-    refused: outcome.refused.map(({ item, reason }) => ({
-      item, reason: `${reason} Its change to the build configuration could not be taken back: ${takenBack.message}`,
-    })),
-  };
-}
+const notPutBack = (reason: string | undefined): string => (reason === undefined ? '' : ` Its mark could not be taken back: ${reason}`);
 
-// `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own, a source mod's build
-// configuration first, so a refusal all its files share writes none of them (commands.md, A selection is one gesture).
+// `modbench.mod.excludeFile` / `modbench.mod.includeFile`: each file marked on its own, then a source mod's build
+// configuration written from the paths the adapter answered. A configuration that cannot be written takes its files'
+// marks back, so the folder and the configuration agree.
 async function markFiles(
   { adapter, mEdit }: SourceModWriters, files: readonly OriginFileRef[], mark: OriginFileMark,
 ): Promise<SelectionResult<OriginFileRef>> {
@@ -191,21 +197,30 @@ async function markFiles(
   } catch (err) {
     return refuse(err);
   }
+  const { marked, refused } = await markEach(adapter, files, mark);
+  const sources = new Map<string, MarkedFile[]>();
+  for (const one of marked) {
+    const sourceFolder = one.file.origin.kind === 'mod' ? sourceMods.folderOf(one.file.origin.name) : undefined;
+    if (sourceFolder !== undefined) sources.set(sourceFolder, [...(sources.get(sourceFolder) ?? []), one]);
+  }
   const change: ExclusionChange = (sourceFolder, of, to) =>
     mEdit.changeBuildConfiguration(sourceFolder, exclusionChange(to, of.map(({ includedPath }) => includedPath)));
-  const groups = bySourceFolder(files, sourceMods);
-  const configured = await configureEach(change, groups, mark);
-  if ('unreachable' in configured) return { applied: false, refusal: configured.unreachable };
-  const landed: OriginFileRef[] = [];
-  const refused: ItemRefusal<OriginFileRef>[] = [];
-  for (const [sourceFolder, inIt] of groups) {
-    const refusal = sourceFolder === undefined ? undefined : configured.refusals.get(sourceFolder);
-    const outcome = sourceFolder === undefined ? await markEach(adapter, inIt, mark)
-      : refusal === undefined ? await markInSourceMod(adapter, change, sourceFolder, inIt, mark)
-        : { landed: [], refused: inIt.map((item) => ({ item, reason: refusal })) };
-    landed.push(...outcome.landed);
-    refused.push(...outcome.refused);
+  const configured = await configureEach(change, sources, mark);
+  if ('unreachable' in configured) {
+    const left = await unmarkEach(adapter, marked, mark);
+    const refusal = [...left.values()].reduce((said, reason) => `${said} A mark could not be taken back: ${reason}`, configured.unreachable);
+    return { applied: false, refusal };
   }
+  const unwritten = new Set<MarkedFile>();
+  for (const [sourceFolder, reason] of configured.refusals) {
+    const inIt = sources.get(sourceFolder) ?? [];
+    const left = await unmarkEach(adapter, inIt, mark);
+    for (const one of inIt) {
+      unwritten.add(one);
+      refused.push({ item: one.file, reason: `${reason}${notPutBack(left.get(one))}` });
+    }
+  }
+  const landed = marked.filter((one) => !unwritten.has(one)).map(({ file }) => file);
   return { applied: true, outcome: { landed, refused } };
 }
 

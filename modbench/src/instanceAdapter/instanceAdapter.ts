@@ -263,11 +263,11 @@ type DownloadedFileTrashed = { readonly gone: true } | { readonly gone: false; r
 
 type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
-/** A mark on a file of an origin, with the path it has once marked, or why it was refused before
- *  anything changed. */
+/** A mark on a file of an origin, with the path it has once marked and the path it has when nothing
+ *  excludes it, or why it was refused before anything changed. */
 export type OriginFileMarked =
   | { readonly gone: true }
-  | { readonly gone: false; readonly wrote: boolean; readonly relativePath: string }
+  | { readonly gone: false; readonly wrote: boolean; readonly relativePath: string; readonly includedPath: string }
   | { readonly gone: false; readonly refusal: string };
 
 /** Every repository in the source folder, listed in the mod order or not, by the mod its build configuration

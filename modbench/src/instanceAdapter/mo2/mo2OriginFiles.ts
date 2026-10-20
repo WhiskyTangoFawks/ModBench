@@ -3,7 +3,7 @@
 import { isAbsolute, relative, sep } from 'node:path';
 import { exists, realPathIfThere, rename, withLock } from '../files';
 import { fileInFolder, type InstanceAdapter, OriginFileMark, OriginFileMarked } from '../instanceAdapter';
-import { EXCLUDED_SUFFIX, excludedName, includedName, isExcludedName } from './layout';
+import { EXCLUDED_SUFFIX, excludedName, includedName, includedPathOf, isExcludedName } from './layout';
 import { originFolder, type Mo2Context } from './mo2Context';
 
 type Mo2OriginFiles = Pick<InstanceAdapter, 'markOriginFile' | 'trashModFile' | 'excludedSuffix'>;
@@ -20,16 +20,17 @@ export function mo2OriginFiles(context: Mo2Context): Mo2OriginFiles {
       if (from === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${relativePath}"`);
       return withLock(from, async (): Promise<OriginFileMarked> => {
         if (!(await exists(from))) return { gone: true };
+        const includedPath = includedPathOf(relativePath);
         const ownMark = isExcludedName(relativePath);
         if (mark === 'Included' && !ownMark && relativePath.split('/').slice(0, -1).some(isExcludedName)) {
           return { gone: false, refusal: `"${relativePath}" has no suffix of its own to remove, and its folder excludes it.` };
         }
-        if (ownMark === (mark === 'Excluded')) return { gone: false, wrote: false, relativePath };
+        if (ownMark === (mark === 'Excluded')) return { gone: false, wrote: false, relativePath, includedPath };
         const renamed = mark === 'Excluded' ? excludedName : includedName;
         const to = renamed(from);
         if (await exists(to)) return { gone: false, refusal: `"${renamed(relativePath)}" is already there.` };
         await rename(from, to);
-        return { gone: false, wrote: true, relativePath: renamed(relativePath) };
+        return { gone: false, wrote: true, relativePath: renamed(relativePath), includedPath };
       });
     },
 

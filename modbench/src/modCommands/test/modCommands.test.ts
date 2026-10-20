@@ -457,7 +457,7 @@ describe('markFiles', () => {
   const OTHER = '/instance/source/ENBoost';
   const SOURCES = sourceMods(new Map([['Harder VATS', SOURCE]]));
   const TWO_SOURCES = sourceMods(new Map([['Harder VATS', SOURCE], ['ENBoost', OTHER]]));
-  const fileOf = (name: string, relativePath: string, includedPath = relativePath) => ({ origin: { kind: 'mod', name }, relativePath, includedPath }) as const;
+  const fileOf = (name: string, relativePath: string) => ({ origin: { kind: 'mod', name }, relativePath }) as const;
   const markOf = (file: ReturnType<typeof fileOf>, mark: OriginFileMark): AdapterCall =>
     ({ verb: 'markOriginFile', origin: file.origin, relativePath: file.relativePath, mark });
   const UNREACHABLE = { refused: true, message: 'Could not change the build configuration — mEdit could not be reached.', unreachable: true } as const;
@@ -468,7 +468,7 @@ describe('markFiles', () => {
   ] as const)('marks a file %s, and the build configuration\'s exclusion with it', async (mark, relativePath, change) => {
     const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
     mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
-    const file = fileOf('Harder VATS', relativePath, 'Textures/a.dds');
+    const file = fileOf('Harder VATS', relativePath);
 
     const outcome = await commands.markFiles([file], mark);
 
@@ -477,24 +477,19 @@ describe('markFiles', () => {
     expect(fake.calls).toEqual([markOf(file, mark)]);
   });
 
-  it('asks mEdit once for every file of a source mod, before any file is marked, and marks none when it refuses', async () => {
+  it('writes the configuration once from every file of a source mod, and takes their marks back when it refuses', async () => {
     const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
-    let markedWhenAsked = -1;
-    mEdit.setCommandHandler('changeBuildConfiguration', () => {
-      markedWhenAsked = fake.calls.length;
-      return Promise.resolve({ refused: true, message: 'it holds no build configuration' });
-    });
+    mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
     const files = [fileOf('Harder VATS', 'a.dds'), fileOf('Harder VATS', 'b.dds')];
 
     const outcome = await commands.markFiles(files, 'Excluded');
 
     expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds', 'b.dds'] }]]);
-    expect(markedWhenAsked).toBe(0);
     expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: files.map((item) => ({ item, reason: 'it holds no build configuration' })) } });
-    expect(fake.calls).toEqual([]);
+    expect(fake.calls).toEqual([...files.map((file) => markOf(file, 'Excluded')), ...files.map((file) => markOf(file, 'Included'))]);
   });
 
-  it('marks the file of a mod with no source though mEdit refuses a source mod\'s', async () => {
+  it('leaves the file of a mod with no source marked though mEdit refuses a source mod\'s', async () => {
     const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
     mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
     const inSource = fileOf('Harder VATS', 'a.dds');
@@ -503,7 +498,7 @@ describe('markFiles', () => {
     const outcome = await commands.markFiles([inSource, inNoSource], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [inNoSource], refused: [{ item: inSource, reason: 'it holds no build configuration' }] } });
-    expect(fake.calls).toEqual([markOf(inNoSource, 'Excluded')]);
+    expect(fake.calls).toEqual([markOf(inSource, 'Excluded'), markOf(inNoSource, 'Excluded'), markOf(inSource, 'Included')]);
   });
 
   it('refuses the whole selection, configuring and marking nothing, when the source mods cannot be read', async () => {
@@ -514,7 +509,7 @@ describe('markFiles', () => {
     expect(fake.calls).toEqual([]);
   });
 
-  it('refuses the whole selection once, marking no file, when mEdit cannot be reached', async () => {
+  it('refuses the whole selection once, taking every mark back, when mEdit cannot be reached', async () => {
     const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
     mEdit.setCommandResult('changeBuildConfiguration', UNREACHABLE);
     const files = [fileOf('Harder VATS', 'a.dds'), fileOf('Harder VATS', 'b.dds'), fileOf('ENBoost', 'c.dds')];
@@ -522,11 +517,11 @@ describe('markFiles', () => {
     const outcome = await commands.markFiles(files, 'Excluded');
 
     expect(outcome).toEqual({ applied: false, refusal: UNREACHABLE.message });
-    expect(fake.calls).toEqual([]);
+    expect(fake.calls).toEqual([...files.map((file) => markOf(file, 'Excluded')), ...files.map((file) => markOf(file, 'Included'))]);
   });
 
   it('puts back a source mod\'s configuration already changed when mEdit cannot be reached for the next, naming what could not be put back', async () => {
-    const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, TWO_SOURCES);
+    const { mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, TWO_SOURCES);
     mEdit.setCommandHandler('changeBuildConfiguration', () => Promise.resolve(configuredBy(mEdit).length === 1 ? { changed: true } : UNREACHABLE));
     const files = [fileOf('Harder VATS', 'a.dds'), fileOf('ENBoost', 'c.dds')];
 
@@ -537,7 +532,6 @@ describe('markFiles', () => {
       applied: false,
       refusal: `${UNREACHABLE.message} The build configuration in "${SOURCE}" could not be put back: ${UNREACHABLE.message}`,
     });
-    expect(fake.calls).toEqual([]);
   });
 
   it('names why a configuration already changed could not be put back', async () => {
@@ -554,7 +548,7 @@ describe('markFiles', () => {
     });
   });
 
-  it('takes back the exclusion of a file gone from disk, and lands the rest', async () => {
+  it('leaves a file gone from disk out of the configuration, and lands the rest', async () => {
     const { mEdit, commands } = over(FIXTURE_ORDER, { goneOriginFiles: [fileOf('Harder VATS', 'gone.dds')] }, undefined, SOURCES);
     mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
     const marked = fileOf('Harder VATS', 'a.dds');
@@ -563,30 +557,34 @@ describe('markFiles', () => {
     const outcome = await commands.markFiles([marked, gone], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [marked], refused: [{ item: gone, reason: '"gone.dds" is gone from disk.' }] } });
-    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds', 'gone.dds'] }], [SOURCE, { include: ['gone.dds'] }]]);
+    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'] }]]);
   });
 
-  it('takes back the exclusion of a file the adapter refuses, with the adapter\'s reason', async () => {
+  it('leaves a file the adapter refuses out of the configuration, with the adapter\'s reason', async () => {
     const { mEdit, commands } = over(FIXTURE_ORDER, { refusals: refusing('markOriginFile', 'permission denied') }, undefined, SOURCES);
-    mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
     const file = fileOf('Harder VATS', 'a.dds');
 
     const outcome = await commands.markFiles([file], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: file, reason: 'permission denied' }] } });
-    expect(configuredBy(mEdit)).toEqual([[SOURCE, { exclude: ['a.dds'] }], [SOURCE, { include: ['a.dds'] }]]);
+    expect(configuredBy(mEdit)).toEqual([]);
   });
 
-  it('names both failures when the exclusion of a file that could not be marked cannot be taken back', async () => {
-    const { mEdit, commands } = over(FIXTURE_ORDER, { goneOriginFiles: [fileOf('Harder VATS', 'gone.dds')] }, undefined, SOURCES);
-    mEdit.setCommandHandler('changeBuildConfiguration', (_, change) =>
-      Promise.resolve(change.exclude === undefined ? { refused: true, message: 'the disk refused the write' } : { changed: true }));
-    const gone = fileOf('Harder VATS', 'gone.dds');
+  it('names both failures when the marks of files the configuration refused cannot be taken back', async () => {
+    const { fake, mEdit } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
+    const commands = modCommands({
+      ...fake.adapter,
+      markOriginFile: (origin, relativePath, mark) => mark === 'Included'
+        ? Promise.resolve({ gone: false, refusal: 'the disk refused the rename' })
+        : fake.adapter.markOriginFile(origin, relativePath, mark),
+    }, mEdit, unreadStatus);
+    mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
+    const file = fileOf('Harder VATS', 'a.dds');
 
-    const outcome = await commands.markFiles([gone], 'Excluded');
+    const outcome = await commands.markFiles([file], 'Excluded');
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: [], refused: [
-      { item: gone, reason: '"gone.dds" is gone from disk. Its change to the build configuration could not be taken back: the disk refused the write' },
+      { item: file, reason: 'it holds no build configuration Its mark could not be taken back: the disk refused the rename' },
     ] } });
   });
 });

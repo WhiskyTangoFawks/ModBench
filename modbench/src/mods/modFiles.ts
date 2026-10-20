@@ -109,7 +109,7 @@ export class FileNode extends vscode.TreeItem {
   }
 
   get ref(): OriginFileRef {
-    return { origin: this.origin, relativePath: this.file.relativePath, includedPath: this.file.includedPath };
+    return { origin: this.origin, relativePath: this.file.relativePath };
   }
 }
 
