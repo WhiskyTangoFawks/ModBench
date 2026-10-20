@@ -19,8 +19,8 @@ import { oneAtATime } from './textDocuments/oneAtATime';
 import { Instance } from './instanceLoader/instance';
 import { factsOf, NO_INSTANCE_FACTS, type InstanceFacts } from './instanceLoader/instanceFacts';
 import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoader/loadOrderSnapshot';
-import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2/mo2Instance';
 import { downloadedFileReader, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
+import { adapterForInstance, isInstance } from './instanceAdapter/openInstance';
 import { serveAgent } from './agent/agentServer';
 import { agentPort } from './agent/agentPort';
 import { attachPort, gameFolderSetting, onStringsLanguageChange, stringsLanguage } from './workspaceConfig';
@@ -111,9 +111,9 @@ interface Opened {
 }
 
 function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened {
-  return whenOpened<Opened>(openedFolder(isMo2Instance, (line) => outputChannel.info(line)), {
+  return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
-      const adapter = mo2InstanceAdapter({
+      const adapter = adapterForInstance({
         instanceRoot, gameFolderSetting, archives: downloadedFileReader,
       });
       const instance = own(new Instance({
