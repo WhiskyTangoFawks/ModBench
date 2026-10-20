@@ -318,12 +318,12 @@ public sealed record SelectedRows(JsonElement[] Rows);
 public sealed record NamedObject(PluginAddress? Plugin, string? FormKey, string? EditorId);
 
 /// <summary>The comparison of every copy given, or, with any copy missing, the copies no plugin gave, in the
-/// order given (ADR-0019): <see cref="Compare"/> is null exactly when <see cref="Missing"/> is not empty.</summary>
+/// order given (ADR-0019): <c>Compare</c> is null exactly when <c>Missing</c> is not empty.</summary>
 public sealed record CompareRecordsAnswer(CompareResult? Compare, IReadOnlyList<CopyMissing> Missing)
 {
-    public static CompareRecordsAnswer Compared(CompareResult compare) => new(compare, []);
+    internal static CompareRecordsAnswer Compared(CompareResult compare) => new(compare, []);
 
-    public static CompareRecordsAnswer NotFound(IReadOnlyList<CopyMissing> missing) => new(null, missing);
+    internal static CompareRecordsAnswer NotFound(IReadOnlyList<CopyMissing> missing) => new(null, missing);
 }
 
 // A tri-state rather than two booleans: the states are mutually exclusive. Deleted is absent
