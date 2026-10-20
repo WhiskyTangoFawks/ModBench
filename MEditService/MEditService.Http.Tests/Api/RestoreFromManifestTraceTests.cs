@@ -161,7 +161,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     {
         var response = await Client.PostAsJsonAsync("/mod-status", request);
         response.EnsureSuccessStatusCode();
-        return Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("mods").EnumerateArray());
+        return Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray());
     }
 
     [Fact]

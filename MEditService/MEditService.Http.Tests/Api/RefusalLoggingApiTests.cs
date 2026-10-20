@@ -87,4 +87,34 @@ public sealed class RefusalLoggingApiTests : HostedTests
 
         AssertLoggedOnce("Refused Create record", "RecordTypeNotFound");
     }
+
+    [Fact]
+    public async Task AnUpdateManifestItemRefused_IsLoggedOnce_NamingTheModAndWhy()
+    {
+        using var instance = new ScratchDirectory("refusal-logging-update-manifest-");
+
+        await Client.PostAsJsonAsync("/update-manifest", new
+        {
+            mods = new[] { new { name = "Gone", folder = Path.Combine(instance, "Gone"), metadataFiles = Array.Empty<string>() } },
+            statCache = Path.Combine(instance, "stat-cache"),
+        });
+
+        AssertLoggedOnce("Refused Update manifest of Gone:", "ModFolderMissing");
+    }
+
+    [Fact]
+    public async Task ARestoreFromManifestItemSkipped_IsLoggedOnce_NamingTheModAndWhy()
+    {
+        using var instance = new ScratchDirectory("refusal-logging-restore-");
+        var folder = Directory.CreateDirectory(Path.Combine(instance, "Bare")).FullName;
+
+        await Client.PostAsJsonAsync("/restore-from-manifest", new
+        {
+            mods = new[] { new { name = "Bare", folder, metadataFiles = Array.Empty<string>() } },
+            statCache = Path.Combine(instance, "stat-cache"),
+            excludedSuffix = ".mohidden",
+        });
+
+        AssertLoggedOnce("Refused Restore from manifest of Bare:", "NoManifest");
+    }
 }
