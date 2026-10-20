@@ -12,7 +12,7 @@ const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): I
 const download = (over: { modID?: string; installedKey?: string; name?: string }): DownloadedFile => {
   const { name = 'foo.7z', ...ids } = over;
   return {
-    name, path: `/downloads/${name}`, metaPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1, excluded: false,
+    name, path: `/downloads/${name}`, metadataPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1, excluded: false,
     meta: { status: 'Downloaded', ...ids },
   };
 };

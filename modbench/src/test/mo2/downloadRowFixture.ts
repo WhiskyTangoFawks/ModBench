@@ -17,6 +17,6 @@ export function downloadRowFixture(
     upgrades: [],
     ...overrides,
     path: join(instanceRoot, 'downloads', name),
-    sidecarPath: join(instanceRoot, 'downloads', name + '.meta'),
+    metadataPath: join(instanceRoot, 'downloads', name + '.meta'),
   };
 }

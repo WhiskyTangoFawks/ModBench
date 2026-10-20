@@ -141,7 +141,7 @@ export interface DownloadedFile {
   readonly name: string;
   readonly path: string;
   /** Where its metadata is, or would be. */
-  readonly metaPath: string;
+  readonly metadataPath: string;
   readonly size: number;
   readonly mtimeMs: number;
   readonly excluded: boolean;

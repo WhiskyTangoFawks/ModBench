@@ -44,7 +44,7 @@ const VALUE = instanceValueFixture({
   ],
   downloads: { kind: 'listed', rows: [{
     name: 'rocks.7z', displayName: 'Rocks', status: 'Installed', size: 5, mtimeMs: 0, hasMeta: true, excluded: false,
-    upgrades: [], path: '/d/rocks.7z', sidecarPath: '/d/rocks.7z.meta',
+    upgrades: [], path: '/d/rocks.7z', metadataPath: '/d/rocks.7z.meta',
   }] },
 });
 
