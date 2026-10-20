@@ -15,7 +15,7 @@ public sealed class PluginRowImmutabilityTests
         var plugins = gameProvided
             ? fixture.Plugins.Select(p => p with { NamedProvider = PluginProvider.Game }).ToList()
             : fixture.Plugins;
-        using var index = Indexes.Reconciled(fixture.GameDirectory, plugins);
+        using var index = Indexes.Reconciled(fixture.DataFolder, plugins);
 
         return index.Queries.GetPlugins().Value().Single().IsImmutable;
     }

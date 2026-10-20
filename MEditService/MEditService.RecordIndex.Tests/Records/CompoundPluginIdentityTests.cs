@@ -13,7 +13,7 @@ public class CompoundPluginIdentityTests
     private readonly LoadOrderHolder _holder = new();
 
     private OpenedIndex WithWinner(OpenedIndex index, ScatteredFixtureData fixture, PluginAddress winner) =>
-        index.WithWinner(_holder, fixture.GameDirectory, fixture.Plugins, winner.Origin);
+        index.WithWinner(_holder, fixture.DataFolder, fixture.Plugins, winner.Origin);
 
     private static readonly PluginAddress ModA = new("Shared.esp", "ModA");
     private static readonly PluginAddress ModB = new("Shared.esp", "ModB");

@@ -21,7 +21,7 @@ public sealed class FailedStatusPublicationTests : IDisposable
         var faults = new InMemoryNotificationPublisher();
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, notifications: faults);
-        index.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         faults.FaultsOn = n => n is PluginChangedNotification;
         PluginBinaries.Rewrite(_fixture.Plugins[0].Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
         var versionAnswered = index.Status.Version;
@@ -37,7 +37,7 @@ public sealed class FailedStatusPublicationTests : IDisposable
         });
 
         var version = holder.Apply(LoadOrderArrival.Snapshot(
-            _fixture.GameDirectory, _fixture.InstanceRoot, GameRelease.Fallout4, [_fixture.Plugins[0]]));
+            _fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, [_fixture.Plugins[0]]));
         Waits.Reached(() => index.Status.Version >= version, "the status answering the arrival");
         Volatile.Write(ref stopped, true);
         await reader;

@@ -17,7 +17,7 @@ public sealed class IndexAnnouncementTests : IDisposable
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly LoadOrderHolder _holder = new();
     private readonly OpenedIndex _index;
-    private readonly ScratchDirectory _gameDirectory = new("medit-announce-game-");
+    private readonly ScratchDirectory _dataFolder = new("medit-announce-data-");
     private readonly ScratchDirectory _instanceRoot = new("medit-announce-instance-");
     private readonly string _pluginPath;
 
@@ -31,7 +31,7 @@ public sealed class IndexAnnouncementTests : IDisposable
     public void Dispose()
     {
         _index.Dispose();
-        _gameDirectory.Dispose();
+        _dataFolder.Dispose();
         _instanceRoot.Dispose();
     }
 
@@ -50,7 +50,7 @@ public sealed class IndexAnnouncementTests : IDisposable
 
     private void ReconcileHeld()
     {
-        _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
+        _index.Reconcile(_holder, _dataFolder, [Entry], GameRelease.Fallout4, _instanceRoot);
         _publishedByReconcile = _notifications.Notifications.Count;
     }
 
@@ -96,7 +96,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         var holder = new LoadOrderHolder();
         using var reopened = Indexes.Open(holder, notifications: notifications);
 
-        reopened.Reconcile(holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
+        reopened.Reconcile(holder, _dataFolder, [Entry], GameRelease.Fallout4, _instanceRoot);
 
         Assert.Contains(notifications.Notifications.OfType<PluginChangedNotification>(), changed => changed.Plugin.Equals(Key));
     }
@@ -106,11 +106,11 @@ public sealed class IndexAnnouncementTests : IDisposable
     {
         WriteValidPlugin(_pluginPath);
         ReconcileHeld();
-        var otherPath = Path.Combine(_gameDirectory, "Other.esp");
+        var otherPath = Path.Combine(_dataFolder, "Other.esp");
         var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
         other.Npcs.AddNew("OtherNpc");
         other.WriteToBinary(otherPath);
-        _index.Reconcile(_holder, _gameDirectory, [Entry, new("Other.esp", otherPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true)], GameRelease.Fallout4, _instanceRoot);
+        _index.Reconcile(_holder, _dataFolder, [Entry, new("Other.esp", otherPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true)], GameRelease.Fallout4, _instanceRoot);
         _publishedByReconcile = _notifications.Notifications.Count;
         PluginBinaries.Touch(otherPath);
 

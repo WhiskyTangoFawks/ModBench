@@ -38,7 +38,7 @@ public class RegistrationScopingTests
             Holder = new LoadOrderHolder();
             Opens = new GatedPluginAdapter();
             Index = Indexes.Open(Holder, Opens);
-            Index.Reconcile(Holder, Plugins.GameDirectory, Plugins.Plugins, GameRelease.Fallout4);
+            Index.Reconcile(Holder, Plugins.DataFolder, Plugins.Plugins, GameRelease.Fallout4);
 
             using var beta = Fallout4Mod.CreateFromBinaryOverlay(
                 Plugins.Plugins.Single(p => p.Name == BetaKey.Name).Path, Fallout4Release.Fallout4);
@@ -68,7 +68,7 @@ public class RegistrationScopingTests
             Index.ResolutionOf(SharedNpcFk, AlphaKey, BetaNpcFk).State;
 
         public void Reconcile(IReadOnlyList<LoadOrderEntry> snapshot) =>
-            Index.Reconcile(Holder, Plugins.GameDirectory, snapshot, GameRelease.Fallout4);
+            Index.Reconcile(Holder, Plugins.DataFolder, snapshot, GameRelease.Fallout4);
 
         public IReadOnlyList<LoadOrderEntry> WithoutBeta => [.. Plugins.Plugins.Where(p => p.Name != BetaKey.Name)];
 

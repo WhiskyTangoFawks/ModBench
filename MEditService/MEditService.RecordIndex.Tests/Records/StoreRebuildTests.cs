@@ -29,12 +29,12 @@ public sealed class StoreRebuildTests : IDisposable
     private PluginAddress Key => _fixture.Plugins.Single().KeyOf();
 
     private void Reconcile(string? instanceRoot) =>
-        _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, instanceRoot);
+        _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, instanceRoot);
 
     [Fact]
     public void AnEmptySnapshot_ReconcilesToAnIndexThatAnswersNothing()
     {
-        _index.Reconcile(_holder, _fixture.GameDirectory, [], GameRelease.Fallout4);
+        _index.Reconcile(_holder, _fixture.DataFolder, [], GameRelease.Fallout4);
 
         Assert.Equal(0, _index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 1, offset: 0).Value().Total);
     }
@@ -47,7 +47,7 @@ public sealed class StoreRebuildTests : IDisposable
         _index.Dispose();
 
         using var next = Indexes.Open(_holder, _opens);
-        next.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
+        next.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(2, _opens.OpenedTotal);
     }
@@ -156,7 +156,7 @@ public sealed class StoreRebuildTests : IDisposable
         };
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, notifications: notifications);
-        index.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         index.SetFilter(MatchesNpcA, "npc-a.sql");
         armed = true;
 
@@ -214,7 +214,7 @@ public sealed class StoreRebuildTests : IDisposable
         var notifications = new InMemoryNotificationPublisher();
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, gate, notifications: notifications);
-        index.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         PluginBinaries.Touch(_fixture.Plugins.Single().Path);
         gate.ParkNextOpenOf(Key.Name);
         Task? parked = null;
@@ -236,7 +236,7 @@ public sealed class StoreRebuildTests : IDisposable
         index.Dispose();
         var opened = gate.OpenedTotal;
         using var next = Indexes.Open(holder, gate);
-        next.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        next.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
         Assert.Equal(opened, gate.OpenedTotal);
         Assert.NotEmpty(next.ListedIn(Key));
@@ -260,7 +260,7 @@ public sealed class StoreRebuildTests : IDisposable
     {
         var earlierHolder = new LoadOrderHolder();
         using (var earlier = Indexes.Open(earlierHolder, _opens))
-            earlier.Reconcile(earlierHolder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+            earlier.Reconcile(earlierHolder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         var indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex = IndexFiles.In(_fixture.InstanceRoot);
         var bytesBeforeHold = File.ReadAllBytes(indexPathWhoseOpenFileDeletionSucceedsOnPosixAndWouldDestroyTheLiveIndex);
         StoreRebuildRefused? refusal;

@@ -23,7 +23,7 @@ public sealed class ReconcileScatteredTests
             .BuildScattered();
 
         using var index = OpenIndex(holder);
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(1, index.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
         Assert.Equal(1, index.CountOf(new PluginAddress("B.esp", PluginOrigin.DataDirectory), "npc_"));
@@ -44,7 +44,7 @@ public sealed class ReconcileScatteredTests
             .BuildScattered();
 
         using var index = OpenIndex(holder);
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
 
         var winner = index.Queries.GetRecord(shared.ToString()).Value();
         Assert.NotNull(winner);
@@ -63,9 +63,9 @@ public sealed class ReconcileScatteredTests
 
         using var opens = new GatedPluginAdapter();
         using var index = Indexes.Open(holder, opens);
-        index.Reconcile(holder, fx.GameDirectory, [fx.Plugins[0]], GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, [fx.Plugins[0]], GameRelease.Fallout4);
 
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(["A.esp", "B.esp"], opens.Opened);
         Assert.Equal(1, index.CountOf(new PluginAddress("A.esp", PluginOrigin.DataDirectory), "npc_"));
@@ -84,7 +84,7 @@ public sealed class ReconcileScatteredTests
         using var adapter = new GatedPluginAdapter(poisonPlugin: "Bad.esp");
         using var index = Indexes.Open(holder, adapter);
 
-        index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Contains(index.Status.Failures, f => f.Name == "Bad.esp");
         Assert.Equal(1, index.CountOf(new PluginAddress("Good.esp", PluginOrigin.DataDirectory), "npc_"));

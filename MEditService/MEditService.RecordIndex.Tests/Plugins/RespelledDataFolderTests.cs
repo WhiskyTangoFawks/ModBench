@@ -6,13 +6,13 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.RecordIndex.Tests.Plugins;
 
-public sealed class RespelledGameFolderTests
+public sealed class RespelledDataFolderTests
 {
     [Fact]
-    public void ALocalizedPlugin_IsNotReindexed_WhenTheGameFolderIsSpelledThroughASymlink()
+    public void ALocalizedPlugin_IsNotReindexed_WhenTheDataFolderIsSpelledThroughASymlink()
     {
         var holder = new LoadOrderHolder();
-        using var data = new PluginFixtureBuilder("respelled-game-folder")
+        using var data = new PluginFixtureBuilder("respelled-data-folder")
             .WithPlugin("A.esp", m =>
             {
                 m.Doors.AddNew("MainDoor").Name = new TranslatedString(Language.English, "The Big Door");
@@ -22,7 +22,7 @@ public sealed class RespelledGameFolderTests
         using (var cold = Indexes.Open(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         using var scratch = new ScratchDirectory("respelled-");
-        var link = Path.Combine(scratch, "game");
+        var link = Path.Combine(scratch, "Data");
         Directory.CreateSymbolicLink(link, data.DataFolder);
         try
         {

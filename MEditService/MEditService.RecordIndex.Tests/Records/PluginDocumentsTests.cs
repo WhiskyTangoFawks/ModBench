@@ -58,7 +58,7 @@ public class PluginDocumentsTests
         (IReadOnlyList<RecordSummary> Records, string HeaderOrigin) ListedWhileWinning(string origin)
         {
             var plugin = new PluginAddress("Shared.esp", origin);
-            index.WithWinner(holder, fixture.GameDirectory, fixture.Plugins, origin);
+            index.WithWinner(holder, fixture.DataFolder, fixture.Plugins, origin);
             return (index.ListedIn(plugin), index.DocumentOf(header, plugin).Origin);
         }
 

@@ -53,7 +53,7 @@ public sealed class SourceIngestTests : IDisposable
 
     private string ModFolder => _entry.ModFolderOf();
 
-    private OpenedIndex LaunchedFreshOverTheSameSourceModTreeAndToldNothing() => Indexes.Reconciled(_fixture.GameDirectory, _fixture.Plugins);
+    private OpenedIndex LaunchedFreshOverTheSameSourceModTreeAndToldNothing() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
 
     private string NpcSourceFile(OpenedIndex index) =>
         _entry.SourceFileOf(index.DocumentOf(_npc, Plugin));
@@ -246,10 +246,10 @@ public sealed class SourceIngestTests : IDisposable
     public void APluginWhoseBinaryCannotBeOpened_TakesARefreshOfItsSourceWithoutThrowing()
     {
         File.WriteAllText(_entry.Path, "this is not a plugin");
-        var partnerPath = Path.Combine(_fixture.GameDirectory, "Partner.esp");
+        var partnerPath = Path.Combine(_fixture.DataFolder, "Partner.esp");
         PluginBinaries.Rewrite(partnerPath, mod => mod.Npcs.AddNew("PartnerNpc"));
         using var index = Indexes.Reconciled(
-            _fixture.GameDirectory,
+            _fixture.DataFolder,
             [.. _fixture.Plugins, new LoadOrderEntry("Partner.esp", partnerPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true)]);
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
         PluginBinaries.Touch(partnerPath);

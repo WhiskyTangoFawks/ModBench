@@ -295,7 +295,7 @@ public class PlacementIndexingTests
         var cellKey = placedCell.ToString();
         foreach (var (winner, other) in new[] { ("ModA", "ModB"), ("ModB", "ModA") })
         {
-            index.WithWinner(holder, fixture.GameDirectory, fixture.Plugins, winner);
+            index.WithWinner(holder, fixture.DataFolder, fixture.Plugins, winner);
             Assert.NotNull(index.PlacementGroupIn(new PluginAddress("Placed.esp", winner), cellKey, formKey));
             Assert.Null(index.PlacementGroupIn(new PluginAddress("Placed.esp", other), cellKey, formKey));
             Assert.Null(index.PlacementGroupIn(new PluginAddress("Placed.esp", "ModC"), cellKey, formKey));
@@ -341,7 +341,7 @@ public class PlacementIndexingTests
         public OpenedIndex Index { get; }
 
         public OpenedIndex WithWinner(PluginAddress winner) =>
-            Index.WithWinner(_holder, Fixture.GameDirectory, Fixture.Plugins, winner.Origin);
+            Index.WithWinner(_holder, Fixture.DataFolder, Fixture.Plugins, winner.Origin);
         public string WorldspaceFk { get; }
         public string ExtCellFk { get; }
         public string PlacedFk { get; }
