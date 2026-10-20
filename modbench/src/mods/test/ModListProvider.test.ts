@@ -309,7 +309,7 @@ describe('ModListProvider', () => {
 
   it('returns a separator’s mods, the entries preceding it, as ModNodes with checkbox, version, tooltip, the later file entry first in the default losing-at-top view', async () => {
     const provider = makeProvider([
-      mod('UFO4P', true, { version: 'v2.1.5', nexusId: '4598', archiveFilename: 'UFO4P.7z' }),
+      mod('UFO4P', true, { version: 'v2.1.5', nexusId: '4598', installationFileName: 'UFO4P.7z' }),
       mod('Disabled Mod', false),
       sep('Section'),
     ]);
@@ -678,7 +678,7 @@ describe('ModListProvider', () => {
 
   describe('a mod row, whatever files it wins or loses (mods.md, A row, Mod)', () => {
     const contested = () => indexedValueOf(
-      [mod('Winner'), mod('Loser', true, { version: '1.2', nexusId: '42', archiveFilename: 'loser.7z' })],
+      [mod('Winner'), mod('Loser', true, { version: '1.2', nexusId: '42', installationFileName: 'loser.7z' })],
       { Winner: { files: [file('Winner', 'a.dds')] }, Loser: { files: [file('Loser', 'a.dds'), file('Loser', 'b.dds')] } },
     );
     const rowOf = async (name: string) => {
@@ -741,7 +741,7 @@ describe('ModListProvider', () => {
     });
 
     it('names the mod manager the value names, not MO2 over another manager\'s instance', async () => {
-      const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries(), { managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'order.sidecar' } })) });
+      const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries(), { managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadedFileMetadataFile: 'order.metadata' } })) });
       const row = expectInstanceOf((await provider.getChildren()).find((n) => n instanceof OverwriteNode), OverwriteNode);
 
       expect(row.tooltip).toBe('The files tools wrote while Another Manager ran them, which win over every mod.');

@@ -7,12 +7,12 @@ const modsDir = join(__dirname, '..', '..', '..', '..', 'test', 'mo2', 'fixtures
 const meta = (mod: string) => readFileSync(join(modsDir, mod, 'meta.ini'), 'utf8');
 
 describe('parseMetaIni', () => {
-  it('reads version, nexusId (modid) and archiveFilename (installationFile)', () => {
+  it('reads version, nexusId (modid) and installationFileName (installationFile)', () => {
     expect(parseMetaIni(meta('Unofficial Fallout 4 Patch'))).toEqual({
       gameName: 'Fallout4',
       version: '2.1.5.0',
       nexusId: '4598',
-      archiveFilename: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
+      installationFileName: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
     });
   });
 
@@ -25,7 +25,7 @@ describe('parseMetaIni', () => {
       gameName: 'Fallout4',
       version: undefined,
       nexusId: undefined,
-      archiveFilename: undefined,
+      installationFileName: undefined,
     });
   });
 
@@ -34,7 +34,7 @@ describe('parseMetaIni', () => {
       gameName: 'Fallout4',
       version: undefined,
       nexusId: undefined,
-      archiveFilename: undefined,
+      installationFileName: undefined,
     });
   });
 
@@ -93,7 +93,7 @@ describe('parseMetaIni — installedFiles', () => {
 
 describe('writeMetaIni', () => {
   it('emits a [General] section with only the present keys', () => {
-    expect(writeMetaIni({ gameName: 'Fallout4', archiveFilename: 'MyMod-1-2.7z' })).toBe(
+    expect(writeMetaIni({ gameName: 'Fallout4', installationFileName: 'MyMod-1-2.7z' })).toBe(
       '[General]\ngameName=Fallout4\ninstallationFile=MyMod-1-2.7z\n',
     );
   });
@@ -107,13 +107,13 @@ describe('writeMetaIni', () => {
       gameName: 'Fallout4',
       nexusId: '4598',
       version: '2.1.5.0',
-      archiveFilename: 'UFO4P-4598.7z',
+      installationFileName: 'UFO4P-4598.7z',
     });
     expect(parseMetaIni(text)).toEqual({
       gameName: 'Fallout4',
       version: '2.1.5.0',
       nexusId: '4598',
-      archiveFilename: 'UFO4P-4598.7z',
+      installationFileName: 'UFO4P-4598.7z',
     });
   });
 });
@@ -192,7 +192,7 @@ describe('setOwnedKeysInText', () => {
       gameName: 'Fallout4',
       nexusId: '4598',
       version: '2.0.0',
-      archiveFilename: 'New-4598.7z',
+      installationFileName: 'New-4598.7z',
       installedFiles: [{ nexusId: '4598', fileId: '99999' }],
     });
 

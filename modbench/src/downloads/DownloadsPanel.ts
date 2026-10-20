@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { DownloadedFileSortColumn } from './downloadRows';
-import type { DeletedDownload, DownloadedFileCommands } from '../downloadedFileCommands/downloads';
+import type { DownloadedFileSortColumn } from './downloadedFileRows';
+import type { DeletedDownloadedFile, DownloadedFileCommands } from '../downloadedFileCommands/downloads';
 import type { DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS } from './keyContext';
 import { pluralArgument, registerGesture, singularArgument } from '../drivingLib/gestureEntry';
@@ -40,17 +40,17 @@ const landed = async <Item>(outcome: Promise<SelectionOutcome<Item>>, partial?: 
 
 // Metadata left behind is not a failure (downloads.md, Reporting story 2): the delete already
 // applied, so it is a log-severity partial, never a notification.
-const deletedPartials = (managerNames: Pick<InstanceValue['managerNames'], 'downloadMetadataFile'>) =>
-  ({ landed }: SelectionOutcome<DeletedDownload>): PartialFailure[] =>
+const deletedPartials = (managerNames: Pick<InstanceValue['managerNames'], 'downloadedFileMetadataFile'>) =>
+  ({ landed }: SelectionOutcome<DeletedDownloadedFile>): PartialFailure[] =>
     landed.flatMap(({ name, metadataLeftBehind }) => (metadataLeftBehind === undefined ? [] : [{
-      message: `"${name}" was deleted, but its ${managerNames.downloadMetadataFile} could not be moved to the trash and was left behind`,
+      message: `"${name}" was deleted, but its ${managerNames.downloadedFileMetadataFile} could not be moved to the trash and was left behind`,
       detail: metadataLeftBehind, severity: 'log' as const,
     }]));
 
 function deleteGesture(
   commands: DownloadedFileCommands, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
   ask: AskQuestion, trash: MoveToTrash, log: (line: string) => void,
-): DownloadsGesture<readonly string[], DeletedDownload> {
+): DownloadsGesture<readonly string[], DeletedDownloadedFile> {
   return {
     fromView: async (entry) => {
       const names = pluralArgument(entry, 'downloadedFile').map((node) => node.argument.row.name);
@@ -58,7 +58,7 @@ function deleteGesture(
     },
     fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
     run: (names) => runDownloadsWriting(instance, () =>
-      landed(commands.deleteDownloads(names, trash), deletedPartials(instance.value.managerNames))),
+      landed(commands.deleteDownloadedFiles(names, trash), deletedPartials(instance.value.managerNames))),
     report: (result, names) => {
       if (!result.applied) return;
       reporter.selectionOutcome(
@@ -79,7 +79,7 @@ function markGesture(
     },
     fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
     run: (names) => runDownloadsWriting(instance, () =>
-      landed(excluded ? commands.excludeDownloads(names) : commands.includeDownloads(names))),
+      landed(excluded ? commands.excludeDownloadedFiles(names) : commands.includeDownloadedFiles(names))),
     report: (result, names) => {
       if (!result.applied) return;
       reporter.selectionOutcome(`Could not ${verb} ${result.outcome.refused.length} of ${names.length} downloaded files.`, result.outcome, (name) => name);

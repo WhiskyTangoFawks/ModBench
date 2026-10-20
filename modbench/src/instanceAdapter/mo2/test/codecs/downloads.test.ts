@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parseDownloadMeta,
+  parseDownloadedFileMeta,
   setHiddenInText,
   setInstalledInText,
   setUninstalledInText,
 } from '../../codecs/downloads';
 
-const metaOf = (text: string) => parseDownloadMeta(text).meta;
+const metaOf = (text: string) => parseDownloadedFileMeta(text).meta;
 
-describe('parseDownloadMeta', () => {
+describe('parseDownloadedFileMeta', () => {
   it('uninstalled=true -> Uninstalled status', () => {
     expect(metaOf('[General]\r\nuninstalled=true\r\n').status).toBe('Uninstalled');
   });
@@ -41,19 +41,19 @@ describe('parseDownloadMeta', () => {
   });
 });
 
-describe('parseDownloadMeta hidden', () => {
+describe('parseDownloadedFileMeta hidden', () => {
   it('is false when removed is explicitly false', () => {
-    expect(parseDownloadMeta('[General]\r\nremoved=false\r\n').hidden).toBe(false);
+    expect(parseDownloadedFileMeta('[General]\r\nremoved=false\r\n').hidden).toBe(false);
   });
 
   it('is independent of the Uninstalled Status: both keys coexist', () => {
-    const parsed = parseDownloadMeta('[General]\r\nuninstalled=true\r\nremoved=true\r\n');
+    const parsed = parseDownloadedFileMeta('[General]\r\nuninstalled=true\r\nremoved=true\r\n');
     expect(parsed.meta.status).toBe('Uninstalled');
     expect(parsed.hidden).toBe(true);
   });
 });
 
-describe('parseDownloadMeta values', () => {
+describe('parseDownloadedFileMeta values', () => {
   it('are decoded, as MO2 writes a name holding a comma quoted', () => {
     expect(metaOf('[General]\r\nmodName="A, B"\r\n').modName).toBe('A, B');
   });

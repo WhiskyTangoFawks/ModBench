@@ -46,24 +46,24 @@ import { downloadedFileCommands } from '../../downloadedFileCommands/downloads';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import type { MoveToTrash } from '../../ports/trash';
-import type { DownloadFile, DownloadRow, Instance, InstanceValue } from '../../instanceLoader/instance';
+import type { LocatedDownloadedFileRow, DownloadedFileRow, Instance, InstanceValue } from '../../instanceLoader/instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce, assertSelectionOutcome } from '../../test/surfacingDoubles';
-import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
+import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import { fakeInstanceAdapter, readingFixture, type FakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-const node = (root: string, name: string, row: Partial<DownloadRow> = {}): DownloadedFileNode =>
-  downloadedFileNodeFixture(downloadRowFixture(name, row, root));
+const node = (root: string, name: string, row: Partial<DownloadedFileRow> = {}): DownloadedFileNode =>
+  downloadedFileNodeFixture(downloadedFileRowFixture(name, row, root));
 
 const ROOT = '/instance';
 
 const NO_INSTALLED_MODS_SO_THE_UPGRADE_PICK_NEVER_SHOWS: InstanceValue['mods'] = [];
 
 const fakeInstance = (
-  mods: InstanceValue['mods'] = NO_INSTALLED_MODS_SO_THE_UPGRADE_PICK_NEVER_SHOWS, downloads: readonly DownloadFile[] = [], gameName = 'Fallout 4',
+  mods: InstanceValue['mods'] = NO_INSTALLED_MODS_SO_THE_UPGRADE_PICK_NEVER_SHOWS, downloads: readonly LocatedDownloadedFileRow[] = [], gameName = 'Fallout 4',
 ): Pick<Instance, 'value' | 'refresh'> => ({
-  value: instanceValueFixture({ mods, downloads: { kind: 'listed', rows: downloads }, gameName }),
+  value: instanceValueFixture({ mods, downloadedFiles: { kind: 'listed', rows: downloads }, gameName }),
   refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
 });
 
@@ -97,7 +97,7 @@ async function makeInstanceRoot(): Promise<string> {
   return root;
 }
 
-async function writeArchive(root: string, name: string, data = 'data'): Promise<string> {
+async function writeDownloadedFile(root: string, name: string, data = 'data'): Promise<string> {
   const path = join(root, 'downloads', name);
   await writeFile(path, data);
   return path;
@@ -127,16 +127,16 @@ function invoke(commandId: string, ...args: unknown[]): unknown {
 describe('registerDownloadsSingleRowCommands', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('open: OS-opens the archive and asks nothing, whether or not there is a .meta', async () => {
+  it('open: OS-opens the downloaded file and asks nothing, whether or not there is a .meta', async () => {
     const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
+    const downloadedFile = await writeDownloadedFile(root, 'foo.7z');
     await writeMeta(root, 'foo.7z');
 
     registerDownloadsSingleRowCommands(recordingReporter(), () => []);
     invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }));
 
     await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
-    expect(calledFsPath(openExternal)).toBe(archive);
+    expect(calledFsPath(openExternal)).toBe(downloadedFile);
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(showTextDocument).not.toHaveBeenCalled();
   });
@@ -149,7 +149,7 @@ describe('registerDownloadsSingleRowCommands', () => {
 
   it('open: on failure, logs and surfaces an error notification naming the action and row', async () => {
     const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
+    await writeDownloadedFile(root, 'foo.7z');
     openExternal.mockRejectedValueOnce(new Error('no handler for this file type'));
     const report = recordingReporter();
 
@@ -162,7 +162,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     ]);
   });
 
-  it('open metadata: opens the sidecar in the editor and asks nothing', async () => {
+  it('open metadata: opens the metadata file and asks nothing', async () => {
     const root = await makeInstanceRoot();
     const meta = await writeMeta(root, 'foo.7z');
 
@@ -263,7 +263,7 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
 
 
   it('a read that fails after the gesture leaves the rows and says so', async () => {
-    const disk = new FakeInstance(instanceValueFixture({ downloads: { kind: 'listed', rows: [downloadRowFixture('foo.7z', {}, ROOT)] } }));
+    const disk = new FakeInstance(instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('foo.7z', {}, ROOT)] } }));
     const provider = new DownloadsProvider({ instance: disk });
     const instance = { value: disk.value, refresh: () => { disk.fail('locked'); return Promise.resolve(); } };
 
@@ -282,7 +282,7 @@ describe('modbench.downloadedFile.exclude / include — a multi-name selection',
     ['exclude', {}, 'Excluded'],
     ['include', { excluded: true }, 'Included'],
   ])('%s: given the right-clicked row and the selection, changes the whole selection, refuses the gone file, and reports once', async (verb, row, mark) => {
-    const fake = fakeInstanceAdapter(readingFixture(), { goneDownloads: new Set(['gone.7z']) });
+    const fake = fakeInstanceAdapter(readingFixture(), { goneDownloadedFiles: new Set(['gone.7z']) });
     const reporter = recordingReporter();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceThatReads, reporter, scriptedDialog(), trash, downloadsLog, () => []);
@@ -384,14 +384,14 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
 
     const instance = {
       ...instanceThatReads,
-      value: instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadMetadataFile: 'sidecar' } }),
+      value: instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadedFileMetadataFile: 'metadata file' } }),
     };
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instance, reporter, scriptedDialog('Delete'), trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.delete', node(ROOT, 'foo.7z'));
 
     expect(downloadsLogLines).toEqual([
-      '"foo.7z" was deleted, but its sidecar could not be moved to the trash and was left behind: EPERM: operation not permitted',
+      '"foo.7z" was deleted, but its metadata file could not be moved to the trash and was left behind: EPERM: operation not permitted',
     ]);
     expect(reporter.reports).toEqual([]);
   });
@@ -427,7 +427,7 @@ describe('the Downloads gestures called by the agent', () => {
   beforeEach(() => vi.clearAllMocks());
 
   const named = (...names: string[]) => new AgentCall(names.map((name) => ({ kind: 'downloadedFile' as const, name })), {});
-  const listing = (...names: string[]) => fakeInstance([], names.map((name) => downloadRowFixture(name, {}, ROOT)));
+  const listing = (...names: string[]) => fakeInstance([], names.map((name) => downloadedFileRowFixture(name, {}, ROOT)));
   const viewSelection = () => [node(ROOT, 'selected.7z')];
 
   it.each([
@@ -447,7 +447,7 @@ describe('the Downloads gestures called by the agent', () => {
   });
 
   it('exclude answers the file gone from disk as refused, and the others as landed', async () => {
-    const fake = fakeInstanceAdapter(readingFixture(), { goneDownloads: new Set(['gone.7z']) });
+    const fake = fakeInstanceAdapter(readingFixture(), { goneDownloadedFiles: new Set(['gone.7z']) });
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), listing('a.7z', 'gone.7z'), recordingReporter(), scriptedDialog(), trash, downloadsLog, viewSelection);
     const answered = await invoke('modbench.downloadedFile.exclude', named('a.7z', 'gone.7z'));
@@ -483,7 +483,7 @@ describe('the Downloads gestures called by the agent', () => {
   });
 
   it('delete refuses, item by item, a file the adapter finds gone, whatever the Instance value lists', async () => {
-    const fake = fakeInstanceAdapter(readingFixture(), { goneDownloads: new Set(['gone.7z']) });
+    const fake = fakeInstanceAdapter(readingFixture(), { goneDownloadedFiles: new Set(['gone.7z']) });
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), listing('a.7z'), recordingReporter(), scriptedDialog(), trash, downloadsLog, viewSelection);
     const answered = await invoke('modbench.downloadedFile.delete', named('a.7z', 'gone.7z'));
@@ -591,17 +591,17 @@ describe('the Downloads gestures from the palette, handed no row, act on the vie
 
   it('open opens the one selected file', async () => {
     const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
+    const downloadedFile = await writeDownloadedFile(root, 'foo.7z');
 
     registerDownloadsSingleRowCommands(recordingReporter(), () => [node(root, 'foo.7z')]);
     await invoke('modbench.downloadedFile.open');
 
-    expect(calledFsPath(openExternal)).toBe(archive);
+    expect(calledFsPath(openExternal)).toBe(downloadedFile);
   });
 
   it('open metadata opens the one selected file\'s metadata', async () => {
     const root = await makeInstanceRoot();
-    await writeArchive(root, 'foo.7z');
+    await writeDownloadedFile(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');
 
     registerDownloadsSingleRowCommands(recordingReporter(), () => [node(root, 'foo.7z', { hasMeta: true })]);

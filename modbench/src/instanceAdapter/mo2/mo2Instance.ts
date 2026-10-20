@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { gameFolderResolver, STEAM, type GameDetectors } from '../gameFolder/gameFolderResolver';
 import { myGamesResolver } from '../gameFolder/myGames';
-import type { ArchiveReader, GameFolderSetting, InstanceAdapter } from '../instanceAdapter';
+import type { InstallationFileReader, GameFolderSetting, InstanceAdapter } from '../instanceAdapter';
 import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
@@ -32,7 +32,7 @@ interface Mo2Machine {
 
 type Mo2InstanceOptions = {
   instanceRoot: string;
-  archives: ArchiveReader;
+  installationFileReader: InstallationFileReader;
 } & (Mo2Machine | { context: Mo2Context });
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
@@ -43,7 +43,7 @@ export function isMo2Instance(root: string): boolean {
 }
 
 export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter {
-  const { instanceRoot, archives } = options;
+  const { instanceRoot, installationFileReader } = options;
   const context: Mo2Context = 'context' in options ? options.context : {
     instanceRoot,
     resolveGameFolder: gameFolderResolver(options.gameFolderSetting, options.detectors),
@@ -52,7 +52,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
     watch: mo2Watch(instanceRoot, options.gameFolderSetting.changed),
     mo2Running: () => programRunning(MO2_PROGRAM),
   };
-  const hashes = hashIndex(hashIndexDir(instanceRoot), archives);
+  const hashes = hashIndex(hashIndexDir(instanceRoot), installationFileReader);
   const source = readingSource(context);
   return {
     names: source.names,
@@ -60,7 +60,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder: async () => (await source.settings()).gameFolder(),
-    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, archives, source), ...mo2Repository(context, hashes), ...mo2Submodules(context),
+    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source), ...mo2Repository(context, hashes), ...mo2Submodules(context),
     originFileHash: hashes.originFileHash,
     statCacheFolder: statCacheDir(instanceRoot),
     subscribe: (listener) => context.watch.subscribe(listener),

@@ -113,7 +113,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own):
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
-        instanceRoot, gameFolderSetting, archives: downloadedFileReader,
+        instanceRoot, gameFolderSetting, installationFileReader: downloadedFileReader,
       });
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
@@ -139,7 +139,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({
-    commands: downloadedFileCommands(adapter), instance, reporter: reporterFor('downloadList'), ask, trash,
+    commands: downloadedFileCommands(adapter), instance, reporter: reporterFor('downloadedFileList'), ask, trash,
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
@@ -149,8 +149,8 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const mods = own(createModsView({
     instance, commands: modCommands(adapter, client, readStatus), copyReads: adapter, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
-    downloadInstall: {
-      reporter: reporterFor('downloadList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),
+    downloadedFileInstallReporting: {
+      reporter: reporterFor('downloadedFileList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),
       progressViewId: DOWNLOADS_KEY_ARGS.view,
     },
     nexusRow: nexusRowInFocusedView(own, deps.focusedView, [MODS_KEY_ARGS.view, DOWNLOADS_KEY_ARGS.view], 'modbench.mod.nexusRowIn'),

@@ -8,7 +8,7 @@ import { readGameName } from './codecs/modOrganizerIni';
 import { ensureDir, exists, get, readOrReason, withLock, write } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
 import type { FileRead, InstallationFile, InstanceAdapter, ModMetadata } from '../instanceAdapter';
-import { downloadFile, modMetaFileIn, settingsFile } from './layout';
+import { downloadedFilePath, modMetaFileIn, settingsFile } from './layout';
 import { currentDownloadsDir, folderHolding, newModFolder, type Mo2Context } from './mo2Context';
 import { readMetaIni } from './mo2Reads';
 import { formatNexusPage, parseNexusPage } from '../nexusPage';
@@ -16,7 +16,7 @@ import { formatNexusPage, parseNexusPage } from '../nexusPage';
 // MO2 records a file installed from outside the downloads folder by its whole path, and reinstalls from the
 // downloads folder by its name once that path is gone.
 async function reinstallPath(context: Mo2Context, recorded: string): Promise<string> {
-  return isAbsolute(recorded) && (await exists(recorded)) ? recorded : downloadFile(await currentDownloadsDir(context), basename(recorded));
+  return isAbsolute(recorded) && (await exists(recorded)) ? recorded : downloadedFilePath(await currentDownloadsDir(context), basename(recorded));
 }
 
 // The file a mod's metadata names: the first installed from its Nexus mod, else the first.
@@ -61,10 +61,10 @@ async function planMetadata(context: Mo2Context, mod: string, { version, install
   if (entryNamed(mod).kind === 'separator') return { file, held: '', changes: {} };
   const held = await get(file, '');
   const carried = parseMetaIni(held);
-  const heldName = carried.archiveFilename === undefined ? undefined : basename(carried.archiveFilename);
+  const heldName = carried.installationFileName === undefined ? undefined : basename(carried.installationFileName);
   const changes: Partial<OwnedMetaKeys> = version === undefined || version === carried.version ? {} : { version };
   if (chosen === undefined) return { file, held, changes };
-  if (chosen.name !== heldName) Object.assign(changes, { archiveFilename: chosen.name });
+  if (chosen.name !== heldName) Object.assign(changes, { installationFileName: chosen.name });
   if (chosen.page !== undefined) {
     const fromPage = await pageChanges(carried, chosen.page, context);
     if ('unwritable' in fromPage) return fromPage;
@@ -79,9 +79,9 @@ async function planMetadata(context: Mo2Context, mod: string, { version, install
 }
 
 async function metadataOf(meta: MetaIni, context: Mo2Context): Promise<ModMetadata> {
-  const { archiveFilename } = meta;
+  const { installationFileName } = meta;
   const { page } = await nexusPageOf(meta, context);
-  return { version: meta.version, installationFile: archiveFilename === undefined ? undefined : { name: basename(archiveFilename), page } };
+  return { version: meta.version, installationFile: installationFileName === undefined ? undefined : { name: basename(installationFileName), page } };
 }
 
 export function mo2Installation(
@@ -107,11 +107,11 @@ export function mo2Installation(
 
     async installationFile(mod) {
       const meta = await readMetaIni(context, mod, 'list');
-      const { archiveFilename } = meta;
-      if (archiveFilename === undefined) return { kind: 'read', answer: undefined };
+      const { installationFileName } = meta;
+      if (installationFileName === undefined) return { kind: 'read', answer: undefined };
       const refused = (why: string): FileRead<InstallationFile | undefined> =>
-        ({ kind: 'unreadable', reason: `Modbench cannot tell what ${archiveFilename} installs: ${why}` });
-      const located = await readOrReason(() => reinstallPath(context, archiveFilename));
+        ({ kind: 'unreadable', reason: `Modbench cannot tell what ${installationFileName} installs: ${why}` });
+      const located = await readOrReason(() => reinstallPath(context, installationFileName));
       if (located.kind === 'unreadable') return refused(located.reason);
       const path = located.answer;
       const hashed = await downloadedFileHash(path);
@@ -121,7 +121,7 @@ export function mo2Installation(
     async downloadedFile(name) {
       // A manifest is text from the repository: a name with a folder in it would reach outside the downloads folder.
       if (basename(name) !== name || name === '..') return { kind: 'read', answer: undefined };
-      const located = await readOrReason(async () => downloadFile(await currentDownloadsDir(context), name));
+      const located = await readOrReason(async () => downloadedFilePath(await currentDownloadsDir(context), name));
       if (located.kind === 'unreadable') return located;
       const path = located.answer;
       if (!(await exists(path))) return { kind: 'read', answer: undefined };

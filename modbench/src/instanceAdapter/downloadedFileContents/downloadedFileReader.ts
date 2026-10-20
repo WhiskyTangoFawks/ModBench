@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { errnoCode } from '../errno';
-import { ARCHIVE_EXTENSIONS } from './archiveNames';
+import { INSTALLATION_FILE_EXTENSIONS } from './installationFileNames';
 import { errorMessage } from '../../ports/errorMessage';
-import type { ArchiveReader } from './archiveReader';
+import type { InstallationFileReader } from './installationFileReader';
 
 const CANDIDATES = ['7z', '7za', '7zz'] as const;
 
@@ -18,16 +18,16 @@ function spawnCollecting(bin: string, args: string[]): Promise<string> {
   });
 }
 
-async function stdoutOfSevenZip(archivePath: string, verb: string, args: string[]): Promise<string> {
+async function stdoutOfSevenZip(installationFilePath: string, verb: string, args: string[]): Promise<string> {
   for (const bin of CANDIDATES) {
     try {
       return await spawnCollecting(bin, args);
     } catch (err) {
       if (errnoCode(err) === 'ENOENT') continue;
-      throw new Error(`Failed to ${verb} ${archivePath}: ${errorMessage(err)}`);
+      throw new Error(`Failed to ${verb} ${installationFilePath}: ${errorMessage(err)}`);
     }
   }
-  const extensions = ARCHIVE_EXTENSIONS.map((ext) => `.${ext}`).join('/');
+  const extensions = INSTALLATION_FILE_EXTENSIONS.map((ext) => `.${ext}`).join('/');
   throw new Error(
     `No 7z binary found (tried ${CANDIDATES.join(', ')}). ` +
       `Install p7zip-full to extract ${extensions} archives.`,
@@ -42,9 +42,9 @@ function fileEntries(listing: string): string[] {
   });
 }
 
-export const downloadedFileReader: ArchiveReader = {
-  list: async (archivePath) => fileEntries(await stdoutOfSevenZip(archivePath, 'list', ['l', '-slt', '-ba', '-sccUTF-8', archivePath])),
-  extract: async (archivePath, destDir) => {
-    await stdoutOfSevenZip(archivePath, 'extract', ['x', archivePath, `-o${destDir}`, '-y']);
+export const downloadedFileReader: InstallationFileReader = {
+  list: async (installationFilePath) => fileEntries(await stdoutOfSevenZip(installationFilePath, 'list', ['l', '-slt', '-ba', '-sccUTF-8', installationFilePath])),
+  extract: async (installationFilePath, destDir) => {
+    await stdoutOfSevenZip(installationFilePath, 'extract', ['x', installationFilePath, `-o${destDir}`, '-y']);
   },
 };

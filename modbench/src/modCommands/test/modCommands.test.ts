@@ -206,12 +206,12 @@ describe('deleteSeparators', () => {
 });
 
 describe('uninstallMods', () => {
-  const ARCHIVE = 'Unofficial Patch-4598-2-1-5.7z';
+  const INSTALLATION_FILE = 'Unofficial Patch-4598-2-1-5.7z';
   const installedFrom = (...pairs: readonly (readonly [string, string])[]): InstanceAnswers =>
     ({ metadata: new Map(pairs.map(([mod, name]) => [mod, { installationFile: { name } }])) });
 
-  it('trashes the folder, then the source folder, then removes the line, then marks the download uninstalled, in that order', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, installedFrom(['Unofficial Patch', ARCHIVE]));
+  it('trashes the folder, then the source folder, then removes the line, then marks the downloaded file uninstalled, in that order', async () => {
+    const { fake, commands } = over(FIXTURE_ORDER, installedFrom(['Unofficial Patch', INSTALLATION_FILE]));
 
     const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
 
@@ -220,11 +220,11 @@ describe('uninstallMods', () => {
       { verb: 'trashEntryFolder', entry: { kind: 'mod', name: 'Unofficial Patch' } },
       { verb: 'trashSourceFolder', mod: 'Unofficial Patch' },
       orderWrite([{ kind: 'dropMod', mod: 'Unofficial Patch' }]),
-      { verb: 'markDownloadedFile', name: ARCHIVE, mark: 'Uninstalled' },
+      { verb: 'markDownloadedFile', name: INSTALLATION_FILE, mark: 'Uninstalled' },
     ]);
   });
 
-  it('removes every selected mod\'s line in one write, and marks no download for a mod whose meta names none', async () => {
+  it('removes every selected mod\'s line in one write, and marks no downloaded file for a mod whose meta names none', async () => {
     const { fake, commands } = over();
 
     const outcome = await commands.uninstallMods(['Harder VATS', 'ENBoost'], NO_TRASH);
@@ -262,9 +262,9 @@ describe('uninstallMods', () => {
     expect(verbs(fake.calls)).not.toContain('markDownloadedFile');
   });
 
-  it('writes nothing for a mod whose folder the trash refuses, refusing it with the reason, while the others land and mark, leaving the refused mod\'s download unmarked', async () => {
+  it('writes nothing for a mod whose folder the trash refuses, refusing it with the reason, while the others land and mark, leaving the refused mod\'s downloaded file unmarked', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, {
-      ...installedFrom(['Harder VATS', 'Harder VATS-1-0.7z'], ['Unofficial Patch', ARCHIVE]),
+      ...installedFrom(['Harder VATS', 'Harder VATS-1-0.7z'], ['Unofficial Patch', INSTALLATION_FILE]),
       refusals: (call) => (call.verb === 'trashEntryFolder' && call.entry.name === 'Harder VATS' ? 'trash unavailable' : undefined),
     });
 
@@ -279,12 +279,12 @@ describe('uninstallMods', () => {
     });
     expect(fake.calls.filter((call) => call.verb === 'changeModOrder')).toEqual([orderWrite([{ kind: 'dropMod', mod: 'Unofficial Patch' }])]);
     expect(fake.calls.filter((call) => call.verb === 'markDownloadedFile')).toEqual([
-      { verb: 'markDownloadedFile', name: ARCHIVE, mark: 'Uninstalled' },
+      { verb: 'markDownloadedFile', name: INSTALLATION_FILE, mark: 'Uninstalled' },
     ]);
   });
 
   it('a mod whose line cannot go after its folder was trashed still lands, carrying the part that failed, and marks nothing for it', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, { ...installedFrom(['Unofficial Patch', ARCHIVE]), refusals: refusing('changeModOrder', 'disk full') });
+    const { fake, commands } = over(FIXTURE_ORDER, { ...installedFrom(['Unofficial Patch', INSTALLATION_FILE]), refusals: refusing('changeModOrder', 'disk full') });
 
     const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
 
@@ -294,8 +294,8 @@ describe('uninstallMods', () => {
     expect(verbs(fake.calls)).not.toContain('markDownloadedFile');
   });
 
-  it('carries the mark\'s refusal beside the landed mod, rather than leaving the download claiming a mod that is gone', async () => {
-    const { commands } = over(FIXTURE_ORDER, { ...installedFrom(['Unofficial Patch', ARCHIVE]), refusals: refusing('markDownloadedFile', 'download_directory could not be resolved') });
+  it('carries the mark\'s refusal beside the landed mod, rather than leaving the downloaded file claiming a mod that is gone', async () => {
+    const { commands } = over(FIXTURE_ORDER, { ...installedFrom(['Unofficial Patch', INSTALLATION_FILE]), refusals: refusing('markDownloadedFile', 'download_directory could not be resolved') });
 
     const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);
 
@@ -305,8 +305,8 @@ describe('uninstallMods', () => {
     });
   });
 
-  it('lands the mod whose download is gone from disk, with no refusal', async () => {
-    const { commands } = over(FIXTURE_ORDER, { ...installedFrom(['Harder VATS', 'Long Gone-1-0.7z']), goneDownloads: new Set(['Long Gone-1-0.7z']) });
+  it('lands the mod whose downloaded file is gone from disk, with no refusal', async () => {
+    const { commands } = over(FIXTURE_ORDER, { ...installedFrom(['Harder VATS', 'Long Gone-1-0.7z']), goneDownloadedFiles: new Set(['Long Gone-1-0.7z']) });
 
     const outcome = await commands.uninstallMods(['Harder VATS'], NO_TRASH);
 
@@ -314,7 +314,7 @@ describe('uninstallMods', () => {
   });
 
   it('reads the installation file before the folder that records it goes', async () => {
-    const { fake, commands } = over(FIXTURE_ORDER, installedFrom(['Unofficial Patch', ARCHIVE]));
+    const { fake, commands } = over(FIXTURE_ORDER, installedFrom(['Unofficial Patch', INSTALLATION_FILE]));
     const writesBeforeRead: number[] = [];
     const read = fake.adapter.modMetadata.bind(fake.adapter);
     fake.adapter.modMetadata = (mod) => { writesBeforeRead.push(fake.calls.length); return read(mod); };
@@ -325,7 +325,7 @@ describe('uninstallMods', () => {
     expect(verbs(fake.calls)[0]).toBe('trashEntryFolder');
   });
 
-  it('lands the mod carrying why its installation file could not be read, marking no download', async () => {
+  it('lands the mod carrying why its installation file could not be read, marking no downloaded file', async () => {
     const { fake, commands } = over(FIXTURE_ORDER, { unreadableMetadata: new Map([['Unofficial Patch', 'meta.ini is locked']]) });
 
     const outcome = await commands.uninstallMods(['Unofficial Patch'], NO_TRASH);

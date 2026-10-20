@@ -11,8 +11,8 @@ import { adapterOver, readDownloadedFile } from '../../test/mo2/adapterOver';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 
 const NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
-const ARCHIVE = `downloads/${NAME}`;
-const META = `${ARCHIVE}.meta`;
+const DOWNLOADED_FILE_NAME = `downloads/${NAME}`;
+const META = `${DOWNLOADED_FILE_NAME}.meta`;
 
 describe('downloaded file commands over the committed corpus fixture: one path each from the command through the real adapter to disk', () => {
   let dir: string;
@@ -20,36 +20,36 @@ describe('downloaded file commands over the committed corpus fixture: one path e
   beforeEach(() => { dir = cloneCorpusFixture(); });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  it('exclude writes one sidecar and nothing else, and the row reads back excluded', async () => {
+  it('exclude writes one metadata file and nothing else, and the row reads back excluded', async () => {
     const before = await snapshotTree(dir);
 
-    assertSelectionOutcome(await downloadedFileCommands(adapterOver(dir)).excludeDownloads([NAME]), { landed: [NAME], refused: [] });
+    assertSelectionOutcome(await downloadedFileCommands(adapterOver(dir)).excludeDownloadedFiles([NAME]), { landed: [NAME], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
     expect((await readDownloadedFile(dir, NAME))?.excluded).toBe(true);
   });
 
-  it('include writes one sidecar and nothing else, and the row reads back included', async () => {
-    assertSelectionOutcome(await downloadedFileCommands(adapterOver(dir)).excludeDownloads([NAME]), { landed: [NAME], refused: [] });
+  it('include writes one metadata file and nothing else, and the row reads back included', async () => {
+    assertSelectionOutcome(await downloadedFileCommands(adapterOver(dir)).excludeDownloadedFiles([NAME]), { landed: [NAME], refused: [] });
     const before = await snapshotTree(dir);
 
-    assertSelectionOutcome(await downloadedFileCommands(adapterOver(dir)).includeDownloads([NAME]), { landed: [NAME], refused: [] });
+    assertSelectionOutcome(await downloadedFileCommands(adapterOver(dir)).includeDownloadedFiles([NAME]), { landed: [NAME], refused: [] });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
     expect((await readDownloadedFile(dir, NAME))?.excluded).toBe(false);
   });
 
-  it('delete trashes the archive and then the sidecar, and nothing else', async () => {
+  it('delete trashes the downloaded file and then the metadata file, and nothing else', async () => {
     const before = await snapshotTree(dir);
     const trashed: string[] = [];
 
-    const outcome = await downloadedFileCommands(adapterOver(dir)).deleteDownloads([NAME], async (path) => {
+    const outcome = await downloadedFileCommands(adapterOver(dir)).deleteDownloadedFiles([NAME], async (path) => {
       trashed.push(path);
       await rm(path);
     });
 
     expect(outcome).toEqual({ landed: [{ name: NAME }], refused: [] });
-    assertOnlyChanged(before, await snapshotTree(dir), new Set([ARCHIVE, META]));
-    expect(trashed).toEqual([join(dir, ARCHIVE), join(dir, META)]);
+    assertOnlyChanged(before, await snapshotTree(dir), new Set([DOWNLOADED_FILE_NAME, META]));
+    expect(trashed).toEqual([join(dir, DOWNLOADED_FILE_NAME), join(dir, META)]);
   });
 });

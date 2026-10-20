@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../../test/noDetectors';
-import { fakeArchiveReader } from '../../../test/fakeArchiveReader';
+import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -24,7 +24,7 @@ async function instance() {
   root = await mkdtemp(join(tmpdir(), 'modbench-mo2-repository-'));
   return mo2InstanceAdapter({
     instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS,
-    archives: fakeArchiveReader([]),
+    installationFileReader: fakeInstallationFileReader([]),
   });
 }
 

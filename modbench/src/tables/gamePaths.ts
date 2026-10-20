@@ -149,7 +149,7 @@ export function gameReleaseForNexusDomain(domain: string): string | undefined {
   return Object.keys(GAME_PATHS).find((release) => GAME_PATHS[release]?.nexusSlug === domain);
 }
 
-/** The Nexus domain of a game as a mod's or a download's metadata spells it; `undefined` when the table holds none.
+/** The Nexus domain of a game as a mod's or a downloaded file's metadata spells it; `undefined` when the table holds none.
  *  Never a guess from the name: a wrong domain opens another game's page. */
 export function nexusDomainForMetaGame(gameName: string): string | undefined {
   const release = gameReleaseForMetaGame(gameName);

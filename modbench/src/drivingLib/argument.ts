@@ -1,4 +1,4 @@
-import type { DownloadFile, InstanceValue } from '../instanceLoader/instance';
+import type { LocatedDownloadedFileRow, InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from './refusal';
 import type { ArgumentOf } from '../wire/argument';
 import { isPluginAddress, isString } from '../wire/messages';
@@ -38,7 +38,7 @@ export const rowNameOf = (carrier: unknown): string => rowLabelOf(carrier) ?? 'a
 
 export interface DownloadedFileArgument {
   readonly kind: 'downloadedFile';
-  readonly row: DownloadFile;
+  readonly row: LocatedDownloadedFileRow;
 }
 
 export function downloadedFileArgumentOf(carrier: unknown): DownloadedFileArgument | undefined {
@@ -48,8 +48,8 @@ export function downloadedFileArgumentOf(carrier: unknown): DownloadedFileArgume
   return argument && isDownloadedFile(argument) ? argument : undefined;
 }
 
-export function downloadedFileNamed(downloads: InstanceValue['downloads'], name: string): DownloadFile {
-  const row = downloads.kind === 'listed' ? downloads.rows.find((listed) => listed.name === name) : undefined;
+export function downloadedFileNamed(downloadedFiles: InstanceValue['downloadedFiles'], name: string): LocatedDownloadedFileRow {
+  const row = downloadedFiles.kind === 'listed' ? downloadedFiles.rows.find((listed) => listed.name === name) : undefined;
   if (!row) throw new Refusal(`"${name}" is gone from Downloads.`);
   return row;
 }

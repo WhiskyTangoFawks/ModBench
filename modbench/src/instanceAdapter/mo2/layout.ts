@@ -3,7 +3,7 @@
 // `formatLiteralScan.test.ts` refuses a second speller.
 
 import { join } from 'node:path';
-import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
+import { METADATA_FILE_SUFFIX } from './codecs/downloads';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
@@ -119,10 +119,10 @@ const loadOrderFile = (instanceRoot: string, profile: string): string =>
 export const pluginOrderFiles = (instanceRoot: string, profile: string): [loadOrder: string, plugins: string] =>
   [loadOrderFile(instanceRoot, profile), pluginsFile(instanceRoot, profile)];
 
-export const downloadFile = (downloadsDir: string, name: string): string => join(downloadsDir, name);
+export const downloadedFilePath = (downloadsDir: string, name: string): string => join(downloadsDir, name);
 
-export const downloadSidecarFile = (downloadsDir: string, name: string): string =>
-  join(downloadsDir, name + DOWNLOAD_SIDECAR_SUFFIX);
+export const downloadedFileMetadataPath = (downloadsDir: string, name: string): string =>
+  join(downloadsDir, name + METADATA_FILE_SUFFIX);
 
 /** A mod's source folder, its repository, beside `mods/` (ADR-0007); `undefined` when its name
  *  gives it none. */

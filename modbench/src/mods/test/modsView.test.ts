@@ -118,7 +118,7 @@ const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row)
 
 const otherDeps = () => ({
   commands: modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), copyReads: fakeInstanceAdapter().adapter, reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
-  extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadInstall: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
+  extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadedFileInstallReporting: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
   modStatus: { push: new InMemoryMEditClient(), readStatus: () => Promise.resolve([]) },
   sourceGestures: {
     commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]) }), rows: () => [],

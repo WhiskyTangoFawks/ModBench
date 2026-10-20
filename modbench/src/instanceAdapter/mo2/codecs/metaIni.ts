@@ -30,7 +30,7 @@ const OWNED_GENERAL_KEYS = [
   ['gameName', 'gameName'],
   ['nexusId', 'modid'],
   ['version', 'version'],
-  ['archiveFilename', 'installationFile'],
+  ['installationFileName', 'installationFile'],
 ] as const;
 
 const INSTALLED_FILES = 'installedFiles';
@@ -69,7 +69,7 @@ export function parseMetaIni(text: string): MetaIni {
     gameName: present('gameName'),
     version: present('version'),
     nexusId: modid && modid !== '0' && modid !== '-1' ? modid : undefined,
-    archiveFilename: present('installationFile'),
+    installationFileName: present('installationFile'),
     installedFiles: parseInstalledFiles(text),
   };
 }
@@ -109,8 +109,8 @@ export function changeOwnedKeysInText(text: string, changes: MetaKeys): string {
 
 /** Sets every key Modbench owns, an absent one cleared. */
 export function setOwnedKeysInText(text: string, keys: MetaKeys): string {
-  const { gameName, nexusId, version, archiveFilename, installedFiles } = keys;
-  return changeOwnedKeysInText(text, { gameName, nexusId, version, archiveFilename, installedFiles });
+  const { gameName, nexusId, version, installationFileName, installedFiles } = keys;
+  return changeOwnedKeysInText(text, { gameName, nexusId, version, installationFileName, installedFiles });
 }
 
 /** Keys use MO2's own names, so the result round-trips through `parseMetaIni`. */

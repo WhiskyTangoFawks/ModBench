@@ -11,7 +11,7 @@ import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree,
 } from './corpusFixture';
 import { adapterOver, readDownloadedFile, readModlistEntries } from './adapterOver';
-import { fakeArchiveReader } from '../fakeArchiveReader';
+import { fakeInstallationFileReader } from '../fakeInstallationFileReader';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const unscriptedMEdit = new InMemoryMEditClient();
@@ -27,23 +27,23 @@ describe('mod lifecycle corpus (uninstall)', () => {
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  const ARCHIVE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
+  const DOWNLOADED_FILE_NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
-  it('uninstallMods trashes the folder, removes the modlist line, and marks the download its meta.ini names uninstalled — nothing else', async () => {
-    const downloadMeta = `downloads/${ARCHIVE}.meta`;
+  it('uninstallMods trashes the folder, removes the modlist line, and marks the downloaded file its meta.ini names uninstalled — nothing else', async () => {
+    const downloadedFileMeta = `downloads/${DOWNLOADED_FILE_NAME}.meta`;
     const before = await snapshotTree(dir);
     await modCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).uninstallMods(['Unofficial Fallout 4 Patch'], trash);
     const after = await snapshotTree(dir);
 
-    assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST, downloadMeta]));
+    assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST, downloadedFileMeta]));
 
     expect(after.has('mods/Unofficial Fallout 4 Patch/meta.ini')).toBe(false);
     expect((await readModlistEntries(dir)).some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(false);
-    const metaText = await readFile(join(dir, downloadMeta), 'utf8');
+    const metaText = await readFile(join(dir, downloadedFileMeta), 'utf8');
     expect(metaText).toContain('uninstalled=true');
   });
 
-  it('uninstallMods on a mod with no linked download touches only its own folder and modlist.txt', async () => {
+  it('uninstallMods on a mod with no linked downloaded file touches only its own folder and modlist.txt', async () => {
     const before = await snapshotTree(dir);
     await modCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).uninstallMods(['Harder VATS'], trash);
     const after = await snapshotTree(dir);
@@ -88,7 +88,7 @@ describe('mod lifecycle corpus (install)', () => {
     await writeFile(join(dir, 'downloads', `${MANUAL}.meta`), '[General]\r\nuninstalled=true\r\n');
     const before = await snapshotTree(dir);
 
-    const outcome = await modCommands(adapterOver(dir, { archives: fakeArchiveReader(['Manual.esp']) }), unscriptedMEdit, unreadStatus)
+    const outcome = await modCommands(adapterOver(dir, { installationFileReader: fakeInstallationFileReader(['Manual.esp']) }), unscriptedMEdit, unreadStatus)
       .installMod({ kind: 'downloadedFile', name: MANUAL }, { kind: 'new', name: 'Manual' }, true);
     const after = await snapshotTree(dir);
 

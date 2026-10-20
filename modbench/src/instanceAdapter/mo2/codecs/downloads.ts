@@ -2,17 +2,17 @@
 // `removed=true` flag is MO2's hidden, which Modbench calls excluded; it is a separate axis from
 // Status, which `uninstalled=true` carries.
 
-import type { DownloadMeta, DownloadStatus } from '../../instanceAdapter';
+import type { DownloadedFileMeta, DownloadedFileStatus } from '../../instanceAdapter';
 import { installedFileKey } from './metaIni';
 import { GENERAL_SECTION, readIniSection, setIniValue } from './qSettingsIni';
 
-/** Appended to a download's filename to name its sidecar. */
-export const DOWNLOAD_SIDECAR_SUFFIX = '.meta';
+/** Appended to a download's filename to name its metadata file. */
+export const METADATA_FILE_SUFFIX = '.meta';
 
 /** `removed` is MO2's hidden, a separate key from the `uninstalled` Status. */
-export function parseDownloadMeta(text: string): { meta: DownloadMeta; hidden: boolean } {
+export function parseDownloadedFileMeta(text: string): { meta: DownloadedFileMeta; hidden: boolean } {
   const values = readIniSection(text, GENERAL_SECTION);
-  let status: DownloadStatus = 'Downloaded';
+  let status: DownloadedFileStatus = 'Downloaded';
   if (values.get('uninstalled') === 'true') status = 'Uninstalled';
   else if (values.get('installed') === 'true') status = 'Installed';
   const id = (key: string): string | undefined => {
@@ -22,7 +22,7 @@ export function parseDownloadMeta(text: string): { meta: DownloadMeta; hidden: b
   const modID = id('modID');
   const fileID = id('fileID');
   const installedKey = modID && fileID ? installedFileKey({ nexusId: modID, fileId: fileID }) : undefined;
-  const meta: DownloadMeta = {
+  const meta: DownloadedFileMeta = {
     status,
     modID,
     name: values.get('name'),
@@ -47,7 +47,7 @@ export function setInstalledInText(text: string): string {
 }
 
 /** `installed` is left untouched, as MO2 leaves it: the two keys coexist and
- *  `parseDownloadMeta` resolves the precedence. */
+ *  `parseDownloadedFileMeta` resolves the precedence. */
 export function setUninstalledInText(text: string): string {
   return setMetaFlag(text, 'uninstalled', true);
 }

@@ -1,18 +1,18 @@
 // How the Downloads tree presents the rows the Instance publishes. None of it touches a file, so
 // none of it belongs to the codec that parsed one.
 
-import type { DownloadRow } from '../instanceLoader/instance';
+import type { DownloadedFileRow } from '../instanceLoader/instance';
 
 /** The columns the reference tool's own Downloads pane sorts by. `name` means the label
  *  (downloads.md, Order and view state, story 2), so it reads `displayName`, not the row's `name`
  *  field. */
 export type DownloadedFileSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';
 
-function sortValue(row: DownloadRow, column: DownloadedFileSortColumn): string | number {
+function sortValue(row: DownloadedFileRow, column: DownloadedFileSortColumn): string | number {
   return column === 'name' ? row.displayName : row[column];
 }
 
-export function sortDownloadedFileRows<T extends DownloadRow>(
+export function sortDownloadedFileRows<T extends DownloadedFileRow>(
   rows: readonly T[],
   column: DownloadedFileSortColumn,
   descending: boolean,
@@ -31,14 +31,14 @@ export function sortDownloadedFileRows<T extends DownloadRow>(
 
 /** `showExcluded` keeps the flags intact, so the dimming decoration can still tell excluded rows
  *  apart. */
-export function filterExcludedRows<T extends DownloadRow>(rows: readonly T[], showExcluded: boolean): T[] {
+export function filterExcludedRows<T extends DownloadedFileRow>(rows: readonly T[], showExcluded: boolean): T[] {
   return showExcluded ? [...rows] : rows.filter((r) => !r.excluded);
 }
 
 // A space-separated flag string, because `when` clauses match it with
 // `viewItem =~ /\bflag\b/`: flags appear only when true, and the word-boundary
 // regex makes any one of them testable regardless of the others.
-export function downloadedFileContextValue(row: DownloadRow): string {
+export function downloadedFileContextValue(row: DownloadedFileRow): string {
   const flags = [
     row.modID !== undefined && 'hasModID',
     row.hasMeta && 'hasMeta',

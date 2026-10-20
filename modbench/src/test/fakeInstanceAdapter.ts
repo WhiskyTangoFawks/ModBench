@@ -85,7 +85,7 @@ export interface InstanceAnswers {
   /** What the installation of each mod answers, by mod name; a mod not there records none. */
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
-  downloads?: ReadonlyMap<string, FileRead<InstallationFile>>;
+  downloadedFiles?: ReadonlyMap<string, FileRead<InstallationFile>>;
   /** What the game files a mod's files take answer, by mod name; a mod not there takes none. */
   gameFilesTaken?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>>>;
   /** The game files the game folder holds, by their lower-cased path; a path not there has none. */
@@ -110,7 +110,7 @@ export interface InstanceAnswers {
   /** What the instance repository holds of each submodule, by name. */
   pins?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['submodule']>>>;
   /** Downloaded files that are gone: they get no mark. */
-  goneDownloads?: ReadonlySet<string>;
+  goneDownloadedFiles?: ReadonlySet<string>;
   /** The reason a trashed downloaded file's metadata is left behind. */
   metadataLeftBehind?: string;
   /** A write that rejects with the message this returns for it, after it is recorded. */
@@ -189,11 +189,11 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     modOrder: () => unreadable('modOrder', { mods: current.mods, modFolders: current.modFolders?.all }),
     downloadedFiles: () => unreadable('downloadedFiles', current.downloadedFiles),
     sourceMods: () => unreadable('sourceMods', current.sourceMods),
-    names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadMetadataFile: '.meta' },
+    names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
     modFolderPath: (mod) => Promise.resolve(answers.foldersAbsent?.has(mod) ? undefined : `/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
-    downloadedFile: (name) => Promise.resolve(answers.downloads?.get(name) ?? { kind: 'read', answer: undefined }),
+    downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? { kind: 'read', answer: undefined }),
     gameFiles: (_dataFolder, paths) => Promise.resolve({
       kind: 'read', answer: paths.flatMap((path) => answers.gameFiles?.get(path.toLowerCase()) ?? []),
     }),
@@ -202,8 +202,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       const reason = answers.unreadableMetadata?.get(mod);
       return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.metadata?.get(mod) ?? {} } : { kind: 'unreadable', reason });
     },
-    metadataOf: ({ version, archiveFilename }) =>
-      Promise.resolve({ version, installationFile: archiveFilename === undefined ? undefined : { name: archiveFilename } }),
+    metadataOf: ({ version, installationFileName }) =>
+      Promise.resolve({ version, installationFile: installationFileName === undefined ? undefined : { name: installationFileName } }),
     unwritableMetadata: (mod) => Promise.resolve(answers.unwritableMetadata?.get(mod)),
     writeModMetadata: (mod, metadata) => record({ verb: 'writeModMetadata', mod, metadata }, undefined),
     metadataFilesInModFolder: ['meta.ini'],
@@ -238,10 +238,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return record({ verb: 'changePluginOrderOverProvided', profile, changes }, { wrote: changes.length > 0 });
     },
     markDownloadedFile: (name, mark) =>
-      record({ verb: 'markDownloadedFile', name, mark }, answers.goneDownloads?.has(name) ? { gone: true } as const : { gone: false, wrote: true } as const),
+      record({ verb: 'markDownloadedFile', name, mark }, answers.goneDownloadedFiles?.has(name) ? { gone: true } as const : { gone: false, wrote: true } as const),
     trashDownloadedFile: (name) =>
       record({ verb: 'trashDownloadedFile', name },
-        answers.goneDownloads?.has(name) ? { gone: true } as const : { gone: false, ...(answers.metadataLeftBehind === undefined ? {} : { metadataLeftBehind: answers.metadataLeftBehind }) } as const),
+        answers.goneDownloadedFiles?.has(name) ? { gone: true } as const : { gone: false, ...(answers.metadataLeftBehind === undefined ? {} : { metadataLeftBehind: answers.metadataLeftBehind }) } as const),
     selectProfile: (profile) => record({ verb: 'selectProfile', profile }, { wrote: profile !== current.profile }),
     createModFolder: (mod) => record({ verb: 'createModFolder', mod }, undefined),
     renameModFolder: (from, to) => record({ verb: 'renameModFolder', from, to }, undefined),

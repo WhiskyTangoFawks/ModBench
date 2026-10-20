@@ -80,7 +80,7 @@ export class SeparatorNode extends vscode.TreeItem {
 const joined = (parts: readonly (string | undefined)[]): string => parts.filter((s): s is string => !!s).join(' · ');
 
 const modTooltip = (mod: Mod, facts: ModFacts | undefined): string => joined([
-  mod.name, mod.version, mod.nexusId, mod.archiveFilename, facts?.sourceFolder && `built from ${facts.sourceFolder}`,
+  mod.name, mod.version, mod.nexusId, mod.installationFileName, facts?.sourceFolder && `built from ${facts.sourceFolder}`,
   facts?.status && lackedLine(facts.status),
 ]);
 
@@ -88,7 +88,7 @@ export class ModNode extends vscode.TreeItem {
   readonly kind = 'mod' as const;
   readonly argument: ModArgument;
   readonly nexusModId: string | undefined;
-  readonly nexusGame: string | undefined;
+  readonly gameName: string | undefined;
   constructor(
     public readonly mod: Mod, public readonly facts?: ModFacts,
     public readonly files: readonly OriginFile[] = [],
@@ -100,7 +100,7 @@ export class ModNode extends vscode.TreeItem {
     this.id = rowIdentity(this.kind, mod.name);
     this.resourceUri = modRowUri(mod.name);
     this.nexusModId = mod.nexusId;
-    this.nexusGame = mod.gameName;
+    this.gameName = mod.gameName;
     this.description = joined([mod.version, facts?.status && statusDescription(facts.status)]);
     this.tooltip = modTooltip(mod, facts);
     this.iconPath = new vscode.ThemeIcon(facts?.sourceMod ? 'repo' : 'package');
