@@ -198,7 +198,7 @@ internal sealed record UpdateManifestModRequest(
     : IModRequest;
 
 /// <summary>The mods to restore from their manifests, with the instance's facts (ADR-0013). AsksWhatItLacks marks a request
-/// sent before the files the manifests name are handed: its NotFound answers ask for them, so none is logged as a skip.</summary>
+/// sent before the manifests' files are handed: its NotFound answers ask for them, and are not logged.</summary>
 internal sealed record RestoreFromManifestRequest(
     IReadOnlyList<RestoreFromManifestModRequest> Mods, string StatCache, string ExclusionMark, ArchiveVariantsRequest? Archives,
     GameFolderRequest? GameFolder, string? Gesture, bool AsksWhatItLacks = false);
