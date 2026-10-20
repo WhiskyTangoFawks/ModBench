@@ -30,7 +30,7 @@ describe('parseDownloadMeta', () => {
   });
 
   it('treats fileID=0 as no id, same as an absent fileID', () => {
-    expect(metaOf('[General]\r\nfileID=0\r\n').fileID).toBeUndefined();
+    expect(metaOf('[General]\r\nmodID=9\r\nfileID=0\r\n').installedKey).toBeUndefined();
   });
 
   it('parses a hand-edited .meta with padded key=value spacing, which a writer never would, the same as the tight form', () => {

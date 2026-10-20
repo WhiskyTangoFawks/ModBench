@@ -15,13 +15,16 @@ export function parseDownloadMeta(text: string): { meta: DownloadMeta; hidden: b
   let status: DownloadStatus = 'Downloaded';
   if (values.get('uninstalled') === 'true') status = 'Uninstalled';
   else if (values.get('installed') === 'true') status = 'Installed';
-  const modID = values.get('modID');
-  const fileID = values.get('fileID');
-  const installedKey = modID && modID !== '0' && fileID && fileID !== '0' ? installedFileKey({ nexusId: modID, fileId: fileID }) : undefined;
+  const id = (key: string): string | undefined => {
+    const value = values.get(key);
+    return value && value !== '0' ? value : undefined;
+  };
+  const modID = id('modID');
+  const fileID = id('fileID');
+  const installedKey = modID && fileID ? installedFileKey({ nexusId: modID, fileId: fileID }) : undefined;
   const meta: DownloadMeta = {
     status,
-    modID: modID && modID !== '0' ? modID : undefined,
-    fileID: fileID && fileID !== '0' ? fileID : undefined,
+    modID,
     name: values.get('name'),
     version: values.get('version'),
     modName: values.get('modName'),

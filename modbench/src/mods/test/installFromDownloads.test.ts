@@ -92,10 +92,10 @@ describe('modbench.mod.install over a downloaded file', () => {
     });
   });
 
-  it('carries the row\'s modID, fileID and version into install', async () => {
+  it('carries the row\'s modID and version into install', async () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
-    await installRow(installDeps({ reporter: recordingReporter() }), { modID: '123', fileID: '456', version: '2.0' });
+    await installRow(installDeps({ reporter: recordingReporter() }), { modID: '123', version: '2.0' });
 
     await vi.waitFor(() => {
       expect(installMod).toHaveBeenCalledWith(
@@ -151,7 +151,7 @@ describe('modbench.mod.install over a downloaded file', () => {
   });
 });
 
-const ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR = { modID: '111', fileID: '999' };
+const ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR = { modID: '111' };
 
 interface FakeUpgradeItem { label: string; description?: string; choice: unknown }
 

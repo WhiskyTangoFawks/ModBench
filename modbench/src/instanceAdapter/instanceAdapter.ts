@@ -126,7 +126,6 @@ export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 export interface DownloadMeta {
   status: DownloadStatus;
   modID?: string;
-  fileID?: string;
   name?: string;
   version?: string;
   modName?: string;

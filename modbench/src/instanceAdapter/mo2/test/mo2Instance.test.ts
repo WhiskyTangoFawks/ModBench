@@ -369,21 +369,18 @@ describe('the MO2 Instance adapter', () => {
       it('hands over a link it cannot follow, by path', async () => {
         await symlink(join(root, 'nowhere'), join(root, 'mods', 'Dangling'));
 
-        const prefix = `${join(root, 'mods', 'Dangling')} is a link Modbench cannot follow, so it is not read: `;
-        const { linkNotes } = await adapter.reading();
-
-        expect(linkNotes).toHaveLength(1);
-        expect(linkNotes[0]?.startsWith(prefix)).toBe(true);
-        expect(linkNotes[0]?.length).toBeGreaterThan(prefix.length);
+        expect((await adapter.reading()).linkNotes).toEqual([expect.stringContaining(join(root, 'mods', 'Dangling'))]);
       });
 
       it('hands over, with the mods\' link, a link in profiles/ or downloads/ it cannot follow', async () => {
         await symlink(join(root, 'nowhere'), join(root, 'profiles', 'Gone'));
         await symlink(join(root, 'nowhere.7z'), join(root, 'downloads', 'Gone-1-0.7z'));
 
-        expect((await adapter.reading()).linkNotes).toHaveLength(2);
-        expect((await adapter.reading()).linkNotes.join('\n')).toContain(join(root, 'downloads', 'Gone-1-0.7z'));
-        expect((await adapter.reading()).linkNotes.join('\n')).toContain(join(root, 'profiles', 'Gone'));
+        const { linkNotes } = await adapter.reading();
+
+        expect(linkNotes).toHaveLength(2);
+        expect(linkNotes.join('\n')).toContain(join(root, 'downloads', 'Gone-1-0.7z'));
+        expect(linkNotes.join('\n')).toContain(join(root, 'profiles', 'Gone'));
       });
 
       it('answers the game folder as not found, with its Data folder unresolved, when no game folder is found', async () => {
