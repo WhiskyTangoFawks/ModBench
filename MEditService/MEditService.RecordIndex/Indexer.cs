@@ -325,8 +325,6 @@ internal sealed class Indexer : IDisposable
         // own stamp can land first, and this one must never answer for it downward.
         lock (_lock)
         {
-            if (heldElsewhere is not null) _heldElsewhereMessage = heldElsewhere;
-            if (failure is not null) _failureMessage = failure;
             changed |= version > _version;
             _version = Math.Max(_version, version);
             if (heldElsewhere is null && failure is null) _arrivalReconciled = Math.Max(_arrivalReconciled, arrivals);
@@ -418,6 +416,11 @@ internal sealed class Indexer : IDisposable
         finally
         {
             EndReconcile();
+            lock (_lock)
+            {
+                if (heldElsewhere is not null) _heldElsewhereMessage = heldElsewhere;
+                if (failure is not null) _failureMessage = failure;
+            }
             ExitExclusive();
         }
     }
@@ -1125,9 +1128,9 @@ internal sealed class Indexer : IDisposable
     /// <summary>Hands <paramref name="whileClosed"/> the file with the store closed and no reconcile running, then
     /// reconciles the load order held unless it refuses. False, having run nothing, when a read outlived the
     /// close: the store is reconciled back.</summary>
-    internal bool WhileClosed(Func<ClosedStore, string?> whileClosed, out string? refusal)
+    internal bool WhileClosed(Func<ClosedStore, string?> whileClosed, out string? heldElsewhere)
     {
-        refusal = null;
+        heldElsewhere = null;
         EnterExclusive();
         try
         {
@@ -1137,18 +1140,13 @@ internal sealed class Indexer : IDisposable
                 StartReconcile();
                 return false;
             }
-            refusal = whileClosed(new ClosedStore(_storeFactory, handedOut));
+            heldElsewhere = whileClosed(new ClosedStore(_storeFactory, handedOut));
+            lock (_lock) _heldElsewhereMessage = heldElsewhere;
         }
         finally { ExitExclusive(); }
-        if (refusal is null) StartReconcile();
-        else HoldElsewhere(refusal);
+        if (heldElsewhere is null) StartReconcile();
+        else PublishStatus();
         return true;
-    }
-
-    private void HoldElsewhere(string message)
-    {
-        lock (_lock) _heldElsewhereMessage = message;
-        PublishStatus();
     }
 
     public void Subscribe()
