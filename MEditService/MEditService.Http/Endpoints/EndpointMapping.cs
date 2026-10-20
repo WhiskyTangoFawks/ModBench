@@ -237,6 +237,57 @@ internal static class EndpointMapping
         return Refusal(refused);
     }
 
+    /// <summary>A gesture on one record that answers only that it applied: 204, or the refusal that left the source as it
+    /// was (ADR-0019).</summary>
+    internal static IResult Answered(string gesture, ILogger logger, RecordEditResult result)
+    {
+        if (result.Applied) return Results.NoContent();
+
+        LogRefusal(logger, gesture, result.Refusal, result.Message);
+        return Refusal(result);
+    }
+
+    internal static IResult Answered(string gesture, ILogger logger, PutLoadOrderResult result)
+    {
+        if (result.Applied) return Results.Ok(result);
+
+        LogRefusal(logger, gesture, result.Refusal, result.Message);
+        return Refusal(result);
+    }
+
+    internal static IResult Answered(string gesture, ILogger logger, PluginAddress plugin, Answer<PluginAddress, PluginCreateRefused> answer)
+    {
+        if (answer.Holds(out var created, out var refused)) return Results.Ok(created);
+
+        LogRefusal(logger, gesture, refused.Refusal, refused.Message, plugin);
+        return Refusal(refused.Refusal, refused.Message);
+    }
+
+    internal static IResult Answered(string gesture, ILogger logger, PluginAddress plugin, RenameSourceResult result) =>
+        result.Match(
+            Results.Ok,
+            (refusal, message) =>
+            {
+                LogRefusal(logger, gesture, refusal, message, plugin);
+                return Refusal(refusal, message);
+            });
+
+    internal static IResult Answered(string gesture, ILogger logger, PluginAddress plugin, MoveLastWrittenResult result)
+    {
+        if (result.Refusal is not { } refusal) return Results.NoContent();
+
+        LogRefusal(logger, gesture, refusal, result.Message, plugin);
+        return Refusal(refusal, result.Message);
+    }
+
+    internal static IResult Answered(string gesture, ILogger logger, string sourceFolder, BuildConfigurationResult result)
+    {
+        if (result.Refusal is not { } refusal) return Results.NoContent();
+
+        LogRefusal(logger, gesture, refusal, result.Message, sourceFolder);
+        return Refusal(refusal, result.Message);
+    }
+
     internal static void LogRefusal<TRefusal>(ILogger logger, string gesture, TRefusal refusal, string? message) =>
         logger.LogWarning("Refused {Gesture}: {Refusal} — {Message}", gesture, refusal, message);
 
@@ -259,44 +310,4 @@ internal static class EndpointMapping
             _ => 422,
         },
         new Dictionary<string, object?> { ["path"] = path });
-
-    /// <summary>No Index gate here (ADR-0015): the Index serializes its own projections
-    /// afterwards, so a source write never queues behind one and never answers "busy".</summary>
-    internal static IResult Execute(
-        string gesture, ILogger logger,
-        Action? logReceived,
-        Func<IResult?> validate,
-        Func<RecordEditResult> execute,
-        Func<RecordEditResult, IResult> onApplied)
-    {
-        logReceived?.Invoke();
-
-        if (validate() is { } validationFailure)
-            return validationFailure;
-
-        var result = execute();
-        if (result.Applied) return onApplied(result);
-
-        LogRefusal(logger, gesture, result.Refusal, result.Message);
-        return Refusal(result);
-    }
-
-    internal static async Task<IResult> ExecuteWriting(
-        string gesture, ILogger logger,
-        Action? logReceived,
-        Func<IResult?> validate,
-        Func<Task<RecordEditResult>> execute,
-        Func<RecordEditResult, IResult> onApplied)
-    {
-        logReceived?.Invoke();
-
-        if (validate() is { } validationFailure)
-            return validationFailure;
-
-        var result = await execute();
-        if (result.Applied) return onApplied(result);
-
-        LogRefusal(logger, gesture, result.Refusal, result.Message);
-        return Refusal(result);
-    }
 }

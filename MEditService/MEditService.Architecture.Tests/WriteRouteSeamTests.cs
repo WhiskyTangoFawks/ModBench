@@ -36,6 +36,7 @@ public sealed class WriteRouteSeamTests
     private static readonly Regex LiteralOrNamedConstant = new(
         @"^(?:""(?:[^""\\]|\\.)*""|[A-Z]\w*(?:\.[A-Z]\w*)+)$", RegexOptions.Compiled);
     private const string BadRequestCall = "EndpointMapping.BadRequest(";
+    private const string AnsweredCall = "EndpointMapping.Answered(";
 
     private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
 
@@ -55,12 +56,12 @@ public sealed class WriteRouteSeamTests
 
     [Theory]
     [MemberData(nameof(EveryNamedMethodRoute))]
-    public void AWriteRoute_MapsThroughTheSharedSeam(string route, string method)
+    public void AWriteRoute_AnswersThroughEndpointMappingAnswered(string route, string method)
     {
         Assert.True(MethodBody(method) is not null, $"{route}: no internal/private/public static method named {method} found in {string.Join(", ", EndpointFiles)}.");
         Assert.True(
-            MapsThroughSeamIn(EndpointFiles.Select(EndpointFile), method),
-            $"{route}: {method} never reaches EndpointMapping — the write routes' shared error-mapping seam.");
+            AnswersThroughAnswered(EndpointFiles.Select(EndpointFile), method),
+            $"{route}: {method} never answers through EndpointMapping.Answered — the one place a write's answer and refusal are mapped.");
     }
 
     [Theory]
@@ -85,13 +86,13 @@ public sealed class WriteRouteSeamTests
             + "    internal static IResult Caller(int x)\n    {\n"
             + "        return DirectHit(x);\n    }\n\n"
             + "    internal static IResult DirectHit(int x)\n    {\n"
-            + "        return EndpointMapping.Refusal(null!);\n    }\n}\n",
+            + "        return EndpointMapping.Answered(null!);\n    }\n}\n",
             file =>
             {
                 Assert.Null(BodyOfStaticDeclarationIn(file, "NoSuchMethod"));
                 var body = BodyOfStaticDeclarationIn(file, "DirectHit");
                 Assert.NotNull(body);
-                Assert.Contains("EndpointMapping.", body, StringComparison.Ordinal);
+                Assert.Contains("EndpointMapping.Answered(", body, StringComparison.Ordinal);
                 Assert.DoesNotContain("Caller", body, StringComparison.Ordinal);
             });
     }
@@ -104,8 +105,8 @@ public sealed class WriteRouteSeamTests
             + "    internal static IResult ThroughASibling(int x)\n    {\n"
             + "        return Shared(x);\n    }\n\n"
             + "    private static IResult Shared(int x)\n    {\n"
-            + "        return EndpointMapping.Refusal(null!);\n    }\n}\n",
-            file => Assert.True(MapsThroughSeamIn([file], "ThroughASibling")));
+            + "        return EndpointMapping.Answered(null!);\n    }\n}\n",
+            file => Assert.True(AnswersThroughAnswered([file], "ThroughASibling")));
     }
 
     [Fact]
@@ -119,7 +120,7 @@ public sealed class WriteRouteSeamTests
             + "        return Results.Problem(\"not found\", statusCode: 404);\n    }\n}\n",
             file =>
             {
-                Assert.False(MapsThroughSeamIn([file], "ThroughAHandRolledSibling"));
+                Assert.False(AnswersThroughAnswered([file], "ThroughAHandRolledSibling"));
                 var offenders = ReachInFollowingEachHelperOnce([file], "ThroughAHandRolledSibling")
                     .SelectMany(ExtractProblemCalls)
                     .ToArray();
@@ -145,8 +146,8 @@ public sealed class WriteRouteSeamTests
     {
         WithPlantedFile(
             "internal static class PlantedEndpoints\n{\n"
-            + "    internal static IResult Mapped(int x) => EndpointMapping.Refusal(null!);\n}\n",
-            file => Assert.True(MapsThroughSeamIn([file], "Mapped")));
+            + "    internal static IResult Mapped(int x) => EndpointMapping.Answered(null!);\n}\n",
+            file => Assert.True(AnswersThroughAnswered([file], "Mapped")));
     }
 
     [Fact]
@@ -156,22 +157,25 @@ public sealed class WriteRouteSeamTests
         var other = Path.Combine(root, "OtherEndpoints.cs");
         var own = Path.Combine(root, "OwnEndpoints.cs");
         File.WriteAllText(other,
-            "internal static class Other\n{\n    internal static IResult Shared() { return EndpointMapping.Refusal(null!); }\n}\n");
+            "internal static class Other\n{\n    internal static IResult Shared() { return EndpointMapping.Answered(null!); }\n}\n");
         File.WriteAllText(own,
             "internal static class Own\n{\n    internal static IResult Route() { return Shared(); }\n"
             + "    private static IResult Shared() { return Results.Problem(\"x\", statusCode: 404); }\n}\n");
 
-        Assert.False(MapsThroughSeamIn([other, own], "Route"));
+        Assert.False(AnswersThroughAnswered([other, own], "Route"));
         Assert.Single(ReachInFollowingEachHelperOnce([other, own], "Route").SelectMany(ExtractProblemCalls));
     }
 
-    [Fact]
-    public void TheScan_DoesNotCountABadRequestAsTheSeam()
+    [Theory]
+    [InlineData("EndpointMapping.BadRequest(\"x\")")]
+    [InlineData("EndpointMapping.Refusal(null!)")]
+    [InlineData("Results.Ok(EndpointMapping.LogRefusal(null!, \"x\", 1, \"m\"))")]
+    public void TheScan_CountsNothingButAnsweredAsTheSeam(string answer)
     {
         WithPlantedFile(
             "internal static class PlantedEndpoints\n{\n"
-            + "    internal static IResult Route() => EndpointMapping.BadRequest(\"x\");\n}\n",
-            file => Assert.False(MapsThroughSeamIn([file], "Route")));
+            + $"    internal static IResult Route() => {answer};\n}}\n",
+            file => Assert.False(AnswersThroughAnswered([file], "Route")));
     }
 
     [Theory]
@@ -198,8 +202,8 @@ public sealed class WriteRouteSeamTests
     private static string EndpointFile(string name) =>
         Path.Combine(ServiceProjects.SolutionDirectory(), "MEditService.Http", "Endpoints", name);
 
-    private static bool MapsThroughSeamIn(IEnumerable<string> files, string methodName) =>
-        ReachInFollowingEachHelperOnce(files, methodName).Any(body => body.Replace(BadRequestCall, "", StringComparison.Ordinal).Contains("EndpointMapping.", StringComparison.Ordinal));
+    private static bool AnswersThroughAnswered(IEnumerable<string> files, string methodName) =>
+        ReachInFollowingEachHelperOnce(files, methodName).Any(body => body.Contains(AnsweredCall, StringComparison.Ordinal));
 
     private static IReadOnlyList<string> ReachInFollowingEachHelperOnce(IEnumerable<string> files, string methodName)
     {

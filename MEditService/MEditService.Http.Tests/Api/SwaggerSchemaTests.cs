@@ -63,6 +63,25 @@ public sealed class SwaggerSchemaTests
         Assert.True(responses.TryGetProperty("503", out _));
     }
 
+    [Theory]
+    [InlineData("put", "/load-order", new[] { "400" })]
+    [InlineData("post", "/plugins/create", new[] { "400", "404", "409", "422", "503" })]
+    [InlineData("post", "/plugins/create-in-mod", new[] { "400", "404", "409", "422", "503" })]
+    [InlineData("post", "/plugins/rename-source-changes", new[] { "400", "404", "409", "422", "500", "503" })]
+    [InlineData("post", "/plugins/move-last-written", new[] { "400", "404", "409", "500", "503" })]
+    [InlineData("post", "/build-configuration", new[] { "400", "422", "500" })]
+    [InlineData("post", "/records/{formKey}/edit", new[] { "400", "404", "409", "422", "500" })]
+    [InlineData("post", "/records/delete", new[] { "400", "404", "409", "422", "500" })]
+    public async Task AWriteRoute_DeclaresEveryStatusItsRefusalCanAnswer_ElseSwashbuckleEmitsContentNeverForIt(
+        string method, string path, string[] refusalStatuses)
+    {
+        var root = await GetSchemaAsync();
+        var responses = root.GetProperty("paths").GetProperty(path).GetProperty(method).GetProperty("responses");
+
+        var declared = responses.EnumerateObject().Select(p => p.Name).ToHashSet();
+        Assert.Empty(refusalStatuses.Except(declared));
+    }
+
     [Fact]
     public async Task CopyRoute_DeclaresOnlyTheCallLevelStatuses_ElseSwashbuckleEmitsContentNeverForAnUndeclaredOne()
     {

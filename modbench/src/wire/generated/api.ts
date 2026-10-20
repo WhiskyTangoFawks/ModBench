@@ -1380,11 +1380,6 @@ export interface components {
             mods: components["schemas"]["ModByFolder"][];
             statCache: string;
         };
-        LoadOrderResponse: {
-            applied: boolean;
-            /** Format: int64 */
-            version: number;
-        };
         /** @enum {string} */
         LoadOrderState: "None" | "Reconciling" | "Ready" | "HeldElsewhere" | "Failed";
         LoadOrderStatus: {
@@ -1603,6 +1598,15 @@ export interface components {
         };
         /** @enum {string} */
         ProblemsFailureKind: "Placement" | "LaterRead";
+        /** @enum {string} */
+        PutLoadOrderRefusal: "None" | "DataFolderNotFound" | "InstanceRootNotFound" | "UnsupportedGameRelease" | "InvalidSnapshot";
+        PutLoadOrderResult: {
+            applied: boolean;
+            refusal: components["schemas"]["PutLoadOrderRefusal"];
+            message: string;
+            /** Format: int64 */
+            version: number;
+        };
         RebuildIndexRequest: {
             instanceRoot: string;
             gameRelease: string;
@@ -1919,7 +1923,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LoadOrderResponse"];
+                    "application/json": components["schemas"]["PutLoadOrderResult"];
                 };
             };
             /** @description Bad Request */

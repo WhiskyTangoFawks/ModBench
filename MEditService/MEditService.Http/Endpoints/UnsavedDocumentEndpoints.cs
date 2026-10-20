@@ -1,3 +1,5 @@
+using MEditService.SourceAdapter;
+
 namespace MEditService.Http.Endpoints;
 
 internal static class UnsavedDocumentEndpoints
@@ -24,3 +26,6 @@ internal static class UnsavedDocumentEndpoints
         return Results.NoContent();
     }
 }
+
+/// <summary>Documents are the unsaved texts of every dirty plugin-source document.</summary>
+internal sealed record UnsavedDocumentsRequest(IReadOnlyList<DocumentChange> Documents);

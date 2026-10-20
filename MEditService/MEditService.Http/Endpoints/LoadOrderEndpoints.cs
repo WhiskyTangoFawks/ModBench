@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Build;
 using MEditService.LoadOrder;
@@ -25,7 +26,7 @@ internal static class LoadOrderEndpoints
                 "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +
                 "Answers as soon as the snapshot is applied; the sweep runs after, reported on " +
                 "GET /load-order/status and the load-order-status notification.")
-            .Produces<LoadOrderResponse>()
+            .Produces<PutLoadOrderResult>()
             .ProducesProblem(400)
             .ProducesProblem(500);
 
@@ -59,7 +60,7 @@ internal static class LoadOrderEndpoints
             req.DataFolder, req.InstanceRoot, gameRelease,
             registered, active, loadedWithNoLine, archives, stringsFiles, places, stringsLanguage,
             new SnapshotMods(req.Mods, req.StatCache));
-        return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : EndpointMapping.Refusal(result);
+        return EndpointMapping.Answered("Put load order", logger, result);
     }
 
     private static bool AllStamped(IReadOnlyList<StampedFile> archives, IReadOnlyList<StampedFile> stringsFiles) =>
@@ -82,4 +83,29 @@ internal static class LoadOrderEndpoints
         }
         return registered;
     }
+}
+
+// Mod Management's snapshot (ADR-0013). InstanceRoot: one index file per instance, inside the instance root (ADR-0010).
+internal sealed record LoadOrderRequest(
+    IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
+    IReadOnlyList<PluginAddress> LoadedWithNoLine, IReadOnlyList<StampedFile> Archives, IReadOnlyList<StampedFile> StringsFiles,
+    IReadOnlyList<PluginPlace> Places, string DataFolder, string InstanceRoot, string GameRelease, string StringsLanguage, IReadOnlyList<ModByFolder> Mods, string StatCache);
+
+internal sealed record LoadOrderPlugin(
+    string Name, string Path, string Origin, PluginProviderRequest Provider, int? Line, bool LineNamesIt, IReadOnlyList<StampedFile> Archives,
+    IReadOnlyList<StampedFile> StringsFiles);
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum PluginProviderKind { Mod, Game, None }
+
+internal sealed record PluginProviderRequest(PluginProviderKind Kind, string? Mod = null, string? Folder = null, string? SourceFolder = null)
+{
+    internal PluginProvider? ToProvider() => Kind switch
+    {
+        PluginProviderKind.Game when Mod is null && Folder is null && SourceFolder is null => PluginProvider.Game,
+        PluginProviderKind.None when Mod is null && Folder is null && SourceFolder is null => PluginProvider.NoMod,
+        PluginProviderKind.Mod when !string.IsNullOrEmpty(Mod) && !string.IsNullOrEmpty(Folder) && SourceFolder is null or { Length: > 0 } =>
+            new PluginProvider.FromMod(Mod, Folder, SourceFolder),
+        _ => null,
+    };
 }

@@ -79,10 +79,9 @@ internal static class ModEndpoints
             return EndpointMapping.BadRequest("A source folder is required, with an output, or paths to exclude or include.");
         }
 
-        var result = handler.Change(req.SourceFolder, new BuildConfigurationChange(req.Output, exclude, include));
-        if (result.Refusal is not { } refusal) return Results.NoContent();
-        EndpointMapping.LogRefusal(loggerFactory.CreateLogger(nameof(ModEndpoints)), "Change build configuration", refusal, result.Message, req.SourceFolder);
-        return EndpointMapping.Refusal(refusal, result.Message);
+        return EndpointMapping.Answered(
+            "Change build configuration", loggerFactory.CreateLogger(nameof(ModEndpoints)), req.SourceFolder,
+            handler.Change(req.SourceFolder, new BuildConfigurationChange(req.Output, exclude, include)));
     }
 
     // build-mod: the selection (commands.md, A selection is one gesture).

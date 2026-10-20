@@ -1,6 +1,9 @@
+using System.Text.Json.Serialization;
+
 namespace MEditService.Commands;
 
 /// <summary>Why Put load order refused (ADR-0019).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PutLoadOrderRefusal
 {
     None,
