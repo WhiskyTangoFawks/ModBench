@@ -472,7 +472,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         var documents = new List<SourceDocument>();
         foreach (var path in _files.FilesIn(root, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories))
         {
-            if (DocumentText.ReadOrNull(_files, path) is not { } text) continue;
+            if (DocumentText.ReadListed(_files, _sourceFolder, path) is not { } text) continue;
             var relativePath = Path.GetRelativePath(_sourceFolder, path);
             RequireParsedFormKey(relativePath, text, plugin.Name);
             if (ReadableDocumentAt(relativePath, text, plugin.Name) is not { } document) continue;

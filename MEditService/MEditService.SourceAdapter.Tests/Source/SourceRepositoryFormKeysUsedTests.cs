@@ -32,6 +32,17 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
     }
 
+    private (ISourceRepository Repository, string Relative) UnreadableDocument()
+    {
+        var repository = SourceMod();
+        var relative = Path.Combine(PluginSourceRoot.For(PluginName), "Npcs", "RenamedByHand.json");
+        var file = Path.Combine(_modFolder, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(file).Require());
+        File.WriteAllText(file, $"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": \"Hidden\"}}");
+        FileModes.Set(file, "000");
+        return (repository, relative);
+    }
+
     [Fact]
     public void AnUncommittedHeaderDocument_IsHeld_ThoughNoRefButTheWorkingTreeCarriesIt()
     {
@@ -58,6 +69,26 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
         File.WriteAllText(file, $"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": \"Hidden\"}}");
 
         Assert.True(repository.FormKeysUsed(Plugin).Value().Contains($"000850:{PluginName}"));
+    }
+
+    [PosixFact]
+    public void ADocumentTheTreeListsButCannotRead_StopsFormKeysUsed_NamingIt_RatherThanFreeWhatItHolds()
+    {
+        var (repository, relative) = UnreadableDocument();
+
+        var stopped = Assert.IsType<SourceFailure.Unreadable>(repository.FormKeysUsed(Plugin).Stopped());
+
+        Assert.Equal(relative, stopped.File?.SourceRelativePath);
+    }
+
+    [PosixFact]
+    public void ADocumentTheTreeListsButCannotRead_StopsEditorIdsHeld_NamingIt_RatherThanFreeWhatItHolds()
+    {
+        var (repository, relative) = UnreadableDocument();
+
+        var stopped = Assert.IsType<SourceFailure.Unreadable>(repository.EditorIdsHeld(Plugin).Stopped());
+
+        Assert.Equal(relative, stopped.File?.SourceRelativePath);
     }
 
     [Fact]

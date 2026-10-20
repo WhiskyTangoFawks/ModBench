@@ -29,6 +29,20 @@ internal static class DocumentText
     internal static string? ReadOrNull(ISourceFiles files, string path) =>
         BytesOrNull(files, path) is { } bytes ? Encoding.UTF8.GetString(bytes) : null;
 
+    /// <summary>The text of a file a listing named: null when it is no longer there, and a stop naming it when
+    /// it is there and cannot be read, for what it holds is still held.</summary>
+    internal static string? ReadListed(ISourceFiles files, string sourceFolder, string path)
+    {
+        try
+        {
+            return files.FileExists(path) ? Encoding.UTF8.GetString(StripUtf8Bom(files.ReadAllBytes(path))) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw SourceStopException.UnreadableIn(sourceFolder, path, $"it could not be read: {ex.Message}");
+        }
+    }
+
     /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
     /// owner's, since the file is the owner's document. Null when it cannot be read or declares
     /// none.</summary>
