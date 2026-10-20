@@ -5,6 +5,7 @@ import { createMEditClient } from '../HttpMEditClient';
 import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import { Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
+import { restoredMod } from '../../test/restoredMod';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -277,7 +278,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/update-manifest', body: { mods: [modToUpdate('ModA'), modToUpdate('ModC')], ...updateFacts, gesture: expect.any(String) as unknown } },
     { name: 'restoreFromManifest', verb: (c) => c.restoreFromManifest([modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], restoreFacts),
       answer: {
-        applied: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] }],
+        applied: [restoredMod({ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] })],
         refused: [
           {
             item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: installation file 'B.7z' is missing.",
@@ -291,7 +292,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         ],
       },
       reads: {
-        landed: [{ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] }],
+        landed: [restoredMod({ mod: 'ModA', written: ['a.nif'], namedByNoLine: ['mine.txt'] })],
         refused: [
           { item: 'ModB', reason: "'ModB' was skipped: installation file 'B.7z' is missing." },
           { item: 'ModC', reason: "'ModC' was skipped: its package does not hold 'c.nif'." },
