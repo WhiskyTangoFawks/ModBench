@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
@@ -49,13 +48,13 @@ internal sealed class FailingQueries(string? rebuildRefusal = null, IndexRefused
 
     public Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout) => throw Failed();
 
-    public Answer<(string Sql, string Source)?, IndexRefused> GetFilter() => throw Failed();
+    public Answer<ActiveFilter?, IndexRefused> GetFilter() => throw Failed();
 
     public IndexRefused? SetFilter(string sql, string source) => throw Failed();
 
     public void ClearFilter() => throw Failed();
 
-    public Answer<JsonElement[], IndexRefused> SelectRows(string sql) => throw Failed();
+    public Answer<SelectedRows, IndexRefused> SelectRows(string sql) => throw Failed();
 
     public Answer<IReadOnlyList<NamedObject>, IndexRefused> ResolveNames(IReadOnlyList<NameQuery> names) => throw Failed();
 

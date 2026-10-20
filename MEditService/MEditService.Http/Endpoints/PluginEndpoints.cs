@@ -41,16 +41,14 @@ internal static class PluginEndpoints
         app.MapGet("/plugins/{plugin}/dependants", (string plugin, string? origin, IQueries svc) =>
         {
             if (!EndpointMapping.PluginAt(plugin, origin, out var address, out var refused)) return refused;
-            return EndpointMapping.Answered(
-                svc.GetDependants(address),
-                dependants => Results.Ok(new PluginDependantsResponse(dependants.Plugins, dependants.Unreadable)));
+            return EndpointMapping.Ok(svc.GetDependants(address));
         })
             .WithName("GetPluginDependants")
             .WithTags(Tag)
             .WithDescription(
                 "The plugins that list the plugin's file name as a master, and the plugins whose masters " +
                 "mEdit could not read. Answers only once the record index is ready.")
-            .Produces<PluginDependantsResponse>()
+            .Produces<PluginDependants>()
             .ProducesProblem(400)
             .ProducesProblem(503);
 
@@ -392,7 +390,6 @@ internal sealed record CreatePluginRequest(string Origin, string Name, string Fo
 internal sealed record CreatePluginInModRequest(string Origin, string Name);
 
 /// <summary>The plugins that list the plugin as a master, and those whose masters could not be read.</summary>
-internal sealed record PluginDependantsResponse(IReadOnlyList<PluginAddress> Dependants, IReadOnlyList<PluginAddress> Unreadable);
 
 /// <summary>The plugin by its origin and file name (ADR-0012), and the file name its source takes.</summary>
 internal sealed record RenameSourceChangesRequest(string Origin, string Name, string NewName);

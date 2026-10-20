@@ -13,12 +13,11 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     private Task ClearFilterAsync() => _client.DeleteAsync("/load-order/filter");
 
     [Fact]
-    public async Task PostFilter_ValidSql_Returns200WithSql()
+    public async Task PostFilter_ValidSql_Returns204WithNoBody()
     {
         var resp = await _client.SetFilter();
-        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("SELECT form_key FROM \"NPC_\"", body.GetProperty("sql").GetString());
+        Assert.Equal(HttpStatusCode.NoContent, resp.StatusCode);
+        Assert.Empty(await resp.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]
@@ -38,13 +37,11 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     }
 
     [Fact]
-    public async Task GetFilter_BeforeAnyFilter_ReturnsSqlNull()
+    public async Task GetFilter_BeforeAnyFilter_Returns204()
     {
         await ClearFilterAsync();
         var resp = await _client.GetAsync("/load-order/filter");
-        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("sql").ValueKind);
+        Assert.Equal(HttpStatusCode.NoContent, resp.StatusCode);
     }
 
     [Fact]
@@ -76,7 +73,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     }
 
     [Fact]
-    public async Task DeleteFilter_Returns204AndClearsTheSqlAndItsSource()
+    public async Task DeleteFilter_Returns204AndLeavesNoFilterInForce()
     {
         await _client.PostAsJsonAsync("/load-order/filter",
             new { sql = "SELECT form_key FROM \"NPC_\"", source = "npcs.sql" });
@@ -85,8 +82,6 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
         Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
 
         var get = await _client.GetAsync("/load-order/filter");
-        var body = await get.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("sql").ValueKind);
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("source").ValueKind);
+        Assert.Equal(HttpStatusCode.NoContent, get.StatusCode);
     }
 }

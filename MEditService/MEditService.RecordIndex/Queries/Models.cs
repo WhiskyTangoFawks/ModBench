@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
@@ -189,7 +190,8 @@ public record ChildRecordSummary(
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum CopyMissingReason { RecordGone, NotInPlugin }
 
-public sealed record MissingCopy(RecordCopy Copy, CopyMissingReason Reason, string Message);
+/// <summary>A copy of the comparison that no plugin gave.</summary>
+public sealed record CopyMissing(string FormKey, PluginAddress Plugin, CopyMissingReason Reason, string Message);
 
 // ADR-0012.
 public record RecordSummary(
@@ -309,20 +311,29 @@ public record IndexRefused(IndexRefusal Refusal, string Message);
 /// names a plugin and picks among those that share a file name.</summary>
 public sealed record NameQuery(string Name, string? Origin = null);
 
+/// <summary>Each row of a SELECT, a JSON object of its columns.</summary>
+public sealed record SelectedRows(JsonElement[] Rows);
+
 /// <summary>What one name means: a plugin, or a record by its FormKey.</summary>
 public sealed record NamedObject(PluginAddress? Plugin, string? FormKey, string? EditorId);
 
 /// <summary>The comparison of every copy given, or, with any copy missing, the copies no plugin gave, in the
-/// order given.</summary>
-public abstract record CompareRecordsAnswer
+/// order given (ADR-0019): <see cref="Compare"/> is null exactly when <see cref="Missing"/> is not empty.</summary>
+public sealed record CompareRecordsAnswer
 {
-    private CompareRecordsAnswer()
+    private CompareRecordsAnswer(CompareResult? compare, IReadOnlyList<CopyMissing> missing)
     {
+        Compare = compare;
+        Missing = missing;
     }
 
-    public sealed record Compared(CompareResult Compare) : CompareRecordsAnswer;
+    public CompareResult? Compare { get; }
 
-    public sealed record Missing(IReadOnlyList<MissingCopy> Copies) : CompareRecordsAnswer;
+    public IReadOnlyList<CopyMissing> Missing { get; }
+
+    public static CompareRecordsAnswer Compared(CompareResult compare) => new(compare, []);
+
+    public static CompareRecordsAnswer NotFound(IReadOnlyList<CopyMissing> missing) => new(null, missing);
 }
 
 // A tri-state rather than two booleans: the states are mutually exclusive. Deleted is absent
@@ -364,4 +375,7 @@ public sealed record PluginProblems(
 
 /// <summary>The plugins whose masters list a plugin's file name, and those whose masters mEdit could not
 /// read and so may.</summary>
-public sealed record PluginDependants(IReadOnlyList<PluginAddress> Plugins, IReadOnlyList<PluginAddress> Unreadable);
+public sealed record PluginDependants(IReadOnlyList<PluginAddress> Dependants, IReadOnlyList<PluginAddress> Unreadable);
+
+/// <summary>The record filter in force: the SQL that narrows the listings, and the file or document it was written in.</summary>
+public sealed record ActiveFilter(string Sql, string Source);

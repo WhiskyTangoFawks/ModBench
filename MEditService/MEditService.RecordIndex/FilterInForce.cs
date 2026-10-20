@@ -1,5 +1,6 @@
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.RecordIndex.Queries;
 using Microsoft.Extensions.Logging;
 
 namespace MEditService.RecordIndex;
@@ -11,9 +12,9 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
     private readonly Lock _lock = new();
     private (string Sql, string Source, IndexScope Scope)? _current;
 
-    public (string Sql, string Source)? Current
+    public ActiveFilter? Current
     {
-        get { lock (_lock) return _current is { } filter ? (filter.Sql, filter.Source) : null; }
+        get { lock (_lock) return _current is { } filter ? new ActiveFilter(filter.Sql, filter.Source) : null; }
     }
 
     /// <summary>Answers why the SQL cannot be a filter, such as no form_key column, leaving the one in force.

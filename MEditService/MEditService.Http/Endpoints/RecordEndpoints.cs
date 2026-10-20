@@ -46,11 +46,11 @@ internal static class RecordEndpoints
             {
                 logger.LogInformation("Received SelectRecords with {Sql}", request.Sql);
             }
-            return EndpointMapping.Answered(svc.SelectRows(request.Sql), rows => Results.Ok(new SelectResponse(rows)));
+            return EndpointMapping.Ok(svc.SelectRows(request.Sql));
         })
         .WithName("SelectRecords")
         .WithTags("Records")
-        .Produces<SelectResponse>()
+        .Produces<SelectedRows>()
         .ProducesProblem(400)
         .ProducesProblem(503);
 
@@ -60,11 +60,11 @@ internal static class RecordEndpoints
             {
                 logger.LogInformation("Received ResolveNames for {Count} names", request.Names.Count);
             }
-            return EndpointMapping.Answered(svc.ResolveNames(request.Names), named => Results.Ok(new ResolveNamesResponse(named)));
+            return EndpointMapping.Ok(svc.ResolveNames(request.Names));
         })
         .WithName("ResolveNames")
         .WithTags("Records")
-        .Produces<ResolveNamesResponse>()
+        .Produces<IReadOnlyList<NamedObject>>()
         .ProducesProblem(400)
         .ProducesProblem(503);
 
@@ -121,7 +121,7 @@ internal static class RecordEndpoints
             "A copy's DocumentText, when given, is the document carrying that column's record, read whether or not " +
             "its plugin is active; the copy is otherwise the one its plugin holds.")
         .WithTags("Records")
-        .Produces<CompareRecordsResponse>()
+        .Produces<CompareRecordsAnswer>()
         .ProducesProblem(400)
         .ProducesProblem(503);
 
@@ -401,9 +401,6 @@ internal static class RecordEndpoints
         return await answer(records);
     }
 
-    internal static CopyMissing Wire(MissingCopy missing) =>
-        new(missing.Copy.FormKey, missing.Copy.Plugin, missing.Reason, missing.Message);
-
     internal static IResult CompareRecords(IReadOnlyList<RecordCopy> copies, IQueries svc)
     {
         if (copies.Count == 0)
@@ -411,13 +408,7 @@ internal static class RecordEndpoints
         if (copies.Any(c => string.IsNullOrWhiteSpace(c.FormKey)
                 || string.IsNullOrWhiteSpace(c.Plugin.Name) || string.IsNullOrWhiteSpace(c.Plugin.Origin)))
             return EndpointMapping.BadRequest("Every record needs a FormKey, a plugin name and an origin.");
-        return EndpointMapping.Answered(
-            svc.GetCompareRecords(copies), answer => Results.Ok(answer switch
-            {
-                CompareRecordsAnswer.Compared compared => new CompareRecordsResponse(compared.Compare, []),
-                CompareRecordsAnswer.Missing missing => new CompareRecordsResponse(null, [.. missing.Copies.Select(Wire)]),
-                _ => throw new UnreachableException(),
-            }));
+        return EndpointMapping.Ok(svc.GetCompareRecords(copies));
     }
 
     internal static IResult CompareRecord(string formKey, CopyText copy, IQueries svc)

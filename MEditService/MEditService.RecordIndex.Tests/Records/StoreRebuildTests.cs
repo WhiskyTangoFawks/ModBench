@@ -96,7 +96,7 @@ public sealed class StoreRebuildTests : IDisposable
 
         Rebuilt(index, data.InstanceRoot);
 
-        Assert.Equal((MatchesNpcA, "npc-a.sql"), index.Queries.GetFilter().Value());
+        Assert.Equal(new ActiveFilter(MatchesNpcA, "npc-a.sql"), index.Queries.GetFilter().Value());
         Assert.Equal(["NpcA"], ListedNpcs(index));
     }
 

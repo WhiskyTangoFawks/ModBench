@@ -18,7 +18,7 @@ public class SelectTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
 
-        var rows = index.Queries.SelectRows("SELECT form_key, editor_id FROM npc_ WHERE editor_id = 'TestNPC01'").Value();
+        var rows = index.Queries.SelectRows("SELECT form_key, editor_id FROM npc_ WHERE editor_id = 'TestNPC01'").Value().Rows;
 
         var row = Assert.Single(rows);
         Assert.Equal("TestNPC01", row.GetProperty("editor_id").GetString());
@@ -30,7 +30,7 @@ public class SelectTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
 
-        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.SelectRows("SELECT form_key FROM npc_").Value().Length);
+        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.SelectRows("SELECT form_key FROM npc_").Value().Rows.Length);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class SelectTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
 
-        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.SelectRows("SELECT count(*) AS n FROM npc_").Value().Single().GetProperty("n").GetInt32());
+        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.SelectRows("SELECT count(*) AS n FROM npc_").Value().Rows.Single().GetProperty("n").GetInt32());
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class SelectTests(TestPluginFixture fixture)
         using var index = LoadedIndex();
         index.SetFilter("SELECT 'NonExistentFormKey:000000' AS form_key", "filter.sql");
 
-        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.SelectRows("SELECT form_key FROM npc_").Value().Length);
+        Assert.Equal(TestPluginFixture.RecordCount, index.Queries.SelectRows("SELECT form_key FROM npc_").Value().Rows.Length);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public class SelectTests(TestPluginFixture fixture)
     {
         using var index = LoadedIndex();
 
-        var columns = index.Queries.SelectRows("SELECT view_name, column_name FROM view_columns").Value()
+        var columns = index.Queries.SelectRows("SELECT view_name, column_name FROM view_columns").Value().Rows
             .Select(row => (row.GetProperty("view_name").GetString(), row.GetProperty("column_name").GetString())).ToList();
 
         Assert.Contains(("records", "is_active"), columns);
@@ -128,7 +128,7 @@ public class SelectTests(TestPluginFixture fixture)
 
         gate.Release();
         await load;
-        Assert.Empty(index.Queries.SelectRows("SELECT form_key FROM npc_").Value());
+        Assert.Empty(index.Queries.SelectRows("SELECT form_key FROM npc_").Value().Rows);
     }
 
     private static LoadOrderEntry Written(ScratchDirectory scratch, string name, int line)

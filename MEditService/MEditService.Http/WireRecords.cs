@@ -9,12 +9,9 @@ using MEditService.SourceAdapter;
 namespace MEditService.Http;
 
 internal sealed record FilterRequest(string Sql, string Source);
-internal sealed record FilterResponse(string? Sql, string? Source);
 
 internal sealed record SelectRequest(string Sql);
-internal sealed record SelectResponse(IReadOnlyList<JsonElement> Rows);
 internal sealed record ResolveNamesRequest(IReadOnlyList<NameQuery> Names);
-internal sealed record ResolveNamesResponse(IReadOnlyList<NamedObject> Named);
 
 /// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, so this names
 /// none.</summary>
@@ -83,14 +80,6 @@ internal sealed record RecordCreateChangesRequest(
     string Origin, string RecordType, string? Container = null, GridPosition? Position = null);
 
 internal sealed record CompareRecordsRequest(IReadOnlyList<RecordCopy> Copies);
-
-/// <summary>A copy of the comparison that no plugin gave: RecordGone when no registered
-/// plugin holds its record at all, otherwise only the plugin it names lacks it.</summary>
-internal sealed record CopyMissing(string FormKey, PluginAddress Plugin, CopyMissingReason Reason, string Message);
-
-/// <summary>The comparison, or the copies that stopped it (ADR-0019): Compare is null exactly
-/// when Missing is not empty.</summary>
-internal sealed record CompareRecordsResponse(CompareResult? Compare, IReadOnlyList<CopyMissing> Missing);
 
 internal sealed record RecordDeleteChangesRequest(IReadOnlyList<RecordAt> Records);
 
