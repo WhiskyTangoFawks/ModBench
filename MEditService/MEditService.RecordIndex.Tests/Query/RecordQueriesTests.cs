@@ -86,8 +86,8 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     {
         var plugin = Assert.Single(_svc.GetPlugins().Value());
 
-        Assert.Equal(PluginName, plugin.Plugin.Name);
-        Assert.Equal(2, plugin.Content.RecordCount);
+        Assert.Equal(PluginName, plugin.Name);
+        Assert.Equal(2, plugin.RecordCount);
     }
 
     [Fact]
@@ -99,8 +99,8 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
         var plugins = index.Queries.GetPlugins().Value();
 
-        Assert.True(plugins.Single(p => p.Plugin.Name == "Unreadable.esp").HasParseFailure);
-        Assert.False(plugins.Single(p => p.Plugin.Name == "Readable.esp").HasParseFailure);
+        Assert.True(plugins.Single(p => p.Name == "Unreadable.esp").HasParseFailure);
+        Assert.False(plugins.Single(p => p.Name == "Readable.esp").HasParseFailure);
     }
 
     [Theory]
@@ -130,8 +130,8 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
         var plugins = Reconciled(fixture).Queries.GetPlugins().Value();
 
-        Assert.True(plugins.Single(p => p.Plugin.Origin == "SourceMod").IsCompiledPlugin);
-        Assert.False(plugins.Single(p => p.Plugin.Origin == "NonSourceMod").IsCompiledPlugin);
+        Assert.True(plugins.Single(p => p.Origin == "SourceMod").IsCompiledPlugin);
+        Assert.False(plugins.Single(p => p.Origin == "NonSourceMod").IsCompiledPlugin);
     }
 
     private OpenedIndex PatchOfAGhostMaster() => Reconciled(new PluginFixtureBuilder("record-query")
@@ -140,7 +140,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     [Fact]
     public void GetPlugins_PluginWithMissingMaster_ReportsItAsAMasterIssue()
     {
-        var patch = Assert.Single(PatchOfAGhostMaster().Queries.GetPlugins().Value(), p => p.Plugin.Name == "Patch.esp");
+        var patch = Assert.Single(PatchOfAGhostMaster().Queries.GetPlugins().Value(), p => p.Name == "Patch.esp");
 
         Assert.Equal(["Ghost.esm"], patch.MissingMasters);
     }
@@ -968,7 +968,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         var index = OwnTwoNpcs();
         index.SetFilter(MatchesNpc02, "npcs.sql");
 
-        Assert.True(Assert.Single(index.Queries.GetPlugins().Value(), p => p.Plugin.Name == PluginName).HasMatchingRecords);
+        Assert.True(Assert.Single(index.Queries.GetPlugins().Value(), p => p.Name == PluginName).HasMatchingRecords);
     }
 
     [Fact]
@@ -977,7 +977,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         var index = OwnTwoNpcs();
         index.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key", "nothing.sql");
 
-        Assert.False(Assert.Single(index.Queries.GetPlugins().Value(), p => p.Plugin.Name == PluginName).HasMatchingRecords);
+        Assert.False(Assert.Single(index.Queries.GetPlugins().Value(), p => p.Name == PluginName).HasMatchingRecords);
     }
 
     [Fact]
@@ -988,7 +988,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         index.ClearFilter();
 
         var plugin = Assert.Single(index.Queries.GetPlugins().Value());
-        Assert.Equal(PluginName, plugin.Plugin.Name);
+        Assert.Equal(PluginName, plugin.Name);
         Assert.True(plugin.HasMatchingRecords);
     }
 

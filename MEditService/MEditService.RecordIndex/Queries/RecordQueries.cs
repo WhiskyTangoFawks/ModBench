@@ -28,9 +28,9 @@ internal sealed class RecordQueries(
 
     private readonly ConflictClassifier _conflictClassifier = new ConflictClassifier(logger);
 
-    public Answer<IReadOnlyList<PluginRow>, IndexRefused> GetPlugins() => IndexAnswer.Of(PluginRows);
+    public Answer<IReadOnlyList<PluginResponse>, IndexRefused> GetPlugins() => IndexAnswer.Of(PluginRows);
 
-    private IReadOnlyList<PluginRow> PluginRows()
+    private IReadOnlyList<PluginResponse> PluginRows()
     {
         var reads = RequireReads();
         var opened = reads.OpenedPlugins;
@@ -43,14 +43,17 @@ internal sealed class RecordQueries(
             : null;
         var parseFailures = reads.GetPluginsWithParseFailures();
         var derivations = reads.GetDerivations();
-        PluginRow ToRow(RegisteredPlugin plugin, bool hasMatchingRecords)
+        PluginResponse ToRow(RegisteredPlugin plugin, bool hasMatchingRecords)
         {
             DerivedFrom? derivedFrom = derivations.TryGetValue(plugin.Key, out var stamped) ? stamped : null;
             var problems = masterIssues?.GetValueOrDefault(plugin.Key, MasterProblems.None);
-            return new(plugin, snapshot.LoadOrderIndex(plugin.Key), IsImmutable: snapshot.ProviderOf(plugin.Key) == PluginProvider.Game, opened[plugin.Key],
-                problems?.Missing, problems?.Late, hasMatchingRecords,
-                parseFailures.Contains(plugin.Key),
+            var content = opened[plugin.Key];
+            var loadOrderIndex = snapshot.LoadOrderIndex(plugin.Key);
+            return new(plugin.Name, plugin.Path, loadOrderIndex, content.IsLight, content.IsMaster, content.IsBlueprint,
+                content.Masters, content.RecordCount, IsImmutable: snapshot.ProviderOf(plugin.Key) == PluginProvider.Game, plugin.Origin,
+                problems?.Missing, problems?.Late, InLoadOrder: loadOrderIndex is not null, hasMatchingRecords,
                 IsCompiledPlugin: derivedFrom?.IsSourceMod() ?? false,
+                HasParseFailure: parseFailures.Contains(plugin.Key),
                 PluginSourceUnreadable: derivedFrom == DerivedFrom.BinaryForUnreadableSource ? WhyUnreadable(plugin) : null,
                 _index.LaterReadFailure(plugin.Key)?.Select(SourceProblem.StoppedAt).ToList());
         }

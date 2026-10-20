@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 
 namespace MEditService.RecordIndex.Queries;
@@ -18,33 +17,45 @@ public record PluginDiagnosisReport(
     string Message,
     string Text);
 
-/// <summary>One plugin row as the read side answers it: the load order's facts, what reading the file
-/// told the Index, and what a filter, a parse failure and the rows' own derivation add.</summary>
-public sealed record PluginRow(
-    RegisteredPlugin Plugin,
-    // LoadOrderIndex (ADR-0013), null when the plugin is not active.
+/// <summary>One plugin row as the wire shows it: the load order's facts, what reading the file told the Index, and
+/// what a filter, a parse failure and the rows' own derivation add.</summary>
+public sealed record PluginResponse(
+    string Name,
+    string Path,
+    // The load index (ADR-0013), null when the plugin is not active; record-level
+    // LoadOrderIndex values are sort keys and put such a plugin last.
     int? LoadOrderIndex,
+    bool IsLight,
+    bool IsMaster,
+    // IsBlueprint (plugins.md, Drag and drop, story 3): a blueprint plugin loads after every plugin
+    // that is not one. False for every plugin of a game without blueprint plugins.
+    bool IsBlueprint,
+    IReadOnlyList<string> Masters,
+    int RecordCount,
     bool IsImmutable,
-    PluginContent Content,
+    string Origin,
     // MissingMasters (ADR-0012): the masters in this plugin's header that are not active.
     // Null while the snapshot is not indexed: not yet checked, which is not no issues.
     IReadOnlyList<string>? MissingMasters,
     // LateMasters: the active masters in this plugin's header that load after it. Null as MissingMasters is.
     IReadOnlyList<string>? LateMasters,
-    // HasMatchingRecords (plugins.md): a record filter prunes records, never a plugin row, so this
-    // is what a caller uses to decide whether to offer a chevron.
-    bool HasMatchingRecords,
+    // InLoadOrder (ADR-0013): whether the plugin is active, which is LoadOrderIndex being set.
+    bool InLoadOrder,
+    // HasMatchingRecords (plugins.md): a record filter prunes records, never a
+    // plugin row, so this is what a caller uses to decide whether to offer a chevron. Defaults
+    // to true: only the plugin listing answers inside a filter.
+    bool HasMatchingRecords = true,
+    // IsCompiledPlugin (ADR-0007): its mod was a source mod when the Index last read it. False with no mod folder
+    // at all (IsImmutable tells the two apart).
+    bool IsCompiledPlugin = false,
     // HasParseFailure: whether this plugin holds a record Mutagen could not read. The plugin-level
     // load failure (LoadOrderResponse.Failures) stays its own channel for a file that never indexed.
-    bool HasParseFailure,
-    // IsCompiledPlugin (ADR-0007): its mod was a source mod when the Index last read it. Whether a .git is on disk
-    // now is the Source adapter's.
-    bool IsCompiledPlugin,
-    // plugins.md, A row, Plugin: compiled plugin, and its rows read from its plugin file because its plugin
+    bool HasParseFailure = false,
+    // plugins.md, A row, Plugin: compiled plugin, and its records are its plugin file's because its plugin
     // source is missing or cannot be read. Null when the plugin source reads.
-    UnreadableSource? PluginSourceUnreadable,
+    UnreadableSource? PluginSourceUnreadable = null,
     // common.md, States, story 6: the files that stopped its last read, while its rows are the last good read's.
-    IReadOnlyList<SourceProblem>? LaterReadFailure);
+    IReadOnlyList<SourceProblem>? LaterReadFailure = null);
 
 public record RecordDetail(
     string FormKey,

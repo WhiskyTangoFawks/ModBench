@@ -21,8 +21,8 @@ public sealed class ReconcileOriginTests
         using var index = OpenIndex(holder);
         index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
-        var opened = index.Queries.GetPlugins().Value().Single(row => row.Plugin.Name == "A.esp");
-        Assert.Equal("SomeMod", opened.Plugin.Origin);
+        var opened = index.Queries.GetPlugins().Value().Single(row => row.Name == "A.esp");
+        Assert.Equal("SomeMod", opened.Origin);
     }
 
     [Fact]

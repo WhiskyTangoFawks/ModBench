@@ -13,7 +13,7 @@ internal static class PluginEndpoints
     public static IEndpointRouteBuilder MapPluginEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/plugins", (IQueries svc) =>
-            EndpointMapping.Answered(svc.GetPlugins(), plugins => Results.Ok(plugins.Select(PluginResponse.Of).ToList())))
+            EndpointMapping.Ok(svc.GetPlugins()))
             .WithName("GetPlugins")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>()

@@ -81,7 +81,7 @@ public sealed class ParseFailedRecordTests
 
         var plugins = scratch.Index.Queries.GetPlugins().Value();
 
-        Assert.Equal([scratch.Plugin], plugins.Where(p => p.HasParseFailure).Select(p => p.Plugin.Key));
+        Assert.Equal([scratch.Plugin], plugins.Where(p => p.HasParseFailure).Select(p => p.KeyOf()));
         var stubMastersIndexedBesideItSoOnlyHasSomethingToExclude = plugins.Count;
         Assert.True(stubMastersIndexedBesideItSoOnlyHasSomethingToExclude > 1);
     }

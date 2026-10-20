@@ -35,7 +35,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var index = OpenIndex(holder);
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        Assert.Equal(TestPluginFixture.PluginName, Assert.Single(index.Queries.GetPlugins().Value()).Plugin.Name);
+        Assert.Equal(TestPluginFixture.PluginName, Assert.Single(index.Queries.GetPlugins().Value()).Name);
     }
 
     [Fact]
