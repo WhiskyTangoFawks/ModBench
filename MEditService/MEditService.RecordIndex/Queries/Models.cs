@@ -22,8 +22,7 @@ public record PluginDiagnosisReport(
 public sealed record PluginResponse(
     string Name,
     string Path,
-    // The load index (ADR-0013), null when the plugin is not active; record-level
-    // LoadOrderIndex values are sort keys and put such a plugin last.
+    // The load index (ADR-0013), null when the plugin is not active.
     int? LoadOrderIndex,
     bool IsLight,
     bool IsMaster,
@@ -39,23 +38,24 @@ public sealed record PluginResponse(
     IReadOnlyList<string>? MissingMasters,
     // LateMasters: the active masters in this plugin's header that load after it. Null as MissingMasters is.
     IReadOnlyList<string>? LateMasters,
-    // InLoadOrder (ADR-0013): whether the plugin is active, which is LoadOrderIndex being set.
-    bool InLoadOrder,
     // HasMatchingRecords (plugins.md): a record filter prunes records, never a
-    // plugin row, so this is what a caller uses to decide whether to offer a chevron. Defaults
-    // to true: only the plugin listing answers inside a filter.
-    bool HasMatchingRecords = true,
+    // plugin row, so this is what a caller uses to decide whether to offer a chevron.
+    bool HasMatchingRecords,
     // IsCompiledPlugin (ADR-0007): its mod was a source mod when the Index last read it. False with no mod folder
     // at all (IsImmutable tells the two apart).
-    bool IsCompiledPlugin = false,
+    bool IsCompiledPlugin,
     // HasParseFailure: whether this plugin holds a record Mutagen could not read. The plugin-level
     // load failure (LoadOrderResponse.Failures) stays its own channel for a file that never indexed.
-    bool HasParseFailure = false,
+    bool HasParseFailure,
     // plugins.md, A row, Plugin: compiled plugin, and its records are its plugin file's because its plugin
     // source is missing or cannot be read. Null when the plugin source reads.
-    UnreadableSource? PluginSourceUnreadable = null,
+    UnreadableSource? PluginSourceUnreadable,
     // common.md, States, story 6: the files that stopped its last read, while its rows are the last good read's.
-    IReadOnlyList<SourceProblem>? LaterReadFailure = null);
+    IReadOnlyList<SourceProblem>? LaterReadFailure)
+{
+    // InLoadOrder (ADR-0013).
+    public bool InLoadOrder => LoadOrderIndex is not null;
+}
 
 public record RecordDetail(
     string FormKey,

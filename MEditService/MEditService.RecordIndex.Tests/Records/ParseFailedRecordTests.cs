@@ -91,7 +91,7 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = Scratch.Misshaped(active: false);
 
-        Assert.True(scratch.Index.PluginRowOf(scratch.Plugin)?.HasParseFailure);
+        Assert.True(scratch.Index.PluginResponseOf(scratch.Plugin)?.HasParseFailure);
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public sealed class ParseFailedRecordTests
 
         Assert.True(counts.Single(t => t.Type == "npc_").HasParseFailure);
         Assert.False(counts.Single(t => t.Type == "weap").HasParseFailure);
-        Assert.True(scratch.Index.PluginRowOf(scratch.Plugin)?.HasParseFailure);
+        Assert.True(scratch.Index.PluginResponseOf(scratch.Plugin)?.HasParseFailure);
     }
 
     [Fact]

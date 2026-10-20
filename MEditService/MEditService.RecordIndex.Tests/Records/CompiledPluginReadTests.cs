@@ -32,7 +32,7 @@ public sealed class CompiledPluginReadTests : IDisposable
     private static readonly PluginAddress Plain = new("Plain.esp", "PlainMod");
 
     private bool ReadsFromItsTree(PluginAddress plugin) =>
-        _index.PluginRowOf(plugin) is { IsCompiledPlugin: true, PluginSourceUnreadable: null };
+        _index.PluginResponseOf(plugin) is { IsCompiledPlugin: true, PluginSourceUnreadable: null };
 
     [Fact]
     public void APluginIngestedFromItsSourceTree_ReadsAsDerivedFromIt()
@@ -43,7 +43,7 @@ public sealed class CompiledPluginReadTests : IDisposable
     [Fact]
     public void APluginIngestedFromItsBytes_ReadsAsDerivedFromThem()
     {
-        Assert.False(_index.PluginRowOf(Plain)?.IsCompiledPlugin ?? true);
+        Assert.False(_index.PluginResponseOf(Plain)?.IsCompiledPlugin ?? true);
     }
 
     [Fact]
@@ -62,6 +62,6 @@ public sealed class CompiledPluginReadTests : IDisposable
     {
         _index.Reconcile(_holder, _fixture.GameDirectory, [.. _fixture.Plugins.Where(p => p.Name != CompiledPlugin.Name)], GameRelease.Fallout4);
 
-        Assert.Null(_index.PluginRowOf(CompiledPlugin));
+        Assert.Null(_index.PluginResponseOf(CompiledPlugin));
     }
 }

@@ -67,7 +67,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
 
         using var index = Reconciled();
 
-        var unreadable = index.PluginRowOf(Plugin)?.PluginSourceUnreadable.Require();
+        var unreadable = index.PluginResponseOf(Plugin)?.PluginSourceUnreadable.Require();
         Assert.Contains(PluginName, unreadable?.Reason, StringComparison.Ordinal);
         Assert.True(unreadable?.DecompileRepairs);
     }
@@ -81,7 +81,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
 
         using var index = Reconciled();
 
-        var unreadable = index.PluginRowOf(Plugin)?.PluginSourceUnreadable.Require();
+        var unreadable = index.PluginResponseOf(Plugin)?.PluginSourceUnreadable.Require();
         Assert.Contains(PluginName.ToUpperInvariant(), unreadable?.Reason, StringComparison.Ordinal);
         Assert.Contains(PluginName.ToLowerInvariant(), unreadable?.Reason, StringComparison.Ordinal);
         Assert.False(unreadable?.DecompileRepairs);
@@ -94,7 +94,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
 
         using var index = Reconciled();
 
-        Assert.Contains(Path.GetFileName(backup), index.PluginRowOf(Plugin)?.PluginSourceUnreadable?.Reason, StringComparison.Ordinal);
+        Assert.Contains(Path.GetFileName(backup), index.PluginResponseOf(Plugin)?.PluginSourceUnreadable?.Reason, StringComparison.Ordinal);
     }
 
     [Fact]

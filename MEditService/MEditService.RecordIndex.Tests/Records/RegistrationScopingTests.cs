@@ -160,7 +160,7 @@ public class RegistrationScopingTests
         Assert.Empty(fx.EveryListedRecord());
         Assert.DoesNotContain(index.Queries.GetPlugins().Value(), p => p.HasMatchingRecords);
         index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{AlphaKey.Name}' AND origin = '{AlphaKey.Origin}'", "filter.sql");
-        Assert.True(index.PluginRowOf(AlphaKey)?.HasMatchingRecords);
+        Assert.True(index.PluginResponseOf(AlphaKey)?.HasMatchingRecords);
         Assert.Contains(fx.EveryListedRecord(), r => r.FormKey == fx.SharedNpcFk);
         index.ClearFilter();
 

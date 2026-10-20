@@ -490,7 +490,7 @@ public sealed class FailedReadStateTests : IDisposable
         var thrown = Faults.Of(typeof(OutOfMemoryException));
         Arm(TreeMoment.ReadBegins, () => throw thrown);
         using var index = Reconciled();
-        Assert.Contains(thrown.Message, index.PluginRowOf(Plugin.KeyOf())?.PluginSourceUnreadable?.Reason, StringComparison.Ordinal);
+        Assert.Contains(thrown.Message, index.PluginResponseOf(Plugin.KeyOf())?.PluginSourceUnreadable?.Reason, StringComparison.Ordinal);
         var readsBefore = TreeReads();
 
         index.Reconcile(index.Holder, _fixture.GameDirectory, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
@@ -514,7 +514,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         using var index = Reconciled();
 
-        var unreadable = index.PluginRowOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
+        var unreadable = index.PluginResponseOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
         Assert.Contains(expected, unreadable?.Reason, StringComparison.Ordinal);
         Assert.True(unreadable?.DecompileRepairs);
     }
@@ -534,7 +534,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         using var index = Reconciled();
 
-        var unreadable = index.PluginRowOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
+        var unreadable = index.PluginResponseOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
         Assert.Contains("the file is held", unreadable?.Reason, StringComparison.Ordinal);
         Assert.False(unreadable?.DecompileRepairs);
     }
@@ -549,7 +549,7 @@ public sealed class FailedReadStateTests : IDisposable
         {
             using var index = Reconciled();
 
-            var unreadable = index.PluginRowOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
+            var unreadable = index.PluginResponseOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
             Assert.False(string.IsNullOrWhiteSpace(unreadable?.Reason));
             Assert.False(unreadable?.DecompileRepairs);
         }

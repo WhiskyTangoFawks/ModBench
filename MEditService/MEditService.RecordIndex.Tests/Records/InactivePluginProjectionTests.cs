@@ -44,7 +44,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     [Fact]
     public void APluginRow_IsInTheLoadOrderExactlyWhenItIsActive()
     {
-        PluginResponse Row() => Assert.IsType<PluginResponse>(_index.PluginRowOf(_mod.KeyOf()));
+        PluginResponse Row() => Assert.IsType<PluginResponse>(_index.PluginResponseOf(_mod.KeyOf()));
         Assert.True(Row().InLoadOrder);
         Assert.NotNull(Row().LoadOrderIndex);
 
@@ -115,7 +115,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     {
         Reconcile(active: false);
 
-        var row = _index.PluginRowOf(_mod.KeyOf()) ?? throw new InvalidOperationException("Expected the plugin's row.");
+        var row = _index.PluginResponseOf(_mod.KeyOf()) ?? throw new InvalidOperationException("Expected the plugin's row.");
         Assert.True(row.IsCompiledPlugin);
         Assert.Null(row.PluginSourceUnreadable);
     }

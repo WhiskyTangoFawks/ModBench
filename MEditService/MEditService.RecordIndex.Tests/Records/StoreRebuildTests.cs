@@ -204,7 +204,7 @@ public sealed class StoreRebuildTests : IDisposable
         AwaitRefill(index);
 
         Assert.Equal(version, index.Status.Version);
-        Assert.NotNull(index.PluginRowOf(data.Plugins[1].KeyOf()));
+        Assert.NotNull(index.PluginResponseOf(data.Plugins[1].KeyOf()));
     }
 
     [Fact]

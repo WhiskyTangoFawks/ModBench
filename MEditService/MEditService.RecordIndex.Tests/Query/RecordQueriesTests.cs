@@ -115,7 +115,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         if (initTheMod) SourceMods.Init(entry);
         if (removeThePluginSource) Directory.Delete(PluginSourceRoot.In(entry.ModFolderOf(), PluginName), recursive: true);
 
-        var plugin = Reconciled(fixture).PluginRowOf(PluginKey) ?? throw new InvalidOperationException("Expected the plugin's row.");
+        var plugin = Reconciled(fixture).PluginResponseOf(PluginKey) ?? throw new InvalidOperationException("Expected the plugin's row.");
 
         Assert.Equal((compiledPlugin, pluginSourceUnreadable), (plugin.IsCompiledPlugin, plugin.PluginSourceUnreadable is not null));
     }
