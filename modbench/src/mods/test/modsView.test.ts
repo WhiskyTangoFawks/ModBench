@@ -121,8 +121,8 @@ const otherDeps = () => ({
   extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadInstall: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
   modStatus: { push: new InMemoryMEditClient(), readStatus: () => Promise.resolve([]) },
   sourceGestures: {
-    commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter }), rows: () => [],
-    pluginsView: 'modbench.pluginListTree', say: () => undefined, saveUnsavedPluginSource: () => Promise.resolve([]),
+    commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]) }), rows: () => [],
+    pluginsView: 'modbench.pluginListTree', say: () => undefined,
     registerRepositories: () => Promise.resolve(),
   },
   manifestGestures: {
