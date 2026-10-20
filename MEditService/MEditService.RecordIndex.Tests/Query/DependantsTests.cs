@@ -54,7 +54,7 @@ public sealed class DependantsTests
 
         var answer = Ready(Base, child, new Plugin("Other.esp", Masters: "Fallout4.esm"));
 
-        Assert.Equal([child.Key], answer.Plugins);
+        Assert.Equal([child.Key], answer.Dependants);
         Assert.Empty(answer.Unreadable);
     }
 
@@ -63,7 +63,7 @@ public sealed class DependantsTests
     {
         var child = new Plugin("Child.esp", Masters: "BASE.ESM");
 
-        Assert.Equal([child.Key], Ready(Base, child).Plugins);
+        Assert.Equal([child.Key], Ready(Base, child).Dependants);
     }
 
     [Fact]
@@ -71,13 +71,13 @@ public sealed class DependantsTests
     {
         var child = new Plugin("Child.esp", Enabled: false, Masters: "Base.esm");
 
-        Assert.Equal([child.Key], Ready(Base, child).Plugins);
+        Assert.Equal([child.Key], Ready(Base, child).Dependants);
     }
 
     [Fact]
     public void GetDependants_ThePluginItself_IsNeverItsOwnDependant()
     {
-        Assert.Empty(Ready(Base with { Masters = ["Base.esm"] }).Plugins);
+        Assert.Empty(Ready(Base with { Masters = ["Base.esm"] }).Dependants);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class DependantsTests
         var answer = index.Queries.GetDependants(Renamed).Value();
 
         Assert.Equal([unread.Key], answer.Unreadable);
-        Assert.Empty(answer.Plugins);
+        Assert.Empty(answer.Dependants);
     }
 
     [Fact]

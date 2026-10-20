@@ -261,13 +261,13 @@ public class RegistrationScopingTests
         fx.Reconcile(fx.WithBetaDisabled);
 
         var rows = fx.Index.Queries.SelectRows(
-            $"SELECT plugin, is_active FROM npc_ WHERE form_key = '{fx.BetaNpcFk}'").Value();
+            $"SELECT plugin, is_active FROM npc_ WHERE form_key = '{fx.BetaNpcFk}'").Value().Rows;
 
         var row = Assert.Single(rows);
         Assert.Equal(BetaKey.Name, row.GetProperty("plugin").GetString());
         Assert.False(row.GetProperty("is_active").GetBoolean());
         Assert.True(fx.Index.Queries.SelectRows(
-            $"SELECT is_active FROM records WHERE form_key = '{fx.SharedNpcFk}' AND plugin = '{AlphaKey.Name}'").Value().Single()
+            $"SELECT is_active FROM records WHERE form_key = '{fx.SharedNpcFk}' AND plugin = '{AlphaKey.Name}'").Value().Rows.Single()
             .GetProperty("is_active").GetBoolean());
     }
 

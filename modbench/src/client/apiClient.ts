@@ -19,7 +19,7 @@ export type PluginDiagnosisReport = Schemas['PluginDiagnosisReport'];
 export type CompareResult = Schemas['CompareResult'];
 
 /** `POST /records/compare`: the comparison, or the copies that stopped it. */
-export type CompareRecordsResponse = Schemas['CompareRecordsResponse'];
+export type CompareRecordsAnswer = Schemas['CompareRecordsAnswer'];
 
 export type CopyText = Schemas['CopyText'];
 

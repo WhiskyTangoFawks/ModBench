@@ -11,7 +11,7 @@ internal static class Copies
     internal static RecordDetail? CopyIn(this OpenedIndex index, string formKey, PluginAddress plugin)
     {
         var answer = index.Queries.GetCompareRecords([new RecordCopy(formKey, plugin)]).Value();
-        return (answer as CompareRecordsAnswer.Compared)?.Compare.Overrides.Single();
+        return answer.Compare?.Overrides.Single();
     }
 
     internal static RecordDetail DocumentOf(this OpenedIndex index, string formKey, PluginAddress plugin) =>

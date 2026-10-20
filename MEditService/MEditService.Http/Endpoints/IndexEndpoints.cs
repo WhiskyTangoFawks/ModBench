@@ -21,7 +21,7 @@ internal static class IndexEndpoints
         app.MapPost("/load-order/filter", SetFilter)
             .WithName("SetFilter")
             .WithTags(LoadOrderTag)
-            .Produces<FilterResponse>()
+            .Produces(204)
             .ProducesProblem(400)
             .ProducesProblem(503)
             .ProducesProblem(500);
@@ -35,7 +35,8 @@ internal static class IndexEndpoints
         app.MapGet("/load-order/filter", GetFilter)
             .WithName("GetFilter")
             .WithTags(LoadOrderTag)
-            .Produces<FilterResponse>()
+            .Produces<RecordFilter>()
+            .Produces(204)
             .ProducesProblem(503);
 
         // The read side's sequence (ADR-0015). 0 with no index held, the same "absence is a state" answer
@@ -84,7 +85,7 @@ internal static class IndexEndpoints
         return Results.Ok(await svc.AwaitSequence(atLeast, TimeSpan.FromMilliseconds(timeoutMs)));
     }
 
-    private static IResult SetFilter(FilterRequest req, IQueries svc, ILoggerFactory loggerFactory)
+    private static IResult SetFilter(RecordFilter req, IQueries svc, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -97,7 +98,7 @@ internal static class IndexEndpoints
             return Results.Problem("The filter's source is required.", statusCode: 400);
         return svc.SetFilter(req.Sql, req.Source) is { } refused
             ? EndpointMapping.Refusal(refused)
-            : Results.Ok(new FilterResponse(req.Sql, req.Source));
+            : Results.NoContent();
     }
 
     private static IResult ClearFilter(IQueries svc, ILoggerFactory loggerFactory)
@@ -112,7 +113,7 @@ internal static class IndexEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received GetFilter");
-        return EndpointMapping.Answered(svc.GetFilter(), filter => Results.Ok(new FilterResponse(filter?.Sql, filter?.Source)));
+        return EndpointMapping.Answered(svc.GetFilter(), filter => filter is null ? Results.NoContent() : Results.Ok(filter));
     }
 
     private static IResult PostRebuildIndex(RebuildIndexRequest req, IQueries svc, ILoggerFactory loggerFactory)

@@ -1011,7 +1011,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
         index.Queries.SetFilter(MatchesNpc02, "npcs.sql").Accepted();
 
-        Assert.Equal((MatchesNpc02, "npcs.sql"), index.Queries.GetFilter().Value());
+        Assert.Equal(new RecordFilter(MatchesNpc02, "npcs.sql"), index.Queries.GetFilter().Value());
     }
 
     [Fact]

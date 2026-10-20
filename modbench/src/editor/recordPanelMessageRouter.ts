@@ -5,7 +5,7 @@ import {
   type ExtensionToWebview, type RecordRead, type ViewState, type WebviewToExtension,
 } from '../wire/messages';
 import type { RecordCopy } from '../wire/recordCopy';
-import type { CompareRecordsResponse, MEditClient, PluginLoadFailure, PluginMetadata } from '../client';
+import type { CompareRecordsAnswer, MEditClient, PluginLoadFailure, PluginMetadata } from '../client';
 import { samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
 import { pickEnumValue } from './enumPicker';
@@ -244,7 +244,7 @@ async function readRecord(
 }
 
 // Only a record no plugin holds is gone; a copy its plugin alone lacks refuses the read (editor.md, States, stories 2 and 4).
-function readOf(answer: CompareRecordsResponse | ReadFailed): RecordRead | ReadFailed {
+function readOf(answer: CompareRecordsAnswer | ReadFailed): RecordRead | ReadFailed {
   if (isReadFailed(answer)) return answer;
   const { compare, missing } = answer;
   if (compare) return { compare };

@@ -4,7 +4,7 @@ namespace MEditService.RecordIndex;
 
 /// <summary>The record filter: the matches of one SQL query, and the records holding a match in the
 /// match's own plugin so it stays reachable beneath them.</summary>
-internal sealed class RecordFilter(Store store)
+internal sealed class FilterMatches(Store store)
 {
     private const string Holders = "_filter_holders";
     private const string Matches = "_filter";

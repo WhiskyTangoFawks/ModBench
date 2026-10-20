@@ -226,8 +226,8 @@ function createMockBackend(): http.Server {
       return;
     }
     if (url === '/load-order/filter') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ sql: null }));
+      res.writeHead(204);
+      res.end();
       return;
     }
     if (url === '/notifications/stream') {

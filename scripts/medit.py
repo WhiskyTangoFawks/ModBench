@@ -45,7 +45,7 @@ def select(sql: str) -> list[JsonRecord]:
 def resolve(*names: Name) -> list[Plugin | RecordName]:
     """What each name means: a plugin file name, or a record's EditorID or FormKey; (name, origin) picks a plugin."""
     queries = [{'name': name} if isinstance(name, str) else {'name': name[0], 'origin': name[1]} for name in names]
-    return [_named(named) for named in _call('POST', '/names/resolve', {'names': queries})['named']]
+    return [_named(named) for named in _call('POST', '/names/resolve', {'names': queries})]
 
 
 def read(plugin: Name, form_key: str) -> JsonRecord:

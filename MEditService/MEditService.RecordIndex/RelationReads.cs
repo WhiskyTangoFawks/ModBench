@@ -367,7 +367,7 @@ internal sealed class RelationReads(
         using var connection = store.OpenReadConnection();
 
         var (where, paramValues) = BuildWhere(
-            null, null, RecordFilter.Matching, origin: null, recordTypes: types);
+            null, null, FilterMatches.Matching, origin: null, recordTypes: types);
 
         return new HashSet<PluginAddress>(
             DuckDbSql.Rows(

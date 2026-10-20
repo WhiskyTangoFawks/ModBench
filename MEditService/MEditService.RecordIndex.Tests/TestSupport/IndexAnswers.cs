@@ -19,9 +19,8 @@ internal static class IndexAnswers
 
     /// <summary>The comparison the Index answered; a missing copy here is a broken fixture.</summary>
     internal static CompareResult Compared(this Answer<CompareRecordsAnswer, IndexRefused> answer) =>
-        answer.Value() is CompareRecordsAnswer.Compared compared
-            ? compared.Compare
-            : throw new InvalidOperationException("Expected every copy to be found here.");
+        answer.Value().Compare
+            ?? throw new InvalidOperationException("Expected every copy to be found here.");
 
     /// <summary>A filter the Index took; its refusal here is a broken fixture.</summary>
     internal static void Accepted(this IndexRefused? refused)

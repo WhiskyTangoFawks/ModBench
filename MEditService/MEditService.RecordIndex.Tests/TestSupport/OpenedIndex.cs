@@ -30,7 +30,7 @@ internal sealed class OpenedIndex(ServiceProvider container, LoadOrderHolder hol
     internal void Settled()
     {
         if (!Queries.GetFilter().Holds(out var filter, out _)) return;
-        if (filter is var (sql, source)) SetFilter(sql, source);
+        if (filter is not null) SetFilter(filter.Sql, filter.Source);
         else ClearFilter();
     }
 

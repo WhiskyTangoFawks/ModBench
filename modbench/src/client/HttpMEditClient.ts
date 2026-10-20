@@ -4,7 +4,7 @@ import type { RecordEditEnvelope } from '../wire/messages';
 import { SILENT_LOG, type Log } from '../ports/log';
 import {
   createApiClient, errorText, isTerminalLoadOrderStatusFor, openNotificationStream,
-  toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult, type CompareRecordsResponse, type CopyText,
+  toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult, type CompareRecordsAnswer, type CopyText,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
 import { bundledBackendPath, spawnPiped } from './bundledBackend';
@@ -686,8 +686,7 @@ class HttpMEditClient implements MEditClient {
   }
 
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed> {
-    return this.read('resolveNames', (signal) => this.apiClient.POST('/names/resolve', { body: { names: [...names] }, signal }),
-      (data) => (data ? data.named : NO_ANSWER));
+    return this.read('resolveNames', (signal) => this.apiClient.POST('/names/resolve', { body: { names: [...names] }, signal }), noBodyFails);
   }
 
   getWhatRestoreDestroys(mods: readonly ModByFolder[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed> {
@@ -713,7 +712,7 @@ class HttpMEditClient implements MEditClient {
     noBodyFails, { absent: { status: 404, answers: null } });
   }
 
-  getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsResponse | ReadFailed> {
+  getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsAnswer | ReadFailed> {
     return this.read('getRecordsComparison', (signal) => this.apiClient.POST('/records/compare', { body: { copies }, signal }), noBodyFails);
   }
 
@@ -776,10 +775,8 @@ class HttpMEditClient implements MEditClient {
   }
 
   getActiveFilter(): Promise<RecordFilter | null | ReadFailed> {
-    return this.read('getActiveFilter', (signal) => this.apiClient.GET('/load-order/filter', { signal }), (data) => {
-      if (data?.sql == null) return null;
-      return data.source == null ? { failed: 'unreadable', cause: 'mEdit answered a record filter with no source.' } : { sql: data.sql, source: data.source };
-    });
+    return this.read('getActiveFilter', (signal) => this.apiClient.GET('/load-order/filter', { signal }), noBodyFails,
+      { absent: { status: 204, answers: null } });
   }
 
   getWorldspaces({ name: plugin, origin }: PluginAddress): Promise<WorldspaceSummary[] | ReadFailed> {

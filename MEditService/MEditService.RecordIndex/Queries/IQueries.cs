@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RepositoriesLib;
@@ -49,12 +48,12 @@ public interface IQueries
     long GetSequence();
     Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout);
 
-    Answer<(string Sql, string Source)?, IndexRefused> GetFilter();
+    Answer<RecordFilter?, IndexRefused> GetFilter();
     // Why the SQL cannot be a filter, or no load order to hold it; null once it is in force.
     IndexRefused? SetFilter(string sql, string source);
     void ClearFilter();
     // The rows of one SELECT over the views of every plugin the record index holds, each a JSON object of its columns; the filter in force does not narrow them.
-    Answer<JsonElement[], IndexRefused> SelectRows(string sql);
+    Answer<SelectedRows, IndexRefused> SelectRows(string sql);
     // One object per name, in order; refused whole when any name means nothing or more than one thing.
     Answer<IReadOnlyList<NamedObject>, IndexRefused> ResolveNames(IReadOnlyList<NameQuery> names);
     StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot);

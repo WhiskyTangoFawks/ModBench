@@ -48,7 +48,7 @@ public sealed class DocumentFromTextTests
 
         var answer = index.Queries.GetCompareRecords([new RecordCopy("00DEAD:Nowhere.esp", Elsewhere, "{}")]).Value();
 
-        Assert.IsType<CompareRecordsAnswer.Missing>(answer);
+        Assert.NotEmpty(answer.Missing);
     }
 
     [Theory]

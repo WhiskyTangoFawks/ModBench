@@ -6,7 +6,7 @@ export type {
   DecompileAndCommitMod, DecompileAndCommitOutcome, BuildFacts, BuildMod, BuildOutcome, UpdateManifestFacts, UpdateManifestMod, UpdateManifestOutcome, ModlistCallOptions, ModlistProgress, DecompileAndCommitProgress, RestoreFacts, RestoreMod, RestoreOutcome, ModByFolder, ModStatus, ReadModStatus, ModRestoreDestroys, ManifestMetadata, NotFound, PluginMetadata, PluginDiagnosisReport, RecordSummary,
   WorldspaceSummary, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords, CellSummary,
   ChildRecordSummary, ContainerChildSummary, CompileDiagnostic,
-  LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsResponse, RecordTypeChoice, GridPosition, WorkingTreeStatesBeneath,
+  LoadOrderRefusal, PluginLoadFailure, CompareResult, CompareRecordsAnswer, RecordTypeChoice, GridPosition, WorkingTreeStatesBeneath,
 } from './MEditClient';
 export type { RecordEditEnvelope, SourceChanges, WriteRefused } from './MEditClient';
 export { isMEditGone, isRefused, UNLIMITED_RECORDS } from './MEditClient';

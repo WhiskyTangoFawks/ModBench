@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -172,10 +171,10 @@ internal sealed class RecordQueries(
         columns.Insert(before, overridden);
     }
 
-    private static MissingCopy MissingCopyOf(RelationReads reads, RecordCopy copy) =>
+    private static CopyMissing CopyMissingFor(RelationReads reads, RecordCopy copy) =>
         reads.IsHeldByAnyPlugin(copy.FormKey)
-            ? new MissingCopy(copy, CopyMissingReason.NotInPlugin, $"{copy.FormKey} is not in {copy.Plugin.Name} ({copy.Plugin.Origin}).")
-            : new MissingCopy(copy, CopyMissingReason.RecordGone, $"{copy.FormKey} is held by no plugin.");
+            ? new CopyMissing(copy.FormKey, copy.Plugin, CopyMissingReason.NotInPlugin, $"{copy.FormKey} is not in {copy.Plugin.Name} ({copy.Plugin.Origin}).")
+            : new CopyMissing(copy.FormKey, copy.Plugin, CopyMissingReason.RecordGone, $"{copy.FormKey} is held by no plugin.");
 
     public Answer<CompareRecordsAnswer, IndexRefused> GetCompareRecords(IReadOnlyList<RecordCopy> copies) =>
         IndexAnswer.Of(() => CompareCopies(copies));
@@ -196,7 +195,7 @@ internal sealed class RecordQueries(
             else documents.Add(document);
         }
         if (missing.Count > 0)
-            return new CompareRecordsAnswer.Missing([.. missing.Select(c => MissingCopyOf(reads, c))]);
+            return CompareRecordsAnswer.CopiesMissing([.. missing.Select(c => CopyMissingFor(reads, c))]);
 
         var records = documents.ConvertAll(ToRecordDetail);
         // Two copies may come from one plugin, so a column is named by its place as well.
@@ -207,7 +206,7 @@ internal sealed class RecordQueries(
         var overrides = records.Select((r, i) => ToCompareOverride(r, state: null, columns[i], snapshot, reads)).ToList();
 
         var conflictAll = ConflictRules.Worst(ConflictAll.NoConflict, diffs.Select(diff => diff.ConflictAll));
-        return new CompareRecordsAnswer.Compared(
+        return CompareRecordsAnswer.Compared(
             ComparisonOf(overrides, diffs, conflictAll, documents[0].RecordType, snapshot));
     }
 
@@ -419,7 +418,7 @@ internal sealed class RecordQueries(
         return new SequenceAwaitResponse(reached, _index.Sequence);
     }
 
-    public Answer<(string Sql, string Source)?, IndexRefused> GetFilter() => IndexAnswer.Of(() =>
+    public Answer<RecordFilter?, IndexRefused> GetFilter() => IndexAnswer.Of(() =>
     {
         RequireReads();
         return filter.Current;
@@ -430,9 +429,9 @@ internal sealed class RecordQueries(
 
     public void ClearFilter() => filter.Clear(_index);
 
-    public Answer<JsonElement[], IndexRefused> SelectRows(string sql) => IndexAnswer.Flat<JsonElement[]>(() =>
+    public Answer<SelectedRows, IndexRefused> SelectRows(string sql) => IndexAnswer.Flat<SelectedRows>(() =>
     {
-        if (SqlDoor.Select(_index, sql).Holds(out var rows, out var rejection)) return rows;
+        if (SqlDoor.Select(_index, sql).Holds(out var rows, out var rejection)) return new SelectedRows(rows);
         return new IndexRefused(IndexRefusal.SelectRejected, rejection);
     });
 

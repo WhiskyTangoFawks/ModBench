@@ -371,7 +371,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   it('resolveNames posts the names given and reads the objects they mean, in order', async () => {
     const { result, request } = await exchange(
       (c) => c.resolveNames([{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }]),
-      answers(200, { named: [{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }] }),
+      answers(200, [{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }]),
     );
 
     expect(request.method).toBe('POST');
@@ -624,14 +624,8 @@ describe('HttpMEditClient — the record filter', () => {
     expect(await client.getActiveFilter()).toEqual({ sql: 'SELECT 1', source: 'armor.sql' });
   });
 
-  it('fails, saying mEdit answered a filter with no source', async () => {
-    const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(200, { sql: 'SELECT 1', source: null }))));
-
-    expect(await client.getActiveFilter()).toEqual({ failed: 'unreadable', cause: 'mEdit answered a record filter with no source.' });
-  });
-
   it('reads no filter when mEdit holds none', async () => {
-    const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(200, { sql: null, source: null }))));
+    const client = makeClient(vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))));
 
     expect(await client.getActiveFilter()).toBeNull();
   });
