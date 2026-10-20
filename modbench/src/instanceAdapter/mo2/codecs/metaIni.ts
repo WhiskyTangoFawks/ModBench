@@ -14,7 +14,7 @@ export interface InstalledFileId {
 }
 
 /** What meta.ini says, `[installedFiles]` as its pairs. */
-export interface MetaIni extends Omit<ModMeta, 'installedFileIds'> {
+export interface MetaIni extends Omit<ModMeta, 'installedFileKeys'> {
   installedFiles?: readonly InstalledFileId[];
 }
 
@@ -74,13 +74,21 @@ export function parseMetaIni(text: string): MetaIni {
   };
 }
 
+/** The key a downloaded file carries for an installed file: its pair. */
+export const installedFileKey = ({ nexusId, fileId }: InstalledFileId): string => `${nexusId}:${fileId}`;
+
+function installedFileOfKey(key: string): InstalledFileId {
+  const at = key.indexOf(':');
+  return { nexusId: key.slice(0, at), fileId: key.slice(at + 1) };
+}
+
 /** What meta.ini says of a mod, in the words every mod manager shares. */
 export const modMetaOf = ({ installedFiles, ...rest }: MetaIni): ModMeta =>
-  ({ ...rest, installedFileIds: installedFiles?.map(({ fileId }) => fileId) });
+  ({ ...rest, installedFileKeys: installedFiles?.map(installedFileKey) });
 
-/** The meta.ini a mod's meta says, each installed file recorded against the mod's own Nexus id. */
-export const metaIniOf = ({ installedFileIds, ...rest }: ModMeta): MetaIni =>
-  ({ ...rest, installedFiles: installedFileIds?.map((fileId) => ({ nexusId: rest.nexusId ?? '', fileId })) });
+/** The meta.ini a mod's meta says. */
+export const metaIniOf = ({ installedFileKeys, ...rest }: ModMeta): MetaIni =>
+  ({ ...rest, installedFiles: installedFileKeys?.map(installedFileOfKey) });
 
 function installedFilesBody(pairs: readonly InstalledFileId[] | undefined): string[] {
   if (!pairs || pairs.length === 0) return [];

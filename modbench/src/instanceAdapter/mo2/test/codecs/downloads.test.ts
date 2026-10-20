@@ -24,6 +24,11 @@ describe('parseDownloadMeta', () => {
     expect(metaOf('[General]\r\nmodID=0\r\n').modID).toBeUndefined();
   });
 
+  it('keys the installed file by its mod and file ids, and by nothing when either is absent', () => {
+    expect(metaOf('[General]\r\nmodID=9\r\nfileID=78\r\n').installedKey).toBe('9:78');
+    expect(metaOf('[General]\r\nmodID=9\r\n').installedKey).toBeUndefined();
+  });
+
   it('treats fileID=0 as no id, same as an absent fileID', () => {
     expect(metaOf('[General]\r\nfileID=0\r\n').fileID).toBeUndefined();
   });

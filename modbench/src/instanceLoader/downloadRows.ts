@@ -45,8 +45,8 @@ export interface UpgradeCandidate {
   readonly tier?: UpgradeTier;
 }
 
-const isFileIdMatch = (mod: Mod, fileID: string | undefined): boolean =>
-  fileID !== undefined && mod.installedFileIds?.includes(fileID) === true;
+const isFileIdMatch = (mod: Mod, installedKey: string | undefined): boolean =>
+  installedKey !== undefined && mod.installedFileKeys?.includes(installedKey) === true;
 
 const isArchiveFilenameMatch = (mod: Mod, downloadName: string): boolean =>
   mod.archiveFilename !== undefined && archiveKey(mod.archiveFilename) === archiveKey(downloadName);
@@ -55,13 +55,13 @@ const TIER_RANK: Record<UpgradeTier | 'none', number> = { fileId: 0, archiveFile
 
 function upgradeCandidates(
   mods: readonly ModlistEntry[],
-  download: Pick<DownloadRow, 'modID' | 'fileID' | 'name'>,
+  download: Pick<DownloadRow, 'modID' | 'name'> & { readonly installedKey?: string },
 ): UpgradeCandidate[] {
   if (!download.modID) return [];
   const pool = mods.filter((e): e is Mod => e.kind === 'mod' && e.nexusId === download.modID);
-  const hasFileIdMatch = pool.some((mod) => isFileIdMatch(mod, download.fileID));
+  const hasFileIdMatch = pool.some((mod) => isFileIdMatch(mod, download.installedKey));
   const tierOf = (mod: Mod): UpgradeTier | undefined => {
-    if (isFileIdMatch(mod, download.fileID)) return 'fileId';
+    if (isFileIdMatch(mod, download.installedKey)) return 'fileId';
     if (!hasFileIdMatch && isArchiveFilenameMatch(mod, download.name)) return 'archiveFilename';
     return undefined;
   };
@@ -112,7 +112,7 @@ export function buildDownloadRows(
       modName: meta?.modName,
       gameName: meta?.gameName,
       author: meta?.author,
-      upgrades: upgradeCandidates(mods, { name: file.name, modID: meta?.modID, fileID: meta?.fileID }),
+      upgrades: upgradeCandidates(mods, { name: file.name, modID: meta?.modID, installedKey: meta?.installedKey }),
       path: file.path,
       sidecarPath: file.metaPath,
     };

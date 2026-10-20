@@ -64,7 +64,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     });
 
     it('records the file it was installed from as a pair with the mod\'s Nexus id', async () => {
-      await holding([...PAYLOAD, 'meta.ini']).install(ARCHIVE, { kind: 'new', name: MOD }, { nexusId: '111', installedFileIds: ['222'] });
+      await holding([...PAYLOAD, 'meta.ini']).install(ARCHIVE, { kind: 'new', name: MOD }, { nexusId: '111', installedFileKeys: ['111:222'] });
 
       expect(await meta(MOD)).toBe('[General]\ngameName=Fallout 4\nmodid=111\n[installedFiles]\n1\\modid=111\n1\\fileid=222\nsize=1\n');
     });

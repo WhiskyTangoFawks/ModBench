@@ -80,8 +80,8 @@ async function settled(readModOrder: () => Promise<ModlistEntry[]>): Promise<Mod
   return readModOrder();
 }
 
-const metaOf = ({ version, nexusId, archiveFilename, installedFileIds }: ModMeta): ModMeta =>
-  ({ version, nexusId, archiveFilename, installedFileIds });
+const metaOf = ({ version, nexusId, archiveFilename, installedFileKeys }: ModMeta): ModMeta =>
+  ({ version, nexusId, archiveFilename, installedFileKeys });
 
 // A listed mod's meta is the one already read. A folder the mod order does not list is read only
 // when downloaded files are there to be matched against it.

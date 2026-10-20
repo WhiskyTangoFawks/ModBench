@@ -13,7 +13,7 @@ const download = (over: { modID?: string; fileID?: string; name?: string }): Dow
   const { name = 'foo.7z', ...ids } = over;
   return {
     name, path: `/downloads/${name}`, metaPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1, excluded: false,
-    meta: { status: 'Downloaded', ...ids },
+    meta: { status: 'Downloaded', ...ids, installedKey: ids.modID && ids.fileID ? `${ids.modID}:${ids.fileID}` : undefined },
   };
 };
 
@@ -41,7 +41,7 @@ describe('the upgrade candidates of a download', () => {
 
   it('flags an installedFiles file-id match as tier fileId', () => {
     const value = [
-      mod({ name: 'Harder VATS', nexusId: '111', version: '2.0', installedFileIds: ['999'] }),
+      mod({ name: 'Harder VATS', nexusId: '111', version: '2.0', installedFileKeys: ['111:999'] }),
     ];
     expect(offered(value, download({ modID: '111', fileID: '999' }))).toEqual([
       ['Harder VATS', 'fileId'],
@@ -58,7 +58,7 @@ describe('the upgrade candidates of a download', () => {
   it('sorts a file-id match first, unmarked mods after', () => {
     const value = [
       mod({ name: 'No Match', nexusId: '111', version: '1.0' }),
-      mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFileIds: ['999'] }),
+      mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFileKeys: ['111:999'] }),
     ];
     expect(offered(value, download({ modID: '111', fileID: '999' }))).toEqual([
       ['The Match', 'fileId'],
@@ -95,7 +95,7 @@ describe('the upgrade candidates of a download', () => {
   it('drops the archiveFilename tier, listing the mod unmarked, when a fileId match exists elsewhere in the pool', () => {
     const value = [
       mod({ name: 'By Name', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
-      mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFileIds: ['999'] }),
+      mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFileKeys: ['111:999'] }),
     ];
     expect(offered(value, download({ modID: '111', fileID: '999', name: 'foo.7z' }))).toEqual([
       ['By File Id', 'fileId'],

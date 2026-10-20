@@ -51,8 +51,8 @@ export interface ModMeta {
   version?: string;
   nexusId?: string;
   archiveFilename?: string;
-  /** The ids, as a downloaded file's `fileID` spells them, of the files it was installed from; undefined when none are recorded. */
-  installedFileIds?: readonly string[];
+  /** The keys, as a downloaded file's `installedKey` spells them, of the files it was installed from; undefined when none are recorded. */
+  installedFileKeys?: readonly string[];
 }
 
 export interface Mod extends ModMeta {
@@ -117,7 +117,7 @@ export type MovePlace =
 export type SeparatorsPlace = Extract<MovePlace, { kind: 'separator' | 'modOrder' }>;
 
 /** What the caller supplies for the record an install leaves with the mod; the adapter adds what it knows of the instance. */
-export type InstallKeys = Pick<ModMeta, 'nexusId' | 'version' | 'archiveFilename' | 'installedFileIds'>;
+export type InstallKeys = Pick<ModMeta, 'nexusId' | 'version' | 'archiveFilename' | 'installedFileKeys'>;
 
 export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 
@@ -132,6 +132,8 @@ export interface DownloadMeta {
   modName?: string;
   gameName?: string;
   author?: string;
+  /** The key a mod's `installedFileKeys` holds for this file, minted by the adapter; undefined when the metadata names no file. */
+  installedKey?: string;
 }
 
 /** A downloaded file, with its metadata parsed; `meta` is undefined when it has none. `excluded` is a separate

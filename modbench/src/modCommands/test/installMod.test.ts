@@ -16,7 +16,7 @@ const DOWNLOADED = { kind: 'downloadedFile', name: 'Freshly-1-0.7z' } as const;
 const DOWNLOADED_PATH = '/downloads/Freshly-1-0.7z';
 const downloadedFile = (name: string, path: string, meta?: Partial<DownloadMeta>): DownloadedFile =>
   ({ name, path, metaPath: `${path}.meta`, size: 1, mtimeMs: 1, excluded: false, meta: meta && { status: 'Downloaded', ...meta } });
-const FRESHLY = downloadedFile(DOWNLOADED.name, DOWNLOADED_PATH, { modID: '111', fileID: '222', version: '3.0.0' });
+const FRESHLY = downloadedFile(DOWNLOADED.name, DOWNLOADED_PATH, { modID: '111', fileID: '222', installedKey: '111:222', version: '3.0.0' });
 
 function install(
   installed: ModPackage, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadModStatus = unreadStatus,
@@ -164,9 +164,9 @@ describe('installMod', () => {
     ['a folder', { kind: 'folder', path: '/elsewhere/Loose' }, { kind: 'folder', path: '/elsewhere/Loose' }, {}],
     ['an archive, recording its file name', ARCHIVE, ARCHIVE, { archiveFilename: 'Freshly-1-0.7z' }],
     ['a downloaded file, recording its name, Nexus ids and version', DOWNLOADED, { kind: 'archive', path: DOWNLOADED_PATH },
-      { archiveFilename: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFileIds: ['222'] }],
+      { archiveFilename: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFileKeys: ['111:222'] }],
     ['an archive that is a downloaded file, recording what the file\'s metadata holds', { kind: 'archive', path: DOWNLOADED_PATH }, { kind: 'archive', path: DOWNLOADED_PATH },
-      { archiveFilename: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFileIds: ['222'] }],
+      { archiveFilename: 'Freshly-1-0.7z', nexusId: '111', version: '3.0.0', installedFileKeys: ['111:222'] }],
   ] as const)('hands the adapter %s with the keys its meta is to hold', async (_, installed, handed, keys) => {
     const { calls } = await install(installed);
 
@@ -176,7 +176,7 @@ describe('installMod', () => {
   it('records no Nexus id for a downloaded file whose metadata holds none', async () => {
     const { calls } = await install(DOWNLOADED, NEW_MOD, {}, true, unreadStatus, [downloadedFile(DOWNLOADED.name, DOWNLOADED_PATH)]);
 
-    expect(calls[0]).toMatchObject({ verb: 'install', keys: { archiveFilename: 'Freshly-1-0.7z', nexusId: undefined, installedFileIds: undefined } });
+    expect(calls[0]).toMatchObject({ verb: 'install', keys: { archiveFilename: 'Freshly-1-0.7z', nexusId: undefined, installedFileKeys: undefined } });
   });
 
   it('marks a downloaded file installed once it landed, and marks no file for an archive, though a downloaded file bears its name', async () => {

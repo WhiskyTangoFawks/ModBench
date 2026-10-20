@@ -3,6 +3,7 @@
 // Status, which `uninstalled=true` carries.
 
 import type { DownloadMeta, DownloadStatus } from '../../instanceAdapter';
+import { installedFileKey } from './metaIni';
 import { GENERAL_SECTION, readIniSection, setIniValue } from './qSettingsIni';
 
 /** Appended to a download's filename to name its sidecar. */
@@ -16,6 +17,7 @@ export function parseDownloadMeta(text: string): { meta: DownloadMeta; hidden: b
   else if (values.get('installed') === 'true') status = 'Installed';
   const modID = values.get('modID');
   const fileID = values.get('fileID');
+  const installedKey = modID && modID !== '0' && fileID && fileID !== '0' ? installedFileKey({ nexusId: modID, fileId: fileID }) : undefined;
   const meta: DownloadMeta = {
     status,
     modID: modID && modID !== '0' ? modID : undefined,
@@ -25,6 +27,7 @@ export function parseDownloadMeta(text: string): { meta: DownloadMeta; hidden: b
     modName: values.get('modName'),
     gameName: values.get('gameName'),
     author: values.get('author'),
+    installedKey,
   };
   return { meta, hidden: values.get('removed') === 'true' };
 }
