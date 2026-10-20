@@ -90,9 +90,9 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
   const isGone = (error: unknown): boolean => ['ENOENT', 'ENOTDIR'].includes(errnoCode(error) ?? '');
 
   const foldersIn = async (folder: string): Promise<string[]> => {
+    listingFailed.delete(folder);
     try {
       const names = await listFolders(folder, ignoreSkippedLink);
-      listingFailed.delete(folder);
       return names.map((name) => join(folder, name));
     } catch (error) {
       if (isGone(error)) return [];
