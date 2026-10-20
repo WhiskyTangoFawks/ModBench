@@ -6,7 +6,7 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
 } from './vscodeMock';
 import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
-import { WALKTHROUGH_ID } from '../walkthrough';
+import { WALKTHROUGH_ID } from '../toolbox/walkthrough';
 import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN } from './commandsCatalog';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';

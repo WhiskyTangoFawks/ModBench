@@ -25,7 +25,7 @@ export type SpawnFn = (executablePath: string, args: string[]) => BackendProcess
 export interface BackendLifecycleOptions {
   /** A developer-launched backend to attach to, spawning nothing and never falling back to a
    *  spawn. Omitted, this window spawns its own (ADR-0010) on a free port. */
-  attachPort?: number;
+  attachPort?: number | null;
   /** Claims the port the spawned backend listens on; defaults to an OS-assigned free one. */
   freePort?: () => Promise<number>;
   pollIntervalMs?: number;
@@ -124,7 +124,7 @@ export class BackendLifecycle {
   private generation = 0;
 
   constructor(opts: BackendLifecycleOptions) {
-    this.attachPort = opts.attachPort;
+    this.attachPort = opts.attachPort ?? undefined;
     this.freePort = opts.freePort ?? claimFreePort;
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
     this.pollTimeoutMs = opts.pollTimeoutMs ?? 30_000;

@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import type { GameFolderSetting } from './instanceAdapter/instanceAdapter';
+import { declaredSetting, onSettingChange } from './drivingLib/setting';
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
+const onConfigurationChange = (listener: Parameters<typeof vscode.workspace.onDidChangeConfiguration>[0]) => vscode.workspace.onDidChangeConfiguration(listener);
 
 const GAME_FOLDER_SETTING_KEY = 'mods.gameFolder';
 
@@ -10,25 +12,14 @@ const GAME_FOLDER_SETTING_KEY = 'mods.gameFolder';
 export const gameFolderSetting: GameFolderSetting = {
   id: `modbench.${GAME_FOLDER_SETTING_KEY}`,
   value: () => meditConfig().get<string>(GAME_FOLDER_SETTING_KEY),
-  changed: (listener) => vscode.workspace.onDidChangeConfiguration((change) => {
-    if (change.affectsConfiguration(`modbench.${GAME_FOLDER_SETTING_KEY}`)) listener();
-  }),
+  changed: (listener) => onSettingChange(onConfigurationChange, `modbench.${GAME_FOLDER_SETTING_KEY}`, listener),
 };
 
 const STRINGS_LANGUAGE_SETTING = 'stringsLanguage';
 
-export function stringsLanguage(): string {
-  const language = meditConfig().get<string>(STRINGS_LANGUAGE_SETTING);
-  if (language === undefined) throw new Error(`modbench.${STRINGS_LANGUAGE_SETTING} has no value: package.json declares its default.`);
-  return language;
-}
+export const stringsLanguage = (): string => declaredSetting(`modbench.${STRINGS_LANGUAGE_SETTING}`, meditConfig().get<string>(STRINGS_LANGUAGE_SETTING));
 
-export function onStringsLanguageChange(listener: () => void): vscode.Disposable {
-  return vscode.workspace.onDidChangeConfiguration((change) => {
-    if (change.affectsConfiguration(`modbench.${STRINGS_LANGUAGE_SETTING}`)) listener();
-  });
-}
+export const onStringsLanguageChange = (listener: () => void): vscode.Disposable =>
+  onSettingChange(onConfigurationChange, `modbench.${STRINGS_LANGUAGE_SETTING}`, listener);
 
-export function attachPort(): number | undefined {
-  return meditConfig().get<number | null>('attachToBackendPort') ?? undefined;
-}
+export const attachPort = (): number | null | undefined => meditConfig().get<number | null>('attachToBackendPort');

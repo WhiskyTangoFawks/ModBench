@@ -9,18 +9,21 @@ import { ACTIVATION_DECIDES_MESSAGE, ACTIVATION_DECIDES_SELECTORS } from '../../
 
 const ACTIVATION = 'extension.ts';
 const WIRING = ['syncWiring.ts'];
-const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'instanceRepository.ts', 'trash.ts', 'workspaceConfig.ts', 'walkthrough.ts'];
+const PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API = ['dialog.ts', 'instanceRepository.ts', 'trash.ts', 'workspaceConfig.ts'];
 const ACTIVATION_EXPORTS = ['activate', 'deactivate'];
 
 const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =>
   ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
 
-function restrictedSyntaxApplied(config: unknown, message: string): string[] {
-  if (typeof config !== 'object' || config === null || !('rules' in config)) return [];
+function restrictedSyntaxOptions(config: unknown): unknown[] | undefined {
+  if (typeof config !== 'object' || config === null || !('rules' in config)) return undefined;
   const { rules } = config;
-  if (typeof rules !== 'object' || rules === null || !('no-restricted-syntax' in rules)) return [];
+  if (typeof rules !== 'object' || rules === null || !('no-restricted-syntax' in rules)) return undefined;
   const options: unknown = rules['no-restricted-syntax'];
-  if (!Array.isArray(options)) return [];
+  return Array.isArray(options) ? options as unknown[] : undefined;
+}
+
+function restrictedSyntaxApplied(options: readonly unknown[], message: string): string[] {
   return options.flatMap((option: unknown) =>
     (typeof option === 'object' && option !== null && 'message' in option && option.message === message
       && 'selector' in option && typeof option.selector === 'string' ? [option.selector] : []));
@@ -42,10 +45,12 @@ const namesFile = (block: unknown, file: string): boolean =>
   typeof block === 'object' && block !== null && 'files' in block && Array.isArray(block.files) && block.files.includes(file);
 
 function restrictedSyntaxOf(blocks: readonly unknown[], file: string, message: string): string[] {
-  return blocks.filter((block) => namesFile(block, join('src', file).split(sep).join('/')))
-    .map((block) => restrictedSyntaxApplied(block, message))
-    .filter((selectors) => selectors.length > 0)
-    .at(-1) ?? [];
+  const path = join('src', file).split(sep).join('/');
+  const last = blocks.filter((block) => namesFile(block, path) || namesFile(block, 'src/*.ts'))
+    .map(restrictedSyntaxOptions)
+    .filter((options) => options !== undefined)
+    .at(-1);
+  return last === undefined ? [] : restrictedSyntaxApplied(last, message);
 }
 
 function exportedNames(source: ts.SourceFile): string[] {
@@ -70,13 +75,19 @@ describe('the composition root builds each box, registers it with VS Code and de
     expect(rootFiles().map((path) => basename(path)).sort()).toEqual([ACTIVATION, ...WIRING, ...PORTS_THE_ROOT_IMPLEMENTS_OVER_THE_WINDOW_API].sort());
   });
 
-  it.each([ACTIVATION, ...WIRING])('the lint config applies the deciding selectors to %s', (file) => {
+  it.each(rootFiles().map((path) => basename(path)))('the lint config applies the deciding selectors to %s', (file) => {
     expect(restrictedSyntaxOf(LINT_CONFIG_BLOCKS, file, ACTIVATION_DECIDES_MESSAGE)).toEqual(ACTIVATION_DECIDES_SELECTORS);
   });
 
   it('a config block that names the root files without the deciding selectors is not the rule', () => {
     const planted = [{ files: ['src/extension.ts'], rules: { 'no-restricted-syntax': ['error', { selector: 'IfStatement', message: 'other' }] } }];
     expect(restrictedSyntaxOf(planted, ACTIVATION, ACTIVATION_DECIDES_MESSAGE)).toEqual([]);
+  });
+
+  it('a later block that names a root file and drops the deciding selectors is the one that applies', () => {
+    const deciding = { files: ['src/*.ts'], rules: { 'no-restricted-syntax': ['error', { selector: 'IfStatement', message: ACTIVATION_DECIDES_MESSAGE }] } };
+    const later = { files: ['src/dialog.ts'], rules: { 'no-restricted-syntax': ['error', { selector: 'Foo', message: 'other' }] } };
+    expect(restrictedSyntaxOf([deciding, later], 'dialog.ts', ACTIVATION_DECIDES_MESSAGE)).toEqual([]);
   });
 
   it.each(rootFiles().map((path) => basename(path)))('%s reaches the Editor only through its index and names no webview', (file) => {

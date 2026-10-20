@@ -31,7 +31,8 @@ import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
 import { createToolboxView, type ToolboxView } from './toolbox/toolboxView';
-import { initRepositoryIn } from './instanceRepository';
+import { hostGit } from './instanceRepository';
+import { initRepositoryIn } from './sourceCommands/initRepositoryIn';
 import { registerModlistCommands } from './toolbox/modlistGestures';
 import { publishRepository } from './toolbox/repositoryContext';
 import { registerRefreshCommand, registerToolboxCommands, TOOLBOX_VIEW } from './toolbox/toolboxCommands';
@@ -46,7 +47,7 @@ import { downloadedFileCommands } from './downloadedFileCommands/downloads';
 import { editingFlow } from './instanceCommands/editing';
 import { instanceCommands } from './instanceCommands/instanceCommands';
 import { reachMEditFromTerminals } from './agent/terminalEnvironment';
-import { openWalkthroughOnce } from './walkthrough';
+import { openWalkthroughOnce } from './toolbox/walkthrough';
 import { instanceSyncs, registerSyncCommands, loadOrderPutHandler, loadOrderPutOnEachLanguageChange, loadOrderPutOnEachValue } from './syncWiring';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
@@ -110,7 +111,7 @@ interface Opened {
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
 }
 
-function openInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened {
+function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened {
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
@@ -145,7 +146,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   const toolbox = own(createToolboxView({ instance, channel: outputChannel }));
-  const modlist = modlistRepositoryCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(instanceRoot), trash });
+  const modlist = modlistRepositoryCommands({ client, adapter, instanceRoot, makeRepository: () => initRepositoryIn(hostGit, instanceRoot), trash });
   const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
   const mods = own(createModsView({
     instance, commands: modCommands(adapter, client, readStatus), copyReads: adapter, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
@@ -233,7 +234,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const focusedView = createFocusedView();
 
   const ownedByViews = ownership();
-  const opened = openInstance(outputChannel, ownedByViews.own);
+  const opened = openFolderAsInstance(outputChannel, ownedByViews.own);
   const sourceModRepositories = sourceModRepositoriesOver({ client: meditClient, outputChannel, ...opened.facts });
   const sourceEditing: SourceEditing = {
     applyWorkspaceChanges: (items) => applyWorkspaceChanges(items),
