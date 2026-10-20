@@ -384,14 +384,14 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
 
     const instance = {
       ...instanceThatReads,
-      value: instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadedFileMetadataFile: 'metadata file' } }),
+      value: instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadedFileMetadataFile: 'zzz-managers-word' } }),
     };
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instance, reporter, scriptedDialog('Delete'), trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.delete', node(ROOT, 'foo.7z'));
 
     expect(downloadsLogLines).toEqual([
-      '"foo.7z" was deleted, but its metadata file could not be moved to the trash and was left behind: EPERM: operation not permitted',
+      '"foo.7z" was deleted, but its zzz-managers-word could not be moved to the trash and was left behind: EPERM: operation not permitted',
     ]);
     expect(reporter.reports).toEqual([]);
   });

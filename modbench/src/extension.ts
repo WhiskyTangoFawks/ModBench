@@ -139,7 +139,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({
-    commands: downloadedFileCommands(adapter), instance, reporter: reporterFor('downloadedFileList'), ask, trash,
+    commands: downloadedFileCommands(adapter), instance, reporter: reporterFor('downloads'), ask, trash,
     log: (line) => outputChannel.warn(`[downloads] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
@@ -150,7 +150,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     instance, commands: modCommands(adapter, client, readStatus), copyReads: adapter, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
     downloadedFileInstallReporting: {
-      reporter: reporterFor('downloadedFileList'), log: (line) => outputChannel.warn(`[downloads] ${line}`),
+      reporter: reporterFor('downloads'), log: (line) => outputChannel.warn(`[downloads] ${line}`),
       progressViewId: DOWNLOADS_KEY_ARGS.view,
     },
     nexusRow: nexusRowInFocusedView(own, deps.focusedView, [MODS_KEY_ARGS.view, DOWNLOADS_KEY_ARGS.view], 'modbench.mod.nexusRowIn'),

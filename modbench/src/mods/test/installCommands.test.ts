@@ -65,10 +65,10 @@ function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   };
 }
 
-describe('modbench.mod.install: archive or folder, asked first', () => {
+describe('modbench.mod.install: installation file or folder, asked first', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('Esc at the archive-or-folder pick installs nothing', async () => {
+  it('Esc at the installation-file-or-folder pick installs nothing', async () => {
     showQuickPick.mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps());
@@ -77,7 +77,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(showOpenDialog).not.toHaveBeenCalled();
   });
 
-  it('asks archive or folder before either OS picker opens', async () => {
+  it('asks installation file or folder before either OS picker opens', async () => {
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce(undefined);
 
@@ -93,7 +93,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(quickPickOrder).toBeLessThan(openDialogOrder);
   });
 
-  it('archive: Esc at the OS picker installs nothing', async () => {
+  it('installation file: Esc at the OS picker installs nothing', async () => {
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce(undefined);
 
@@ -103,7 +103,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(installMod).not.toHaveBeenCalled();
   });
 
-  it('archive: the OS picker offers install\'s own archive extensions rather than a list of its own that would drift', async () => {
+  it('installation file: the OS picker offers install\'s own installation file extensions rather than a list of its own that would drift', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([uriFile('/somewhere/foo.zip')]);
@@ -117,7 +117,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     }));
   });
 
-  it('archive: one of the instance\'s downloaded files is handed on as the archive picked, for the command to know as that file', async () => {
+  it('installation file: one of the instance\'s downloaded files is handed on as the installation file picked, for the command to know as that file', async () => {
     const row = downloadedFileRowFixture('foo.7z', { modID: '111', version: '2.0' });
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
@@ -135,7 +135,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     );
   });
 
-  it('archive: one of the instance\'s downloaded files that installs but cannot be marked is one Output line, not a failure', async () => {
+  it('installation file: one of the instance\'s downloaded files that installs but cannot be marked is one Output line, not a failure', async () => {
     const row = downloadedFileRowFixture('foo.7z');
     const log = vi.fn();
     const reporter = recordingReporter();
@@ -155,7 +155,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('archive: one outside the downloads folder, though it shares a downloaded file\'s name, installs as an archive under the name prompted', async () => {
+  it('installation file: one outside the downloads folder, though it shares a downloaded file\'s name, installs as an installation file under the name prompted', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([uriFile('/archive/foo.7z')]);
@@ -169,7 +169,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     );
   });
 
-  it('archive: a cancelled name prompt installs nothing', async () => {
+  it('installation file: a cancelled name prompt installs nothing', async () => {
     showInputBox.mockResolvedValueOnce(undefined);
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([uriFile('/archive/foo.7z')]);
@@ -285,7 +285,7 @@ describe('modbench.mod.install: a downloaded file is its package', () => {
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'disk full' }]);
   });
 
-  it('a mod row as Argument is no package, so it asks archive or folder', async () => {
+  it('a mod row as Argument is no package, so it asks installation file or folder', async () => {
     showQuickPick.mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps());
@@ -327,7 +327,7 @@ describe('modbench.mod.install called by the agent', () => {
     nothingAsked();
   });
 
-  it('installs an archive outside the downloads as an archive, and a folder as a folder', async () => {
+  it('installs an installation file outside the downloads as an installation file, and a folder as a folder', async () => {
     installMod.mockResolvedValue({ applied: true, isFomod: false });
 
     registerModInstallCommands(deps());
@@ -339,7 +339,7 @@ describe('modbench.mod.install called by the agent', () => {
     nothingAsked();
   });
 
-  it('hands on an archive that is a downloaded file as the archive given, for the command to know as that file', async () => {
+  it('hands on an installation file that is a downloaded file as the installation file given, for the command to know as that file', async () => {
     const row = downloadedFileRowFixture('foo.7z');
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
 
@@ -387,7 +387,7 @@ describe('modbench.mod.install called by the agent', () => {
     expect(answered).toEqual({ applied: false, refusal: 'Failed to install "Harder VATS".', detail: 'would lose files' });
   });
 
-  it('answers a FOMOD archive as one, warning nothing itself', async () => {
+  it('answers a FOMOD installation file as one, warning nothing itself', async () => {
     installMod.mockResolvedValueOnce({ applied: true, isFomod: true });
     const warnIfFomod = vi.fn();
 

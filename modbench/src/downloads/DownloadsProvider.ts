@@ -184,8 +184,8 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     return this.cache.filter((n) => n.argument.row.displayName.toLowerCase().includes(this.filterLower));
   }
 
-  private build(downloads: readonly LocatedDownloadedFileRow[]): DownloadedFileNode[] {
-    const rows = sortDownloadedFileRows(filterExcludedRows(downloads, this.showExcluded), this.sortColumn, this.sortDescending);
+  private build(downloadedFiles: readonly LocatedDownloadedFileRow[]): DownloadedFileNode[] {
+    const rows = sortDownloadedFileRows(filterExcludedRows(downloadedFiles, this.showExcluded), this.sortColumn, this.sortDescending);
     return rows.map((row) => new DownloadedFileNode(row));
   }
 }

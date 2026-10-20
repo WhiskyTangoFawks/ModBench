@@ -1192,7 +1192,7 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    it('follows the downloads folder the last read of the settings resolved, signalling once when it moves, not the one where the instance began, so a download landing in the folder the settings name now is heard', async () => {
+    it('follows the downloads folder the last read of the settings resolved, signalling once when it moves, not the one where the instance began, so a downloaded file landing in the folder the settings name now is heard', async () => {
       let signals = 0;
       const watched = watchedOver(contextOver(root));
       watched.subscribe(() => { signals++; });

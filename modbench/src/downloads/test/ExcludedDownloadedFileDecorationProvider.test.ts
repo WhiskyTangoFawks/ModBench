@@ -44,7 +44,7 @@ describe('ExcludedDownloadedFileDecorationProvider', () => {
     expect(provider.provideFileDecoration(vscode.Uri.file(join(instanceRoot, 'mods', 'SomeMod')))).toBeUndefined();
   });
 
-  it('returns undefined for a sibling path that only shares the downloads/ string prefix, even when slicing it reproduces an excluded download\'s name', () => {
+  it('returns undefined for a sibling path that only shares the downloads/ string prefix, even when slicing it reproduces an excluded downloaded file\'s name', () => {
     const downloadsDir = join(instanceRoot, 'downloads');
     const provider = new ExcludedDownloadedFileDecorationProvider(() => downloadsDir, () => new Set(['evil.zip']));
     const uri = vscode.Uri.file(`${downloadsDir}Xevil.zip`);

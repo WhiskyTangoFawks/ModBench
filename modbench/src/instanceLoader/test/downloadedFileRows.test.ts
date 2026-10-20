@@ -89,7 +89,7 @@ describe('buildDownloadedFileRows — Installed follows the mods, not the metada
     expect(soleRow(rows).status).toBe('Uninstalled');
   });
 
-  it('keeps the metadata’s Uninstalled when no mod names it, MO2\'s own Uninstalled being a user statement about the archive, not a claim about a mod', () => {
+  it('keeps the metadata’s Uninstalled when no mod names it, MO2\'s own Uninstalled being a user statement about the downloaded file, not a claim about a mod', () => {
     const rows = buildDownloadedFileRows([file('Pack.7z', 1, metaOf({ status: 'Uninstalled' }))], new Map(), []);
 
     expect(soleRow(rows).status).toBe('Uninstalled');

@@ -115,15 +115,15 @@ describe('hashIndex', () => {
     expect(answer.kind === 'read' && answer.answer.entries.map((entry) => entry.path)).toEqual(ENTRIES);
   });
 
-  it('answers a file it cannot read, or a downloaded file the archive reader cannot open, with the reason', async () => {
+  it('answers a file it cannot read, or a downloaded file the installation file reader cannot open, with the reason', async () => {
     const refusing: InstallationFileReader = { ...fakeInstallationFileReader([]), list: () => Promise.reject(new Error('Can not open the file as archive')) };
     const index = hashIndex(folder, refusing);
 
     const missing = await index.gameFileHash(join(root, 'none.dds'));
-    const notAnArchive = await index.downloadedFileHash(await fileHolding('Mod.esp', 'aaaa'));
+    const notAnInstallationFile = await index.downloadedFileHash(await fileHolding('Mod.esp', 'aaaa'));
 
     expect(missing.kind === 'unreadable' && missing.reason).toContain('ENOENT');
-    expect(notAnArchive).toEqual({ kind: 'unreadable', reason: 'Can not open the file as archive' });
+    expect(notAnInstallationFile).toEqual({ kind: 'unreadable', reason: 'Can not open the file as archive' });
     expect(await readdir(folder).catch(() => [])).toEqual([]);
   });
 

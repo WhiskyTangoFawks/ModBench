@@ -1,4 +1,4 @@
-// `.meta` is a QSettings::IniFormat file MO2 writes beside each download. Its
+// `.meta` is a QSettings::IniFormat file MO2 writes beside each downloaded file. Its
 // `removed=true` flag is MO2's hidden, which Modbench calls excluded; it is a separate axis from
 // Status, which `uninstalled=true` carries.
 
@@ -6,7 +6,7 @@ import type { DownloadedFileMeta, DownloadedFileStatus } from '../../instanceAda
 import { installedFileKey } from './metaIni';
 import { GENERAL_SECTION, readIniSection, setIniValue } from './qSettingsIni';
 
-/** Appended to a download's filename to name its metadata file. */
+/** Appended to a downloaded file's name to name its metadata file. */
 export const METADATA_FILE_SUFFIX = '.meta';
 
 /** `removed` is MO2's hidden, a separate key from the `uninstalled` Status. */
@@ -41,7 +41,7 @@ const setMetaFlag = (text: string, key: string, value: boolean): string =>
   setIniValue(text === '' ? `[${GENERAL_SECTION}]\r\n` : text, GENERAL_SECTION, key, String(value));
 
 /** Both keys, as MO2's own markInstalled writes them: a reader resolves `uninstalled` first, so
- *  a download uninstalled and then reinstalled would otherwise still read Uninstalled. */
+ *  a downloaded file uninstalled and then reinstalled would otherwise still read Uninstalled. */
 export function setInstalledInText(text: string): string {
   return setMetaFlag(setMetaFlag(text, 'uninstalled', false), 'installed', true);
 }

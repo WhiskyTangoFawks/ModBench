@@ -82,13 +82,13 @@ describe('makeReporter', () => {
         ],
       };
 
-      makeReporter(channel, 'downloadedFile.delete').selectionOutcome('Could not delete 2 downloadedFiles.', outcome, nameOf);
+      makeReporter(channel, 'downloadedFile.delete').selectionOutcome('Could not delete 2 downloaded files.', outcome, nameOf);
 
       expect(showErrorMessage.mock.calls).toEqual([
-        ['Could not delete 2 downloadedFiles. — "D.7z" (in use), "E.7z" (gone from disk)'],
+        ['Could not delete 2 downloaded files. — "D.7z" (in use), "E.7z" (gone from disk)'],
       ]);
       expect(channelWrites(channel)).toEqual([
-        ['[downloadedFile.delete] Could not delete 2 downloadedFiles. — "D.7z" (in use), "E.7z" (gone from disk)'],
+        ['[downloadedFile.delete] Could not delete 2 downloaded files. — "D.7z" (in use), "E.7z" (gone from disk)'],
       ]);
       expect(showWarningMessage).not.toHaveBeenCalled();
       expect(showInformationMessage).not.toHaveBeenCalled();

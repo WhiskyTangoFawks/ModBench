@@ -30,7 +30,7 @@ export interface LocatedDownloadedFileRow extends DownloadedFileRow {
   readonly metadataPath: string;
 }
 
-// Archive filenames come from two places and are compared, never displayed, so they are folded: a
+// Installation file names come from two places and are compared, never displayed, so they are folded: a
 // Windows filename is case-insensitive.
 const installationFileKey = (filename: string): string => filename.toLowerCase();
 
@@ -68,7 +68,7 @@ function upgradeCandidates(
 }
 
 /** Which mods each downloaded file was installed into, keyed by its folded filename: the
- *  reverse of every mod's archive filename, many to many. A mod naming no file claims nothing,
+ *  reverse of every mod's installation file name, many to many. A mod naming no file claims nothing,
  *  which is unknown rather than an uninstall. */
 export function modsByInstallationFileName(
   mods: readonly { name: string; installationFileName?: string }[],

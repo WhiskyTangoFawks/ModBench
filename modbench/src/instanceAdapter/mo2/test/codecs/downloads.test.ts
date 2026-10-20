@@ -77,7 +77,7 @@ describe('setInstalledInText', () => {
     expect(setInstalledInText('')).toBe('[General]\r\ninstalled=true\r\nuninstalled=false\r\n');
   });
 
-  it('clears an earlier uninstall, so a reinstalled download reads Installed again, MO2\'s markInstalled writing uninstalled=false beside installed=true and a reader taking uninstalled first', () => {
+  it('clears an earlier uninstall, so a reinstalled downloaded file reads Installed again, MO2\'s markInstalled writing uninstalled=false beside installed=true and a reader taking uninstalled first', () => {
     const uninstalled = setUninstalledInText('[General]\r\ninstalled=true\r\n');
     expect(metaOf(uninstalled).status).toBe('Uninstalled');
     expect(metaOf(setInstalledInText(uninstalled)).status).toBe('Installed');
