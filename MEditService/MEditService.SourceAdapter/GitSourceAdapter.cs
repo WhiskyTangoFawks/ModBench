@@ -40,7 +40,7 @@ public sealed class GitSourceAdapter(UnsavedDocuments unsaved) : ISourceAdapter
 
     public SourceFailure? WhyGitCannotRun() => SourceRepository.WhyGitCannotRun();
 
-    public string? InstanceRootNotFound(string? instanceRoot) => SourceRepository.InstanceRootNotFound(instanceRoot);
+    public string ContentStamp(string text) => SourceRepository.ContentStamp(text);
 
     public SourceFailure? Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,

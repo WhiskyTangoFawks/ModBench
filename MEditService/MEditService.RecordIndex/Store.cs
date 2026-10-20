@@ -8,6 +8,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using MEditService.RecordIndex.Queries;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -37,6 +38,7 @@ internal sealed class Store : IDisposable
     private readonly INotificationPublisher? _notifications;
     private readonly Projection _projection;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
+    private readonly ISourceAdapter _source;
     private PluginIngest? _pluginIngest;
     private WorkingTreeOverlay? _workingTreeOverlay;
     private bool _recordTypeViewsCreated;
@@ -66,11 +68,12 @@ internal sealed class Store : IDisposable
     /// holds no header flag, master list or record count. The gate and the filter outlive the store,
     /// which a rebuild swaps beneath them.</summary>
     public Store(
-        ILogger logger, string? databasePath, string? instanceRoot, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder, IPluginAdapter plugins,
+        ILogger logger, string? databasePath, string? instanceRoot, SchemaReflector schemaReflector, TableDdlBuilder ddlBuilder, IPluginAdapter plugins, ISourceAdapter source,
         TimeProvider? timeProvider, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed,
         IndexWriteGate gate, FilterInForce filterInForce, INotificationPublisher? notifications)
     {
         _logger = logger;
+        _source = source;
         _gate = gate;
         _filterInForce = filterInForce;
         _notifications = notifications;
@@ -220,8 +223,8 @@ internal sealed class Store : IDisposable
         DiscardFileWrittenUnderAnotherVersion(indexVersion);
         _schemas = _schemaReflector.GetSchemas(release);
         Release = release;
-        _pluginIngest = new PluginIngest(Connection, _logger, release);
-        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release);
+        _pluginIngest = new PluginIngest(Connection, _logger, release, _source);
+        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _schemas, release, _source);
         TableDdlBuilder.CreateTables(Connection);
         DuckDbSql.Execute(Connection, $"DELETE FROM {IndexVersionRelation}");
         DuckDbSql.Execute(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);

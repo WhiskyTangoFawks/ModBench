@@ -2,7 +2,6 @@ using MEditService.Codec.Schema;
 using MEditService.Commands.Build;
 using MEditService.LoadOrder;
 using MEditService.ModFolderAdapter;
-using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Strings;
 
@@ -16,15 +15,14 @@ public sealed class PutLoadOrderHandler
     private readonly IModFolderRepository _modFolders;
     private readonly LoadOrderHolder _holder;
     private readonly SchemaReflector _schemaReflector;
-    private readonly ISourceAdapter _source;
     private readonly ExternalChangeCheck _externalChanges;
     private readonly ModStatusCheck _modStatus;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal PutLoadOrderHandler(
-        IModFolderRepository modFolders, LoadOrderHolder holder, SchemaReflector schemaReflector, ISourceAdapter source,
+        IModFolderRepository modFolders, LoadOrderHolder holder, SchemaReflector schemaReflector,
         ExternalChangeCheck externalChanges, ModStatusCheck modStatus) =>
-        (_modFolders, _holder, _schemaReflector, _source, _externalChanges, _modStatus) = (modFolders, holder, schemaReflector, source, externalChanges, modStatus);
+        (_modFolders, _holder, _schemaReflector, _externalChanges, _modStatus) = (modFolders, holder, schemaReflector, externalChanges, modStatus);
 
     public PutLoadOrderResult Put(
         string dataFolder, string? instanceRoot, GameRelease gameRelease,
@@ -34,8 +32,8 @@ public sealed class PutLoadOrderHandler
     {
         if (!_modFolders.DataFolderExists(dataFolder))
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.DataFolderNotFound, $"Data folder not found: {dataFolder}");
-        if (_source.InstanceRootNotFound(instanceRoot) is { } notFound)
-            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InstanceRootNotFound, notFound);
+        if (!Directory.Exists(instanceRoot))
+            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InstanceRootNotFound, $"Instance root not found: {instanceRoot}");
 
         // Discovered here, synchronously, never inside a reconcile the caller cannot see — the
         // schema this warms is what the reconcile that follows Apply needs anyway.

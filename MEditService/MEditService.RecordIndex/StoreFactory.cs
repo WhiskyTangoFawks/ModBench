@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -14,6 +15,7 @@ internal sealed class StoreFactory(
     SchemaReflector schemaReflector,
     TableDdlBuilder ddlBuilder,
     IPluginAdapter plugins,
+    ISourceAdapter source,
     IndexWriteGate gate,
     FilterInForce filter,
     INotificationPublisher? notifications,
@@ -59,7 +61,7 @@ internal sealed class StoreFactory(
         long? atLeastSequence, out string? refusal)
     {
         var store = new Store(
-            _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), instanceRoot, schemaReflector, ddlBuilder, plugins,
+            _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), instanceRoot, schemaReflector, ddlBuilder, plugins, source,
             timeProvider, openedPlugins, indexed, gate, filter, notifications);
         refusal = store.Open();
         if (refusal is not null)

@@ -53,8 +53,9 @@ public interface ISourceAdapter
     /// <summary>Why git cannot be run here, so no repository can be made or written; null when it can.</summary>
     SourceFailure? WhyGitCannotRun();
 
-    /// <summary>The refusal naming the instance root when it is not there; null when it is.</summary>
-    string? InstanceRootNotFound(string? instanceRoot);
+    /// <summary>The stamp of one document's text, as the UTF-8 the record index stores: every side hashes through here, so a
+    /// file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
+    string ContentStamp(string text);
 
     /// <summary>A repository for a mod that has none: one commit, <c>Init &lt;mod&gt;</c>, on <c>main</c>, of each
     /// plugin's door tree, the assets and a build configuration naming <paramref name="output"/>.</summary>

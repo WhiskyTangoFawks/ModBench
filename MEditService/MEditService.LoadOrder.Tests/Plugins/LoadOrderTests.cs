@@ -326,4 +326,23 @@ public sealed class LoadOrderTests
 
         Assert.Equal([upper, lower], Order([upper, lower]).CaseOnlyCollisions);
     }
+
+    [Fact]
+    public void CollisionReasonOf_NamesWhatDiffersAndTheOthers()
+    {
+        var upper = Registered("Dup.esp", "ModA");
+        var lower = Registered("dup.esp", "ModA");
+        var otherOrigin = Registered("Dup.esp", "moda");
+
+        var pair = Order([upper, lower]);
+        var triple = Order([upper, lower, otherOrigin]);
+
+        Assert.Equal(
+            "Its name differs only in case from dup.esp from ModA, so no one can tell which the game loads. None is read.",
+            pair.CollisionReasonOf(upper));
+        Assert.Equal(
+            "Its name and origin differs only in case from Dup.esp from ModA, dup.esp from ModA, so no one can tell which the game loads. None is read.",
+            triple.CollisionReasonOf(otherOrigin));
+        Assert.StartsWith("Its origin differs only in case from ", Order([upper, otherOrigin]).CollisionReasonOf(upper));
+    }
 }

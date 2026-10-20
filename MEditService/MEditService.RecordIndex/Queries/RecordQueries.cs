@@ -463,8 +463,8 @@ internal sealed class RecordQueries(
 
     public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
-        if (SourceRepository.InstanceRootNotFound(instanceRoot) is { } notFound)
-            return new(StoreRebuildRefusal.InstanceRootNotFound, notFound);
+        if (!Directory.Exists(instanceRoot))
+            return new(StoreRebuildRefusal.InstanceRootNotFound, $"Instance root not found: {instanceRoot}");
         return _index.RebuildStore(gameRelease, instanceRoot);
     }
 

@@ -17,17 +17,20 @@ internal sealed class WorkingTreeOverlay
     private readonly ILogger _logger;
     private readonly ContainerDocuments _containers;
     private readonly PluginIngest _ingest;
+    private readonly ISourceAdapter _source;
     private readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas;
     private readonly RecordTypes _types;
     private readonly GameRelease _release;
 
     public WorkingTreeOverlay(
-        DuckDBConnection connection, ILogger logger, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+        DuckDBConnection connection, ILogger logger, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release,
+        ISourceAdapter source)
     {
+        _source = source;
         _connection = connection;
         _logger = logger;
         _containers = new ContainerDocuments(release);
-        _ingest = new PluginIngest(connection, logger, release);
+        _ingest = new PluginIngest(connection, logger, release, source);
         _types = RecordTypes.For(release);
         _release = release;
         _schemas = schemas;
@@ -117,7 +120,7 @@ internal sealed class WorkingTreeOverlay
         DuckDbSql.Execute(_connection, """
             INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, body, content_hash, form_key_plugin)
             VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $5, $6, $7)
-            """, formKey, key.Name, key.Origin, recordType, Stored(recordType, body), SourceRepository.ContentStamp(body),
+            """, formKey, key.Name, key.Origin, recordType, Stored(recordType, body), _source.ContentStamp(body),
             RecordMasters.PluginNamedBy(formKey));
     }
 
@@ -134,7 +137,7 @@ internal sealed class WorkingTreeOverlay
             UPDATE mirror.records
             SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin, Stored(recordType, body), SourceRepository.ContentStamp(body));
+            """, formKey, key.Name, key.Origin, Stored(recordType, body), _source.ContentStamp(body));
     }
 
     private string Stored(string recordType, string body) => ContainerDocumentEdits.WithChildSlotsCut(body, recordType, _release);
@@ -221,7 +224,7 @@ internal sealed class WorkingTreeOverlay
                 $"{child.FormKey} in {key.Name} ({key.Origin}) reached projection untyped, past the read that refuses it.");
 
             var childBody = _containers.TextOf(child);
-            if (string.Equals(SourceRepository.ContentStamp(childBody), EffectiveStamp(key, child.FormKey), StringComparison.Ordinal)) continue;
+            if (string.Equals(_source.ContentStamp(childBody), EffectiveStamp(key, child.FormKey), StringComparison.Ordinal)) continue;
 
             touched.Add(child.FormKey);
             if (RowExistsAtEffective(key, child.FormKey))

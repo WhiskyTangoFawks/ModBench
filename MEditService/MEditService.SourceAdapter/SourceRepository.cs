@@ -58,10 +58,6 @@ public sealed class SourceRepository : ISourceRepository
 
     private static bool IsSourceMod(PluginProvider.FromMod mod) => mod.SourceFolder is { } sourceFolder && IsSourceMod(sourceFolder);
 
-    /// <summary>The refusal naming the instance root when it is not there; null when it is.</summary>
-    public static string? InstanceRootNotFound(string? instanceRoot) =>
-        Directory.Exists(instanceRoot) ? null : $"Instance root not found: {instanceRoot}";
-
     /// <summary>Whether the plugin's source reads: its mod is a source mod and holds one tree for it. A source mod
     /// holds none for a plugin another tool put there or whose source was deleted.</summary>
     internal static bool SourceReads(RegisteredPlugin plugin) =>
