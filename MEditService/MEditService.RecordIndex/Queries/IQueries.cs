@@ -23,6 +23,7 @@ public interface IQueries
     Answer<IReadOnlyList<PluginRecordTypeCount>, IndexRefused> GetPluginRecordTypes(PluginAddress plugin);
     Answer<WorkingTreeStatesBeneath, IndexRefused> GetWorkingTreeStatesBeneath(PluginAddress plugin);
     Answer<IReadOnlyList<RecordTypeChoice>, IndexRefused> GetCreatableRecordTypes();
+    Answer<IReadOnlyList<string>, IndexRefused> GetCreatablePluginExtensions();
     // Null when the plugin holds no such record.
     Answer<IReadOnlyList<RecordTypeChoice>?, IndexRefused> GetChildRecordTypes(PluginAddress plugin, string formKey);
     Answer<IReadOnlyList<ReferenceResult>, IndexRefused> GetReferences(string targetFormKey);

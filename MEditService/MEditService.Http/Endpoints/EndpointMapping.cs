@@ -42,10 +42,6 @@ internal static class EndpointMapping
             ? null
             : Results.Problem($"Unknown strings language: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<Language>())}", statusCode: 400);
 
-    /// <summary>A "not right now" the caller can retry, never a bad request.</summary>
-    internal static IResult NoLoadOrder() =>
-        new Logged(nameof(IndexRefusal.NoLoadOrder), NoLoadOrderException.DefaultMessage, NoLoadOrderProblem());
-
     private static IResult NoLoadOrderProblem() =>
         Results.Problem(
             NoLoadOrderException.DefaultMessage, statusCode: StatusCodes.Status503ServiceUnavailable,
