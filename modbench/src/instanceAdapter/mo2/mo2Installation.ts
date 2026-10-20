@@ -3,14 +3,14 @@
 import { entryNamed } from './codecs/modlistText';
 import { basename, dirname, isAbsolute } from 'node:path';
 import { gameReleaseForNexusDomain, nexusDomainForMetaGame } from '../../tables/gamePaths';
-import { changeOwnedKeysInText, MOD_META_FILE_NAME, parseMetaIni } from './codecs/metaIni';
+import { changeOwnedKeysInText, type InstalledFileId, type MetaIni, metaIniOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni } from './codecs/metaIni';
 import { readGameName } from './codecs/modOrganizerIni';
 import { ensureDir, exists, get, readOrReason, withLock, write } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
-import type { FileRead, InstalledFileId, InstallationFile, InstanceAdapter, ModMeta, ModMetadata, OwnedMetaKeys } from '../instanceAdapter';
+import type { FileRead, InstallationFile, InstanceAdapter, ModMetadata } from '../instanceAdapter';
 import { downloadFile, modMetaFileIn, settingsFile } from './layout';
 import { currentDownloadsDir, folderHolding, newModFolder, type Mo2Context } from './mo2Context';
-import type { ReadingSource } from '../instanceReading';
+import { readMetaIni } from './mo2Reads';
 import { formatNexusPage, parseNexusPage } from '../nexusPage';
 
 // MO2 records a file installed from outside the downloads folder by its whole path, and reinstalls from the
@@ -20,11 +20,11 @@ async function reinstallPath(context: Mo2Context, recorded: string): Promise<str
 }
 
 // The file a mod's metadata names: the first installed from its Nexus mod, else the first.
-const installedFileOf = ({ nexusId, installedFiles = [] }: ModMeta): InstalledFileId | undefined =>
+const installedFileOf = ({ nexusId, installedFiles = [] }: MetaIni): InstalledFileId | undefined =>
   installedFiles.find((file) => file.nexusId === nexusId) ?? installedFiles[0];
 
 // A mod with no game of its own is the instance's game's.
-async function nexusPageOf(meta: ModMeta, { instanceRoot }: Mo2Context): Promise<Pick<InstallationFile, 'page' | 'unpagedGame'>> {
+async function nexusPageOf(meta: MetaIni, { instanceRoot }: Mo2Context): Promise<Pick<InstallationFile, 'page' | 'unpagedGame'>> {
   const file = installedFileOf(meta);
   const modId = file?.nexusId || meta.nexusId;
   if (!modId) return {};
@@ -40,7 +40,7 @@ async function metaGameFor(domain: string, { instanceRoot }: Mo2Context): Promis
 
 type MetadataPlan = { readonly unwritable: string } | { readonly file: string; readonly held: string; readonly changes: Partial<OwnedMetaKeys> };
 
-async function pageChanges(carried: ModMeta, page: string, context: Mo2Context): Promise<Partial<OwnedMetaKeys> | { readonly unwritable: string }> {
+async function pageChanges(carried: MetaIni, page: string, context: Mo2Context): Promise<Partial<OwnedMetaKeys> | { readonly unwritable: string }> {
   const nexus = parseNexusPage(page);
   if (nexus === undefined) return { unwritable: `its page '${page}' is not a Nexus page, the only host MO2's metadata holds` };
   const gameName = await metaGameFor(nexus.game, context);
@@ -78,19 +78,19 @@ async function planMetadata(context: Mo2Context, mod: string, { version, install
   return { file, held, changes };
 }
 
-async function metadataOf(meta: ModMeta, context: Mo2Context): Promise<ModMetadata> {
+async function metadataOf(meta: MetaIni, context: Mo2Context): Promise<ModMetadata> {
   const { archiveFilename } = meta;
   const { page } = await nexusPageOf(meta, context);
   return { version: meta.version, installationFile: archiveFilename === undefined ? undefined : { name: basename(archiveFilename), page } };
 }
 
 export function mo2Installation(
-  context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>, { modMeta }: Pick<ReadingSource, 'modMeta'>,
+  context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>,
 ): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'modMetadata' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
   return {
-    modMetadata: (mod) => readOrReason(async () => metadataOf(await modMeta(mod, 'list'), context)),
+    modMetadata: (mod) => readOrReason(async () => metadataOf(await readMetaIni(context, mod, 'list'), context)),
 
-    metadataOf: (meta) => metadataOf(meta, context),
+    metadataOf: (meta) => metadataOf(metaIniOf(meta), context),
 
     unwritableMetadata: async (mod, metadata) => {
       const plan = await planMetadata(context, mod, metadata);
@@ -106,7 +106,7 @@ export function mo2Installation(
     }),
 
     async installationFile(mod) {
-      const meta = await modMeta(mod, 'list');
+      const meta = await readMetaIni(context, mod, 'list');
       const { archiveFilename } = meta;
       if (archiveFilename === undefined) return { kind: 'read', answer: undefined };
       const refused = (why: string): FileRead<InstallationFile | undefined> =>

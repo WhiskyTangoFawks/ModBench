@@ -35,11 +35,11 @@ describe('buildDownloadRows', () => {
 
   it('flags hasMeta and carries the metadata\'s fields', () => {
     const row = soleRow(rowsClaimedByNoMod([file('foo.zip', 100, metaOf({
-      modID: '12345', fileID: '456', version: '1.2.3', modName: 'Sleep', gameName: 'Fallout4', author: 'Someone',
+      modID: '12345', version: '1.2.3', modName: 'Sleep', gameName: 'Fallout4', author: 'Someone',
     }))]));
 
     expect(row).toMatchObject({
-      hasMeta: true, modID: '12345', fileID: '456', version: '1.2.3', modName: 'Sleep', gameName: 'Fallout4', author: 'Someone',
+      hasMeta: true, modID: '12345', version: '1.2.3', modName: 'Sleep', gameName: 'Fallout4', author: 'Someone',
     });
   });
 

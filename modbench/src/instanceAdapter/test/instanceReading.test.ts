@@ -46,6 +46,14 @@ describe('the instance assembled from a manager\'s reading', () => {
     expect(reading.orderNotes).toEqual(['plugins.txt lists the plugin NONASCIIRETEXTURE.ESP on more than one line; the first line holds']);
   });
 
+  it('words each link the source could not follow as a note naming its path and why', async () => {
+    const skipping = { ...source, modFolders: (skip: (path: string, reason: string) => void) => { skip('/inst/mods/Loop', 'too many levels'); return source.modFolders(skip); } };
+
+    const { linkNotes } = await readInstance(skipping);
+
+    expect(linkNotes).toEqual(['/inst/mods/Loop is a link Modbench cannot follow, so it is not read: too many levels']);
+  });
+
   it('reads the settings once, so one reading holds one generation of the ini', async () => {
     let reads = 0;
     const counting = { ...source, settings: () => { reads++; return source.settings(); } };

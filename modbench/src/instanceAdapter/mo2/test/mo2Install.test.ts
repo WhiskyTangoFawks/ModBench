@@ -63,6 +63,12 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       assertOnlyChanged(before, await snapshotTree(root), new Set([...PAYLOAD, 'meta.ini'].map((file) => `mods/${MOD}/${file}`)));
     });
 
+    it('records the file it was installed from as a pair with the mod\'s Nexus id', async () => {
+      await holding([...PAYLOAD, 'meta.ini']).install(ARCHIVE, { kind: 'new', name: MOD }, { nexusId: '111', installedFileKeys: ['111:222'] });
+
+      expect(await meta(MOD)).toBe('[General]\ngameName=Fallout 4\nmodid=111\n[installedFiles]\n1\\modid=111\n1\\fileid=222\nsize=1\n');
+    });
+
     it('copies a folder\'s files in, leaving the folder where the user put it', async () => {
       const source = await mkdtemp(join(tmpdir(), 'medit-install-source-'));
       try {

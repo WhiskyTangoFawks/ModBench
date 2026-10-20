@@ -118,7 +118,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
   });
 
   it('archive: one of the instance\'s downloaded files is handed on as the archive picked, for the command to know as that file', async () => {
-    const row = downloadRowFixture('foo.7z', { modID: '111', fileID: '222', version: '2.0' });
+    const row = downloadRowFixture('foo.7z', { modID: '111', version: '2.0' });
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([uriFile(row.path)]);
@@ -308,7 +308,7 @@ describe('modbench.mod.install called by the agent', () => {
   };
 
   it('installs the downloaded file named as a new mod under the name given, asking nothing, and answers the mod written', async () => {
-    const row = downloadRowFixture('foo.7z', { modID: '111', fileID: '222', version: '2.0' });
+    const row = downloadRowFixture('foo.7z', { modID: '111', version: '2.0' });
     installMod.mockResolvedValueOnce({ applied: true, isFomod: false });
     const warnIfFomod = vi.fn();
     const reporter = recordingReporter();

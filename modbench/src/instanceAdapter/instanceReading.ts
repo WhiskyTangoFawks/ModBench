@@ -80,8 +80,8 @@ async function settled(readModOrder: () => Promise<ModlistEntry[]>): Promise<Mod
   return readModOrder();
 }
 
-const metaOf = ({ version, nexusId, archiveFilename, installedFiles }: ModMeta): ModMeta =>
-  ({ version, nexusId, archiveFilename, installedFiles });
+const metaOf = ({ version, nexusId, archiveFilename, installedFileKeys }: ModMeta): ModMeta =>
+  ({ version, nexusId, archiveFilename, installedFileKeys });
 
 // A listed mod's meta is the one already read. A folder the mod order does not list is read only
 // when downloaded files are there to be matched against it.
@@ -136,8 +136,9 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
   return {
     profile, gameName, gameRelease, mods: mods.kept, modGroups: groupModOrder(mods.kept), pluginOrder: pluginOrder.kept, orderNotes: [...mods.notes, ...pluginOrder.notes], downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
-    profiles, modFolders, skippedLinks, runtimeOutput, modFiles, folderMeta,
+    profiles, modFolders, runtimeOutput, modFiles, folderMeta,
     sourceMods, holdsRepository, watchNotes: source.watchNotes(), managerRunning,
+    linkNotes: [...skippedLinks].map(([linkPath, reason]) => `${linkPath} is a link Modbench cannot follow, so it is not read: ${reason}`),
   };
 }
 

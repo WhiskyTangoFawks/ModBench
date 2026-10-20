@@ -369,15 +369,18 @@ describe('the MO2 Instance adapter', () => {
       it('hands over a link it cannot follow, by path', async () => {
         await symlink(join(root, 'nowhere'), join(root, 'mods', 'Dangling'));
 
-        expect([...(await adapter.reading()).skippedLinks.keys()]).toEqual([join(root, 'mods', 'Dangling')]);
+        expect((await adapter.reading()).linkNotes).toEqual([expect.stringContaining(join(root, 'mods', 'Dangling'))]);
       });
 
       it('hands over, with the mods\' link, a link in profiles/ or downloads/ it cannot follow', async () => {
         await symlink(join(root, 'nowhere'), join(root, 'profiles', 'Gone'));
         await symlink(join(root, 'nowhere.7z'), join(root, 'downloads', 'Gone-1-0.7z'));
 
-        expect([...(await adapter.reading()).skippedLinks.keys()].sort())
-          .toEqual([join(root, 'downloads', 'Gone-1-0.7z'), join(root, 'profiles', 'Gone')]);
+        const { linkNotes } = await adapter.reading();
+
+        expect(linkNotes).toHaveLength(2);
+        expect(linkNotes.join('\n')).toContain(join(root, 'downloads', 'Gone-1-0.7z'));
+        expect(linkNotes.join('\n')).toContain(join(root, 'profiles', 'Gone'));
       });
 
       it('answers the game folder as not found, with its Data folder unresolved, when no game folder is found', async () => {
@@ -1715,6 +1718,18 @@ describe('the MO2 Instance adapter', () => {
           const answer = await adapter.installationFile('Unofficial Fallout 4 Patch');
           return answer.kind === 'read' ? answer.answer?.page : undefined;
         };
+
+        it('answers, for a meta read through the reading, the page of the file whose mod id is not the meta\'s own', async () => {
+          await writeFile(
+            join(root, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'),
+            `[General]\r\ngameName=Fallout4\r\nmodid=4598\r\ninstallationFile=${DOWNLOAD}\r\n\r\n[installedFiles]\r\n1\\modid=9\r\n1\\fileid=78\r\nsize=1\r\n`,
+          );
+          const entry = (await adapter.reading()).mods.find((e) => e.name === 'Unofficial Fallout 4 Patch');
+
+          const metadata = await adapter.metadataOf(entry?.kind === 'mod' ? entry : {});
+
+          expect(metadata.installationFile?.page).toBe(NEXUS + 'fallout4/mods/9?tab=files&file_id=78');
+        });
 
         it('names no page for a game the registry has no Nexus domain for, and says which game', async () => {
           await writeFile(
