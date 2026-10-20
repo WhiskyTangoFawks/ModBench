@@ -31,7 +31,7 @@ describe('switchProfile', () => {
 
   it.each([
     ['a name the instance does not hold', 'No Such Profile', PROFILES],
-    ['a profile the instance no longer holds', 'Secondary', ['Default']],
+    ['a profile the instance does not hold', 'Secondary', ['Default']],
   ])('refuses %s, handing the adapter nothing', async (_, profile, held) => {
     const { fake, switchProfile } = over({}, held);
 

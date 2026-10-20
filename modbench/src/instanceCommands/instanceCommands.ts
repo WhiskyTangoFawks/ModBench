@@ -3,6 +3,7 @@
 import type { MEditClient } from '../client';
 import { refuse } from '../coreLib/refuse';
 import type { CommandResult } from '../coreLib/commandResult';
+import type { TailOf } from '../coreLib/boundCommand';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { RefreshResult } from './loadOrder';
 
@@ -36,7 +37,7 @@ export function instanceCommands(
   { adapter, client, instanceRoot }: { adapter: InstanceAdapter; client: Pick<MEditClient, 'rebuildIndex'>; instanceRoot: string },
 ) {
   return {
-    switchProfile: (profile: string) => switchProfile(adapter, profile),
+    switchProfile: (...args: TailOf<typeof switchProfile>) => switchProfile(adapter, ...args),
     refresh: () => refresh(adapter, client, instanceRoot),
   };
 }

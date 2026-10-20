@@ -117,7 +117,7 @@ describe('no command takes a slice of the instance value', () => {
   });
 
   it('flags a slice declared as a type of its own', () => {
-    const planted = 'interface InstanceGame { readonly gameName: string; readonly gameRelease: string | undefined }\n';
-    expect(slicedFieldsIn(planted, instanceValueFields())).toEqual(['gameName', 'gameRelease']);
+    const planted = 'interface InstanceSlice { readonly profiles: readonly string[]; readonly activeProfile: string }\n';
+    expect(slicedFieldsIn(planted, instanceValueFields())).toEqual(['profiles', 'activeProfile']);
   });
 });
