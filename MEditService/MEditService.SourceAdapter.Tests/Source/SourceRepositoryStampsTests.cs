@@ -35,7 +35,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
 
     private string RelativeNpcFolder => Path.GetDirectoryName(Path.GetRelativePath(_modFolder, NpcFile)).Require();
 
-    private static string StampOf(string text) => SourceRepository.ContentStamp(text);
+    private static string StampOf(string text) => TestAdapters.Source().ContentStamp(text);
 
     [Fact]
     public void ContentStamp_IsEqualForEqualBytesAndDistinctForDifferentOnes()
@@ -44,8 +44,8 @@ public sealed class SourceRepositoryStampsTests : IDisposable
         var alsoA = "{\n  \"Value\": 250\n}\n";
         var b = "{\n  \"Value\": 251\n}\n";
 
-        Assert.Equal(SourceRepository.ContentStamp(a), SourceRepository.ContentStamp(alsoA));
-        Assert.NotEqual(SourceRepository.ContentStamp(a), SourceRepository.ContentStamp(b));
+        Assert.Equal(TestAdapters.Source().ContentStamp(a), TestAdapters.Source().ContentStamp(alsoA));
+        Assert.NotEqual(TestAdapters.Source().ContentStamp(a), TestAdapters.Source().ContentStamp(b));
     }
 
     [Fact]

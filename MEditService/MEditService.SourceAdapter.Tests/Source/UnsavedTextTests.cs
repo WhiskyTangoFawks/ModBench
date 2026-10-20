@@ -52,8 +52,8 @@ public sealed class UnsavedTextTests : IDisposable
         _unsaved.Apply([]);
         var dropped = Reads.StampsOf(Plugin).ByFormKey[Npc];
 
-        Assert.Equal(SourceRepository.ContentStamp(NpcBody("TypedNpc")), held);
-        Assert.Equal(SourceRepository.ContentStamp(NpcBody("VendorNpc")), dropped);
+        Assert.Equal(TestAdapters.Source().ContentStamp(NpcBody("TypedNpc")), held);
+        Assert.Equal(TestAdapters.Source().ContentStamp(NpcBody("VendorNpc")), dropped);
     }
 
     [Fact]
