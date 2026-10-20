@@ -213,19 +213,6 @@ describe.runIf(process.platform === 'linux')('(VS Code\'s recursive watcher miss
     expect(failures).toBe(1);
   });
 
-  it('names once a reason links cannot be followed, a loop, and nothing for a link to nothing', async () => {
-    const created = join(root, 'Created');
-    await mkdir(join(created, 'Held'), { recursive: true });
-    await symlink('Loop', join(created, 'Loop'));
-    await symlink('AlsoLoop', join(created, 'Held', 'AlsoLoop'));
-    await symlink(join(root, 'Gone'), join(created, 'Dangling'));
-
-    await held.created(created);
-
-    expect(held.failures()).toEqual(['ELOOP: too many symbolic links encountered']);
-    expect(failures).toBe(2);
-  });
-
   it('answers nothing for a created path that is a file', async () => {
     const file = join(root, 'Created');
     await writeFile(file, '');

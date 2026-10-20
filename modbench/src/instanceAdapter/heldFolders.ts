@@ -6,7 +6,7 @@ import { realpath, stat } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { errorMessage } from '../ports/errorMessage';
 import { errnoCode } from './errno';
-import { listFolders, type SkippedLink } from './files';
+import { ignoreSkippedLink, listFolders } from './files';
 
 export interface HeldFolderWatch {
   /** Watches each folder, at any depth, that `folder` holds, while open; settles once each is watched. */
@@ -48,7 +48,7 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
   const watched = new Map<string, { watcher: FSWatcher; real: string }>();
   const watchedReal = new Set<string>();
   const failed = new Map<string, string>();
-  const listingFailed = new Map<string, Set<string>>();
+  const listingFailed = new Map<string, string>();
   let isOpen = false;
 
   const forget = (folder: string): void => {
@@ -89,22 +89,17 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
 
   const isGone = (error: unknown): boolean => ['ENOENT', 'ENOTDIR'].includes(errnoCode(error) ?? '');
 
-  // A link to nothing is a folder gone; any other reason a link cannot be followed is named once, whichever link.
   const foldersIn = async (folder: string): Promise<string[]> => {
-    const reasons = new Set<string>();
-    const skippedLink: SkippedLink = (linkPath, reason) => {
-      if (!reason.startsWith('ENOENT')) reasons.add(reason.replace(`, stat '${linkPath}'`, ''));
-    };
-    const names = await listFolders(folder, skippedLink).catch((error: unknown) => {
-      if (!isGone(error)) reasons.add(reasonOf(error));
-      return [];
-    });
-    if (reasons.size === 0) listingFailed.delete(folder);
-    else {
-      listingFailed.set(folder, reasons);
+    try {
+      const names = await listFolders(folder, ignoreSkippedLink);
+      listingFailed.delete(folder);
+      return names.map((name) => join(folder, name));
+    } catch (error) {
+      if (isGone(error)) return [];
+      listingFailed.set(folder, reasonOf(error));
       onFailure();
+      return [];
     }
-    return names.map((name) => join(folder, name));
   };
 
   const realOf = async (folder: string): Promise<string | undefined> =>
@@ -163,6 +158,6 @@ function heldFolderWatch({ onChange, holds, onFailure }: HeldFolderWatchDeps): H
       failed.clear();
       listingFailed.clear();
     },
-    failures: () => [...new Set([...failed.values(), ...[...listingFailed.values()].flatMap((reasons) => [...reasons])])],
+    failures: () => [...new Set([...failed.values(), ...listingFailed.values()])],
   };
 }
