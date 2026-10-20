@@ -10,7 +10,7 @@ public sealed record ModToRestore(
 
 /// <summary>The instance's facts beyond its mods: the stat cache's folder, the game folder with the game files the request
 /// found for the manifests, and what a build needs, as <see cref="InstanceToBuild"/>.</summary>
-public sealed record InstanceToRestore(string StatCache, string ExcludedSuffix, ArchiveVariants? Archives, GameFolder? GameFolder = null);
+public sealed record InstanceToRestore(string StatCache, string ExclusionMark, ArchiveVariants? Archives, GameFolder? GameFolder = null);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RestoreRefusal

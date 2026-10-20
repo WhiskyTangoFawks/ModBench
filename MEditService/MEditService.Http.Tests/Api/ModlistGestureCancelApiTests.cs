@@ -33,7 +33,7 @@ public sealed class ModlistGestureCancelApiTests : HostedTests
         {
             mods,
             statCache = Path.Combine(_instance, "stat-cache"),
-            excludedSuffix = ".mohidden",
+            exclusionMark = ".mohidden",
             gesture,
         };
     }

@@ -337,7 +337,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
           { name: 'ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'] },
           { name: 'ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'] },
         ],
-        { statCache: '/instance/stat-cache', excludedSuffix: '.excluded', archives: archiveVariants('Fallout4'), gameFolder: GAME_FOLDER },
+        { statCache: '/instance/stat-cache', exclusionMark: '.excluded', archives: archiveVariants('Fallout4'), gameFolder: GAME_FOLDER },
         { onProgress: expect.any(Function) as unknown, signal: undefined },
       ],
     }]);

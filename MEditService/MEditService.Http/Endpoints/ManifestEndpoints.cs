@@ -92,8 +92,8 @@ internal static class ManifestEndpoints
     {
         var mods = req.Mods ?? [];
         if (Malformed(mods, req.StatCache, req.GameFolder) is { } malformed) return malformed;
-        if (string.IsNullOrWhiteSpace(req.ExcludedSuffix))
-            return EndpointMapping.BadRequest("The suffix the mod manager gives an excluded file's name is required.");
+        if (string.IsNullOrWhiteSpace(req.ExclusionMark))
+            return EndpointMapping.BadRequest("The mod manager's exclusion mark is required.");
         var variants = req.Archives?.Variants();
         if (req.Archives is not null && variants is null) return EndpointMapping.BadRequest(ArchiveVariantsRequest.NotOneEach);
         if (mods.Any(mod => mod.Submodule is { IsWhole: false }))
@@ -103,7 +103,7 @@ internal static class ManifestEndpoints
         var result = await handler.RestoreAsync(
             [.. mods.Select(mod => new ModToRestore(
                 mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.Submodule?.ToSubmodule()))],
-            new InstanceToRestore(req.StatCache, req.ExcludedSuffix, variants, req.GameFolder?.ToGameFolder()), req.Gesture, running.Token);
+            new InstanceToRestore(req.StatCache, req.ExclusionMark, variants, req.GameFolder?.ToGameFolder()), req.Gesture, running.Token);
 
         return EndpointMapping.Answered("Restore from manifest", loggerFactory.CreateLogger(nameof(ManifestEndpoints)), result);
     }
@@ -196,9 +196,9 @@ internal sealed record UpdateManifestModRequest(
     : IModRequest;
 
 /// <summary>The mods to restore from their manifests, with the instance's facts (ADR-0013): StatCache and GameFolder as update
-/// manifest's, ExcludedSuffix and Archives as build's. Gesture names it to a cancel and in its progress.</summary>
+/// manifest's, ExclusionMark and Archives as build's. Gesture names it to a cancel and in its progress.</summary>
 internal sealed record RestoreFromManifestRequest(
-    IReadOnlyList<RestoreFromManifestModRequest> Mods, string StatCache, string ExcludedSuffix, ArchiveVariantsRequest? Archives,
+    IReadOnlyList<RestoreFromManifestModRequest> Mods, string StatCache, string ExclusionMark, ArchiveVariantsRequest? Archives,
     GameFolderRequest? GameFolder, string? Gesture);
 
 /// <summary>A mod, with the submodule its manifest names, none until a refusal names it.</summary>

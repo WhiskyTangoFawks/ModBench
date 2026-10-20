@@ -14,7 +14,7 @@ import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
   'gameFolder' | 'gameRelease' | 'modOrder' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'removeIgnoreList' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
-  | 'statCacheFolder' | 'trashModFile' | 'excludedSuffix' | 'submodule'>;
+  | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule'>;
 
 interface ModlistRepositoryCommandsDeps {
   client: Pick<MEditClient, 'updateManifest' | 'restoreFromManifest' | 'getWhatRestoreDestroys' | 'getModStatus'>;
@@ -296,7 +296,7 @@ async function restoreFolders(
   if (read.sent.length === 0) return { applied: true, landed: [], refused: read.refused };
   const sent: readonly RestoreMod[] = read.sent;
   const facts: RestoreFacts = {
-    statCache: adapter.statCacheFolder, excludedSuffix: adapter.excludedSuffix, archives: archiveVariants(gameRelease), gameFolder: wireGameFolder(folder, []),
+    statCache: adapter.statCacheFolder, exclusionMark: adapter.exclusionMark, archives: archiveVariants(gameRelease), gameFolder: wireGameFolder(folder, []),
   };
   const restoring = { onProgress: (progress: ModlistProgress): void => { onProgress?.({ phase: 'Restoring', ...progress }); }, signal };
   const first = await restoreOnce(client, sent, facts, restoring);

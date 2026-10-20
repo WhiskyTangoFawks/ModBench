@@ -1,30 +1,26 @@
 # Modbench
 
-Modbench is a modding IDE for Bethesda games, built on VS Code. It treats a modlist and its mods as source code, with git for history, review and collaboration. With it, you can:
+Modbench is a modding IDE for Bethesda games, built on VS Code. It treats a modlist and its mods as source code, with git for history, review and collaboration. With it, you can 
 
-- Roll a modlist back to any earlier state.
-- Try a change on a branch, and drop it when it breaks the game.
-- Clone a modlist as its manifests, and restore the working modlist from them.
-- Review each record a change touches, as a diff, before it reaches the game.
-- Manage multiple contributors working on a single modlist cleanly.
-- Keep your edits to another author's mod on top of each new release ([how](docs/wiki/workflows.md#patch-another-authors-mod)).
-- Script records in any language, and review a script's changes as you review your own.
+- Decompile and edit Mods.
+- Make changes to your modlist.
+- Do anything with a mod or modlist that you can do with git. Commit, clone (and rebuild from the manifest), rollback, branch, fork, review, etc.
+- Script against plugins in any language.
+- Work natively on Windows or Linux
 
 ## Is it for you
 
-Modbench is a power tool for an advanced modlist maintainer who wants the functionality of standard software development tooling. You need to know git and VS Code, or at least want to learn them.
+Modbench is a power tool for an advanced modlist maintainer who wants the functionality and workflows of standard software development tools. You need to know git and VS Code, or at least want to learn them.
 
 ## How it works
 
-Modbench is a VS Code extension. The editor, the terminal, search, extensions and your agent work on your modlist. Mod management and record editing are one unified tool, so when you reorder a mod, the record panel follows. The Mods view works as MO2's does, and the record panel as xEdit's does.
+Modbench is a VS Code extension. The editor, the terminal, search, extensions and your agent all work. Mod management and record editing are one unified tool, so when you reorder a mod, the record panel follows in real time, without reloading. The Mods view works more or less as MO2's does, and the record panel is basically xEdit's comparison grid.
 
-Git holds the history. You commit, diff, branch and merge a modlist as you would any project, and you roll back a change that breaks the game.
-
-VS Code edits files, and git stores files. So Modbench works on files, and turns mods and plugins into files git can hold.
+VS Code edits files, and git stores files, neither work natively with binaries. So Modbench works on human readable, decomiled json, unlike most other modding tools which let you directly edit a binary. The first step to editting a plugin is decompilation, which automatically creates a local git repo. Once you have done so, modbench treats that source as the mods source code, and the compiled mod as a build artifact.
 
 ### A mod is its manifest
 
-Git does not hold gigabytes of binary files. So the modlist repository holds each mod as a manifest, which restores the mod as installed. The profiles and MO2's modlist configuration sit beside the manifests. An upgrade, a new mod or a removed file reads as a change to a manifest, which git tracks.
+Git does not hold gigabytes of binary files and assets. So the modlist repository holds each mod as a manifest of it's installed files. The profiles and MO2's modlist configuration sit beside the manifests. An upgrade, a new mod or a removed file reads as a change to a manifest, which git tracks. To change branches, you simply commit any existing changes, git checkout as normal, and restore any changed mods from their manifests.
 
 The instance stays MO2's, in MO2's own format, so you can switch between MO2 and Modbench: close one, then open the other. Nothing Modbench does breaks using the list in MO2.
 
@@ -63,14 +59,14 @@ What works today:
 - Records: an xEdit-style record panel across the active plugins, with conflict colours, field editing, copy as override, new record, and Referenced By.
 - Version control: the modlist repository, source mods and build.
 
-Planned, on the [milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) board:
+Planned:
 
 - Deploy and launch: Modbench does not launch the game yet, so you launch it from MO2.
-- Downloads: fetch each file a manifest names, so a clone restores with no file fetched by hand. This waits on a Nexus API key.
+- Downloads: there is no automation of downloads yet, this waits on me asking for a Nexus API key.
 - Repair of a malformed plugin, so it decompiles. Mutagen is stricter than xEdit about what it accepts, so not every plugin decompiles today.
-- Vortex instances, alongside MO2.
-- FOMOD installers.
-- Creating a new instance. Today Modbench opens an existing one.
+- Compatibility with Vortex instances.
+- FOMOD installer compatibility.
+- Creating a new instance. Today Modbench only opens an existing one.
 - LOOT integration.
 - Including Deltas for changed manually changed files in a comitted modlist, as wabbajack does. In order to fit in a git repo, all files must match the hash of their providing package. This may eventually be implemented through providing the delta as an external download.
 

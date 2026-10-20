@@ -96,8 +96,8 @@ internal static class ModEndpoints
         {
             return EndpointMapping.BadRequest("Every mod needs a name, a source folder and a folder.");
         }
-        if (string.IsNullOrWhiteSpace(req.ExcludedSuffix))
-            return EndpointMapping.BadRequest("The suffix the mod manager gives an excluded file's name is required.");
+        if (string.IsNullOrWhiteSpace(req.ExclusionMark))
+            return EndpointMapping.BadRequest("The mod manager's exclusion mark is required.");
         if (string.IsNullOrWhiteSpace(req.StatCache)) return EndpointMapping.BadRequest("The folder of the stat cache is required.");
         var variants = req.Archives?.Variants();
         if (req.Archives is not null && variants is null) return EndpointMapping.BadRequest(ArchiveVariantsRequest.NotOneEach);
@@ -106,7 +106,7 @@ internal static class ModEndpoints
             "Build", logger,
             buildModHandler.BuildAsync(
                 [.. mods.Select(mod => new ModToBuild(mod.Name, mod.SourceFolder, mod.Folder, mod.MetadataFiles ?? [], mod.Version, mod.IsSubmodule))],
-                new InstanceToBuild(req.ExcludedSuffix, variants, req.StatCache)),
+                new InstanceToBuild(req.ExclusionMark, variants, req.StatCache)),
             EndpointMapping.Refusal);
     }
 }
@@ -116,9 +116,9 @@ internal static class ModEndpoints
 internal sealed record BuildConfigurationRequest(
     string SourceFolder, string? Output, IReadOnlyList<string>? Exclude, IReadOnlyList<string>? Include);
 
-/// <summary>The mods to build with the instance's facts (ADR-0013): the mod manager's suffix for an excluded file's
-/// name, the game's archive variants, if any, and the stat cache's folder.</summary>
-internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExcludedSuffix, ArchiveVariantsRequest? Archives, string StatCache);
+/// <summary>The mods to build with the instance's facts (ADR-0013): the mod manager's exclusion mark, the game's
+/// archive variants, if any, and the stat cache's folder.</summary>
+internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExclusionMark, ArchiveVariantsRequest? Archives, string StatCache);
 
 /// <summary>A mod by name, the source folder whose build configuration names it, its folder, its version, its metadata
 /// files, which its manifest does not name, and whether the Instance adapter makes its repository a submodule (ADR-0023).</summary>
