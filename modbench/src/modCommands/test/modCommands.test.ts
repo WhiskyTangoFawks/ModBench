@@ -734,3 +734,27 @@ describe('the names a separator or mod may take', () => {
     expect(await commands.renameModNameRefusal('a\\b', 'Mod B')).toBe('A mod name cannot contain / or \\');
   });
 });
+
+describe('the mod commands refuse a clashing name themselves, writing nothing', () => {
+  type Commands = ReturnType<typeof over>['commands'];
+  const unlisted = { modFolders: modFoldersOf('Unlisted Mod') };
+
+  it.each([
+    ['insertSeparator onto a separator', (c: Commands) => c.insertSeparator(RADFALL.toUpperCase(), { kind: 'mod', name: 'ENBoost' }), 'A separator with this name already exists'],
+    ['renameSeparator onto another separator', (c: Commands) => c.renameSeparator(UNASSIGNED, RADFALL), 'A separator with this name already exists'],
+    ['renameMod onto a listed mod', (c: Commands) => c.renameMod('Harder VATS', 'enboost'), 'A mod with this name already exists'],
+    ['renameMod onto a folder with no line', (c: Commands) => c.renameMod('Harder VATS', 'unlisted mod'), 'A mod with this name already exists'],
+    ['renameMod to a name with a path separator', (c: Commands) => c.renameMod('Harder VATS', 'a/b'), 'A mod name cannot contain / or \\'],
+  ])('%s', async (_, run, refusal) => {
+    const { fake, commands } = over(FIXTURE_ORDER, {}, undefined, unlisted);
+
+    expect(await run(commands)).toEqual({ applied: false, refusal });
+    expect(verbs(fake.calls)).toEqual([]);
+  });
+
+  it('renames a separator to its own name in another case', async () => {
+    const { commands } = over();
+
+    expect(await commands.renameSeparator(UNASSIGNED, UNASSIGNED.toUpperCase())).toMatchObject({ applied: true });
+  });
+});
