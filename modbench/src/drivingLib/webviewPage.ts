@@ -1,6 +1,6 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
-import { WEBVIEW_STYLESHEET } from './webviewStylesheet';
+import { WEBVIEW_STYLESHEET } from '../wire/webviewPages';
 
 /** A page of the webview build: its script, and what is set on `window` before the script runs.
  *  Every page links the build's one stylesheet. */
