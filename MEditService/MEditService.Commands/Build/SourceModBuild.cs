@@ -45,7 +45,7 @@ internal sealed class SourceModBuild
         if (notAnAsset.File is not null)
             return Refused(BuildRefusal.ArchiveFileNotAnAsset, $"'{notAnAsset.Archive}' takes '{notAnAsset.File}', which is not an asset of its source.");
 
-        var written = new FolderWrite(_modFolders, mod.Folder, source.Exclude, instance.ExcludedSuffix);
+        var written = new FolderWrite(_modFolders, mod.Folder, source.Exclude, instance.ExclusionMark);
 
         var packed = source.Archives.SelectMany(archive => archive.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
         try

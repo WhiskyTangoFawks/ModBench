@@ -164,7 +164,7 @@ export type DecompileAndCommitMod = components['schemas']['DecompileAndCommitMod
  *  (ADR-0013). */
 export type BuildMod = components['schemas']['BuildModRequest'];
 
-/** The instance's facts every mod's build needs: the suffix of an excluded name, and the release's archive variants. */
+/** The instance's facts every mod's build needs: the mod manager's exclusion mark, and the release's archive variants. */
 export type BuildFacts = Omit<components['schemas']['BuildRequest'], 'mods'>;
 
 // The generated mod, with each refusal as `ItemRefusal` and each unset flag absent: mEdit sends null and false.
@@ -218,7 +218,7 @@ export interface UpdateManifestOutcome {
 export type RestoreMod = components['schemas']['RestoreFromManifestModRequest'];
 
 /** The instance's facts restore from manifest needs: the stat cache's folder, the game folder with the game files handed so
- *  far, the suffix of an excluded file and the archives a build packs. */
+ *  far, the mod manager's exclusion mark and the archives a build packs. */
 export type RestoreFacts = Omit<components['schemas']['RestoreFromManifestRequest'], 'mods' | 'gesture'>;
 
 

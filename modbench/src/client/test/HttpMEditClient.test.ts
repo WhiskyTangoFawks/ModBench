@@ -173,9 +173,9 @@ const modToBuild = (name: string) => ({ name, sourceFolder: `/instance/source/${
 const modToUpdate = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'], isSourceMod: false });
 const updateFacts = { statCache: '/instance/stat-cache' };
 const modToRestore = (name: string) => ({ name, folder: `/instance/mods/${name}`, metadataFiles: ['meta.ini'] });
-const restoreFacts = { statCache: '/instance/stat-cache', excludedSuffix: '.mohidden', archives: null };
+const restoreFacts = { statCache: '/instance/stat-cache', exclusionMark: '.mohidden', archives: null };
 const buildFacts = {
-  excludedSuffix: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } },
+  exclusionMark: '.mohidden', archives: { general: { ba2: { version: 1, compressed: true } }, textures: { ba2: { version: 1, compressed: true } } },
   statCache: '/instance/stat-cache',
 };
 

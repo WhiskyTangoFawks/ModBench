@@ -15,7 +15,7 @@ namespace MEditService.Commands.Tests.Build;
 public sealed class BuildModHandlerTests : IDisposable
 {
     private const string ModName = "Mod";
-    private const string Suffix = ".mohidden";
+    private const string ExclusionMark = ".excluded";
     private const string MetaIni = "meta.ini";
     private const string Remote = "https://example.com/mod.git";
 
@@ -24,7 +24,7 @@ public sealed class BuildModHandlerTests : IDisposable
     private readonly ScratchDirectory _root = new("medit-build-handler-");
     private readonly LoadOrderHolder _holder = new();
 
-    public BuildModHandlerTests() => _noArchives = new(Suffix, Archives: null, StatCache);
+    public BuildModHandlerTests() => _noArchives = new(ExclusionMark, Archives: null, StatCache);
 
     public void Dispose() => _root.Dispose();
 
@@ -147,14 +147,14 @@ public sealed class BuildModHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Build_WritesAnExcludedFile_AndEachFileOfAnExcludedFolder_UnderTheSuffix()
+    public async Task Build_WritesAnExcludedFile_AndEachFileOfAnExcludedFolder_UnderTheExclusionMarkHanded()
     {
         WriteSource("{\"output\": \"Mod\", \"exclude\": [\"Textures/A.dds\", \"meshes\"]}",
             ("textures/a.dds", "a"), ("textures/b.dds", "b"), ("meshes/deep/c.nif", "c"));
 
         await Landed();
 
-        Assert.Equal([("meshes.mohidden/deep/c.nif", "c"), ("textures/a.dds.mohidden", "a"), ("textures/b.dds", "b")], FilesIn(ModFolder));
+        Assert.Equal([("meshes.excluded/deep/c.nif", "c"), ("textures/a.dds.excluded", "a"), ("textures/b.dds", "b")], FilesIn(ModFolder));
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public sealed class BuildModHandlerTests : IDisposable
             ("meshes/c.nif", "c"), ("readme.txt", "loose"));
         WriteAsset("textures/a.dds", Dds.Dxt1(8, 8, 1).File);
 
-        var built = await Landed(new InstanceToBuild(Suffix, new ArchiveVariants(
+        var built = await Landed(new InstanceToBuild(ExclusionMark, new ArchiveVariants(
             new Ba2Variant(1, Ba2Contents.General, Compressed: false), new Ba2Variant(1, Ba2Contents.Textures, Compressed: false)), StatCache));
 
         Assert.Empty(built.ArchivesRefused);

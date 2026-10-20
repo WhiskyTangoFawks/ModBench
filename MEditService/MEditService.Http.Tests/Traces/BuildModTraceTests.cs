@@ -104,7 +104,7 @@ public sealed class BuildModTraceTests : HostedTests
                 },
             },
             statCache = StatCache,
-            excludedSuffix = ".mohidden",
+            exclusionMark = ".mohidden",
         }));
 
         Assert.Empty(answer.GetProperty("refused").EnumerateArray());
@@ -156,13 +156,13 @@ public sealed class BuildModTraceTests : HostedTests
 
     public static TheoryData<string, string> NotARequestToBuild => new()
     {
-        { "no mod", "{\"mods\": [], \"excludedSuffix\": \".mohidden\"}" },
-        { "no folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\"}], \"excludedSuffix\": \".mohidden\"}" },
-        { "no suffix", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"statCache\": \"c\"}" },
-        { "no stat cache", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"excludedSuffix\": \".mohidden\"}" },
+        { "no mod", "{\"mods\": [], \"exclusionMark\": \".mohidden\"}" },
+        { "no folder", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\"}], \"exclusionMark\": \".mohidden\"}" },
+        { "no exclusion mark", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"statCache\": \"c\"}" },
+        { "no stat cache", "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"exclusionMark\": \".mohidden\"}" },
         {
             "a variant both a BA2 and a BSA",
-            "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"excludedSuffix\": \".mohidden\", \"statCache\": \"c\", " +
+            "{\"mods\": [{\"name\": \"ModBuildOutcome\", \"sourceFolder\": \"s\", \"folder\": \"f\"}], \"exclusionMark\": \".mohidden\", \"statCache\": \"c\", " +
             "\"archives\": {\"general\": {\"ba2\": {\"version\": 1, \"compressed\": true}, \"bsa\": {\"version\": 105, \"archiveFlags\": 3, \"fileFlags\": 0}}, " +
             "\"textures\": {\"ba2\": {\"version\": 1, \"compressed\": true}}}}"
         },

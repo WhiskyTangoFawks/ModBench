@@ -57,6 +57,19 @@ public sealed class RestoreASourceModTests : IDisposable
     }
 
     [Fact]
+    public async Task AFileItsBuildConfigurationExcludes_ComesBackUnderTheExclusionMarkHanded_AndItsLineNamesItSo()
+    {
+        var excluding = Commit("{\"output\": \"Mod\", \"exclude\": [\"meshes/c.nif\"]}", "excluded");
+        Manifested();
+
+        Assert.Single((await Restore(excluding)).Applied);
+
+        Assert.Equal("excluded", File.ReadAllText(Path.Combine(ModFolder, "meshes", "c.nif.excluded")));
+        Assert.False(File.Exists(Path.Combine(ModFolder, "meshes", "c.nif")));
+        Assert.Equal(["meshes/c.nif.excluded"], _folders.ReadManifest(ModFolder, ModName).Require().Files.Select(file => file.Path));
+    }
+
+    [Fact]
     public async Task AManifestNamingASubmodule_WhoseRequestHandsNone_IsNotFound_NamingIt()
     {
         Manifested();
@@ -250,7 +263,7 @@ public sealed class RestoreASourceModTests : IDisposable
         if (pin is not null) _submodule.Pin(pin);
         return TestEditService.RestoreHandler(_holder, notifications, source ?? TestAdapters.Source(), _folders).RestoreAsync(
             [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch))],
-            new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".mohidden", Archives: null), cancel: cancel);
+            new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".excluded", Archives: null), cancel: cancel);
     }
 
     private string Commit(string configuration, string mesh) =>

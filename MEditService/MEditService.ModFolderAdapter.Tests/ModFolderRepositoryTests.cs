@@ -34,8 +34,8 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void ExcludedName_IsTheNameWithTheSuffixAfterIt() =>
-        Assert.Equal("a.esp.mohidden", _repository.ExcludedName("a.esp", ".mohidden"));
+    public void ExcludedName_IsTheNameWithTheExclusionMarkAfterIt() =>
+        Assert.Equal("a.esp.excluded", _repository.ExcludedName("a.esp", ".excluded"));
 
     [Fact]
     public void DataFolderExists_AnswersWhetherTheFolderIsThere()

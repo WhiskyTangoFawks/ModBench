@@ -48,7 +48,7 @@ describe('modbench.mod.build', () => {
         build: (mods) => {
           progressSteps.push('build');
           builds.push(mods);
-          return client.build([], { excludedSuffix: '', archives: null, statCache: '' });
+          return client.build([], { exclusionMark: '', archives: null, statCache: '' });
         },
       },
       instance: instanceThatReads,
