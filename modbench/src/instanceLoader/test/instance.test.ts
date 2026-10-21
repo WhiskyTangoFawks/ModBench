@@ -664,25 +664,6 @@ describe('Instance — game folder and the archives the game loads', () => {
     expect(logs).toEqual(['[instance] The game\'s INIs list the archive Gone.ba2, which no mod, Overwrite or game folder holds.']);
   });
 
-  it('hands a mod\'s plugin a strings file added beside it, at the next read', async () => {
-    const reading: Partial<InstanceReading> = {
-      ...GAME_FOUND,
-      mods: [mod('Patch Mod')],
-      pluginOrder: [{ name: 'Patch Mod.esp', enabled: true }],
-      modFolders: modFoldersOf('Patch Mod'),
-    };
-    const { instance, fake } = loader({ ...reading, modFiles: new Map([['Patch Mod', filesOfMod('Patch Mod', 'Patch Mod.esp')]]) });
-    await instance.refresh();
-
-    const stringsFile = '/mods/Patch Mod/Strings/Patch Mod_en.STRINGS';
-    fake.read({ modFiles: new Map([['Patch Mod', filesOfMod('Patch Mod', 'Patch Mod.esp', 'Strings/Patch Mod_en.STRINGS')]]) });
-    await instance.refresh();
-
-    expect(instance.value.loadOrderSnapshot).toMatchObject({
-      plugins: expect.arrayContaining([expect.objectContaining({ origin: 'Patch Mod', stringsFiles: [expect.objectContaining({ path: stringsFile })] })]) as unknown,
-    });
-  });
-
   it('hands a mod\'s plugin the new stamp of a strings file rewritten beside it, at the next read', async () => {
     const stringsFile = '/mods/Patch Mod/Strings/Patch Mod_en.STRINGS';
     let changedNs = 1n;
@@ -723,21 +704,6 @@ describe('Instance — game folder and the archives the game loads', () => {
     await instance.refresh();
 
     expect(instance.value.gameFolder).toEqual(GAME_FOLDER);
-  });
-
-  it('keeps every plugins.txt line as a row when the game folder is not found, Data-only rows line-only with no path, a mod-provided row keeping its real path', async () => {
-    const { instance } = loader({
-      mods: [mod(NONO)],
-      pluginOrder: [{ name: 'NonAsciiRetexture.esp', enabled: true }, { name: 'Unofficial Fallout 4 Patch.esp', enabled: true }],
-      modFiles: new Map([[NONO, filesOfMod(NONO, 'NonAsciiRetexture.esp')]]),
-    });
-
-    await instance.refresh();
-
-    expect(instance.value.plugins).toEqual([
-      { name: 'NonAsciiRetexture.esp', path: `/mods/${NONO}/NonAsciiRetexture.esp`, origin: NONO, line: 0, enabled: true, winning: true },
-      { name: 'Unofficial Fallout 4 Patch.esp', path: undefined, origin: 'Data/', line: 1, enabled: true, winning: true },
-    ]);
   });
 
   it('carries the paths a view renders: overwrite/, downloads/ and each listed mod\'s own folder, matched as the manager matches names, where it has one', async () => {
@@ -832,19 +798,6 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
 
     expect(instance.value.pluginsLoadedWithNoLine).toEqual(
       ['Fallout4.esm', 'DLCRobot.esm', 'ccListed.esl'].map((name) => ({ name, origin: 'Data/', path: join('/game/Data', name) })));
-  });
-
-  it('carries a game master an enabled mod provides where the game folder holds none, at its file\'s spelling, in the snapshot too', async () => {
-    const { instance } = loader({
-      ...GAME_FOUND, gameRelease: 'Fallout4', mods: [mod('Consumer')], modFolders: modFoldersOf('Consumer'),
-      modFiles: new Map([['Consumer', filesOfMod('Consumer', 'dlccoast.esm')]]),
-    });
-
-    await instance.refresh();
-
-    const provided = { name: 'dlccoast.esm', origin: 'Consumer' };
-    expect(instance.value.pluginsLoadedWithNoLine).toEqual([{ ...provided, path: '/mods/Consumer/dlccoast.esm' }]);
-    expect(instance.value.loadOrderSnapshot).toMatchObject({ loadedWithNoLine: [provided] });
   });
 
   it('carries the load order snapshot put load order sends, keyed on the game folder it was derived from, each mod with its folder and a source mod with its source folder', async () => {

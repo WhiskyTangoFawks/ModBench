@@ -103,20 +103,25 @@ describe('the instance assembled from a manager\'s reading', () => {
     await expect(readInstance(unreadable)).resolves.toMatchObject({ downloadedFiles: { kind: 'unresolved' } });
   });
 
-  it('reads a mod order that parses to no entries again after a settle, believing the second read', async () => {
+  it.each<[string, (read: ReadingSource) => Promise<unknown>, () => Promise<unknown>]>([
+    ['the instance whole', async (read) => (await readInstance(read)).mods.map((e) => e.name), async () => (await source.modOrder('Default')).map((e) => e.name)],
+    ['the plugins the mod order provides', async (read) => {
+      const provided = await readPluginsProvided(read, 'Default');
+      return provided.kind === 'listed' && provided.plugins.has('patch mod.esp');
+    }, () => Promise.resolve(true)],
+  ])('reads a mod order that parses to no entries again after a settle, believing the second read, for %s', async (_, readOver, expected) => {
+    await mkdir(join(dir, 'game', 'Data'), { recursive: true });
     const path = join(dir, DEFAULT_MODLIST);
     const complete = await text(DEFAULT_MODLIST);
     await writeFile(path, '');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
-      const reading = readInstance(source);
+      const reading = readOver(sourceOver(dir, { gameFolderSettingValue: join(dir, 'game') }));
       await settleWaitArmed();
       await writeFile(path, complete);
       await vi.advanceTimersByTimeAsync(1000);
 
-      const mods = (await reading).mods;
-      expect(mods.length).toBeGreaterThan(0);
-      expect(mods.map((e) => e.name)).toEqual((await source.modOrder('Default')).map((e) => e.name));
+      expect(await reading).toEqual(await expected());
     } finally {
       vi.useRealTimers();
     }

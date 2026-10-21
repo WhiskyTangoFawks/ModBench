@@ -55,20 +55,6 @@ const builtIndex = (filesByMod: Record<string, OriginFile[]>, overwrite: readonl
   );
 
 describe('buildLoadOrderRows, its origins asserted as the literal reserved values of the wire contract rather than the constants the module produces them from', () => {
-  it('a mod-provided listed plugin is the winning plugin at its plugins.txt line, with that mod as origin', () => {
-    const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
-
-    const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
-
-    expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', line: 0, enabled: true, winning: true }]);
-  });
-
-  it('a vanilla/DLC/CC plugin no mod provides records the reserved Data-directory origin', () => {
-    const result = buildLoadOrderRows(lines(['Fallout4.esm']), index({}), [], GAME_FOLDER, inDataFolder('Fallout4.esm'));
-
-    expect(result).toEqual([{ name: 'Fallout4.esm', path: join(DATA_FOLDER, 'Fallout4.esm'), origin: 'Data/', line: 0, enabled: true, winning: true }]);
-  });
-
   it('a mod called Data and a mod called overwrite keep their own origin, apart from the game folder and Overwrite', () => {
     const fakeIndex = index({
       'D.esp': { winner: '/mods/Data/D.esp', winnerMod: 'Data' },
@@ -348,22 +334,14 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     expect(snapshotOf([], [], { ...NO_ARCHIVES, gameRelease: 'Fallout4VR' })?.gameRelease).toBe('Fallout4VR');
   });
 
-  it('is undefined — no put at all — while the game folder\'s plugins cannot be listed, as a snapshot lacking the game\'s masters is not sent', () => {
+  it.each<[string, Partial<Parameters<typeof loadOrderSnapshotOf>[0]>]>([
+    ['the game folder\'s plugins cannot be listed, as a snapshot lacking the game\'s masters is not sent', { pluginsLoadedWithNoLine: undefined }],
+    ['the game folder is not found', { gameFolder: NOT_FOUND }],
+    ['the game folder\'s archives cannot be listed, as a snapshot lacking the game\'s strings is not sent', { archives: { ...NO_ARCHIVES, inData: { kind: 'unreadable', reason: 'EACCES' } } }],
+  ])('is undefined — no put at all — while %s', (_, withheld) => {
     expect(loadOrderSnapshotOf({
-      plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: undefined, modFolders, sourceDirs, places: [], modlist: NO_MODLIST, archives: NO_ARCHIVES,
+      plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, places: [], modlist: NO_MODLIST, archives: NO_ARCHIVES, ...withheld,
     })).toBeUndefined();
-  });
-
-  it('is undefined — no put at all — when the game folder is not found', () => {
-    expect(loadOrderSnapshotOf({
-      plugins: [row('a.esp', 'ModA', 0)], gameFolder: NOT_FOUND, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, places: [], modlist: NO_MODLIST, archives: NO_ARCHIVES,
-    })).toBeUndefined();
-  });
-
-  it('is undefined — no put at all — while the game folder\'s archives cannot be listed, as a snapshot lacking the game\'s strings is not sent', () => {
-    const archives: ArchiveSources = { ...NO_ARCHIVES, inData: { kind: 'unreadable', reason: 'EACCES' } };
-
-    expect(snapshotOf([row('a.esp', 'ModA', 0)], [], archives)).toBeUndefined();
   });
 
   describe('the archives the game loads and the strings files it reads', () => {

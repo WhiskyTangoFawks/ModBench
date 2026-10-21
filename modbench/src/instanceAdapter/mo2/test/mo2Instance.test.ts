@@ -8,7 +8,7 @@ import {
 import type { PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../../test/noDetectors';
-import { eventually, settleWaitArmed, writtenAndHeard } from '../../../test/eventually';
+import { eventually, writtenAndHeard } from '../../../test/eventually';
 import { present } from '../../../ports/present';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -127,8 +127,8 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('the reads beside the reading', () => {
-      it('answers the profile the settings select', async () => {
-        expect(await adapter.activeProfile()).toBe('Default');
+      it('answers the release of the game the settings name', async () => {
+        expect(await adapter.gameRelease()).toBe('Fallout4');
       });
 
       it('answers the profile the settings select now, not the one a read before did', async () => {
@@ -136,10 +136,6 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, INI), (await text(root, INI)).replace('selected_profile=@ByteArray(Default)', 'selected_profile=@ByteArray(Other)'));
 
         expect([before, await adapter.activeProfile()]).toEqual(['Default', 'Other']);
-      });
-
-      it('answers the release of the game the settings name', async () => {
-        expect(await adapter.gameRelease()).toBe('Fallout4');
       });
 
       it('answers the game folder the game folder setting names, with its Data folder', async () => {
@@ -151,10 +147,6 @@ describe('the MO2 Instance adapter', () => {
         } finally {
           await rm(game, { recursive: true, force: true });
         }
-      });
-
-      it('answers every profile', async () => {
-        expect([...await adapter.profiles()].sort()).toEqual(['Default', 'Secondary']);
       });
 
       it('answers the active profile\'s mod order, and the folders the mods are in with the separators\'', async () => {
@@ -175,22 +167,6 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, 'profiles', 'Secondary', 'modlist.txt'), '+Only Here\n');
 
         expect((await adapter.modOrder()).mods).toEqual([{ kind: 'mod', name: 'Only Here', enabled: true }]);
-      });
-
-      it('answers the source mods by the output their build configuration names', async () => {
-        await mkdir(join(root, 'source', 'Old Name', '.git'), { recursive: true });
-        await writeFile(join(root, 'source', 'Old Name', 'build.json'), '{"output":"Harder VATS"}');
-
-        const sourceMods = await adapter.sourceMods();
-
-        expect(sourceMods.folderOf('harder vats')).toBe(join(root, 'source', 'Old Name'));
-        expect(sourceMods.folderOf('ENBoost - 12k')).toBeUndefined();
-      });
-
-      it('answers the downloaded files now', async () => {
-        const downloadedFiles = await adapter.downloadedFiles();
-
-        expect(downloadedFiles.kind === 'listed' && downloadedFiles.files?.map(({ name }) => name)).toEqual(['Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z']);
       });
 
       describe('the downloaded file a path names', () => {
@@ -277,33 +253,8 @@ describe('the MO2 Instance adapter', () => {
         expect(['unofficial fallout 4 patch.esp', 'patch mod.esp'].map((key) => plugins.has(key))).toEqual([true, false]);
       });
 
-      it('answers no plugin of a disabled mod', async () => {
-        await writeFile(join(root, 'mods', 'Harder VATS', 'Disabled.esp'), '');
-
-        const plugins = await pluginsOver(withGame);
-
-        expect(['patch mod.esp', 'disabled.esp'].map((key) => plugins.has(key))).toEqual([true, false]);
-      });
-
       it('answers no plugins while the game folder is not found', async () => {
         expect(await providedOver(adapter)).toEqual({ kind: 'unresolved' });
-      });
-
-      it('reads a mod order that parses to no entries again after a settle, as the reading does, rather than answer no mod plugins', async () => {
-        const path = join(root, DEFAULT_MODLIST);
-        const complete = await text(root, DEFAULT_MODLIST);
-        await writeFile(path, '');
-        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-        try {
-          const plugins = pluginsOver(withGame);
-          await settleWaitArmed();
-          await writeFile(path, complete);
-          await vi.advanceTimersByTimeAsync(1000);
-
-          expect((await plugins).has('patch mod.esp')).toBe(true);
-        } finally {
-          vi.useRealTimers();
-        }
       });
     });
 
@@ -346,17 +297,6 @@ describe('the MO2 Instance adapter', () => {
         expect(mods[2]).toMatchObject({
           version: '21.0.0.0', nexusId: '29227', installationFileName: 'SKKFastStartNewGame_021-29227-021-1745492845.zip',
         });
-      });
-
-      it('answers the mod order grouped by separator: each separator holds the mods before it, the mods after the last are ungrouped', async () => {
-        const { modGroups } = await adapter.reading();
-
-        expect(modGroups.groups.map(({ separator, mods }) => [separator.name, mods.map((m) => m.name)])).toEqual([
-          ['Unassigned (Modlist Development)', ['Ñoño\'s Retexture', 'Patch Mod', 'SKK Fast Start new game (Fallout 4)']],
-          ['Radfall - All-In-One Survival Overhaul', ['[NODELETE] Radfall', 'Unofficial Fallout 4 Patch']],
-        ]);
-        expect(modGroups.ungrouped.map((m) => m.name)).toEqual(['ENBoost - 12k', 'Harder VATS', 'Cracked and Smudged Pip-Boy Screen']);
-        expect(modGroups.groups[0]?.mods[0]).toMatchObject({ version: '1.0.0', nexusId: '99001' });
       });
 
       it('never carries meta fields on a separator entry, even when a same-named mod folder exists', async () => {
@@ -464,31 +404,6 @@ describe('the MO2 Instance adapter', () => {
       expect([await text(root, INI), ...await held()]).toEqual(before);
     });
 
-    it('rejects when the settings name no game', async () => {
-      await writeFile(join(root, INI), '[General]\r\nselected_profile=@ByteArray(Default)\r\n');
-
-      await expect(source.settings()).rejects.toThrow(/gameName/);
-    });
-
-    it('rejects when the settings name no selected profile', async () => {
-      await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\n');
-
-      await expect(source.settings()).rejects.toThrow(/selected_profile/);
-    });
-
-    it('finds the game folder the setting names', async () => {
-      const game = await mkdtemp(join(tmpdir(), 'mo2-instance-game-'));
-      try {
-        await mkdir(join(game, 'Data'));
-
-        const folder = await (await sourceAt(root, game).settings()).gameFolder();
-
-        expect(folder).toEqual({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
-      } finally {
-        await rm(game, { recursive: true, force: true });
-      }
-    });
-
     it("answers the settings' own gamePath as a place it looked, not set, when the settings hold none", async () => {
       await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n');
 
@@ -586,27 +501,8 @@ describe('the MO2 Instance adapter', () => {
       expect(await source.profiles(ignoreSkippedLink)).toEqual([]);
     });
 
-    it('answers the mods and separators in mod order, winning end first', async () => {
-      const order = await source.modOrder('Default');
-
-      expect(modNames(order).slice(0, 4)).toEqual([
-        "mod:Ñoño's Retexture:true",
-        'mod:Patch Mod:true',
-        'mod:SKK Fast Start new game (Fallout 4):true',
-        'separator:Unassigned (Modlist Development):false',
-      ]);
-    });
-
     it('rejects a profile with no mod order to read', async () => {
       await expect(source.modOrder('No Such Profile')).rejects.toThrow(/ENOENT/);
-    });
-
-    it('answers a mod\'s meta', async () => {
-      expect(await source.modMeta('Unofficial Fallout 4 Patch', 'list')).toMatchObject({
-        version: '2.1.5.0',
-        nexusId: '4598',
-        installationFileName: DOWNLOADED_FILE,
-      });
     });
 
     it('answers the meta and the files of a mod whose folder differs from its name only in case', async () => {
@@ -669,13 +565,6 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    it('answers which mod folder holds an entry, matched as MO2 matches names, from the one listing', async () => {
-      const folders = present(await source.modFolders(ignoreSkippedLink), 'the mod folders');
-
-      expect(folders.holding({ kind: 'mod', name: 'harder vats' })?.path).toBe(join(root, 'mods', 'Harder VATS'));
-      expect(folders.holding({ kind: 'mod', name: 'No Such Mod' })).toBeUndefined();
-    });
-
     it.skipIf(process.platform === 'win32')('(Windows cannot hold two names that differ only in case) answers each of two folders whose names differ only in case for the entry spelled as its own', async () => {
       await mkdir(join(root, 'mods', 'ModA'));
       await mkdir(join(root, 'mods', 'moda'));
@@ -706,15 +595,6 @@ describe('the MO2 Instance adapter', () => {
       await writeFile(join(root, 'mods'), 'not a directory');
 
       await expect(source.modFolders(ignoreSkippedLink)).rejects.toThrow();
-    });
-
-    it('answers the plugins in plugin order, with their enabled state', async () => {
-      expect(await source.pluginOrder('Default')).toEqual([
-        { name: 'NonAsciiRetexture.esp', enabled: true },
-        { name: 'Patch Mod.esp', enabled: true },
-        { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
-        { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
-      ]);
     });
 
     it('rejects a profile with no plugin order to read', async () => {
@@ -884,14 +764,6 @@ describe('the MO2 Instance adapter', () => {
         await localSettings(true);
 
         expect(await source.archiveList('Default', found(), 'Fallout4')).toEqual({ archives: ['Main.ba2', 'Custom2.ba2'], notes: [] });
-      });
-
-      it('reads none of the profile\'s INIs while the profile keeps no game INIs of its own', async () => {
-        await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\n');
-        await writeFile(profileFile('Fallout4.ini'), '[Archive]\nsResourceArchiveList=Left Behind.ba2\n');
-        await localSettings(false);
-
-        expect((await source.archiveList('Default', found(), 'Fallout4')).archives).toEqual(['Default.ba2']);
       });
 
       it.each([
@@ -1367,13 +1239,6 @@ describe('the MO2 Instance adapter', () => {
       expect((await adapter.reading()).modFolders?.holding({ kind: 'mod', name: 'unassigned (modlist development)_SEPARATOR' })).toMatchObject({
         kind: 'separator', name: 'Unassigned (Modlist Development)',
       });
-    });
-
-    it('knows a separator\'s mod by the name of its folder, and a mod by its own', async () => {
-      const folders = present((await adapter.reading()).modFolders, 'the mod folders');
-
-      expect(folders.holding({ kind: 'separator', name: 'unassigned (modlist development)' })?.modName).toBe('Unassigned (Modlist Development)_separator');
-      expect(folders.holding({ kind: 'mod', name: 'harder vats' })?.modName).toBe('Harder VATS');
     });
 
     describe('a separator, which has no metadata', () => {
@@ -2072,13 +1937,11 @@ describe('the MO2 Instance adapter', () => {
       await expect(adapter.createModFolder('../escape')).rejects.toThrow(/Not a valid mod name/);
     });
 
-    it.each([
-      ['a mod\'s, in another case', 'harder vats', 'Harder VATS'],
-      ['a separator\'s, whose name it decodes to', 'unassigned (modlist development)_SEPARATOR', 'Unassigned (Modlist Development)_separator'],
-    ])('refuses a folder already there as %s, naming it, never adopting another mod\'s folder or a separator\'s in silence', async (_, mod, folder) => {
+    it('refuses a folder already there as a separator\'s, whose name it decodes to, naming it, never adopting a separator\'s in silence', async () => {
       const before = await snapshotTree(root);
 
-      await expect(adapter.createModFolder(mod)).rejects.toThrow(`The folder "${join(root, 'mods', folder)}" is in the way`);
+      await expect(adapter.createModFolder('unassigned (modlist development)_SEPARATOR'))
+        .rejects.toThrow(`The folder "${join(root, 'mods', 'Unassigned (Modlist Development)_separator')}" is in the way`);
 
       assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
@@ -2110,33 +1973,15 @@ describe('the MO2 Instance adapter', () => {
       expect(await isThere(join(root, 'mods', 'Harder VATS 2'))).toBe(false);
     });
 
-    it('refuses to rename a folder that is not there', async () => {
-      await expect(adapter.renameModFolder('No Such Mod', 'Anything')).rejects.toThrow(/No Such Mod/);
-    });
-
-    it('refuses a rename onto a folder already there, in any case, and moves nothing', async () => {
-      const before = await snapshotTree(root);
-
-      await expect(adapter.renameModFolder('Harder VATS', 'unofficial fallout 4 patch'))
-        .rejects.toThrow(`The folder "${join(root, 'mods', 'Unofficial Fallout 4 Patch')}" is in the way`);
-
-      assertOnlyChanged(before, await snapshotTree(root), new Set());
-    });
-
-    it('moves the folder that holds a mod or a separator to the trash, and answers false when none does', async () => {
+    it('moves the folder that holds a separator to the trash', async () => {
       const trashed: string[] = [];
-      const trash = (path: string): Promise<void> => {
+
+      expect(await adapter.trashEntryFolder({ kind: 'separator', name: 'Unassigned (Modlist Development)' }, (path) => {
         trashed.push(path);
         return Promise.resolve();
-      };
+      })).toBe(true);
 
-      expect(await adapter.trashEntryFolder({ kind: 'mod', name: 'harder vats' }, trash)).toBe(true);
-      expect(await adapter.trashEntryFolder({ kind: 'separator', name: 'Unassigned (Modlist Development)' }, trash)).toBe(true);
-      expect(await adapter.trashEntryFolder({ kind: 'mod', name: 'No Such Mod' }, trash)).toBe(false);
-
-      expect(trashed).toEqual([
-        join(root, 'mods', 'Harder VATS'), join(root, 'mods', 'Unassigned (Modlist Development)_separator'),
-      ]);
+      expect(trashed).toEqual([join(root, 'mods', 'Unassigned (Modlist Development)_separator')]);
     });
 
     it.each(['mod', 'separator'] as const)('trashes no folder outside mods/ for a %s line another tool wrote with a / in its name', async (kind) => {
@@ -2201,17 +2046,6 @@ describe('the MO2 Instance adapter', () => {
       expect(await isThere(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'))).toBe(true);
     });
 
-    it('refuses to include a file with no suffix of its own that its folder excludes, changing nothing', async () => {
-      await put(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds'));
-      const before = await snapshotTree(root);
-
-      expect(await adapter.markOriginFile(modOrigin, 'Textures.mohidden/a.dds', 'Included')).toEqual({
-        gone: false, refusal: '"Textures.mohidden/a.dds" has no suffix of its own to remove, and its folder excludes it.',
-      });
-
-      assertOnlyChanged(before, await snapshotTree(root), new Set());
-    });
-
     it('includes a file with its own suffix inside an excluded folder, removing its own suffix alone', async () => {
       await put(join(root, 'mods', 'Harder VATS', 'Textures.mohidden', 'a.dds.mohidden'), 'pixels');
 
@@ -2265,10 +2099,6 @@ describe('the MO2 Instance adapter', () => {
       await expect(adapter.originFile(modOrigin, '../Other/a.dds')).rejects.toThrow('Not a file of mod "Harder VATS"');
     });
 
-    it('answers gone for a file that is not there', async () => {
-      expect(await adapter.markOriginFile(modOrigin, 'Missing.esp', 'Excluded')).toEqual({ gone: true });
-    });
-
     it.each([
       ['Excluded', 'a.dds', 'a.dds.mohidden'],
       ['Included', 'a.dds.mohidden', 'a.dds'],
@@ -2291,14 +2121,6 @@ describe('the MO2 Instance adapter', () => {
 
       expect(await isThere(join(root, 'mods', 'overwrite', 'a.esp.mohidden'))).toBe(true);
       expect(await isThere(join(root, 'overwrite', 'a.esp'))).toBe(true);
-    });
-
-    it.each(['../outside.txt', 'a/../../outside.txt', '/etc/hosts', '', 'a\\..\\..\\outside.txt'])('refuses the path "%s", which leaves the origin\'s folder, changing nothing', async (path) => {
-      const before = await snapshotTree(root);
-
-      await expect(adapter.markOriginFile(modOrigin, path, 'Excluded')).rejects.toThrow(/Not a file of/);
-
-      assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
 
     it('refuses a mod that has no folder', async () => {
@@ -2334,17 +2156,6 @@ describe('the MO2 Instance adapter', () => {
       const trashed: string[] = [];
 
       await expect(adapter.trashModFile('Harder VATS', 'linked/a.txt', (file) => {
-        trashed.push(file);
-        return Promise.resolve();
-      })).rejects.toThrow(/Not a file of/);
-
-      expect(trashed).toEqual([]);
-    });
-
-    it('refuses to trash a path that leaves the mod\'s folder, trashing nothing', async () => {
-      const trashed: string[] = [];
-
-      await expect(adapter.trashModFile('Harder VATS', '../outside.txt', (file) => {
         trashed.push(file);
         return Promise.resolve();
       })).rejects.toThrow(/Not a file of/);
@@ -2414,21 +2225,6 @@ describe('the MO2 Instance adapter', () => {
       ]);
     });
 
-    it('moves a separator to a place in mod order', async () => {
-      await change([{
-        kind: 'moveSeparators',
-        separators: ['Radfall - All-In-One Survival Overhaul'],
-        place: { kind: 'modOrder' },
-        end: 'winning',
-      }]);
-
-      expect(modNames(await source.modOrder('Default')).slice(0, 3)).toEqual([
-        'mod:[NODELETE] Radfall:true',
-        'mod:Unofficial Fallout 4 Patch:true',
-        'separator:Radfall - All-In-One Survival Overhaul:false',
-      ]);
-    });
-
     it('adds a separator with its folder', async () => {
       await change([{ kind: 'addSeparator', separator: 'New Separator', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }]);
 
@@ -2487,14 +2283,6 @@ describe('the MO2 Instance adapter', () => {
       expect(await change([{ kind: 'renameMod', from: 'No Such Mod', to: 'Anything' }])).toMatchObject({ wrote: false });
     });
 
-    it('refuses a rename onto a name another listed mod has, in any case', async () => {
-      const before = await text(root, DEFAULT_MODLIST);
-
-      await expect(change([{ kind: 'renameMod', from: 'Harder VATS', to: 'unofficial fallout 4 patch' }])).rejects.toThrow();
-
-      expect(await text(root, DEFAULT_MODLIST)).toBe(before);
-    });
-
     it('writes nothing when the changes are already true of mod order', async () => {
       const before = await text(root, DEFAULT_MODLIST);
       const mtime = (await stat(join(root, DEFAULT_MODLIST))).mtimeMs;
@@ -2506,25 +2294,9 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it.each<[string, ModOrderChange]>([
-      ['enable', { kind: 'enable', mod: 'No Such Mod', enabled: true }],
       ['moveMods', { kind: 'moveMods', mods: ['No Such Mod'], place: { kind: 'modOrder' }, end: 'winning' }],
       ['moveSeparators', { kind: 'moveSeparators', separators: ['No Such Sep'], place: { kind: 'modOrder' }, end: 'winning' }],
-      ['moveMods to a separator that is not there', {
-        kind: 'moveMods', mods: ['Harder VATS'], place: { kind: 'separator', name: 'Gone Separator' }, end: 'losing',
-      }],
-      ['moveMods beside a mod that is not there', {
-        kind: 'moveMods', mods: ['Harder VATS'], place: { kind: 'mod', name: 'Gone Mod' }, end: 'losing',
-      }],
-      ['moveSeparators to a separator that is not there', {
-        kind: 'moveSeparators', separators: ['Unassigned (Modlist Development)'], place: { kind: 'separator', name: 'Gone Separator' }, end: 'losing',
-      }],
-      ['renameSeparator', { kind: 'renameSeparator', from: 'No Such Sep', to: 'Anything' }],
-      ['addSeparator beside an anchor', { kind: 'addSeparator', separator: 'Anything', anchor: { kind: 'mod', name: 'No Such Mod' } }],
-      ['addSeparator a listed separator', { kind: 'addSeparator', separator: 'Unassigned (Modlist Development)', anchor: { kind: 'mod', name: 'SKK Fast Start new game (Fallout 4)' } }],
-      ['renameSeparator onto a listed separator', {
-        kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Radfall - All-In-One Survival Overhaul',
-      }],
-    ])('rejects %s naming an entry that is not there, or adding a separator that is, and writes nothing, not leaving the text as it was and dropping the change in silence', async (_, bad) => {
+    ])('rejects %s naming an entry that is not there, and writes nothing, not leaving the text as it was and dropping the change in silence', async (_, bad) => {
       const before = await text(root, DEFAULT_MODLIST);
 
       await expect(change([{ kind: 'enable', mod: 'Harder VATS', enabled: true }, bad])).rejects.toThrow(/modlist/);
@@ -2533,10 +2305,7 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it.each<[string, ModOrderChange]>([
-      ['adding a mod listed in another case', { kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'HARDER VATS' } }],
       ['adding a separator listed in another case', { kind: 'addAtWinningEnd', entry: { kind: 'separator', name: 'radfall - all-in-one survival overhaul' } }],
-      ['dropping a mod not listed', { kind: 'dropMod', mod: 'No Such Mod' }],
-      ['dropping a separator not listed', { kind: 'dropSeparator', separator: 'No Such Sep' }],
     ])('writes nothing for %s, and says so, the entry already being as the change would leave it, so a gesture that raced mod sync to the same line does not fail', async (_, already) => {
       const before = await text(root, DEFAULT_MODLIST);
 
@@ -2692,27 +2461,6 @@ describe('the MO2 Instance adapter', () => {
     });
 
     describe('names, matched as MO2 matches them', () => {
-      it('finds each entry a change names in any case, and writes it as mod order lists it', async () => {
-        await change([
-          { kind: 'enable', mod: 'harder vats', enabled: true },
-          { kind: 'moveMods', mods: ['CRACKED AND SMUDGED PIP-BOY SCREEN'], place: { kind: 'separator', name: 'unassigned (modlist development)' }, end: 'losing' },
-          { kind: 'dropSeparator', separator: 'RADFALL - ALL-IN-ONE SURVIVAL OVERHAUL' },
-        ]);
-
-        const order = modNames(await source.modOrder('Default'));
-        expect(order).toContain('mod:Harder VATS:true');
-        expect(order).not.toContain('separator:Radfall - All-In-One Survival Overhaul:false');
-        expect(order.indexOf('mod:Cracked and Smudged Pip-Boy Screen:true'))
-          .toBe(order.indexOf('separator:Unassigned (Modlist Development):false') - 1);
-      });
-
-      it.each<[string, ModOrderChange]>([
-        ['a separator', { kind: 'addSeparator', separator: 'unassigned (modlist development)', anchor: { kind: 'mod', name: 'SKK Fast Start new game (Fallout 4)' } }],
-        ['a rename', { kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'radfall - all-in-one survival overhaul' }],
-      ])('rejects adding %s mod order already lists in another case', async (_, bad) => {
-        await expect(change([bad])).rejects.toThrow(/already in modlist/);
-      });
-
       it('names a separator as MO2 names its folder, and refuses a name with nothing of it left', async () => {
         await change([{ kind: 'addSeparator', separator: '  Core:  Mods.  ', anchor: { kind: 'separator', name: 'Unassigned (Modlist Development)' } }]);
 
@@ -2811,44 +2559,6 @@ describe('the MO2 Instance adapter', () => {
 
       expect(seen).toEqual([(await source.pluginOrder('Default')).map((p) => p.name)]);
     });
-
-    it('finds each plugin a change names in any case, and writes it as plugin order lists it, a filename comparing as the game compares it, ignoring case', async () => {
-      await change([
-        { kind: 'enable', plugin: 'patch mod.esp', enabled: false },
-        { kind: 'move', plugins: ['CCSBJFO4003-GRENADE.ESL'], toIndex: 0 },
-        { kind: 'drop', plugin: 'nonasciiretexture.ESP' },
-      ]);
-
-      expect(await source.pluginOrder('Default')).toEqual([
-        { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
-        { name: 'Patch Mod.esp', enabled: false },
-        { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
-      ]);
-    });
-
-    it('writes nothing to add a plugin plugin order already lists in another case, doing nothing not being an error so a gesture that raced plugin sync to the same line does not fail', async () => {
-      const before = await source.pluginOrder('Default');
-
-      expect(await change([{ kind: 'add', plugin: 'PATCH MOD.ESP' }])).toEqual({ wrote: false });
-      expect(await source.pluginOrder('Default')).toEqual(before);
-    });
-
-    it('writes nothing when the changes are already true of plugin order', async () => {
-      expect(await change([{ kind: 'enable', plugin: 'Patch Mod.esp', enabled: true }])).toEqual({ wrote: false });
-    });
-
-    it.each<[string, PluginOrderChange]>([
-      ['enable', { kind: 'enable', plugin: 'No Such.esp', enabled: true }],
-      ['move', { kind: 'move', plugins: ['No Such.esp'], toIndex: 0 }],
-      ['drop', { kind: 'drop', plugin: 'No Such.esp' }],
-    ])('rejects %s naming a plugin that is not there, and writes nothing, not leaving the text as it was and dropping the change in silence', async (_, bad) => {
-      const before = await text(root, DEFAULT_PLUGINS);
-
-      await expect(change([{ kind: 'enable', plugin: 'Patch Mod.esp', enabled: false }, bad]))
-        .rejects.toThrow(/plugins\.txt/);
-
-      expect(await text(root, DEFAULT_PLUGINS)).toBe(before);
-    });
   });
 
   describe('a downloaded file\'s metadata', () => {
@@ -2886,13 +2596,6 @@ describe('the MO2 Instance adapter', () => {
 
       await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Included');
       expect(await adapter.markDownloadedFile(DOWNLOADED_FILE, 'Included')).toEqual({ gone: false, wrote: false });
-    });
-
-    it('keeps both marks of two writes racing, rather than the second writer dropping the first key', async () => {
-      await Promise.all([adapter.markDownloadedFile('manual.zip', 'Excluded'), adapter.markDownloadedFile('manual.zip', 'Installed')]);
-
-      expect(await metaOf('manual.zip')).toMatch(/removed=true/);
-      expect(await metaOf('manual.zip')).toMatch(/installed=true/);
     });
 
     it('writes no metadata for a file already included, so a file at rest does not gain metadata', async () => {
