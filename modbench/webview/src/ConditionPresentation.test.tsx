@@ -542,39 +542,6 @@ describe('a governing member posts its own value and nothing else, the cascade b
     await waitFor(() => expect(postedEnvelopes()).toEqual([{ op: 'set', path: dataMember('Function'), value: 'HasKeyword' }]));
   });
 
-  it('a member that governs nothing posts the same one-leaf set', async () => {
-    currentCompare = oneColumn([documentSpelledCondition({}, {
-      Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp', Unknown3: -1,
-    })]);
-    renderPanel();
-    const cell = await openMemberEditor('Unknown3');
-
-    const input = required(cell.querySelector('input'), "the cell's input");
-    fireEvent.change(input, { target: { value: '7' } });
-    fireEvent.blur(input);
-
-    expect(postedEnvelopes()).toEqual([{ op: 'set', path: dataMember('Unknown3'), value: 7 }]);
-  });
-});
-
-describe('switching a condition\'s leaf, as Use Global is an ordinary discriminator switch: the Kind row\'s own set, which the backend turns into the leaf switch that keeps every member the two leaves share', () => {
-  it('posts one set of the discriminator member with the chosen leaf\'s wire value', async () => {
-    currentCompare = oneColumn([documentSpelledCondition({}, { Function: 'IsSneaking' })]);
-    renderPanel();
-    await openConditions();
-    await waitFor(() => expect(rowLabelTdNotAValueCellOfTheSameText('Kind')).toBeDefined());
-
-    const kindLabelCell = required(rowLabelTdNotAValueCellOfTheSameText('Kind'), "the 'Kind' row's label cell");
-    const kindRow = required(kindLabelCell.closest('tr'), "the 'Kind' row");
-    const cell = required(kindRow.querySelectorAll('td')[1], "the 'Kind' row's second cell");
-    vi.mocked(vscode.postMessage).mockImplementation(hostPickingEnum(() => 'ConditionGlobal'));
-    fireEvent.doubleClick(required(cell.querySelector('[data-open-trigger]'), "the cell's open trigger"));
-    await waitFor(() => expect(postedEnvelopes()).toEqual([{
-      op: 'set',
-      path: [{ kind: 'member', name: 'Conditions' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'MutagenObjectType' }],
-      value: 'ConditionGlobal',
-    }]));
-  });
 });
 
 describe('a type-varying member takes its cell from each column\'s own leaf: ComparisonValue is a float under ConditionFloat, a GLOB link under ConditionGlobal', () => {

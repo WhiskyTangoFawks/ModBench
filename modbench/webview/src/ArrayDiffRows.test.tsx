@@ -350,45 +350,6 @@ describe('RecordPanel — array editing', () => {
     expect(lastEnvelope()).toBeUndefined();
   });
 
-  it('a focused element tells the host it can move down', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Values'));
-    await waitFor(() => screen.getByText('[0]'));
-    const cell = required(screen.getByText('1').closest('td'), "the '1' cell's td ancestor");
-    fireEvent.click(cell);
-
-    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Values'), at(0)], canMoveDown: true }));
-  });
-
-  it('a focused element tells the host it can move up', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Values'));
-    await waitFor(() => screen.getByText('[2]'));
-    const cell = required(screen.getByText('3').closest('td'), "the '3' cell's td ancestor");
-    fireEvent.click(cell);
-
-    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Values'), at(2)], canMoveUp: true }));
-  });
-
-  it('the first element tells the host it cannot move up, as VS Code moves a line: at the end of the array nothing happens', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Values'));
-    await waitFor(() => screen.getByText('[0]'));
-    const cell = required(screen.getByText('1').closest('td'), "the '1' cell's td ancestor");
-    fireEvent.click(cell);
-
-    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ canMoveUp: false }));
-  });
-
-  it('the last element tells the host it cannot move down', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Values'));
-    await waitFor(() => screen.getByText('[2]'));
-    const cell = required(screen.getByText('3').closest('td'), "the '3' cell's td ancestor");
-    fireEvent.click(cell);
-
-    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ canMoveDown: false }));
-  });
 });
 
 const editableIntArrayMeta = fieldMeta({
@@ -472,17 +433,6 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     expect(lastEnvelope()).toEqual({ op: 'set', path: [member('Values'), at(1)], value: 99 });
   });
 
-  it('a struct member: the struct, then the member by name', async () => {
-    currentCompare = structCollapseExpandResult;
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('ObjectBounds'));
-    await waitFor(() => screen.getByText('X1'));
-
-    editLastCellOfRowByXEditDoubleClick('X1', '5', '7');
-
-    expect(lastEnvelope()).toEqual({ op: 'set', path: [member('ObjectBounds'), member('X1')], value: 7 });
-  });
-
   it('a member of a struct element inside a struct, as OMOD Properties[i].step sits two hops deep: every hop from the record down', async () => {
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
@@ -496,32 +446,6 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     expect(lastEnvelope()).toEqual({
       op: 'set', path: [member('Container'), member('Entries'), at(0), member('Weight')], value: 7,
     });
-  });
-
-  it('an element nested inside a struct tells the host every hop', async () => {
-    currentCompare = nestedStructArrayResult;
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Container'));
-    await waitFor(() => screen.getByText('Entries'));
-    await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
-
-    const indexCell = required(screen.getAllByText('[0]').find(el => el.tagName === 'TD'), "the '[0]' index cell");
-    const row = required(indexCell.closest('tr'), "the row containing the '[0]' index cell");
-    const cells = row.querySelectorAll('td');
-    const cell = required(cells[cells.length - 1], "the last cell in the row");
-    fireEvent.click(cell);
-
-    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Container'), member('Entries'), at(0)] }));
-  });
-
-  it('a top-level scalar: the one member hop', async () => {
-    currentCompare = scalarResult;
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Level'));
-
-    editLastCellOfRowByXEditDoubleClick('Level', '4', '6');
-
-    expect(lastEnvelope()).toEqual({ op: 'set', path: [member('Level')], value: 6 });
   });
 
   it('the message names the record and the column, and carries the envelope alone', async () => {

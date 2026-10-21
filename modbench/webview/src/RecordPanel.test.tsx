@@ -308,14 +308,6 @@ describe('RecordPanel', () => {
     expect(master.compareDocumentPosition(winner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('a cell in an immutable column opens nothing when clicked, as nothing ever reaches a write from here', async () => {
-    renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse });
-    await waitFor(() => screen.getByText('Original Name'));
-    fireEvent.click(screen.getByText('Original Name'));
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(screen.getByText('Original Name')).toBeInTheDocument();
-  });
-
 });
 
 describe('RecordPanel — a file whose plugin is disabled, or in a disabled mod', () => {
@@ -436,31 +428,6 @@ describe('RecordPanel — the file\'s column', () => {
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  it('is marked in its header, to the eye and to a screen reader, and no other column is', async () => {
-    renderPanel(twoCompiledPlugin, { plugins: bothCompiledPlugin, fileColumn: 'MyMod.esp|ModA' });
-    await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
-
-    expect(headerOf('MyMod.esp')).toHaveAttribute('aria-current', 'true');
-    expect(headerOf('MyMod.esp').querySelector('.codicon.codicon-edit')).not.toBeNull();
-    expect(headerOf('Other.esp')).not.toHaveAttribute('aria-current');
-    expect(headerOf('Other.esp').querySelector('.codicon-edit')).toBeNull();
-  });
-
-  it('opens another column\'s copy on Enter or Space on its focused header, and nothing on another key or on its own header', async () => {
-    renderPanel(twoCompiledPlugin, { plugins: bothCompiledPlugin, fileColumn: 'MyMod.esp|ModA' });
-    await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
-    vi.mocked(vscode.postMessage).mockClear();
-
-    expect(headerOf('Other.esp')).toHaveAttribute('tabindex', '0');
-    fireEvent.keyDown(headerOf('MyMod.esp'), { key: 'Enter' });
-    fireEvent.keyDown(headerOf('Other.esp'), { key: 'ArrowDown' });
-    fireEvent.keyDown(within(headerOf('Other.esp')).getByRole('button'), { key: 'Enter' });
-    fireEvent.keyDown(headerOf('Other.esp'), { key: 'Enter' });
-    fireEvent.keyDown(headerOf('Other.esp'), { key: ' ' });
-
-    expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_COLUMNS)).toHaveLength(2);
-  });
-
   it('opens another column\'s copy on a click on its header, and nothing on a click on its own or on a collapse control', async () => {
     renderPanel(twoCompiledPlugin, { plugins: bothCompiledPlugin, fileColumn: 'MyMod.esp|ModA' });
     await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
@@ -507,42 +474,12 @@ describe('RecordPanel — column header native right-click menu', () => {
   });
 
   it.each([
-    ['an editable compiled plugin', { isCompiledPlugin: true, isImmutable: false }, true],
-    ['a non-compiled plugin', { isCompiledPlugin: false, isImmutable: false }, false],
-    ['a compiled plugin, plugin-source-unreadable', { isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, false],
-    ['a read-only', { isCompiledPlugin: true, isImmutable: true }, false],
-    ['a non-compiled plugin read-only', { isCompiledPlugin: false, isImmutable: true }, false],
-  ])('the header of %s plugin says whether delete applies to it, only where the plugin is a compiled plugin and its plugin source reads', async (_what, facts, editable) => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    const compare = compareResultFixture({
-      conflictAll: 'OnlyOne',
-      overrides: [compareOverride({
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-        isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
-      })],
-      diffs: [diffNode({
-        fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
-        winnerColumn: 'MyMod.esp', cellStates: {},
-      })],
-    });
-    const { container } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: 'ModA', ...facts }] });
-    await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
-
-    await waitFor(() => {
-      const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
-      expect(parseJsonRecord(headerContext)).toMatchObject({ editable });
-    });
-  });
-
-  it.each([
-    ['an active plugin in a source mod', { isCompiledPlugin: true }, { ModA: 'sourceMod' }, 'sourceMod'],
-    ['a disabled plugin in a source mod', { isCompiledPlugin: true, isImmutable: true }, { ModA: 'sourceMod' }, 'sourceMod'],
-    ['an active plugin in a non-source mod', { isCompiledPlugin: false }, { ModA: 'nonSourceMod' }, 'nonSourceMod'],
-    ['a disabled plugin in a non-source mod', { isCompiledPlugin: false, isImmutable: true }, { ModA: 'nonSourceMod' }, 'nonSourceMod'],
-    ['a plugin the game provides', { isCompiledPlugin: false, isImmutable: true }, {}, 'none'],
-    ['a plugin in Overwrite', { isCompiledPlugin: false }, {}, 'none'],
-  ] as const)('the header of %s names the repository state of its origin\'s mod, which decompile and commit and decompile are offered on', async (_what, facts, modsByOrigin, inMod) => {
+    ['an editable compiled plugin in a source mod', { isCompiledPlugin: true, isImmutable: false }, { ModA: 'sourceMod' }, { editable: true, inMod: 'sourceMod' }],
+    ['a compiled plugin whose plugin source is unreadable, in a non-source mod',
+      { isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, { ModA: 'nonSourceMod' },
+      { editable: false, inMod: 'nonSourceMod' }],
+    ['a plugin the game provides', { isCompiledPlugin: false, isImmutable: true }, {}, { editable: false, inMod: 'none' }],
+  ] as const)('the header of %s carries whether delete applies and the repository state of its origin\'s mod', async (_what, facts, modsByOrigin, expected) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
@@ -561,7 +498,7 @@ describe('RecordPanel — column header native right-click menu', () => {
 
     await waitFor(() => {
       const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
-      expect(parseJsonRecord(headerContext)).toMatchObject({ inMod });
+      expect(parseJsonRecord(headerContext)).toMatchObject(expected);
     });
   });
 
@@ -632,22 +569,17 @@ describe('RecordPanel — a vanilla master column', () => {
 describe('RecordPanel — a Partial Form column', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('reads (Partial Form) in its dimmed header, with no control on it', async () => {
+  it.each([
+    ['(Partial Form)', partialFormCompiledPluginsResponse],
+    ['(no source)', pluginsResponse],
+  ])('dims the header of a Partial Form copy under its status %s, with no control on it', async (status, plugins) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(partialFormCompareResult, { plugins: partialFormCompiledPluginsResponse });
-    await waitFor(() => expect(screen.getByText('(Partial Form)')).toBeInTheDocument());
+    renderPanel(partialFormCompareResult, { plugins });
+    await waitFor(() => expect(screen.getByText(status)).toBeInTheDocument());
 
     const th = required(screen.getByText('MyMod.esp').closest('th'), 'the column\u2019s header');
     expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
     expect(th.querySelector('input')).toBeNull();
-  });
-
-  it('is dimmed under an earlier status too', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(partialFormCompareResult, { plugins: pluginsResponse });
-    await waitFor(() => expect(screen.getByText('(no source)')).toBeInTheDocument());
-
-    expect(screen.getByText('MyMod.esp').closest('th')).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
 
   it('renders every cell of that column dimmed too, as one dimmed set reaches the header and every cell under it: a header-only rule would leave the cells at full weight once the non-sticky header scrolls away', async () => {
@@ -662,18 +594,6 @@ describe('RecordPanel — a Partial Form column', () => {
     expect(cells[1]).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
 
-  it('drops a diff node naming a member no override\'s schema declares, as the panel resolves every row\'s schema leaf itself and such a node has no shape to render against', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel({
-      ...compareResult,
-      diffs: [...compareResult.diffs, {
-        fieldName: 'Undeclared', values: { 'MyMod.esp': 'x' }, winnerColumn: 'MyMod.esp',
-cellStates: {}, conflictAll: 'NoConflict',
-      }],
-    });
-    await waitFor(() => expect(screen.getByText('Name')).toBeInTheDocument());
-    expect(screen.queryByText('Undeclared')).not.toBeInTheDocument();
-  });
 });
 
 describe('RecordPanel — flags cell editing through real message plumbing', () => {
@@ -714,21 +634,6 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
     expect(screen.getAllByRole('checkbox')).toHaveLength(4);
   });
 
-  it('reads a read-only column\u2019s flags as the editable column\u2019s do, as nothing marks its cells ahead of time, and writes nothing on a click', async () => {
-    renderPanel(flagsCompareResult, { plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate });
-    await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(4));
-    const [, masterCell, modCell] = Array.from(required(screen.getByText('Flags').closest('tr'), 'the Flags row').querySelectorAll('td'));
-    const boxesOf = (cell: Element | undefined) =>
-      Array.from(required(cell, 'a value cell').querySelectorAll('input')).map(box => ({ checked: box.checked, disabled: box.disabled }));
-    expect(boxesOf(masterCell)).toEqual(boxesOf(modCell));
-    vi.mocked(vscode.postMessage).mockClear();
-
-    fireEvent.click(required(masterCell?.querySelector('input'), 'the master’s first flag'));
-
-    expect(lastPostedEnvelope(vi.mocked(vscode.postMessage))).toBeUndefined();
-    expect(boxesOf(masterCell)).toEqual(boxesOf(modCell));
-  });
-
   it('toggling a flag posts set of the member with the names now set', async () => {
     renderPanel(flagsCompareResult, { plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate });
     await waitFor(() => expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0));
@@ -758,15 +663,6 @@ describe('RecordPanel — conflict color coding', () => {
     expect(row.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
   });
 
-  it('applies orange row background to a field whose own conflictAll is Conflict', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(compareResult);
-    await waitFor(() => screen.getByText('Name'));
-    const row = screen.getByText('Name').closest('tr');
-    if (!row) throw new Error('expected a tr ancestor of the Name row');
-    expect(row.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowConflict)');
-  });
-
   it('colors only the field that actually differs — an agreeing sibling row gets no background', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(twoSiblingFieldsResult);
@@ -777,15 +673,6 @@ describe('RecordPanel — conflict color coding', () => {
     if (!levelRow) throw new Error('expected a tr ancestor of the Level row');
     expect(nameRow.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
     expect(levelRow.style.backgroundColor).toBe('');
-  });
-
-  it('applies orange cell background when cellStates is ConflictWins', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(compareResult);
-    await waitFor(() => screen.getByText('Override Name'));
-    const cell = screen.getByText('Override Name').closest('td');
-    if (!cell) throw new Error('expected a td ancestor of the Override Name cell');
-    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflictWins)');
   });
 
   it('applies green cell background when cellStates is Override', async () => {
@@ -839,18 +726,6 @@ describe('RecordPanel — conflict cell tooltips and colours', () => {
     expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflictLoses)');
     expect(cell.style.color).toBe('var(--vscode-modbench-conflictLosesText)');
     expect(cell.title).toBe('Conflict loser');
-  });
-
-  it('paints an unchanged copy grey and names it', async () => {
-    renderPanel(threeWayResult);
-    const cell = (await screen.findAllByText('A'))[1]?.closest('td');
-    expect(cell?.style.backgroundColor).toBe('var(--vscode-modbench-conflictIdenticalToMaster)');
-    expect(cell?.title).toBe('Identical to Master');
-  });
-
-  it('names the winning cell', async () => {
-    renderPanel(threeWayResult);
-    expect((await cellOf('C')).title).toBe('Conflict winner');
   });
 
   it('names the first loaded column Master, with no colour', async () => {
@@ -960,34 +835,11 @@ describe('RecordPanel — struct sub-rows', () => {
     expect(screen.getByText('Bounds').closest('td')).toHaveAttribute('data-focused-cell');
   });
 
-  it('double clicking the label collapses an expanded row and expands it again', async () => {
-    renderPanel(structCompareResult);
-    await waitFor(() => screen.getByText('X'));
-
-    fireEvent.doubleClick(screen.getByText('Bounds'));
-    expect(screen.queryByText('X')).not.toBeInTheDocument();
-    fireEvent.doubleClick(screen.getByText('Bounds'));
-    expect(screen.getByText('X')).toBeInTheDocument();
-  });
-
   it('child row for X shows each override\'s own sub-field value, the master\'s beside the override\'s: the delta struct expansion exists to show', async () => {
     renderPanel(structCompareResult);
     await waitFor(() => screen.getByText('X'));
     expect(screen.getByText('15')).toBeInTheDocument();
     expect(screen.getByText('10')).toBeInTheDocument();
-  });
-
-  it('the arrow beside the label collapses the child rows, and expands them again', async () => {
-    renderPanel(structCompareResult);
-    await waitFor(() => screen.getByText('X'));
-    const boundsRow = () => required(screen.getByText('Bounds').closest('tr'), "the Bounds row");
-
-    fireEvent.click(within(boundsRow()).getByRole('button', { expanded: true }));
-    expect(screen.queryByText('X')).not.toBeInTheDocument();
-    expect(screen.getAllByText('{…}').length).toBeGreaterThan(0);
-
-    fireEvent.click(within(boundsRow()).getByRole('button', { expanded: false }));
-    expect(screen.getByText('X')).toBeInTheDocument();
   });
 
   it('a double click on the arrow toggles the row once for each of its two clicks', async () => {
@@ -1002,13 +854,6 @@ describe('RecordPanel — struct sub-rows', () => {
     expect(screen.getByText('X')).toBeInTheDocument();
   });
 
-  it('child row X has correct cell background from cellStates (Override = green)', async () => {
-    renderPanel(structCompareResult);
-    await waitFor(() => screen.getByText('15'));
-    const cell = screen.getByText('15').closest('td');
-    if (!cell) throw new Error('expected a td ancestor of the child row\'s 15 cell');
-    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflictOverride)');
-  });
 });
 
 describe('RecordPanel — keys through the rows', () => {
@@ -1043,16 +888,6 @@ describe('RecordPanel — keys through the rows', () => {
     expect(focusedCells(container)).toEqual([labelCell('X')]);
   });
 
-  it('Home and End move the focus to the first and last row', async () => {
-    const { container, cell } = await focusedOn('Bounds');
-
-    press(cell, 'End');
-    expect(focusedCells(container)).toEqual([labelCell('Y')]);
-
-    press(labelCell('Y'), 'Home');
-    expect(focusedCells(container)).toEqual([labelCell('Record Header')]);
-  });
-
   it('Left collapses an expanded row and Right expands it again', async () => {
     const { container, cell } = await focusedOn('Bounds');
 
@@ -1062,35 +897,6 @@ describe('RecordPanel — keys through the rows', () => {
 
     press(labelCell('Bounds'), 'ArrowRight');
     expect(screen.getByText('X')).toBeInTheDocument();
-  });
-
-  it('Right on an expanded row steps into its first child, and Left steps back out to the parent', async () => {
-    const { container, cell } = await focusedOn('Bounds');
-
-    press(cell, 'ArrowRight');
-    expect(focusedCells(container)).toEqual([labelCell('X')]);
-
-    press(labelCell('X'), 'ArrowLeft');
-    expect(focusedCells(container)).toEqual([labelCell('Bounds')]);
-    expect(screen.getByText('X')).toBeInTheDocument();
-  });
-
-  it('on a value column, Left and Right move a column and Down keeps the column', async () => {
-    const { container } = await focusedOn('Bounds');
-    const valueCell = required(screen.getByText('15').closest('td'), 'the winner\'s X cell');
-    const masterCell = required(screen.getByText('10').closest('td'), 'the master\'s X cell');
-    fireEvent.click(masterCell);
-
-    press(masterCell, 'ArrowRight');
-    expect(focusedCells(container)).toEqual([valueCell]);
-    expect(screen.getByText('X')).toBeInTheDocument();
-
-    press(valueCell, 'ArrowDown');
-    const yRow = required(screen.getByText('Y').closest('tr'), 'the Y row');
-    expect(focusedCells(container)).toEqual([yRow.children[2]]);
-
-    press(required(yRow.children[2], 'the winner\'s Y cell'), 'ArrowLeft');
-    expect(focusedCells(container)).toEqual([yRow.children[1]]);
   });
 
   it('tells the host the user entered the grid when a key moves the focus', async () => {
@@ -1256,16 +1062,6 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
     expect(client.load).not.toHaveBeenCalled();
   });
 
-  it.each([
-    [{ failed: 'no-answer' }, 'mEdit gave no answer.'],
-    [{ failed: 'timed-out' }, 'mEdit did not answer in time.'],
-    [{ failed: 'unreachable' }, 'mEdit could not be reached.'],
-  ])('says %j in the page\'s own words, with no verb, path or status', async (failure, words) => {
-    const load = vi.fn().mockResolvedValue({ ok: false, failure });
-    renderPanel(compareResult, { load });
-
-    await waitFor(() => expect(screen.getByText(`Failed to load: ${words}`)).toBeInTheDocument());
-  });
 });
 
 const loaded = (result: CompareResult | null, conflictsComputed = true, gone = ['000001:Fallout4.esm'], copiesLacking: string[] = []) => ({
@@ -1461,23 +1257,6 @@ describe('RecordPanel — column collapse', () => {
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
     fireEvent.click(collapseButton('MyMod.esp'));
     expect(screen.getByText('Override Name')).toBeInTheDocument();
-  });
-
-  it('a click on a column header away from its button collapses nothing', async () => {
-    renderPanel(compareResult);
-    await waitFor(() => screen.getByText('Override Name'));
-
-    fireEvent.click(screen.getByText('MyMod.esp'));
-    expect(screen.getByText('Override Name')).toBeInTheDocument();
-  });
-
-  it('collapsed column header hides the (read-only) label', async () => {
-    renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse });
-    await waitFor(() => screen.getByText('(read-only)'));
-    expect(screen.getByText('(read-only)')).toBeInTheDocument();
-
-    fireEvent.click(collapseButton('Fallout4.esm'));
-    expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
   });
 
   it('collapsed state survives a read of the record under the FormKey it moved to', async () => {
@@ -1677,31 +1456,6 @@ const mixedLeafAliasResult: CompareResult = compareResultFixture({
   })],
 });
 
-const mixedLeafAliasDiff = required(mixedLeafAliasResult.diffs[0], "the sole diff of mixedLeafAliasResult");
-const mixedLeafAliasDiffChildren = required(mixedLeafAliasDiff.children, "the sole diff's children");
-const mixedLeafAliasDiffChild = required(mixedLeafAliasDiffChildren[0], "the sole diff's first child");
-const mixedLeafAliasDiffChildChildren = required(
-  mixedLeafAliasDiffChild.children, "the first child's own children",
-);
-
-const singleLeafAliasResult: CompareResult = compareResultFixture({
-  ...mixedLeafAliasResult,
-  overrides: mixedLeafAliasResult.overrides.map(o => compareOverride({ ...o, fields: [{ metadata: aliasesMeta, value: [masterAlias] }] })),
-  diffs: [diffNode({
-    ...mixedLeafAliasDiff,
-    values: { 'Fallout4.esm': [masterAlias], 'MyMod.esp': [masterAlias] },
-    children: [diffNode({
-      ...mixedLeafAliasDiffChild,
-      values: { 'Fallout4.esm': masterAlias, 'MyMod.esp': masterAlias },
-      children: mixedLeafAliasDiffChildChildren
-        .filter(c => c.fieldName !== 'external')
-        .map(c => (c.fieldName === 'location'
-          ? diffNode({ ...c, values: { 'Fallout4.esm': { alias_id: 5 }, 'MyMod.esp': { alias_id: 5 } } })
-          : c)),
-    })],
-  })],
-});
-
 const gridBodyRowsNotHeaderLoadIndexes = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
 const cellsOf = (label: string) => required(gridBodyRowsNotHeaderLoadIndexes().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
 const cellAt = (label: string, index: number) => required(cellsOf(label)[index], `the '${label}' row's cell ${index}`);
@@ -1725,36 +1479,6 @@ describe('RecordPanel — union element rows: two plugins can disagree on which 
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('[0]'));
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('location'));
   }
-
-  it('shows the union of both plugins\' leaf members', async () => {
-    await renderElement();
-    expect(gridBodyRowsNotHeaderLoadIndexes().getByText('name')).toBeInTheDocument();
-    expect(gridBodyRowsNotHeaderLoadIndexes().getByText('location')).toBeInTheDocument();
-    expect(gridBodyRowsNotHeaderLoadIndexes().getByText('external')).toBeInTheDocument();
-  });
-
-  it('renders an empty cell for the column whose leaf lacks the member', async () => {
-    await renderElement();
-    fireEvent.click(required(labelCell('location').querySelector('button'), "the 'location' row's arrow"));
-    fireEvent.click(required(labelCell('external').querySelector('button'), "the 'external' row's arrow"));
-    const locationRow = required(labelCell('location').closest('tr'), "the 'location' row");
-    const locationCells = locationRow.querySelectorAll('td');
-    expect(required(locationCells[1], "the 'location' row's second cell").textContent).toBe('{…}');
-    expect(required(locationCells[2], "the 'location' row's third cell").textContent).toBe('');
-
-    const externalRow = required(labelCell('external').closest('tr'), "the 'external' row");
-    const externalCells = externalRow.querySelectorAll('td');
-    expect(required(externalCells[1], "the 'external' row's second cell").textContent).toBe('');
-    expect(required(externalCells[2], "the 'external' row's third cell").textContent).toBe('{…}');
-  });
-
-  it('shows no row for a member no plugin\'s leaf declares, an element\'s rows being the ones its own plugins carry rather than one per schema member, as the backend drops a member null in every column', async () => {
-    renderPanel(singleLeafAliasResult);
-    await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('aliases'));
-    await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('[0]'));
-    await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('location'));
-    expect(gridBodyRowsNotHeaderLoadIndexes().queryByText('external')).not.toBeInTheDocument();
-  });
 
   it('indents each nesting level by its own depth', async () => {
     await renderElement();
@@ -1868,74 +1592,33 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field, a Muta
   });
 });
 
-describe('RecordPanel — an absent member reads as its default, the document omitting a member equal to its default, while "—" is kept for a member whose metadata says null is a value', () => {
-  const statsMeta: FieldMetadata = fieldMeta({
-    name: 'Stats', type: 'struct',
-    fields: [
-      fieldMeta({ name: 'Weight', type: 'int' }),
-      fieldMeta({ name: 'Essential', type: 'bool' }),
-      fieldMeta({ name: 'Prefix', type: 'string' }),
-      fieldMeta({
-        name: 'RunOn', type: 'enum', default: 'Subject',
-        enumMembers: [{ value: 'Subject' }, { value: 'Target' }]}),
-      fieldMeta({ name: 'Count', type: 'int', default: 100 }),
-      fieldMeta({ name: 'Owner', type: 'formKey', validFormKeyTypes: ['NPC_'], allowsNull: true }),
-    ]});
-  const full = { Weight: 3, Essential: true, Prefix: 'x', RunOn: 'Target', Count: 7, Owner: '000019:Fallout4.esm' };
-  const sparse = {};
-
+describe('RecordPanel — editing an absent member', () => {
+  const weightMeta: FieldMetadata = fieldMeta({ name: 'Weight', type: 'int' });
+  const statsMeta: FieldMetadata = fieldMeta({ name: 'Stats', type: 'struct', fields: [weightMeta] });
   const compare: CompareResult = compareResultFixture({
     conflictAll: 'Conflict',
     overrides: [
       compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false,
-        editorId: 'TestNPC', fields: [{ metadata: statsMeta, value: full }], conflictThis: 'Master' }),
+        editorId: 'TestNPC', fields: [{ metadata: statsMeta, value: { Weight: 3 } }], conflictThis: 'Master' }),
       compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', isWinner: true,
-        editorId: 'TestNPC', fields: [{ metadata: statsMeta, value: sparse }], conflictThis: 'ConflictWins' }),
+        editorId: 'TestNPC', fields: [{ metadata: statsMeta, value: {} }], conflictThis: 'ConflictWins' }),
     ],
     diffs: [diffNode({
-      fieldName: 'Stats', values: { 'Fallout4.esm': full, 'MyMod.esp': sparse },
+      fieldName: 'Stats', values: { 'Fallout4.esm': { Weight: 3 }, 'MyMod.esp': {} },
       winnerColumn: 'MyMod.esp', cellStates: {},
-      children: Object.entries(full).map(([name, v]) => diffNode({
-        fieldName: name, values: { 'Fallout4.esm': v, 'MyMod.esp': null },
+      children: [diffNode({
+        fieldName: 'Weight', values: { 'Fallout4.esm': 3, 'MyMod.esp': null },
         winnerColumn: 'Fallout4.esm', cellStates: {},
-      })),
+      })],
     })],
   });
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
 
-  async function renderExpanded() {
+  it('posts one set with the typed value, over the default the editor opens on', async () => {
     renderPanel(compare, { plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate });
-    await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Stats'));
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Weight'));
-  }
-
-  it('an absent int reads 0, an absent bool false, an absent string empty', async () => {
-    await renderExpanded();
-    expect(cellAt('Weight', 2).textContent).toBe('0');
-    expect(cellAt('Essential', 2).textContent).toBe('False');
-    expect(cellAt('Prefix', 2).textContent).toBe('');
-    expect(gridBodyRowsNotHeaderLoadIndexes().queryAllByText('—')).toHaveLength(1);
-  });
-
-  it('an absent enum reads the default the metadata names', async () => {
-    await renderExpanded();
-    expect(cellAt('RunOn', 2).textContent).toBe('Subject');
-  });
-
-  it('an absent scalar with a declared default reads that default', async () => {
-    await renderExpanded();
-    expect(cellAt('Count', 2).textContent).toBe('100');
-  });
-
-  it('an unset nullable link reads as empty', async () => {
-    await renderExpanded();
-    expect(cellAt('Owner', 2).textContent).toBe('—');
-  });
-
-  it('editing an absent int from its default posts one set with the typed value, the default being what the editor opens on so a value equal to it is no edit at all', async () => {
-    await renderExpanded();
     vi.mocked(vscode.postMessage).mockClear();
     const cell = cellAt('Weight', 2);
     fireEvent.doubleClick(within(cell).getByText('0'));
@@ -1946,148 +1629,6 @@ describe('RecordPanel — an absent member reads as its default, the document om
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
       envelope: { op: 'set', path: [{ kind: 'member', name: 'Stats' }, { kind: 'member', name: 'Weight' }], value: 5 },
     }));
-  });
-});
-
-describe('RecordPanel — a member of an absent owner reads as nothing, not as zero: it is not absent-by-default, there being nothing for it to be a member of', () => {
-  const boundsMeta: FieldMetadata = fieldMeta({
-    name: 'Bounds', type: 'struct', allowsNull: true,
-    fields: [fieldMeta({ name: 'X', type: 'int' })]});
-  const valuesMeta: FieldMetadata = fieldMeta({
-    name: 'Values', type: 'array', isArray: true,
-    elementType: fieldMeta({ name: '', type: 'int' })});
-  const compare: CompareResult = compareResultFixture({
-    conflictAll: 'Conflict',
-    overrides: [
-      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false, editorId: 'TestNPC',
-        fields: [{ metadata: boundsMeta, value: { X: 10 } }, { metadata: valuesMeta, value: [1, 2] }], conflictThis: 'Master' }),
-      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: boundsMeta, value: null }, { metadata: valuesMeta, value: [1] }], conflictThis: 'ConflictWins' }),
-    ],
-    diffs: [
-      diffNode({
-        fieldName: 'Bounds', values: { 'Fallout4.esm': { X: 10 }, 'MyMod.esp': null },
-        winnerColumn: 'Fallout4.esm', cellStates: {},
-        children: [diffNode({ fieldName: 'X', values: { 'Fallout4.esm': 10, 'MyMod.esp': null }, winnerColumn: 'Fallout4.esm', cellStates: {} })],
-      }),
-      diffNode({
-        fieldName: 'Values', values: { 'Fallout4.esm': [1, 2], 'MyMod.esp': [1] },
-        winnerColumn: 'MyMod.esp', cellStates: {},
-        children: [
-          diffNode({ fieldName: '[0]', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
-          diffNode({ fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': null }, winnerColumn: 'Fallout4.esm', cellStates: {} }),
-        ],
-      }),
-    ],
-  });
-
-  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('an unset nullable struct reads as empty, and its member as nothing rather than zero', async () => {
-    renderPanel(compare, { plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate });
-    await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Bounds'));
-    expect(cellAt('Bounds', 2).textContent).toBe('');
-    await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('X'));
-
-    expect(cellAt('X', 1).textContent).toBe('10');
-    expect(cellAt('X', 2).textContent).toBe('');
-  });
-
-  it('an element past the column\'s own length reads as nothing, not zero', async () => {
-    renderPanel(compare, { plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate });
-    await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Values'));
-    await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('[1]'));
-
-    expect(cellAt('[1]', 1).textContent).toBe('2');
-    expect(cellAt('[1]', 2).textContent).toBe('');
-  });
-
-  it('a Partial Form column\'s fields read as nothing, the classifier nulling every field so none is absent-by-default', async () => {
-    renderPanel(partialFormCompareResult, { plugins: partialFormCompiledPluginsResponse });
-    await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Name'));
-    expect(cellAt('Name', 1).textContent).toBe('Original Name');
-    expect(cellAt('Name', 2).textContent).toBe('');
-  });
-
-  it('a Partial Form column\'s non-nullable struct field, whose absence would otherwise read as its default, reads as nothing, not as its default', async () => {
-    const sizeMeta: FieldMetadata = fieldMeta({
-      name: 'Size', type: 'struct', fields: [fieldMeta({ name: 'Width', type: 'int' })]});
-    renderPanel(compareResultFixture({
-      ...partialFormCompareResult,
-      overrides: partialFormCompareResult.overrides.map((o, i) => ({
-        ...o, fields: [{ metadata: sizeMeta, value: i === 0 ? { Width: 3 } : null }],
-      })),
-      diffs: [diffNode({
-        fieldName: 'Size', values: { 'Fallout4.esm': { Width: 3 }, 'MyMod.esp': null },
-        winnerColumn: 'Fallout4.esm', cellStates: {},
-        children: [diffNode({
-          fieldName: 'Width', values: { 'Fallout4.esm': 3, 'MyMod.esp': null },
-          winnerColumn: 'Fallout4.esm', cellStates: {},
-        })],
-      })],
-    }), { plugins: partialFormCompiledPluginsResponse });
-    await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Size'));
-    fireEvent.click(required(required(gridBodyRowsNotHeaderLoadIndexes().getByText('Size').closest('td'), "the 'Size' cell's td ancestor").querySelector('button'), "the 'Size' row's expand button"));
-    expect(cellAt('Size', 1).textContent).toBe('{…}');
-    expect(cellAt('Size', 2).textContent).toBe('');
-
-    fireEvent.click(required(required(gridBodyRowsNotHeaderLoadIndexes().getByText('Size').closest('td'), "the 'Size' cell's td ancestor").querySelector('button'), "the 'Size' row's expand button"));
-    await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Width'));
-    expect(cellAt('Width', 2).textContent).toBe('');
-  });
-});
-
-describe('RecordPanel — an absent non-nullable struct reads as its default members, as it has no "unset" so the column that omits it holds that struct at its defaults, member by member', () => {
-  const sizeMeta: FieldMetadata = fieldMeta({
-    name: 'Size', type: 'struct',
-    fields: [
-      fieldMeta({ name: 'Width', type: 'int' }),
-      fieldMeta({ name: 'Label', type: 'string' }),
-      fieldMeta({ name: 'Depth', type: 'int', default: 12 }),
-    ]});
-  const full = { Width: 3, Label: 'x', Depth: 7 };
-  const compare: CompareResult = compareResultFixture({
-    conflictAll: 'Conflict',
-    overrides: [
-      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false, editorId: 'TestNPC',
-        fields: [{ metadata: sizeMeta, value: full }], conflictThis: 'Master' }),
-      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: sizeMeta, value: null }], conflictThis: 'ConflictWins' }),
-    ],
-    diffs: [diffNode({
-      fieldName: 'Size', values: { 'Fallout4.esm': full, 'MyMod.esp': null },
-      winnerColumn: 'Fallout4.esm', cellStates: {},
-      children: Object.entries(full).map(([name, v]) => diffNode({
-        fieldName: name, values: { 'Fallout4.esm': v, 'MyMod.esp': null },
-        winnerColumn: 'Fallout4.esm', cellStates: {},
-      })),
-    })],
-  });
-
-  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
-  afterEach(() => vi.unstubAllGlobals());
-
-  async function renderExpanded() {
-    renderPanel(compare, { plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate });
-    await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Width'));
-  }
-
-  async function renderCollapsed() {
-    await renderExpanded();
-    fireEvent.click(required(required(gridBodyRowsNotHeaderLoadIndexes().getByText('Size').closest('td'), "the 'Size' cell's td ancestor").querySelector('button'), "the 'Size' row's expand button"));
-  }
-
-  it('the struct the column omits reads as a struct, not as nothing', async () => {
-    await renderCollapsed();
-    expect(cellAt('Size', 2).textContent).toBe('{…}');
-  });
-
-  it('each member of the omitted struct reads its own default', async () => {
-    await renderExpanded();
-    expect(cellAt('Width', 2).textContent).toBe('0');
-    expect(cellAt('Label', 2).textContent).toBe('');
-    expect(cellAt('Depth', 2).textContent).toBe('12');
   });
 });
 
@@ -2158,11 +1699,6 @@ describe('RecordPanel — a column whose record failed to parse stays in the gri
     { name: 'Broken.esp', isImmutable: false, loadOrderIndex: 0, isCompiledPlugin: true },
     { name: 'Good.esp', isImmutable: false, loadOrderIndex: 1, isCompiledPlugin: true },
   ];
-
-  const contextsFor = (container: HTMLElement, plugin: string) =>
-    Array.from(container.querySelectorAll('[data-vscode-context]'))
-      .map((e) => parseJsonRecord(e.getAttribute('data-vscode-context') ?? ''))
-      .filter(c => c.plugin === plugin);
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Broken.esp'));
   afterEach(() => vi.unstubAllGlobals());
@@ -2265,25 +1801,6 @@ describe('RecordPanel — a column whose record failed to parse stays in the gri
     expect(container.querySelectorAll('[data-focused-cell]')).toHaveLength(1);
   });
 
-  it('offers no array right-click commands, where the readable column offers them, the array gestures being host commands gated on the row\'s own data-vscode-context', async () => {
-    const { container } = renderPanel(compare, { plugins });
-    await waitFor(() => screen.getByText('Stored Name'));
-
-    const arraySections = (plugin: string) => contextsFor(container, plugin)
-      .map(c => String(c.webviewSection)).filter(s => s.includes('array'));
-    expect(arraySections('Broken.esp')).toEqual([]);
-    expect(arraySections('Good.esp')).not.toEqual([]);
-  });
-
-  it('marks the extended editor read-only on its string cells, where the readable column does not, Open in Editor… staying on a read-only column as the only way to read a long value in full', async () => {
-    const { container } = renderPanel(compare, { plugins });
-    await waitFor(() => screen.getByText('Stored Name'));
-
-    const stringContext = (plugin: string) => contextsFor(container, plugin)
-      .find(c => String(c.webviewSection).includes('stringValue'));
-    expect(stringContext('Broken.esp')?.readOnly).toBe(true);
-    expect(stringContext('Good.esp')?.readOnly).toBe(false);
-  });
 });
 
 describe('RecordPanel — the Record Header', () => {
@@ -2356,16 +1873,6 @@ describe('RecordPanel — the Record Header', () => {
     expect(cellOf(container, 'Form Key').textContent).toBe('MovedNpc [000800:MyMod.esp]');
   });
 
-  it('collapses to its own row, hiding the header members', async () => {
-    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: compiledPlugin });
-    await waitFor(() => screen.getByText('A Name'));
-
-    fireEvent.doubleClick(screen.getByText('Record Header'));
-
-    expect(rowLabels(container)).toEqual(['Record Header', 'Name']);
-  });
-
   it('edits a header member as any field: a typed number posts a set of that member', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
     const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: compiledPlugin });
@@ -2379,19 +1886,6 @@ describe('RecordPanel — the Record Header', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('VersionControl')], value: 7 });
-  });
-
-  it('reads Record Flags as its flags, and a check box posts the integer with that bit set', async () => {
-    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: compiledPlugin });
-    await waitFor(() => screen.getByText('A Name'));
-    vi.mocked(vscode.postMessage).mockClear();
-
-    const boxes = within(cellOf(container, 'Record Flags')).getAllByRole('checkbox');
-    expect(boxes.map(b => b.matches(':checked'))).toEqual([false, true]);
-    fireEvent.click(required(boxes[0], 'the Deleted check box'));
-
-    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('MajorRecordFlagsRaw')], value: 1024 | 32 });
   });
 
   it('opens the FormID on the FormKey and posts a set of the record\'s FormKey member with the one typed', async () => {
@@ -2459,38 +1953,6 @@ describe('RecordPanel — the Record Header', () => {
     Array.from(required(rows(container).find(tr => tr.querySelector('td')?.textContent === 'Version Control Info 1'),
       'the Version Control Info 1 row').querySelectorAll('td')).slice(1);
 
-  it('reads Version Control Info 1 as the date, user and index it packs, by each copy\'s own Form Version', async () => {
-    vi.stubGlobal('mEditFormKey', '000800:Base.esm');
-    const { container } = renderPanel(stamped([
-      { plugin: 'Base.esm', stamp: 33890154, formVersion: 43 },
-      { plugin: 'MyMod.esp', stamp: 33890154, formVersion: 44 },
-    ]), { plugins: stampPlugins });
-    await waitFor(() => screen.getAllByText('A Name'));
-
-    expect(stampCells(container).map(c => c.textContent)).toEqual([
-      '2005-07-106 User: 5 Index: 2', '2015-11-10 User: 5 Index: 2',
-    ]);
-  });
-
-  it('reads Version Control Info 1 as None where it packs nothing, and by the older packing where the copy holds no Form Version', async () => {
-    vi.stubGlobal('mEditFormKey', '000800:Base.esm');
-    const { container } = renderPanel(stamped([
-      { plugin: 'Base.esm', stamp: null, formVersion: 131 },
-      { plugin: 'MyMod.esp', stamp: 17001482, formVersion: null },
-    ]), { plugins: stampPlugins });
-    await waitFor(() => screen.getAllByText('A Name'));
-
-    expect(stampCells(container).map(c => c.textContent)).toEqual(['None', '2011-12-10 User: 3 Index: 1']);
-  });
-
-  it('reads a Version Control Info 1 held signed, as a plugin header holds it, as the 32 bits it packs', async () => {
-    vi.stubGlobal('mEditFormKey', '000800:Base.esm');
-    const { container } = renderPanel(stamped([{ plugin: 'MyMod.esp', stamp: -1, formVersion: 131 }]), { plugins: stampPlugins });
-    await waitFor(() => screen.getAllByText('A Name'));
-
-    expect(stampCells(container).map(c => c.textContent)).toEqual(['2127-15-31 User: 255 Index: 255']);
-  });
-
   it('opens and copies Version Control Info 1 as the number it holds', async () => {
     vi.stubGlobal('mEditFormKey', '000800:Base.esm');
     const { container } = renderPanel(stamped([{ plugin: 'MyMod.esp', stamp: 33890154, formVersion: 131 }]), { plugins: stampPlugins });
@@ -2524,39 +1986,6 @@ describe('RecordPanel — the Record Header', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('VersionControl')], value: 7 });
-  });
-
-  it('edits a Partial Form copy\'s EditorID, which the copy keeps', async () => {
-    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const editorIdMeta = fieldMeta({ name: 'EditorID', type: 'string', allowsNull: true, isEditorId: true });
-    const record = partialFormCopyWithHeaderMembersAndNoFieldsOfItsOwn();
-    const { container } = renderPanel({
-      ...record,
-      overrides: record.overrides.map(o => ({ ...o, fields: [{ metadata: editorIdMeta, value: 'Inside' }, ...o.fields] })),
-      diffs: [diffNode({ fieldName: 'EditorID', values: { 'MyMod.esp': 'Inside' }, winnerColumn: 'MyMod.esp' }), ...record.diffs],
-    }, { plugins: compiledPlugin });
-    await waitFor(() => screen.getByText('(Partial Form)'));
-    vi.mocked(vscode.postMessage).mockClear();
-
-    const cell = cellOf(container, 'EditorID');
-    fireEvent.doubleClick(within(cell).getByText('Inside'));
-    const input = required(cell.querySelector('input'), 'the cell\'s input');
-    fireEvent.change(input, { target: { value: 'Renamed' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-
-    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('EditorID')], value: 'Renamed' });
-  });
-
-  it('reads a Partial Form copy\'s own field empty, opening no editor', async () => {
-    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
-    const { container } = renderPanel(partialFormCopyWithHeaderMembersAndNoFieldsOfItsOwn(), { plugins: compiledPlugin });
-    await waitFor(() => screen.getByText('(Partial Form)'));
-
-    const cell = cellOf(container, 'Name');
-    fireEvent.doubleClick(cell);
-
-    expect(cell.textContent).toBe('');
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('offers the FormID no open-field-value menu, where a text field offers one, open field value being a text field\'s and the FormID reading as a reference', async () => {

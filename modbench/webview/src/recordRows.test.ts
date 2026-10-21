@@ -170,22 +170,28 @@ describe('a union element', () => {
       name: 'aliases', type: 'array', isArray: true,
       elementType: fieldMeta({
         name: '', type: 'struct',
-        fields: [fieldMeta({ name: 'Kind', type: 'string', isDiscriminator: true }), location],
+        fields: [fieldMeta({ name: 'Kind', type: 'string', isDiscriminator: true }), fieldMeta({ name: 'name', type: 'string' }), location],
       }),
     });
-    const master = { Kind: 'RefAlias', location: { id: 5 } };
-    const override = { Kind: 'LocAlias', location: null };
+    const master = { Kind: 'RefAlias', name: 'AnAlias', location: { id: 5 } };
+    const override = { Kind: 'LocAlias', name: 'AnAlias', location: null };
     const rows = fieldRowsOf(rowsFor(answer([aliases], [diffNode({
       fieldName: 'aliases', values: {},
       children: [diffNode({
         fieldName: '[0]', values: { [MASTER]: master, [MOD]: override },
-        children: [diffNode({ fieldName: 'location', values: { [MASTER]: { id: 5 }, [MOD]: null } })],
+        children: [
+          diffNode({ fieldName: 'name', values: { [MASTER]: 'AnAlias', [MOD]: 'AnAlias' } }),
+          diffNode({ fieldName: 'location', values: { [MASTER]: { id: 5 }, [MOD]: null } }),
+        ],
       })],
     })])));
     const element = rows[1];
-    const member = rows[2];
+    const member = rows[3];
 
-    expect(rows.map(r => r.key)).toEqual(['aliases', 'aliases.[0]', 'aliases.[0].location']);
+    expect(rows.map(r => r.key)).toEqual(['aliases', 'aliases.[0]', 'aliases.[0].name', 'aliases.[0].location']);
+    expect(member?.cells.get(MASTER)?.shown).toEqual({ id: 5 });
+    expect(member?.cells.get(MOD)?.holds).toBe(false);
+    expect(member?.cells.get(MOD)?.shown).toBeUndefined();
     expect(member?.depth).toBe(2);
     expect(member?.cells.get(MASTER)?.meta).toBe(refLocation);
     expect(member?.cells.get(MOD)?.meta).toBe(location);
@@ -305,5 +311,139 @@ describe('the record header rows\' cells', () => {
     expect(row?.label.context).toEqual({ webviewSection: 'cell', copyText: 'FormID', preventDefaultContextMenuItems: true });
     expect(row?.cells.get(MOD)?.context)
       .toEqual({ webviewSection: 'cell', copyText: 'TestNPC [000001:Fallout4.esm]', preventDefaultContextMenuItems: true });
+  });
+});
+
+describe('a union element\'s member only some leaves declare', () => {
+  const only = (leaf: string) => fieldMeta({ name: 'external', type: 'struct', variants: { [leaf]: fieldMeta({ name: 'external', type: 'struct' }) } });
+  const aliases = fieldMeta({
+    name: 'aliases', type: 'array', isArray: true,
+    elementType: fieldMeta({
+      name: '', type: 'struct',
+      fields: [fieldMeta({ name: 'Kind', type: 'string', isDiscriminator: true }), only('LocAlias')],
+    }),
+  });
+  const rows = fieldRowsOf(rowsFor(answer([aliases], [diffNode({
+    fieldName: 'aliases', values: {},
+    children: [diffNode({
+      fieldName: '[0]', values: { [MASTER]: { Kind: 'RefAlias', external: null }, [MOD]: { Kind: 'LocAlias', external: { id: 7 } } },
+      children: [diffNode({ fieldName: 'external', values: { [MASTER]: null, [MOD]: { id: 7 } } })],
+    })],
+  })])));
+  const external = rows.find(r => r.key === 'aliases.[0].external');
+
+  it('is a row, held by the columns whose leaf declares it', () => {
+    expect([MASTER, MOD].map(c => external?.cells.get(c)?.holds)).toEqual([false, true]);
+  });
+});
+
+describe('a cell in a column that cannot be edited', () => {
+  const name = fieldMeta({ name: 'Name', type: 'string' });
+  const names = fieldMeta({ name: 'Names', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'string' }) });
+  const rows = fieldRowsOf(rowsFor(answer([name, names], [
+    diffNode({ fieldName: 'Name', values: { [MASTER]: 'A', [MOD]: 'B' } }),
+    diffNode({
+      fieldName: 'Names', values: { [MASTER]: ['A'], [MOD]: ['B'] },
+      children: [diffNode({ fieldName: '[0]', values: { [MASTER]: 'A', [MOD]: 'B' } })],
+    }),
+  ]), [MASTER]));
+
+  it.each([
+    ['a string offers the extended editor read-only', 'Name', { webviewSection: 'cell stringValue', readOnly: true }],
+    ['an array offers no array command', 'Names', { webviewSection: 'cell' }],
+  ])('%s', (_what, key, expected) => {
+    expect(rows.find(r => r.key === key)?.cells.get(MOD)?.context).toMatchObject(expected);
+  });
+});
+
+describe('a member the document omits', () => {
+  const memberOf = (
+    metas: FieldMetadata[], diffs: CompareResult['diffs'], key: string, options: { partial?: boolean } = {},
+  ) => {
+    const result = answer(metas, diffs, options.partial);
+    return fieldRowsOf(rowsFor(result, [MASTER, MOD], options.partial ? [MOD] : [])).find(r => r.key === key)?.cells.get(MOD);
+  };
+  const struct = (name: string, fields: FieldMetadata[], allowsNull = false) => fieldMeta({ name, type: 'struct', fields, allowsNull });
+  const memberDiff = (name: string, master: unknown) => diffNode({ fieldName: name, values: { [MASTER]: master, [MOD]: null } });
+
+  const stats = struct('Stats', [
+    fieldMeta({ name: 'Weight', type: 'int' }),
+    fieldMeta({ name: 'Essential', type: 'bool' }),
+    fieldMeta({ name: 'Prefix', type: 'string' }),
+    fieldMeta({ name: 'RunOn', type: 'enum', default: 'Subject', enumMembers: [{ value: 'Subject' }, { value: 'Target' }] }),
+    fieldMeta({ name: 'Count', type: 'int', default: 100 }),
+    fieldMeta({ name: 'Owner', type: 'formKey', validFormKeyTypes: ['NPC_'], allowsNull: true }),
+  ]);
+  const statsDiff = diffNode({
+    fieldName: 'Stats', values: { [MASTER]: { Weight: 3 }, [MOD]: {} },
+    children: ['Weight', 'Essential', 'Prefix', 'RunOn', 'Count', 'Owner'].map(name => memberDiff(name, 'x')),
+  });
+
+  it.each([
+    ['an int', 'Weight', 0],
+    ['a bool', 'Essential', false],
+    ['a string', 'Prefix', ''],
+    ['an enum, the default its metadata names', 'RunOn', 'Subject'],
+    ['a scalar with a declared default', 'Count', 100],
+    ['a nullable link, which has no default to read', 'Owner', undefined],
+  ])('of a struct the column holds reads as its default: %s', (_kind, name, expected) => {
+    const cell = memberOf([stats], [statsDiff], `Stats.${name}`);
+
+    expect(cell?.holds).toBe(true);
+    expect(cell?.value).toEqual(expected);
+  });
+
+  const size = struct('Size', [
+    fieldMeta({ name: 'Width', type: 'int' }),
+    fieldMeta({ name: 'Label', type: 'string' }),
+    fieldMeta({ name: 'Depth', type: 'int', default: 12 }),
+  ]);
+  const sizeDiff = diffNode({
+    fieldName: 'Size', values: { [MASTER]: { Width: 3, Label: 'x', Depth: 7 }, [MOD]: null },
+    children: ['Width', 'Label', 'Depth'].map(name => memberDiff(name, 1)),
+  });
+
+  it.each([
+    ['Size', undefined],
+    ['Size.Width', 0],
+    ['Size.Label', ''],
+    ['Size.Depth', 12],
+  ])('a non-nullable struct it omits is held at its defaults: %s', (key, value) => {
+    const cell = memberOf([size], [sizeDiff], key);
+
+    expect(cell?.holds).toBe(true);
+    expect(cell?.value).toEqual(value);
+  });
+
+  const unsetStruct = struct('Bounds', [fieldMeta({ name: 'X', type: 'int' })], true);
+  const unsetDiff = diffNode({
+    fieldName: 'Bounds', values: { [MASTER]: { X: 10 }, [MOD]: null }, children: [memberDiff('X', 10)],
+  });
+  const values = fieldMeta({ name: 'Values', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'int' }) });
+  const valuesDiff = diffNode({
+    fieldName: 'Values', values: { [MASTER]: [1, 2], [MOD]: [1] },
+    children: [diffNode({ fieldName: '[0]', values: { [MASTER]: 1, [MOD]: 1 } }), memberDiff('[1]', 2)],
+  });
+
+  it.each([
+    ['a nullable struct it leaves unset', unsetStruct, unsetDiff, 'Bounds'],
+    ['a member of that unset struct', unsetStruct, unsetDiff, 'Bounds.X'],
+    ['an element past its own array\'s length', values, valuesDiff, 'Values.[1]'],
+  ])('is nothing in the column that holds no owner for it: %s', (_kind, meta, diff, key) => {
+    const cell = memberOf([meta], [diff], key);
+
+    expect(cell?.holds).toBe(false);
+    expect(cell?.shown).toBeUndefined();
+  });
+
+  it.each([
+    ['a field', fieldMeta({ name: 'Name', type: 'string' }), 'Name', diffNode({ fieldName: 'Name', values: { [MASTER]: 'Original', [MOD]: null } })],
+    ['a non-nullable struct, whose absence would read as its default', size, 'Size', sizeDiff],
+    ['a member of that struct', size, 'Size.Width', sizeDiff],
+  ])('is nothing in a Partial Form column, which holds none of the record\'s own fields: %s', (_kind, meta, key, diff) => {
+    const cell = memberOf([meta], [diff], key, { partial: true });
+
+    expect(cell?.holds).toBe(false);
+    expect(cell?.shown).toBeUndefined();
   });
 });
