@@ -321,6 +321,15 @@ describe('PluginFacts — which plugins mEdit holds and the record filter', () =
     expect(facts.noRecordMatchMessage('weapon')).toBe(matchesNothing ? 'No records match weapon.' : undefined);
   });
 
+  it('keeps a plugin hidden through a tick that indexes nothing yet', () => {
+    const facts = new PluginFacts();
+    facts.refreshed([held({ hasMatchingRecords: false })]);
+
+    facts.indexed([], []);
+
+    expect(facts.hiddenByRecordFilter(A)).toBe(true);
+  });
+
   it('forgets that no plugin matched once the record filter changes', () => {
     const facts = new PluginFacts();
     facts.refreshed([held({ hasMatchingRecords: false })]);
