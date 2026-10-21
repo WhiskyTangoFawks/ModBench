@@ -112,7 +112,7 @@ async function rowsBeneath(
   return states;
 }
 
-describe('RecordBrowser.getPluginChildren (record types)', () => {
+describe('a plugin\'s children, one group per record type', () => {
   it('returns one group per record type', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'weap', count: 10 }, { type: 'npc_', count: 3 }] });
     const provider = new RecordBrowser(repo);
@@ -162,7 +162,7 @@ describe('RecordBrowser.getPluginChildren (record types)', () => {
   });
 });
 
-describe('RecordBrowser.getPluginChildren — an answer that is no failed read', () => {
+describe('a plugin\'s children — an answer that is no failed read', () => {
   it('shows a row that cannot be built as no error row, and reaches the caller', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getRecordTypes', [{ ...recordTypeCountFixture({ type: 'weap', count: 1 }), get type(): string { throw new Error('the row broke'); } }]);
@@ -180,7 +180,7 @@ describe('RecordBrowser.getPluginChildren — an answer that is no failed read',
   });
 });
 
-describe('RecordBrowser.getChildren of a record-type group', () => {
+describe('a record-type group\'s children', () => {
   it('lists a record row for every record in one call', async () => {
     const records = [makeRecord(0), makeRecord(1), makeRecord(2)];
     const repo = makeClient({ records: { items: records, total: 3 } });
@@ -232,8 +232,8 @@ describe('RecordBrowser.getChildren of a record-type group', () => {
   });
 });
 
-describe('RecordBrowser.getChildren of a record-type group — no per-row fan-out for container presence', () => {
-  it('listing ~1,300 Quests issues exactly one getRecords call and zero getContainerChildren calls', async () => {
+describe('a record-type group\'s children — no per-row fan-out for container presence', () => {
+  it('listing ~1,300 Quests reads the group once and asks nothing per row for its children', async () => {
     const FALLOUT4_ESM_APPROXIMATE_QUST_COUNT = 1_300;
     const records = Array.from(
       { length: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT }, (_, i) => makeRecord(i, 'None', i % 2 === 0));
@@ -392,7 +392,7 @@ describe('every row is named as xEdit names it', () => {
   });
 });
 
-describe('onDidReadRecords / workingTreeStateOf', () => {
+describe('the rows a group reads, and their working-tree state', () => {
   async function readGroup(repo: InMemoryMEditClient) {
     const provider = new RecordBrowser(repo);
     const typeNode = await soleGroup(provider, PLUGIN0);
@@ -466,12 +466,12 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     expect(provider.workingTreeStateOf(recordResourceUri({ name: 'Other.esp', origin: 'Data/' }, override.formKey))).toBe('Modified');
   });
 
-  it('workingTreeStateOf is undefined for a record nothing has cached yet', () => {
+  it('a record nothing has cached yet has no working-tree state', () => {
     const provider = new RecordBrowser(makeClient());
     expect(provider.workingTreeStateOf(recordResourceUri({ name: 'Plugin0.esp', origin: 'Data/' }, '000001:Fallout4.esm'))).toBeUndefined();
   });
 
-  it('workingTreeStateOf is undefined for a URI outside the medit-record: scheme', async () => {
+  it('a URI outside the medit-record: scheme has no working-tree state', async () => {
     const record = makeRecord(0, 'Modified');
     const { provider, typeNode } = await readGroup(makeClient({ records: { items: [record], total: 1 } }));
     await provider.getChildren(typeNode);
@@ -565,7 +565,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
   });
 });
 
-describe('RecordBrowser.refresh', () => {
+describe('refreshing the browser', () => {
   it('asks the view to render again, and the group then lists what mEdit now holds', async () => {
     const repo = makeClient({ records: { items: [makeRecord(0)], total: 1 } });
     const provider = new RecordBrowser(repo);
@@ -583,7 +583,7 @@ describe('RecordBrowser.refresh', () => {
   });
 });
 
-describe('RecordBrowser worldspace tree', () => {
+describe('the worldspace tree', () => {
   it('expands a worldspace into its persistent cell and blocks, labeled the way xEdit does', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
     repo.setQueryAnswer('getWorldspaces', [WORLDSPACE_OF_M]);
@@ -718,33 +718,7 @@ describe('RecordBrowser worldspace tree', () => {
   });
 });
 
-describe('RecordBrowser fetch failures', () => {
-  it('getPluginChildren: builds a plugin\'s children from its (origin, filename)', async () => {
-    const repo = makeClient({
-      recordTypes: [
-        { type: 'cell', count: 4, displayName: 'Cell' },
-        { type: 'weap', count: 5, displayName: 'Weapon' },
-        { type: 'wrld', count: 1, displayName: 'Worldspace' },
-      ],
-    });
-    const provider = new RecordBrowser(repo);
-
-    const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
-
-    expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: [{ name: 'Plugin0.esp', origin: 'Data/' }] });
-    expect(children.map(c => c.label)).toEqual(['Cell', 'Weapon', 'Worldspace']);
-  });
-
-  it('getPluginChildren: records below it carry the open-editor command', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'weap', count: 1 }] });
-    const provider = new RecordBrowser(repo);
-    const [recordType] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
-
-    const [record] = await provider.getChildren(recordType);
-
-    expect(present(record, 'the record row').command).toMatchObject({ command: 'modbench.record.open' });
-  });
-
+describe('a failed fetch', () => {
   it.each<[string, () => Promise<RecordBrowserNode[]>]>([
     ['getRecordTypes', async () => {
       const repo = makeClient();
@@ -789,7 +763,7 @@ describe('RecordBrowser fetch failures', () => {
   });
 });
 
-describe('RecordBrowser spatial origin threading', () => {
+describe('spatial rows of a shared filename', () => {
   const SHARED_B: PluginAddress = { name: 'Shared.esp', origin: 'ModB' };
   type Walk = { repo: InMemoryMEditClient; opened: RecordBrowserNode[] };
   const openedAs = (formKey: string) => [{ argument: { kind: 'record', formKey, plugin: SHARED_B } }];
@@ -912,10 +886,10 @@ describe('RecordBrowser spatial origin threading', () => {
 
 });
 
-describe('RecordBrowser.getPluginChildren (origin)', () => {
+describe('a plugin of a shared filename browses its own children', () => {
   const sharedClient = () => listsForThePluginAsked(makeClient({ recordTypes: [{ type: 'weap', count: 1 }] }));
 
-  it('asks the repository for the plugin the row stands for', async () => {
+  it('asks for the plugin the row stands for', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'weap', count: 1 }] });
     const provider = new RecordBrowser(repo);
 
@@ -1011,8 +985,8 @@ describe('which record rows are containers is mEdit\'s answer', () => {
   });
 });
 
-describe('RecordBrowser.getChildren of a container row', () => {
-  it('a quest row expands via repository.getContainerChildren into ordinary record rows', async () => {
+describe('a container row\'s children', () => {
+  it('a quest row expands into ordinary record rows', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getContainerChildren', [
       makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA'),
@@ -1060,7 +1034,7 @@ describe('RecordBrowser.getChildren of a container row', () => {
     ]);
   });
 
-  it('a topic row expands via repository.getContainerChildren into its Responses', async () => {
+  it('a topic row expands into its Responses', async () => {
     const repo = makeClient();
     repo.setQueryAnswer('getContainerChildren', [
       makeContainerChild('info1:Fallout4.esm', 'info'),
