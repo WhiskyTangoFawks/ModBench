@@ -173,10 +173,11 @@ export class InMemoryMEditClient implements MEditClient {
 
   setStatus(status: BackendStatus): void {
     this._status = status;
+    if (status === 'running') this.gone = false;
     for (const listener of this.statusListeners) listener(status);
   }
 
-  // Every unscripted query starts answering unreachable, same as a real gone backend's read side.
+  // Until mEdit runs again, an unscripted query answers unreachable, same as a real gone backend's read side.
   private reset(): void {
     this.gone = true;
     this.queryAnswers = {};
@@ -277,7 +278,7 @@ export class InMemoryMEditClient implements MEditClient {
     const scripted = this.queryAnswers[method]?.[0];
     if (!scripted && this.gone) return Promise.resolve({ failed: 'unreachable' });
     if (!scripted) {
-      return Promise.resolve({ failed: 'refused', refusal: `InMemoryMEditClient: no scripted answer for query "${method}"` });
+      return Promise.reject(new Error(`InMemoryMEditClient: no scripted answer for query "${method}"`));
     }
     return Promise.resolve(scripted.value);
   }

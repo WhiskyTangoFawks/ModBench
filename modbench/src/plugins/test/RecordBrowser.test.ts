@@ -162,6 +162,24 @@ describe('RecordBrowser.getPluginChildren (record types)', () => {
   });
 });
 
+describe('RecordBrowser.getPluginChildren — an answer that is no failed read', () => {
+  it('shows an unreadable answer as no error row, and reaches the caller', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getRecordTypes', null as unknown as []);
+
+    await expect(new RecordBrowser(client).getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' })).rejects.toThrow(TypeError);
+  });
+
+  it('shows a failed read as the one error row', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getRecordTypes', { failed: 'unreachable' });
+
+    const children = await new RecordBrowser(client).getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
+
+    expect(children.map(c => c.contextValue)).toEqual(['error']);
+  });
+});
+
 describe('RecordBrowser.getChildren of a record-type group', () => {
   it('lists a record row for every record in one call', async () => {
     const records = [makeRecord(0), makeRecord(1), makeRecord(2)];

@@ -32,18 +32,37 @@ function watched<T>() {
   };
 }
 
-function feedOver(client = new InMemoryMEditClient(), shown: readonly PluginAddress[] = [A]) {
+function clientFindingNoDefects(): InMemoryMEditClient {
+  const client = new InMemoryMEditClient();
+  client.setQueryAnswer('getDiagnoses', []);
+  return client;
+}
+
+function feedOver(client = clientFindingNoDefects(), shown: readonly PluginAddress[] = [A], publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void) {
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
   const feed = new PluginFactsFeed({
     client, shownPlugins: () => shown,
-    publishDiagnoses: diagnoses.push,
+    publishDiagnoses: publishDiagnoses ?? diagnoses.push,
     publishChangedOutside: changedOutside.push,
     publishFailedToRead: () => undefined,
   });
   const changes = vi.fn();
   feed.onDidChange(changes);
   return { feed, client, diagnoses, changedOutside, changes };
+}
+
+async function nextUnhandledRejection(trigger: () => Promise<unknown>): Promise<unknown> {
+  const others = process.listeners('unhandledRejection');
+  process.removeAllListeners('unhandledRejection');
+  try {
+    return await new Promise((resolve) => {
+      process.once('unhandledRejection', resolve);
+      void trigger();
+    });
+  } finally {
+    for (const listener of others) process.on('unhandledRejection', listener);
+  }
 }
 
 const compiledPluginFlag = (feed: PluginFactsFeed) => feed.rows.contextFlags(A).includes('compiledPlugin');
@@ -184,10 +203,9 @@ describe('PluginFactsFeed', () => {
     const before = changes.mock.calls.length;
 
     slowScan.resolve({ failed: 'refused', refusal: 'late' });
-    await slowScan.promise;
-    await Promise.resolve();
+    await feed.refresh();
 
-    expect(changes.mock.calls.length).toBe(before);
+    expect(changes.mock.calls.length).toBe(before + 1);
     expect(feed.rows.readFailureMessage()).toBeUndefined();
   });
 
@@ -200,10 +218,35 @@ describe('PluginFactsFeed', () => {
     feed.indexed([], []);
 
     slowScan.resolve([diagnosis('stale')]);
-    await slowScan.promise;
+    await feed.refresh();
 
     expect(diagnoses.items).toEqual([]);
     expect(feed.rows.description(A)).toBeUndefined();
+  });
+
+  describe('a throw that is no failed read', () => {
+    it('is not folded into the unreadable-plugin-list rows, and reaches the caller', async () => {
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswer('getPlugins', [held()]);
+      const feed = new PluginFactsFeed({
+        client, shownPlugins: () => { throw new Error('the tree broke'); },
+        publishDiagnoses: () => undefined, publishChangedOutside: () => undefined, publishFailedToRead: () => undefined,
+      });
+
+      await expect(feed.reconciled([])).rejects.toThrow('the tree broke');
+      expect(feed.rows.readFailureMessage()).toBeUndefined();
+    });
+
+    it('is not folded into a failed scan on the rows, and is left unhandled', async () => {
+      const { feed, client } = feedOver(undefined, undefined, () => { throw new Error('the Problems panel broke'); });
+      client.setQueryAnswer('getPlugins', [held()]);
+      client.setQueryAnswer('getDiagnoses', []);
+
+      const thrown = await nextUnhandledRejection(() => feed.reconciled([]));
+
+      expect(thrown).toEqual(new Error('the Problems panel broke'));
+      expect(feed.rows.readFailureMessage()).toBeUndefined();
+    });
   });
 
   it('takes the external-change notification itself: publishes A\'s warning and fires the change event', () => {
