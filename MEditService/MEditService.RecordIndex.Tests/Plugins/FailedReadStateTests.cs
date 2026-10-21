@@ -609,59 +609,13 @@ public sealed class FailedReadStateTests : IDisposable
 
     private enum TreeMoment { StampsTaken, ReadBegins, ReadEnds, RecordRead }
 
-    private sealed class HookedSource(Action<TreeMoment, PluginAddress> at) : ISourceAdapter
+    private sealed class HookedSource(Action<TreeMoment, PluginAddress> at) : DelegatingSourceAdapter(TestAdapters.Source())
     {
-        private readonly ISourceAdapter _inner = new GitSourceAdapter(new UnsavedDocuments());
+        public override ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
+            base.Over(plugin, release) is { } reads ? new HookedRepository(reads, at) : null;
 
-        public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) =>
-            _inner.Over(plugin, release) is { } reads ? new HookedRepository(reads, at) : null;
-
-        public ISourceRepositoryReads? TreeOf(RegisteredPlugin plugin, GameRelease release) =>
-            _inner.SourceReads(plugin) ? Over(plugin, release) : null;
-
-        public bool SourceReads(RegisteredPlugin plugin) => _inner.SourceReads(plugin);
-
-        public bool IsSourceMod(RegisteredPlugin plugin) => _inner.IsSourceMod(plugin);
-
-        public bool IsSourceMod(string modFolder) => _inner.IsSourceMod(modFolder);
-
-        public SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => _inner.WhySourceDoesNotRead(plugin);
-
-        public ISourceRepository? Open(PluginProvider.FromMod provider, GameRelease release) => _inner.Open(provider, release);
-
-        public ISourceRepository OverFolder(PluginProvider.FromMod provider, GameRelease release) => _inner.OverFolder(provider, release);
-
-        public IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held) =>
-            _inner.WriteSessionOver(provider, release, held);
-
-        public bool TreeHolds(RegisteredPlugin plugin, string path) => _inner.TreeHolds(plugin, path);
-
-        public RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path) => _inner.RecordOfFile(loadOrder, path);
-
-        public string FileNameOf(RecordIdentity identity) => _inner.FileNameOf(identity);
-
-        public bool HoldsAnotherRepository(string modFolder) => _inner.HoldsAnotherRepository(modFolder);
-
-        public SourceFailure? WhyGitCannotRun() => _inner.WhyGitCannotRun();
-
-        public string? InstanceRootNotFound(string? instanceRoot) => _inner.InstanceRootNotFound(instanceRoot);
-
-        public string ContentStamp(string text) => _inner.ContentStamp(text);
-
-        public SourceFailure? Init(
-            string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-            IReadOnlyList<Asset> assets) =>
-            _inner.Init(sourceFolder, output, plugins, assets);
-
-        public Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder) => _inner.SourceToBuild(sourceFolder);
-
-        public Answer<SubmoduleHead, SourceFailure> CommitAtHead(Submodule submodule, CancellationToken cancel) => _inner.CommitAtHead(submodule, cancel);
-
-        public SourceFailure? ChangeBuildConfiguration(string sourceFolder, BuildConfigurationChange change) =>
-            _inner.ChangeBuildConfiguration(sourceFolder, change);
-
-        public IReadOnlyList<TreeFile> ReadBackOf(string pluginFileName, IReadOnlyList<TreeFile> tree, GameRelease gameRelease) =>
-            _inner.ReadBackOf(pluginFileName, tree, gameRelease);
+        public override ISourceRepositoryReads? TreeOf(RegisteredPlugin plugin, GameRelease release) =>
+            SourceReads(plugin) ? Over(plugin, release) : null;
     }
 
     private sealed class HookedRepository(ISourceRepositoryReads inner, Action<TreeMoment, PluginAddress> at) : ISourceRepositoryReads
