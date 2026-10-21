@@ -104,11 +104,8 @@ interface Move {
 export function registerModMoveCommand(
   commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
-  const failed = (kind: Move['kind'], detail: string): GestureResult<string> =>
-    ({ applied: false, refusal: `Failed to move ${kind}s.`, detail });
-
   const asMoveResult = (kind: Move['kind'], result: SelectionResult<string>): GestureResult<string> =>
-    result.applied ? result : failed(kind, result.refusal);
+    result.applied ? result : { applied: false, refusal: `Failed to move ${kind}s.`, detail: result.refusal };
 
   const gesture: AgentGesture<ModlistNode, Move, GestureResult<string>, MoveTarget> = {
     fromView: async (entry, option) => {

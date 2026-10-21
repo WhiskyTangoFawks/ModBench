@@ -120,21 +120,26 @@ describe('moveMods and moveSeparators', () => {
     expect(fake.calls).toEqual([orderWrite([{ kind: 'moveSeparators', separators: [UNASSIGNED], place, end: 'winning' }])]);
   });
 
-  it('moveMods lands nothing for a place that is one of the mods moving, refusing each by name, and writes nothing', async () => {
+  it('refuses once a mod move whose target is one of the moving mods, and writes nothing', async () => {
     const { fake, commands } = over();
 
     const outcome = await commands.moveMods(['ENBoost', 'Harder VATS'], { kind: 'mod', name: 'ENBoost' }, 'losing');
 
-    const reason = 'The target is "ENBoost", which is moving.';
-    expect(outcome).toEqual({
-      applied: true,
-      outcome: { landed: [], refused: [{ item: 'ENBoost', reason }, { item: 'Harder VATS', reason }] },
-    });
+    expect(outcome).toEqual({ applied: false, refusal: 'The target is "ENBoost", which is moving.' });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('refuses once a separator move whose target is one of the moving separators, and writes nothing', async () => {
+    const { fake, commands } = over();
+
+    const outcome = await commands.moveSeparators([UNASSIGNED, RADFALL], { kind: 'separator', name: RADFALL }, 'losing');
+
+    expect(outcome).toEqual({ applied: false, refusal: `The target is "${RADFALL}", which is moving.` });
     expect(fake.calls).toEqual([]);
   });
 
   it.each<MovePlace>([{ kind: 'mod', name: 'ENBoost' }, { kind: 'ungrouped' }])(
-    'moveSeparators refuses the place %j, which no separator can take, and writes nothing', async (place) => {
+    'refuses once a separator move to the place %j, which no separator can take, and writes nothing', async (place) => {
       const { fake, commands } = over();
 
       const outcome = await commands.moveSeparators([UNASSIGNED], place, 'winning');

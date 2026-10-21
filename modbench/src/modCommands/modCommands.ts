@@ -82,31 +82,32 @@ function setModsEnabled(
 
 export type { EntryRef, MovePlace, OrderEnd, OriginFileMark, SeparatorsPlace } from '../instanceAdapter/instanceAdapter';
 
-// `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
-// order, at the `end` of the place. A gone entry refuses the whole move; a place among the movers
-// refuses each mover.
-async function moveMods(
-  adapter: InstanceAdapter, modNames: readonly string[], place: MovePlace, end: OrderEnd,
-): Promise<SelectionResult<string>> {
-  if (place.kind === 'mod' && modNames.includes(place.name)) {
-    const reason = `The target is "${place.name}", which is moving.`;
-    return { applied: true, outcome: { landed: [], refused: modNames.map((item) => ({ item, reason })) } };
-  }
-  return changeSelection(adapter, 'mod', modNames, (found) => [{ kind: 'moveMods', mods: found, place, end }]);
-}
-
-// `modbench.mod.move` over separators (mods.md, Pickers, Move): each brings every mod it holds,
-// and they land on the `end` side of the place. A gone target refuses the whole move.
 const SEPARATOR_PLACES =
   'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.';
 
 const isSeparatorsPlace = (place: MovePlace): place is SeparatorsPlace =>
   place.kind === 'separator' || place.kind === 'modOrder';
 
+const movingTarget = (name: string): CommandResult => ({ applied: false, refusal: `The target is "${name}", which is moving.` });
+
+// `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
+// order, at the `end` of the place. A gone mod is refused by name; a gone or moving target
+// refuses the whole move.
+async function moveMods(
+  adapter: InstanceAdapter, modNames: readonly string[], place: MovePlace, end: OrderEnd,
+): Promise<SelectionResult<string>> {
+  if (place.kind === 'mod' && modNames.includes(place.name)) return movingTarget(place.name);
+  return changeSelection(adapter, 'mod', modNames, (found) => [{ kind: 'moveMods', mods: found, place, end }]);
+}
+
+// `modbench.mod.move` over separators (mods.md, Pickers, Move): each brings every mod it holds,
+// and they land on the `end` side of the place. A gone, moving or mod-side target refuses the
+// whole move.
 async function moveSeparators(
   adapter: InstanceAdapter, separatorNames: readonly string[], place: MovePlace, end: OrderEnd,
 ): Promise<SelectionResult<string>> {
   if (!isSeparatorsPlace(place)) return { applied: false, refusal: SEPARATOR_PLACES };
+  if (place.kind === 'separator' && separatorNames.includes(place.name)) return movingTarget(place.name);
   return changeSelection(adapter, 'separator', separatorNames, (found) =>
     [{ kind: 'moveSeparators', separators: found, place, end }]);
 }
