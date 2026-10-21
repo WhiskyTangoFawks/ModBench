@@ -77,4 +77,46 @@ public sealed class ReadMeetsSwapTests : IDisposable
             .OfType<LoadOrderStatusNotification>().Select(n => n.Status.State));
         Assert.NotEmpty(_index.ListedIn(_fixture.Plugins.Single().KeyOf()));
     }
+
+    [Fact]
+    public void ASqlSelect_OfAnIndexFileDuckDbInvalidated_IsNotReady_NotRejectedAsTheQuery_AndReopensTheIndex()
+    {
+        Invalidate();
+        var statusesBefore = _notifications.Notifications.Count;
+
+        var refused = _index.Queries.SelectRows("SELECT 1 AS n").Refused();
+
+        Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
+        Assert.Contains("invalidated", refused.Message, StringComparison.Ordinal);
+        Waits.Reached(() => _index.Status.State == LoadOrderState.Ready && _index.Queries.GetPlugins().Holds(out _, out _), "the reopened index");
+        Assert.Contains(LoadOrderState.Reconciling, _notifications.Notifications.Skip(statusesBefore)
+            .OfType<LoadOrderStatusNotification>().Select(n => n.Status.State));
+    }
+
+    [Fact]
+    public void ASqlSelect_OfAGenuinelyBadQuery_IsRejectedWithDuckDbsReason()
+    {
+        var refused = _index.Queries.SelectRows("SELECT no_such_column FROM records").Refused();
+
+        Assert.Equal(IndexRefusal.SelectRejected, refused.Refusal);
+        Assert.Contains("no_such_column", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASetFilter_OfAnIndexFileDuckDbInvalidated_IsNotReady_NotRejectedAsTheFilter()
+    {
+        Invalidate();
+
+        var refused = _index.Queries.SetFilter("SELECT form_key FROM records", "test");
+
+        Assert.Equal(IndexRefusal.IndexNotReady, refused?.Refusal);
+        Assert.Contains("invalidated", refused?.Message, StringComparison.Ordinal);
+    }
+
+    private void Invalidate()
+    {
+        IndexFiles.AbortNextCheckpoint(_fixture.InstanceRoot);
+        Assert.Throws<DuckDB.NET.Data.DuckDBException>(() =>
+            IndexFiles.Execute(_fixture.InstanceRoot, "CREATE TABLE aborts_the_checkpoint AS SELECT range AS n FROM range(100000)"));
+    }
 }

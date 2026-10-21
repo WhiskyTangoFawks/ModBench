@@ -42,7 +42,7 @@ internal sealed class FilterMatches(Store store)
         {
             if (!ReturnsFormKey(connection, sql)) return "Filter SQL must return a form_key column";
         }
-        catch (DuckDBException ex)
+        catch (DuckDBException ex) when (!Store.IsInvalidation(ex))
         {
             return ex.Message;
         }

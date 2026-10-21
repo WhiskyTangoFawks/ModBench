@@ -188,7 +188,7 @@ internal sealed class RelationReads(
             return DuckDbSql.Rows(connection, $"SELECT to_json(__row) FROM ({sql}\n) __row",
                 reader => JsonDocument.Parse(reader.GetString(0)).RootElement.Clone()).ToArray();
         }
-        catch (DuckDBException ex)
+        catch (DuckDBException ex) when (!Store.IsInvalidation(ex))
         {
             return ex.Message;
         }
