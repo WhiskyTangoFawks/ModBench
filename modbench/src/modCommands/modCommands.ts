@@ -88,7 +88,7 @@ const SEPARATOR_PLACES =
 const isSeparatorsPlace = (place: MovePlace): place is SeparatorsPlace =>
   place.kind === 'separator' || place.kind === 'modOrder';
 
-const movingTarget = (name: string): CommandResult => ({ applied: false, refusal: `The target is "${name}", which is moving.` });
+const movingTarget = (name: string): { applied: false; refusal: string } => ({ applied: false, refusal: `The target is "${name}", which is moving.` });
 
 // `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
 // order, at the `end` of the place. A gone mod is refused by name; a gone or moving target
