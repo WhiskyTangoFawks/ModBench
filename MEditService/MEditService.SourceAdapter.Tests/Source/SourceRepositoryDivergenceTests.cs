@@ -30,8 +30,7 @@ public sealed class SourceRepositoryDivergenceTests : IDisposable
     public void Dispose() => _modFolder.Dispose();
 
     private ISourceRepository Repository =>
-        TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
+        TestAdapters.OpenSourceMod(_modFolder, GameRelease.Fallout4);
 
     private static string HeaderPath => PluginSourceRoot.HeaderDocument(PluginName);
 

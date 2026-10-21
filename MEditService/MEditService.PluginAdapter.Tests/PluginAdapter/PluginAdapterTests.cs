@@ -49,7 +49,7 @@ public sealed class PluginAdapterTests
     }
 
     [Fact]
-    public async Task CreateAndWriteAsync_CarriesTheReleaseAndKeyItWasGiven_NoRecordsAndNoMasters()
+    public async Task CreateAndWriteAsync_CarriesTheReleaseAndKeyItWasGiven_NoRecordsAndNoMasters_AndLeavesNothingElseInTheFolder()
     {
         using var scratch = new ScratchDirectory("medit-adapter-create-");
         var path = Path.Combine(scratch, PluginName);
@@ -64,6 +64,7 @@ public sealed class PluginAdapterTests
         Assert.Equal(GameRelease.Fallout4, reread.GameRelease);
         Assert.Empty(reread.EnumerateMajorRecords());
         Assert.Empty(reread.ModHeader.MasterReferences);
+        Assert.Equal([PluginName], Directory.EnumerateFileSystemEntries(scratch, "*", SearchOption.AllDirectories).Select(entry => Path.GetRelativePath(scratch, entry)));
     }
 
     [Fact]
@@ -110,18 +111,6 @@ public sealed class PluginAdapterTests
         Assert.Equal((master, light), (((IModFlagsGetter)reread).IsMaster, ((IModFlagsGetter)reread).IsSmallMaster));
         const int headerVersionOffset = 24 + 6;
         Assert.Equal(GameConstants.Get(release).DefaultModHeaderVersion, BitConverter.ToSingle(await File.ReadAllBytesAsync(path), headerVersionOffset));
-    }
-
-    [Fact]
-    public async Task CreateAndWriteAsync_LeavesThePluginAloneInItsFolder()
-    {
-        using var scratch = new ScratchDirectory("medit-adapter-create-alone-");
-        (await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4)).Answered();
-
-        Assert.Equal(
-            [PluginName],
-            Directory.EnumerateFileSystemEntries(scratch, "*", SearchOption.AllDirectories)
-                .Select(entry => Path.GetRelativePath(scratch, entry)));
     }
 
     [Fact]

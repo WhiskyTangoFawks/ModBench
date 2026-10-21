@@ -166,95 +166,107 @@ public sealed class WriteSessionTests : IDisposable
     private static SourceDocument Child(IMajorRecordGetter record, string recordType) =>
         new(record.FormKey.ToString(), recordType, record.EditorID, RecordTextCodec.SerializeToText(record, Release));
 
-    [Fact]
-    public void ARenameThenARemovalFromTheRenamedDocument_AnswerTheTreeTheyLeave()
+    public enum Sequence
     {
-        var renamed = Renamed(_quest, "qust", QuestPath, "Renamed");
-
-        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
-        [
-            repository => repository.ChangesToPut(Plugin, renamed),
-            repository => repository.ChangesToRemove(Plugin, Identity(_response, "info")),
-        ];
-
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
+        RenameThenRemoveAChildOfTheRenamed,
+        RenameThenRemoveTheRenamed,
+        RenameAContainerThenPutAChildInIt,
+        NewDocumentThenItsRename,
+        RekeyAContainerThenRemoveIt,
+        RenameAContainerThenRemoveInsideIt,
+        CreateAContainerThenPutAChildInIt,
     }
 
-    [Fact]
-    public void ARenameThenARemovalOfTheRenamedDocument_AnswerTheTreeTheyLeave()
+    private Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] WritesOf(Sequence sequence)
     {
-        var renamed = Renamed(_quest, "qust", QuestPath, "Renamed");
-
-        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
-        [
-            repository => repository.ChangesToPut(Plugin, renamed),
-            repository => repository.ChangesToRemove(Plugin, renamed.Identity),
-        ];
-
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
-    }
-
-    [Fact]
-    public void ARenamedContainerTakingAChild_AnswersTheTreeTheyLeave()
-    {
-        var renamed = Renamed(_cell, "cell", CellPath, "RenamedCell");
-        var child = Child(new PlacedObject(_mod) { EditorID = "AddedRef" }, "refr");
-
-        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
-        [
-            repository => repository.ChangesToPut(Plugin, renamed),
-            repository => repository.ChangesToPutChild(Plugin, renamed.Identity, "Temporary", child),
-        ];
-
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
-    }
-
-    [Fact]
-    public void ANewDocumentThenItsRename_AnswerTheTreeTheyLeave()
-    {
-        var npc = new Npc(_mod) { EditorID = "NewNpc" };
-        var created = Child(npc, "npc_");
-
-        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
-        [
-            repository => repository.ChangesToPut(Plugin, created),
-            repository => repository.ChangesToPut(Plugin, created with
-            {
-                EditorId = "RenamedNpc",
-                Body = created.Body.Replace("\"NewNpc\"", "\"RenamedNpc\"", StringComparison.Ordinal),
-            }),
-        ];
-
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
-    }
-
-    [Fact]
-    public void ARekeyedContainerThenItsRemoval_AnswerTheTreeTheyLeave()
-    {
+        var renamedQuest = Renamed(_quest, "qust", QuestPath, "Renamed");
+        var renamedCell = Renamed(_cell, "cell", CellPath, "RenamedCell");
+        var created = Child(new Npc(_mod) { EditorID = "NewNpc" }, "npc_");
+        var newCell = Child(new Cell(_mod) { EditorID = "NewCell" }, "cell");
+        var addedRef = Child(new PlacedObject(_mod) { EditorID = "AddedRef" }, "refr");
         var cell = Identity(_cell, "cell");
         var rekeyed = cell with { FormKey = $"000900:{PluginName}" };
+        return sequence switch
+        {
+            Sequence.RenameThenRemoveAChildOfTheRenamed =>
+            [
+                repository => repository.ChangesToPut(Plugin, renamedQuest),
+                repository => repository.ChangesToRemove(Plugin, Identity(_response, "info")),
+            ],
+            Sequence.RenameThenRemoveTheRenamed =>
+            [
+                repository => repository.ChangesToPut(Plugin, renamedQuest),
+                repository => repository.ChangesToRemove(Plugin, renamedQuest.Identity),
+            ],
+            Sequence.RenameAContainerThenPutAChildInIt =>
+            [
+                repository => repository.ChangesToPut(Plugin, renamedCell),
+                repository => repository.ChangesToPutChild(Plugin, renamedCell.Identity, "Temporary", addedRef),
+            ],
+            Sequence.NewDocumentThenItsRename =>
+            [
+                repository => repository.ChangesToPut(Plugin, created),
+                repository => repository.ChangesToPut(Plugin, created with
+                {
+                    EditorId = "RenamedNpc",
+                    Body = created.Body.Replace("\"NewNpc\"", "\"RenamedNpc\"", StringComparison.Ordinal),
+                }),
+            ],
+            Sequence.RekeyAContainerThenRemoveIt =>
+            [
+                repository => repository.ChangesToRekey(Plugin, cell, rekeyed.FormKey),
+                repository => repository.ChangesToRemove(Plugin, rekeyed),
+            ],
+            Sequence.RenameAContainerThenRemoveInsideIt =>
+            [
+                repository => repository.ChangesToPut(Plugin, Renamed(_worldspace, "wrld", WorldspacePath, "RenamedWorld")),
+                repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")),
+            ],
+            Sequence.CreateAContainerThenPutAChildInIt =>
+            [
+                repository => repository.ChangesToPut(Plugin, newCell),
+                repository => repository.ChangesToPutChild(Plugin, newCell.Identity, "Temporary", addedRef),
+            ],
+            _ => throw new ArgumentOutOfRangeException(nameof(sequence), sequence, null),
+        };
+    }
 
-        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
-        [
-            repository => repository.ChangesToRekey(Plugin, cell, rekeyed.FormKey),
-            repository => repository.ChangesToRemove(Plugin, rekeyed),
-        ];
+    [Theory]
+    [InlineData(Sequence.RenameThenRemoveAChildOfTheRenamed)]
+    [InlineData(Sequence.RenameThenRemoveTheRenamed)]
+    [InlineData(Sequence.RenameAContainerThenPutAChildInIt)]
+    [InlineData(Sequence.NewDocumentThenItsRename)]
+    [InlineData(Sequence.RekeyAContainerThenRemoveIt)]
+    [InlineData(Sequence.RenameAContainerThenRemoveInsideIt)]
+    [InlineData(Sequence.CreateAContainerThenPutAChildInIt)]
+    public void WritesInOneSession_AnswerTheTreeTheyLeaveOneAfterAnother(Sequence sequence)
+    {
+        var writes = WritesOf(sequence);
 
         Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
     }
 
     [Fact]
-    public void ARemovalInsideAContainersFolderThenTheContainersRename_AnswerTheTreeTheyLeave()
+    public void SavingTheRemovalOfAnEmbeddedChild_LeavesItGoneAndItsSiblingHeld()
     {
-        var renamed = Renamed(_worldspace, "wrld", WorldspacePath, "RenamedWorld");
+        var repository = Repository;
 
-        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
-        [
-            repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")),
-            repository => repository.ChangesToPut(Plugin, renamed),
-        ];
+        repository.SaveChanges(repository.ChangesToRemove(Plugin, Identity(_response, "info"))).Wrote();
 
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
+        Assert.Null(repository.RecordOf(Plugin, Identity(_response, "info")).Value());
+        Assert.NotNull(repository.RecordOf(Plugin, Identity(_response2, "info")).Value());
+    }
+
+    [Fact]
+    public void SavingTheRemovalOfAContainerWithADirectoryOfItsOwn_TakesTheDirectoryAndLeavesTheWorldspace()
+    {
+        var repository = Repository;
+
+        repository.SaveChanges(repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))).Wrote();
+
+        Assert.False(Directory.Exists(Path.GetDirectoryName(FullPath(ExteriorCellPath))));
+        Assert.Null(repository.RecordOf(Plugin, Identity(_exteriorCell, "cell")).Value());
+        Assert.NotNull(repository.RecordOf(Plugin, Identity(_worldspace, "wrld")).Value());
     }
 
     [Fact]
@@ -471,20 +483,6 @@ public sealed class WriteSessionTests : IDisposable
     }
 
     [Fact]
-    public void AChildPutIntoAContainerTheSessionCreated_AnswersTheTreeTheyLeave()
-    {
-        var cell = Child(new Cell(_mod) { EditorID = "NewCell" }, "cell");
-        var child = Child(new PlacedObject(_mod) { EditorID = "AddedRef" }, "refr");
-        Func<ISourceRepository, Answer<SourceChanges, SourceFailure>>[] writes =
-        [
-            repository => repository.ChangesToPut(Plugin, cell),
-            repository => repository.ChangesToPutChild(Plugin, cell.Identity, "Temporary", child),
-        ];
-
-        Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
-    }
-
-    [Fact]
     public void TheChangesWritten_LeaveTheTreeTheWritesLeaveOneAfterAnother()
     {
         var renamed = Renamed(_quest, "qust", QuestPath, "Renamed");
@@ -506,13 +504,16 @@ public sealed class WriteSessionTests : IDisposable
     private string FileUnderTheRenamedCell =>
         Path.Combine(PluginSourceRoot.For(PluginName), "Cells", "0", "0", $"RenamedCell - {_cell.FormKey.ID:X6}_{PluginName}", "Unsaved.json");
 
-    private Dictionary<string, (string Held, Func<ISourceRepository, Answer<SourceChanges, SourceFailure>> Write)> WritesReachingAHeldFile => new()
+    private string EditedUnsaved(string path) => File.ReadAllText(FullPath(path)) + " ";
+
+    private Dictionary<string, (string Held, string Text, Func<ISourceRepository, Answer<SourceChanges, SourceFailure>> Write)> WritesReachingAHeldFile => new()
     {
-        ["rewriting a file"] = (QuestPath, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))),
-        ["moving a file"] = (QuestPath, repository => repository.ChangesToPut(Plugin, Renamed(_quest, "qust", QuestPath, "Renamed"))),
-        ["deleting a folder holding a file"] = (ExteriorCellPath, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))),
+        ["rewriting a file"] = (QuestPath, EditedUnsaved(QuestPath), repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))),
+        ["moving a file"] = (QuestPath, EditedUnsaved(QuestPath), repository => repository.ChangesToPut(Plugin, Renamed(_quest, "qust", QuestPath, "Renamed"))),
+        ["deleting a folder holding a file"] = (
+            ExteriorCellPath, EditedUnsaved(ExteriorCellPath), repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))),
         ["moving onto a folder holding a file"] = (
-            FileUnderTheRenamedCell, repository => repository.ChangesToPut(Plugin, Renamed(_cell, "cell", CellPath, "RenamedCell"))),
+            FileUnderTheRenamedCell, "{}", repository => repository.ChangesToPut(Plugin, Renamed(_cell, "cell", CellPath, "RenamedCell"))),
     };
 
     public static TheoryData<string> WriteNames { get; } =
@@ -522,8 +523,8 @@ public sealed class WriteSessionTests : IDisposable
     [MemberData(nameof(WriteNames))]
     public void AWriteReachingAFileHeldUnsaved_IsRefusedNamingTheFile_AndWritesNothing(string write)
     {
-        var (held, changes) = WritesReachingAHeldFile[write];
-        var session = Session(new DocumentChange(FullPath(held), File.Exists(FullPath(held)) ? File.ReadAllText(FullPath(held)) + " " : "{}"));
+        var (held, text, changes) = WritesReachingAHeldFile[write];
+        var session = Session(new DocumentChange(FullPath(held), text));
         Assert.Null(Write(session, changes));
         var before = TreeSnapshot.Of(_modFolder);
 
@@ -562,6 +563,14 @@ public sealed class WriteSessionTests : IDisposable
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
+    private static Action VerbOn(ISourceRepository repository, string verb, Action onWrite) =>
+        verb switch
+        {
+            "replace" => () => repository.ReplaceSourceFrom(Plugin, [], "ABCDEF0123"),
+            "moveLast" => () => repository.MoveLastWrittenTo(Plugin.Name, "Renamed.esp"),
+            _ => () => repository.WriteBinary(Plugin, "ABCDEF0123", onWrite),
+        };
+
     [Theory]
     [InlineData("replace")]
     [InlineData("moveLast")]
@@ -572,12 +581,7 @@ public sealed class WriteSessionTests : IDisposable
         var session = Session();
         var wrote = false;
 
-        Assert.Throws<InvalidOperationException>(() => verb switch
-        {
-            "replace" => session.Repository.ReplaceSourceFrom(Plugin, [], "ABCDEF0123"),
-            "moveLast" => session.Repository.MoveLastWrittenTo(Plugin.Name, "Renamed.esp"),
-            _ => session.Repository.WriteBinary(Plugin, "ABCDEF0123", () => wrote = true).Holds(out _, out var failure) ? null : failure,
-        });
+        Assert.Throws<InvalidOperationException>(VerbOn(session.Repository, verb, () => wrote = true));
 
         Assert.False(wrote);
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));

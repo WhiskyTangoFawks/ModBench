@@ -27,8 +27,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
         File.SetLastWriteTimeUtc(Path.Combine(modFolder, Document), new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         var before = File.ReadAllBytes(IndexOf(modFolder));
 
-        var repository = TestAdapters.Source().Open(TestMod.In(modFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{modFolder}' to be a source mod.");
+        var repository = TestAdapters.OpenSourceMod(modFolder, GameRelease.Fallout4);
         Assert.Empty(repository.ChangedSinceLastCommit(
             new PluginAddress(Plugin, "TestMod")).Value());
 

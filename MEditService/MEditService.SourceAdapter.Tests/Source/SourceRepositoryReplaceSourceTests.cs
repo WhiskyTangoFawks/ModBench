@@ -199,7 +199,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     private ISourceRepository Repository =>
-        TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture source mod.");
+        TestAdapters.OpenSourceMod(_modFolder, GameRelease.Fallout4);
 
     private string Root => PluginSourceRoot.In(_modFolder, Plugin);
 
@@ -228,7 +228,7 @@ public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
     [Fact]
     public void ReplaceSourceFrom_WithGitGoneFromPathAfterTheUpFrontCheck_AnswersGitUnavailable_AndLeavesTheSourceAsItWas()
     {
-        var repository = TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture source mod.");
+        var repository = TestAdapters.OpenSourceMod(_modFolder, GameRelease.Fallout4);
         var path = Environment.GetEnvironmentVariable("PATH");
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try

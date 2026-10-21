@@ -34,8 +34,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
         PluginBaselines.Init(
             _modFolder,
             [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
-        return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
+        return TestAdapters.OpenSourceMod(_modFolder, Release);
     }
 
     private static (string, string, string?, string) Tuple(SourceDocument document) =>
@@ -54,8 +53,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
             _modFolder,
             [new TreeFile(HeaderRelativePath, Encoding.UTF8.GetBytes(HeaderBody)),
              new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
-        return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
+        return TestAdapters.OpenSourceMod(_modFolder, Release);
     }
 
     [Fact]
