@@ -5,7 +5,7 @@ import {
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom,
 } from '../../test/vscodeMock';
 import {
-  filterBoxWindowMock, filterBoxCommandsMock, commandInvoker, currentBoxOf, waitForMessage,
+  filterBoxWindowMock, filterBoxCommandsMock, commandInvoker, currentBoxOf, waitForMessage, FakeTreeViews,
 } from '../../drivingLib/test/nameFilterViewHarness';
 
 const h = vi.hoisted(() => ({
@@ -14,8 +14,6 @@ const h = vi.hoisted(() => ({
     contextKeys: new Map<string, unknown>(),
     boxes: [],
   },
-  trees: new Map<string, { description?: string; message?: string }>(),
-  selectionListeners: [] as ((e: { selection: readonly unknown[] }) => void)[],
   decorationProviders: [] as vscode.FileDecorationProvider[],
 }));
 
@@ -26,18 +24,7 @@ vi.mock('vscode', () => ({
   Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
   window: {
     ...filterBoxWindowMock(h.state),
-    createTreeView: (id: string, options: { treeDataProvider: unknown }) => {
-      const view = {
-        ...options, description: undefined, message: undefined, selection: [] as readonly unknown[],
-        onDidChangeSelection: (listener: (e: { selection: readonly unknown[] }) => void) => {
-          h.selectionListeners.push(listener);
-          return { dispose: () => undefined };
-        },
-        dispose: () => undefined,
-      };
-      h.trees.set(id, view);
-      return view;
-    },
+    createTreeView: (id: string, options: { treeDataProvider: vscode.TreeDataProvider<unknown> }) => treeViews.create(id, options),
     registerFileDecorationProvider: (provider: vscode.FileDecorationProvider) => {
       h.decorationProviders.push(provider);
       return { dispose: () => undefined };
@@ -72,17 +59,18 @@ const downloadsViewDeps = (instance: InstanceView & Pick<Instance, 'refresh'>): 
   logUnresolved: () => undefined,
 });
 const command = commandInvoker(h.state);
+const treeViews = new FakeTreeViews();
 const currentBox = currentBoxOf(h.state);
 
 const instanceOver = (...rows: ReturnType<typeof downloadedFileRowFixture>[]) =>
   new FakeInstance(instanceValueFixture({ downloadedFiles: { kind: 'listed', rows } }));
 const viewOver = (instance: FakeInstance) => createDownloadsView(downloadsViewDeps(instance));
-const downloadsTree = () => present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
+const downloadsTree = () => treeViews.view('modbench.downloads');
 
 beforeEach(() => {
   h.state.boxes.length = 0;
   h.state.commands.clear();
-  h.selectionListeners.length = 0;
+  treeViews.clear();
   h.state.contextKeys.clear();
   h.decorationProviders.length = 0;
 });
@@ -169,22 +157,18 @@ describe('the Downloads view tells its palette entries, which are handed no row,
   const KEYS = ['singleFile', 'singleFileWithMeta', 'holdsFile', 'holdsIncluded', 'holdsExcluded']
     .map((name) => `modbench.downloadedFile.${name}`);
   const keys = () => Object.fromEntries(KEYS.map((key) => [key, h.state.contextKeys.get(key)]));
-  const select = (view: { selection: readonly unknown[] }, rows: readonly unknown[]) => {
-    view.selection = rows;
-    for (const listener of h.selectionListeners) listener({ selection: rows });
-  };
 
   it('sets each key off the selection as it changes', () => {
-    const { view: downloadsView } = viewOver(instanceOver());
+    viewOver(instanceOver());
 
-    select(downloadsView, [downloadedFileNodeFixture(downloadedFileRowFixture('a.7z', { hasMeta: true }))]);
+    downloadsTree().selectRows([downloadedFileNodeFixture(downloadedFileRowFixture('a.7z', { hasMeta: true }))]);
     expect(keys()).toEqual({
       'modbench.downloadedFile.singleFile': true, 'modbench.downloadedFile.singleFileWithMeta': true,
       'modbench.downloadedFile.holdsFile': true, 'modbench.downloadedFile.holdsIncluded': true,
       'modbench.downloadedFile.holdsExcluded': false,
     });
 
-    select(downloadsView, [
+    downloadsTree().selectRows([
       downloadedFileNodeFixture(downloadedFileRowFixture('b.7z', { excluded: true })), downloadedFileNodeFixture(downloadedFileRowFixture('c.7z', { excluded: true })),
     ]);
     expect(keys()).toEqual({

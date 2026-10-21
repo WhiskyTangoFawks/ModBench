@@ -1,110 +1,18 @@
 import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, uriFrom, fakeUri } from '../../test/vscodeMock';
 import type { ReferencesViewInput } from '../referencesView';
+import {
+  commandHandlers, contextKeys, disk, documentChanges, editorProviderDisposals, editorProviderOptions, editorProviders, editorVscode,
+  executeCommand, executed, fakePanel, fileSystems, openedDocuments, pickers, referencesView, type FakePanel,
+} from './editorVscode';
 
-const h = vi.hoisted(() => ({
-  referencesView: { enabled: true, inputs: [] as ReferencesViewInput[] },
-  pickersShown: 0,
-  reports: [] as unknown[][],
-  commands: new Map<string, (...args: unknown[]) => unknown>(),
-  contextKeys: new Map<string, unknown>(),
-  executed: [] as unknown[][],
-  editorProviders: new Map<string, unknown>(),
-  fileSystems: new Map<string, unknown>(),
-  openedDocuments: [] as unknown[],
-  editorProviderDisposals: 0,
-  editorProviderOptions: new Map<string, unknown>(),
-  documentChanges: new Set<(event: { document: unknown; contentChanges: unknown[] }) => void>(),
-  disk: new Map<string, string | Uint8Array>(),
-  FileSystemError: class extends Error { code = ''; },
-}));
-
-vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, FileSystemError: h.FileSystemError,
-  Disposable: class {
-    constructor(public dispose: () => void) {}
-    static from(...parts: { dispose(): void }[]) { return { dispose: () => parts.forEach((part) => part.dispose()) }; }
-  },
-  Uri: {
-    from: (parts: Parameters<typeof uriFrom>[0]) => Object.defineProperty(uriFrom(parts), 'toString', {
-      value: () => `${parts.scheme}:${parts.path}?${parts.query ?? ''}`,
-    }),
-    joinPath: (...parts: unknown[]) => parts.join('/'),
-    file: (fsPath: string) => {
-      const file = fakeUri(fsPath);
-      return Object.assign(file, { with: (change: object) => Object.assign({}, file, change) });
-    },
-  },
-  ViewColumn: { Active: -1, One: 1, Beside: -2 },
-  Position: class { constructor(public line: number, public character: number) {} },
-  Location: class { constructor(public uri: unknown, public range: unknown) {} },
-  commands: {
-    registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => {
-      h.commands.set(id, handler);
-      return { dispose: () => h.commands.delete(id) };
-    },
-    executeCommand: (id: string, ...args: unknown[]) => {
-      h.executed.push([id, ...args]);
-      if (id === 'setContext') h.contextKeys.set(String(args[0]), args[1]);
-      return Promise.resolve(h.commands.get(id)?.(...args));
-    },
-  },
-  workspace: {
-    registerFileSystemProvider: (scheme: string, provider: unknown) => {
-      h.fileSystems.set(scheme, provider);
-      return { dispose: () => undefined };
-    },
-    registerTextDocumentContentProvider: () => ({ dispose: () => undefined }),
-    textDocuments: [],
-    fs: {
-      readFile: ({ fsPath, path }: { fsPath?: string; path?: string }) => {
-        const held = h.disk.get(fsPath ?? path ?? '');
-        if (held === undefined) return Promise.reject(Object.assign(new h.FileSystemError('no such file'), { code: 'FileNotFound' }));
-        return Promise.resolve(typeof held === 'string' ? new TextEncoder().encode(held) : held);
-      },
-    },
-    onDidCloseTextDocument: () => ({ dispose: () => undefined }),
-    onDidOpenTextDocument: () => ({ dispose: () => undefined }),
-    onDidSaveTextDocument: () => ({ dispose: () => undefined }),
-    openTextDocument: (uri: unknown) => {
-      h.openedDocuments.push(uri);
-      return Promise.resolve({ uri, getText: () => '{}' });
-    },
-    onDidChangeTextDocument: (listener: (event: { document: unknown; contentChanges: unknown[] }) => void) => {
-      h.documentChanges.add(listener);
-      return { dispose: () => h.documentChanges.delete(listener) };
-    },
-  },
-  window: {
-    showTextDocument: () => Promise.resolve(),
-    createQuickPick: () => {
-      h.pickersShown++;
-      const hidden: (() => void)[] = [];
-      return {
-        show: () => { hidden.forEach((listener) => { listener(); }); }, dispose: () => undefined,
-        onDidChangeValue: () => undefined, onDidAccept: () => undefined, onDidHide: (listener: () => void) => { hidden.push(listener); },
-      };
-    },
-    registerCustomEditorProvider: (viewType: string, provider: unknown, options: unknown) => {
-      h.editorProviders.set(viewType, provider);
-      h.editorProviderOptions.set(viewType, options);
-      return { dispose: () => { h.editorProviderDisposals++; } };
-    },
-  },
-  extensions: {
-    getExtension: (id: string) => (id === 'vscode.references-view' && h.referencesView.enabled
-      ? { activate: () => Promise.resolve({ setInput: (input: ReferencesViewInput) => { h.referencesView.inputs.push(input); } }) }
-      : undefined),
-  },
-}));
+vi.mock('vscode', () => editorVscode);
 
 import * as vscode from 'vscode';
-import { createEditor } from '..';
-import type { ModFacts } from '../modsByOrigin';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { createFocusedView } from '../../drivingLib/focusedView';
+import type { ModFacts } from '../modsByOrigin';
+import { fakeLoadOrder, forgetEditor, NO_MODS, register, reporter } from './editorHarness';
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { present } from '../../ports/present';
 import { comparisonOf } from '../../test/comparison';
@@ -119,37 +27,6 @@ const renderedUri = (formKey: string, fileName: string) => vscode.Uri.from({
 const isShowColumns = (message: unknown) => typeof message === 'object' && message !== null && 'type' in message && message.type === 'showColumns';
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-interface FakePanel {
-  title: string;
-  active: boolean;
-  viewColumn: number | undefined;
-  webview: { postMessage: ReturnType<typeof vi.fn>; options?: unknown; html?: string; cspSource: string; asWebviewUri: (uri: unknown) => unknown; onDidReceiveMessage: (listener: (message: unknown) => void) => { dispose(): void } };
-  onDidDispose: (listener: () => void) => { dispose(): void };
-  onDidChangeViewState: (listener: () => void) => { dispose(): void };
-  focus(): void;
-  close(): void;
-  receive(message: unknown): void;
-}
-
-function fakePanel(): FakePanel {
-  const disposed: (() => void)[] = [];
-  const viewState: (() => void)[] = [];
-  const received: ((message: unknown) => void)[] = [];
-  const panel: FakePanel = {
-    title: '', active: true, viewColumn: 2,
-    webview: {
-      postMessage: vi.fn(() => Promise.resolve(true)), cspSource: 'csp', asWebviewUri: (uri) => uri,
-      onDidReceiveMessage: (listener) => { received.push(listener); return { dispose: () => undefined }; },
-    },
-    onDidDispose: (listener) => { disposed.push(listener); return { dispose: () => undefined }; },
-    onDidChangeViewState: (listener) => { viewState.push(listener); return { dispose: () => undefined }; },
-    focus: () => { viewState.forEach((listener) => { listener(); }); },
-    close: () => { disposed.forEach((listener) => { listener(); }); },
-    receive: (message) => { received.forEach((listener) => { listener(message); }); },
-  };
-  return panel;
-}
-
 interface RecordEditorProvider {
   resolveCustomTextEditor(document: unknown, panel: unknown): Promise<void>;
 }
@@ -157,48 +34,16 @@ interface RecordEditorProvider {
 const isRecordEditorProvider = (value: unknown): value is RecordEditorProvider =>
   typeof value === 'object' && value !== null && 'resolveCustomTextEditor' in value;
 
-const NO_MODS: ModFacts = {
-  listedSourceMods: () => new Set<string>(), modOfOrigin: () => undefined, standingOf: () => ({ kind: 'enabled' }),
-  onChange: () => ({ dispose: () => undefined }),
-};
-
 const inItsDocument = () => new vscode.Location(vscode.Uri.file('/its/document.json'), new vscode.Position(3, 15));
 
-function fakeLoadOrder() {
-  const listeners = new Set<() => void>();
-  return {
-    coming: true,
-    now() { return this.coming; },
-    onChanged(listener: () => void) { listeners.add(listener); return { dispose: () => { listeners.delete(listener); } }; },
-    changed() { listeners.forEach((listener) => { listener(); }); },
-  };
-}
 let loadOrder = fakeLoadOrder();
 
 function makeEditor(
   client = new InMemoryMEditClient(), recordViewIds = [] as readonly string[], modFacts = NO_MODS,
   locateRecord = vi.fn((_record: object) => Promise.resolve<vscode.Location | { refused: string } | undefined>(inItsDocument())),
 ) {
-  const focusedView = createFocusedView();
-  const outputChannel = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-  const editor = createEditor({
-    context: { extensionUri: fakeUri('/ext') },
-    meditClient: client,
-    loadOrderComing: loadOrder,
-    outputChannel,
-    reporterFor: () => ({
-      report: (...args: unknown[]) => { h.reports.push(args); }, landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn(),
-    }),
-    ask: vi.fn(),
-    focusedView,
-    recordViewIds,
-    recordWriteProgressView: 'test.view',
-    instance: { refresh: () => Promise.resolve(undefined) },
-    sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
-    modFacts,
-    locateRecord,
-  });
-  const provider = h.editorProviders.get('modbench.record');
+  const { editor, focusedView, outputChannel } = register({ meditClient: client, recordViewIds, modFacts, locateRecord, loadOrder });
+  const provider = editorProviders.get('modbench.record');
   if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
   const open = (formKey: string): FakePanel => {
     const panel = fakePanel();
@@ -213,7 +58,7 @@ function makeEditor(
   const openFile = (fsPath: string, document?: object): Promise<FakePanel> => openDocument({ scheme: 'file', fsPath }, document);
   const tabs = new Map<string, FakePanel>();
   const vsCodeOpensTabs = ({ resolvesAfterOpenAnswers = false } = {}) => {
-    h.commands.set('vscode.openWith', async (uri: unknown) => {
+    commandHandlers.set('vscode.openWith', async (uri: unknown) => {
       if (tabs.has(String(uri))) return;
       const panel = fakePanel();
       tabs.set(String(uri), panel);
@@ -226,29 +71,20 @@ function makeEditor(
 }
 
 beforeEach(() => {
+  forgetEditor();
   loadOrder = fakeLoadOrder();
-  h.disk.clear();
-  h.commands.clear();
-  h.contextKeys.clear();
-  h.executed.length = 0;
-  h.fileSystems.clear();
-  h.openedDocuments.length = 0;
-  h.referencesView.enabled = true;
-  h.referencesView.inputs.length = 0;
-  h.pickersShown = 0;
-  h.reports.length = 0;
 });
 
 const askReferencedBy = async (...args: unknown[]): Promise<ReferencesViewInput | undefined> => {
-  const shown = h.referencesView.inputs.length;
-  await h.commands.get('modbench.record.referencedBy')?.(...args);
-  return h.referencesView.inputs.slice(shown).at(-1);
+  const shown = referencesView.inputs.length;
+  await commandHandlers.get('modbench.record.referencedBy')?.(...args);
+  return referencesView.inputs.slice(shown).at(-1);
 };
 
 const askedFromThePalette = async () => {
-  const [inputs, pickers] = [h.referencesView.inputs.length, h.pickersShown];
+  const [inputs, pickersBefore] = [referencesView.inputs.length, pickers.shown];
   await askReferencedBy();
-  return { listed: h.referencesView.inputs.slice(inputs).map((input) => input.title), picked: h.pickersShown - pickers };
+  return { listed: referencesView.inputs.slice(inputs).map((input) => input.title), picked: pickers.shown - pickersBefore };
 };
 const listing = (record: string) => ({ listed: [`Referenced By: ${record}`], picked: 0 });
 const PICKED = { listed: [], picked: 1 };
@@ -266,13 +102,13 @@ const comparisonsAsked = (client: InMemoryMEditClient) =>
   client.calls.filter(({ method }) => method === 'getComparison').map(({ args }) => args);
 
 const changeDocument = (change: { document: unknown; contentChanges: unknown[] }) => {
-  h.documentChanges.forEach((listener) => { listener(change); });
+  documentChanges.forEach((listener) => { listener(change); });
 };
 
 const activeA = [pluginMetadataFixture({ name: 'A.esp', origin: 'ModA', inLoadOrder: true })];
 const inactiveA = [pluginMetadataFixture({ name: 'A.esp', origin: 'ModA', loadOrderIndex: null, inLoadOrder: false })];
 
-const opened = () => h.executed.filter(([id]) => id === 'vscode.openWith').map(([, uri]) => uri);
+const opened = () => executed().filter(([id]) => id === 'vscode.openWith').map(([, uri]) => uri);
 
 describe('Referenced By from the palette asks about the record tab in focus', () => {
   function palette() {
@@ -335,7 +171,7 @@ describe('Referenced By from the palette asks about the record tab in focus', ()
     const moving = open(OLD);
     open(OTHER);
 
-    await h.commands.get('modbench.record.editField')?.(
+    await commandHandlers.get('modbench.record.editField')?.(
       { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin }, { op: 'set', path: [{ kind: 'member', name: 'FormID' }], value: 'x' });
     expect(await askedFromThePalette()).toEqual(listing(OTHER));
 
@@ -425,19 +261,19 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
 
   it('is refused, naming the built-in extension it needs, while VS Code\'s References view is disabled, before any record is asked for', async () => {
     asking();
-    h.referencesView.enabled = false;
+    referencesView.enabled = false;
 
     await askReferencedBy();
 
-    expect(h.pickersShown).toBe(0);
-    expect(h.reports).toEqual([['error', 'Referenced By needs VS Code\'s built-in Reference Search View.', 'Enable the extension vscode.references-view.']]);
+    expect(pickers.shown).toBe(0);
+    expect(reporter.report.mock.calls).toEqual([['error', 'Referenced By needs VS Code\'s built-in Reference Search View.', 'Enable the extension vscode.references-view.']]);
   });
 
   it('is refused for what names no record', async () => {
     asking();
 
     expect(await askReferencedBy({ argument: { kind: 'mod', name: 'ModA' } })).toBeUndefined();
-    expect(h.reports).toEqual([['error', 'Could not list what references a record.', 'What was given names no record.']]);
+    expect(reporter.report.mock.calls).toEqual([['error', 'Could not list what references a record.', 'What was given names no record.']]);
   });
 
   it.each([
@@ -448,7 +284,7 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
     locateRecord.mockResolvedValue(located);
 
     expect(await askReferencedBy(recordRow)).toBeUndefined();
-    expect(h.reports).toEqual([['error', `Could not list what references ${GUN}.`, why]]);
+    expect(reporter.report.mock.calls).toEqual([['error', `Could not list what references ${GUN}.`, why]]);
   });
 });
 
@@ -459,13 +295,13 @@ describe('the focused cell of the record tab in focus', () => {
 
     panel.receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: { webviewSection: 'field', copyText: 'Iron' }, entered: true });
 
-    expect(h.contextKeys.get('modbench.record.focusedCellSection')).toBe('field');
+    expect(contextKeys.get('modbench.record.focusedCellSection')).toBe('field');
     expect(focusedView.id()).toBe('modbench.recordGrid');
     expect(editor.copyValue.map(({ text }) => text({ view: 'modbench.recordGrid' }, undefined))).toEqual(['Iron', undefined]);
   });
 
   const cell = (webviewSection: string) => ({ webviewSection });
-  const focusedSection = () => h.contextKeys.get('modbench.record.focusedCellSection');
+  const focusedSection = () => contextKeys.get('modbench.record.focusedCellSection');
 
   it('is the cell of the tab in focus, whichever tab reported one, and follows the focus', () => {
     const { open } = makeEditor();
@@ -563,7 +399,7 @@ describe('conflicts computed', () => {
 
 describe('a record tab whose record an edit of its FormID moved', () => {
   const [OLD, MOVED] = ['000800:Mod.esp', '000900:Mod.esp'];
-  const editField = (formKey: string) => h.commands.get('modbench.record.editField')?.(
+  const editField = (formKey: string) => commandHandlers.get('modbench.record.editField')?.(
     { formKey, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin }, { op: 'set', path: [{ kind: 'member', name: 'Name' }], value: 'x' });
   const editedFormKeys = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'getEditChanges').map(c => c.args[0]);
 
@@ -606,7 +442,7 @@ describe('an edit of a FormID, fired with no panel', () => {
     const { open } = makeEditor(client);
     const [one, other, elsewhere] = [open(OLD), open(OLD), open(ELSEWHERE)];
 
-    await h.commands.get('modbench.record.editField')?.(
+    await commandHandlers.get('modbench.record.editField')?.(
       { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin }, { op: 'set', path: [{ kind: 'member', name: 'FormID' }], value: 'x' });
     client.emit({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: [OLD, MOVED], sequence: 2 });
 
@@ -625,9 +461,9 @@ describe('a record gesture from the palette', () => {
     const { focusedView } = makeEditor(client, ['modbench.pluginListTree']);
     focusedView.follow('modbench.pluginListTree', plugins);
 
-    await h.commands.get('modbench.record.open')?.();
+    await commandHandlers.get('modbench.record.open')?.();
 
-    expect(h.contextKeys.get('modbench.record.selectionIn')).toBe('modbench.pluginListTree');
+    expect(contextKeys.get('modbench.record.selectionIn')).toBe('modbench.pluginListTree');
     expect(opened()).toEqual([renderedUri('000803:A.esp', 'Placed.json')]);
   });
 });
@@ -650,7 +486,7 @@ describe('the Editor\'s file systems', () => {
   };
 
   async function readThrough(uri: { scheme: string }): Promise<string> {
-    const files = h.fileSystems.get(uri.scheme);
+    const files = fileSystems.get(uri.scheme);
     if (!isReadable(files)) throw new Error(`no file system registered on ${uri.scheme}`);
     return new TextDecoder().decode(await files.readFile(uri));
   }
@@ -669,11 +505,11 @@ describe('the Editor\'s file systems', () => {
 
   async function openedField(readOnly: boolean): Promise<{ scheme: string }> {
     makeEditor(fieldClient());
-    await h.commands.get('modbench.record.openFieldValue')?.({
+    await commandHandlers.get('modbench.record.openFieldValue')?.({
       webviewSection: 'stringValue', formKey: FORM_KEY, plugin: plugin.name, origin: plugin.origin, recordLabel: 'Cell [000803:A.esp]',
       fieldName: 'Description', value: 'a long description', readOnly, path: [{ kind: 'member', name: 'Description' }],
     });
-    return documentIn(h.openedDocuments.at(-1));
+    return documentIn(openedDocuments.at(-1));
   }
 
   it('read a field value through the editable scheme', async () => {
@@ -695,8 +531,8 @@ describe('the Editor\'s file systems', () => {
     client.setQueryAnswer('getCopyDocument', { kind: 'ContainersFile', location: CELL_FILE });
     client.setQueryAnswer('getRecordOfFile', null);
     makeEditor(client);
-    h.disk.set(CELL_FILE, '{ "EditorID": "Cell" }');
-    await h.commands.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: FORM_KEY, plugin } });
+    disk.set(CELL_FILE, '{ "EditorID": "Cell" }');
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: FORM_KEY, plugin } });
     const [uri] = opened();
 
     expect(await readThrough(documentIn(uri))).toBe('{ "EditorID": "Cell" }');
@@ -844,7 +680,7 @@ describe('a record file\'s tab', () => {
     });
 
     it('reads the file\'s column from mEdit once the document is saved and its plugin is active, as the read model\'s value wins', async () => {
-      h.disk.set(FILE, '{ "EditorID": "OnDisk" }');
+      disk.set(FILE, '{ "EditorID": "OnDisk" }');
       expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false), activeA)).toEqual([[GUN, undefined]]);
     });
 
@@ -863,13 +699,13 @@ describe('a record file\'s tab', () => {
     });
 
     it('reads the file\'s column from the file on disk once the document is saved and its plugin is not active, as mEdit compares no copy of it', async () => {
-      h.disk.set(FILE, '{ "EditorID": "OnDisk" }');
+      disk.set(FILE, '{ "EditorID": "OnDisk" }');
       expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false)))
         .toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }', alone: false }]]);
     });
 
     it('reads the saved file without its byte order mark, as its document\'s text has none', async () => {
-      h.disk.set(FILE, '\uFEFF{ "EditorID": "OnDisk" }');
+      disk.set(FILE, '\uFEFF{ "EditorID": "OnDisk" }');
       expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false)))
         .toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }', alone: false }]]);
     });
@@ -879,7 +715,7 @@ describe('a record file\'s tab', () => {
     });
 
     it('fails the read, saying why, when the saved file on disk is not text', async () => {
-      h.disk.set(FILE, new Uint8Array([0xff, 0xfe, 0xfd]));
+      disk.set(FILE, new Uint8Array([0xff, 0xfe, 0xfd]));
       const client = holdingClient();
       client.setQueryAnswer('getPlugins', inactiveA);
       const { openFile } = makeEditor(client);
@@ -893,7 +729,7 @@ describe('a record file\'s tab', () => {
     });
 
     it('reads the file\'s column from the file on disk when mEdit cannot say whether its plugin is active, so it shows either way', async () => {
-      h.disk.set(FILE, '{ "EditorID": "OnDisk" }');
+      disk.set(FILE, '{ "EditorID": "OnDisk" }');
       const client = holdingClient();
       client.setQueryFailure('getPlugins', { failed: 'unreachable' });
       const { openFile } = makeEditor(client);
@@ -1087,7 +923,7 @@ describe('a record tab closed', () => {
     let land: (answer: typeof holding) => void = () => undefined;
     client.setQueryAnswerOnce('getRecordOfFile', new Promise<typeof holding>((resolve) => { land = resolve; }));
     makeEditor(client);
-    const provider = h.editorProviders.get('modbench.record');
+    const provider = editorProviders.get('modbench.record');
     if (!isRecordEditorProvider(provider)) throw new Error('no record editor registered');
     const tab = fakePanel();
     const resolving = provider.resolveCustomTextEditor({ uri: { scheme: 'file', fsPath: FILE } }, tab);
@@ -1112,13 +948,13 @@ describe('a record tab closed', () => {
       return { dispose: () => { modsHeard.delete(heard); } };
     } };
     const { openFile } = makeEditor(client, [], modFacts);
-    const documentsHeard = h.documentChanges.size;
+    const documentsHeard = documentChanges.size;
     const tab = await openFile(FILE);
-    expect([modsHeard.size, h.documentChanges.size]).toEqual([1, documentsHeard + 1]);
+    expect([modsHeard.size, documentChanges.size]).toEqual([1, documentsHeard + 1]);
 
     tab.close();
 
-    expect([modsHeard.size, h.documentChanges.size]).toEqual([0, documentsHeard]);
+    expect([modsHeard.size, documentChanges.size]).toEqual([0, documentsHeard]);
   });
 });
 
@@ -1271,11 +1107,11 @@ describe('what a record tab\'s webview posts', () => {
       const { open } = makeEditor(mEdit);
       const tab = open(FORM_KEY);
       const context = { webviewSection: 'arrayParent', formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA', path, preventDefaultContextMenuItems: true };
-      await h.commands.get('modbench.record.editField')?.(
+      await commandHandlers.get('modbench.record.editField')?.(
         { formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA' }, { op: 'set', path, value: 'x' });
       mEdit.setQueryAnswer('getEditChanges', { applied: true, moves: [], deletions: [], documents: [] });
 
-      await h.commands.get('modbench.record.addElement')?.(context);
+      await commandHandlers.get('modbench.record.addElement')?.(context);
 
       expect(edits(mEdit).map(([formKey]) => formKey)).toEqual([FORM_KEY, MODDED]);
       expect(tab.webview.postMessage).not.toHaveBeenCalled();
@@ -1291,12 +1127,12 @@ describe('what a record tab\'s webview posts', () => {
       const mEdit = client();
       const { open, outputChannel } = makeEditor(mEdit);
       const tab = open(GUN);
-      const [executed, asked] = [h.executed.length, mEdit.calls.length];
+      const [executed, asked] = [executeCommand.mock.calls.length, mEdit.calls.length];
 
       tab.receive(message);
       await settle();
 
-      expect([h.executed.length, mEdit.calls.length]).toEqual([executed, asked]);
+      expect([executeCommand.mock.calls.length, mEdit.calls.length]).toEqual([executed, asked]);
       expect(tab.webview.postMessage).not.toHaveBeenCalled();
       const logged: unknown = outputChannel.warn.mock.calls.at(-1)?.[0];
       expect(logged).toMatch(/^Dropped a message from a record tab's page: /);
@@ -1472,7 +1308,7 @@ describe('a click on a column\'s header', () => {
 
     tab.receive({ type: 'openColumns', records: [knife] });
 
-    expect(h.executed.filter(([id]) => id === 'modbench.record.open'))
+    expect(executed().filter(([id]) => id === 'modbench.record.open'))
       .toEqual([['modbench.record.open', [{ argument: { kind: 'record', ...knife } }]]]);
   });
 });
@@ -1557,12 +1393,12 @@ describe('a child record\'s tab', () => {
   });
 
   it('reads the child\'s column from mEdit once its container is saved and its plugin is active', async () => {
-    h.disk.set(CHILD.path, '{ "EditorID": "OnDisk" }');
+    disk.set(CHILD.path, '{ "EditorID": "OnDisk" }');
     expect(await readOf({ isDirty: false, getText: () => '{ "EditorID": "Cell" }' }, activeA)).toEqual([[PLACED, undefined]]);
   });
 
   it('reads the child\'s column from its container\'s file on disk once it is saved and its plugin is not active', async () => {
-    h.disk.set(CHILD.path, '{ "EditorID": "OnDisk" }');
+    disk.set(CHILD.path, '{ "EditorID": "OnDisk" }');
     expect(await readOf({ isDirty: false, getText: () => '{ "EditorID": "Cell" }' }))
       .toEqual([[PLACED, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }', alone: false }]]);
   });
@@ -1587,7 +1423,7 @@ describe('several records opened at once', () => {
   const gunDocument = renderedUri(GUN, 'Gun.json');
   const columnsPosted = (tab: FakePanel | undefined) => tab?.webview.postMessage.mock.calls.filter(([message]) => isShowColumns(message));
   const firstRead = { type: 'requestRecordLoad', requestId: 'r0', formKey: GUN, columns: [] };
-  const openSeveral = () => h.commands.get('modbench.record.open')?.(
+  const openSeveral = () => commandHandlers.get('modbench.record.open')?.(
     [{ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } }, { argument: { kind: 'record', formKey: AMMO } },
       { argument: { kind: 'record', formKey: KNIFE, plugin: knifeIn } }]);
   function severalClient(): InMemoryMEditClient {
@@ -1606,7 +1442,7 @@ describe('several records opened at once', () => {
 
     await openSeveral();
 
-    expect(h.executed.filter(([id]) => id === 'vscode.openWith'))
+    expect(executed().filter(([id]) => id === 'vscode.openWith'))
       .toEqual([['vscode.openWith', gunDocument, 'modbench.record', { viewColumn: -1, preview: true }]]);
     const tab = tabOn(gunDocument);
     expect(pageGlobal(tab ?? fakePanel(), 'mEditColumns'))
@@ -1628,7 +1464,7 @@ describe('several records opened at once', () => {
   it('show the first record\'s tab already open, which takes the others as its columns, and leave its tab in another group alone', async () => {
     const { vsCodeOpensTabs, openDocument } = makeEditor(severalClient());
     const tabOn = vsCodeOpensTabs();
-    await h.commands.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
     tabOn(gunDocument)?.receive(firstRead);
     const elsewhere = await openDocument(gunDocument);
     elsewhere.active = false;
@@ -1644,7 +1480,7 @@ describe('several records opened at once', () => {
   it('hold the columns for a tab whose page has asked no read yet, which listens only once it has', async () => {
     const { vsCodeOpensTabs } = makeEditor(severalClient());
     const tabOn = vsCodeOpensTabs();
-    await h.commands.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
     const tab = tabOn(gunDocument);
 
     await openSeveral();
@@ -1663,7 +1499,7 @@ describe('several records opened at once', () => {
     client.setQueryFailureOnce('getRecordOfFile', { failed: 'unreachable' });
     client.setQueryAnswer('getRecordOfFile', { formKey: GUN, plugin: COPY_PLUGIN });
     const { openDocument } = makeEditor(client);
-    const tab = await openDocument(fakeUri(GUN_FILE));
+    const tab = await openDocument(vscode.Uri.file(GUN_FILE));
 
     await openSeveral();
     client.emit({
@@ -1687,7 +1523,7 @@ describe('several records opened at once', () => {
     await openSeveral();
     tabOn(gunDocument)?.receive(firstRead);
 
-    await h.commands.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
 
     expect(columnsPosted(tabOn(gunDocument))).toEqual([[{ type: 'showColumns', columns: [] }]]);
   });
@@ -1838,7 +1674,7 @@ describe('a record tab', () => {
   it('keeps its page alive while it is hidden', () => {
     makeEditor();
 
-    expect(h.editorProviderOptions.get('modbench.record')).toEqual({ webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true } });
+    expect(editorProviderOptions.get('modbench.record')).toEqual({ webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true } });
   });
 });
 
@@ -1848,7 +1684,7 @@ describe('the grid\'s F2', () => {
     const behind = open('000801:A.esp');
     const inFocus = open('000802:A.esp');
 
-    await h.commands.get('modbench.recordGrid.editHere')?.();
+    await commandHandlers.get('modbench.recordGrid.editHere')?.();
 
     expect(inFocus.webview.postMessage).toHaveBeenCalledWith({ type: 'openCellEditor' });
     expect(behind.webview.postMessage).not.toHaveBeenCalled();
@@ -1858,11 +1694,11 @@ describe('the grid\'s F2', () => {
 describe('the Editor disposed', () => {
   it('lets go of what it registered once, however often it is disposed', () => {
     const { editor } = makeEditor();
-    h.editorProviderDisposals = 0;
+    editorProviderDisposals.count = 0;
 
     editor.dispose();
     editor.dispose();
 
-    expect(h.editorProviderDisposals).toBe(h.editorProviders.size);
+    expect(editorProviderDisposals.count).toBe(editorProviders.size);
   });
 });

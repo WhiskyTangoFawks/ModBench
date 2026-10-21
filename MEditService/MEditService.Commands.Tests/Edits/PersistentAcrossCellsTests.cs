@@ -128,49 +128,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
 
     private ISourceRepository Tree => TestAdapters.Source().Open(TestMod.Of(Address(Override), _plugins.FolderOf(Override)), GameRelease.Fallout4).Require();
 
-    [Fact]
-    public void SettingPersistent_WhereTheWorldspaceHoldsNoPersistentCell_CopiesItInFromItsMaster()
-    {
-        Load(masterCompiledPlugin: false);
-
-        SetFlags("Mover", Persistent);
-
-        var persistentCell = Document(World)["TopCell"].Require().AsObject();
-        Assert.Equal(MasterPersistentCell.ToString(), persistentCell["FormKey"].Require().GetValue<string>());
-        Assert.Equal("MasterPersistentCell", persistentCell["EditorID"].Require().GetValue<string>());
-        Assert.Equal(5f, persistentCell["WaterHeight"].Require().GetValue<float>());
-        Assert.Equal(["Mover"], Group(persistentCell, "Persistent"));
-        Assert.Empty(Group(Document(_keys["Here"]), "Temporary"));
-    }
-
-    [Fact]
-    public void SettingPersistent_WithNoPersistentCellInAMaster_CreatesOne()
-    {
-        Load(masterCompiledPlugin: false, masterHasPersistentCell: false);
-
-        SetFlags("Mover", Persistent);
-
-        var persistentCell = Document(World)["TopCell"].Require().AsObject();
-        Assert.Equal(Override.ModKey, FormKey.Factory(persistentCell["FormKey"].Require().GetValue<string>()).ModKey);
-        Assert.Equal(Persistent, persistentCell["MajorRecordFlagsRaw"].Require().GetValue<int>() & Persistent);
-        Assert.Equal(["Mover"], Group(persistentCell, "Persistent"));
-        Assert.Empty(Group(Document(_keys["Here"]), "Temporary"));
-    }
-
-    [Fact]
-    public void ClearingPersistent_WhereThePluginLacksTheCellAtItsPosition_CopiesItInFromItsMaster()
-    {
-        Load(masterCompiledPlugin: true);
-
-        SetFlags("Leaver", 0);
-
-        var copied = Document(MasterGridCell);
-        Assert.Equal("MasterGrid", copied["EditorID"].Require().GetValue<string>());
-        Assert.Equal(7f, copied["WaterHeight"].Require().GetValue<float>());
-        Assert.Equal(["Leaver"], Group(copied, "Temporary"));
-        Assert.Equal(["Wanderer"], Group(Document(_keys["Here"]), "Persistent"));
-    }
-
     private DocumentChange MastersUnsaved(FormKey formKey, string respelled, string with)
     {
         var file = _plugins.DocumentFileOf(_master.Require(), formKey);
@@ -210,18 +167,6 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         SetFlags("Leaver", 0);
 
         Assert.Equal("UnsavedGrid", Document(MasterGridCell)["EditorID"].Require().GetValue<string>());
-    }
-
-    [Fact]
-    public void ClearingPersistent_WhereThePluginLacksTheCellAtItsPosition_CopiesItInFromANonCompiledPluginMaster()
-    {
-        Load(masterCompiledPlugin: false);
-
-        SetFlags("Leaver", 0);
-
-        var copied = Document(MasterGridCell);
-        Assert.Equal("MasterGrid", copied["EditorID"].Require().GetValue<string>());
-        Assert.Equal(["Leaver"], Group(copied, "Temporary"));
     }
 
     private sealed class FaultingOnClosingAMasterAskedForACell() : DelegatingPluginAdapter(TestAdapters.Mutagen())
@@ -294,10 +239,103 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Equal("Expected the plugin to close.", fault.Message);
     }
 
-    [Fact]
-    public void ClearingPersistent_WithNoCellAtItsPositionInAMaster_CreatesOneAtItsGrid()
+    private static Fallout4Mod MiddleOverridingThePersistentCell() => Middle((_, world) => world.TopCell = new Cell(MasterPersistentCell, Fallout4Release.Fallout4)
     {
-        Load(masterCompiledPlugin: true);
+        EditorID = "MiddlesPersistentCell",
+        MajorRecordFlagsRaw = Persistent,
+        WaterHeight = 9f,
+    });
+
+    private static Fallout4Mod MiddleOverridingTheGridCell() => Middle((_, world) => world.SubCells.Add(CellBlocks.Exterior(
+        new Cell(MasterGridCell, Fallout4Release.Fallout4)
+        {
+            EditorID = "MiddlesGrid",
+            WaterHeight = 9f,
+            Grid = new CellGrid { Point = new P2Int(3, 3) },
+        })));
+
+    private static Fallout4Mod MiddleHoldingAPersistentCell() => Middle((mod, world) =>
+        world.TopCell = new Cell(mod) { EditorID = "MiddlesPersistentCell", MajorRecordFlagsRaw = Persistent });
+
+    private static Fallout4Mod MiddleHoldingTheCellAtTheGrid() => Middle((mod, world) =>
+        world.SubCells.Add(CellBlocks.Exterior(new Cell(mod) { EditorID = "MiddlesCell", Grid = new CellGrid { Point = new P2Int(9, 9) } })));
+
+    public static TheoryData<bool, Fallout4Mod?> MastersHoldingAPersistentCell() => new()
+    {
+        { false, null },
+        { false, MiddleOverridingThePersistentCell() },
+    };
+
+    [Theory]
+    [MemberData(nameof(MastersHoldingAPersistentCell))]
+    public void SettingPersistent_WhereTheWorldspaceHoldsNoPersistentCell_CopiesItInFromItsMaster(bool masterCompiledPlugin, Fallout4Mod? nonMaster)
+    {
+        Load(masterCompiledPlugin, middle: nonMaster);
+
+        SetFlags("Mover", Persistent);
+
+        var persistentCell = Document(World)["TopCell"].Require().AsObject();
+        Assert.Equal(MasterPersistentCell.ToString(), persistentCell["FormKey"].Require().GetValue<string>());
+        Assert.Equal("MasterPersistentCell", persistentCell["EditorID"].Require().GetValue<string>());
+        Assert.Equal(5f, persistentCell["WaterHeight"].Require().GetValue<float>());
+        Assert.Equal(["Mover"], Group(persistentCell, "Persistent"));
+        Assert.Empty(Group(Document(_keys["Here"]), "Temporary"));
+    }
+
+    public static TheoryData<Fallout4Mod?> PluginsHoldingNoPersistentCellToCopy() => new()
+    {
+        { null },
+        { MiddleHoldingAPersistentCell() },
+    };
+
+    [Theory]
+    [MemberData(nameof(PluginsHoldingNoPersistentCellToCopy))]
+    public void SettingPersistent_WithNoPersistentCellInAMaster_CreatesOne(Fallout4Mod? nonMaster)
+    {
+        Load(masterCompiledPlugin: false, masterHasPersistentCell: false, middle: nonMaster);
+
+        SetFlags("Mover", Persistent);
+
+        var persistentCell = Document(World)["TopCell"].Require().AsObject();
+        Assert.Equal(Override.ModKey, FormKey.Factory(persistentCell["FormKey"].Require().GetValue<string>()).ModKey);
+        Assert.Equal(Persistent, persistentCell["MajorRecordFlagsRaw"].Require().GetValue<int>() & Persistent);
+        Assert.Equal(["Mover"], Group(persistentCell, "Persistent"));
+        Assert.Empty(Group(Document(_keys["Here"]), "Temporary"));
+    }
+
+    public static TheoryData<bool, Fallout4Mod?> MastersHoldingTheCellAtThePosition() => new()
+    {
+        { true, null },
+        { false, null },
+        { false, MiddleOverridingTheGridCell() },
+    };
+
+    [Theory]
+    [MemberData(nameof(MastersHoldingTheCellAtThePosition))]
+    public void ClearingPersistent_WhereThePluginLacksTheCellAtItsPosition_CopiesItInFromItsMaster(bool masterCompiledPlugin, Fallout4Mod? nonMaster)
+    {
+        Load(masterCompiledPlugin, middle: nonMaster);
+
+        SetFlags("Leaver", 0);
+
+        var copied = Document(MasterGridCell);
+        Assert.Equal("MasterGrid", copied["EditorID"].Require().GetValue<string>());
+        Assert.Equal(7f, copied["WaterHeight"].Require().GetValue<float>());
+        Assert.Equal(["Leaver"], Group(copied, "Temporary"));
+        Assert.Equal(["Wanderer"], Group(Document(_keys["Here"]), "Persistent"));
+    }
+
+    public static TheoryData<bool, Fallout4Mod?> PluginsHoldingNoCellAtThePosition() => new()
+    {
+        { true, null },
+        { false, MiddleHoldingTheCellAtTheGrid() },
+    };
+
+    [Theory]
+    [MemberData(nameof(PluginsHoldingNoCellAtThePosition))]
+    public void ClearingPersistent_WithNoCellAtItsPositionInAMaster_CreatesOneAtItsGrid(bool masterCompiledPlugin, Fallout4Mod? nonMaster)
+    {
+        Load(masterCompiledPlugin, middle: nonMaster);
 
         SetFlags("Wanderer", 0);
 
@@ -308,81 +346,15 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     }
 
     [Fact]
-    public void SettingPersistent_WhereOnlyAPluginThatIsNoMasterOverridesThePersistentCell_CopiesItInFromTheMaster()
-    {
-        Load(masterCompiledPlugin: false, middle: Middle((_, world) => world.TopCell = new Cell(MasterPersistentCell, Fallout4Release.Fallout4)
-        {
-            EditorID = "MiddlesPersistentCell",
-            MajorRecordFlagsRaw = Persistent,
-            WaterHeight = 9f,
-        }));
-
-        SetFlags("Mover", Persistent);
-
-        var persistentCell = Document(World)["TopCell"].Require().AsObject();
-        Assert.Equal("MasterPersistentCell", persistentCell["EditorID"].Require().GetValue<string>());
-        Assert.Equal(5f, persistentCell["WaterHeight"].Require().GetValue<float>());
-    }
-
-    [Fact]
-    public void SettingPersistent_WhereOnlyAPluginThatIsNoMasterHoldsAPersistentCell_CreatesOne()
-    {
-        Load(masterCompiledPlugin: false, masterHasPersistentCell: false, middle: Middle((mod, world) =>
-            world.TopCell = new Cell(mod) { EditorID = "MiddlesPersistentCell", MajorRecordFlagsRaw = Persistent }));
-
-        SetFlags("Mover", Persistent);
-
-        var persistentCell = Document(World)["TopCell"].Require().AsObject();
-        Assert.Equal(Override.ModKey, FormKey.Factory(persistentCell["FormKey"].Require().GetValue<string>()).ModKey);
-        Assert.Equal(["Mover"], Group(persistentCell, "Persistent"));
-    }
-
-    [Fact]
     public void SettingPersistent_WhereTheWorkingTreeHasMadeAPluginAMaster_CopiesThePersistentCellInFromIt()
     {
-        Load(masterCompiledPlugin: false, middle: Middle((_, world) => world.TopCell = new Cell(MasterPersistentCell, Fallout4Release.Fallout4)
-        {
-            EditorID = "MiddlesPersistentCell",
-            MajorRecordFlagsRaw = Persistent,
-            WaterHeight = 9f,
-        }));
+        Load(masterCompiledPlugin: false, middle: MiddleOverridingThePersistentCell());
         SetBase("Mover", MiddleStatic);
 
         SetFlags("Mover", Persistent);
 
         var persistentCell = Document(World)["TopCell"].Require().AsObject();
         Assert.Equal("MiddlesPersistentCell", persistentCell["EditorID"].Require().GetValue<string>());
-    }
-
-    [Fact]
-    public void ClearingPersistent_WhereOnlyAPluginThatIsNoMasterHoldsTheCellAtItsPosition_CreatesOne()
-    {
-        Load(masterCompiledPlugin: false, middle: Middle((mod, world) =>
-            world.SubCells.Add(CellBlocks.Exterior(new Cell(mod) { EditorID = "MiddlesCell", Grid = new CellGrid { Point = new P2Int(9, 9) } }))));
-
-        SetFlags("Wanderer", 0);
-
-        var created = Tree.GetCellAt(Address(Override), World.ToString(), 9, 9).Value().Require();
-        Assert.Equal(Override.ModKey, FormKey.Factory(created.FormKey).ModKey);
-        Assert.Equal(["Wanderer"], Group(Document(FormKey.Factory(created.FormKey)), "Temporary"));
-    }
-
-    [Fact]
-    public void ClearingPersistent_WhereAMasterHoldsTheCellAndAPluginThatIsNoMasterOverridesIt_CopiesTheMastersCell()
-    {
-        Load(masterCompiledPlugin: false, middle: Middle((_, world) => world.SubCells.Add(CellBlocks.Exterior(
-            new Cell(MasterGridCell, Fallout4Release.Fallout4)
-            {
-                EditorID = "MiddlesGrid",
-                WaterHeight = 9f,
-                Grid = new CellGrid { Point = new P2Int(3, 3) },
-            }))));
-
-        SetFlags("Leaver", 0);
-
-        var copied = Document(MasterGridCell);
-        Assert.Equal("MasterGrid", copied["EditorID"].Require().GetValue<string>());
-        Assert.Equal(7f, copied["WaterHeight"].Require().GetValue<float>());
     }
 
     [Fact]
