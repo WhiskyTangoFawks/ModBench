@@ -198,6 +198,62 @@ public sealed class UnsavedDocumentTests : IDisposable
     }
 
     [Fact]
+    public void AHandOverWhoseStatusCannotBePublished_PublishesTheFailedStatusOnceItCan()
+    {
+        var statusFault = Faults.InTurn(typeof(NotSupportedException));
+        var notifications = new InMemoryNotificationPublisher();
+        using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: notifications);
+        notifications.OnPublish = Faults.On(IsRowsChanged, Faults.Of(typeof(InvalidOperationException)))
+            + (notification => { if (notification is LoadOrderStatusNotification) statusFault(); });
+
+        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
+
+        Waits.Reached(
+            () => notifications.Notifications.OfType<LoadOrderStatusNotification>().Any(n => n.Status.State == LoadOrderState.Failed),
+            "the failed status published");
+    }
+
+    [Fact]
+    public void AHandOverWhoseStatusPublishIsCancelledOutsideDisposal_LeavesTheNextHandOverValidated()
+    {
+        var statusCancelled = Faults.InTurn(typeof(OperationCanceledException));
+        var notifications = new InMemoryNotificationPublisher();
+        using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: notifications);
+        notifications.OnPublish = Faults.On(IsRowsChanged, Faults.Of(typeof(InvalidOperationException)))
+            + (notification => { if (notification is LoadOrderStatusNotification) statusCancelled(); });
+        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
+        Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
+
+        notifications.OnPublish = null;
+        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedAgain\""))]);
+
+        Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");
+    }
+
+    [Fact]
+    public async Task ADisposalDuringAHandOver_IsNotLoggedAsAFailure()
+    {
+        var log = new List<LogEntry>();
+        using var loggers = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(log)));
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "disposed"), loggerFactory: loggers, notifications: notifications);
+        var disposed = false;
+        notifications.OnPublish = notification =>
+        {
+            if (!IsRowsChanged(notification) || disposed) return;
+            disposed = true;
+            index.Dispose();
+            throw new OperationCanceledException();
+        };
+
+        index.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
+        Waits.Reached(() => disposed, "the disposal");
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+
+        lock (log) Assert.DoesNotContain(log, entry => entry.Message.Contains("failed unexpectedly", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void AHandOverThatValidatesCleanly_ClearsTheFailureAnEarlierHandOverSet()
     {
         var faults = new InMemoryNotificationPublisher { FaultsOn = IsRowsChanged };
@@ -217,11 +273,11 @@ public sealed class UnsavedDocumentTests : IDisposable
     {
         var faults = new InMemoryNotificationPublisher();
         using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: faults);
-        var publishFault = Faults.Of(typeof(NotSupportedException));
-        faults.OnPublish = Faults.On(IsRowsChanged, Faults.Of(typeof(InvalidOperationException)))
-            + Faults.On(n => n is LoadOrderStatusNotification, publishFault);
+        var validationFault = Faults.Of(typeof(InvalidOperationException));
+        faults.OnPublish = Faults.On(IsRowsChanged, validationFault)
+            + Faults.On(n => n is LoadOrderStatusNotification, Faults.Of(typeof(NotSupportedException)));
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
-        Waits.Reached(() => faulting.Status.Message?.Contains(publishFault.Message, StringComparison.Ordinal) == true, "the publish fault in the status");
+        Waits.Reached(() => faulting.Status.Message?.Contains(validationFault.Message, StringComparison.Ordinal) == true, "the validation fault in the status");
 
         faults.OnPublish = null;
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedAgain\""))]);
