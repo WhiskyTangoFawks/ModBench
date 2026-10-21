@@ -140,6 +140,7 @@ try
     }
     catch (OperationCanceledException) when (lifetime.ApplicationStopping.IsCancellationRequested)
     {
+        return;
     }
 }
 catch (Exception ex) when (ex is not OutOfMemoryException)
