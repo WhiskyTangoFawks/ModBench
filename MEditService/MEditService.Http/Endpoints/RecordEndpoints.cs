@@ -251,6 +251,9 @@ internal static class RecordEndpoints
         .WithTags("Records")
         .Produces<DeleteRecordResult>()
         .ProducesProblem(400)
+        .ProducesProblem(404)
+        .ProducesProblem(409)
+        .ProducesProblem(422)
         .ProducesProblem(500)
         .ProducesProblem(503);
 
