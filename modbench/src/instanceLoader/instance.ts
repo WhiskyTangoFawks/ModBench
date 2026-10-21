@@ -31,7 +31,7 @@ export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
 const SETTLE_MS = 200;
 
-type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes' | 'managerRunning';
+type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning';
 
 type DownloadedFilesResult =
   | { readonly kind: 'listed'; readonly rows: readonly LocatedDownloadedFileRow[] }
@@ -332,10 +332,11 @@ export class Instance implements Subscription {
   }
 
   private tellReading({
-    linkNotes, archiveListNotes, orderNotes, sourceMods, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes, managerRunning,
+    linkNotes, archiveListNotes, orderNotes, sourceMods, mods: entries, modFiles, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes, managerRunning,
   }: InstanceReading): void {
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
     this.tellOnce('notes', notes.map((note) => `[instance] ${note}`), 'info');
+    this.tellOnce('listingNotes', entries.flatMap((entry) => entry.kind === 'mod' ? (modFiles.get(entry.name)?.notes ?? []).map((note) => `[instance] ${entry.name}: ${note}`) : []), 'info');
     this.tellOnce('links', linkNotes.map((note) => `[instance] ${note}`), 'info');
     this.tellOnce('orderNotes', orderNotes.map((note) => `[instance] ${note}`), 'warn');
     this.tellOnce('archiveListNotes', archiveListNotes.map((note) => `[instance] ${note}`), 'warn');
@@ -406,14 +407,14 @@ export class Instance implements Subscription {
   }
 
   private async read(): Promise<InstanceValue> {
-    const { adapter, log } = this.options;
+    const { adapter } = this.options;
     const reading = await adapter.reading();
     const {
       profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadedFilesOutcome, gameFolder, dataFolderPlugins,
       creationClubList: creationClub, dataFolderArchives, runtimeOutput, modFolders, profiles, sourceMods,
     } = reading;
     this.tellReading(reading);
-    const index = buildFileConflictIndex(entries, runtimeOutput.files, reading.modFiles, (line) => log.info(line));
+    const index = buildFileConflictIndex(entries, runtimeOutput.files, reading.modFiles);
     const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder, dataFolderPlugins);
     const pluginsLoadedWithNoLine = pluginsLoadedWithNoLineOf(loadedWithNoLineOf(gameRelease, creationClub), dataFolderPlugins, plugins, gameFolder);
     // Installed reads every mod folder, not one profile's mod order: a folder no profile has synced
