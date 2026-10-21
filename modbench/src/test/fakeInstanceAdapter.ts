@@ -153,22 +153,6 @@ function folderBeside(folders: ModFolders | undefined, name: string): string {
   return `${held.slice(0, Math.max(held.lastIndexOf('/'), held.lastIndexOf('\\')))}/${name}`;
 }
 
-const separatorFolderOf = (folders: ModFolders | undefined, separator: string): ModFolder =>
-  ({ kind: 'separator', name: separator, path: folderBeside(folders, `${separator}_separator`), modName: `${separator}_separator` });
-
-// MO2 makes a separator's folder with its line and moves it with the line; a mod's folder is left where it is.
-function separatorFoldersAfter(folders: ModFolders | undefined, landed: readonly ModOrderChange[]): ModFolders | undefined {
-  return landed.reduce((held, change) => {
-    const all = held?.all ?? [];
-    if (change.kind === 'addSeparator') return foldersHolding([...all, separatorFolderOf(held, change.separator)]);
-    if (change.kind === 'renameSeparator') {
-      const from = held?.holding({ kind: 'separator', name: change.from });
-      return foldersHolding(all.map((folder) => (folder === from ? separatorFolderOf(held, change.to) : folder)));
-    }
-    return held;
-  }, folders);
-}
-
 const namesNoFolder = (name: string): boolean => name === '' || name === '.' || name === '..' || /[\\/]/.test(name);
 
 const reachesOut = (relativePath: string): boolean => relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
@@ -309,7 +293,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return write({ verb: 'changeModOrder', profile, changes }, () => {
         const { order, landed } = modOrderAfter(current.mods, changes);
         const wrote = JSON.stringify(order) !== JSON.stringify(current.mods);
-        current = { ...current, mods: order, modGroups: groupModOrder(order), modFolders: separatorFoldersAfter(current.modFolders, landed) };
+        current = { ...current, mods: order, modGroups: groupModOrder(order) };
         return { wrote, landed };
       });
     },
@@ -374,7 +358,13 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         const held = originFilesOf(origin);
         const there = [...held?.files ?? [], ...held?.folders ?? []].some((one) => one.relativePath === relativePath);
         if (held === undefined || !there) return { gone: true };
-        if (relativePath.toLowerCase().endsWith(EXCLUSION_MARK) === (mark === 'Excluded')) return { gone: false, wrote: false, relativePath };
+        const ownMark = relativePath.toLowerCase().endsWith(EXCLUSION_MARK);
+        if (mark === 'Included' && !ownMark && relativePath.split('/').slice(0, -1).some((segment) => segment.toLowerCase().endsWith(EXCLUSION_MARK))) {
+          return { gone: false, refusal: `"${relativePath}" has no suffix of its own to remove, and its folder excludes it.` };
+        }
+        if (ownMark === (mark === 'Excluded')) return { gone: false, wrote: false, relativePath };
+        const target = mark === 'Excluded' ? relativePath + EXCLUSION_MARK : relativePath.slice(0, -EXCLUSION_MARK.length);
+        if ([...held.files, ...held.folders].some((one) => one.relativePath === target)) return { gone: false, refusal: `"${target}" is already there.` };
         const renamedPath = (path: string): string => (path === relativePath || path.startsWith(`${relativePath}/`)
           ? (mark === 'Excluded' ? relativePath + EXCLUSION_MARK : relativePath.slice(0, -EXCLUSION_MARK.length)) + path.slice(relativePath.length)
           : path);

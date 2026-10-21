@@ -10,6 +10,7 @@ import { implementationsOver, pluginOrderOf, type Subject } from './adapterContr
 
 const ALPHA: FileOrigin = { kind: 'mod', name: 'Alpha' };
 const BETA: FileOrigin = { kind: 'mod', name: 'Beta' };
+const GAMMA: FileOrigin = { kind: 'mod', name: 'Gamma' };
 const trash = (path: string): Promise<void> => rm(path, { recursive: true, force: true });
 
 describe.each(implementationsOver('holdings-instance'))('$name holds the contract of what the instance holds', (implementation) => {
@@ -112,10 +113,6 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       expect(await adapter.markOriginFile(ALPHA, 'textures/none.dds', 'Excluded')).toEqual({ gone: true });
     });
 
-    it('marks an excluded file with the suffix the manager reads', () => {
-      expect(adapter.exclusionMark).toBe('.mohidden');
-    });
-
     it('marks an origin file that is there with the mark it names', async () => {
       const marked = `textures/a.dds${adapter.exclusionMark}`;
       expect(await adapter.markOriginFile(ALPHA, 'textures/a.dds', 'Excluded')).toEqual({ gone: false, wrote: true, relativePath: marked });
@@ -126,7 +123,17 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       expect(await filesOf(ALPHA)).toEqual(['Other.esp', 'Patch.esp', 'textures/a.dds']);
     });
 
-    it.each(['../Beta/Taken.esp', 'textures/../../Beta/Taken.esp', 'textures\\..\\a.dds'])('refuses a path that reaches outside the origin: %s', async (path) => {
+    it('refuses to include a file whose folder excludes it, which has no suffix of its own', async () => {
+      expect(await adapter.markOriginFile(GAMMA, 'meshes.mohidden/b.nif', 'Included'))
+        .toEqual({ gone: false, refusal: '"meshes.mohidden/b.nif" has no suffix of its own to remove, and its folder excludes it.' });
+    });
+
+    it('refuses to mark a file onto a name that is there', async () => {
+      expect(await adapter.markOriginFile(GAMMA, 'x.dds', 'Excluded')).toEqual({ gone: false, refusal: '"x.dds.mohidden" is already there.' });
+      expect(await adapter.markOriginFile(GAMMA, 'x.dds.mohidden', 'Included')).toEqual({ gone: false, refusal: '"x.dds" is already there.' });
+    });
+
+    it.each(['../Beta/Taken.esp', 'textures//a.dds', 'textures/../../Beta/Taken.esp', 'textures\\..\\a.dds'])('refuses a path that reaches outside the origin: %s', async (path) => {
       const notAFile = `Not a file of mod "Alpha": "${path}"`;
       await expect(adapter.originFile(ALPHA, path)).rejects.toThrow(notAFile);
       await expect(adapter.markOriginFile(ALPHA, path, 'Excluded')).rejects.toThrow(notAFile);

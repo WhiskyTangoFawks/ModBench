@@ -484,11 +484,12 @@ const configuredBy = (mEdit: InMemoryMEditClient) =>
   mEdit.calls.filter((call) => call.method === 'changeBuildConfiguration').map((call) => call.args);
 
 describe('markFiles', () => {
+  const MARK = fakeInstanceAdapter().adapter.exclusionMark;
   const SOURCE = '/instance/source/Harder VATS';
   const OTHER = '/instance/source/ENBoost';
   const MOD_FILES = new Map(['Harder VATS', 'ENBoost'].map((name) => [name, {
     origin: name, folder: `/mods/${name}`, folders: [], notes: [],
-    files: ['a.dds', 'b.dds', 'c.dds', 'bad.dds', 'Textures/a.dds', 'Textures/a.dds.mohidden'].map((path) => fileIn(`/mods/${name}`, path)),
+    files: ['a.dds', 'b.dds', 'c.dds', 'bad.dds', 'Textures/a.dds', `Textures/b.dds${MARK}`].map((path) => fileIn(`/mods/${name}`, path)),
   }]));
   const SOURCES = { ...sourceMods(new Map([['Harder VATS', SOURCE]])), modFiles: MOD_FILES };
   const TWO_SOURCES = { ...sourceMods(new Map([['Harder VATS', SOURCE], ['ENBoost', OTHER]])), modFiles: MOD_FILES };
@@ -499,7 +500,7 @@ describe('markFiles', () => {
 
   it.each([
     ['Excluded', 'Textures/a.dds', { exclude: ['Textures/a.dds'] }],
-    ['Included', 'Textures/a.dds.mohidden', { include: ['Textures/a.dds'] }],
+    ['Included', `Textures/b.dds${MARK}`, { include: ['Textures/b.dds'] }],
   ] as const)('marks a file %s, and the build configuration\'s exclusion with it', async (mark, relativePath, change) => {
     const { fake, mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
     mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
