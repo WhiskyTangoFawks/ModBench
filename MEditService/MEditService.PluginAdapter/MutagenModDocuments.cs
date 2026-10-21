@@ -60,7 +60,7 @@ internal sealed class MutagenModDocuments(
 
     private readonly record struct HeldRecord(string TableName, RecordTableSchema Schema, IMajorRecordGetter Getter);
 
-    // DuckDB reads 2048 consecutive rows at once, so a group of multi-megabyte documents in one run
+    // A batch holds SerializeBatchSize consecutive records, so a group of multi-megabyte documents in one run
     // holds gigabytes. Each table with a group of its own is spread over the plugin by its share of
     // the records.
     private IEnumerable<HeldRecord> Spread()
