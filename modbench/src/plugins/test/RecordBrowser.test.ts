@@ -209,7 +209,7 @@ describe('a record-type group\'s children', () => {
     expect(limitArg).toBeGreaterThan(FALLOUT4_ESM_INFO_COUNT);
   });
 
-  it('a "qust" row\'s collapsible state follows its own RecordSummary.hasContainerChildren, not its record type alone', async () => {
+  it('a "qust" row is expandable only when its own record holds children, not by its record type alone', async () => {
     const repo = makeClient({
       recordTypes: [{ type: 'qust', count: 2 }],
       records: {
