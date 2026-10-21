@@ -11,9 +11,8 @@ internal static class NavigatorSql
     /// response in its topic, a placed reference in its cell, an exterior cell in its worldspace.</summary>
     internal static string HeldIn(string schema) => $"SELECT plugin, origin, parent, child, slot FROM {schema}holdings";
 
-    /// <summary>The <c>held</c> CTE every holdings read below reads: the holdings <paramref name="where"/>
-    /// keeps. DuckDB pushes no join key into a holdings read, so a read about one plugin keeps that
-    /// plugin's here, or reads every plugin's.</summary>
+    /// <summary>The <c>held</c> CTE the holdings reads below read: the holdings <paramref name="where"/>
+    /// keeps. DuckDB pushes no join key into it, so a read about one plugin names the plugin here.</summary>
     internal static string HeldFor(RecordScope scope, string where) =>
         $"held AS (SELECT plugin, origin, parent, child, slot FROM ({scope.Held}) h {where})";
 
