@@ -83,8 +83,8 @@ function setModsEnabled(
 export type { EntryRef, MovePlace, OrderEnd, OriginFileMark, SeparatorsPlace } from '../instanceAdapter/instanceAdapter';
 
 // `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
-// order, at the `end` of the place. A separator or mod that has gone refuses the whole move, and
-// so does a place that is one of the mods moving.
+// order, at the `end` of the place. A gone entry refuses the whole move; a place among the movers
+// refuses each mover.
 async function moveMods(
   adapter: InstanceAdapter, modNames: readonly string[], place: MovePlace, end: OrderEnd,
 ): Promise<SelectionResult<string>> {
@@ -96,8 +96,7 @@ async function moveMods(
 }
 
 // `modbench.mod.move` over separators (mods.md, Pickers, Move): each brings every mod it holds,
-// and they land on the `end` side of the place. A target that has gone refuses the whole move, and
-// so does a place that is beside a mod or among the ungrouped mods.
+// and they land on the `end` side of the place. A gone target refuses the whole move.
 const SEPARATOR_PLACES =
   'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.';
 
