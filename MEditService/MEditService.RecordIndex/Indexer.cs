@@ -69,15 +69,49 @@ internal sealed class Indexer : IDisposable
     private int _plannedCount;
     private int _activeCount;
     private IReadOnlyList<PluginLoadFailure> _collisionFailures = [];
-    // Cleared at the top of every attempt: a repeated refusal re-sets it a moment later, a successful
-    // one leaves it clear.
-    private string? _heldElsewhereMessage;
-    // The same lifetime as _heldElsewhereMessage, for the reconcile's other known-unknown outcome.
-    private string? _failureMessage;
-    private string? _handOverFailure;
-    // The version the reconcile door last finished answering for: never a superseded attempt's,
-    // since that one returns before reaching its own update.
-    private long _version;
+    private sealed record Standing(long Version, string? HeldElsewhere, string? Failure, string? HandOverFailure)
+    {
+        public Standing WithoutRefusals() => this with { HeldElsewhere = null, Failure = null, HandOverFailure = null };
+    }
+
+    // Replaced whole under _lock, never edited in place, so a reader sees a version with its own refusals.
+    private Standing _standing = new(0, null, null, null);
+
+    private bool Swap(Func<Standing, Standing> change)
+    {
+        lock (_lock)
+        {
+            var next = change(_standing);
+            if (next == _standing) return false;
+            _standing = next;
+            return true;
+        }
+    }
+
+    private (long Version, LoadOrderState State, string? Message) _told;
+
+    // ADR-0015: every site that changes what Status reports calls this after. A status counts as told
+    // only once Publish returns. _lock is reentrant, so this is safe from inside a lock a caller holds.
+    private void PublishStatus()
+    {
+        lock (_lock)
+        {
+            var status = Status;
+            _notifications?.Publish(new LoadOrderStatusNotification(status));
+            _told = (status.Version, status.State, status.Message);
+        }
+    }
+
+    // A swap whose publish never came, such as a superseded attempt's, is told by the next attempt's close.
+    private bool Untold()
+    {
+        lock (_lock)
+        {
+            var status = Status;
+            return _told != (status.Version, status.State, status.Message);
+        }
+    }
+
     // A detached index whose reads outlived the drain: it stays open, so a retry drains it again
     // before any store is opened on its path.
     private OpenScope? _undrained;
@@ -114,7 +148,14 @@ internal sealed class Indexer : IDisposable
     {
         // Cancel and dispose both happen under _lock, so a token can never be cancelled after it has
         // been disposed.
-        lock (_lock) _reconcileCancellation?.Cancel();
+        lock (_lock)
+        {
+            if (_reconcileCancellation is { } inFlight)
+            {
+                inFlight.Cancel();
+                _logger.LogDebug("Asked the reconcile in flight to stop");
+            }
+        }
         _exclusive.Enter();
     }
 
@@ -178,26 +219,23 @@ internal sealed class Indexer : IDisposable
                 LoadOrderStatus held;
                 if (_scope is null)
                 {
-                    held = LoadOrderStatus.None with { Version = _version };
+                    held = LoadOrderStatus.None with { Version = _standing.Version };
                 }
                 else
                 {
                     var state = _conflictsComputed && !_validating ? LoadOrderState.Ready : LoadOrderState.Reconciling;
-                    held = new LoadOrderStatus(state, _plannedCount, _activeCount, [.. _indexed], _conflictsComputed, [.. _scope.Held.Failures, .. _collisionFailures], Version: _version);
+                    held = new LoadOrderStatus(state, _plannedCount, _activeCount, [.. _indexed], _conflictsComputed, [.. _scope.Held.Failures, .. _collisionFailures], Version: _standing.Version);
                 }
 
-                if (_heldElsewhereMessage is { } heldElsewhere)
+                if (_standing.HeldElsewhere is { } heldElsewhere)
                     return held with { State = LoadOrderState.HeldElsewhere, Message = heldElsewhere };
-                if ((_failureMessage ?? _handOverFailure) is { } failure)
+                if ((_standing.Failure ?? _standing.HandOverFailure) is { } failure)
                     return held with { State = LoadOrderState.Failed, Message = failure };
                 return held;
             }
         }
     }
 
-    // ADR-0015: every site that changes what Status reports calls this after. _lock is reentrant,
-    // so this is safe to call from inside a lock a caller already holds.
-    private void PublishStatus() => _notifications?.Publish(new LoadOrderStatusNotification(Status));
 
     public long Sequence { get { lock (_lock) return _scope?.Store.Sequence ?? 0; } }
 
@@ -285,11 +323,7 @@ internal sealed class Indexer : IDisposable
         try
         {
             var failure = ValidationFailure(() => ValidateTreesOf(paths), CancellationToken.None, out _);
-            lock (_lock)
-            {
-                moved = _handOverFailure != failure;
-                _handOverFailure = failure;
-            }
+            moved = Swap(standing => standing with { HandOverFailure = failure });
         }
         finally { _exclusive.Exit(); }
         if (moved) PublishStatus();
@@ -314,16 +348,12 @@ internal sealed class Indexer : IDisposable
     // nothing.
     private void Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival)
     {
-        long version = 0;
         long arrivals = 0;
-        bool changed;
-        string? heldElsewhere = null;
-        string? failure = null;
-        var versionAdvanced = false;
+        bool arrived;
+        bool refused;
         try
         {
-            if (ReconcileOrRefuse(arrival, ref version, ref arrivals, ref heldElsewhere, ref failure, ref versionAdvanced) is not { } reconciled) return;
-            changed = reconciled;
+            arrived = ReconcileOrRefuse(arrival, ref arrivals, out refused);
         }
         catch (OperationCanceledException ex)
         {
@@ -333,14 +363,14 @@ internal sealed class Indexer : IDisposable
             _logger.LogInformation(ex, "Load order reconcile was superseded before it completed");
             return;
         }
-        lock (_lock)
+        if (arrived)
         {
-            changed |= versionAdvanced;
-            if (heldElsewhere is null && failure is null) _arrivalReconciled = Math.Max(_arrivalReconciled, arrivals);
-            _validating = false;
-            if (changed) PublishStatus();
+            if (!refused)
+            {
+                lock (_lock) _arrivalReconciled = Math.Max(_arrivalReconciled, arrivals);
+            }
+            lock (_reconciled) Monitor.PulseAll(_reconciled);
         }
-        lock (_reconciled) Monitor.PulseAll(_reconciled);
     }
 
     // ADR-0015, read-your-writes: a source write reaches the record index through the next snapshot, so a read after one waits
@@ -370,19 +400,22 @@ internal sealed class Indexer : IDisposable
         get { lock (_lock) return _arrivalReconciled; }
     }
 
-    // A superseded reconcile throws OperationCanceledException, leaving its work for its
-    // successor; a second window's hold is answered in heldElsewhere. Null when the arrival
-    // resolved to none, and false when the reconcile changed nothing Status reports.
-    private bool? ReconcileOrRefuse(
-        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version, ref long arrivals,
-        ref string? heldElsewhere, ref string? failure, ref bool versionAdvanced)
+    // A superseded reconcile throws, leaving its work to its successor. The closing swap and its publish
+    // share one hold of _lock, so no reader sees a version before the status answering it.
+    private bool ReconcileOrRefuse(
+        Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long arrivals, out bool refused)
     {
         EnterExclusive();
         var token = CancellationToken.None;
         var superseded = false;
+        var progressed = false;
+        long version = 0;
+        string? heldElsewhere = null;
+        string? failure = null;
+        refused = false;
         try
         {
-            if (arrival() is not { } resolved) return null;
+            if (arrival() is not { } resolved) return false;
             var (snapshot, arrived) = resolved;
             version = arrived;
             arrivals = _holder.Arrivals;
@@ -394,14 +427,7 @@ internal sealed class Indexer : IDisposable
 
             // A fresh attempt starting: whatever the previous attempt's own refusal set is stale the
             // moment this one is asked for, whichever way this one goes.
-            bool refusalCleared;
-            lock (_lock)
-            {
-                refusalCleared = _heldElsewhereMessage is not null || _failureMessage is not null || _handOverFailure is not null;
-                _heldElsewhereMessage = null;
-                _failureMessage = null;
-                _handOverFailure = null;
-            }
+            progressed = Swap(standing => standing.WithoutRefusals());
             token = BeginReconcile();
             if (EnsureScope(snapshot, out heldElsewhere, out failure) is not { } scope)
             {
@@ -409,11 +435,11 @@ internal sealed class Indexer : IDisposable
                 // previous scope down before the open that refused).
                 return true;
             }
-            var reconciled = ReconcileProgressively(scope, snapshot, token) || refusalCleared;
+            progressed |= ReconcileProgressively(scope, snapshot, token);
             failure = ValidateHeld(token, out var busy);
             // A validation the busy gate stopped has not read the disk whole.
             if (busy) arrivals = 0;
-            return failure is not null || reconciled;
+            return true;
         }
         catch (Exception ex) when (CancelledBy(ex, token))
         {
@@ -431,17 +457,25 @@ internal sealed class Indexer : IDisposable
         finally
         {
             EndReconcile();
-            lock (_lock)
+            refused = heldElsewhere is not null || failure is not null;
+            try
             {
-                if (heldElsewhere is not null) _heldElsewhereMessage = heldElsewhere;
-                if (failure is not null) _failureMessage = failure;
                 if (!superseded)
                 {
-                    versionAdvanced = version > _version;
-                    _version = Math.Max(_version, version);
+                    lock (_lock)
+                    {
+                        _validating = false;
+                        var swapped = Swap(standing => standing with
+                        {
+                            Version = Math.Max(standing.Version, version),
+                            HeldElsewhere = heldElsewhere ?? standing.HeldElsewhere,
+                            Failure = failure ?? standing.Failure,
+                        });
+                        if (swapped || progressed || Untold()) PublishStatus();
+                    }
                 }
             }
-            ExitExclusive();
+            finally { ExitExclusive(); }
         }
     }
 
@@ -1161,7 +1195,8 @@ internal sealed class Indexer : IDisposable
                 return false;
             }
             heldElsewhere = whileClosed(new ClosedStore(_storeFactory, handedOut));
-            lock (_lock) _heldElsewhereMessage = heldElsewhere;
+            var refusal = heldElsewhere;
+            Swap(standing => standing with { HeldElsewhere = refusal });
         }
         finally { ExitExclusive(); }
         if (heldElsewhere is null) StartReconcile();
@@ -1249,9 +1284,7 @@ internal sealed class Indexer : IDisposable
         _plannedCount = 0;
         _activeCount = 0;
         _collisionFailures = [];
-        _heldElsewhereMessage = null;
-        _failureMessage = null;
-        _handOverFailure = null;
+        _standing = _standing.WithoutRefusals();
         return detached;
     }
 }
