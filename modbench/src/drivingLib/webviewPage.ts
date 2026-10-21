@@ -9,6 +9,8 @@ export interface WebviewPage {
   readonly globals?: Readonly<Record<string, unknown>>;
 }
 
+const inlineScriptJson = (value: unknown): string => ((JSON.stringify(value) as string | undefined) ?? 'undefined').replace(/</g, '\\u003c');
+
 export function showWebviewPage(
   webview: Pick<vscode.Webview, 'options' | 'html' | 'cspSource' | 'asWebviewUri'>, extensionUri: vscode.Uri,
   { script, globals = {} }: WebviewPage,
@@ -18,7 +20,7 @@ export function showWebviewPage(
   const asset = (file: string) => webview.asWebviewUri(vscode.Uri.joinPath(root, 'assets', file)).toString();
   const { cspSource } = webview;
   const nonce = crypto.randomBytes(16).toString('base64');
-  const assignments = Object.entries(globals).map(([name, value]) => `window.${name} = ${JSON.stringify(value)};`).join(' ');
+  const assignments = Object.entries(globals).map(([name, value]) => `window.${name} = ${inlineScriptJson(value)};`).join(' ');
   webview.html = `<!DOCTYPE html>
 <html lang="en">
 <head>
