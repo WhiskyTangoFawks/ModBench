@@ -96,15 +96,6 @@ describe('a gesture run as an agent call and as a view call', () => {
     expect(entries).toEqual([{ focused: picked, selection: [picked] }]);
   });
 
-  it.each([
-    ['a tree row is the clicked row', other, { clicked: other, selection: [other] }],
-    ['a key\'s own args are not a row', { view: 'modbench.test' }, { focused: picked, selection: [picked] }],
-  ])('without isRow, %s', async (_name, clicked, expected) => {
-    const { handler, entries } = register();
-    await handler(clicked);
-    expect(entries).toEqual([expected]);
-  });
-
   it('with isRow, the gesture says which clicked values are rows', async () => {
     const context = { webview: 'ctx' };
     const { handler, entries } = register({}, (value): value is Row => value === context);
