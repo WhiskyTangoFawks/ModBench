@@ -164,7 +164,7 @@ describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine 
   });
 });
 
-describe('buildFileConflictIndex — what the reading holds: the walk is the adapter\x27s', () => {
+describe('buildFileConflictIndex — what the reading holds: the walk is the adapter\'s', () => {
   it('takes no excluded file as a provider, in a mod or Overwrite, and keeps it among its mod\'s files', () => {
     const excluded = { relativePath: 'Hidden.esp', path: '/mods/ModA/Hidden.esp', sourcePath: '/mods/ModA/Hidden.esp', excluded: true, markedExcluded: true, includedPath: 'Hidden.esp' };
     const kept = { relativePath: 'Kept.esp', path: '/mods/ModA/Kept.esp', sourcePath: '/mods/ModA/Kept.esp', excluded: false, markedExcluded: false, includedPath: 'Kept.esp' };

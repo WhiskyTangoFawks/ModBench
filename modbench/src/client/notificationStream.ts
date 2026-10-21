@@ -4,10 +4,19 @@ import { isNotificationKind, type NotificationKind, type NotificationPayloads } 
 import { isString, isStringArray } from '../wire/messages';
 import { errorMessage } from '../ports/errorMessage';
 
+/** Where a listener's throw goes: it left whatever the listener feeds out of date. `recovered`
+ *  follows a call that succeeded after one that threw. */
+export interface ListenerThrows {
+  threw(listener: object, message: string, detail: string): void;
+  recovered(listener: object): void;
+}
+
+const STALE_VIEW = 'A view did not take an update from mEdit, so it may be out of date';
+
 // Dispatching for the one stream kind this file opens (SSE); `whenConnected`'s
 // default answer below is settled, which `SseNotificationSubscriber` overrides with its own.
 class NotificationListenerRegistry {
-  constructor(protected readonly log: Log) {}
+  constructor(protected readonly log: Log, private readonly throws: ListenerThrows) {}
 
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
     'load-order-status': new Set(), 'decompile-and-commit-progress': new Set(), 'update-manifest-progress': new Set(), 'restore-from-manifest-progress': new Set(), 'external-change': new Set(),
@@ -69,17 +78,17 @@ class NotificationListenerRegistry {
   }
 
   private deliver<K extends NotificationKind>(kind: K, payload: NotificationPayloads[K]): void {
-    for (const listener of this.typedListeners[kind]) this.callListener(kind, () => listener(payload));
+    for (const listener of this.typedListeners[kind]) this.callListener(listener, () => listener(payload));
   }
 
-  // One listener's throw is a failure to report, never the stream's: the listeners after it
-  // still hear, and the stream stays open.
-  protected callListener(what: string, call: () => void): void {
+  protected callListener(listener: object, call: () => void): void {
     try {
       call();
     } catch (e) {
-      this.log.error(`[notifications] a ${what} listener threw: ${errorMessage(e)}`);
+      this.throws.threw(listener, STALE_VIEW, errorMessage(e));
+      return;
     }
+    this.throws.recovered(listener);
   }
 }
 
@@ -88,6 +97,7 @@ interface SseNotificationSubscriberDeps {
    *  a double, never a live backend. */
   openStream: (signal: AbortSignal) => Promise<Response>;
   log?: Log;
+  listenerThrows: ListenerThrows;
   /** How long to wait before retrying after the stream drops or ends. */
   reconnectDelayMs?: number;
 }
@@ -174,7 +184,7 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
   private readonly reopenListeners = new Set<() => void>();
 
   constructor(private readonly deps: SseNotificationSubscriberDeps) {
-    super(deps.log ?? SILENT_LOG);
+    super(deps.log ?? SILENT_LOG, deps.listenerThrows);
     this.reconnectDelayMs = deps.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS;
   }
 
@@ -227,7 +237,7 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
     if (this.generation !== generation) return;
     const reopened = this.openedThisStart;
     this.openedThisStart = true;
-    if (reopened) for (const listener of [...this.reopenListeners]) this.callListener('reconnected', listener);
+    if (reopened) for (const listener of [...this.reopenListeners]) this.callListener(listener, listener);
   }
 
   private async connectOnce(generation: number): Promise<void> {

@@ -3,6 +3,7 @@ import { SseNotificationSubscriber } from '../notificationStream';
 import { toLoadOrderStatus } from '../apiClient';
 import type { NotificationKind } from '../MEditClient';
 import type { NotificationEvent } from '../apiClient';
+import { IGNORED_THROWS, recordedThrows } from './fixtures';
 import { leveledLog } from '../../test/leveledLog';
 import { present } from '../../ports/present';
 
@@ -36,7 +37,7 @@ function streamResponse(chunks: Uint8Array[]): Response {
 }
 
 class TestableSubscriber extends SseNotificationSubscriber {
-  constructor() { super({ openStream: () => Promise.reject(new Error('never opened')) }); }
+  constructor() { super({ openStream: () => Promise.reject(new Error('never opened')), listenerThrows: IGNORED_THROWS }); }
   receive(event: NotificationEvent): void { this.dispatch(event); }
 }
 
@@ -47,7 +48,7 @@ describe('SseNotificationSubscriber', () => {
   it('dispatches an event frame and skips a comment-only one', async () => {
     const event = rowsChanged(['000001:Test.esp']);
     const openStream = vi.fn().mockResolvedValue(streamResponse([commentFrame(), sseFrame(event)]));
-    const subscriber = new SseNotificationSubscriber({ openStream });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream });
     const received: unknown[] = [];
     subscriber.onNotification('rows-changed', (p) => received.push(p));
 
@@ -60,7 +61,7 @@ describe('SseNotificationSubscriber', () => {
 
   it('carries the mods a mod-status-changed frame names through the stream', async () => {
     const event = rowsChanged([], { kind: 'mod-status-changed', mods: ['ModA'] });
-    const subscriber = new SseNotificationSubscriber({ openStream: vi.fn().mockResolvedValue(streamResponse([sseFrame(event)])) });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream: vi.fn().mockResolvedValue(streamResponse([sseFrame(event)])) });
     const received: unknown[] = [];
     subscriber.onNotification('mod-status-changed', (p) => received.push(p));
 
@@ -76,7 +77,7 @@ describe('SseNotificationSubscriber', () => {
     const openStream = vi.fn()
       .mockResolvedValueOnce(streamResponse([]))
       .mockResolvedValueOnce(streamResponse([sseFrame(secondEvent)]));
-    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
     const received: unknown[] = [];
     subscriber.onNotification('rows-changed', (p) => received.push(p));
 
@@ -95,7 +96,7 @@ describe('SseNotificationSubscriber', () => {
     const openStream = vi.fn()
       .mockResolvedValueOnce(streamResponse([frameOfValidJsonMissingTheFieldsAnEventRequires()]))
       .mockResolvedValueOnce(streamResponse([sseFrame(goodEvent)]));
-    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
     const received: unknown[] = [];
     subscriber.onNotification('rows-changed', (p) => received.push(p));
 
@@ -109,11 +110,11 @@ describe('SseNotificationSubscriber', () => {
     subscriber.stop();
   });
 
-  it('a throwing listener is logged as an error and does not drop the stream, and the listeners after it hear the frame', async () => {
-    const event = rowsChanged(['000001:Test.esp']);
-    const openStream = vi.fn().mockResolvedValue(streamResponse([sseFrame(event)]));
+  it('a throwing listener is reported as thrown and does not drop the stream, and the listeners after it hear the frame', async () => {
+    const openStream = vi.fn().mockResolvedValue(streamResponse([sseFrame(rowsChanged(['000001:Test.esp']))]));
     const log = leveledLog();
-    const subscriber = new SseNotificationSubscriber({ openStream, log, reconnectDelayMs: 1000 });
+    const { sink, threw } = recordedThrows();
+    const subscriber = new SseNotificationSubscriber({ openStream, log, listenerThrows: sink, reconnectDelayMs: 1000 });
     const heard: unknown[] = [];
     subscriber.onNotification('rows-changed', () => { throw new Error('listener broke'); });
     subscriber.onNotification('rows-changed', (p) => heard.push(p));
@@ -122,15 +123,33 @@ describe('SseNotificationSubscriber', () => {
     await vi.waitFor(() => expect(log.lines.info).toContain('[notifications] stream ended; reconnecting'));
 
     expect(heard).toHaveLength(1);
-    expect(log.lines.error.join('\n')).toContain('listener broke');
+    expect(threw.map((t) => t.detail)).toEqual(['listener broke']);
     expect(log.lines.warn.join('\n')).not.toContain('stream dropped');
     subscriber.stop();
   });
 
-  it('a throwing reopen listener is logged as an error and does not drop the stream, and the listeners after it hear the reopen', async () => {
+  it('says a listener recovered once a call of it that threw is followed by one that returns', async () => {
+    const frames = [sseFrame(rowsChanged(['a'])), sseFrame(rowsChanged(['b']))];
+    const openStream = vi.fn().mockResolvedValue(streamResponse(frames));
+    const log = leveledLog();
+    const { sink, threw, recovered } = recordedThrows();
+    const subscriber = new SseNotificationSubscriber({ openStream, log, listenerThrows: sink, reconnectDelayMs: 1000 });
+    const listener = vi.fn().mockImplementationOnce(() => { throw new Error('once'); });
+    subscriber.onNotification('rows-changed', listener);
+
+    subscriber.start();
+    await vi.waitFor(() => expect(log.lines.info).toContain('[notifications] stream ended; reconnecting'));
+
+    expect(threw).toHaveLength(1);
+    expect(recovered).toEqual([listener]);
+    subscriber.stop();
+  });
+
+  it('a throwing reopen listener is reported as thrown and does not drop the stream, and the listeners after it hear the reopen', async () => {
     const openStream = vi.fn().mockImplementation(() => Promise.resolve(streamResponse([])));
     const log = leveledLog();
-    const subscriber = new SseNotificationSubscriber({ openStream, log, reconnectDelayMs: 1000 });
+    const { sink, threw } = recordedThrows();
+    const subscriber = new SseNotificationSubscriber({ openStream, log, listenerThrows: sink, reconnectDelayMs: 1000 });
     const heard = vi.fn();
     subscriber.onReconnected(() => { throw new Error('reopen listener broke'); });
     subscriber.onReconnected(heard);
@@ -141,7 +160,7 @@ describe('SseNotificationSubscriber', () => {
     await vi.waitFor(() => expect(log.lines.info).toHaveLength(2));
 
     expect(heard).toHaveBeenCalledTimes(1);
-    expect(log.lines.error.join('\n')).toContain('reopen listener broke');
+    expect(threw.map((t) => t.detail)).toEqual(['reopen listener broke']);
     expect(log.lines.warn.join('\n')).not.toContain('stream dropped');
     subscriber.stop();
   });
@@ -153,7 +172,7 @@ describe('SseNotificationSubscriber', () => {
       return Promise.resolve(streamResponse([frameOfValidJsonMissingTheFieldsAnEventRequires()]));
     });
     const log = leveledLog();
-    const subscriber = new SseNotificationSubscriber({ openStream, log, reconnectDelayMs: 100_000 });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, log, reconnectDelayMs: 100_000 });
 
     subscriber.start();
     await vi.waitFor(() => expect(log.lines.warn.join('\n')).toContain('stream dropped'));
@@ -167,7 +186,7 @@ describe('SseNotificationSubscriber', () => {
     const openStream = vi.fn()
       .mockRejectedValueOnce(new Error('ECONNREFUSED'))
       .mockResolvedValueOnce(streamResponse([sseFrame(event)]));
-    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 500 });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 500 });
     const received: unknown[] = [];
     subscriber.onNotification('rows-changed', (p) => received.push(p));
 
@@ -181,7 +200,7 @@ describe('SseNotificationSubscriber', () => {
 
   it('start() is idempotent — a second call while running opens no second stream', async () => {
     const openStream = vi.fn().mockResolvedValue(streamResponse([]));
-    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 100_000 });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 100_000 });
 
     subscriber.start();
     await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
@@ -193,7 +212,7 @@ describe('SseNotificationSubscriber', () => {
 
   it('start() after a stop() taken between attempts opens one stream at once, not a delayed pair, the sleeping loop not waking on its own beside a second loop', async () => {
     const openStream = vi.fn().mockResolvedValue(streamResponse([]));
-    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 2000 });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 2000 });
 
     subscriber.start();
     await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
@@ -209,7 +228,7 @@ describe('SseNotificationSubscriber', () => {
   it('whenConnected() settles only once the stream has answered', async () => {
     let answer: ((response: Response) => void) | undefined;
     const openStream = vi.fn().mockImplementation(() => new Promise<Response>((r) => { answer = r; }));
-    const subscriber = new SseNotificationSubscriber({ openStream });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream });
     let connected = false;
 
     subscriber.start();
@@ -224,7 +243,7 @@ describe('SseNotificationSubscriber', () => {
 
   it('whenConnected() settles when the attempt fails, so the caller goes on without progress rather than waiting for a stream it will never get', async () => {
     const openStream = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 100_000 });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 100_000 });
     let connected = false;
 
     subscriber.start();
@@ -239,7 +258,7 @@ describe('SseNotificationSubscriber', () => {
       .mockResolvedValueOnce(streamResponse([]))
       .mockResolvedValueOnce(streamResponse([]))
       .mockResolvedValue(new Response(new ReadableStream(), { status: 200 }));
-    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
     const reconnects = vi.fn();
     subscriber.onReconnected(reconnects);
 
@@ -256,7 +275,7 @@ describe('SseNotificationSubscriber', () => {
 
   it('announces no reopen for the first open after a stop and start', async () => {
     const openStream = vi.fn().mockResolvedValue(new Response(new ReadableStream(), { status: 200 }));
-    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
     const reconnects = vi.fn();
     subscriber.onReconnected(reconnects);
 
@@ -274,7 +293,7 @@ describe('SseNotificationSubscriber', () => {
     const openStream = vi.fn()
       .mockResolvedValueOnce(streamResponse([]))
       .mockRejectedValue(new Error('ECONNREFUSED'));
-    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
     const reconnects = vi.fn();
     subscriber.onReconnected(reconnects);
 
@@ -293,7 +312,7 @@ describe('SseNotificationSubscriber', () => {
       sawSignal = signal;
       return new Promise<Response>(() => {});
     });
-    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
+    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
 
     subscriber.start();
     await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
