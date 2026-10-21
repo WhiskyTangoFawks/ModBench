@@ -205,6 +205,7 @@ class HttpMEditClient implements MEditClient {
   }): Promise<T | WriteRefused> {
     try {
       await this.handOver.sent();
+      await this.loadOrder.latest();
       const { data, error, response } = await spec.post();
       if (!response.ok) {
         const text = errorText(error);
@@ -557,6 +558,7 @@ class HttpMEditClient implements MEditClient {
     formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope,
   ): Promise<RecordEditChangesOutcome> {
     await this.handOver.sent();
+    await this.loadOrder.latest();
     let result;
     try {
       result = await this.apiClient.POST('/records/{formKey}/edit-changes', {

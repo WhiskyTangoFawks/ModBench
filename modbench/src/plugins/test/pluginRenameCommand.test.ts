@@ -36,11 +36,10 @@ import type { AskQuestion } from '../../ports/dialog';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
-import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { present } from '../../ports/present';
 
-const held = (name: string, origin: string): NonNullable<InstanceAnswers['heldPlugins']>[number] =>
-  ({ name, origin: { kind: 'mod', name: origin } });
+const held = (name: string, origin: string) => ({ name, origin: { kind: 'mod', name: origin } }) as const;
 
 const PLUGIN = { name: 'Patch.esp', origin: 'ModA' };
 const CHANGES = { treeName: 'Patch.esp', moves: [], deletions: [], documents: [] };
@@ -55,8 +54,8 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
   const stepsWhenAsked: string[][] = [];
   const ask = Object.assign<AskQuestion, { asked: typeof dialog.asked }>(
     (...args) => { stepsWhenAsked.push([...progressSteps]); return dialog(...args); }, { asked: dialog.asked });
-  const instanceAnswers: InstanceAnswers = { heldPlugins: [held('Patch.esp', 'ModA'), held('Taken.esp', 'ModA'), held('Elsewhere.esp', 'ModB')] };
-  const fake = fakeInstanceAdapter(undefined, instanceAnswers);
+  const instanceAnswers: InstanceAnswers = {};
+  const fake = fakeInstanceAdapter(readingFixture(pluginFilesHeld(held('Patch.esp', 'ModA'), held('Taken.esp', 'ModA'), held('Elsewhere.esp', 'ModB'))), instanceAnswers);
   const instance = {
     value: instanceValueFixture(),
     quiet: async <T>(work: () => Promise<T>): Promise<T> => {

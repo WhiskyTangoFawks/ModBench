@@ -5,7 +5,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { OVERWRITE_ORIGIN } from '../../wire/pluginAddress';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
-import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, pluginFilesHeld, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import type { PluginAddress } from '../../wire/pluginAddress';
@@ -25,8 +25,11 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
     applied.push(changes);
     return Promise.resolve(failure);
   });
-  const rename = (newName: string, plugin: PluginAddress = PLUGIN, answers: InstanceAnswers = {}) => {
-    const fake = fakeInstanceAdapter(undefined, answers);
+  const rename = (newName: string, plugin: PluginAddress = PLUGIN, answers: InstanceAnswers = {}, held: readonly string[] = []) => {
+    const fake = fakeInstanceAdapter(readingFixture(pluginFilesHeld(
+      { origin: plugin.origin === OVERWRITE_ORIGIN ? { kind: 'runtimeOutput' } : { kind: 'mod', name: plugin.origin }, name: plugin.name },
+      ...held.map((name) => ({ origin: { kind: 'mod', name: plugin.origin } as const, name })),
+    )), answers);
     const result = pluginCommandsWith(fake.adapter, client).renamePlugin({ apply }, plugin, newName);
     return { fake, result };
   };
@@ -66,8 +69,7 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
   });
 
   it('refuses a name the origin already holds before any write', async () => {
-    const heldPlugins = [{ origin: { kind: 'mod' as const, name: PLUGIN.origin }, name: 'Renamed Patch.esp' }];
-    const { fake, result } = rename('Renamed Patch.esp', PLUGIN, { heldPlugins });
+    const { fake, result } = rename('Renamed Patch.esp', PLUGIN, {}, ['Renamed Patch.esp']);
 
     expect(await result).toEqual({ applied: false, sourceRenamed: false, refusal: '"Patch Mod" already holds "Renamed Patch.esp".' });
     expect(client.calls.map((call) => call.method)).toEqual(['getCreatablePluginExtensions']);
@@ -122,9 +124,9 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
 });
 
 describe('renameRefusal — what the prompt is told before the rename is asked for', () => {
-  const refusal = (newName: string, heldIn: string) => pluginCommandsWith(fakeInstanceAdapter(undefined, {
-    heldPlugins: [{ origin: { kind: 'mod', name: heldIn }, name: 'Renamed Patch.esp' }],
-  }).adapter).renameRefusal(PLUGIN, newName, ['.esm', '.esl', '.esp']);
+  const refusal = (newName: string, heldIn: string) => pluginCommandsWith(fakeInstanceAdapter(readingFixture(pluginFilesHeld(
+    { origin: { kind: 'mod', name: heldIn }, name: 'Renamed Patch.esp' },
+  ))).adapter).renameRefusal(PLUGIN, newName, ['.esm', '.esl', '.esp']);
 
   it('refuses a name the plugin\'s origin holds, and not one another origin holds', async () => {
     expect(await refusal('Renamed Patch.esp', 'Patch Mod')).toBe('"Patch Mod" already holds "Renamed Patch.esp".');

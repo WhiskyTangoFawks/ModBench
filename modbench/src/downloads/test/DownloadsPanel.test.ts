@@ -49,9 +49,12 @@ import type { MoveToTrash } from '../../ports/trash';
 import type { LocatedDownloadedFileRow, DownloadedFileRow, Instance, InstanceValue } from '../../instanceLoader/instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce, assertSelectionOutcome } from '../../test/surfacingDoubles';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
-import { fakeInstanceAdapter, readingFixture, type FakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
+import { downloadedFilesOf, fakeInstanceAdapter, readingFixture, type InstanceAnswers, type FakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+
+const downloadsFake = (answers: InstanceAnswers = {}) =>
+  fakeInstanceAdapter(readingFixture({ downloadedFiles: downloadedFilesOf('a.7z', 'b.7z', 'foo.7z', 'locked.7z') }), answers);
 
 const node = (root: string, name: string, row: Partial<DownloadedFileRow> = {}): DownloadedFileNode =>
   downloadedFileNodeFixture(downloadedFileRowFixture(name, row, root));
@@ -213,7 +216,7 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
   });
 
   it('exclude writes the mark, then the read, then the bar closes', async () => {
-    const fake = fakeInstanceAdapter();
+    const fake = downloadsFake();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceReadingTheWrites(fake), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.exclude', node(ROOT, 'foo.7z'));
@@ -222,7 +225,7 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
   });
 
   it('a selection of several runs one bar and one read', async () => {
-    registerDownloadsMultiRowCommands(downloadedFileCommands(fakeInstanceAdapter().adapter), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(downloadedFileCommands(downloadsFake().adapter), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.exclude', node(ROOT, 'a.7z'), [node(ROOT, 'a.7z'), node(ROOT, 'b.7z')]);
 
     expect(progressSteps).toEqual([opens, reads, 'progress closes']);
@@ -232,7 +235,7 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
     ['exclude', 'modbench.downloadedFile.exclude', { excluded: true }, 'Excluded'],
     ['include', 'modbench.downloadedFile.include', { excluded: false }, 'Included'],
   ])('%s still hands the adapter the mark for a row the view shows already in that state, since the disk decides', async (_name, command, row, mark) => {
-    const fake = fakeInstanceAdapter();
+    const fake = downloadsFake();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     await invoke(command, node(ROOT, 'foo.7z', row));
@@ -242,7 +245,7 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
   });
 
   it('delete trashes, then the read, then the bar closes', async () => {
-    const { adapter } = fakeInstanceAdapter();
+    const { adapter } = downloadsFake();
     const trashing: InstanceAdapter = {
       ...adapter,
       trashDownloadedFile: (name, trashFile) => { progressSteps.push('trash'); return adapter.trashDownloadedFile(name, trashFile); },
@@ -255,7 +258,7 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
   });
 
   it('a declined delete opens no bar', async () => {
-    registerDownloadsMultiRowCommands(downloadedFileCommands(fakeInstanceAdapter().adapter), instanceThatReads, recordingReporter(), scriptedDialog(undefined), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(downloadedFileCommands(downloadsFake().adapter), instanceThatReads, recordingReporter(), scriptedDialog(undefined), trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.delete', node(ROOT, 'foo.7z'));
 
     expect(progressSteps).toEqual([]);
@@ -267,7 +270,7 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
     const provider = new DownloadsProvider({ instance: disk });
     const instance = { value: disk.value, refresh: () => { disk.fail('locked'); return Promise.resolve(); } };
 
-    registerDownloadsMultiRowCommands(downloadedFileCommands(fakeInstanceAdapter().adapter), instance, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(downloadedFileCommands(downloadsFake().adapter), instance, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.exclude', node(ROOT, 'foo.7z'));
 
     expect((await provider.getChildren()).map((n) => n.kind === 'downloadedFile' && n.argument.row.name)).toEqual(['foo.7z']);
@@ -282,7 +285,7 @@ describe('modbench.downloadedFile.exclude / include — a multi-name selection',
     ['exclude', {}, 'Excluded'],
     ['include', { excluded: true }, 'Included'],
   ])('%s: given the right-clicked row and the selection, changes the whole selection, refuses the gone file, and reports once', async (verb, row, mark) => {
-    const fake = fakeInstanceAdapter(readingFixture(), { goneDownloadedFiles: new Set(['gone.7z']) });
+    const fake = downloadsFake();
     const reporter = recordingReporter();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceThatReads, reporter, scriptedDialog(), trash, downloadsLog, () => []);
@@ -302,7 +305,7 @@ describe('modbench.downloadedFile.exclude / include — a multi-name selection',
   });
 
   it('an empty selection excludes nothing and reports nothing', async () => {
-    const fake = fakeInstanceAdapter();
+    const fake = downloadsFake();
     const reporter = recordingReporter();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceThatReads, reporter, scriptedDialog(), trash, downloadsLog, () => []);
@@ -318,7 +321,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('Esc deletes nothing and says nothing', async () => {
-    const fake = fakeInstanceAdapter();
+    const fake = downloadsFake();
     const reporter = recordingReporter();
     const ask = scriptedDialog(undefined);
 
@@ -332,7 +335,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   });
 
   it('given the right-clicked row and the selection, deletes the whole selection in one call, refuses the file that cannot go, and reports once', async () => {
-    const fake = fakeInstanceAdapter(readingFixture(), {
+    const fake = downloadsFake({
       refusals: (call) => (call.verb === 'trashDownloadedFile' && call.name === 'locked.7z' ? 'EPERM: operation not permitted' : undefined),
     });
     const reporter = recordingReporter();
@@ -368,7 +371,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     const selection = selecting(node(ROOT, 'a.7z'), node(ROOT, 'b.7z'));
     const ask = scriptedDialog('Delete');
 
-    registerDownloadsMultiRowCommands(downloadedFileCommands(fakeInstanceAdapter().adapter), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(downloadedFileCommands(downloadsFake().adapter), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, () => []);
     invoke('modbench.downloadedFile.delete', selection[0], selection);
 
     await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
@@ -379,7 +382,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   });
 
   it('metadata left behind after the file landed is one Output line naming the word the instance supplies, no notification', async () => {
-    const fake = fakeInstanceAdapter(readingFixture(), { metadataLeftBehind: 'EPERM: operation not permitted' });
+    const fake = downloadsFake({ metadataLeftBehind: 'EPERM: operation not permitted' });
     const reporter = recordingReporter();
 
     const instance = {
@@ -400,7 +403,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     const ask = scriptedDialog('Delete');
     const viewSelection = () => [node(ROOT, 'a.7z'), node(ROOT, 'b.7z')];
 
-    const fake = fakeInstanceAdapter();
+    const fake = downloadsFake();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, viewSelection);
     invoke('modbench.downloadedFile.delete');
@@ -413,7 +416,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     const reporter = recordingReporter();
     const ask = scriptedDialog('Delete');
 
-    const fake = fakeInstanceAdapter();
+    const fake = downloadsFake();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceThatReads, reporter, ask, trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.delete');
@@ -434,7 +437,7 @@ describe('the Downloads gestures called by the agent', () => {
     ['exclude', 'Excluded'],
     ['include', 'Included'],
   ])('%s marks the files given, never the selection, and answers the outcome without reporting it', async (verb, mark) => {
-    const fake = fakeInstanceAdapter();
+    const fake = downloadsFake();
     const reporter = recordingReporter();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), listing('a.7z', 'b.7z'), reporter, scriptedDialog(), trash, downloadsLog, viewSelection);
@@ -447,7 +450,7 @@ describe('the Downloads gestures called by the agent', () => {
   });
 
   it('exclude answers the file gone from disk as refused, and the others as landed', async () => {
-    const fake = fakeInstanceAdapter(readingFixture(), { goneDownloadedFiles: new Set(['gone.7z']) });
+    const fake = downloadsFake();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), listing('a.7z', 'gone.7z'), recordingReporter(), scriptedDialog(), trash, downloadsLog, viewSelection);
     const answered = await invoke('modbench.downloadedFile.exclude', named('a.7z', 'gone.7z'));
@@ -458,7 +461,7 @@ describe('the Downloads gestures called by the agent', () => {
   it('delete trashes the files given, never the selection, asking nothing, and answers what it deleted', async () => {
     const ask = scriptedDialog('Delete');
     const reporter = recordingReporter();
-    const fake = fakeInstanceAdapter();
+    const fake = downloadsFake();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), listing('a.7z'), reporter, ask, trash, downloadsLog, viewSelection);
     const answered = await invoke('modbench.downloadedFile.delete', named('a.7z'));
@@ -470,7 +473,7 @@ describe('the Downloads gestures called by the agent', () => {
   });
 
   it('delete answers the metadata left behind as a log partial, writing no line itself', async () => {
-    const fake = fakeInstanceAdapter(readingFixture(), { metadataLeftBehind: 'EPERM' });
+    const fake = downloadsFake({ metadataLeftBehind: 'EPERM' });
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), listing('a.7z'), recordingReporter(), scriptedDialog(), trash, downloadsLog, viewSelection);
     const answered = await invoke('modbench.downloadedFile.delete', named('a.7z'));
@@ -483,7 +486,7 @@ describe('the Downloads gestures called by the agent', () => {
   });
 
   it('delete refuses, item by item, a file the adapter finds gone, whatever the Instance value lists', async () => {
-    const fake = fakeInstanceAdapter(readingFixture(), { goneDownloadedFiles: new Set(['gone.7z']) });
+    const fake = downloadsFake();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), listing('a.7z'), recordingReporter(), scriptedDialog(), trash, downloadsLog, viewSelection);
     const answered = await invoke('modbench.downloadedFile.delete', named('a.7z', 'gone.7z'));
@@ -492,7 +495,7 @@ describe('the Downloads gestures called by the agent', () => {
   });
 
   it.each(['delete', 'exclude', 'include'])('%s refuses an Argument that is not a downloaded file, writing nothing', async (verb) => {
-    const fake = fakeInstanceAdapter();
+    const fake = downloadsFake();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), listing('a.7z'), recordingReporter(), scriptedDialog(), trash, downloadsLog, viewSelection);
     await expect(invoke(`modbench.downloadedFile.${verb}`, new AgentCall([{ kind: 'mod', name: 'a.7z' }], {}))).rejects.toBeInstanceOf(Refusal);
@@ -614,7 +617,7 @@ describe('the Downloads gestures from the palette, handed no row, act on the vie
     ['exclude', {}, 'Excluded'],
     ['include', { excluded: true }, 'Included'],
   ])('%s takes the whole selection', async (verb, row, mark) => {
-    const fake = fakeInstanceAdapter();
+    const fake = downloadsFake();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => [node(ROOT, 'a.7z', row), node(ROOT, 'b.7z', row)]);
     await invoke(`modbench.downloadedFile.${verb}`);

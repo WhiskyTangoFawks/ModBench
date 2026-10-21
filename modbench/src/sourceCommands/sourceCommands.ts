@@ -6,7 +6,7 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 import { ba2VersionsOf } from '../tables/gamePaths';
 
 interface SourceCommandsDeps {
-  client: Pick<MEditClient, 'build' | 'decompileAndCommit' | 'latestLoadOrder'>;
+  client: Pick<MEditClient, 'build' | 'decompileAndCommit'>;
   adapter: Pick<InstanceAdapter,
     'modMetadata' | 'metadataFilesInModFolder' | 'sourceFolder' | 'sourceMods' | 'gameRelease' | 'modFolderPath' | 'exclusionMark' | 'statCacheFolder' | 'sourceHost'>;
   /** Saves the unsaved plugin source under a folder, as Text documents holds it; answers the paths VS Code left unsaved. */
@@ -50,7 +50,6 @@ export function sourceCommands({ client, adapter, saveUnsaved }: SourceCommandsD
         else sent.push(decided);
       }
       if (sent.length === 0) return { landed: [], refused };
-      await client.latestLoadOrder();
       const outcome = await client.build(
         sent, { exclusionMark: adapter.exclusionMark, archives: archiveVariants(await adapter.gameRelease()), statCache: adapter.statCacheFolder });
       return isRefused(outcome) ? outcome : { landed: outcome.landed, refused: [...outcome.refused, ...refused] };
@@ -68,7 +67,6 @@ export function sourceCommands({ client, adapter, saveUnsaved }: SourceCommandsD
         else sent.push({ name: mod, sourceFolder, metadataFiles: [...adapter.metadataFilesInModFolder] });
       }
       if (sent.length === 0) return { landed: [], refused };
-      await client.latestLoadOrder();
       const outcome = await client.decompileAndCommit(sent, options);
       return isRefused(outcome) ? outcome : { landed: outcome.landed, refused: [...outcome.refused, ...refused] };
     },

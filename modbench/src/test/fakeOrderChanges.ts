@@ -5,8 +5,8 @@ import {
 } from '../instanceAdapter/instanceAdapter';
 
 const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
-const indexOfEntry = (order: readonly ModlistEntry[], entry: EntryRef): number =>
-  order.findIndex((listed) => listed.kind === entry.kind && sameName(listed.name, entry.name));
+const isNamed = (listed: ModlistEntry, kind: ModlistEntry['kind'], name: string): boolean => listed.kind === kind && sameName(listed.name, name);
+const indexOfEntry = (order: readonly ModlistEntry[], entry: EntryRef): number => order.findIndex((listed) => isNamed(listed, entry.kind, entry.name));
 
 function listedName(order: readonly ModlistEntry[], entry: EntryRef): string {
   const listed = order[indexOfEntry(order, entry)];
@@ -93,13 +93,13 @@ function moveBlock(order: readonly ModlistEntry[], isMoved: (entry: ModlistEntry
 
 function applied(order: readonly ModlistEntry[], change: ModOrderChange): ModlistEntry[] {
   switch (change.kind) {
-    case 'enable': return order.map((entry) => (entry.kind === 'mod' && sameName(entry.name, change.mod) ? { ...entry, enabled: change.enabled } : entry));
+    case 'enable': return order.map((entry) => (isNamed(entry, 'mod', change.mod) ? { ...entry, enabled: change.enabled } : entry));
     case 'moveMods': {
-      const moved = (entry: ModlistEntry): boolean => entry.kind === 'mod' && change.mods.some((name) => sameName(name, entry.name));
+      const moved = (entry: ModlistEntry): boolean => change.mods.some((name) => isNamed(entry, 'mod', name));
       return moveBlock(order, moved, (rest) => modsInsertAt(rest, change.place, change.end));
     }
     case 'moveSeparators': {
-      const inBlock = new Set(order.flatMap((entry, index) => (entry.kind === 'separator' && change.separators.some((name) => sameName(name, entry.name))
+      const inBlock = new Set(order.flatMap((entry, index) => (change.separators.some((name) => isNamed(entry, 'separator', name))
         ? Array.from({ length: index + 1 - blockStartOf(order, index) }, (_, offset) => blockStartOf(order, index) + offset)
         : [])));
       return moveBlock(order, (_, index) => inBlock.has(index), (rest) => separatorsInsertAt(rest, change.place, change.end));
@@ -110,10 +110,10 @@ function applied(order: readonly ModlistEntry[], change: ModOrderChange): Modlis
       const at = change.anchor.kind === 'mod' ? anchorAt + 1 : blockStartOf(order, anchorAt);
       return order.toSpliced(at, 0, { kind: 'separator', name: change.separator, enabled: true });
     }
-    case 'renameSeparator': return order.map((entry) => (entry.kind === 'separator' && sameName(entry.name, change.from) ? { ...entry, name: change.to } : entry));
-    case 'renameMod': return order.map((entry) => (entry.kind === 'mod' && sameName(entry.name, change.from) ? { ...entry, name: change.to } : entry));
-    case 'dropMod': return order.filter((entry) => !(entry.kind === 'mod' && sameName(entry.name, change.mod)));
-    case 'dropSeparator': return order.filter((entry) => !(entry.kind === 'separator' && sameName(entry.name, change.separator)));
+    case 'renameSeparator': return order.map((entry) => (isNamed(entry, 'separator', change.from) ? { ...entry, name: change.to } : entry));
+    case 'renameMod': return order.map((entry) => (isNamed(entry, 'mod', change.from) ? { ...entry, name: change.to } : entry));
+    case 'dropMod': return order.filter((entry) => !isNamed(entry, 'mod', change.mod));
+    case 'dropSeparator': return order.filter((entry) => !isNamed(entry, 'separator', change.separator));
   }
 }
 

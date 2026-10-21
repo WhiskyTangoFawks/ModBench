@@ -76,12 +76,12 @@ describe('installMod', () => {
       expect(calls).toEqual([]);
     });
 
-    it('leaves a mod no folder holds to the adapter, whose claim refuses it', async () => {
-      const answers = { installed: { landed: false }, foldersAbsent: new Set(['Vanished Mod']) } as const;
+    it('leaves a mod whose name gives no folder to the adapter, whose claim refuses it', async () => {
+      const answers = { installed: { landed: false } } as const;
 
-      const { result } = await install(INSTALLATION_FILE, { kind: 'upgrade', name: 'Vanished Mod' }, answers, false, reading([]));
+      const { result } = await install(INSTALLATION_FILE, { kind: 'upgrade', name: 'Vanished/Mod' }, answers, false, reading([]));
 
-      expect(result).toEqual({ applied: false, refusal: 'Cannot upgrade "Vanished Mod": there is no folder by that name under mods/.' });
+      expect(result).toEqual({ applied: false, refusal: 'Cannot upgrade "Vanished/Mod": there is no folder by that name under mods/.' });
     });
 
     it('installs over a mod whose folder only lacks files its manifest names, which the upgrade does not lose', async () => {
@@ -215,13 +215,24 @@ describe('installMod', () => {
     expect(calls.map((call) => call.verb)).toEqual(['install']);
   });
 
-  it.each([
-    ['its metadata cannot be written', { refusals: refusing('markDownloadedFile', 'EISDIR: illegal operation on a directory') }, /EISDIR/],
-    ['it is gone from disk', { goneDownloadedFiles: new Set([DOWNLOADED_FILE.name]) }, /"Freshly-1-0.7z" is gone from disk/],
-  ] as const)('reports a downloaded file it could not mark, because %s, beside the landed mod', async (_, answers, why) => {
-    const { result } = await install(DOWNLOADED_FILE, NEW_MOD, answers);
+  it('reports a downloaded file it could not mark, because its metadata cannot be written, beside the landed mod', async () => {
+    const { result } = await install(DOWNLOADED_FILE, NEW_MOD, { refusals: refusing('markDownloadedFile', 'EISDIR: illegal operation on a directory') });
 
     expect(result).toMatchObject({ applied: true, isFomod: false });
-    expect(result.applied && result.downloadedFileRefusal).toMatch(why);
+    expect(result.applied && result.downloadedFileRefusal).toMatch(/EISDIR/);
+  });
+
+  it('reports a downloaded file it could not mark, because it went from disk during the install, beside the landed mod', async () => {
+    const fake = fakeInstanceAdapter(readingFixture({ downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files: [FRESHLY] } }), {
+      refusals: (call) => {
+        if (call.verb === 'install') fake.read({ downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files: [] } });
+        return undefined;
+      },
+    });
+
+    const result = await modCommands(fake.adapter, new InMemoryMEditClient(), unreadStatus).installMod(DOWNLOADED_FILE, NEW_MOD, true);
+
+    expect(result).toMatchObject({ applied: true, isFomod: false });
+    expect(result.applied && result.downloadedFileRefusal).toMatch(/"Freshly-1-0.7z" is gone from disk/);
   });
 });

@@ -1020,6 +1020,32 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     expect(requests).toHaveLength(1);
   });
 
+  it.each(gestures)('sends the %s request only once the load order sent before it has settled', async (_name, gesture, route) => {
+    const { response, push } = pushableStreamResponse();
+    let putLoadOrder = false;
+    const requests: string[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(response)],
+      ['/load-order', () => { putLoadOrder = true; return Promise.resolve(jsonResponse(200, { applied: true, version: 1 })); }],
+      [route, (req) => { requests.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, { applied: [], refused: [] })); }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    void client.sendLoadOrder({
+      plugins: [], active: [], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache',
+      dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
+    });
+    await vi.waitFor(() => expect(putLoadOrder).toBe(true));
+
+    const gesturing = gesture(client);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests).toEqual([]);
+
+    push(readyTickThatSettlesPutLoadOrder());
+    await gesturing;
+    expect(requests).toHaveLength(1);
+  });
+
   it('fails a refused hand-over with mEdit\'s reason alone', async () => {
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],

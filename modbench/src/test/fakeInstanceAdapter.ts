@@ -1,6 +1,6 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import {
-  filesWinningFirst, type DecideModOrder, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type SourceMods, type OriginFile, type InstallKeys, type PluginOrderChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+  entryNotFound, filesWinningFirst, type DecideModOrder, type DownloadedFile, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type SourceMods, type OriginFile, type InstallKeys, type PluginOrderChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
@@ -111,19 +111,12 @@ export interface InstanceAnswers {
   hosts?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['sourceHost']>>>;
   /** What the instance repository holds of each submodule, by name. */
   pins?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['submodule']>>>;
-  /** Downloaded files that are gone: they get no mark. */
-  goneDownloadedFiles?: ReadonlySet<string>;
   /** The reason a trashed downloaded file's metadata is left behind. */
   metadataLeftBehind?: string;
   /** A write that rejects with the message this returns for it, after it is recorded. */
   refusals?: (call: AdapterCall) => string | undefined;
   /** The reason reading a file of an origin fails, or `undefined` when it reads. */
   unreadOriginFile?: (file: { readonly origin: FileOrigin; readonly relativePath: string }) => string | undefined;
-  /** Origin files that are gone: they get no mark. */
-  goneOriginFiles?: readonly { readonly origin: FileOrigin; readonly relativePath: string }[];
-  heldPlugins?: readonly { readonly origin: FileOrigin; readonly name: string }[];
-  /** Entries with no folder to trash, by name. */
-  foldersAbsent?: ReadonlySet<string>;
 }
 
 export interface FakeInstanceAdapter {
@@ -143,19 +136,46 @@ export interface FakeInstanceAdapter {
 const EXCLUSION_MARK = '.excluded';
 
 const entryKey = (entry: EntryRef): string => (entry.kind === 'separator' ? `${entry.name}_separator` : entry.name).toLowerCase();
-const originKey = (origin: FileOrigin): string => (origin.kind === 'mod' ? `mod:${origin.name}` : origin.kind);
 
 /** The folders of the given entries, a bare name being a mod, held as the fake's `entryKey` folds names. */
 export function modFoldersOf(...entries: readonly (string | (EntryRef & { modName?: string }))[]): ModFolders {
-  const all: ModFolder[] = entries.map((entry) => {
+  return foldersHolding(entries.map((entry) => {
     const ref = typeof entry === 'string' ? { kind: 'mod' as const, name: entry } : entry;
     return { kind: ref.kind, name: ref.name, path: `/mods/${ref.name}`, modName: ref.modName ?? ref.name };
-  });
-  return { all, holding: (entry) => all.find((folder) => entryKey(folder) === entryKey(entry)) };
+  }));
 }
 
-export const fileIn = (folder: string, relativePath: string): OriginFile =>
-  ({ relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath });
+const foldersHolding = (all: readonly ModFolder[]): ModFolders =>
+  ({ all, holding: (entry) => all.find((folder) => entryKey(folder) === entryKey(entry)) });
+
+const namesNoFolder = (name: string): boolean => name === '' || name === '.' || name === '..' || /[\\/]/.test(name);
+
+const inTheWay = (path: string): Error => new Error(`The folder "${path}" is in the way`);
+
+export function fileIn(folder: string, relativePath: string): OriginFile {
+  const includedPath = relativePath.split('/').map((segment) => segment.replace(EXCLUSION_MARK, '')).join('/');
+  const marked = includedPath !== relativePath;
+  return { relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`, excluded: marked, markedExcluded: marked, includedPath };
+}
+
+/** The origins' files at their roots, each plugin held by the origin it is given with. */
+export function pluginFilesHeld(...held: readonly { readonly origin: FileOrigin; readonly name: string }[]): Pick<InstanceReading, 'modFiles' | 'runtimeOutput'> {
+  const originsFiles = (origin: string, folder: string, names: readonly string[]): OriginFiles =>
+    ({ origin, folder, files: names.map((name) => fileIn(folder, name)), folders: [], notes: [] });
+  const namesIn = (wanted: FileOrigin): string[] => held.filter((one) => one.origin.kind === wanted.kind && (one.origin.kind !== 'mod' || (wanted.kind === 'mod' && one.origin.name === wanted.name))).map((one) => one.name);
+  const mods = [...new Set(held.flatMap((one) => (one.origin.kind === 'mod' ? [one.origin.name] : [])))];
+  return {
+    modFiles: new Map(mods.map((name) => [name, originsFiles(name, `/mods/${name}`, namesIn({ kind: 'mod', name }))])),
+    runtimeOutput: originsFiles('overwrite', '/overwrite', namesIn({ kind: 'runtimeOutput' })),
+  };
+}
+
+/** The downloads folder listing these names, each with no metadata. */
+export const downloadedFilesOf = (...names: readonly string[]): DownloadedFiles => ({
+  kind: 'listed',
+  downloadsDir: '/downloads',
+  files: names.map((name) => ({ name, path: `/downloads/${name}`, metadataPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1, excluded: false, meta: undefined })),
+});
 
 /** The Instance adapter's second implementation: reads answer from the reading and the answers,
  *  each write is recorded, and a decision a caller hands over runs against the reading. */
@@ -185,6 +205,17 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       current = { ...current, pluginOrder: order };
       return { wrote };
     });
+  const foldersNow = (): ModFolders => current.modFolders ?? foldersHolding([]);
+  const originFilesOf = (origin: FileOrigin): OriginFiles | undefined => (origin.kind === 'mod' ? current.modFiles.get(origin.name) : current.runtimeOutput);
+  const downloadedFileNamed = (name: string): DownloadedFile | undefined => {
+    if (current.downloadedFiles.kind === 'unresolved') throw new Error(current.downloadedFiles.reason);
+    return current.downloadedFiles.files?.find((file) => file.name === name);
+  };
+  const withOriginFiles = (origin: FileOrigin, next: OriginFiles): void => {
+    current = origin.kind === 'mod' ? { ...current, modFiles: new Map(current.modFiles).set(origin.name, next) } : { ...current, runtimeOutput: next };
+  };
+  const rootFileOf = (origin: FileOrigin, name: string): OriginFile | undefined =>
+    originFilesOf(origin)?.files.find((file) => !file.relativePath.includes('/') && pluginKey(file.relativePath) === pluginKey(name));
   const unreadable = <T>(read: keyof NonNullable<InstanceAnswers['unreadReads']>, found: T): Promise<T> => {
     const why = answers.unreadReads?.[read];
     return why === undefined ? Promise.resolve(found) : Promise.reject(new Error(why));
@@ -210,7 +241,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     sourceMods: () => unreadable('sourceMods', current.sourceMods),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
-    modFolderPath: (mod) => Promise.resolve(answers.foldersAbsent?.has(mod) ? undefined : `/mods/${mod}`),
+    modFolderPath: (mod) => Promise.resolve(namesNoFolder(mod) ? undefined : foldersNow().holding({ kind: 'mod', name: mod })?.path ?? `/mods/${mod}`),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? { kind: 'read', answer: undefined }),
@@ -267,30 +298,64 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return reorderPlugins({ verb: 'changePluginOrderOverProvided', profile, changes }, changes);
     },
     markDownloadedFile: (name, mark) =>
-      record({ verb: 'markDownloadedFile', name, mark }, answers.goneDownloadedFiles?.has(name) ? { gone: true } as const : { gone: false, wrote: true } as const),
+      write({ verb: 'markDownloadedFile', name, mark }, () => (downloadedFileNamed(name) === undefined ? { gone: true } as const : { gone: false, wrote: true } as const)),
     trashDownloadedFile: (name) =>
-      record({ verb: 'trashDownloadedFile', name },
-        answers.goneDownloadedFiles?.has(name) ? { gone: true } as const : { gone: false, ...(answers.metadataLeftBehind === undefined ? {} : { metadataLeftBehind: answers.metadataLeftBehind }) } as const),
+      write({ verb: 'trashDownloadedFile', name }, () => {
+        if (downloadedFileNamed(name) === undefined) return { gone: true } as const;
+        if (current.downloadedFiles.kind === 'listed') {
+          current = { ...current, downloadedFiles: { ...current.downloadedFiles, files: current.downloadedFiles.files?.filter((file) => file.name !== name) } };
+        }
+        return { gone: false, ...(answers.metadataLeftBehind === undefined ? {} : { metadataLeftBehind: answers.metadataLeftBehind }) } as const;
+      }),
     selectProfile: (profile) => record({ verb: 'selectProfile', profile }, { wrote: profile !== current.profile }),
-    createModFolder: (mod) => record({ verb: 'createModFolder', mod }, undefined),
-    renameModFolder: (from, to) => record({ verb: 'renameModFolder', from, to }, undefined),
+    createModFolder: (mod) =>
+      write({ verb: 'createModFolder', mod }, () => {
+        const held = foldersNow().holding({ kind: 'mod', name: mod });
+        if (held !== undefined) throw inTheWay(held.path);
+        current = { ...current, modFolders: foldersHolding([...foldersNow().all, { kind: 'mod', name: mod, path: `/mods/${mod}`, modName: mod }]) };
+      }),
+    renameModFolder: (from, to) =>
+      write({ verb: 'renameModFolder', from, to }, () => {
+        const held = foldersNow().holding({ kind: 'mod', name: from });
+        if (held === undefined) throw new Error(entryNotFound({ kind: 'mod', name: from }));
+        const taken = foldersNow().holding({ kind: 'mod', name: to });
+        if (taken !== undefined && taken !== held) throw inTheWay(taken.path);
+        current = { ...current, modFolders: foldersHolding(foldersNow().all.map((folder) => (folder === held ? { ...folder, name: to, path: `/mods/${to}`, modName: to } : folder))) };
+      }),
     originFile: (origin, relativePath) => {
       const unread = answers.unreadOriginFile?.({ origin, relativePath });
       if (unread !== undefined) return Promise.reject(new Error(unread));
-      const gone = answers.goneOriginFiles?.some((one) => originKey(one.origin) === originKey(origin) && one.relativePath === relativePath);
-      const listed = (origin.kind === 'mod' ? current.modFiles.get(origin.name) : current.runtimeOutput)?.files.find((file) => file.relativePath === relativePath);
-      const unmarked = relativePath.split('/').map((segment) => segment.replace(EXCLUSION_MARK, '')).join('/');
-      return Promise.resolve(gone ? undefined : listed ?? { ...fileIn('/origin', relativePath), includedPath: unmarked });
+      return Promise.resolve(originFilesOf(origin)?.files.find((file) => file.relativePath === relativePath));
     },
     markOriginFile: (origin, relativePath, mark) =>
-      record<OriginFileMarked>({ verb: 'markOriginFile', origin, relativePath, mark },
-        answers.goneOriginFiles?.some((gone) => originKey(gone.origin) === originKey(origin) && gone.relativePath === relativePath) ? { gone: true } : { gone: false, wrote: true, relativePath }),
+      write<OriginFileMarked>({ verb: 'markOriginFile', origin, relativePath, mark }, () => {
+        const held = originFilesOf(origin);
+        const there = [...held?.files ?? [], ...held?.folders ?? []].some((one) => one.relativePath === relativePath);
+        return there ? { gone: false, wrote: true, relativePath } : { gone: true };
+      }),
     entryKey,
     exclusionMark: EXCLUSION_MARK,
-    originHoldsPlugin: (origin, name) => Promise.resolve((answers.heldPlugins ?? []).some((held) =>
-      originKey(held.origin) === originKey(origin) && pluginKey(held.name) === pluginKey(name))),
-    renamePlugin: (origin, from, to) => record({ verb: 'renamePlugin', origin, from, to }, undefined),
-    trashEntryFolder: (entry) => record({ verb: 'trashEntryFolder', entry }, !answers.foldersAbsent?.has(entry.name)),
+    originHoldsPlugin: (origin, name) => Promise.resolve(rootFileOf(origin, name) !== undefined),
+    renamePlugin: (origin, from, to) =>
+      write({ verb: 'renamePlugin', origin, from, to }, () => {
+        const sameAsFrom = (name: string): boolean => pluginKey(name) === pluginKey(from);
+        const other = current.pluginOrder.find((plugin) => pluginKey(plugin.name) === pluginKey(to) && !sameAsFrom(plugin.name));
+        if (other !== undefined && current.pluginOrder.some((plugin) => sameAsFrom(plugin.name))) throw new Error(`Plugin already in plugins.txt: ${other.name}`);
+        const own = rootFileOf(origin, from);
+        if (own === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${from}"`);
+        const taken = rootFileOf(origin, to);
+        if (taken !== undefined && taken !== own) throw new Error(`The file "${taken.path}" is in the way`);
+        const files = originFilesOf(origin);
+        if (files !== undefined) withOriginFiles(origin, { ...files, files: files.files.map((file) => (file === own ? fileIn(files.folder ?? '', to) : file)) });
+        current = { ...current, pluginOrder: current.pluginOrder.map((plugin) => (sameAsFrom(plugin.name) ? { ...plugin, name: to } : plugin)) };
+      }),
+    trashEntryFolder: (entry) =>
+      write({ verb: 'trashEntryFolder', entry }, () => {
+        const held = foldersNow().holding(entry);
+        if (held === undefined) return false;
+        current = { ...current, modFolders: foldersHolding(foldersNow().all.filter((folder) => folder !== held)) };
+        return true;
+      }),
     trashModFile: (mod, relativePath) => record({ verb: 'trashModFile', mod, relativePath }, undefined),
     trashSourceFolder: (mod) => record({ verb: 'trashSourceFolder', mod }, true),
     install: (installed, target, keys) =>
