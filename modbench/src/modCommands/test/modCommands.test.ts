@@ -119,6 +119,32 @@ describe('moveMods and moveSeparators', () => {
     });
     expect(fake.calls).toEqual([orderWrite([{ kind: 'moveSeparators', separators: [UNASSIGNED], place, end: 'winning' }])]);
   });
+
+  it('moveMods lands nothing for a place that is one of the mods moving, refusing each by name, and writes nothing', async () => {
+    const { fake, commands } = over();
+
+    const outcome = await commands.moveMods(['ENBoost', 'Harder VATS'], { kind: 'mod', name: 'ENBoost' }, 'losing');
+
+    const reason = 'The target is "ENBoost", which is moving.';
+    expect(outcome).toEqual({
+      applied: true,
+      outcome: { landed: [], refused: [{ item: 'ENBoost', reason }, { item: 'Harder VATS', reason }] },
+    });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it.each<MovePlace>([{ kind: 'mod', name: 'ENBoost' }, { kind: 'ungrouped' }])(
+    'moveSeparators refuses the place %j, which no separator can take, and writes nothing', async (place) => {
+      const { fake, commands } = over();
+
+      const outcome = await commands.moveSeparators([UNASSIGNED], place, 'winning');
+
+      expect(outcome).toEqual({
+        applied: false,
+        refusal: 'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.',
+      });
+      expect(fake.calls).toEqual([]);
+    });
 });
 
 describe('insertSeparator', () => {

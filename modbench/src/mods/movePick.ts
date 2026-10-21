@@ -58,9 +58,6 @@ export function separatorsMovePick(
     .map((g) => ({ label: g.separator.name, target: { kind: 'separator', name: g.separator.name } }));
 }
 
-export const isSeparatorsPlace = (place: MovePlace): place is SeparatorsPlace =>
-  place.kind === 'separator' || place.kind === 'modOrder';
-
 const isOrderEnd = (value: unknown): value is OrderEnd => value === 'winning' || value === 'losing';
 
 function placeOf(value: unknown): MovePlace | undefined {

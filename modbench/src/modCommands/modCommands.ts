@@ -83,18 +83,31 @@ function setModsEnabled(
 export type { EntryRef, MovePlace, OrderEnd, OriginFileMark, SeparatorsPlace } from '../instanceAdapter/instanceAdapter';
 
 // `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
-// order, at the `end` of the place. A separator or mod that has gone refuses the whole move.
-function moveMods(
+// order, at the `end` of the place. A separator or mod that has gone refuses the whole move, and
+// so does a place that is one of the mods moving.
+async function moveMods(
   adapter: InstanceAdapter, modNames: readonly string[], place: MovePlace, end: OrderEnd,
 ): Promise<SelectionResult<string>> {
+  if (place.kind === 'mod' && modNames.includes(place.name)) {
+    const reason = `The target is "${place.name}", which is moving.`;
+    return { applied: true, outcome: { landed: [], refused: modNames.map((item) => ({ item, reason })) } };
+  }
   return changeSelection(adapter, 'mod', modNames, (found) => [{ kind: 'moveMods', mods: found, place, end }]);
 }
 
 // `modbench.mod.move` over separators (mods.md, Pickers, Move): each brings every mod it holds,
-// and they land on the `end` side of the place. A target that has gone refuses the whole move.
-function moveSeparators(
-  adapter: InstanceAdapter, separatorNames: readonly string[], place: SeparatorsPlace, end: OrderEnd,
+// and they land on the `end` side of the place. A target that has gone refuses the whole move, and
+// so does a place that is beside a mod or among the ungrouped mods.
+const SEPARATOR_PLACES =
+  'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.';
+
+const isSeparatorsPlace = (place: MovePlace): place is SeparatorsPlace =>
+  place.kind === 'separator' || place.kind === 'modOrder';
+
+async function moveSeparators(
+  adapter: InstanceAdapter, separatorNames: readonly string[], place: MovePlace, end: OrderEnd,
 ): Promise<SelectionResult<string>> {
+  if (!isSeparatorsPlace(place)) return { applied: false, refusal: SEPARATOR_PLACES };
   return changeSelection(adapter, 'separator', separatorNames, (found) =>
     [{ kind: 'moveSeparators', separators: found, place, end }]);
 }

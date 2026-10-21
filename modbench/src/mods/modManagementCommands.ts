@@ -17,7 +17,7 @@ import type { MoveToTrash } from '../ports/trash';
 import type { EntryRef, ModCommands, MovePlace, OriginFileMark, OriginFileRef, SelectionResult } from '../modCommands/modCommands';
 import { FILE_MARKS, fileLabel } from './modFiles';
 import {
-  endAtTop, isSeparatorsPlace, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem, type MoveTarget,
+  endAtTop, onlyCurrent, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem, type MoveTarget,
 } from './movePick';
 import { errorMessage } from '../ports/errorMessage';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
@@ -95,9 +95,6 @@ interface MoveView {
   direction: () => SortDirection;
 }
 
-const SEPARATOR_PLACES =
-  'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.';
-
 interface Move {
   readonly kind: 'mod' | 'separator';
   readonly names: readonly string[];
@@ -141,16 +138,9 @@ export function registerModMoveCommand(
       if (entries.some((entry) => entry.kind !== kind)) throw new Refusal('An agent call to move carries mods or separators, not both.');
       return { kind, names: entries.map((entry) => entry.name), target: options };
     },
-    run: async ({ kind, names, target: { place, end } }) => {
-      if (kind === 'mod') {
-        if (place.kind === 'mod' && names.includes(place.name)) {
-          return { applied: true, outcome: { landed: [], refused: names.map((item) => ({ item, reason: `The target is "${place.name}", which is moving.` })) } };
-        }
-        return runModsWriting(instance, async () => asMoveResult(kind, await commands.moveMods(names, place, end)));
-      }
-      if (!isSeparatorsPlace(place)) return failed(kind, SEPARATOR_PLACES);
-      return runModsWriting(instance, async () => asMoveResult(kind, await commands.moveSeparators(names, place, end)));
-    },
+    run: ({ kind, names, target: { place, end } }) =>
+      runModsWriting(instance, async () => asMoveResult(
+        kind, await (kind === 'mod' ? commands.moveMods(names, place, end) : commands.moveSeparators(names, place, end)))),
     report: (result, { kind, names }) => {
       if (!result.applied) {
         reporter.report('error', result.refusal, result.detail);
