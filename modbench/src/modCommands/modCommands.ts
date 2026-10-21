@@ -255,17 +255,30 @@ async function newModNameRefusalInInstance(adapter: InstanceAdapter, name: strin
   return newModNameRefusal(keyOf(adapter), await adapter.modOrder(), name);
 }
 
+async function refusedName(refusal: Promise<string | undefined>): Promise<{ applied: false; refusal: string } | undefined> {
+  try {
+    const reason = await refusal;
+    return reason === undefined ? undefined : { applied: false, refusal: reason };
+  } catch (err) {
+    return refuse(err);
+  }
+}
+
 // Insert a new enabled separator next to the anchor (mods.md, Add separator); the adapter places it.
-function insertSeparator(
+async function insertSeparator(
   adapter: InstanceAdapter, requested: string, anchor: EntryRef,
 ): Promise<SeparatorResult> {
+  const refused = await refusedName(separatorNameRefusal(adapter, requested));
+  if (refused) return refused;
   return changeSeparator(adapter, () => [{ kind: 'addSeparator', separator: requested, anchor }]);
 }
 
 // Rename a separator in place, and its folder with it.
-function renameSeparator(
+async function renameSeparator(
   adapter: InstanceAdapter, oldName: string, requested: string,
 ): Promise<SeparatorResult> {
+  const refused = await refusedName(separatorNameRefusal(adapter, requested, oldName));
+  if (refused) return refused;
   return changeSeparator(adapter, () => [{ kind: 'renameSeparator', from: oldName, to: requested }]);
 }
 
@@ -415,6 +428,8 @@ export type RenameModResult =
 async function renameMod({ adapter, mEdit }: SourceModWriters, from: string, to: string): Promise<RenameModResult> {
   if (to.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
   if (from === to) return { applied: true, lineRefusals: [], unchanged: true };
+  const refused = await refusedName(renameModNameRefusal(adapter, to, from));
+  if (refused) return refused;
   let activeProfile: string;
   let profiles: readonly string[];
   let sourceFolder: string | undefined;
