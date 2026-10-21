@@ -88,13 +88,19 @@ describe('downloadedFileReader, spawning the binary itself', () => {
     await expect(downloadedFileReader.list('/tmp/bad.7z')).rejects.toThrow(/Failed to list \/tmp\/bad\.7z.*exited with code 2/);
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) rejects a listing with the OS reason, not 7z\'s exit code, when the file cannot be opened', async () => {
-    fakeNodeAs7zPreloadedToExit(2);
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) rejects a listing with 7z\'s reason, the permission denial, when the file cannot be opened', async () => {
+    process.env.PATH = originalPath;
     const archive = join(bin, 'locked.7z');
     await writeFile(archive, 'x');
     await chmod(archive, 0o000);
 
-    await expect(downloadedFileReader.list(archive)).rejects.toThrow(/EACCES: permission denied/);
+    await expect(downloadedFileReader.list(archive)).rejects.toThrow(/Failed to list .*locked\.7z: .*Permission denied/s);
+  });
+
+  it('keeps the exit code when the binary writes nothing to stderr', async () => {
+    fakeNodeAs7zPreloadedToExit(2);
+
+    await expect(downloadedFileReader.list('/tmp/bad.7z')).rejects.toThrow(/Failed to list \/tmp\/bad\.7z: .*exited with code 2/);
   });
 
   it('falls through to the next binary name when one is absent', async () => {

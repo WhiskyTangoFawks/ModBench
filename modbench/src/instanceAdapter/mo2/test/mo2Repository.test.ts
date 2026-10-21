@@ -707,13 +707,13 @@ describe('the MO2 adapter\'s game files', () => {
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) answers unreadable, with why, only the paths whose folder cannot be listed, not that they are absent', async () => {
     const adapter = await instance();
     await put('game/Data/Meshes/a.nif', 'aaaa');
-    await put('game/Data/b.dds', 'bbbb');
+    await put('game/Data/b.dds', 'aaaa');
     const meshes = join(root, 'game', 'Data', 'Meshes');
     await chmod(meshes, 0o000);
 
     try {
       expect(await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif', 'NotInGame.txt', 'B.dds', 'Textures/c.dds']))
-        .toEqual({ files: [{ path: 'b.dds', hash: expect.any(String) as unknown }], unreadable: { 'meshes/a.nif': expect.stringMatching(/EACCES/) as unknown } });
+        .toEqual({ files: [{ path: 'b.dds', hash: HASH_OF_AAAA }], unreadable: { 'meshes/a.nif': expect.stringMatching(/EACCES/) as unknown } });
     } finally {
       await chmod(meshes, 0o755);
     }
