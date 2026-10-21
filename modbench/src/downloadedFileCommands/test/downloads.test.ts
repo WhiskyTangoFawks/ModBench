@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { downloadedFileCommands } from '../downloads';
-import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { downloadedFilesOf, fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 import type { MoveToTrash } from '../../ports/trash';
 
 const commandsOver = (answers: InstanceAnswers = {}) => {
-  const fake = fakeInstanceAdapter(readingFixture(), answers);
+  const fake = fakeInstanceAdapter(readingFixture({ downloadedFiles: downloadedFilesOf('a.7z', 'b.7z', 'foo.7z', 'locked.7z', 'other.7z') }), answers);
   return { fake, commands: downloadedFileCommands(fake.adapter) };
 };
 
@@ -16,7 +16,7 @@ describe('excludeDownloadedFiles / includeDownloadedFiles', () => {
     ['excludeDownloadedFiles', 'Excluded'],
     ['includeDownloadedFiles', 'Included'],
   ] as const)('%s marks every name %s and refuses the one gone from disk, by name', async (verb, mark) => {
-    const { fake, commands } = commandsOver({ goneDownloadedFiles: new Set(['gone.7z']) });
+    const { fake, commands } = commandsOver();
 
     const outcome = await commands[verb](['a.7z', 'gone.7z', 'b.7z']);
 
@@ -45,7 +45,7 @@ describe('deleteDownloadedFiles', () => {
   });
 
   it('refuses a file gone from disk, by name', async () => {
-    const { commands } = commandsOver({ goneDownloadedFiles: new Set(['gone.7z']) });
+    const { commands } = commandsOver();
 
     assertSelectionOutcome(await commands.deleteDownloadedFiles(['gone.7z'], noopTrash), {
       landed: [],
