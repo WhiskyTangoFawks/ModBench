@@ -3,8 +3,8 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
 
-/// <summary>A mod to restore from its manifest, with the installation file and submodule its manifest names if the request found
-/// them, its metadata files, and why the request could not read a game file or installation file, by game path or name.</summary>
+/// <summary>A mod to restore from its manifest, with what the request found of the files and submodule it names, and why it could
+/// not read a game file or installation file, by game path or name.</summary>
 public sealed record ModToRestore(
     string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, Submodule? Submodule = null,
     IReadOnlyDictionary<string, string>? Unreadable = null);
