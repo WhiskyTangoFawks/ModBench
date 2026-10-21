@@ -1,3 +1,4 @@
+import { IGNORED_THROWS } from './fixtures';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const backendLog = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), logLevel: 3 };
@@ -13,7 +14,7 @@ describe('stopMEditClient', () => {
 
   it('stops the client the last createMEditClient made', async () => {
     const { createMEditClient, stopMEditClient } = await import('../index');
-    const client = createMEditClient({ backend: { attachPort: 5172 }, backendLog });
+    const client = createMEditClient({ backend: { attachPort: 5172 }, backendLog, listenerThrows: IGNORED_THROWS });
     const stop = vi.spyOn(client, 'stop').mockResolvedValue();
 
     await stopMEditClient();

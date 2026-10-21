@@ -10,7 +10,7 @@ import { createUnlimitedFetch } from './unlimitedFetch';
 import { bundledBackendPath, spawnPiped } from './bundledBackend';
 import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } from './backendLog';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
-import { SseNotificationSubscriber } from './notificationStream';
+import { SseNotificationSubscriber, type ListenerThrows } from './notificationStream';
 import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
@@ -42,6 +42,7 @@ interface HttpMEditClientDeps {
    *  HTTP responses through this. */
   fetch?: (input: Request) => Promise<Response>;
   log?: Log;
+  listenerThrows: ListenerThrows;
   timeoutMs?: number;
   reconnectDelayMs?: number;
 }
@@ -107,6 +108,7 @@ class HttpMEditClient implements MEditClient {
     this.notifications = new SseNotificationSubscriber({
       openStream: (signal) => openNotificationStream(this.apiClient, signal),
       log: deps.log,
+      listenerThrows: deps.listenerThrows,
       reconnectDelayMs: deps.reconnectDelayMs,
     });
     this.lifecycle = new BackendLifecycle(backendOptions(deps));
