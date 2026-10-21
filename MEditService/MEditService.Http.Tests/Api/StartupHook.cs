@@ -1,6 +1,6 @@
 using System.Reflection;
 
-/// <summary>Lets a spawned backend load this assembly and what it references from this assembly's
+/// <summary>DOTNET_STARTUP_HOOKS requires a type named StartupHook in the global namespace. Lets a spawned backend load this assembly and what it references from this assembly's
 /// directory, which the backend's own dependency file does not list, so the host can find StalledStartup.</summary>
 internal static class StartupHook
 {

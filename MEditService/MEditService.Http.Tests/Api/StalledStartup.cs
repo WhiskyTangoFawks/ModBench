@@ -6,8 +6,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>Named by ASPNETCORE_HOSTINGSTARTUPASSEMBLIES in a spawned backend, it holds the host in
-/// its start until the host is asked to stop.</summary>
+/// <summary>Named by ASPNETCORE_HOSTINGSTARTUPASSEMBLIES in a spawned backend.</summary>
 public sealed class StalledStartup : IHostingStartup
 {
     public const string Marker = "startup stalled";

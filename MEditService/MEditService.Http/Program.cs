@@ -132,7 +132,14 @@ try
     if (app.Configuration.GetValue<bool>("ExitWhenStdinCloses"))
         _ = StopWhenStdinCloses(app.Lifetime);
 
-    await app.RunAsync();
+    try
+    {
+        await app.RunAsync();
+    }
+    catch (OperationCanceledException) when (app.Lifetime.ApplicationStopping.IsCancellationRequested)
+    {
+        // A stop requested while the host was still starting is a requested exit, not a failure.
+    }
 }
 catch (Exception ex) when (ex is not OutOfMemoryException)
 {
