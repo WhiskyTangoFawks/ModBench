@@ -1131,6 +1131,40 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
     await client.stop();
   });
 
+  it.each(gestures)('%s cancels while a load order is still being put, since a cancel depends on none', async (_name, route, kind, call) => {
+    const { response, push } = pushableStreamResponse();
+    const seen: { gesture?: unknown; cancelPath?: string; putLoadOrder?: boolean } = {};
+    let answerGesture = (): void => {};
+    const gestureAnswered = new Promise<void>((resolve) => { answerGesture = resolve; });
+    const client = makeClient(routedFetch([
+      ['/notifications/stream', () => Promise.resolve(response)], ['/unsaved-documents', noContent],
+      ['/load-order', () => { seen.putLoadOrder = true; return new Promise<Response>(() => {}); }],
+      ['/modlist-gestures/', (req) => { seen.cancelPath = new URL(req.url).pathname; answerGesture(); return noContent(); }],
+      [route, async (req) => {
+        const body: unknown = await req.clone().json();
+        seen.gesture = typeof body === 'object' && body !== null ? Reflect.get(body, 'gesture') : undefined;
+        await gestureAnswered;
+        return jsonResponse(200, { applied: [], refused: [] });
+      }],
+    ]));
+    await client.start();
+    const cancel = new AbortController();
+    const outcome = call(client, cancel.signal);
+    await vi.waitFor(() => expect(seen.gesture).toBeDefined());
+    void client.sendLoadOrder({
+      plugins: [], active: [], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache',
+      dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
+    });
+    await vi.waitFor(() => expect(seen.putLoadOrder).toBe(true));
+    push(progressFrame(kind, seen.gesture));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    cancel.abort();
+
+    await vi.waitFor(() => expect(seen.cancelPath).toBe(`/modlist-gestures/${String(seen.gesture)}/cancel`));
+    await outcome;
+    await client.stop();
+  });
+
   it.each(gestures)('%s logs no error, since a cancel is no failure', async (_name, ...gesture) => {
     const { client, log } = await cancelled(gesture);
 

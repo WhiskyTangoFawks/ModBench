@@ -48,7 +48,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 
 const NOTIFICATION_KINDS = [
   'rows-changed', 'plugin-changed', 'load-order-status', 'decompile-and-commit-progress', 'update-manifest-progress', 'restore-from-manifest-progress', 'external-change',
-  'plugin-source-unreadable', 'record-filter-cleared', 'mod-status-changed',
+  'plugin-source-unreadable', 'record-filter-cleared', 'mod-status-changed', 'reconnected',
 ] as const;
 
 /** The kinds a client subscribes to, narrowed from the schema's honest `string` for a typed `onNotification` call
@@ -68,6 +68,9 @@ export interface NotificationPayloads {
   'rows-changed': { plugin: PluginAddress; keys: string[] };
   'plugin-changed': { plugin: PluginAddress };
   'mod-status-changed': { mods: string[] };
+  /** The stream opened again while `running`: the process behind it may be a restarted one, holding
+   *  nothing sent before, so everything read from mEdit may have changed. */
+  'reconnected': undefined;
 }
 
 /** Whether the wire defines `kind` — the one place `NotificationEvent.kind` (the schema's honest
@@ -421,9 +424,6 @@ export interface MEditClient {
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
   /** The port this window's mEdit answers on, heard as soon as it is known and again if it changes. */
   onPort(listener: (port: number) => void): () => void;
-  /** The notification stream opened again while `running`. The process behind the stream may
-   *  be a restarted one, holding nothing sent before. */
-  onReconnected(listener: () => void): () => void;
   /** commands.md, No lifecycle gestures for mEdit: it starts with the extension. Never rejects;
    *  a launch that fails leaves mEdit stopped, and `onLaunch` hears why. */
   start(): Promise<void>;

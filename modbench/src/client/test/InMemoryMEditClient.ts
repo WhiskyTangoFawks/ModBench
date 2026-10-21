@@ -69,7 +69,6 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly notifications = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream: () => Promise.reject(new Error('never started')) });
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private readonly portListeners = new Set<(port: number) => void>();
-  private readonly reconnectListeners = new Set<() => void>();
   private readonly handOverListeners = new Set<(failure: ReadFailed | undefined) => void>();
   private _status: BackendStatus = 'starting';
   private putAnswer: LoadOrderWire['put'] = () => Promise.reject(new Error('InMemoryMEditClient: no scripted answer for a put'));
@@ -78,13 +77,12 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly loadOrderStatusKept = keepLoadOrderStatus({
     onNotification: (kind, listener) => this.notifications.onNotification(kind, listener),
     onStatusChanged: (listener) => this.onStatusChanged(listener),
-    onReconnected: (listener) => this.onReconnected(listener),
   });
   private readonly snapshotsPut: LoadOrderSnapshot[] = [];
   private readonly sender = createLoadOrderSender({
     status: () => this.status,
     onStatusChanged: (listener) => this.onStatusChanged(listener),
-    onReconnected: (listener) => this.onReconnected(listener),
+    onReconnected: (listener) => this.notifications.onNotification('reconnected', listener),
     start: () => { this.record('start', []); return this.startAnswer(); },
     stop: () => {
       this.record('stop', []);
@@ -207,14 +205,9 @@ export class InMemoryMEditClient implements MEditClient {
     for (const listener of [...this.portListeners]) listener(port);
   }
 
-  onReconnected(listener: () => void): () => void {
-    this.reconnectListeners.add(listener);
-    return () => { this.reconnectListeners.delete(listener); };
-  }
-
   /** The notification stream dropped and opened again, the status never leaving `attached`. */
   reconnected(): void {
-    for (const listener of [...this.reconnectListeners]) listener();
+    this.notifications.announceReconnected();
   }
 
   async start(): Promise<void> { await this.sender.launch(); }

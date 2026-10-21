@@ -22,12 +22,12 @@ export class ModStatuses implements SyncMessage, vscode.Disposable {
   private readonly unsubscribes: (() => void)[];
 
   constructor(
-    client: Pick<MEditClient, 'onNotification' | 'onReconnected'>, private readonly readStatus: ReadModStatus, private readonly log: (line: string) => void,
+    client: Pick<MEditClient, 'onNotification'>, private readonly readStatus: ReadModStatus, private readonly log: (line: string) => void,
     mods: () => readonly string[],
   ) {
     this.unsubscribes = [
       client.onNotification('mod-status-changed', ({ mods: changed }) => { void this.ask(changed); }),
-      client.onReconnected(() => { void this.ask(mods()); }),
+      client.onNotification('reconnected', () => { void this.ask(mods()); }),
     ];
   }
 

@@ -33,6 +33,14 @@ import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 // so nothing tries to tell them apart.
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
+interface PostSpec<T> {
+  op: string;
+  failMsg: string;
+  post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
+  /** What a 2xx with no body answers. */
+  noContent?: T;
+}
+
 interface HttpMEditClientDeps {
   /** The process this client is the front of. It spawns the bundled backend unless told otherwise. */
   backend?: Omit<BackendLifecycleOptions, 'onOutput' | 'serilogLevelArgs' | 'log'>;
@@ -122,7 +130,7 @@ class HttpMEditClient implements MEditClient {
     this.loadOrder = createLoadOrderSender({
       status: () => this.lifecycle.status,
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
-      onReconnected: (listener) => this.notifications.onReconnected(listener),
+      onReconnected: (listener) => this.notifications.onNotification('reconnected', listener),
       start: () => this.lifecycle.start(),
       stop: () => this.lifecycle.stop(),
       put: (snapshot, signal) => this.putLoadOrder(snapshot, signal),
@@ -130,7 +138,7 @@ class HttpMEditClient implements MEditClient {
     this.handOver = createUnsavedHandOver({
       status: () => this.lifecycle.status,
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
-      onReconnected: (listener) => this.notifications.onReconnected(listener),
+      onReconnected: (listener) => this.notifications.onNotification('reconnected', listener),
       put: (documents) => this.putUnsavedDocuments(documents),
     });
   }
@@ -155,9 +163,6 @@ class HttpMEditClient implements MEditClient {
   get status(): BackendStatus { return this.lifecycle.status; }
   onStatusChanged(listener: (status: BackendStatus) => void): () => void {
     return this.lifecycle.onStatusChanged(listener);
-  }
-  onReconnected(listener: () => void): () => void {
-    return this.notifications.onReconnected(listener);
   }
   async start(): Promise<void> { await this.loadOrder.launch(); }
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void { return this.loadOrder.onLaunch(listener); }
@@ -196,16 +201,19 @@ class HttpMEditClient implements MEditClient {
   // Every write verb below shares this shape: POST, map a non-ok response or a thrown request
   // onto WriteRefused, otherwise hand back the wire data untouched. No refresh, no toast — the
   // caller does both, from what this returns.
-  private async mutate<T>(spec: {
-    op: string;
-    failMsg: string;
-    post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
-    /** What a 2xx with no body answers. */
-    noContent?: T;
-  }): Promise<T | WriteRefused> {
+  private async mutate<T>(spec: PostSpec<T>): Promise<T | WriteRefused> {
     try {
       await this.handOver.sent();
       await this.loadOrder.latest();
+    } catch (e) {
+      return this.threw(spec, e);
+    }
+    return this.post(spec);
+  }
+
+  // A request that depends on neither the load order nor the unsaved documents.
+  private async post<T>(spec: PostSpec<T>): Promise<T | WriteRefused> {
+    try {
       const { data, error, response } = await spec.post();
       if (!response.ok) {
         const text = errorText(error);
@@ -214,9 +222,13 @@ class HttpMEditClient implements MEditClient {
       }
       return data ?? spec.noContent ?? { refused: true, message: `${spec.failMsg} — no answer` };
     } catch (e) {
-      this.log.error(`[HttpMEditClient] ${spec.op} threw: ${errorMessage(e)}`);
-      return { refused: true, message: `${spec.failMsg} — ${failureReason(UNREACHABLE)}`, unreachable: true };
+      return this.threw(spec, e);
     }
+  }
+
+  private threw(spec: { op: string; failMsg: string }, e: unknown): WriteRefused {
+    this.log.error(`[HttpMEditClient] ${spec.op} threw: ${errorMessage(e)}`);
+    return { refused: true, message: `${spec.failMsg} — ${failureReason(UNREACHABLE)}`, unreachable: true };
   }
 
   // A write over a selection: each item lands or is refused on its own, and the counted phrase
@@ -349,7 +361,7 @@ class HttpMEditClient implements MEditClient {
   // A reopened stream carries none of the ticks published while it was down, so the process's
   // own status is read again when it opens.
   private rereadOnReopen(version: number, settle: (status: LoadOrderProgress) => void): () => void {
-    return this.notifications.onReconnected(() => {
+    return this.notifications.onNotification('reconnected', () => {
       void this.currentLoadOrderStatus().then((current) => {
         if (current && isTerminalLoadOrderStatusFor(current, version)) settle(current);
       });
@@ -500,7 +512,7 @@ class HttpMEditClient implements MEditClient {
     let begun = false;
     let cancelling: Promise<{ cancelled: true } | WriteRefused> | undefined;
     const cancel = (): void => {
-      cancelling ??= this.mutate({
+      cancelling ??= this.post({
         op: `cancel(${gesture})`, failMsg: 'Could not cancel', noContent: { cancelled: true as const },
         post: () => this.apiClient.POST('/modlist-gestures/{gesture}/cancel', { params: { path: { gesture } } }),
       });
