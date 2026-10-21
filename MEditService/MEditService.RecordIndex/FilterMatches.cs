@@ -76,7 +76,7 @@ internal sealed class FilterMatches(Store store)
     private static bool FailedOnARow(DuckDBException ex) =>
         RowFaultKinds.Any(kind => ex.Message.StartsWith(kind, StringComparison.Ordinal));
 
-    // Parses and binds the filter's SQL and reads no row, so whatever it throws is the SQL's own.
+    // Parses and binds the filter's SQL and reads no row, so what it throws is the SQL's own unless DuckDB has been invalidated.
     private static bool ReturnsFormKey(DuckDBConnection connection, string sql)
     {
         using var probeCmd = connection.CreateCommand();

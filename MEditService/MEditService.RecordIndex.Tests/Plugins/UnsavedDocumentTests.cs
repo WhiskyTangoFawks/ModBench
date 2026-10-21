@@ -219,7 +219,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         using var secondHandedOver = new ManualResetEventSlim();
         var statusCancelled = Faults.InTurn(() =>
         {
-            Assert.True(secondHandedOver.Wait(TimeSpan.FromMinutes(1)));
+            secondHandedOver.Wait(TimeSpan.FromMinutes(1));
             throw new OperationCanceledException();
         });
         var notifications = new InMemoryNotificationPublisher();

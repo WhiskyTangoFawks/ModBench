@@ -263,7 +263,7 @@ internal sealed class Indexer : IDisposable
                 try { ValidateAndPublish(paths); }
                 catch (Exception ex) when (!CancelledBy(ex, CancellationToken.None))
                 {
-                    _logger.LogError(ex, "Validating the handed documents failed unexpectedly");
+                    _logger.LogError(ex, "Handing over the documents failed unexpectedly");
                     try { PublishStatus(); }
                     catch (Exception publishFault) when (!CancelledBy(publishFault, CancellationToken.None))
                     {
