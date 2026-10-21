@@ -47,16 +47,17 @@ export function mo2Repository(
   const gameFiles: InstanceAdapter['gameFiles'] = async (dataFolder, modFilePaths) => {
     const find = caseBlindFinder(dataFolder);
     const files = new Map<string, GameFile>();
+    const unreadable: Record<string, string> = {};
     for (const modFilePath of modFilePaths) {
       const found = await find(modFilePath);
-      if (found.kind === 'unreadable') return found;
+      if (found.kind === 'unreadable') { unreadable[modFilePath] = found.reason; continue; }
       const names = found.answer;
       if (names === undefined || files.has(names.join('/').toLowerCase())) continue;
       const hashed = await gameFileHash(join(dataFolder, ...names));
-      if (hashed.kind === 'unreadable') return hashed;
+      if (hashed.kind === 'unreadable') { unreadable[modFilePath] = hashed.reason; continue; }
       files.set(names.join('/').toLowerCase(), { path: names.join('/'), hash: hashed.answer.hash });
     }
-    return { kind: 'read', answer: [...files.values()] };
+    return { files: [...files.values()], unreadable };
   };
 
   return {
@@ -73,7 +74,8 @@ export function mo2Repository(
     async gameFilesTakenBy(dataFolder, mod) {
       const { files, notes } = await originFilesIn(context, { kind: 'mod', name: mod }, false, 'list');
       const taken = await gameFiles(dataFolder, files.map((file) => file.relativePath));
-      return taken.kind === 'read' ? { kind: 'read', answer: { gameFiles: taken.answer, notes } } : taken;
+      const [reason] = Object.values(taken.unreadable);
+      return reason === undefined ? { kind: 'read', answer: { gameFiles: taken.files, notes } } : { kind: 'unreadable', reason };
     },
   };
 }

@@ -8,13 +8,17 @@ const CANDIDATES = ['7z', '7za', '7zz'] as const;
 
 function spawnCollecting(bin: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'ignore'] });
+    const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     const out: Buffer[] = [];
+    const err: Buffer[] = [];
     child.stdout.on('data', (chunk: Buffer) => out.push(chunk));
+    child.stderr.on('data', (chunk: Buffer) => err.push(chunk));
     child.on('error', reject);
-    child.on('close', (code) =>
-      code === 0 ? resolve(Buffer.concat(out).toString('utf8')) : reject(new Error(`${bin} exited with code ${code}`)),
-    );
+    child.on('close', (code) => {
+      const why = Buffer.concat(err).toString('utf8').trim();
+      if (code === 0) resolve(Buffer.concat(out).toString('utf8'));
+      else reject(new Error(why === '' ? `${bin} exited with code ${code}` : why));
+    });
   });
 }
 

@@ -688,7 +688,7 @@ describe('the MO2 adapter\'s game files', () => {
 
     const found = await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif', 'mine.nif', 'MESHES']);
 
-    expect(found).toEqual({ kind: 'read', answer: [{ path: 'Meshes/A.nif', hash: HASH_OF_AAAA }] });
+    expect(found).toEqual({ files: [{ path: 'Meshes/A.nif', hash: HASH_OF_AAAA }], unreadable: {} });
   });
 
   it('reads through a link to a folder in the Data folder, and finds no folder where a link to a file stands', async () => {
@@ -701,18 +701,36 @@ describe('the MO2 adapter\'s game files', () => {
 
     const found = await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif', 'linked.txt/a.nif']);
 
-    expect(found).toEqual({ kind: 'read', answer: [{ path: 'Meshes/A.nif', hash: HASH_OF_AAAA }] });
+    expect(found).toEqual({ files: [{ path: 'Meshes/A.nif', hash: HASH_OF_AAAA }], unreadable: {} });
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) answers unreadable, with why, when a folder on the path cannot be listed, not that the file is absent', async () => {
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) answers unreadable, with why, only the paths whose folder cannot be listed, not that they are absent', async () => {
     const adapter = await instance();
     await put('game/Data/Meshes/a.nif', 'aaaa');
+    await put('game/Data/b.dds', 'aaaa');
     const meshes = join(root, 'game', 'Data', 'Meshes');
     await chmod(meshes, 0o000);
 
     try {
-      expect(await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif']))
-        .toEqual({ kind: 'unreadable', reason: expect.stringMatching(/EACCES/) as unknown });
+      expect(await adapter.gameFiles(join(root, 'game', 'Data'), ['meshes/a.nif', 'NotInGame.txt', 'B.dds', 'Textures/c.dds']))
+        .toEqual({ files: [{ path: 'b.dds', hash: HASH_OF_AAAA }], unreadable: { 'meshes/a.nif': expect.stringMatching(/EACCES/) as unknown } });
+    } finally {
+      await chmod(meshes, 0o755);
+    }
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every folder) refuses the game files a mod takes only when one of its own folders cannot be listed', async () => {
+    const adapter = await instance();
+    await put('game/Data/Meshes/a.nif', 'aaaa');
+    await put('game/Data/b.dds', 'bbbb');
+    await put('mods/Mod/b.dds', 'bbbb');
+    await put('mods/Other/meshes/a.nif', 'aaaa');
+    const meshes = join(root, 'game', 'Data', 'Meshes');
+    await chmod(meshes, 0o000);
+
+    try {
+      expect(await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), 'Mod')).toMatchObject({ kind: 'read', answer: { gameFiles: [{ path: 'b.dds' }] } });
+      expect(await adapter.gameFilesTakenBy(join(root, 'game', 'Data'), 'Other')).toMatchObject({ kind: 'unreadable', reason: expect.stringMatching(/EACCES/) as unknown });
     } finally {
       await chmod(meshes, 0o755);
     }

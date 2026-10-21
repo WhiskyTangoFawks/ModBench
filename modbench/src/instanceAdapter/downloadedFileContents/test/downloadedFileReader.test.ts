@@ -14,7 +14,7 @@ describe('downloadedFileReader, spawning the binary itself', () => {
   beforeAll(async () => {
     bin = await mkdtemp(join(tmpdir(), 'fake-7z-'));
     await copyFile(process.execPath, join(bin, FAKE_7Z));
-    await writeFile(join(bin, 'exit-as-asked.cjs'), 'require("fs").writeFileSync(process.env.FAKE_7Z_ARGV_FILE, JSON.stringify([require("path").basename(process.argv[1]), ...process.argv.slice(2)])); process.stdout.write(process.env.FAKE_7Z_STDOUT ?? ""); process.exit(Number(process.env.FAKE_7Z_EXIT));');
+    await writeFile(join(bin, 'exit-as-asked.cjs'), 'require("fs").writeFileSync(process.env.FAKE_7Z_ARGV_FILE, JSON.stringify([require("path").basename(process.argv[1]), ...process.argv.slice(2)])); process.stdout.write(process.env.FAKE_7Z_STDOUT ?? ""); process.stderr.write(process.env.FAKE_7Z_STDERR ?? ""); process.exit(Number(process.env.FAKE_7Z_EXIT));');
   });
   afterAll(() => rm(bin, { recursive: true, force: true }));
   beforeEach(async () => {
@@ -29,6 +29,7 @@ describe('downloadedFileReader, spawning the binary itself', () => {
     else process.env.NODE_OPTIONS = originalNodeOptions;
     delete process.env.FAKE_7Z_EXIT;
     delete process.env.FAKE_7Z_STDOUT;
+    delete process.env.FAKE_7Z_STDERR;
     delete process.env.FAKE_7Z_ARGV_FILE;
   });
 
@@ -82,10 +83,14 @@ describe('downloadedFileReader, spawning the binary itself', () => {
     expect(await argvAsked()).toEqual(['l', '-slt', '-ba', '-sccUTF-8', '/tmp/mod.7z']);
   });
 
-  it('rejects a listing with the exit code in the message when the binary exits non-zero', async () => {
+  it.each([
+    ['carries 7z\'s stderr, trimmed, as why', 'ERROR: /tmp/bad.7z : opening : errno=13 : Permission denied\n', /Failed to list \/tmp\/bad\.7z: ERROR: .*Permission denied$/],
+    ['keeps the exit code when 7z writes nothing to stderr', '', /Failed to list \/tmp\/bad\.7z: .*exited with code 2$/],
+  ])('rejects a listing that %s', async (_name, stderr, message) => {
     fakeNodeAs7zPreloadedToExit(2);
+    process.env.FAKE_7Z_STDERR = stderr;
 
-    await expect(downloadedFileReader.list('/tmp/bad.7z')).rejects.toThrow(/Failed to list \/tmp\/bad\.7z.*exited with code 2/);
+    await expect(downloadedFileReader.list('/tmp/bad.7z')).rejects.toThrow(message);
   });
 
   it('falls through to the next binary name when one is absent', async () => {

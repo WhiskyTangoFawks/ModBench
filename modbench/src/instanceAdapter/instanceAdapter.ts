@@ -339,6 +339,11 @@ export interface GameFile {
   readonly hash: string;
 }
 
+interface GameFilesRead {
+  readonly files: readonly GameFile[];
+  readonly unreadable: Readonly<Record<string, string>>;
+}
+
 // The game files a mod's files take, and each entry of its folder the listing skipped, one line apiece.
 interface GameFilesTaken {
   readonly gameFiles: readonly GameFile[];
@@ -479,9 +484,9 @@ export interface InstanceAdapter {
   /** The folder in the instance, outside every mod folder, where mEdit keeps what it last read of each mod's files
    *  (modlist-repository.md, Status, story 3). The repository never commits it. */
   readonly statCacheFolder: string;
-  /** The game files in `dataFolder` at the paths of a mod's files, named as the game folder names them, with their hashes;
-   *  a path the game folder holds no file at has none. */
-  gameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<FileRead<readonly GameFile[]>>;
+  /** The game files in `dataFolder` at the paths of a mod's files, named as the game folder names them, with their hashes.
+   *  A path that could not be read is `unreadable` as asked, with why: neither found nor absent. */
+  gameFiles(dataFolder: string, modFilePaths: readonly string[]): Promise<GameFilesRead>;
   /** The game files in `dataFolder` at the paths of the files in `mod`'s folder, as `gameFiles` names them, listed in any
    *  profile or none. */
   gameFilesTakenBy(dataFolder: string, mod: string): Promise<FileRead<GameFilesTaken>>;

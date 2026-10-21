@@ -165,9 +165,11 @@ async function namedGameFiles(
   const unreadable = new Map<string, Record<string, string>>();
   for (const { mod, gameFiles } of notFound) {
     if (gameFiles.length === 0) continue;
-    const read = typeof folder === 'string' ? { kind: 'unreadable' as const, reason: folder } : await adapter.gameFiles(folder.dataFolder, gameFiles);
-    if (read.kind === 'unreadable') { unreadable.set(mod, Object.fromEntries(gameFiles.map((path) => [path, read.reason]))); continue; }
-    for (const file of read.answer) found.set(file.path.toLowerCase(), file);
+    const read = typeof folder === 'string'
+      ? { files: [], unreadable: Object.fromEntries(gameFiles.map((path) => [path, folder])) }
+      : await adapter.gameFiles(folder.dataFolder, gameFiles);
+    unreadable.set(mod, read.unreadable);
+    for (const file of read.files) found.set(file.path.toLowerCase(), file);
   }
   return { found: [...found.values()], unreadable: (mod) => unreadable.get(mod) ?? {} };
 }
