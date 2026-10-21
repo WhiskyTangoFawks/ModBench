@@ -230,6 +230,41 @@ describe('a reconnect', () => {
     expect(sentNames(client)).toEqual(['A.esp', 'A.esp']);
   });
 
+  it('owes every view the announce until a snapshot applies, a resend that failed announcing nothing', async () => {
+    const client = running();
+    const resent = resentOf(client);
+    const heard: string[] = [];
+    client.onNotification('plugin-changed', ({ plugin }) => heard.push(plugin.name));
+    await client.sendLoadOrder(snapshot('A.esp'));
+    client.answerPuts(() => Promise.resolve({ outcome: 'failed', message: 'no' }));
+
+    client.reconnected();
+    await until(() => resent.length > 0);
+    client.answerPuts(() => Promise.resolve(APPLIED));
+    await client.sendLoadOrder(snapshot('B.esp'));
+
+    await until(() => heard.length > 0);
+    expect(heard).toEqual(['B.esp']);
+  });
+
+  it('tells a snapshot that was waiting at the reopen to its sender alone, never as a resend', async () => {
+    const client = running();
+    const resent = resentOf(client);
+    const released = pending<LoadOrderOutcome>();
+    const failed: LoadOrderOutcome = { outcome: 'failed', message: 'no' };
+    client.answerPuts((sent) => (sent.plugins[0]?.name === 'A.esp' ? released.promise : Promise.resolve(failed)));
+    const older = client.sendLoadOrder(snapshot('A.esp'));
+    await until(() => sentNames(client).length === 1);
+    const newer = client.sendLoadOrder(snapshot('B.esp'));
+
+    client.reconnected();
+    released.resolve(APPLIED);
+
+    await expect(older).resolves.toEqual(APPLIED);
+    await expect(newer).resolves.toEqual(failed);
+    expect(resent).toEqual([]);
+  });
+
   it('puts nothing before any snapshot was handed', async () => {
     const client = running();
     const resent = resentOf(client);

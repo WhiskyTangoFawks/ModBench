@@ -781,6 +781,41 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await vi.waitFor(() => expect(heard).toEqual([{ name: 'Foo.esp', origin: 'A' }, ['ModA']]));
   });
 
+  it('announces every plugin and mod of the newer snapshot that applies first after a reopen, since a reopen finding one waiting resends nothing', async () => {
+    const streams: { end: () => void }[] = [];
+    const answers: ((r: Response) => void)[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => {
+        let controller!: ReadableStreamDefaultController<Uint8Array>;
+        const body = new ReadableStream<Uint8Array>({ start: (c) => { controller = c; } });
+        streams.push({ end: () => controller.close() });
+        return Promise.resolve(new Response(body, { status: 200 }));
+      }],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
+        state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
+      }))],
+      ['/load-order', () => new Promise<Response>((resolve) => { answers.push(resolve); })],
+    ]);
+    const client = makeClient(fetch, { reconnectDelayMs: 0 });
+    await client.start();
+    const heard: unknown[] = [];
+    client.onNotification('plugin-changed', ({ plugin }) => heard.push(plugin));
+    client.onNotification('mod-status-changed', ({ mods }) => heard.push(mods));
+    const older = client.sendLoadOrder(snapshot);
+    await vi.waitFor(() => expect(answers).toHaveLength(1));
+    const newer = client.sendLoadOrder({ ...snapshot, mods: [{ name: 'ModA', folder: '/mods/ModA', metadataFiles: [] }] });
+
+    streams[0]?.end();
+    await vi.waitFor(() => expect(streams).toHaveLength(2));
+    answers[0]?.(jsonResponse(200, appliedBody));
+    await older;
+    await vi.waitFor(() => expect(answers).toHaveLength(2));
+    answers[1]?.(jsonResponse(200, appliedBody));
+    await newer;
+
+    await vi.waitFor(() => expect(heard).toEqual([{ name: 'Foo.esp', origin: 'A' }, ['ModA']]));
+  });
+
   it('answers a PUT that heard only an older version\'s tick from the process\'s own status', async () => {
     const { response: stream, push } = pushableStreamResponse();
     let answerPut!: (r: Response) => void;

@@ -4,7 +4,7 @@ import type {
 } from '../MEditClient';
 import type { LoadOrderStatus, NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
-import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
+import { announceAfterReopen, createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
 import type { ReadFailed } from '../../wire/readFailed';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
@@ -100,9 +100,7 @@ export class InMemoryMEditClient implements MEditClient {
   });
 
   constructor() {
-    this.sender.onResent((snapshot, outcome) => {
-      if (outcome.outcome === 'applied') this.notifications.announceChanged(snapshot);
-    });
+    announceAfterReopen(this.sender, this.notifications);
   }
 
   /** Answers each PUT of a snapshot, as the backend would, from the snapshot and its abort signal. */
