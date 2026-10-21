@@ -170,22 +170,28 @@ describe('a union element', () => {
       name: 'aliases', type: 'array', isArray: true,
       elementType: fieldMeta({
         name: '', type: 'struct',
-        fields: [fieldMeta({ name: 'Kind', type: 'string', isDiscriminator: true }), location],
+        fields: [fieldMeta({ name: 'Kind', type: 'string', isDiscriminator: true }), fieldMeta({ name: 'name', type: 'string' }), location],
       }),
     });
-    const master = { Kind: 'RefAlias', location: { id: 5 } };
-    const override = { Kind: 'LocAlias', location: null };
+    const master = { Kind: 'RefAlias', name: 'AnAlias', location: { id: 5 } };
+    const override = { Kind: 'LocAlias', name: 'AnAlias', location: null };
     const rows = fieldRowsOf(rowsFor(answer([aliases], [diffNode({
       fieldName: 'aliases', values: {},
       children: [diffNode({
         fieldName: '[0]', values: { [MASTER]: master, [MOD]: override },
-        children: [diffNode({ fieldName: 'location', values: { [MASTER]: { id: 5 }, [MOD]: null } })],
+        children: [
+          diffNode({ fieldName: 'name', values: { [MASTER]: 'AnAlias', [MOD]: 'AnAlias' } }),
+          diffNode({ fieldName: 'location', values: { [MASTER]: { id: 5 }, [MOD]: null } }),
+        ],
       })],
     })])));
     const element = rows[1];
-    const member = rows[2];
+    const member = rows[3];
 
-    expect(rows.map(r => r.key)).toEqual(['aliases', 'aliases.[0]', 'aliases.[0].location']);
+    expect(rows.map(r => r.key)).toEqual(['aliases', 'aliases.[0]', 'aliases.[0].name', 'aliases.[0].location']);
+    expect(member?.cells.get(MASTER)?.shown).toEqual({ id: 5 });
+    expect(member?.cells.get(MOD)?.holds).toBe(false);
+    expect(member?.cells.get(MOD)?.shown).toBeUndefined();
     expect(member?.depth).toBe(2);
     expect(member?.cells.get(MASTER)?.meta).toBe(refLocation);
     expect(member?.cells.get(MOD)?.meta).toBe(location);

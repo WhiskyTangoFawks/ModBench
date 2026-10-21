@@ -131,8 +131,9 @@ describe('PluginHeader', () => {
   });
 
   it('shows only its label while collapsed', () => {
-    renderHeader({}, { collapsed: true });
+    renderHeader({ isImmutable: true }, { collapsed: true });
     expect(screen.queryByText('(source)')).not.toBeInTheDocument();
+    expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
     expect(screen.getByText('MyMod.esp').parentElement).toHaveTextContent(/^\[01\] MyMod\.esp$/);
   });
 
