@@ -6,16 +6,16 @@ import {
   DiagnosticSeverity, FakeDiagnosticCollection, uriFile, uriFrom,
 } from '../../test/vscodeMock';
 import {
-  filterBoxCommandsMock, filterBoxWindowMock, currentBoxOf, waitForMessage, type FakeInputBox,
+  filterBoxCommandsMock, filterBoxWindowMock, currentBoxOf, waitForMessage, FakeTreeViews, type FakeInputBox,
 } from '../../drivingLib/test/nameFilterViewHarness';
 
 type SqlLens = { provideCodeLenses(document: Pick<vscode.TextDocument, 'getText'>): vscode.CodeLens[] };
 
+const treeViews = new FakeTreeViews();
+
 const h = vi.hoisted(() => ({
   state: { commands: new Map<string, (...args: unknown[]) => unknown>(), boxes: [] as FakeInputBox[] },
   lenses: [] as SqlLens[],
-  views: [] as { description?: string; message?: string }[],
-  providers: [] as vscode.TreeDataProvider<unknown>[],
   decorations: [] as { provideFileDecoration(uri: unknown): { badge?: string } | undefined }[],
   diagnostics: new Map<string, FakeDiagnosticCollection>(),
   commands: new Map<string, (...args: unknown[]) => unknown>(),
@@ -27,8 +27,6 @@ const h = vi.hoisted(() => ({
   picked: [] as string[][],
   opened: [] as unknown[],
   shown: [] as unknown[],
-  selectRows: (_rows: unknown[]): void => undefined,
-  toggle: { expand: (_row: unknown): void => undefined, collapse: (_row: unknown): void => undefined },
 }));
 
 vi.mock('vscode', () => {
@@ -44,25 +42,7 @@ vi.mock('vscode', () => {
     Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
     window: {
       ...filterBoxWindowMock(state),
-      createTreeView: (_id: string, options: { treeDataProvider: vscode.TreeDataProvider<unknown> }) => {
-        const selectionListeners: ((event: { selection: unknown[] }) => unknown)[] = [];
-        const expandListeners: ((event: { element: unknown }) => unknown)[] = [];
-        const collapseListeners: ((event: { element: unknown }) => unknown)[] = [];
-        h.toggle = {
-          expand: (element) => { expandListeners.forEach((listener) => listener({ element })); },
-          collapse: (element) => { collapseListeners.forEach((listener) => listener({ element })); },
-        };
-        const view: { description?: string; message?: string } & Record<string, unknown> = {
-          selection: [], onDidChangeCheckboxState: disposable, dispose: () => undefined,
-          onDidExpandElement: (listener: (event: { element: unknown }) => unknown) => { expandListeners.push(listener); return disposable(); },
-          onDidCollapseElement: (listener: (event: { element: unknown }) => unknown) => { collapseListeners.push(listener); return disposable(); },
-          onDidChangeSelection: (listener: (event: { selection: unknown[] }) => unknown) => { selectionListeners.push(listener); return disposable(); },
-        };
-        h.selectRows = (rows) => { view.selection = rows; selectionListeners.forEach((listener) => listener({ selection: rows })); };
-        h.views.push(view);
-        h.providers.push(options.treeDataProvider);
-        return view;
-      },
+      createTreeView: (id: string, options: { treeDataProvider: vscode.TreeDataProvider<unknown> }) => treeViews.create(id, options),
       registerFileDecorationProvider: (provider: (typeof h.decorations)[number]) => {
         h.decorations.push(provider);
         return disposable();
@@ -186,15 +166,14 @@ function pluginsView(
     ask: scriptedDialog(), recordWrite: (command) => command(),
     sourceEditing: { applyWorkspaceChanges: () => Promise.resolve(), oneAtATime: (job) => job(), refreshSourceControlFor: () => undefined },
   });
-  const provider = () => present(h.providers[0], 'the Plugins tree data provider');
+  const provider = () => treeViews.view().treeDataProvider;
   const rows = async () => (await provider().getChildren()) ?? [];
-  return { client, recordBrowser, plugins, reporters, instance, rows, provider, view: () => present(h.views[0], 'the Plugins tree view') };
+  return { client, recordBrowser, plugins, reporters, instance, rows, provider, view: () => treeViews.view() };
 }
 
 beforeEach(() => {
   h.lenses.length = 0;
-  h.views.length = 0;
-  h.providers.length = 0;
+  treeViews.clear();
   h.decorations.length = 0;
   h.diagnostics.clear();
   h.contexts.length = 0;
@@ -240,7 +219,7 @@ describe('the Plugins view\'s move from the palette', () => {
       gameFolder: FOUND,
     }));
     const [, b] = await rows();
-    h.selectRows([present(b, 'the B.esp row')]);
+    treeViews.view().selectRows([present(b, 'the B.esp row')]);
 
     await present(h.commands.get('modbench.plugin.move'), 'the modbench.plugin.move handler')();
 
@@ -257,7 +236,7 @@ describe('the Plugins view\'s selection for a key', () => {
     focused.follow('modbench.pluginListTree', plugins.followed);
     const [row] = await rows();
 
-    h.selectRows([present(row, 'the plugin row')]);
+    treeViews.view().selectRows([present(row, 'the plugin row')]);
     Object.assign(view(), { selection: [] });
 
     expect(focused.selectionOf('modbench.pluginListTree')).toEqual([row]);
@@ -495,7 +474,7 @@ describe('the record filter, from the commands that set and clear it', () => {
     const readsBefore = pluginReads(client);
     return {
       client, reporter, recordBrowserRefreshes,
-      description: () => present(h.views[0], 'the Plugins tree view').description,
+      description: () => treeViews.view().description,
       lensOn: (sql: string) => present(h.lenses[0], 'the code lens provider').provideCodeLenses({ getText: () => sql })[0]?.command?.command,
       filterActive: () => h.contexts.filter(([name]) => name === 'modbench.record.filterActive').map(([, value]) => value),
       pluginFactsReread: async () => { await flushed(); return pluginReads(client) > readsBefore; },
@@ -817,7 +796,7 @@ describe('the Plugins view\'s message line and name filter', () => {
   const NO_MATCH = 'No matches for "zzznomatch".';
   const currentBox = currentBoxOf(h.state);
   const messageIs = (expected: string | undefined, label: string) =>
-    waitForMessage(h.views[0] ?? {}, (m) => m === expected, label);
+    waitForMessage(treeViews.view(), (m) => m === expected, label);
 
   async function applyFilter(client: InMemoryMEditClient, source: string | undefined) {
     if (source === undefined) {
@@ -1072,9 +1051,9 @@ describe('a collapsed row\'s badge, from the states beneath it', () => {
     badges.provideFileDecoration(uri);
     await settled();
     const collapsed = badges.provideFileDecoration(uri)?.badge;
-    h.toggle.expand(row);
+    treeViews.view().expand(row);
     const expanded = badges.provideFileDecoration(uri)?.badge;
-    h.toggle.collapse(row);
+    treeViews.view().collapse(row);
 
     expect([collapsed, expanded, badges.provideFileDecoration(uri)?.badge]).toEqual(['•', undefined, '•']);
   });
