@@ -160,22 +160,21 @@ const sentence = (reason: string): string => ` ${reason.charAt(0).toUpperCase()}
 
 async function namedGameFiles(
   adapter: Adapter, folder: NamedGameFolder | string, notFound: readonly NotFound[],
-): Promise<{ found: readonly GameFile[]; unread: (mod: string) => string }> {
+): Promise<{ found: readonly GameFile[]; unreadable: (mod: string) => Record<string, string> }> {
   const found = new Map<string, GameFile>();
-  const unread = new Map<string, string>();
+  const unreadable = new Map<string, Record<string, string>>();
   for (const { mod, gameFiles } of notFound) {
     if (gameFiles.length === 0) continue;
-    if (typeof folder === 'string') { unread.set(mod, sentence(folder)); continue; }
-    const read = await adapter.gameFiles(folder.dataFolder, gameFiles);
-    if (read.kind === 'unreadable') { unread.set(mod, ` The game files could not be read: ${read.reason}.`); continue; }
+    const read = typeof folder === 'string' ? { kind: 'unreadable' as const, reason: folder } : await adapter.gameFiles(folder.dataFolder, gameFiles);
+    if (read.kind === 'unreadable') { unreadable.set(mod, Object.fromEntries(gameFiles.map((path) => [path, read.reason]))); continue; }
     for (const file of read.answer) found.set(file.path.toLowerCase(), file);
   }
-  return { found: [...found.values()], unread: (mod) => unread.get(mod) ?? '' };
+  return { found: [...found.values()], unreadable: (mod) => unreadable.get(mod) ?? {} };
 }
 
 async function namedDownloadedFiles(adapter: Adapter, notFound: readonly NotFound[]): Promise<{
   handed: (name: string | undefined) => RestoreMod['installationFile'];
-  unread: (name: string | undefined) => string;
+  unreadable: (name: string | undefined) => string | undefined;
 }> {
   const read = new Map<string, FileRead<InstallationFile | undefined>>();
   for (const name of new Set(notFound.flatMap(({ installationFile }) => installationFile === undefined ? [] : [installationFile]))) {
@@ -186,9 +185,9 @@ async function namedDownloadedFiles(adapter: Adapter, notFound: readonly NotFoun
       const file = name === undefined ? undefined : read.get(name);
       return file?.kind === 'read' && file.answer !== undefined ? wireFile(file.answer) : undefined;
     },
-    unread: (name) => {
+    unreadable: (name) => {
       const file = name === undefined ? undefined : read.get(name);
-      return file?.kind === 'unreadable' ? ` '${name}' could not be read: ${file.reason}.` : '';
+      return file?.kind === 'unreadable' ? file.reason : undefined;
     },
   };
 }
@@ -320,12 +319,14 @@ async function restoreFolders(
   const again = sent.flatMap((mod) => {
     const notFound = retried.get(mod.name);
     return notFound === undefined
-      ? [] : [{ ...mod, installationFile: downloaded.handed(notFound.installationFile), submodule: submodules.handed(notFound.submodule) }];
+      ? [] : [{
+        ...mod, installationFile: downloaded.handed(notFound.installationFile), submodule: submodules.handed(notFound.submodule),
+        unreadableGameFiles: named.unreadable(mod.name), unreadableInstallationFile: downloaded.unreadable(notFound.installationFile),
+      }];
   });
   const second = await restoreOnce(client, again, { ...facts, gameFolder: wireGameFolder(folder, named.found), asksWhatItLacks: false }, restoring);
   if (!second.applied) return { ...second, landed: first.landed };
-  const unreadFor = new Map(second.notFound.map(({ mod, installationFile, submodule }) =>
-    [mod, named.unread(mod) + downloaded.unread(installationFile) + submodules.unread(submodule)]));
+  const unreadFor = new Map(second.notFound.map(({ mod, submodule }) => [mod, submodules.unread(submodule)]));
   return {
     applied: true,
     landed: [...first.landed, ...second.landed],

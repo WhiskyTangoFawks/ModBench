@@ -1734,6 +1734,10 @@ export interface components {
             installationFile?: components["schemas"]["InstallationFileRequest"] | null;
             metadataFiles: string[];
             submodule?: components["schemas"]["SubmoduleRequest"] | null;
+            unreadableGameFiles?: {
+                [key: string]: string;
+            } | null;
+            unreadableInstallationFile?: string | null;
         };
         RestoreFromManifestRequest: {
             mods: components["schemas"]["RestoreFromManifestModRequest"][];

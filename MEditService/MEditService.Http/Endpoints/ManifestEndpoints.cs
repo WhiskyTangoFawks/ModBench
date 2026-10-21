@@ -103,7 +103,8 @@ internal static class ManifestEndpoints
         using var running = cancels.Run(req.Gesture, aborted);
         var result = await handler.RestoreAsync(
             [.. mods.Select(mod => new ModToRestore(
-                mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.Submodule?.ToSubmodule()))],
+                mod.Name, mod.Folder, mod.InstallationFile?.ToInstallationFile(), mod.MetadataFiles ?? [], mod.Submodule?.ToSubmodule(),
+                mod.UnreadableGameFiles, mod.UnreadableInstallationFile))],
             new InstanceToRestore(req.StatCache, req.ExclusionMark, variants, req.GameFolder?.ToGameFolder()), req.Gesture, running.Token);
 
         return EndpointMapping.Answered(
@@ -204,9 +205,11 @@ internal sealed record RestoreFromManifestRequest(
     IReadOnlyList<RestoreFromManifestModRequest> Mods, string StatCache, string ExclusionMark, ArchiveVariantsRequest? Archives,
     GameFolderRequest? GameFolder, string? Gesture, bool AsksWhatItLacks = false);
 
-/// <summary>A mod, with the submodule its manifest names, none until a refusal names it.</summary>
+/// <summary>A mod, with the submodule its manifest names, none until a refusal names it, and why the request could not read a game
+/// file, by its game path, or an installation file, by its name.</summary>
 internal sealed record RestoreFromManifestModRequest(
-    string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, SubmoduleRequest? Submodule)
+    string Name, string Folder, InstallationFileRequest? InstallationFile, IReadOnlyList<string> MetadataFiles, SubmoduleRequest? Submodule,
+    IReadOnlyDictionary<string, string>? UnreadableGameFiles = null, string? UnreadableInstallationFile = null)
     : IModRequest;
 
 /// <summary>A submodule as the Instance adapter reads the instance repository (ADR-0013): the folder git checks it out in, the

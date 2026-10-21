@@ -386,6 +386,45 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
+    public async Task AGameFolderMod_WhoseGameFilesTheRequestCouldNotRead_IsSkippedNamingEachAsUnreadable_NeverMissing()
+    {
+        _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.dds", "b");
+        GameFolderModManifested(("a.nif", "a"), ("b.dds", "b"));
+        var unread = ModFrom(Mod) with { UnreadableGameFiles = new Dictionary<string, string> { ["a.nif"] = "EACCES", ["b.dds"] = "EACCES" } };
+
+        var refused = Assert.Single((await Handler.RestoreAsync([unread], Instance())).Refused);
+
+        Assert.Equal(RestoreRefusal.Lacking, refused.Refusal);
+        Assert.Equal("was skipped: game file 'a.nif' could not be read: EACCES; game file 'b.dds' could not be read: EACCES.", refused.Message);
+    }
+
+    [Fact]
+    public async Task AModWithGameFilesTheRequestCouldNotRead_AndAnotherLack_NamesBoth()
+    {
+        _folders.WithFile(Mod, "a.nif", "a");
+        _folders.Manifests[Mod] = new Manifest(
+            new ManifestPackage.GameFolder("Fallout 4", "#"), [Line("a.nif", new PackageEntry.Held()), Line("mine.txt", new PackageEntry.NotHeld())]);
+        var unread = ModFrom(Mod) with { UnreadableGameFiles = new Dictionary<string, string> { ["a.nif"] = "EACCES" } };
+
+        var refused = Assert.Single((await Handler.RestoreAsync([unread], Instance())).Refused);
+
+        Assert.Equal("was skipped: game file 'a.nif' could not be read: EACCES; its package does not hold 'mine.txt'.", refused.Message);
+    }
+
+    [Fact]
+    public async Task AModWhoseInstallationFileTheRequestCouldNotRead_IsSkippedNamingItUnreadable_NeverMissing()
+    {
+        var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"));
+        _folders.WithFile(Mod, "a.nif", "a");
+        Manifested(Mod, downloadedFile, Line("a.nif", new PackageEntry.Held()));
+        var unread = ModFrom(Mod) with { UnreadableInstallationFile = "EACCES" };
+
+        var refused = Assert.Single((await Handler.RestoreAsync([unread], Instance())).Refused);
+
+        Assert.Equal((RestoreRefusal.Lacking, "was skipped: installation file 'Mod.zip' could not be read: EACCES."), (refused.Refusal, refused.Message));
+    }
+
+    [Fact]
     public async Task AGameFolderMod_WhoseGameFilesHaveOtherBytes_IsSkippedWritingNothing()
     {
         _folders.WithFile("data", "a.nif", "newer").WithFile(Mod, "a.nif", "edited");
