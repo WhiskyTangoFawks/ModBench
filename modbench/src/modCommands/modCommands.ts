@@ -103,9 +103,9 @@ async function moveMods(
   return changeSelection(adapter, 'mod', modNames, (found) => [{ kind: 'moveMods', mods: found, place, end }]);
 }
 
-// `modbench.mod.move` over separators (mods.md, Pickers, Move): each brings every mod it holds,
+// `modbench.mod.move` over separators: each brings every mod it holds,
 // and they land on the `end` side of the place. A gone or moving target, or a place no separator
-// can take, refuses the whole move.
+// can take, refuses the move.
 async function moveSeparators(
   adapter: InstanceAdapter, separatorNames: readonly string[], place: MovePlace, end: OrderEnd,
 ): Promise<SelectionResult<string>> {
