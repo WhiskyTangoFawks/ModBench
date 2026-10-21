@@ -120,21 +120,21 @@ describe('moveMods and moveSeparators', () => {
     expect(fake.calls).toEqual([orderWrite([{ kind: 'moveSeparators', separators: [UNASSIGNED], place, end: 'winning' }])]);
   });
 
-  it('refuses once a mod move whose target is one of the moving mods, and writes nothing', async () => {
+  it.each(['ENBoost', 'enboost'])('refuses once a mod move whose target %s is one of the moving mods, and writes nothing', async (target) => {
     const { fake, commands } = over();
 
-    const outcome = await commands.moveMods(['ENBoost', 'Harder VATS'], { kind: 'mod', name: 'ENBoost' }, 'losing');
+    const outcome = await commands.moveMods(['ENBoost', 'Harder VATS'], { kind: 'mod', name: target }, 'losing');
 
-    expect(outcome).toEqual({ applied: false, refusal: 'The target is "ENBoost", which is moving.' });
+    expect(outcome).toEqual({ applied: false, refusal: `The target is "${target}", which is moving.` });
     expect(fake.calls).toEqual([]);
   });
 
-  it('refuses once a separator move whose target is one of the moving separators, and writes nothing', async () => {
+  it.each([RADFALL, RADFALL.toLowerCase()])('refuses once a separator move whose target %s is one of the moving separators, and writes nothing', async (target) => {
     const { fake, commands } = over();
 
-    const outcome = await commands.moveSeparators([UNASSIGNED, RADFALL], { kind: 'separator', name: RADFALL }, 'losing');
+    const outcome = await commands.moveSeparators([UNASSIGNED, RADFALL], { kind: 'separator', name: target }, 'losing');
 
-    expect(outcome).toEqual({ applied: false, refusal: `The target is "${RADFALL}", which is moving.` });
+    expect(outcome).toEqual({ applied: false, refusal: `The target is "${target}", which is moving.` });
     expect(fake.calls).toEqual([]);
   });
 
