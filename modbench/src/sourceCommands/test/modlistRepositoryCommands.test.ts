@@ -367,7 +367,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     expect(outcome).toEqual({ applied: true, landed: RESTORED.landed, refused: [] });
   });
 
-  it('reads each skipped mod\'s game files on their own, so a folder one mod needs cannot be listed and the other mod still lands', async () => {
+  it('reads each skipped mod\'s game files on their own, hands mEdit why one mod\'s could not be read, and the other mod still lands', async () => {
     const { commands, client } = commandsOver({
       gameFiles: new Map([['meshes/b.nif', { path: 'Meshes/B.nif', hash: '#b' }]]),
       unreadableGameFiles: new Map([['textures/a.dds', 'EACCES']]),
@@ -380,21 +380,19 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
 
-    expect(outcome).toMatchObject({
-      landed: [{ mod: 'ModB' }],
-      refused: [{ item: 'ModA', reason: 'was skipped: its game files could not be read: EACCES.' }],
-    });
+    expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModA', unreadable: { 'textures/a.dds': 'EACCES' } }, { name: 'ModB', unreadable: {} }]);
+    expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }] });
   });
 
-  it('says why beside a mod still skipped for game files when the game folder was not found', async () => {
+  it('hands mEdit that the game folder was not found as why each game file of a skipped mod could not be read', async () => {
     const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf({}, GAME_FOLDER_NOT_FOUND));
     client.setCommandResult('restoreFromManifest', {
-      landed: [], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }], notFound: [{ mod: 'ModA', gameFiles: ['a.nif'] }],
+      landed: [], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }], notFound: [{ mod: 'ModA', gameFiles: ['a.nif', 'b.nif'] }],
     });
 
-    const outcome = await commands.restoreFromManifest(['ModA']);
+    await commands.restoreFromManifest(['ModA']);
 
-    expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'was skipped: game file is missing. The game folder was not found.' }] });
+    expect(client.calls[1]?.args[0]).toMatchObject([{ unreadable: { 'a.nif': 'the game folder was not found', 'b.nif': 'the game folder was not found' } }]);
   });
 
   it('sends a mod skipped for a submodule the call did not hand again, with where git checks it out, its pin and its branch, and answers both sends as one', async () => {
@@ -476,15 +474,15 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     expect(outcome).toEqual({ applied: true, landed: RESTORED.landed, refused: [] });
   });
 
-  it('says why beside a mod still skipped for an installation file the Instance adapter could not read', async () => {
+  it('hands mEdit why an installation file the Instance adapter could not read could not be read', async () => {
     const { commands, client } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'unreadable', reason: 'EACCES' }]]) });
     client.setCommandResult('restoreFromManifest', {
       landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFile: 'ModA-1.0.7z', gameFiles: [] }],
     });
 
-    const outcome = await commands.restoreFromManifest(['ModA']);
+    await commands.restoreFromManifest(['ModA']);
 
-    expect(outcome).toEqual({ applied: true, landed: [], refused: [{ item: 'ModA', reason: `${INSTALLATION_FILE_MISSING} 'ModA-1.0.7z' could not be read: EACCES.` }] });
+    expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModA', unreadable: { 'ModA-1.0.7z': 'EACCES' } }]);
   });
 
   it('sends no skipped mod again once its signal aborts, handing mEdit the signal, so a cancel stops after the mod in hand', async () => {
