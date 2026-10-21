@@ -4,9 +4,11 @@ using MEditService.SourceAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>A mod to restore from its manifest, with the installation file its manifest names if the request found it in the
-/// downloads folder, its metadata files, and the submodule its manifest names if the request found it pinned.</summary>
+/// downloads folder, its metadata files, the submodule its manifest names if the request found it pinned, and the game files and
+/// installation file the request could not read, by game path and by name, each with why.</summary>
 public sealed record ModToRestore(
-    string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, Submodule? Submodule = null);
+    string Name, string Folder, InstallationFile? InstallationFile, IReadOnlyList<string> MetadataFiles, Submodule? Submodule = null,
+    IReadOnlyDictionary<string, string>? Unreadable = null);
 
 /// <summary>The instance's facts beyond its mods: the stat cache's folder, the game folder with the game files the request
 /// found for the manifests, and what a build needs, as <see cref="InstanceToBuild"/>.</summary>

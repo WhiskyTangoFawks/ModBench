@@ -49,7 +49,7 @@ public sealed class RestoreFromManifestHandler
             return Skipped(RestoreRefusal.Unreadable, $"a file could not be read: {e.Message}");
         }
 
-        var resolved = new PackageContents(_repository, manifest, mod.InstallationFile, instance.GameFolder).Resolve();
+        var resolved = new PackageContents(_repository, manifest, mod.InstallationFile, instance.GameFolder, mod.Unreadable).Resolve();
         if (resolved.Lacks.Count > 0) return Lacked(resolved.Lacks);
         if (resolved.Built is { } submodule)
         {

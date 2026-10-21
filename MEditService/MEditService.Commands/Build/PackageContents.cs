@@ -3,13 +3,20 @@ using MEditService.ModFolderAdapter;
 namespace MEditService.Commands.Build;
 
 /// <summary>Each manifest line's entry in the mod's one package, with the hash that fixes its bytes, and what the package lacks.</summary>
-internal sealed class PackageContents(IModFolderRepository repository, Manifest manifest, InstallationFile? installationFile, GameFolder? gameFolder)
+internal sealed class PackageContents(IModFolderRepository repository, Manifest manifest, InstallationFile? installationFile, GameFolder? gameFolder,
+    IReadOnlyDictionary<string, string>? unreadable = null)
 {
+    private readonly Dictionary<string, string> _unreadable = new(unreadable ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
+
     internal record Lack(string Text)
     {
         internal sealed record InstallationFileMissing(string Name) : Lack($"installation file '{Name}' is missing");
 
         internal sealed record GameFileMissing(string Path) : Lack($"game file '{Path}' is missing");
+
+        internal sealed record InstallationFileUnreadable(string Name, string Reason) : Lack($"installation file '{Name}' could not be read: {Reason}");
+
+        internal sealed record GameFileUnreadable(string Path, string Reason) : Lack($"game file '{Path}' could not be read: {Reason}");
 
         internal sealed record SubmoduleMissing(string Name) : Lack($"its submodule '{Name}' is missing");
 
@@ -77,14 +84,20 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
     private (PackagedFile?, Lack?) EntryOf(string path, FileBytes.InGameFolder held) =>
         gameFolder?.Files.FirstOrDefault(file => string.Equals(file.Path, held.Path, StringComparison.OrdinalIgnoreCase)) is { } game
             ? (new PackagedFile.InGameFolder(path, game.Hash, gameFolder.DataFolder, game.Path), null)
-            : (null, new Lack.GameFileMissing(held.Path));
+            : (null, GameFileLack(held.Path));
+
+    private Lack GameFileLack(string path) =>
+        _unreadable.TryGetValue(path, out var why) ? new Lack.GameFileUnreadable(path, why) : new Lack.GameFileMissing(path);
 
     private (Handed? Handed, Lack? Lack) Package(ManifestPackage.InstallationFile named) => _package ??= Find(named);
 
     private (Handed?, Lack?) Find(ManifestPackage.InstallationFile named)
     {
         var handed = installationFile is not null && repository.InstallationFileName(installationFile.Path) == named.Name ? installationFile : null;
-        if (handed is null) return (null, new Lack.InstallationFileMissing(named.Name));
+        if (handed is null)
+        {
+            return (null, _unreadable.TryGetValue(named.Name, out var why) ? new Lack.InstallationFileUnreadable(named.Name, why) : new Lack.InstallationFileMissing(named.Name));
+        }
         if (!repository.InstallationFileExists(handed.Path)) return (null, new Lack($"installation file '{named.Name}' is not in the downloads folder"));
         if (named.Hash != handed.Hash) return (null, new Lack($"installation file '{named.Name}' has other bytes"));
         Dictionary<string, HashedEntry> entries = new(StringComparer.OrdinalIgnoreCase);
