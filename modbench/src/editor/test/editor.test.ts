@@ -350,6 +350,7 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
   function asking() {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getComparison', comparisonOf(GUN, [{ plugin: 'A.esp', isWinner: true, editorId: 'Gun' }]));
+    client.setQueryAnswer('getPlugins', []);
     client.setQueryAnswer('getReferences', [{
       formKey: '000900:A.esp', plugin: 'A.esp', origin: 'ModA', fieldPath: 'Keywords[0]', recordType: 'weap', recordTypeName: 'Weapon', editorId: 'Rifle',
     }]);
@@ -378,6 +379,7 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getComparison', null);
     client.setQueryAnswer('getChildRecordTypes', []);
+    client.setQueryAnswer('getPlugins', []);
     client.setQueryAnswer('getReferences', [{
       formKey: '000900:A.esp', plugin: 'A.esp', origin: 'ModA', fieldPath: 'Keywords[0]', recordType: 'weap', recordTypeName: 'Weapon', editorId: 'Rifle',
     }]);
@@ -741,7 +743,7 @@ describe('a record file\'s tab', () => {
     expect(tab.title).toBe('Gun.json');
   });
 
-  it('shows "Failed to load:" and mEdit\'s reason when mEdit refuses the file, with a line in the Output', async () => {
+  it('shows "Failed to load:" and mEdit\'s reason when mEdit refuses the file, and adds no Output line of its own', async () => {
     const client = fileClient();
     const why = `${FILE} declares no FormKey, so it is no record's document.`;
     client.setQueryFailure('getRecordOfFile', { failed: 'refused', refusal: why });
@@ -751,7 +753,7 @@ describe('a record file\'s tab', () => {
 
     expect(pageGlobal(tab, 'mEditLoadError')).toEqual({ failed: 'refused', refusal: why });
     expect(pageGlobal(tab, 'mEditFormKey')).toBeUndefined();
-    expect(outputChannel.warn).toHaveBeenCalledWith(`Failed to read ${FILE}: ${why}`);
+    expect(outputChannel.warn).not.toHaveBeenCalled();
   });
 
   it('shows the empty panel, and no line in the Output, when mEdit refuses while a load order is on its way, then the record once it arrives', async () => {
@@ -781,7 +783,7 @@ describe('a record file\'s tab', () => {
     const tab = await openFile(FILE);
 
     expect(pageGlobal(tab, 'mEditLoadError')).toEqual(refusal);
-    expect(outputChannel.warn).toHaveBeenCalledWith(`Failed to read ${FILE}: No load order has been received.`);
+    expect(outputChannel.warn).not.toHaveBeenCalled();
   });
 
   it('empties the panel of an earlier failure when mEdit then refuses while a load order is on its way', async () => {
@@ -1137,7 +1139,6 @@ describe('what a record tab\'s webview posts', () => {
 
   describe('a read mEdit refuses for want of a load order', () => {
     const refusal = { failed: 'no-load-order', refusal: 'No load order has been received.' } as const;
-    const refusedWarning = `Failed to read ${GUN}: No load order has been received.`;
     const cell = {
       scheme: 'modbench-child-record', path: '/source/ModA/plugin-source/A.esp/Cells/Cell.json', query: 'formKey=000801%3AA.esp&name=A.esp&origin=ModA',
     };
@@ -1161,16 +1162,16 @@ describe('what a record tab\'s webview posts', () => {
       expect(outputChannel.warn).not.toHaveBeenCalled();
     });
 
-    it('is failed in the Output once no load order is on its way', async () => {
+    it('is failed once no load order is on its way', async () => {
       loadOrder.coming = false;
 
       const { tab, outputChannel } = await refusedTab();
 
       expect(lastLoadAnswer(tab)).toEqual({ type: 'recordLoadAnswered', requestId: 'r1', ok: false, failure: refusal });
-      expect(outputChannel.warn).toHaveBeenCalledWith(refusedWarning);
+      expect(outputChannel.warn).not.toHaveBeenCalled();
     });
 
-    it('reads again when Modbench declines to hand a load order, and is then failed in the Output', async () => {
+    it('reads again when Modbench declines to hand a load order, and is then failed', async () => {
       const { tab, outputChannel } = await refusedTab();
       const postsBefore = loadRecordPosts(tab).length;
 
@@ -1182,7 +1183,7 @@ describe('what a record tab\'s webview posts', () => {
       tab.receive({ ...loadRequest, requestId: 'r2' });
       await settle();
       expect(lastLoadAnswer(tab)).toEqual({ type: 'recordLoadAnswered', requestId: 'r2', ok: false, failure: refusal });
-      expect(outputChannel.warn).toHaveBeenCalledWith(refusedWarning);
+      expect(outputChannel.warn).not.toHaveBeenCalled();
     });
 
     it('reads again on a status once no load order is coming', async () => {
@@ -1226,7 +1227,7 @@ describe('what a record tab\'s webview posts', () => {
       await settle();
 
       expect(lastLoadAnswer(tab)).toEqual({ type: 'recordLoadAnswered', requestId: 'r2', ok: false, failure: refusal });
-      expect(outputChannel.warn).toHaveBeenCalledWith(refusedWarning);
+      expect(outputChannel.warn).not.toHaveBeenCalled();
     });
   });
 
@@ -1456,7 +1457,7 @@ describe('what a record tab\'s webview posts', () => {
       await settle();
 
       expect(loadAnswered(tab)).toEqual([{ type: 'recordLoadAnswered', requestId: 'r1', ok: false, failure: { failed: 'unreachable' } }]);
-      expect(outputChannel.warn).toHaveBeenCalledWith(`Failed to read ${GUN}: mEdit could not be reached.`);
+      expect(outputChannel.warn).not.toHaveBeenCalled();
       expect(tab.title).toBe(GUN);
     });
   });

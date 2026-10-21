@@ -31,9 +31,12 @@ export function isReadFailed(answer: unknown): answer is ReadFailed {
 export const failureReason = (failure: ReadFailed): string =>
   failure.refusal ?? failure.cause ?? IN_FRONT_END_WORDS[failure.failed];
 
+/** The throw of `answerOf`, so a catch can take a failed read and let any other throw through. */
+export class ReadFailedError extends Error {}
+
 /** For a surface that already reports a thrown reason, as the Plugins tree's error row does: the
- *  answer, or an Error whose message is the failure in the front end's words. */
+ *  answer, or a ReadFailedError whose message is the failure in the front end's words. */
 export function answerOf<A>(answer: A | ReadFailed): A {
-  if (isReadFailed(answer)) throw new Error(failureReason(answer));
+  if (isReadFailed(answer)) throw new ReadFailedError(failureReason(answer));
   return answer;
 }

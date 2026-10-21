@@ -163,9 +163,15 @@ function syncRefusing() {
   };
 }
 
+function clientHoldingNothing(): InMemoryMEditClient {
+  const client = new InMemoryMEditClient();
+  client.setQueryAnswer('getPlugins', []);
+  return client;
+}
+
 function pluginsView(
   value = instanceValueFixture(),
-  { instance = new FakeInstance(value), client = new InMemoryMEditClient(), pluginSync = syncRefusing().pluginSync }:
+  { instance = new FakeInstance(value), client = clientHoldingNothing(), pluginSync = syncRefusing().pluginSync }:
     { instance?: FakeInstance; client?: InMemoryMEditClient; pluginSync?: Sync } = {},
 ) {
   const recordBrowser = new RecordBrowser(client);

@@ -1,12 +1,10 @@
 import * as vscode from 'vscode';
-import type { Log } from '../ports/log';
 import type { MEditClient, PluginAddress, ReferenceResult } from '../client';
-import { errorMessage } from '../ports/errorMessage';
 import { ErrorNode } from '../drivingLib/errorNode';
 import type { RecordArgument } from '../drivingLib/recordArgument';
 import { recordLabel } from '../wire/recordLabel';
 import { conditionedContextValue, type PluginConditions } from '../drivingLib/recordRowContext';
-import { failureReason, isReadFailed, localFailure } from '../wire/readFailed';
+import { failureReason, isReadFailed } from '../wire/readFailed';
 import { pluginCanBeEdited } from '../wire/pluginEditable';
 import { messageLine } from '../drivingLib/messageLine';
 import { pluginAddressKey } from '../wire/pluginAddress';
@@ -99,21 +97,18 @@ function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): T[][] {
 
 // Create record is offered where the plugin's copy of the record can hold a child, which is what
 // create's own pick reads.
-async function holdsChildren(client: Pick<MEditClient, 'getChildRecordTypes'>, log: Log, plugin: PluginAddress, formKey: string): Promise<boolean> {
-  const types = await client.getChildRecordTypes(plugin, formKey).catch((error: unknown) => localFailure(errorMessage(error)));
-  if (!isReadFailed(types)) return types.length > 0;
-  log.warn(`[ReferencedBy] getChildRecordTypes(${plugin.origin}, ${plugin.name}, ${formKey}) failed: ${failureReason(types)}`);
-  return false;
+async function holdsChildren(client: Pick<MEditClient, 'getChildRecordTypes'>, plugin: PluginAddress, formKey: string): Promise<boolean> {
+  const types = await client.getChildRecordTypes(plugin, formKey);
+  return !isReadFailed(types) && types.length > 0;
 }
 
 interface Lookups {
   readonly list: string;
   readonly conditionsOf: ConditionsOf;
   readonly client: ReferencedByClient;
-  readonly log: Log;
 }
 
-async function referrerNode({ list, conditionsOf, client, log }: Lookups, copies: readonly ReferenceResult[]): Promise<ReferencedByReferrerNode | undefined> {
+async function referrerNode({ list, conditionsOf, client }: Lookups, copies: readonly ReferenceResult[]): Promise<ReferencedByReferrerNode | undefined> {
   const [first] = copies;
   if (!first) return undefined;
   const editorId = first.editorId ?? undefined;
@@ -123,7 +118,7 @@ async function referrerNode({ list, conditionsOf, client, log }: Lookups, copies
     const address = { name: held.plugin, origin: held.origin };
     return [(async () => {
       const conditions = conditionsOf(address);
-      const container = conditions.editable && await holdsChildren(client, log, address, first.formKey);
+      const container = conditions.editable && await holdsChildren(client, address, first.formKey);
       return new ReferencedByHolderNode(list, first.formKey, editorId, address, fields.map(r => r.fieldPath), conditions, container);
     })()];
   }));
@@ -156,28 +151,23 @@ export interface ReferencedByList {
 
 export type ReferencedByClient = Pick<MEditClient, 'getReferences' | 'getChildRecordTypes' | 'getPlugins' | 'loadOrderStatus'>;
 
-async function editabilityFromPlugins(client: Pick<MEditClient, 'getPlugins'>, log: Log): Promise<ConditionsOf> {
-  const plugins = await client.getPlugins().catch((error: unknown) => localFailure(errorMessage(error)));
-  if (isReadFailed(plugins)) {
-    log.warn(`[ReferencedBy] getPlugins failed: ${failureReason(plugins)}`);
-    return () => ({ editable: false });
-  }
+async function editabilityFromPlugins(client: Pick<MEditClient, 'getPlugins'>): Promise<ConditionsOf> {
+  const plugins = await client.getPlugins();
+  if (isReadFailed(plugins)) return () => ({ editable: false });
   const editable = new Set(plugins.filter(pluginCanBeEdited).map(pluginAddressKey));
   return (plugin) => ({ editable: editable.has(pluginAddressKey(plugin)) });
 }
 
 /** What references `target`, read once (editor-referenced-by.md, Asking, story 4); `list` tells this list from every other asked for. */
 export async function readReferencedBy(
-  client: ReferencedByClient, log: Log, target: string, list: string,
+  client: ReferencedByClient, target: string, list: string,
 ): Promise<ReferencedByList> {
-  const read = await client.getReferences(target).catch((error: unknown) => localFailure(errorMessage(error)));
+  const read = await client.getReferences(target);
   const indexing = client.loadOrderStatus?.conflictsComputed ? undefined : INDEXING_MESSAGE;
   if (isReadFailed(read)) {
-    const reason = failureReason(read);
-    log.error(`[ReferencedBy] getReferences(${target}) failed: ${reason}`);
-    return { provider: new ReferencedByTreeProvider([new ErrorNode(reason)]), message: indexing };
+    return { provider: new ReferencedByTreeProvider([new ErrorNode(failureReason(read))]), message: indexing };
   }
-  const lookups = { list, conditionsOf: await editabilityFromPlugins(client, log), client, log };
+  const lookups = { list, conditionsOf: await editabilityFromPlugins(client), client };
   const referrers = (await Promise.all(groupBy(read, r => r.formKey).map(copies => referrerNode(lookups, copies))))
     .flatMap(referrer => referrer ?? []).sort(byTypeThenLabel);
   return {

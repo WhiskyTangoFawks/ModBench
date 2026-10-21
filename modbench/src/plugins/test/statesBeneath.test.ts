@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { leveledLog } from '../../test/leveledLog';
 import type { WorkingTreeStatesBeneath } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordTypeCountFixture } from '../../client/test/fixtures';
@@ -210,11 +209,10 @@ describe('the states beneath a row', () => {
     expect(browser.statesBeneathOf(row)).toEqual([]);
   });
 
-  it('log a failed first read and say so on the message line, as the error row would, without asking again until a refresh', async () => {
+  it('say so on the message line, as the error row would, without asking again until a refresh', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryFailure('getWorkingTreeStatesBeneath', { failed: 'refused', refusal: 'boom' });
-    const log = leveledLog();
-    const browser = new RecordBrowser(client, log);
+    const browser = new RecordBrowser(client);
     const said = vi.fn();
     browser.beneathFailure.onMessageChanged(said);
     const row = rowResourceUri(PLUGIN);
@@ -226,7 +224,6 @@ describe('the states beneath a row', () => {
     expect(after).toEqual([]);
     expect(browser.beneathFailure.message()).toBe('Failed to load: boom');
     expect(said).toHaveBeenCalledTimes(1);
-    expect(log.lines.error).toEqual([expect.stringContaining('boom')]);
     expect(beneathCalls(client)).toHaveLength(1);
   });
 
