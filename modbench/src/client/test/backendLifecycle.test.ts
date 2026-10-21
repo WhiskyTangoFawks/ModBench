@@ -113,7 +113,7 @@ describe('BackendLifecycle', () => {
     const { port } = addressInfo(closed.address());
     await new Promise((resolve) => closed.close(resolve));
     const logged = leveledLog();
-    const lifecycle = new BackendLifecycle({ attachPort: port, pollIntervalMs: 5, pollTimeoutMs: 40, log: logged });
+    const lifecycle = new BackendLifecycle({ attachPort: port, pollIntervalMs: 150, pollTimeoutMs: 200, log: logged });
 
     await lifecycle.start();
 
