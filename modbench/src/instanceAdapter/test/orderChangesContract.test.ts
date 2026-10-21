@@ -134,6 +134,7 @@ describe.each(implementations)('$name holds the order changes\' contract', (impl
     it.each<[string, PluginOrderChange, string[]]>([
       ['enabling, a plugin named in another case', { kind: 'enable', plugin: 'b.ESP', enabled: true }, ['A.esp', 'B.esp', 'C.esp']],
       ['moving', { kind: 'move', plugins: ['C.esp', 'A.esp'], toIndex: 1 }, ['B.esp (off)', 'A.esp', 'C.esp']],
+      ['moving, a plugin named in another case', { kind: 'move', plugins: ['c.ESP'], toIndex: 0 }, ['C.esp', 'A.esp', 'B.esp (off)']],
       ['adding', { kind: 'add', plugin: 'New.esp' }, [...PLUGINS_AS_LISTED, 'New.esp (off)']],
       ['dropping', { kind: 'drop', plugin: 'b.esp' }, ['A.esp', 'C.esp']],
     ])('shows %s to the next read of the order', async (_, change, order) => {

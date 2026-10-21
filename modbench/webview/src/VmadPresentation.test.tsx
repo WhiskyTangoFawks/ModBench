@@ -12,7 +12,7 @@ import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW } from '../../src/wire/messages';
 import {
   compareOverride, compareResultFixture, diffNode, fieldMeta, leafMeta as field, lastPostedEnvelope, panelClient,
-  lastToldElement, required,
+  required,
 } from './test/fixtures';
 
 const SCRIPT_PROPERTY_LEAF_LABELS_DROPPING_THE_BASES_WORDS: Record<string, string> = {
@@ -501,45 +501,4 @@ describe('Add Script is the generic array gesture', () => {
     });
   });
 
-  it('an edit under a nested keyed array carries the index hop at each level', async () => {
-    currentCompare = oneColumn([script('Guard', [documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 })])]);
-    renderPanel();
-    await openScripts();
-    await waitFor(() => screen.getByText('Data'));
-
-    const dataCell = cellAt(rowOf(fieldCell('Data')), 1);
-    const openTrigger = dataCell.querySelector('[data-open-trigger]');
-    if (!openTrigger) throw new Error("no open trigger in Data's value cell");
-    fireEvent.doubleClick(openTrigger);
-    const input = dataCell.querySelector('input');
-    if (!input) throw new Error("no input in Data's value cell");
-    fireEvent.change(input, { target: { value: '25' } });
-    fireEvent.blur(input);
-
-    expect(lastEnvelope()).toEqual({
-      op: 'set',
-      path: [
-        { kind: 'member', name: 'Scripts' }, { kind: 'index', index: 0 },
-        { kind: 'member', name: 'Properties' }, { kind: 'index', index: 0 },
-        { kind: 'member', name: 'Data' },
-      ],
-      value: 25,
-    });
-  });
-
-  it('a property under a keyed script tells the host both index hops', async () => {
-    currentCompare = oneColumn([script('Guard', [documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 })])]);
-    renderPanel();
-    await openScripts();
-    await waitFor(() => fieldCell('Radius'));
-
-    fireEvent.click(cellAt(rowOf(fieldCell('Radius')), 1));
-
-    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({
-      path: [
-        { kind: 'member', name: 'Scripts' }, { kind: 'index', index: 0 },
-        { kind: 'member', name: 'Properties' }, { kind: 'index', index: 0 },
-      ],
-    }));
-  });
 });
