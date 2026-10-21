@@ -9,7 +9,7 @@ export interface WebviewPage {
   readonly globals?: Readonly<Record<string, unknown>>;
 }
 
-const inlineScriptJson = (value: unknown): string => String(JSON.stringify(value)).replace(/</g, '\\u003c');
+const inlineScriptJson = (value: unknown): string => `${JSON.stringify(value)}`.replace(/</g, '\\u003c');
 
 export function showWebviewPage(
   webview: Pick<vscode.Webview, 'options' | 'html' | 'cspSource' | 'asWebviewUri'>, extensionUri: vscode.Uri,
