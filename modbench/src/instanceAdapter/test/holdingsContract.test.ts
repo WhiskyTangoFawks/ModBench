@@ -135,7 +135,7 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       expect(await adapter.markOriginFile(GAMMA, marked, 'Included')).toEqual({ gone: false, refusal: '"x.dds" is already there.' });
     });
 
-    it.each(['../Beta/Taken.esp', 'textures//a.dds', 'textures/../../Beta/Taken.esp', 'textures\\..\\a.dds'])('refuses a path that reaches outside the origin: %s', async (path) => {
+    it.each(['../Beta/Taken.esp', 'textures//a.dds', 'textures/../../Beta/Taken.esp', 'textures\\..\\a.dds', 'a/../../outside.txt', '/etc/hosts', ''])('refuses a path that reaches outside the origin: %s', async (path) => {
       const notAFile = `Not a file of mod "Alpha": "${path}"`;
       await expect(adapter.originFile(ALPHA, path)).rejects.toThrow(notAFile);
       await expect(adapter.markOriginFile(ALPHA, path, 'Excluded')).rejects.toThrow(notAFile);
