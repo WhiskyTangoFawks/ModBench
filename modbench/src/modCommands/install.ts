@@ -75,7 +75,9 @@ export async function upgradeLoss(
   if (isReadFailed(answer)) return statusUnread(mod, failureReason(answer));
   const status = answer.find((read) => read.mod === mod);
   if (status === undefined) {
-    return await adapter.modFolderPath(mod) === undefined ? undefined : `"${mod}" has no status in the answer.`;
+    const { modFolders } = await adapter.modOrder();
+    const wanted = adapter.entryKey({ kind: 'mod', name: mod });
+    return modFolders?.some((folder) => adapter.entryKey(folder) === wanted) ? `"${mod}" has no status in the answer.` : undefined;
   }
   if (status.unreadable) return statusUnread(mod, status.unreadable.why);
   const loss = lossOf(status);
