@@ -18,7 +18,7 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
 
     public virtual bool IsSourceMod(RegisteredPlugin plugin) => inner.IsSourceMod(plugin);
 
-    public virtual bool IsSourceMod(string modFolder) => inner.IsSourceMod(modFolder);
+    public virtual bool IsSourceMod(string sourceFolder) => inner.IsSourceMod(sourceFolder);
 
     public virtual SourceFailure? WhySourceDoesNotRead(RegisteredPlugin plugin) => inner.WhySourceDoesNotRead(plugin);
 
@@ -35,7 +35,7 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
 
     public virtual string FileNameOf(RecordIdentity identity) => inner.FileNameOf(identity);
 
-    public virtual bool HoldsAnotherRepository(string modFolder) => inner.HoldsAnotherRepository(modFolder);
+    public virtual bool HoldsAnotherRepository(string sourceFolder) => inner.HoldsAnotherRepository(sourceFolder);
 
     public virtual SourceFailure? WhyGitCannotRun() => inner.WhyGitCannotRun();
 
