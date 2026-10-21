@@ -90,18 +90,16 @@ internal sealed class Indexer : IDisposable
 
     private (long Version, LoadOrderState State, string? Message) _told;
 
-    // ADR-0015: every site that changes what Status reports calls this after, outside the exclusive
-    // right, so a publisher that throws strands nothing. _lock is reentrant, so this is safe to call
-    // from inside a lock a caller already holds.
+    // ADR-0015: every site that changes what Status reports calls this after. A status counts as told
+    // only once Publish returns. _lock is reentrant, so this is safe from inside a lock a caller holds.
     private void PublishStatus()
     {
-        LoadOrderStatus status;
         lock (_lock)
         {
-            status = Status;
+            var status = Status;
+            _notifications?.Publish(new LoadOrderStatusNotification(status));
             _told = (status.Version, status.State, status.Message);
         }
-        _notifications?.Publish(new LoadOrderStatusNotification(status));
     }
 
     // A swap whose publish never came, such as a superseded attempt's, is told by the next attempt's close.

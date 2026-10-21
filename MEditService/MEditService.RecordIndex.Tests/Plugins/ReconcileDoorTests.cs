@@ -2,6 +2,7 @@ using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -219,6 +220,28 @@ public sealed class ReconcileDoorTests
     }
 
     [Fact]
+    public void AStatusWhosePublishFailed_IsToldAgainOnceTheFaultLifts_WithNoStatusChange()
+    {
+        using var data = new PluginFixtureBuilder("retold-door").WithPlugin("A.esp").Build();
+        var notifications = new InMemoryNotificationPublisher
+        {
+            FaultsOn = n => n is LoadOrderStatusNotification { Status.State: LoadOrderState.Ready },
+        };
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, notifications: notifications);
+        var version = holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        index.AwaitVersion(version);
+        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the ready state");
+        notifications.FaultsOn = null;
+
+        holder.Apply(holder.Current);
+
+        Assert.True(
+            Waits.ReachedWithin(() => StatusesPublished(notifications).LastOrDefault()?.Status.State == LoadOrderState.Ready, TimeSpan.FromSeconds(20)),
+            "the ready status being published once the fault lifted");
+    }
+
+    [Fact]
     public async Task AFailureCleared_ByAnAttemptSupersededBeforeItsClosingSwap_IsToldByItsSuccessor()
     {
         using var data = new PluginFixtureBuilder("superseded-untold-door")
@@ -226,9 +249,11 @@ public sealed class ReconcileDoorTests
             .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("FromOther"))
             .Build();
         var notifications = new InMemoryNotificationPublisher { FaultsOn = n => n is PluginChangedNotification };
+        var log = new List<LogEntry>();
+        using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(log)));
         var holder = new LoadOrderHolder();
         using var gate = new GatedPluginAdapter();
-        using var index = Indexes.Open(holder, gate, notifications: notifications);
+        using var index = Indexes.Open(holder, gate, loggerFactory: loggerFactory, notifications: notifications);
         index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         PluginBinaries.Rewrite(data.Plugins[0].Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
         index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Failed, "the failed status");
@@ -239,8 +264,8 @@ public sealed class ReconcileDoorTests
         Assert.True(await Waits.CompletesWithin(gate.WaitUntilParkedAsync(), TimeSpan.FromSeconds(20)), "the validation re-reading the plugin");
 
         holder.Apply(holder.Current);
-        await Task.Delay(300);
         gate.Release();
+        Waits.Reached(() => { lock (log) return log.Exists(e => e.Message.Contains("superseded", StringComparison.Ordinal)); }, "the attempt being superseded");
 
         Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the successor answering Ready");
         Assert.True(
