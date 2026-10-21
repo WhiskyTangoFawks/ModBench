@@ -246,7 +246,11 @@ public sealed class ReconcileDoorTests
     {
         using var data = new PluginFixtureBuilder("superseded-untold-door")
             .WithPlugin("NonCompiledPlugin.esp", mod => mod.Npcs.AddNew("FromA"))
-            .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("FromOther"))
+            // Validation checks for cancellation before each plugin: more plugins, more chances to land the cancel.
+            .WithPlugin("OtherOne.esp", mod => mod.Npcs.AddNew("FromOne"))
+            .WithPlugin("OtherTwo.esp", mod => mod.Npcs.AddNew("FromTwo"))
+            .WithPlugin("OtherThree.esp", mod => mod.Npcs.AddNew("FromThree"))
+            .WithPlugin("OtherFour.esp", mod => mod.Npcs.AddNew("FromFour"))
             .Build();
         var notifications = new InMemoryNotificationPublisher { FaultsOn = n => n is PluginChangedNotification };
         var log = new List<LogEntry>();
