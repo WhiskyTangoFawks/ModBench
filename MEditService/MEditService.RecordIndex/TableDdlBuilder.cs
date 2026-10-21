@@ -79,7 +79,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // A LEFT JOIN, never a correlated EXISTS: winners holds at most one row per form_key, so
     // the join cannot duplicate a row, and a hash join beats EXISTS on the full-scan reads that
     // dominate.
-    private static string WinnerJoin(string alias, string pluginColumn, string originColumn) => $"""
+    internal static string WinnerJoin(string alias, string pluginColumn, string originColumn) => $"""
         LEFT JOIN {ActiveSchema}.{WinnersRelation} w
                ON w.form_key = {alias}.form_key
               AND w.plugin = {alias}.{pluginColumn}
@@ -143,7 +143,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     // ADR-0012, through this one predicate. A registration's load index is null when
     // the plugin is not active (ADR-0013).
-    private static string ActiveJoin(string alias, string pluginColumn, string originColumn) =>
+    internal static string ActiveJoin(string alias, string pluginColumn, string originColumn) =>
         $"{RegisteredJoin(alias, pluginColumn, originColumn)} AND p.load_order_idx IS NOT NULL";
 
     internal const string PluginRecordsView = "plugin_records";

@@ -9,20 +9,27 @@ internal static class NavigatorSql
 {
     /// <summary>One row per record a record holds in the same plugin: a topic in its quest, a
     /// response in its topic, a placed reference in its cell, an exterior cell in its worldspace.</summary>
-    internal static readonly string Held = HeldIn("");
-
     internal static string HeldIn(string schema) => $"SELECT plugin, origin, parent, child, slot FROM {schema}holdings";
 
-    /// <summary>What a cell holds, by <c>parent_cell</c>: a record held outside a placement group,
+    /// <summary>The <c>held</c> CTE the holdings reads below read: the holdings <paramref name="where"/>
+    /// keeps. DuckDB pushes no join key into it, so a read about one plugin names the plugin here.</summary>
+    internal static string HeldFor(RecordScope scope, string where) =>
+        $"held AS (SELECT plugin, origin, parent, child, slot FROM ({scope.Held}) h {where})";
+
+    /// <summary>What a cell holds in <c>held</c>, by <c>parent_cell</c>: a record held outside a placement group,
     /// such as its landscape or a navmesh, lists among the temporary ones as xEdit lists it.</summary>
     internal static readonly string CellChildren = $"""
         SELECT plugin, origin, parent AS parent_cell, child AS form_key,
                CASE WHEN slot = '{PersistentFlag.PersistentGroup}' THEN 'persistent' ELSE 'temporary' END AS placement_group
-        FROM ({Held})
+        FROM held
         """;
 
-    /// <summary>Two CTEs for a <c>WITH RECURSIVE</c>: <c>held</c>, the holdings <paramref name="where"/>
-    /// keeps, and <c>above_failure</c>, every record holding an unreadable one at any depth.</summary>
+    /// <summary>What a record holds in <c>held</c> that no spatial read lists: not its placed references or its cells.</summary>
+    internal static readonly string ContainerChildren =
+        $"(SELECT * FROM held WHERE slot NOT IN ({HoldingSlots.Placed}, {HoldingSlots.TopCell}, {HoldingSlots.Exterior}))";
+
+    /// <summary>Two CTEs for a <c>WITH RECURSIVE</c>: <see cref="HeldFor"/>'s <c>held</c>, and
+    /// <c>above_failure</c>, every record holding an unreadable one at any depth.</summary>
     internal static string AboveAFailure(RecordScope scope, string where) =>
         Above(scope, where, "above_failure", "TRUE", "f.parse_diagnosis IS NOT NULL");
 
@@ -34,7 +41,7 @@ internal static class NavigatorSql
 
     // `f` is the record the walk climbs from, so a seed's condition and fact name it.
     private static string Above(RecordScope scope, string where, string name, string seedFact, string seedCondition) => $"""
-        held AS (SELECT plugin, origin, parent, child FROM ({scope.Held}) h {where}),
+        {HeldFor(scope, where)},
         {name}(plugin, origin, form_key, fact) AS (
             SELECT held.plugin, held.origin, held.parent, {seedFact} FROM held
             JOIN {scope.Records} f ON f.form_key = held.child AND f.plugin = held.plugin AND f.origin = held.origin
@@ -45,10 +52,10 @@ internal static class NavigatorSql
         )
         """;
 
-    // Joined rather than a correlated NOT EXISTS, which DuckDB answers by materializing the records
+    // Reads `held`. Joined rather than a correlated NOT EXISTS, which DuckDB answers by materializing the records
     // beside it, bodies and all: a plugin's bodies outgrow the memory the record index is held to.
     internal static string Unheld(string alias) =>
-        $" ANTI JOIN ({Held}) holding ON holding.child = {alias}.form_key AND holding.plugin = {alias}.plugin AND holding.origin = {alias}.origin";
+        $" ANTI JOIN held holding ON holding.child = {alias}.form_key AND holding.plugin = {alias}.plugin AND holding.origin = {alias}.origin";
 
     /// <summary>A FormID is its filename's active load index, then its ID; a light plugin's take the
     /// FE prefix, so follow every full plugin's. Read off registrations, which land before the
