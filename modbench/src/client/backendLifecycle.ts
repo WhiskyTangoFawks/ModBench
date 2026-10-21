@@ -202,11 +202,8 @@ export class BackendLifecycle {
     this.generation++; // cancels an in-flight doStart()/connect()
     const child = this.child;
     this.child = undefined;
-    try {
-      if (child) await this.stopAndConfirmExit(child);
-    } finally {
-      if (this._status !== 'stopped') this.setStatus('stopped');
-    }
+    if (child) await this.stopAndConfirmExit(child);
+    if (this._status !== 'stopped') this.setStatus('stopped');
   }
 
   // Closing stdin stops the backend gracefully on both platforms; Node's SIGTERM kills on Windows.
@@ -214,18 +211,15 @@ export class BackendLifecycle {
   // can spawn a second child.
   private stopAndConfirmExit(child: BackendProcess): Promise<void> {
     return new Promise((resolve) => {
-      // A container, not a `let`, so it exists (as `undefined`) before onExit is even defined.
-      const escalateTimer: { current?: ReturnType<typeof setTimeout> } = {};
-      const onExit = () => {
-        clearTimeout(escalateTimer.current);
-        resolve();
-      };
-      child.on('exit', onExit);
-      child.stdin.end();
-      escalateTimer.current = setTimeout(() => {
+      const escalateTimer = setTimeout(() => {
         this.log.warn(`[backend] did not exit within ${this.stopGracePeriodMs}ms of closing stdin — sending SIGKILL`);
         child.kill('SIGKILL');
       }, this.stopGracePeriodMs);
+      child.on('exit', () => {
+        clearTimeout(escalateTimer);
+        resolve();
+      });
+      child.stdin.end();
     });
   }
 
