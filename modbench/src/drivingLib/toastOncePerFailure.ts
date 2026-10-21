@@ -1,8 +1,7 @@
 import type { Reporter } from '../ports/reporter';
 
-/** A callback that throws on every call would toast on every call. Every throw reaches the Output
- *  (ADR-0019); a toast follows only a source's first throw of a reason, and again once the source
- *  has recovered, as `tellOnce` tells a note again after it clears. */
+/** Every throw reaches the Output (ADR-0019). A toast follows a source's first throw of a reason,
+ *  and again after the source has recovered, so a callback that throws on every call cannot flood. */
 export function toastOncePerFailure(reporter: Reporter) {
   const toasted = new Map<object, string>();
   return {
