@@ -71,18 +71,6 @@ public sealed class UpdateManifestHandlerTests
     }
 
     [Fact]
-    public async Task AFileWhoseBytesDifferFromItsPackagesCopy_IsNotInThePackage_IsReported_AndNoInstallationFileIsOpened()
-    {
-        _folders.WithFile(Mod, "meshes/a.nif", "edited");
-
-        var updated = await Landed(ModFrom("Mod", DownloadedFile("dl/Base.zip", ("Meshes/A.nif", "original"))));
-
-        Assert.IsType<PackageEntry.NotHeld>(FileOf(Mod, "meshes/a.nif").Entry);
-        Assert.Equal(["meshes/a.nif"], updated.NotInPackage);
-        Assert.Equal(0, _folders.Opens);
-    }
-
-    [Fact]
     public async Task AFolderOfItsMetadataAlone_GetsAManifestThatNamesNothing()
     {
         _folders.WithFile(Mod, "meta.ini", "[General]");
@@ -145,34 +133,23 @@ public sealed class UpdateManifestHandlerTests
         Assert.Equal(["Other"], result.Applied.Select(landed => landed.Mod));
     }
 
-    [Fact]
-    public async Task AFileTheInstallationFileHoldsUnderAnotherPath_NamesThatPath()
+    public static TheoryData<string, (string Path, string Hash)[], string, PackageEntry> InstallationFileEntriesOfAFile() => new()
     {
-        _folders.WithFile(Mod, "a.nif", "hello");
+        { "a.nif", [("Data/a.nif", "hello")], "a.nif", ManifestFile.At("a.nif", new FileBytes.InInstallationFile("Patch.zip", "Data/a.nif")).Entry },
+        { "b/same.txt", [("a/same.txt", "hello"), ("b/same.txt", "hello")], "b/same.txt", new PackageEntry.Held() },
+        { "Textures/A.dds", [("textures/a.dds", "hello")], "Textures/A.dds", new PackageEntry.Held() },
+    };
 
-        await Landed(ModFrom("Mod", DownloadedFile("dl/Patch.zip", ("Data/a.nif", "hello"))));
-
-        Assert.Equal(ManifestFile.At("a.nif", new FileBytes.InInstallationFile("Patch.zip", "Data/a.nif")).Entry, FileOf(Mod, "a.nif").Entry);
-    }
-
-    [Fact]
-    public async Task AFileHeldByTwoEntries_NamesTheOneAtItsOwnPath()
+    [Theory]
+    [MemberData(nameof(InstallationFileEntriesOfAFile))]
+    public async Task AFileTheInstallationFileHolds_IsTheEntryItsBytesAndItsPathPick(
+        string path, (string Path, string Hash)[] entries, string manifestPath, PackageEntry expected)
     {
-        _folders.WithFile(Mod, "b/same.txt", "hello");
+        _folders.WithFile(Mod, path, "hello");
 
-        await Landed(ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("a/same.txt", "hello"), ("b/same.txt", "hello"))));
+        await Landed(ModFrom("Mod", DownloadedFile("dl/Patch.zip", entries)));
 
-        Assert.IsType<PackageEntry.Held>(FileOf(Mod, "b/same.txt").Entry);
-    }
-
-    [Fact]
-    public async Task AFilePathedInADifferentCaseThanItsEntry_IsStillTheShortLine()
-    {
-        _folders.WithFile(Mod, "Textures/A.dds", "hello");
-
-        await Landed(ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("textures/a.dds", "hello"))));
-
-        Assert.IsType<PackageEntry.Held>(FileOf(Mod, "Textures/A.dds").Entry);
+        Assert.Equal(expected, FileOf(Mod, manifestPath).Entry);
     }
 
     [Fact]
@@ -197,15 +174,24 @@ public sealed class UpdateManifestHandlerTests
         Assert.Equal("stat-cache is read-only", updated.StatCacheNotWritten);
     }
 
-    [Fact]
-    public async Task AFileNothingHolds_WithNoCopyAtItsPath_IsNotInThePackage_AndIsReported()
+    public static TheoryData<(string Path, string Text)[], (string Path, string Hash)[], string> FilesNothingHolds() => new()
     {
-        _folders.WithFile(Mod, "a.txt", "hellO").WithFile(Mod, "b.txt", "hello");
+        { [("meshes/a.nif", "edited")], [("Meshes/A.nif", "original")], "meshes/a.nif" },
+        { [("a.txt", "hellO"), ("b.txt", "hello")], [("other/a.txt", "hello"), ("b.txt", "hello")], "a.txt" },
+    };
 
-        var updated = await Landed(ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("other/a.txt", "hello"), ("b.txt", "hello"))));
+    [Theory]
+    [MemberData(nameof(FilesNothingHolds))]
+    public async Task AFileNothingHoldsAtItsPath_IsNotInThePackage_IsReported_AndNoInstallationFileIsOpened(
+        (string Path, string Text)[] modFiles, (string Path, string Hash)[] entries, string notHeld)
+    {
+        foreach (var (path, text) in modFiles) _folders.WithFile(Mod, path, text);
 
-        Assert.IsType<PackageEntry.NotHeld>(FileOf(Mod, "a.txt").Entry);
-        Assert.Equal(["a.txt"], updated.NotInPackage);
+        var updated = await Landed(ModFrom("Mod", DownloadedFile("dl/Base.zip", entries)));
+
+        Assert.IsType<PackageEntry.NotHeld>(FileOf(Mod, notHeld).Entry);
+        Assert.Equal([notHeld], updated.NotInPackage);
+        Assert.Equal(0, _folders.Opens);
     }
 
     [Fact]
