@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import type { PluginAddress } from '../client';
-import { pluginNameKey } from '../wire/pluginAddress';
 import type { Instance } from '../instanceLoader/instance';
 import { registerAgentGesture, type AgentGesture, type GestureResult } from '../drivingLib/agentGesture';
 import { pluralArgument } from '../drivingLib/gestureEntry';
@@ -17,11 +16,6 @@ function isDrop(value: unknown): value is PluginsDrop {
   if (value.kind === 'winningEnd' || value.kind === 'losingEnd') return true;
   return (value.kind === 'before' || value.kind === 'after') && 'name' in value && typeof value.name === 'string';
 }
-
-type DropBeside = Extract<PluginsDrop, { name: string }>;
-
-const dropsOnMoving = (plugins: readonly PluginAddress[], drop: PluginsDrop): drop is DropBeside =>
-  'name' in drop && plugins.some(({ name }) => pluginNameKey(name) === pluginNameKey(drop.name));
 
 interface MoveView extends Pick<PluginsTreeProvider, 'movePlaces'> {
   selection: () => readonly PluginsTreeNode[];
@@ -49,9 +43,6 @@ export function registerPluginMoveCommand(
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), drop: options.drop }),
     run: async ({ plugins, drop }) => {
-      if (dropsOnMoving(plugins, drop)) {
-        return { applied: true, outcome: { landed: [], refused: plugins.map((item) => ({ item, reason: `The drop is on "${drop.name}", which is moving.` })) } };
-      }
       try {
         const result = await runWritingGesture(PLUGINS_KEY_ARGS.view, instance, () => commands.reorderPlugins(plugins, drop));
         return result.applied
