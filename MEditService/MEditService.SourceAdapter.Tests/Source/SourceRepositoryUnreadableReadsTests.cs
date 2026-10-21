@@ -49,21 +49,14 @@ public sealed class SourceRepositoryUnreadableReadsTests : IDisposable
         Encoding.UTF8.GetBytes($"{{\"FormKey\": \"000850:{PluginName}\", \"EditorID\": \"{editorId}\"}}");
 
     private static void AssertStoppedNaming(string relativePath, SourceFailure stopped) =>
-        Assert.Equal(relativePath, Assert.IsType<SourceFailure.Unreadable>(stopped).File?.SourceRelativePath);
+        Assert.Contains(relativePath, Assert.IsType<SourceFailure.Inaccessible>(stopped).Reason);
 
-    [PosixFact]
-    public void ARecordByFormKey_WhoseDocumentIsNamedForItAndUnreadable_StopsNamingIt()
+    [PosixTheory]
+    [InlineData("Hidden - 000850_Unreadable.esp.json")]
+    [InlineData("RenamedByHand.json")]
+    public void ARecordByFormKey_WhoseDocumentIsUnreadable_NamedForItOrNot_StopsNamingIt(string leaf)
     {
-        var npc = Path.Combine(Root, "Npcs", $"Hidden - 000850_{PluginName}.json");
-        var repository = SourceMod(new TreeFile(npc, NpcText("Hidden")));
-
-        AssertStoppedNaming(Unreadable(npc), repository.RecordByFormKey(Plugin, $"000850:{PluginName}").Stopped());
-    }
-
-    [PosixFact]
-    public void ARecordByFormKey_WhoseDocumentIsRenamedByHandAndUnreadable_StopsNamingIt()
-    {
-        var npc = Path.Combine(Root, "Npcs", "RenamedByHand.json");
+        var npc = Path.Combine(Root, "Npcs", leaf);
         var repository = SourceMod(new TreeFile(npc, NpcText("Hidden")));
 
         AssertStoppedNaming(Unreadable(npc), repository.RecordByFormKey(Plugin, $"000850:{PluginName}").Stopped());

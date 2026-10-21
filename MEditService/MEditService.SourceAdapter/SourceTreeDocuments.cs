@@ -271,7 +271,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     private static int? Number(string text) =>
         int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
 
-    // Never exclusive owners of the file: it may vanish or lock between the listing and the read.
+    // Never exclusive owners of the file: it may vanish between the listing and the read.
     private string? Read(string path)
     {
         try

@@ -254,12 +254,20 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         Assert.Equal($"{NpcFile} is no record document: its root is not a JSON object.", WhyRefused(NpcFile));
     }
 
+    [PosixFact]
+    public void AFileThatCannotBeRead_IsRefused_GivingTheReason()
+    {
+        FileModes.Set(NpcFile, "000");
+
+        Assert.StartsWith($"{NpcFile} could not be read: ", WhyRefused(NpcFile));
+    }
+
     [Fact]
     public void AFileThatIsGone_IsRefused()
     {
         File.Delete(NpcFile);
 
-        Assert.Equal($"{NpcFile} could not be read.", WhyRefused(NpcFile));
+        Assert.Equal($"{NpcFile} is gone.", WhyRefused(NpcFile));
     }
 
     [Fact]

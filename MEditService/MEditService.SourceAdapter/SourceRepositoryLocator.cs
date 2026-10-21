@@ -97,7 +97,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         // Nothing of its own, so another record's document carries it inline, and the codec reads its
         // type and name off that document's text.
         if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
-        if (DocumentText.ListedBytes(_files, _sourceFolder, owner.FullPath) is not { } ownerBytes) return null;
+        if (DocumentText.BytesIfPresent(_files, owner.FullPath) is not { } ownerBytes) return null;
         return new ContainerDocuments(_release).EmbeddedChild(owner.RecordType, ownerBytes, spelled) is { } child
             ? ChildIdentity(child, owner.FullPath)
             : null;
@@ -170,7 +170,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
 
         foreach (var documentPath in DocumentsNaming(sourceRoot, spelled))
         {
-            if (DocumentText.ListedText(_files, _sourceFolder, documentPath) is { } text && DocumentTokens.WhyNotADocument(text) is { } why) return why;
+            if (DocumentText.TextIfPresent(_files, documentPath) is { } text && DocumentTokens.WhyNotADocument(text) is { } why) return why;
         }
         return null;
     }
@@ -183,13 +183,13 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         string? text;
         try
         {
-            text = DocumentText.ListedText(_files, _sourceFolder, fullPath);
+            text = DocumentText.TextIfPresent(_files, fullPath);
         }
-        catch (SourceStopException stop)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new RecordOfFileAnswer.Refused(stop.Message);
+            return new RecordOfFileAnswer.Refused($"{fullPath} could not be read: {ex.Message}");
         }
-        if (text is null) return new RecordOfFileAnswer.Refused($"{fullPath} could not be read.");
+        if (text is null) return new RecordOfFileAnswer.Refused($"{fullPath} is gone.");
         if (DocumentTokens.WhyNotADocument(text) is { } why) return new RecordOfFileAnswer.Refused($"{fullPath} is no record document: {why}");
         return DocumentText.FormKeyDeclaredIn(text, relativePath, treeName) is { } declared
             ? new RecordOfFileAnswer.Holds(new RecordAt(plugin, declared))
@@ -240,7 +240,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         var identified = new List<(string, RecordIdentity)>();
         foreach (var documentPath in documentPaths)
         {
-            if (DocumentText.ListedText(_files, _sourceFolder, documentPath) is not { } text) continue;
+            if (DocumentText.TextIfPresent(_files, documentPath) is not { } text) continue;
             var relativePath = Path.GetRelativePath(_sourceFolder, documentPath);
             if (ReadableDocumentAt(relativePath, text, pluginFileName) is not { } document) continue;
             if (!FormKeyComparer.Instance.Equals(document.FormKey, spelled)) continue;
@@ -304,8 +304,8 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
             [.. documents.SelectMany(document => Enumerable.Repeat(document, 1 + ChildrenCarrying(document, formKey)))],
             formKey, _sourceFolder);
 
-    // An unreadable candidate counts none: it is either the only one, the file a Remove deletes and a
-    // read opens and stops on, or one of several, which stop as ambiguous.
+    // An unreadable candidate counts none: the only one is the file a Remove deletes and a read stops
+    // on, and one of several stops as ambiguous.
     private int ChildrenCarrying(string document, string formKey)
     {
         try
@@ -353,8 +353,8 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         if (!path.UnderWorldspaceBlockLevels) return null;
 
         var worldspaceDocument = SourceRepositoryLayout.ContainerDocumentHeldBy(_files, Path.Combine(_sourceFolder, path.WorldspaceDirectory));
-        var worldspaceText = DocumentText.ListedText(_files, _sourceFolder, worldspaceDocument)
-            ?? throw SourceStopException.UnreadableIn(_sourceFolder, worldspaceDocument, "it could not be read");
+        var worldspaceText = DocumentText.TextIfPresent(_files, worldspaceDocument)
+            ?? throw SourceStopException.UnreadableIn(_sourceFolder, worldspaceDocument, "it is missing");
         var worldspace = DocumentText.FormKeyDeclaredIn(worldspaceText, worldspaceDocument, plugin.Name)
             ?? throw SourceStopException.UnreadableIn(
                 _sourceFolder, worldspaceDocument,
@@ -491,7 +491,7 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
         var documents = new List<SourceDocument>();
         foreach (var path in _files.FilesIn(root, $"*{SourceRepositoryLayout.JsonSuffix}", SearchOption.AllDirectories))
         {
-            if (DocumentText.ListedBytes(_files, _sourceFolder, path) is not { } bytes) continue;
+            if (DocumentText.BytesIfPresent(_files, path) is not { } bytes) continue;
             var text = Encoding.UTF8.GetString(bytes);
             var relativePath = Path.GetRelativePath(_sourceFolder, path);
             RequireParsedFormKey(relativePath, text, plugin.Name);
