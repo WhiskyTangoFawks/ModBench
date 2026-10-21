@@ -66,16 +66,15 @@ public sealed class ReadMeetsSwapTests : IDisposable
         IndexFiles.AbortNextCheckpoint(_fixture.InstanceRoot);
         Assert.Throws<DuckDB.NET.Data.DuckDBException>(() =>
             IndexFiles.Execute(_fixture.InstanceRoot, "CREATE TABLE aborts_the_checkpoint AS SELECT range AS n FROM range(100000)"));
-        var published = new List<LoadOrderState>();
-        _notifications.OnPublish = n =>
-        {
-            if (n is LoadOrderStatusNotification status) lock (published) published.Add(status.Status.State);
-        };
+        var statusesBefore = _notifications.Notifications.Count;
 
-        _index.Queries.GetPlugins().Refused();
+        var refused = _index.Queries.GetPlugins().Refused();
 
+        Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
+        Assert.Contains("invalidated", refused.Message, StringComparison.Ordinal);
         Waits.Reached(() => _index.Status.State == LoadOrderState.Ready && _index.Queries.GetPlugins().Holds(out _, out _), "the reopened index");
-        lock (published) Assert.Contains(LoadOrderState.Reconciling, published);
+        Assert.Contains(LoadOrderState.Reconciling, _notifications.Notifications.Skip(statusesBefore)
+            .OfType<LoadOrderStatusNotification>().Select(n => n.Status.State));
         Assert.NotEmpty(_index.ListedIn(_fixture.Plugins.Single().KeyOf()));
     }
 }

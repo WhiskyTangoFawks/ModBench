@@ -8,11 +8,11 @@ namespace MEditService.RecordIndex.Queries;
 
 /// <summary>Builds the answers the Index's face gives. Inside the Index a read that finds nothing held,
 /// not ready or out of memory throws; here it becomes the answer.</summary>
-internal static class IndexAnswer
+internal sealed class IndexAnswer(Action onInvalidation)
 {
-    public static Answer<T, IndexRefused> Of<T>(Func<T> read) => Flat<T>(() => read());
+    public Answer<T, IndexRefused> Of<T>(Func<T> read) => Flat<T>(() => read());
 
-    public static Answer<T, IndexRefused> Flat<T>(Func<Answer<T, IndexRefused>> read)
+    public Answer<T, IndexRefused> Flat<T>(Func<Answer<T, IndexRefused>> read)
     {
         try
         {
@@ -20,18 +20,19 @@ internal static class IndexAnswer
         }
         catch (Exception ex) when (RefusalOf(ex) is { } refused)
         {
+            if (Store.IsInvalidation(ex)) onInvalidation();
             return refused;
         }
     }
 
-    public static Answer<T, IndexRefused> Sourced<T>(Func<Answer<T, SourceFailure>> read) =>
+    public Answer<T, IndexRefused> Sourced<T>(Func<Answer<T, SourceFailure>> read) =>
         Flat<T>(() =>
         {
             if (read().Holds(out var value, out var failure)) return value;
             return new IndexRefused(IndexRefusal.SourceStopped, failure.Reason);
         });
 
-    public static IndexRefused? Refusing(Func<IndexRefused?> act) =>
+    public IndexRefused? Refusing(Func<IndexRefused?> act) =>
         Flat<bool>(() =>
         {
             if (act() is { } refused) return refused;

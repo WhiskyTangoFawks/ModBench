@@ -297,7 +297,7 @@ public sealed class StoreRebuildTests : IDisposable
         Reconcile(_fixture.InstanceRoot);
         using var rebuilding = new CancellationTokenSource();
         var answered = 0;
-        var readers = Enumerable.Range(0, 2).Select(_ => Task.Run(() =>
+        var readers = Enumerable.Range(0, 4).Select(_ => Task.Run(() =>
         {
             while (!rebuilding.IsCancellationRequested)
             {
