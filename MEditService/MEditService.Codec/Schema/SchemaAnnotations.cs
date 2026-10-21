@@ -450,10 +450,13 @@ public sealed record SchemaAnnotations(
         }
     }
 
+    private static IEnumerable<(string TypeName, string MemberName)> Ordinally(IEnumerable<(string TypeName, string MemberName)> rows) =>
+        rows.OrderBy(row => row.TypeName, StringComparer.Ordinal).ThenBy(row => row.MemberName, StringComparer.Ordinal);
+
     // A row no leaf of its union declares hides nothing.
     private IEnumerable<string> UnresolvedUnusedSlotMembers(IReadOnlyList<Type> allTypes, ILookup<string, Type> typesByName)
     {
-        foreach (var (typeName, member) in UnusedSlotMembers.Order())
+        foreach (var (typeName, member) in Ordinally(UnusedSlotMembers))
         {
             var label = $"{nameof(UnusedSlotMembers)}: {typeName}.{member}";
             if (typesByName[typeName].FirstOrDefault(t => t.IsClass) is not { } setterType
@@ -468,7 +471,7 @@ public sealed record SchemaAnnotations(
     // already types nullable, or on something that is no link, it says nothing.
     private IEnumerable<string> UnresolvedPermittedNullLinks(ILookup<string, Type> typesByName)
     {
-        foreach (var entry in PermittedNullFormLinks.Order())
+        foreach (var entry in Ordinally(PermittedNullFormLinks))
         {
             if (Property(typesByName, entry) is not { } prop) continue;
             var label = $"{nameof(PermittedNullFormLinks)}: {entry.TypeName}.{entry.MemberName}";

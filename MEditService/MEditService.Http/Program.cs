@@ -127,12 +127,21 @@ try
     app.MapIndexEndpoints();
     app.MapUnsavedDocumentEndpoints();
 
+    var lifetime = app.Lifetime;
+
     // The extension holds this process's stdin open and never writes to it. The OS closes it when the
     // extension host dies, however it dies, so the end of stdin is the end of the window that owns this backend.
     if (app.Configuration.GetValue<bool>("ExitWhenStdinCloses"))
-        app.Lifetime.ApplicationStarted.Register(() => _ = StopWhenStdinCloses(app.Lifetime));
+        _ = StopWhenStdinCloses(lifetime);
 
-    await app.RunAsync();
+    try
+    {
+        await app.RunAsync();
+    }
+    catch (OperationCanceledException) when (lifetime.ApplicationStopping.IsCancellationRequested)
+    {
+        return;
+    }
 }
 catch (Exception ex) when (ex is not OutOfMemoryException)
 {

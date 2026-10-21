@@ -15,6 +15,8 @@
          the reference list), so a box two hops down is a compile error rather than a line nobody
          noticed arriving. -->
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
     <MutagenVersion>0.55.0-alpha.67</MutagenVersion>
   </PropertyGroup>
 
