@@ -37,6 +37,8 @@ import { publishRepository } from './toolbox/repositoryContext';
 import { registerRefreshCommand, registerToolboxCommands, TOOLBOX_VIEW } from './toolbox/toolboxCommands';
 import { openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
+import { toastOncePerFailure } from './drivingLib/toastOncePerFailure';
+import { reportSubscriberThrows } from './drivingLib/reportSubscriberThrows';
 import { pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
 import { modlistRepositoryCommands } from './sourceCommands/modlistRepositoryCommands';
 import { sourceCommands } from './sourceCommands/sourceCommands';
@@ -127,6 +129,7 @@ function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own):
 function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: OpenedInstance, deps: ViewsDeps): InstanceSide {
   const { outputChannel, client, plugins: pluginsBox, reporterFor, ask, trash, extensionId } = deps;
   own(markFirstReadLanded(instance));
+  own(reportSubscriberThrows(instance, toastOncePerFailure(reporterFor('instance'))));
   const commands = instanceCommands({ adapter, client, instanceRoot });
   const { modSync, pluginSync } = own(instanceSyncs({
     instance, syncMods: modSyncOver(adapter), syncPlugins: pluginSyncOver(adapter), channel: outputChannel,
@@ -228,7 +231,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(outputChannel);
 
   // ADR-0002.
-  const meditClient = createMEditClient({ backend: { attachPort: attachPort() }, backendLog: outputChannel, log: outputChannel });
+  const meditClient = createMEditClient({ backend: { attachPort: attachPort() }, backendLog: outputChannel, log: outputChannel, listenerThrows: toastOncePerFailure(makeReporter(outputChannel, 'notifications')) });
   const focusedView = createFocusedView();
 
   const ownedByViews = ownership();

@@ -507,8 +507,10 @@ describe('Instance — a value that survives a bad read', () => {
   });
 
   it('keeps recomputing after a subscriber throws', async () => {
-    const { instance, errorLines } = loader();
+    const { instance } = loader();
     const seen: number[] = [];
+    const thrown: (string | undefined)[] = [];
+    instance.onListenerOutcome(({ threw }) => thrown.push(threw));
     instance.subscribe(() => {
       throw new Error('subscriber exploded');
     });
@@ -518,7 +520,19 @@ describe('Instance — a value that survives a bad read', () => {
     await instance.refresh();
 
     expect(seen).toEqual([1, 2]);
-    expect(errorLines.filter((m) => m.includes('subscriber threw'))).toHaveLength(2);
+    expect(thrown).toEqual(['subscriber exploded', undefined, 'subscriber exploded', undefined]);
+  });
+
+  it('tells of a read-failure listener that throws, as one that follows a failed read', async () => {
+    const { instance, fake } = loader();
+    const outcomes: { during: string; threw: string | undefined }[] = [];
+    instance.onListenerOutcome(({ during, threw }) => outcomes.push({ during, threw }));
+    instance.onReadFailure(() => { throw new Error('failure listener exploded'); });
+    fake.failReading('unreadable');
+
+    await instance.refresh();
+
+    expect(outcomes).toEqual([{ during: 'read-failure', threw: 'failure listener exploded' }]);
   });
 });
 

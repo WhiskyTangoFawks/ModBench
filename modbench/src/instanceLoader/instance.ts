@@ -120,6 +120,14 @@ export type InstanceSubscriber = (value: InstanceValue, sequence: number) => voi
 /** Hears each recompute that failed; `readFailure` holds the reason. The value and sequence are
  *  where they were: before the first landed value that is the empty sentinel at 0. */
 export type ReadFailureListener = () => void;
+/** What calling one subscriber (`during` a landed value) or one read-failure listener (`during` a
+ *  failed read) came to: `threw` is its error's message, undefined when it returned. */
+export interface ListenerOutcome {
+  readonly listener: object;
+  readonly during: 'value' | 'read-failure';
+  readonly threw: string | undefined;
+}
+export type ListenerOutcomeListener = (outcome: ListenerOutcome) => void;
 
 /** The Instance as a tree reads it: the held value, sequence and read failure, plus the two
  *  channels they move on. */
@@ -224,6 +232,7 @@ export class Instance implements Subscription {
   private subscribers: InstanceSubscriber[] = [];
 
   private failureListeners: ReadFailureListener[] = [];
+  private outcomeListeners: ListenerOutcomeListener[] = [];
 
   private timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -295,6 +304,17 @@ export class Instance implements Subscription {
     };
   }
 
+  /** Called with the outcome of each call to a subscriber or read-failure listener, so a view that
+   *  missed an update can be told of. */
+  onListenerOutcome(listener: ListenerOutcomeListener): Subscription {
+    this.outcomeListeners.push(listener);
+    return {
+      dispose: () => {
+        this.outcomeListeners = this.outcomeListeners.filter((l) => l !== listener);
+      },
+    };
+  }
+
   /** The recompute activation runs, and the one that corrects the value after a change the
    *  adapter never signalled. Identical to the one a signal runs. Settles when its read has run;
    *  a read that overlapped `quiet` is dropped, not landed. */
@@ -329,6 +349,7 @@ export class Instance implements Subscription {
     this.focus.dispose();
     this.subscribers = [];
     this.failureListeners = [];
+    this.outcomeListeners = [];
   }
 
   private tellReading({
@@ -385,25 +406,27 @@ export class Instance implements Subscription {
       const failure = errorMessage(err);
       this.options.log.error(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
-      this.notify(this.failureListeners, (listener) => listener());
+      this.notify(this.failureListeners, 'read-failure', (listener) => listener());
       return;
     }
     if (epoch !== this.quietEpoch || this.quiets > 0) return;
     this.current = next;
     this.failure = undefined;
     this.seq++;
-    this.notify(this.subscribers, (subscriber) => subscriber(next, this.seq));
+    this.notify(this.subscribers, 'value', (subscriber) => subscriber(next, this.seq));
   }
 
   // A throwing subscriber would otherwise reject the queue for good, and no later recompute
   // would run — the dead chain tail every write queue's tail-catch documents.
-  private notify<T>(listeners: readonly T[], call: (listener: T) => void): void {
+  private notify<T extends object>(listeners: readonly T[], during: ListenerOutcome['during'], call: (listener: T) => void): void {
     for (const listener of [...listeners]) {
+      let threw: string | undefined;
       try {
         call(listener);
       } catch (err) {
-        this.options.log.error(`[instance] subscriber threw at sequence ${this.seq}: ${errorMessage(err)}`);
+        threw = errorMessage(err);
       }
+      for (const onOutcome of [...this.outcomeListeners]) onOutcome({ listener, during, threw });
     }
   }
 
