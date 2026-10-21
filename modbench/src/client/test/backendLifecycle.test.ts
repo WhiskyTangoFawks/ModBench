@@ -4,9 +4,11 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { createServer, type Server } from 'node:http';
 import { spawn as nodeSpawn } from 'node:child_process';
-import type { AddressInfo } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
 
 import { BackendLifecycle } from '../backendLifecycle';
+import type { HealthAnswer } from '../backendLifecycle';
+import { answered } from './healthAnswer';
 import type { BackendStatus } from '../MEditClient';
 import { present } from '../../ports/present';
 
@@ -23,8 +25,8 @@ function record(lifecycle: BackendLifecycle): BackendStatus[] {
   return statuses;
 }
 
-function healthCheck(state: { healthy: boolean }): () => Promise<boolean> {
-  return () => Promise.resolve(state.healthy);
+function healthCheck(state: { healthy: boolean }): () => Promise<HealthAnswer> {
+  return () => Promise.resolve(answered(state.healthy));
 }
 
 describe('BackendLifecycle', () => {
@@ -32,7 +34,7 @@ describe('BackendLifecycle', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('attaches when a backend is already running', async () => {
-    const lifecycle = new BackendLifecycle({ attachPort: 5172, checkHealth: () => Promise.resolve(true) });
+    const lifecycle = new BackendLifecycle({ attachPort: 5172, checkHealth: () => Promise.resolve(answered(true)) });
     const statuses = record(lifecycle);
 
     await lifecycle.start();
@@ -43,7 +45,7 @@ describe('BackendLifecycle', () => {
 
   it('polls until backend becomes healthy', async () => {
     let call = 0;
-    const checkHealth = vi.fn(() => Promise.resolve(call++ >= 2));
+    const checkHealth = vi.fn(() => Promise.resolve(answered(call++ >= 2)));
 
     const lifecycle = new BackendLifecycle({ attachPort: 5172, pollIntervalMs: 10, checkHealth });
     const statuses = record(lifecycle);
@@ -56,8 +58,8 @@ describe('BackendLifecycle', () => {
   });
 
   it.each([
-    ['answers unhealthy', () => Promise.resolve(false)],
-    ['never settles', () => new Promise<boolean>(() => {})],
+    ['answers unhealthy', () => Promise.resolve(answered(false))],
+    ['never settles', () => new Promise<HealthAnswer>(() => {})],
   ])('reports disconnected at the deadline when the health check %s', async (_case, checkHealth) => {
     const lifecycle = new BackendLifecycle({ attachPort: 5172, pollIntervalMs: 10, pollTimeoutMs: 0, checkHealth });
     const statuses = record(lifecycle);
@@ -66,6 +68,43 @@ describe('BackendLifecycle', () => {
 
     expect(statuses).toContain('disconnected');
     expect(lifecycle.status).toBe('disconnected');
+  });
+
+  it('says the backend did not answer in time when the deadline cuts off a request that hangs, and destroys the request', async () => {
+    const sockets: Socket[] = [];
+    const silent = createServer(() => {});
+    silent.on('connection', (socket) => sockets.push(socket));
+    await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
+    const logged = leveledLog();
+    const lifecycle = new BackendLifecycle({ attachPort: addressInfo(silent.address()).port, pollIntervalMs: 5, pollTimeoutMs: 40, log: logged });
+
+    await lifecycle.start();
+    await vi.waitFor(() => expect(sockets.every((socket) => socket.destroyed)).toBe(true));
+    silent.close();
+
+    expect(sockets).not.toHaveLength(0);
+    expect(logged.lines.error).toEqual([expect.stringMatching(/Timed out waiting for backend on port \d+: it did not answer in time/)]);
+  });
+
+  it('reports the cut-off attempt, not the reason of an earlier one', async () => {
+    let call = 0;
+    const checkHealth = () => call++ === 0 ? Promise.resolve<HealthAnswer>({ healthy: false, reason: 'refused' }) : new Promise<HealthAnswer>(() => {});
+    const logged = leveledLog();
+
+    await new BackendLifecycle({ attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 40, checkHealth, log: logged }).start();
+
+    expect(logged.lines.error).toEqual([expect.stringContaining('it did not answer in time')]);
+  });
+
+  it('reports no reason from an earlier start', async () => {
+    const logged = leveledLog();
+    const refusing = new BackendLifecycle({ attachPort: 5172, pollTimeoutMs: 0, log: logged, checkHealth: () => Promise.resolve<HealthAnswer>({ healthy: false, reason: 'refused' }) });
+    const hanging = new BackendLifecycle({ attachPort: 5172, pollTimeoutMs: 0, log: logged, checkHealth: () => new Promise<HealthAnswer>(() => {}) });
+
+    await refusing.start();
+    await hanging.start();
+
+    expect(logged.lines.error).toEqual([expect.stringContaining('refused'), expect.stringContaining('it did not answer in time')]);
   });
 
   it('logs once, at the deadline, why nothing answered, and not on each poll before it', async () => {
@@ -114,7 +153,7 @@ describe('BackendLifecycle.start', () => {
     const spawn = vi.fn(() => makeChild());
 
     const lifecycle = new BackendLifecycle({
-      freePort: () => Promise.resolve(41000), spawn, executablePath: '/x/backend', checkHealth: () => Promise.resolve(true),
+      freePort: () => Promise.resolve(41000), spawn, executablePath: '/x/backend', checkHealth: () => Promise.resolve(answered(true)),
     });
     await lifecycle.start();
 
@@ -130,7 +169,7 @@ describe('BackendLifecycle.start', () => {
 
     const lifecycle = new BackendLifecycle({
       freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x',
-      checkHealth: () => Promise.resolve(true),
+      checkHealth: () => Promise.resolve(answered(true)),
     });
     const statuses = record(lifecycle);
     await lifecycle.start();
@@ -142,7 +181,7 @@ describe('BackendLifecycle.start', () => {
   it('gives each lifecycle its own free port', async () => {
     const ports = await Promise.all([1, 2].map(async () => {
       const lifecycle = new BackendLifecycle({
-        spawn: () => makeChild(), executablePath: '/x', checkHealth: () => Promise.resolve(true),
+        spawn: () => makeChild(), executablePath: '/x', checkHealth: () => Promise.resolve(answered(true)),
       });
       await lifecycle.start();
       return lifecycle.port;
@@ -157,7 +196,7 @@ describe('BackendLifecycle.start', () => {
 
     const lifecycle = new BackendLifecycle({
       attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20, spawn, executablePath: '/x/backend',
-      checkHealth: () => Promise.resolve(false),
+      checkHealth: () => Promise.resolve(answered(false)),
     });
     await lifecycle.start();
 
@@ -171,7 +210,7 @@ describe('BackendLifecycle.start', () => {
 
     const lifecycle = new BackendLifecycle({
       attachPort: null, pollIntervalMs: 5, pollTimeoutMs: 20, spawn, executablePath: '/x/backend', freePort: () => Promise.resolve(6000),
-      checkHealth: () => Promise.resolve(true),
+      checkHealth: () => Promise.resolve(answered(true)),
     });
     await lifecycle.start();
 
@@ -190,7 +229,7 @@ describe('BackendLifecycle.start', () => {
   it('tells a port listener the spawned backend\'s port once claimed, before the backend answers', async () => {
     const lifecycle = new BackendLifecycle({
       freePort: () => Promise.resolve(41000), spawn: () => makeChild(), executablePath: '/x/backend',
-      pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(false),
+      pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(answered(false)),
     });
     const heard: number[] = [];
     lifecycle.onPort((port) => heard.push(port));
@@ -202,7 +241,7 @@ describe('BackendLifecycle.start', () => {
   });
 
   it('tells no port listener once it has unsubscribed', async () => {
-    const lifecycle = new BackendLifecycle({ freePort: () => Promise.resolve(41000), pollIntervalMs: 5, pollTimeoutMs: 5, checkHealth: () => Promise.resolve(false) });
+    const lifecycle = new BackendLifecycle({ freePort: () => Promise.resolve(41000), pollIntervalMs: 5, pollTimeoutMs: 5, checkHealth: () => Promise.resolve(answered(false)) });
     const heard: number[] = [];
     lifecycle.onPort((port) => heard.push(port))();
 
@@ -212,7 +251,7 @@ describe('BackendLifecycle.start', () => {
   });
 
   it('attaches to the developer port once it answers', async () => {
-    const lifecycle = new BackendLifecycle({ attachPort: 5172, checkHealth: () => Promise.resolve(true) });
+    const lifecycle = new BackendLifecycle({ attachPort: 5172, checkHealth: () => Promise.resolve(answered(true)) });
     await lifecycle.start();
 
     expect(lifecycle.status).toBe('running');
@@ -320,7 +359,7 @@ describe('BackendLifecycle exit / stop', () => {
     const logged = leveledLog();
     const lifecycle = new BackendLifecycle({
       freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x',
-      checkHealth: () => Promise.resolve(true), log: logged,
+      checkHealth: () => Promise.resolve(answered(true)), log: logged,
     });
     await lifecycle.start();
     const statuses = record(lifecycle);
@@ -337,7 +376,7 @@ describe('BackendLifecycle exit / stop', () => {
     const children: ReturnType<typeof makeChild>[] = [];
     const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
     const lifecycle = new BackendLifecycle({
-      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: () => Promise.resolve(false),
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: () => Promise.resolve(answered(false)),
     });
     const started = lifecycle.start();
     await vi.waitFor(() => expect(children).toHaveLength(1), { interval: 2 });
@@ -353,7 +392,7 @@ describe('BackendLifecycle exit / stop', () => {
     const children: ReturnType<typeof makeChild>[] = [];
     const logged = leveledLog();
     const lifecycle = new BackendLifecycle({
-      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, executablePath: '/x', checkHealth: () => Promise.resolve(true),
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, executablePath: '/x', checkHealth: () => Promise.resolve(answered(true)),
       spawn: () => { const c = makeChild(); children.push(c); return c; }, log: logged,
     });
     await lifecycle.start();
@@ -367,7 +406,7 @@ describe('BackendLifecycle exit / stop', () => {
     const logged = leveledLog();
     const lifecycle = new BackendLifecycle({
       freePort: () => Promise.resolve(5172), pollIntervalMs: 5, pollTimeoutMs: 10_000, executablePath: '/nonexistent/backend',
-      checkHealth: () => Promise.resolve(false), log: logged,
+      checkHealth: () => Promise.resolve(answered(false)), log: logged,
       spawn: (exe, args) => nodeSpawn(exe, args, { stdio: 'pipe' }),
     });
 
@@ -381,7 +420,7 @@ describe('BackendLifecycle exit / stop', () => {
     ['claiming a port throws', { freePort: () => Promise.reject(new Error('no port')) }],
     ['the spawn throws', { freePort: () => Promise.resolve(5172), spawn: () => { throw new Error('no spawn'); } }],
   ])('is stopped by the stop after a start that threw, %s', async (_name, options) => {
-    const lifecycle = new BackendLifecycle({ executablePath: '/x', checkHealth: () => Promise.resolve(true), ...options });
+    const lifecycle = new BackendLifecycle({ executablePath: '/x', checkHealth: () => Promise.resolve(answered(true)), ...options });
     await lifecycle.start().catch(() => undefined);
 
     await lifecycle.stop();
@@ -391,7 +430,7 @@ describe('BackendLifecycle exit / stop', () => {
 
   it('is stopped by the stop after an attach that timed out, so the item agrees with the failed launch', async () => {
     const lifecycle = new BackendLifecycle({
-      attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(false),
+      attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(answered(false)),
     });
     await lifecycle.start();
     expect(lifecycle.status).toBe('disconnected');
@@ -443,7 +482,7 @@ describe('BackendLifecycle exit / stop', () => {
     const children: ReturnType<typeof makeChild>[] = [];
     const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
     const lifecycle = new BackendLifecycle({
-      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: () => Promise.resolve(false),
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 3, spawn, executablePath: '/x', checkHealth: () => Promise.resolve(answered(false)),
     });
     const started = lifecycle.start();
     await vi.waitFor(() => expect(children).toHaveLength(1), { interval: 2 });

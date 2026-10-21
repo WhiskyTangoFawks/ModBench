@@ -44,8 +44,11 @@ export interface BackendLifecycleOptions {
   stopGracePeriodMs?: number;
   /** Polled at `pollIntervalMs` while attaching/starting; defaults to a real GET `/health`
    *  against `port`. Injectable so a test drives attach timing without a real socket. */
-  checkHealth?: () => Promise<boolean>;
+  checkHealth?: (cancelled: AbortSignal) => Promise<HealthAnswer>;
 }
+
+/** Whether the backend answered, and if not, why. */
+export type HealthAnswer = { readonly healthy: true } | { readonly healthy: false; readonly reason: string };
 
 export interface LauncherWire {
   status(): BackendStatus;
@@ -107,9 +110,7 @@ export class BackendLifecycle {
   private readonly spawnFn?: SpawnFn;
   private readonly executablePath?: string;
   private readonly serilogLevelArgs?: () => string[];
-  private readonly checkHealthFn: () => Promise<boolean>;
-
-  private lastHealthFailure?: string;
+  private readonly checkHealthFn: (cancelled: AbortSignal) => Promise<HealthAnswer>;
 
   private _status: BackendStatus = 'starting';
   private readonly listeners = new Set<(status: BackendStatus) => void>();
@@ -134,7 +135,7 @@ export class BackendLifecycle {
     this.spawnFn = opts.spawn;
     this.executablePath = opts.executablePath;
     this.serilogLevelArgs = opts.serilogLevelArgs;
-    this.checkHealthFn = opts.checkHealth ?? (() => this.checkHealthOverHttp());
+    this.checkHealthFn = opts.checkHealth ?? ((cancelled) => this.checkHealthOverHttp(cancelled));
   }
 
   get status(): BackendStatus { return this._status; }
@@ -242,17 +243,16 @@ export class BackendLifecycle {
       const attempt = async () => {
         const abandoned = () => gen !== this.generation || (child !== undefined && this.child !== child);
         if (abandoned()) { resolve(); return; }
-        const healthy = await withinDeadline(this.checkHealthFn(), deadline);
+        const answer = await withinDeadline(this.checkHealthFn, deadline);
         if (abandoned()) { resolve(); return; }
-        if (healthy) {
+        if (answer.healthy) {
           this.setStatus('running');
           resolve();
           return;
         }
 
-        if (Date.now() >= deadline) {
-          const why = this.lastHealthFailure === undefined ? '' : `: ${this.lastHealthFailure}`;
-          this.log.error(`[backend] Timed out waiting for backend on port ${this.port}${why}`);
+        if (Date.now() + this.pollIntervalMs >= deadline) {
+          this.log.error(`[backend] Timed out waiting for backend on port ${this.port}: ${answer.reason}`);
           this.setStatus('disconnected');
           resolve();
           return;
@@ -265,13 +265,13 @@ export class BackendLifecycle {
     });
   }
 
-  private checkHealthOverHttp(): Promise<boolean> {
+  private checkHealthOverHttp(cancelled: AbortSignal): Promise<HealthAnswer> {
     return new Promise((resolve) => {
-      const req = http.get(`http://localhost:${this.port}/health`, (res) => {
-        this.lastHealthFailure = res.statusCode === 200 ? undefined : `/health answered ${res.statusCode}`;
-        resolve(res.statusCode === 200);
+      const req = http.get(`http://localhost:${this.port}/health`, { signal: cancelled }, (res) => {
+        resolve(res.statusCode === 200 ? { healthy: true } : { healthy: false, reason: `/health answered ${res.statusCode}` });
+        res.resume();
       });
-      req.on('error', (err) => { this.lastHealthFailure = failureReason(err); resolve(false); });
+      req.on('error', (err) => { resolve({ healthy: false, reason: failureReason(err) }); });
     });
   }
 
@@ -287,13 +287,14 @@ function failureReason(err: Error): string {
   return inner.length > 0 ? inner.join('; ') : err.message || err.name;
 }
 
-async function withinDeadline(check: Promise<boolean>, deadline: number): Promise<boolean> {
+async function withinDeadline(check: (cancelled: AbortSignal) => Promise<HealthAnswer>, deadline: number): Promise<HealthAnswer> {
+  const cancel = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const expired = new Promise<boolean>((resolve) => {
-    timer = setTimeout(() => resolve(false), Math.max(0, deadline - Date.now()));
+  const expired = new Promise<HealthAnswer>((resolve) => {
+    timer = setTimeout(() => { cancel.abort(); resolve({ healthy: false, reason: 'it did not answer in time' }); }, Math.max(0, deadline - Date.now()));
   });
   try {
-    return await Promise.race([check, expired]);
+    return await Promise.race([check(cancel.signal), expired]);
   } finally {
     clearTimeout(timer);
   }

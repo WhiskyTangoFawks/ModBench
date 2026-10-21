@@ -7,6 +7,7 @@ import type { MEditClient, RecordEditEnvelope } from '../MEditClient';
 import { PassThrough, Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
 import { restoredMod } from '../../test/restoredMod';
+import { answered } from './healthAnswer';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -26,7 +27,7 @@ function makeClient(
   return createMEditClient({ listenerThrows: IGNORED_THROWS,
     backend: {
       attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
-      checkHealth: () => Promise.resolve(health === 'up'),
+      checkHealth: () => Promise.resolve(answered(health === 'up')),
     },
     backendLog: fakeLogChannel(), fetch, ...deps,
   });
@@ -780,7 +781,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
           children.push(child);
           return child;
         },
-        pollIntervalMs: 3, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(true),
+        pollIntervalMs: 3, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(answered(true)),
       },
       backendLog: fakeLogChannel(), fetch: routedFetch([['/notifications/stream', () => Promise.resolve(openStreamResponse())]]),
     });
@@ -805,7 +806,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     ['the spawn throws', { freePort: () => Promise.resolve(5172), spawn: () => { throw new Error('no spawn'); } }],
   ])('is stopped when the launch fails because %s', async (_name, backend) => {
     const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
-      backend: { executablePath: '/x/backend', pollIntervalMs: 3, checkHealth: () => Promise.resolve(true), ...backend },
+      backend: { executablePath: '/x/backend', pollIntervalMs: 3, checkHealth: () => Promise.resolve(answered(true)), ...backend },
       backendLog: fakeLogChannel(), fetch: routedFetch([]),
     });
 
@@ -826,7 +827,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
           process.nextTick(() => child.emit('exit', 1));
           return child;
         },
-        pollIntervalMs: 3, pollTimeoutMs: 300, checkHealth: () => Promise.resolve(false),
+        pollIntervalMs: 3, pollTimeoutMs: 300, checkHealth: () => Promise.resolve(answered(false)),
       },
       backendLog: fakeLogChannel(), fetch: routedFetch([['/notifications/stream', () => Promise.resolve(openStreamResponse())]]),
     });
@@ -851,7 +852,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
         freePort: () => Promise.resolve(5172), spawn: () => child, executablePath: '/x/backend',
-        pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(true),
+        pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(answered(true)),
       },
       backendLog: fakeLogChannel(), fetch,
     });
@@ -920,7 +921,7 @@ describe('HttpMEditClient, the backend process it hides', () => {
     const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
         freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x/backend',
-        checkHealth: () => Promise.resolve(state.healthy),
+        checkHealth: () => Promise.resolve(answered(state.healthy)),
       },
       backendLog: channel,
       fetch: neverFetch(),
