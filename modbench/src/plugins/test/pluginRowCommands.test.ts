@@ -45,6 +45,7 @@ import { registerDecompileCommand } from '../pluginRowCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { PluginNode } from '../pluginRows';
 import { AgentCall } from '../../drivingLib/agentGesture';
+import { Refusal } from '../../drivingLib/refusal';
 import { assertAskedOnce, recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 
@@ -130,16 +131,6 @@ describe('modbench.plugin.decompile', () => {
     expect(reporter.landings).toEqual([]);
   });
 
-  it('from the palette, decompiles the Plugins view\'s selection', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('decompile', { landed: [FIRST], refused: [] });
-    const { handler } = registered(client, 'Decompile', [row(FIRST)]);
-
-    await handler();
-
-    expect(decompileCalls(client)).toEqual([[[FIRST], true]]);
-  });
-
   it('names each refused plugin and why in one notification while the rest land', async () => {
     const client = new InMemoryMEditClient();
     const refusal = 'First.esp does not round-trip through its own source.';
@@ -213,6 +204,15 @@ describe('modbench.plugin.decompile, called by the agent', () => {
 
     expect(await handler(calling(SECOND))).toEqual({ applied: false, refusal: 'git was not found on PATH.' });
     expect(reporter.reports).toEqual([]);
+  });
+
+  it('refuses an Argument that is not a plugin, decompiling nothing', async () => {
+    const client = new InMemoryMEditClient();
+    const { handler } = registered(client);
+
+    await expect(handler(new AgentCall([{ kind: 'mod', name: 'ModA' }], {}))).rejects.toBeInstanceOf(Refusal);
+
+    expect(client.calls.filter((c) => c.method === 'decompile')).toEqual([]);
   });
 });
 

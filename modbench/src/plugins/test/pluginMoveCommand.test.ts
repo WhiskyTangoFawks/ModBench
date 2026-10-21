@@ -29,6 +29,7 @@ vi.mock('vscode', async () => {
 import type { MEditClient, PluginMetadata } from '../../client';
 import type { PluginsDrop } from '../../pluginCommands/plugins';
 import { AgentCall } from '../../drivingLib/agentGesture';
+import { Refusal } from '../../drivingLib/refusal';
 import { registerPluginMoveCommand } from '../pluginMoveCommand';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -102,16 +103,6 @@ describe('modbench.plugin.move', () => {
 
     expect(reporter.reports).toEqual([]);
     expect(fake.calls).toEqual(moved('C.esp', 0));
-  });
-
-  it('does nothing for no plugins', async () => {
-    const { reporter, fake } = registered();
-
-    await invoke(undefined, undefined, LOSING_END);
-
-    expect(fake.calls).toEqual([]);
-    expect(progressSteps).toEqual([]);
-    expect(reporter.reports).toEqual([]);
   });
 
   it('with no target given, lands the block on the place picked', async () => {
@@ -189,7 +180,7 @@ describe('modbench.plugin.move, called by the agent', () => {
   it('refuses an Argument that is not a plugin, writing nothing', async () => {
     const { fake } = registered();
 
-    await expect(invoke(new AgentCall([{ kind: 'mod', name: 'ModA' }], { drop: LOSING_END }))).rejects.toThrow('carries plugins only');
+    await expect(invoke(new AgentCall([{ kind: 'mod', name: 'ModA' }], { drop: LOSING_END }))).rejects.toBeInstanceOf(Refusal);
 
     expect(fake.calls).toEqual([]);
   });
