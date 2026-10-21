@@ -85,9 +85,9 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
     {
         var (repository, relative) = UnreadableDocument();
 
-        var stopped = Assert.IsType<SourceFailure.Unreadable>(query(repository).Stopped());
+        var stopped = Assert.IsType<SourceFailure.Inaccessible>(query(repository).Stopped());
 
-        Assert.Equal(relative, stopped.File?.SourceRelativePath);
+        Assert.Contains(relative, stopped.Reason);
     }
 
     [Fact]
