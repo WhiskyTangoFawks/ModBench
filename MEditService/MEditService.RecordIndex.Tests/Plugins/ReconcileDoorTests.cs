@@ -246,15 +246,11 @@ public sealed class ReconcileDoorTests
     {
         using var data = new PluginFixtureBuilder("superseded-untold-door")
             .WithPlugin("NonCompiledPlugin.esp", mod => mod.Npcs.AddNew("FromA"))
-            // Validation checks for cancellation before each plugin: more plugins, more chances to land the cancel.
-            .WithPlugin("OtherOne.esp", mod => mod.Npcs.AddNew("FromOne"))
-            .WithPlugin("OtherTwo.esp", mod => mod.Npcs.AddNew("FromTwo"))
-            .WithPlugin("OtherThree.esp", mod => mod.Npcs.AddNew("FromThree"))
-            .WithPlugin("OtherFour.esp", mod => mod.Npcs.AddNew("FromFour"))
+            .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("FromOther"))
             .Build();
         var notifications = new InMemoryNotificationPublisher { FaultsOn = n => n is PluginChangedNotification };
         var log = new List<LogEntry>();
-        using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(log)));
+        using var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
         var holder = new LoadOrderHolder();
         using var gate = new GatedPluginAdapter();
         using var index = Indexes.Open(holder, gate, loggerFactory: loggerFactory, notifications: notifications);
@@ -268,6 +264,7 @@ public sealed class ReconcileDoorTests
         Assert.True(await Waits.CompletesWithin(gate.WaitUntilParkedAsync(), TimeSpan.FromSeconds(20)), "the validation re-reading the plugin");
 
         holder.Apply(holder.Current);
+        Waits.Reached(() => { lock (log) return log.Exists(e => e.Message.Contains("Asked the reconcile in flight to stop", StringComparison.Ordinal)); }, "the attempt being asked to stop");
         gate.Release();
         Waits.Reached(() => { lock (log) return log.Exists(e => e.Message.Contains("superseded", StringComparison.Ordinal)); }, "the attempt being superseded");
 

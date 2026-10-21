@@ -148,7 +148,14 @@ internal sealed class Indexer : IDisposable
     {
         // Cancel and dispose both happen under _lock, so a token can never be cancelled after it has
         // been disposed.
-        lock (_lock) _reconcileCancellation?.Cancel();
+        lock (_lock)
+        {
+            if (_reconcileCancellation is { } inFlight)
+            {
+                inFlight.Cancel();
+                _logger.LogDebug("Asked the reconcile in flight to stop");
+            }
+        }
         _exclusive.Enter();
     }
 
