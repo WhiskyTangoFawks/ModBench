@@ -367,20 +367,21 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     expect(outcome).toEqual({ applied: true, landed: RESTORED.landed, refused: [] });
   });
 
-  it('reads each skipped mod\'s game files on their own, hands mEdit why one mod\'s could not be read, and the other mod still lands', async () => {
+  it('reads each skipped mod\'s game files on their own, hands mEdit why one of a mod\'s could not be read and not why a plainly missing one of them was not found, and the other mod still lands', async () => {
     const { commands, client } = commandsOver({
       gameFiles: new Map([['meshes/b.nif', { path: 'Meshes/B.nif', hash: '#b' }]]),
       unreadableGameFiles: new Map([['textures/a.dds', 'EACCES']]),
     });
     client.setCommandHandler('restoreFromManifest', (mods, facts) => Promise.resolve(facts.asksWhatItLacks
       ? { landed: [], refused: mods.map(({ name }) => ({ item: name, reason: 'was skipped: game file is missing.' })),
-        notFound: [{ mod: 'ModA', gameFiles: ['textures/a.dds'] }, { mod: 'ModB', gameFiles: ['meshes/b.nif'] }] }
+        notFound: [{ mod: 'ModA', gameFiles: ['textures/a.dds', 'NotInGame.txt'] }, { mod: 'ModB', gameFiles: ['meshes/b.nif'] }] }
       : { landed: facts.gameFolder?.files.length ? [restoredMod({ mod: 'ModB', written: ['b.nif'] })] : [],
         refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }], notFound: [{ mod: 'ModA', gameFiles: ['textures/a.dds'] }] }));
 
     const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
 
-    expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModA', unreadableGameFiles: { 'textures/a.dds': 'EACCES' } }, { name: 'ModB', unreadableGameFiles: {} }]);
+    expect(client.calls[1]?.args[0]).toEqual([
+      expect.objectContaining({ name: 'ModA', unreadableGameFiles: { 'textures/a.dds': 'EACCES' } }), expect.objectContaining({ name: 'ModB', unreadableGameFiles: {} })]);
     expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }] });
   });
 

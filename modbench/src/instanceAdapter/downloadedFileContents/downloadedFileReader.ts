@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { access, constants } from 'node:fs/promises';
 import { errnoCode } from '../errno';
 import { INSTALLATION_FILE_EXTENSIONS } from './installationFileNames';
 import { errorMessage } from '../../ports/errorMessage';
@@ -19,6 +20,9 @@ function spawnCollecting(bin: string, args: string[]): Promise<string> {
 }
 
 async function stdoutOfSevenZip(installationFilePath: string, verb: string, args: string[]): Promise<string> {
+  await access(installationFilePath, constants.R_OK).catch((err: unknown) => {
+    if (errnoCode(err) === 'EACCES') throw err;
+  });
   for (const bin of CANDIDATES) {
     try {
       return await spawnCollecting(bin, args);

@@ -200,12 +200,13 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? { kind: 'read', answer: undefined }),
-    gameFiles: (_dataFolder, paths) => {
-      const reason = paths.flatMap((path) => answers.unreadableGameFiles?.get(path.toLowerCase()) ?? [])[0];
-      return Promise.resolve(reason === undefined
-        ? { kind: 'read', answer: paths.flatMap((path) => answers.gameFiles?.get(path.toLowerCase()) ?? []) }
-        : { kind: 'unreadable', reason });
-    },
+    gameFiles: (_dataFolder, paths) => Promise.resolve({
+      files: paths.flatMap((path) => answers.gameFiles?.get(path.toLowerCase()) ?? []),
+      unreadable: Object.fromEntries(paths.flatMap((path) => {
+        const reason = answers.unreadableGameFiles?.get(path.toLowerCase());
+        return reason === undefined ? [] : [[path, reason]];
+      })),
+    }),
     gameFilesTakenBy: (_dataFolder, mod) => Promise.resolve(answers.gameFilesTaken?.get(mod) ?? { kind: 'read', answer: { gameFiles: [], notes: [] } }),
     modMetadata: (mod) => {
       const reason = answers.unreadableMetadata?.get(mod);
