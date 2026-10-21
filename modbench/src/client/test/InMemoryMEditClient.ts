@@ -38,7 +38,7 @@ export interface RecordedCall {
   args: unknown[];
 }
 
-// One scripted step, queued per method: resolves an answer or rejects with an error. An answer
+// One scripted step, queued per method: resolves an answer or a ReadFailed. An answer
 // may be a pending `PromiseLike`, held in flight on a test's own schedule.
 type ScriptedStep<T> = { kind: 'answer'; value: T | PromiseLike<T> } | { kind: 'failure'; failure: ReadFailed };
 
@@ -125,8 +125,7 @@ export class InMemoryMEditClient implements MEditClient {
     this.queryAnswers[method] = boxed;
   }
 
-  /** Every call to `method` fails until re-scripted, answering a ReadFailed or rejecting
-   *  with an Error — the failure-shaped sibling of {@link setQueryAnswer}. */
+  /** Every call to `method` answers a ReadFailed until re-scripted — the failure-shaped sibling of {@link setQueryAnswer}. */
   setQueryFailure(method: QueryMethod, failure: ReadFailed): void {
     this.queryFailures.set(method, failure);
   }
@@ -137,7 +136,7 @@ export class InMemoryMEditClient implements MEditClient {
     this.pushQueryStep(method, { kind: 'answer', value: answer });
   }
 
-  /** {@link setQueryAnswerOnce}'s failure-shaped sibling — queues one failure, answered or rejected as setQueryFailure does. */
+  /** {@link setQueryAnswerOnce}'s failure-shaped sibling — queues one ReadFailed. */
   setQueryFailureOnce(method: QueryMethod, failure: ReadFailed): void {
     this.pushQueryStep(method, { kind: 'failure', failure });
   }
