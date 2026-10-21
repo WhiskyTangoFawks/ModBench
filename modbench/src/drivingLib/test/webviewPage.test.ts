@@ -54,9 +54,7 @@ describe('a page of the webview build, loaded into a webview', () => {
     const hostile = 'C:/mods/<!--<script>x</script>\u2028\u2029"\\\'';
     const { html } = shown({ ...RECORD_PAGE, globals: { mEditError: hostile } });
     const inline = /<script nonce="[^"]*">([\s\S]*?)<\/script>/.exec(html)?.[1] ?? '';
-    const window: Record<string, unknown> = {};
-    new Function('window', inline)(window);
-    expect(window.mEditError).toBe(hostile);
+    expect(JSON.parse(inline.replace(/^window\.mEditError = /, '').replace(/;$/, ''))).toBe(hostile);
     expect(inline).not.toMatch(/<|\u2028|\u2029/);
   });
 
