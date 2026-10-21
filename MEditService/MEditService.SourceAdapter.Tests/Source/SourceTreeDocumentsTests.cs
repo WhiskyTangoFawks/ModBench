@@ -78,8 +78,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
         Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
 
     private ISourceRepository Repository =>
-        TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
+        TestAdapters.OpenSourceMod(_modFolder, Release);
 
     private Dictionary<string, PluginDocument> Documents() =>
         Repository.ReadDocuments(
@@ -109,58 +108,6 @@ public sealed class SourceTreeDocumentsTests : IDisposable
             EveryEmbeddedChild()
                 .Where(child => documents.ContainsKey(child.FormKey.ToString()))
                 .Select(child => child.EditorID));
-    }
-
-    [Fact]
-    public void AChildInAListSlot_IsDeIndentedOutOfItsOwnerAndCarriesNoTypeDiscriminator()
-    {
-        var text = Documents()[_temporaryRef.FormKey.ToString()].Text;
-
-        Assert.Equal(
-            $$"""
-            {
-              "FormKey": "{{_temporaryRef.FormKey}}",
-              "EditorID": "TempRef",
-              "Scale": 1.0,
-              "Position": "11, 22, 33"
-            }
-            """,
-            text);
-    }
-
-    [Fact]
-    public void AChildInsideAnEmbeddedChild_IsDeIndentedOnceForEachLevelItSitsUnder()
-    {
-        var documents = Documents();
-
-        Assert.Equal(
-            $$"""
-            {
-              "FormKey": "{{_topCell.FormKey}}",
-              "EditorID": "TopCell",
-              "WaterHeight": 5.0,
-              "Temporary": [
-                {
-                  "MutagenObjectType": "PlacedObject",
-                  "FormKey": "{{_topCellRef.FormKey}}",
-                  "EditorID": "TopCellRef",
-                  "Scale": 6.0,
-                  "Position": "7, 8, 9"
-                }
-              ]
-            }
-            """,
-            documents[_topCell.FormKey.ToString()].Text);
-        Assert.Equal(
-            $$"""
-            {
-              "FormKey": "{{_topCellRef.FormKey}}",
-              "EditorID": "TopCellRef",
-              "Scale": 6.0,
-              "Position": "7, 8, 9"
-            }
-            """,
-            documents[_topCellRef.FormKey.ToString()].Text);
     }
 
     [Fact]

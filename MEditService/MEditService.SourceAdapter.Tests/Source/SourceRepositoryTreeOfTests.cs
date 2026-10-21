@@ -39,8 +39,7 @@ public sealed class SourceRepositoryTreeOfTests : IDisposable
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
     private ISourceRepository Repository =>
-        TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
+        TestAdapters.OpenSourceMod(_modFolder, GameRelease.Fallout4);
 
     private string NpcRelativePath =>
         Repository.RelativePathOf(Plugin, Npc).Value()

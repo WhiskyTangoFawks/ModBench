@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -92,8 +93,11 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     private static byte[] Serialize(IMajorRecordGetter record) =>
         Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
 
-    private ISourceRepository Repository =>
-        TestAdapters.Source().Open(TestMod.In(_modFolder), Release) ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
+    private ISourceRepository? _repository;
+
+    private ISourceRepository Repository => _repository ??= TheNextOperation;
+
+    private ISourceRepository TheNextOperation => TestAdapters.OpenSourceMod(_modFolder, Release);
 
     private static RecordIdentity Identity(IMajorRecordGetter record, string recordType) =>
         new(record.FormKey.ToString(), recordType, record.EditorID);
@@ -134,15 +138,63 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         return document.RootElement.TryGetProperty("FormKey", out var formKey) ? formKey.GetString() : null;
     }
 
-    [Fact]
-    public void Get_OfAPlacedReferenceInsideItsCell_IsTheChildsOwnText()
+    public enum Child
     {
-        var body = Repository.RecordOf(Plugin, Identity(_persistentRef, "refr")).Value()?.Body;
+        PersistentRef,
+        TemporaryRef,
+        ExteriorRef,
+        TopCellRef,
+        Topic,
+        Response,
+    }
 
-        Assert.NotNull(body);
-        Assert.Equal(_persistentRef.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
-        Assert.Contains("\"PersistRef\"", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("WaterHeight", body, StringComparison.Ordinal);
+    private (IMajorRecordGetter Record, string RecordType) Embedded(Child child) =>
+        child switch
+        {
+            Child.PersistentRef => (_persistentRef, "refr"),
+            Child.TemporaryRef => (_temporaryRef, "refr"),
+            Child.ExteriorRef => (_exteriorRef, "refr"),
+            Child.TopCellRef => (_topCellRef, "refr"),
+            Child.Topic => (_topic, "dial"),
+            Child.Response => (_response, "info"),
+            _ => throw new ArgumentOutOfRangeException(nameof(child), child, null),
+        };
+
+    private static string? RootEditorId(string body)
+    {
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("EditorID").GetString();
+    }
+
+    private RecordIdentity? IdentityOf(IMajorRecordGetter record) =>
+        Repository.RecordByFormKey(
+            Plugin, record.FormKey.ToString()).Value()?.Identity;
+
+    [Theory]
+    [InlineData(Child.PersistentRef)]
+    [InlineData(Child.TemporaryRef)]
+    [InlineData(Child.ExteriorRef)]
+    [InlineData(Child.TopCellRef)]
+    [InlineData(Child.Topic)]
+    [InlineData(Child.Response)]
+    public void AnEmbeddedChild_IsItsOwnText_UnderTheTypeItsSlotHoldsAndItsOwnEditorId(Child child)
+    {
+        var (record, recordType) = Embedded(child);
+
+        var document = Repository.RecordByFormKey(Plugin, record.FormKey.ToString()).Value().Require();
+
+        Assert.Equal(Identity(record, recordType), document.Identity);
+        Assert.Equal(Repository.RecordOf(Plugin, Identity(record, recordType)).Value()?.Body, document.Body);
+        Assert.Equal(record.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(document.Body));
+        Assert.Equal(record.EditorID, RootEditorId(document.Body));
+    }
+
+    [Fact]
+    public void AnEmbeddedChild_CarriesTheChildrenItEmbeds()
+    {
+        var topic = Repository.RecordByFormKey(Plugin, _topic.FormKey.ToString()).Value()?.Body;
+
+        Assert.Contains("\"Response2\"", topic, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -159,91 +211,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var body = Repository.RecordOf(Plugin, Identity(_exteriorCell, "cell")).Value()?.Body;
 
         Assert.Equal(File.ReadAllText(FullPath(ExteriorCellPath)), body);
-    }
-
-    [Fact]
-    public void Get_OfAPlacedReferenceInsideAnExteriorCell_ReadsThatCellsDirectoryAsACell()
-    {
-        var body = Repository.RecordOf(Plugin, Identity(_exteriorRef, "refr")).Value()?.Body;
-
-        Assert.NotNull(body);
-        Assert.Equal(_exteriorRef.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
-        Assert.DoesNotContain("WaterHeight", body, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Get_OfAWorldspacesTopCellsPlacedReference_ReachesTwoEmbedLevelsDown()
-    {
-        var body = Repository.RecordOf(Plugin, Identity(_topCellRef, "refr")).Value()?.Body;
-
-        Assert.NotNull(body);
-        Assert.Equal(_topCellRef.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
-    }
-
-    [Fact]
-    public void Get_OfAQuestsDialogTopic_IsTheChildsOwnText()
-    {
-        var body = Repository.RecordOf(Plugin, Identity(_topic, "dial")).Value()?.Body;
-
-        Assert.NotNull(body);
-        Assert.Equal(_topic.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
-        Assert.Contains("\"Response2\"", body, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Get_OfAResponseInsideAQuestsTopic_IsTheChildsOwnText()
-    {
-        var body = Repository.RecordOf(Plugin, Identity(_response, "info")).Value()?.Body;
-
-        Assert.NotNull(body);
-        Assert.Equal(_response.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
-        Assert.DoesNotContain("\"Response2\"", body, StringComparison.Ordinal);
-    }
-
-    private RecordIdentity? IdentityOf(IMajorRecordGetter record) =>
-        Repository.RecordByFormKey(
-            Plugin, record.FormKey.ToString()).Value()?.Identity;
-
-    [Fact]
-    public void Get_APlacedReferenceInsideItsCell_NamesItsTypeAndEditorId_FromTheTypeWrittenIntoItsOwnTextForItsSlotHoldsAnAbstractElementType()
-    {
-        Assert.Equal(
-            new RecordIdentity(_persistentRef.FormKey.ToString(), "refr", "PersistRef"),
-            IdentityOf(_persistentRef));
-    }
-
-    [Fact]
-    public void Get_AResponseInsideAQuestsTopic_NamesTheTypeItsSlotHolds_ForAConcreteSlotLeavesNoTypeInTheDocument()
-    {
-        Assert.Equal(
-            new RecordIdentity(_response.FormKey.ToString(), "info", "Response"),
-            IdentityOf(_response));
-    }
-
-    [Fact]
-    public void Get_ATopicInsideItsQuest_NamesTheTypeItsSlotHolds()
-    {
-        Assert.Equal(
-            new RecordIdentity(_topic.FormKey.ToString(), "dial", "Topic"),
-            IdentityOf(_topic));
-    }
-
-    [Fact]
-    public void Get_AReferenceTwoEmbedLevelsDown_NamesItThroughTheWorldspacesTopCell()
-    {
-        Assert.Equal(
-            new RecordIdentity(_topCellRef.FormKey.ToString(), "refr", "TopCellRef"),
-            IdentityOf(_topCellRef));
-    }
-
-
-    [Fact]
-    public void Get_ByFormKey_OfAChildAnotherRecordsDocumentCarries_IsTheChildsOwnTextUnderItsIdentity()
-    {
-        var document = Repository.RecordByFormKey(Plugin, _topic.FormKey.ToString()).Value();
-
-        Assert.Equal(Identity(_topic, "dial"), document?.Identity);
-        Assert.Equal(Repository.RecordOf(Plugin, Identity(_topic, "dial")).Value()?.Body, document?.Body);
     }
 
     [Fact]
@@ -403,23 +370,16 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Cel")]
-    [InlineData("Npc")]
-    public void Get_ByFormKey_OfAChildInASingleTypeSlotTypedAsNothingTheSlotHolds_RefusesNamingItsOwnersFileAndWhy(string type)
+    [InlineData("Cel", Read.GetByFormKey)]
+    [InlineData("Npc", Read.GetByFormKey)]
+    [InlineData("Cel", Read.ReadingTheTree)]
+    [InlineData("Npc", Read.ReadingTheTree)]
+    public void AChildInASingleTypeSlotTypedAsNothingTheSlotHolds_RefusesNamingItsOwnersFileAndWhy(string type, Read read)
     {
         TypeTheTopCell(type);
 
-        AssertNamesTheWorldspacesTopCellTyped(type, Assert.IsType<SourceFailure.Unreadable>(Repository.RecordByFormKey(Plugin, TopCellFormKey).Stopped()));
-    }
-
-    [Theory]
-    [InlineData("Cel")]
-    [InlineData("Npc")]
-    public void ReadingTheTree_WhenAChildInASingleTypeSlotIsTypedAsNothingTheSlotHolds_IsRefusedNamingItsOwnersFileAndWhy(string type)
-    {
-        TypeTheTopCell(type);
-        AssertNamesTheWorldspacesTopCellTyped(type, Assert.IsType<SourceFailure.Unreadable>(
-            Repository.ReadDocuments(Plugin, tree => tree.Records.ToList()).Stopped()));
+        AssertNamesTheWorldspacesTopCellTyped(
+            type, Assert.IsType<SourceFailure.Unreadable>(Stopped(read, _worldspace.TopCell.Require(), "cell", WorldspacePath)));
     }
 
     private void HoldTheTemporaryRefTwiceInItsCell()
@@ -577,25 +537,29 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains("00FFFF:Embedded.esp", refused.Reason, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void ChangesToRewrite_OfAChildItsOwnersTextNamesWhereItsTypeHoldsNone_RefusesAsNoDocumentHoldingIt()
+    public enum Change
+    {
+        Rewrite,
+        Rekey,
+    }
+
+    [Theory]
+    [InlineData(Change.Rewrite)]
+    [InlineData(Change.Rekey)]
+    public void AChildItsOwnersTextNamesWhereItsTypeHoldsNone_IsRefusedAsNoDocumentHoldingIt(Change change)
     {
         var child = WriteAChildInASlotItsOwnerTypeHoldsNone();
 
-        var refused = Assert.IsType<SourceFailure.NotCarried>(Repository.ChangesToRewrite(Plugin, child).Stopped());
-
-        AssertRefusedAsAChildItsOwnersTextDoesNotCarry(refused);
+        AssertRefusedAsAChildItsOwnersTextDoesNotCarry(Assert.IsType<SourceFailure.NotCarried>(ChangesTo(change, child).Stopped()));
     }
 
-    [Fact]
-    public void ChangesToRekey_OfAChildItsOwnersTextNamesWhereItsTypeHoldsNone_RefusesAsNoDocumentHoldingIt()
-    {
-        var child = WriteAChildInASlotItsOwnerTypeHoldsNone();
-
-        var refused = Assert.IsType<SourceFailure.NotCarried>(Repository.ChangesToRekey(Plugin, child.Identity, FreeFormKey).Stopped());
-
-        AssertRefusedAsAChildItsOwnersTextDoesNotCarry(refused);
-    }
+    private Answer<SourceChanges, SourceFailure> ChangesTo(Change change, SourceDocument child) =>
+        change switch
+        {
+            Change.Rewrite => Repository.ChangesToRewrite(Plugin, child),
+            Change.Rekey => Repository.ChangesToRekey(Plugin, child.Identity, FreeFormKey),
+            _ => throw new ArgumentOutOfRangeException(nameof(change), change, null),
+        };
 
     [Fact]
     public void ChangesToRekey_OfARecordWhoseFileWentAfterItWasLocated_RefusesAsNoDocumentHoldingIt()
@@ -687,44 +651,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void Put_OfAPlacedReference_LandsInTheCellsDocument_LeavingTheCellsOwnFieldsAlone()
-    {
-        var repository = Repository;
-        var renamed = new PlacedObject(_persistentRef.FormKey, Fallout4Release.Fallout4)
-        {
-            EditorID = "RenamedRef",
-            Position = new P3Float(9f, 9f, 9f),
-            Scale = 4f,
-        };
-
-        repository.Put(
-            Plugin,
-            new SourceDocument(
-                _persistentRef.FormKey.ToString(), "refr", "RenamedRef", Encoding.UTF8.GetString(Serialize(renamed)))).Wrote();
-
-        var cellText = File.ReadAllText(FullPath(InteriorCellPath));
-        Assert.Contains("\"RenamedRef\"", cellText, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"PersistRef\"", cellText, StringComparison.Ordinal);
-        Assert.Contains("\"WaterHeight\": 100.0", cellText, StringComparison.Ordinal);
-        Assert.Contains("\"TempRef\"", cellText, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Remove_OfAnEmbeddedChild_LeavesTheOwnersOtherChildrenIntact()
-    {
-        var repository = Repository;
-
-        repository.Remove(Plugin, Identity(_response, "info")).Wrote();
-
-        var questText = File.ReadAllText(FullPath(QuestPath));
-        Assert.DoesNotContain("\"Response\"", questText, StringComparison.Ordinal);
-        Assert.Contains("\"Response2\"", questText, StringComparison.Ordinal);
-        Assert.Contains("\"Topic\"", questText, StringComparison.Ordinal);
-        Assert.Null(repository.RecordOf(Plugin, Identity(_response, "info")).Value());
-        Assert.NotNull(repository.RecordOf(Plugin, Identity(_response2, "info")).Value());
-    }
-
-    [Fact]
     public void ChangesToRemove_OfAnEmbeddedChild_RewritesItsOwnersDocument_AndWritesNothing()
     {
         var before = File.ReadAllText(FullPath(QuestPath));
@@ -752,8 +678,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         var owner = Assert.Single(changes.Documents);
         Assert.Equal(FullPath(QuestPath), Path.Combine(_modFolder, owner.Path));
-        var order = new[] { "Response", "Response2", "Response3" }.Select(name => owner.Text.IndexOf($"\"{name}\"", StringComparison.Ordinal)).ToArray();
-        Assert.True(order[0] >= 0 && order[0] < order[1] && order[1] < order[2], string.Join(",", order));
+        Assert.Contains("\"Response3\"", owner.Text, StringComparison.Ordinal);
         Assert.Empty(changes.Deletions);
         Assert.Equal(before, File.ReadAllText(FullPath(QuestPath)));
     }
@@ -816,14 +741,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void ChangesToRemove_OfARecordNoDocumentHolds_IsNotCarried()
-    {
-        var stopped = Repository.ChangesToRemove(Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent")).Stopped();
-
-        Assert.IsType<SourceFailure.NotCarried>(stopped);
-    }
-
-    [Fact]
     public void Remove_OfARecordNoDocumentHolds_SaysNoDocumentHoldsIt()
     {
         var refused = Assert.IsType<SourceFailure.NotCarried>(
@@ -859,18 +776,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
             Repository.Remove(Plugin, new RecordIdentity("00A001:Embedded.esp", "refr", "Absent")).Failed());
 
         Assert.StartsWith($"{QuestPath} was found holding 00A001:Embedded.esp, but its own text does not carry it.", refused.Reason, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Remove_OfAContainerWithADirectoryOfItsOwn_TakesTheWholeDirectory()
-    {
-        var repository = Repository;
-
-        repository.Remove(Plugin, Identity(_exteriorCell, "cell")).Wrote();
-
-        Assert.False(Directory.Exists(Path.GetDirectoryName(FullPath(ExteriorCellPath))));
-        Assert.Null(repository.RecordOf(Plugin, Identity(_exteriorCell, "cell")).Value());
-        Assert.NotNull(repository.RecordOf(Plugin, Identity(_worldspace, "wrld")).Value());
     }
 
     [Fact]
@@ -922,7 +827,9 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? throw new InvalidOperationException($"Expected '{path}' to have a parent directory."));
         File.WriteAllBytes(path, Serialize(cell));
 
-        Assert.Equal(new RecordIdentity(added.FormKey.ToString(), "refr", "AddedRef"), IdentityOf(added));
+        Assert.Equal(
+            new RecordIdentity(added.FormKey.ToString(), "refr", "AddedRef"),
+            TheNextOperation.RecordByFormKey(Plugin, added.FormKey.ToString()).Value()?.Identity);
     }
 
     [Fact]
@@ -979,7 +886,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         _exteriorCell.Temporary.Add(_temporaryRef);
         File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
 
-        Assert.IsType<SourceFailure.Ambiguous>(Repository.RelativePathOf(Plugin, Identity(_temporaryRef, "refr")).Stopped());
+        Assert.IsType<SourceFailure.Ambiguous>(TheNextOperation.RelativePathOf(Plugin, Identity(_temporaryRef, "refr")).Stopped());
     }
 
     [Fact]

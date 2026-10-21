@@ -17,6 +17,9 @@ public sealed class PluginDocumentReadTests
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
+    private static IPluginDocuments OpenDocuments(string fileName, string path) =>
+        Adapter.OpenDocuments(new ModPath(ModKey.FromFileName(fileName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+
     [Fact]
     public void OpenDocuments_YieldsEachRecordAsTheCodecsOwnText_UnderItsSchemaTableName()
     {
@@ -25,8 +28,7 @@ public sealed class PluginDocumentReadTests
             .Build();
         var path = Path.Combine(data.DataFolder, PluginName);
 
-        using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        using var documents = OpenDocuments(PluginName, path);
         var npc = documents.Records.Single(d => d.RecordType == "npc_");
 
         using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
@@ -55,8 +57,7 @@ public sealed class PluginDocumentReadTests
             .Build();
         var path = Path.Combine(data.DataFolder, PluginName);
 
-        using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        using var documents = OpenDocuments(PluginName, path);
         var positions = documents.Records.Select((document, position) => (document.RecordType, position))
             .Where(d => d.RecordType == recordType).Select(d => d.position).ToList();
 
@@ -72,8 +73,7 @@ public sealed class PluginDocumentReadTests
             .Build();
         var path = Path.Combine(data.DataFolder, PluginName);
 
-        using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        using var documents = OpenDocuments(PluginName, path);
 
         Assert.Equal(PluginHeader.RecordType, documents.Header.RecordType);
         Assert.Equal($"000000:{PluginName}", documents.Header.FormKey);
@@ -88,8 +88,7 @@ public sealed class PluginDocumentReadTests
         MisshapedPerkPlugin.Plugin.WriteInto(scratch.Path);
         var path = Path.Combine(scratch.Path, MisshapedPerkPlugin.FileName);
 
-        using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(MisshapedPerkPlugin.FileName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        using var documents = OpenDocuments(MisshapedPerkPlugin.FileName, path);
         var perks = documents.Records.Where(d => d.RecordType == "perk").ToList();
 
         var unreadable = perks.Single(d => d.FormKey == MisshapedPerkPlugin.FormKey);
@@ -112,8 +111,7 @@ public sealed class PluginDocumentReadTests
         File.WriteAllBytes(path, RawPlugin.Plugin(RawPlugin.Tes4(),
             RawPlugin.Group("NPC_", RawPlugin.Record("NPC_", 0x800, RawPlugin.EditorId("Npc")), RawPlugin.Misc(0x801, "Stray"))));
 
-        using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        using var documents = OpenDocuments(PluginName, path);
 
         Assert.Empty(documents.Records);
         var failure = Assert.Single(documents.Failures);
@@ -136,8 +134,7 @@ public sealed class PluginDocumentReadTests
         File.WriteAllBytes(path, RawPlugin.Concat(File.ReadAllBytes(path),
             RawPlugin.Group("QUST", RawPlugin.Record("QUST", 0xA00, RawPlugin.EditorId("Quest")), RawPlugin.Misc(0xA01, "Stray"))));
 
-        using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        using var documents = OpenDocuments(PluginName, path);
         var read = documents.Records.Select(d => d.RecordType).ToList();
 
         Assert.Equal(["cell", "refr", "refr", "refr"], read.Order(StringComparer.Ordinal));
@@ -151,8 +148,7 @@ public sealed class PluginDocumentReadTests
         using var data = CellFixture("documents-cell", out var extCellFormKey);
         var path = Path.Combine(data.DataFolder, PluginName);
 
-        using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        using var documents = OpenDocuments(PluginName, path);
         var cell = documents.Records.Single(d => d.RecordType == "cell" && d.FormKey == extCellFormKey);
 
         Assert.Equal(new CellStructure("000800:Documents.esp", 3, 4, 1, 2, IsInterior: false), cell.Cell);
@@ -164,8 +160,7 @@ public sealed class PluginDocumentReadTests
         using var data = CellFixture("documents-contents", out var extCellFormKey);
         var path = Path.Combine(data.DataFolder, PluginName);
 
-        using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        using var documents = OpenDocuments(PluginName, path);
         var cell = documents.Records.Single(d => d.RecordType == "cell" && d.FormKey == extCellFormKey);
 
         Assert.NotNull(cell.Contents);
@@ -194,8 +189,7 @@ public sealed class PluginDocumentReadTests
             .Build();
         var path = Path.Combine(data.DataFolder, PluginName);
 
-        using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        using var documents = OpenDocuments(PluginName, path);
         var quest = documents.Records.Single(d => d.RecordType == "qust" && d.FormKey == questFormKey);
 
         Assert.Equal([new ChildRecord(topicFormKey, "DialogTopics", 0)], quest.Contents ?? []);

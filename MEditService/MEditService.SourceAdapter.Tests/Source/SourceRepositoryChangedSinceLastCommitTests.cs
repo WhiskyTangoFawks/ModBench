@@ -34,8 +34,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         var files = new[] { new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody)) }.Concat(extraFiles).ToArray();
         PluginBaselines.Init(
             _modFolder, files);
-        return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
+        return TestAdapters.OpenSourceMod(_modFolder, Release);
     }
 
     private static IReadOnlyDictionary<string, RecordChange> ChangesIn(ISourceRepository repository) =>
@@ -62,8 +61,7 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         var oldFolder = Directory.CreateDirectory(Path.Combine(_modFolder, lookalikeFolderName, PluginName)).FullName;
         File.WriteAllText(Path.Combine(oldFolder, "notes.txt"), "notes");
         PluginBaselines.Init(_modFolder, [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
-        var repository = TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
+        var repository = TestAdapters.OpenSourceMod(_modFolder, Release);
         var gitDir = Path.Combine(_modFolder, ".git");
         GitProbe.Run(gitDir, _modFolder, "add", "-f", $"{lookalikeFolderName}/{PluginName}/notes.txt");
         GitProbe.Run(gitDir, _modFolder, "commit", "-q", "-m", "Their own file");

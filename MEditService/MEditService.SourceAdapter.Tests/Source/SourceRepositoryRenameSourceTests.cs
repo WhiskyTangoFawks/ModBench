@@ -247,7 +247,7 @@ public sealed class SourceRepositoryRenameSourceTests : IDisposable
         return true;
     }
 
-    private ISourceRepository Repository => TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();
+    private ISourceRepository Repository => TestAdapters.OpenSourceMod(_modFolder, GameRelease.Fallout4);
 
     private IWriteSession Session(params DocumentChange[] held) => TestAdapters.Source().WriteSessionOver(TestMod.In(_modFolder), GameRelease.Fallout4, held);
 

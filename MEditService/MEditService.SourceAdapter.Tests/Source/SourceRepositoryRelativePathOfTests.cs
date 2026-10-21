@@ -23,8 +23,7 @@ public sealed class SourceRepositoryRelativePathOfTests : IDisposable
         var header = new TreeFile(HeaderPath, "{\"MasterReferences\": []}"u8.ToArray());
         PluginBaselines.Init(
             _modFolder, [header]);
-        return TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
+        return TestAdapters.OpenSourceMod(_modFolder, GameRelease.Fallout4);
     }
 
     [Fact]

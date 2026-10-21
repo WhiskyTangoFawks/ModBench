@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Globalization;
 using MEditService.Codec.Schema;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
@@ -8,64 +8,22 @@ namespace MEditService.Codec.Tests.Schema;
 
 public sealed class DeclaredDefaultTests
 {
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
-        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
-
-    private static FieldMetadata Vmad => Schemas["npc_"].RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").Field;
-
-    private static FieldMetadata Member(FieldMetadata owner, string name) =>
-        (owner.Fields ?? throw new InvalidOperationException($"Expected '{owner.Name}' to have sub-fields."))
-            .Single(f => f.Name == name);
-
-    private static long AsLong(object? value) => JsonSerializer.SerializeToElement(value).GetInt64();
-
-    [Fact]
-    public void ANumericMemberWithADeclaredDefault_SpellsIt_BecauseTheCodecOmitsAMemberEqualToMutagensDeclaredDefaultNotTheClrZero()
-    {
-        Assert.Equal(2, AsLong(Member(Vmad, "ObjectFormat").Default));
-        Assert.Equal(6, AsLong(Member(Vmad, "Version").Default));
-    }
-
-    [Fact]
-    public void ANumericMemberWhoseDefaultIsZero_SpellsNothing()
-    {
-        var script = Member(Vmad, "Scripts").ElementType
-            ?? throw new InvalidOperationException("Expected 'Scripts' to have an array element type.");
-
-        Assert.Null(Member(script, "Name").Default);
-        Assert.Null(Schemas["npc_"].RecordColumns.Single(c => c.Name == "HeightMin").Field.Default);
-    }
-
-    [Fact]
-    public void AnEnumMember_AlwaysNamesItsDefault_DeclaredOrZero()
-    {
-        var scriptsElement = Member(Vmad, "Scripts").ElementType
-            ?? throw new InvalidOperationException("Expected 'Scripts' to have an array element type.");
-        var property = Member(scriptsElement, "Properties").ElementType
-            ?? throw new InvalidOperationException("Expected 'Properties' to have an array element type.");
-        var conditionsElement = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementType
-            ?? throw new InvalidOperationException("Expected 'Conditions' to have an array element type.");
-        var data = Member(conditionsElement, "Data");
-
-        Assert.Equal("Edited", Member(property, "Flags").Default);
-        Assert.Equal("Subject", Member(data, "RunOnType").Default);
-    }
-
-    [Fact]
-    public void AColumnCarriesItsDeclaredDefault()
-    {
-        var priority = Schemas["dial"].RecordColumns.Single(c => c.Name == "Priority");
-
-        Assert.Equal(50, AsLong(priority.Field.Default));
-    }
-
     [Theory]
+    [InlineData("npc_", "VirtualMachineAdapter.ObjectFormat", "2")]
+    [InlineData("npc_", "VirtualMachineAdapter.Version", "6")]
+    [InlineData("npc_", "VirtualMachineAdapter.Scripts.[].Name", null)]
+    [InlineData("npc_", "HeightMin", null)]
+    [InlineData("npc_", "VirtualMachineAdapter.Scripts.[].Properties.[].Flags", "Edited")]
+    [InlineData("cobj", "Conditions.[].Data.RunOnType", "Subject")]
+    [InlineData("dial", "Priority", "50")]
     [InlineData("ligh", "Color", "#00000000")]
     [InlineData("mato", "ProjectionVector", "0, 0, 0")]
     [InlineData("race", "Unknown", "0x0000000000000000")]
-    public void AColorVectorOrHexMember_NamesTheCodecsSpellingOfItsZero_BecauseItHasNoWireZeroOfItsOwnAndPlainZeroIsNotItsSpelling(string table, string column, string zero)
+    public void AFieldsDefault_IsTheOneMutagenDeclaresOrTheCodecsSpellingOfItsZero(string table, string path, string? expected)
     {
-        Assert.Equal(zero, Schemas[table].RecordColumns.Single(c => c.Name == column).Field.Default);
+        var field = SchemaFields.At(GameRelease.Fallout4, table, path);
+
+        Assert.Equal(expected, field.Default is null ? null : Convert.ToString(field.Default, CultureInfo.InvariantCulture));
     }
 
     private const string DeclaredDefaultsRefusalPrefix = "SchemaReflector: declared defaults unavailable";
