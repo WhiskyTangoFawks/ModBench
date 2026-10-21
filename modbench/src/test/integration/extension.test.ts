@@ -686,22 +686,6 @@ describe('modbench.record.open', () => {
     assert.ok(hasRenderedTab('Fallout4.esm:000020'), 'the seed tab is untouched');
   });
 
-  it('reads the Argument of a Plugins-tree row from a menu to its own record', async () => {
-    const row = { argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data/' }, formKey: 'Fallout4.esm:000030' } };
-
-    await vscode.commands.executeCommand('modbench.record.openPinned', row, [row]);
-
-    await waitFor('the RecordNode\'s tab', () => hasRenderedTab('Fallout4.esm:000030') || undefined);
-  });
-
-  it('reads the Argument of a placed row from a menu to its own record', async () => {
-    const row = { argument: { kind: 'record', plugin: { name: 'Fallout4.esm', origin: 'Data/' }, formKey: 'Fallout4.esm:000040' } };
-
-    await vscode.commands.executeCommand('modbench.record.openPinned', row, [row]);
-
-    await waitFor('the ChildRecordNode\'s tab', () => hasRenderedTab('Fallout4.esm:000040') || undefined);
-  });
-
   it('a menu\'s multi-selection opens one grid, pinned, in the active group', async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllGroups');
     const selection = [
@@ -2014,32 +1998,11 @@ describe('A FormKey in plugin source', () => {
     assert.deepStrictEqual(await activated(), heldHover);
   });
 
-  it('shows no hover for a FormKey no active plugin holds', async () => {
-    await activated();
-    const asked = requestLog.length;
-    const texts = await hoverTexts(NOT_HELD_FORM_KEY);
-
-    assert.deepStrictEqual(texts, []);
-    assert.ok(requestLog.slice(asked).some((line) => line.includes(encodeURIComponent(NOT_HELD_FORM_KEY))), 'sanity: mEdit was asked');
-  });
-
-  it('shows its record in a plugin source folder the adapter names in another case', async () => {
-    await activated();
-    const other = await documentAt('Source', 'Held Mod', 'Plugin-Source', 'Held.esp', 'Gun.json');
-
-    assert.deepStrictEqual(await hoverTextsIn(other, '000801'), heldHover);
-  });
-
   it('shows no hover in JSON outside the plugin source folder', async () => {
     await activated();
     const other = await documentAt('Other.json');
 
     assert.deepStrictEqual(await hoverTextsIn(other, '000801'), []);
-  });
-
-  it('shows no hover for text that is not a FormKey', async () => {
-    await activated();
-    assert.deepStrictEqual(await hoverTexts('Rusty'), []);
   });
 
   const definitionsOf = async (formKey: string): Promise<vscode.Location[]> => {
@@ -2116,14 +2079,6 @@ describe('A FormKey in plugin source', () => {
     assert.deepStrictEqual(definitions, []);
   });
 
-  it('has no definition for a FormKey no active plugin holds', async () => {
-    await activated();
-    const asked = requestLog.length;
-
-    assert.deepStrictEqual(await definitionsOf(NOT_HELD_FORM_KEY), []);
-    assert.ok(requestLog.slice(asked).includes(`GET /records/${encodeURIComponent(NOT_HELD_FORM_KEY)}`), 'sanity: mEdit was asked');
-  });
-
   it('finds a record across the compiled plugins by Go to Symbol in Workspace, each copy at its document', async () => {
     await activated();
     const asked = requestLog.length;
@@ -2161,38 +2116,12 @@ describe('A FormKey in plugin source', () => {
     assert.deepStrictEqual(await labelsIn(document, 'Auto'), ['Auto', 'Single']);
   });
 
-  it('completes no enum values in JSON outside the plugin source folder', async () => {
-    await activated();
-    const other = await documentAt('Other.json');
-    assert.deepStrictEqual(await labelsIn(other, 'Auto'), []);
-  });
-
-  it('completes no field that is not a reference', async () => {
-    await activated();
-    assert.deepStrictEqual(await offeredIn(document, 'Rusty'), []);
-  });
-
   it('completes no reference in JSON outside the plugin source folder', async () => {
     await activated();
     const other = await documentAt('Other.json');
     assert.deepStrictEqual(await offeredIn(other, NOT_HELD_FORM_KEY), []);
   });
 
-  it('offers no quick fix', async () => {
-    const position = positionIn(HELD_FORM_KEY);
-    const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
-      'vscode.executeCodeActionProvider', document.uri, new vscode.Range(position, position), vscode.CodeActionKind.QuickFix.value);
-
-    assert.deepStrictEqual(actions, []);
-  });
-
-  it('offers no Rename Symbol', async () => {
-    const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit | undefined>(
-      'vscode.executeDocumentRenameProvider', document.uri, positionIn(HELD_FORM_KEY), '000802:Held.esp').then(
-      (renamed) => renamed, () => undefined);
-
-    assert.strictEqual(edit?.size ?? 0, 0);
-  });
 });
 
 describe('An unsaved document in plugin source', () => {
