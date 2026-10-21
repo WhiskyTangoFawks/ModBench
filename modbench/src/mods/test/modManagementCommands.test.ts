@@ -1677,15 +1677,6 @@ describe('the mod gestures, called by the agent', () => {
       nothingOpened();
     });
 
-    it('refuses a name the command refuses as a Refusal, renaming nothing', async () => {
-      renameModNameRefusal.mockResolvedValueOnce('A mod with this name already exists');
-      register();
-
-      await expect(invoke('modbench.mod.rename', renameCall('Mod B'))).rejects.toEqual(new Refusal('A mod with this name already exists'));
-
-      expect(renameMod).not.toHaveBeenCalled();
-    });
-
     it('answers a rename to the mod\'s own name as nothing landed and nothing refused, reporting nothing', async () => {
       renameMod.mockResolvedValue({ applied: true, lineRefusals: [], unchanged: true });
       const reporter = recordingReporter();
@@ -1916,16 +1907,6 @@ describe('the separator gestures, called by the agent', () => {
       nothingOpened(ask);
     });
 
-    it('refuses a name the command refuses as a Refusal, adding nothing', async () => {
-      separatorNameRefusal.mockResolvedValueOnce('A separator with this name already exists');
-      register();
-
-      await expect(invoke('modbench.separator.add', new AgentCall([group('Group A')], { name: 'Group B' })))
-        .rejects.toEqual(new Refusal('A separator with this name already exists'));
-
-      expect(insertSeparator).not.toHaveBeenCalled();
-    });
-
     it('answers a refusal of the command as the failure the view reports', async () => {
       insertSeparator.mockResolvedValue({ applied: false, refusal: 'A separator name cannot be empty.' });
       const reporter = recordingReporter();
@@ -1964,16 +1945,6 @@ describe('the separator gestures, called by the agent', () => {
       expect(answered).toEqual({ applied: true, outcome: { landed: ['Written Name'], refused: [] } });
       expect(reporter.reports).toEqual([]);
       nothingOpened(ask);
-    });
-
-    it('asks the command for the refusal with the separator\'s own name, and refuses what it refuses as a Refusal', async () => {
-      separatorNameRefusal.mockResolvedValueOnce('A separator with this name already exists');
-      register();
-
-      await expect(invoke('modbench.separator.rename', renameCall('Group B'))).rejects.toEqual(new Refusal('A separator with this name already exists'));
-
-      expect(separatorNameRefusal).toHaveBeenCalledWith('Group B', 'Group A');
-      expect(renameSeparator).not.toHaveBeenCalled();
     });
 
     it('answers a rename that wrote nothing as nothing landed and nothing refused', async () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { unreadStatus } from '../../test/unreadStatus';
-import { modSyncOver, modCommands } from '../modCommands';
+import { modSyncOver, modCommands, type ModCommands } from '../modCommands';
 import type {
   EntryRef, InstanceReading, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
@@ -391,7 +391,7 @@ describe('renameMod', () => {
     expect(fake.calls).toEqual([]);
   });
 
-  it.each([['profiles'], ['sourceMods']] as const)('refuses, renaming nothing, when %s cannot be read', async (read) => {
+  it.each([['profiles'], ['sourceMods'], ['modOrder']] as const)('refuses, renaming nothing, when %s cannot be read', async (read) => {
     const { fake, commands } = over(FIXTURE_ORDER, { unreadReads: { [read]: 'the read failed' } });
 
     expect(await rename(commands)).toEqual({ applied: false, refusal: 'the read failed' });
@@ -735,26 +735,22 @@ describe('the names a separator or mod may take', () => {
   });
 });
 
-describe('the mod commands refuse a clashing name themselves, writing nothing', () => {
-  type Commands = ReturnType<typeof over>['commands'];
-  const unlisted = { modFolders: modFoldersOf('Unlisted Mod') };
-
-  it.each([
-    ['insertSeparator onto a separator', (c: Commands) => c.insertSeparator(RADFALL.toUpperCase(), { kind: 'mod', name: 'ENBoost' }), 'A separator with this name already exists'],
-    ['renameSeparator onto another separator', (c: Commands) => c.renameSeparator(UNASSIGNED, RADFALL), 'A separator with this name already exists'],
-    ['renameMod onto a listed mod', (c: Commands) => c.renameMod('Harder VATS', 'enboost'), 'A mod with this name already exists'],
-    ['renameMod onto a folder with no line', (c: Commands) => c.renameMod('Harder VATS', 'unlisted mod'), 'A mod with this name already exists'],
-    ['renameMod to a name with a path separator', (c: Commands) => c.renameMod('Harder VATS', 'a/b'), 'A mod name cannot contain / or \\'],
-  ])('%s', async (_, run, refusal) => {
-    const { fake, commands } = over(FIXTURE_ORDER, {}, undefined, unlisted);
+describe('a name the mod order already holds', () => {
+  const clash = (run: (c: ModCommands) => Promise<unknown>, refusal: string) => async () => {
+    const { fake, commands } = over();
 
     expect(await run(commands)).toEqual({ applied: false, refusal });
     expect(verbs(fake.calls)).toEqual([]);
-  });
+  };
 
-  it('renames a separator to its own name in another case', async () => {
+  it('is refused by add separator, writing nothing', clash((c) => c.insertSeparator(RADFALL, { kind: 'mod', name: 'ENBoost' }), 'A separator with this name already exists'));
+  it('is refused by rename separator, writing nothing', clash((c) => c.renameSeparator(UNASSIGNED, RADFALL), 'A separator with this name already exists'));
+  it('is refused by rename mod, renaming no folder', clash((c) => c.renameMod('Harder VATS', 'ENBoost'), 'A mod with this name already exists'));
+
+  it('is no clash for the entry being renamed, in another case', async () => {
     const { commands } = over();
 
     expect(await commands.renameSeparator(UNASSIGNED, UNASSIGNED.toUpperCase())).toMatchObject({ applied: true });
+    expect(await commands.renameMod('Harder VATS', 'harder vats')).toMatchObject({ applied: true });
   });
 });

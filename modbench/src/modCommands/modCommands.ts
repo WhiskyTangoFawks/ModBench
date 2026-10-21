@@ -255,7 +255,6 @@ async function newModNameRefusalInInstance(adapter: InstanceAdapter, name: strin
   return newModNameRefusal(keyOf(adapter), await adapter.modOrder(), name);
 }
 
-// Insert a new enabled separator next to the anchor (mods.md, Add separator); the adapter places it.
 async function refusedName(refusal: Promise<string | undefined>): Promise<{ applied: false; refusal: string } | undefined> {
   try {
     const reason = await refusal;
@@ -265,6 +264,7 @@ async function refusedName(refusal: Promise<string | undefined>): Promise<{ appl
   }
 }
 
+// Insert a new enabled separator next to the anchor (mods.md, Add separator); the adapter places it.
 async function insertSeparator(
   adapter: InstanceAdapter, requested: string, anchor: EntryRef,
 ): Promise<SeparatorResult> {

@@ -220,7 +220,6 @@ export function registerModContextCommands(
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a mod carries one mod.');
       const oldName = modNameOf(only);
-      await refuseAgentName(commands.renameModNameRefusal(name, oldName));
       return { oldName, newName: name };
     },
     run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
@@ -318,7 +317,6 @@ function renameGesture(
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a separator carries one separator.');
       const oldName = separatorNameOf(only);
-      await refuseAgentName(commands.separatorNameRefusal(name, oldName));
       return { oldName, newName: name };
     },
     run: ({ oldName, newName }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
@@ -349,7 +347,6 @@ function renameGesture(
     fromAgent: async ({ argument, options: { name } }) => {
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to add a separator carries one mod or separator, the anchor.');
-      await refuseAgentName(commands.separatorNameRefusal(name));
       return { name, anchor: entryRefOf(only) };
     },
     run: ({ name, anchor }) => runModsWriting(instance, async (): Promise<GestureResult<string>> => {
