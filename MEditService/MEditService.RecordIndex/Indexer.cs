@@ -66,6 +66,7 @@ internal sealed class Indexer : IDisposable
     private readonly List<PluginAddress> _indexed = [];
     private bool _conflictsComputed;
     private bool _validating;
+    private bool _recovering;
     private int _plannedCount;
     private int _activeCount;
     private IReadOnlyList<PluginLoadFailure> _collisionFailures = [];
@@ -125,7 +126,52 @@ internal sealed class Indexer : IDisposable
     public RelationReads RequireReads()
     {
         AwaitTheReconcileAfterTheLastSourceWrite();
-        return RequireScope().Store.Reads;
+        var scope = RequireScope();
+        if (scope.Store.IsInvalidated()) RecoverFromInvalidation(scope);
+        return scope.Store.Reads;
+    }
+
+    // ADR-0003: recovery is not gated. The read that meets the invalidation says so and the reopening
+    // runs on, so the status says Reconciling until the reads answer again.
+    private void RecoverFromInvalidation(OpenScope invalidated)
+    {
+        lock (_lock)
+        {
+            if (_scope != invalidated || _recovering) throw InvalidatedMidRecovery();
+            _recovering = true;
+        }
+        PublishStatus();
+        Task.Factory.StartNew(ReopenInvalidated, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        throw InvalidatedMidRecovery();
+    }
+
+    private static IndexNotReadyException InvalidatedMidRecovery() =>
+        new("mEdit's record index was invalidated by a fatal error and is being reopened.");
+
+    private void ReopenInvalidated()
+    {
+        string? failure = null;
+        EnterExclusive();
+        try
+        {
+            failure = ReopenStore();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Reopening the invalidated record index failed");
+            failure = ex.Message;
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                _recovering = false;
+                _validating = false;
+                if (failure is not null) _failureMessage = $"mEdit's record index was not reopened: {failure}";
+            }
+            ExitExclusive();
+        }
+        PublishStatus();
     }
 
     public RelationReads RequireWholeSetReads()
