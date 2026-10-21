@@ -18,7 +18,7 @@ const modPath = (name: string, relativePath: string): string => `/mods/${name}/$
 const indexOver = (entries: ModlistEntry[], filesByMod: Record<string, string[]>, overwrite: OriginFile[] = []) =>
   buildFileConflictIndex(entries, overwrite, new Map(Object.entries(filesByMod).map(([name, paths]) => [name, {
     origin: name, folder: `/mods/${name}`, folders: [], notes: [], files: paths.map((path) => fileIn(`/mods/${name}`, path)),
-  }])), () => {});
+  }])));
 
 const SHARED = 'textures/shared/foo.dds';
 const conflicting = { ModA: [SHARED], ModB: [SHARED, 'meshes/onlyB.nif'] };
@@ -106,7 +106,7 @@ describe('buildFileConflictIndex — Overwrite is the winning-most provider', ()
     const entries = [mod(OVERWRITE_ORIGIN)];
     const sharing = { relativePath: 'a.dds', path: '/instance/overwrite/a.dds', sourcePath: '/instance/overwrite/a.dds', excluded: false, markedExcluded: false, includedPath: 'a.dds' };
     const index = buildFileConflictIndex(
-      entries, [sharing], answering([OVERWRITE_ORIGIN], { folder: '/mods/overwrite', files: [{ relativePath: 'a.dds', path: '/mods/overwrite/a.dds', sourcePath: '/mods/overwrite/a.dds', excluded: false, markedExcluded: false, includedPath: 'a.dds' }], folders: [], notes: [] }), () => {},
+      entries, [sharing], answering([OVERWRITE_ORIGIN], { folder: '/mods/overwrite', files: [{ relativePath: 'a.dds', path: '/mods/overwrite/a.dds', sourcePath: '/mods/overwrite/a.dds', excluded: false, markedExcluded: false, includedPath: 'a.dds' }], folders: [], notes: [] }),
     );
     expect(index.files.get('a.dds')?.winner).toBe(sharing.path);
     expect(index.files.get('a.dds')?.winnerOrigin).toEqual({ kind: 'runtimeOutput' });
@@ -142,7 +142,6 @@ describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine 
         ['ModA', { origin: 'ModA', folder: '/mods', folders: [], notes: [], files: [variant('/mods/ModA', 'Textures/Foo.dds'), variant('/mods/ModA', 'textures/foo.dds')] }],
         ['ModB', { origin: 'ModB', folder: '/mods', folders: [], notes: [], files: [variant('/mods/ModB', 'textures/foo.dds')] }],
       ]),
-      () => {},
     );
 
     expect(index.files.get('textures/foo.dds')).toMatchObject({
@@ -165,21 +164,13 @@ describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine 
   });
 });
 
-describe('buildFileConflictIndex — what the reading holds: the walk is the adapter\'s, and a note for a skipped entry is an Output line, never a silent skip', () => {
-  it('logs each entry the listing skipped, naming its mod', () => {
-    const log = vi.fn();
-
-    buildFileConflictIndex([mod('ModA')], [], answering(['ModA'], { folder: '/mods/ModA', files: [], folders: [], notes: ['broken link "/mods/ModA/x.dds", skipped'] }), log);
-
-    expect(log).toHaveBeenCalledWith(expect.stringMatching(/ModA.*broken link "\/mods\/ModA\/x\.dds", skipped/));
-  });
-
+describe('buildFileConflictIndex — what the reading holds: the walk is the adapter\x27s', () => {
   it('takes no excluded file as a provider, in a mod or Overwrite, and keeps it among its mod\'s files', () => {
     const excluded = { relativePath: 'Hidden.esp', path: '/mods/ModA/Hidden.esp', sourcePath: '/mods/ModA/Hidden.esp', excluded: true, markedExcluded: true, includedPath: 'Hidden.esp' };
     const kept = { relativePath: 'Kept.esp', path: '/mods/ModA/Kept.esp', sourcePath: '/mods/ModA/Kept.esp', excluded: false, markedExcluded: false, includedPath: 'Kept.esp' };
     const overwritten = { relativePath: 'Hidden.esp', path: '/overwrite/Hidden.esp', sourcePath: '/overwrite/Hidden.esp', excluded: true, markedExcluded: true, includedPath: 'Hidden.esp' };
     const index = buildFileConflictIndex(
-      [mod('ModA')], [overwritten], answering(['ModA'], { folder: '/mods/ModA', files: [excluded, kept], folders: [], notes: [] }), () => {},
+      [mod('ModA')], [overwritten], answering(['ModA'], { folder: '/mods/ModA', files: [excluded, kept], folders: [], notes: [] }),
     );
 
     expect([...index.files].map((entry) => entry.relativePath)).toEqual(['Kept.esp']);
@@ -190,7 +181,7 @@ describe('buildFileConflictIndex — what the reading holds: the walk is the ada
     const linked = { relativePath: 'x/linked.dds', path: '/mods/ModA/x/linked.dds', sourcePath: '/shared/real.dds', excluded: false, markedExcluded: false, includedPath: 'x/linked.dds' };
     const folder = { relativePath: 'x', path: '/mods/ModA/x', excluded: false };
     const index = buildFileConflictIndex(
-      [mod('ModA')], [], answering(['ModA'], { folder: '/mods/ModA', files: [linked], folders: [folder], notes: [] }), () => {},
+      [mod('ModA')], [], answering(['ModA'], { folder: '/mods/ModA', files: [linked], folders: [folder], notes: [] }),
     );
 
     expect(index.files.get('x/linked.dds')?.winner).toBe('/shared/real.dds');
@@ -223,7 +214,7 @@ describe.skipIf(litrInstance === '')('buildFileConflictIndex — real LitR insta
       );
     }
 
-    const index = buildFileConflictIndex(entries, [], await modFilesOf(litr, entries), () => {});
+    const index = buildFileConflictIndex(entries, [], await modFilesOf(litr, entries));
     for (const relativePath of contested) {
       const entry = index.files.get(relativePath);
       expect(entry?.providers).toEqual([modOrigin(fixName), modOrigin(baseName)]);
