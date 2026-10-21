@@ -1,3 +1,4 @@
+import { IGNORED_THROWS } from './fixtures';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { leveledLog } from '../../test/leveledLog';
@@ -22,7 +23,7 @@ function makeClient(
   fetch: (input: Request) => Promise<Response>,
   { health = 'up', ...deps }: { health?: 'up' | 'down' } & Pick<Parameters<typeof createMEditClient>[0], 'timeoutMs' | 'reconnectDelayMs' | 'log'> = {},
 ) {
-  return createMEditClient({
+  return createMEditClient({ listenerThrows: IGNORED_THROWS,
     backend: {
       attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
       checkHealth: () => Promise.resolve(health === 'up'),
@@ -771,7 +772,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
 
   it('stays stopped after a crash: a snapshot answers backendFailed, with no second child spawned and nothing launched', async () => {
     const children: EventEmitter[] = [];
-    const client = createMEditClient({
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
         freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
         spawn: () => {
@@ -803,7 +804,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     ['claiming a port throws', { freePort: () => Promise.reject(new Error('no port')) }],
     ['the spawn throws', { freePort: () => Promise.resolve(5172), spawn: () => { throw new Error('no spawn'); } }],
   ])('is stopped when the launch fails because %s', async (_name, backend) => {
-    const client = createMEditClient({
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: { executablePath: '/x/backend', pollIntervalMs: 3, checkHealth: () => Promise.resolve(true), ...backend },
       backendLog: fakeLogChannel(), fetch: routedFetch([]),
     });
@@ -815,7 +816,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
 
   it('answers a snapshot backendFailed after a launch whose child exited before it answered, and launches nothing again', async () => {
     const children: EventEmitter[] = [];
-    const client = createMEditClient({
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
         freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
         spawn: () => {
@@ -847,7 +848,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     ]);
     const child = Object.assign(new EventEmitter(), { kill: () => undefined, stdin: new PassThrough() });
     child.stdin.on('finish', () => { abortedAtKill = putSignal?.aborted; child.emit('exit', 0); });
-    const client = createMEditClient({
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
         freePort: () => Promise.resolve(5172), spawn: () => child, executablePath: '/x/backend',
         pollIntervalMs: 5, pollTimeoutMs: 20, checkHealth: () => Promise.resolve(true),
@@ -879,7 +880,7 @@ describe('HttpMEditClient — a read before mEdit has started', () => {
   it('fails as unreachable, and files the reason in the log alone', async () => {
     const log = leveledLog();
     const fetch = vi.fn();
-    const client = createMEditClient({ backendLog: fakeLogChannel(), fetch, log });
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS, backendLog: fakeLogChannel(), fetch, log });
 
     await expect(client.getPlugins()).resolves.toEqual({ failed: 'unreachable' });
     expect(fetch).not.toHaveBeenCalled();
@@ -916,7 +917,7 @@ describe('HttpMEditClient, the backend process it hides', () => {
       state.healthy = true;
       return { kill: vi.fn(), on: vi.fn(), stdin: new PassThrough(), stdout: Readable.from(['[10:00:00 WRN] slow\n']), stderr: null };
     });
-    const client = createMEditClient({
+    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
         freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x/backend',
         checkHealth: () => Promise.resolve(state.healthy),

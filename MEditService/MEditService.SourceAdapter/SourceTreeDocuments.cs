@@ -114,7 +114,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             var own = SourceRepositoryLayout.ContainerDocumentHeldBy(_files, worldspaceDirectory);
             foreach (var document in DocumentsAt(own, cell: null, holders)) yield return document;
 
-            var worldspaceFormKey = DocumentText.FormKeyDeclaredBy(_files, own, _pluginFileName);
+            var worldspaceFormKey = Read(own) is { } ownText ? DocumentText.FormKeyDeclaredIn(ownText, own, _pluginFileName) : null;
             foreach (var blockDirectory in _files.DirectoriesIn(worldspaceDirectory))
             {
                 var (blockX, blockY) = Coordinates(Path.GetFileName(blockDirectory));
@@ -271,7 +271,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     private static int? Number(string text) =>
         int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
 
-    // Never exclusive owners of the file: it may vanish or lock between the listing and the read.
+    // Never exclusive owners of the file: it may vanish between the listing and the read.
     private string? Read(string path)
     {
         try

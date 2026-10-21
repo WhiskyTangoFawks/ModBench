@@ -327,7 +327,7 @@ public sealed class CreateRecordChangesHandlerTests
         var result = mod.CreateHandler.CreateRecordSync(mod.Plugin, "npc_");
 
         FileModes.Set(held, "644");
-        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.SourceAccessFailed, result.Refusal);
         Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
