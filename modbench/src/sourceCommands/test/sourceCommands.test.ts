@@ -29,7 +29,7 @@ describe('sourceCommands build', () => {
       args: [[
         { name: 'ModA', sourceFolder: '/instance/source/ModA', folder: '/mods/ModA', metadataFiles: ['meta.ini'], version: '1.2.3', isSubmodule: true },
         { name: 'ModB', sourceFolder: '/instance/source/Old ModB', folder: '/mods/ModB', metadataFiles: ['meta.ini'], isSubmodule: false },
-      ], { exclusionMark: '.excluded', archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache' }],
+      ], { exclusionMark: '.mohidden', archives: { general: ba2, textures: ba2 }, statCache: '/instance/stat-cache' }],
     }]);
   });
 
@@ -82,7 +82,7 @@ describe('sourceCommands build', () => {
 
     await sourceCommands({ client, adapter: fakeAdapter({}, 'SkyrimSE'), saveUnsaved: savedAll }).build(['ModA']);
 
-    expect(client.calls.map((call) => call.args[1])).toEqual([{ exclusionMark: '.excluded', archives: null, statCache: '/instance/stat-cache' }]);
+    expect(client.calls.map((call) => call.args[1])).toEqual([{ exclusionMark: '.mohidden', archives: null, statCache: '/instance/stat-cache' }]);
   });
 
   it('refuses a mod no repository builds, naming why, and builds the rest', async () => {

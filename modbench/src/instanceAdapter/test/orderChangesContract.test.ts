@@ -100,6 +100,34 @@ describe.each(implementations)('$name holds the order changes\' contract', (impl
     });
   });
 
+  describe('mod folders', () => {
+    const folderNames = async (): Promise<string[]> =>
+      ((await adapter.reading()).modFolders?.all ?? []).map((folder) => `${folder.kind}:${folder.name}`).sort();
+
+    it('moves the folder of a separator it renames', async () => {
+      await changeMods({ kind: 'renameSeparator', from: 'Lower', to: 'Bottom' });
+      expect(await folderNames()).toEqual(['mod:Delta', 'separator:Bottom']);
+    });
+
+    it('leaves the folder of a mod it renames where it is', async () => {
+      await changeMods({ kind: 'renameMod', from: 'Delta', to: 'Omega' });
+      expect(await folderNames()).toEqual(['mod:Delta', 'separator:Lower']);
+    });
+
+    it('makes the folder of a separator it adds', async () => {
+      await changeMods({ kind: 'addSeparator', separator: 'Fresh', anchor: { kind: 'mod', name: 'Gamma' } });
+      expect(await folderNames()).toEqual(['mod:Delta', 'separator:Fresh', 'separator:Lower']);
+    });
+  });
+
+  describe('profile', () => {
+    it('shows the profile it selected to the next read, and writes nothing for the one selected', async () => {
+      expect(await adapter.selectProfile('Default')).toEqual({ wrote: false });
+      expect(await adapter.selectProfile('Other')).toEqual({ wrote: true });
+      expect((await adapter.reading()).profile).toBe('Other');
+    });
+  });
+
   describe('plugin order', () => {
     it('refuses a plugin that is not listed, and writes nothing of the batch it was in', async () => {
       await expect(changePlugins({ kind: 'enable', plugin: 'B.esp', enabled: true }, { kind: 'drop', plugin: 'Nope.esp' }))

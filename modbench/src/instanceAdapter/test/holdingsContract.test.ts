@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rm } from 'node:fs/promises';
+import { dirname, join, normalize } from 'node:path';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -25,6 +26,10 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
     const { downloadedFiles } = await adapter.reading();
     return downloadedFiles.kind === 'listed' ? (downloadedFiles.files ?? []).map((file) => file.name) : [];
   };
+  const downloadedFile = async (name: string) => {
+    const { downloadedFiles } = await adapter.reading();
+    return downloadedFiles.kind === 'listed' ? downloadedFiles.files?.find((file) => file.name === name) : undefined;
+  };
   const filesOf = async (origin: FileOrigin): Promise<string[]> => {
     const { modFiles } = await adapter.reading();
     return (origin.kind === 'mod' ? modFiles.get(origin.name)?.files ?? [] : []).map((file) => file.relativePath).sort();
@@ -33,7 +38,8 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
   describe('mod folders', () => {
     it('gives no folder to a name that reaches outside the mods folder', async () => {
       expect(await adapter.modFolderPath('Vanished/Mod')).toBeUndefined();
-      expect(await adapter.modFolderPath('Nope')).toMatch(/Nope$/);
+      const held = await adapter.modFolderPath('Alpha');
+      expect(normalize(await adapter.modFolderPath('Nope') ?? '')).toBe(join(dirname(held ?? ''), 'Nope'));
     });
 
     it('refuses to create a folder that is there, in any case', async () => {
@@ -86,8 +92,12 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       expect(await adapter.trashDownloadedFile('Fresh.7z', trash)).toEqual({ gone: true });
     });
 
-    it('trashes a downloaded file that is gone', async () => {
-      expect(await adapter.trashDownloadedFile('Gone.7z', trash)).toEqual({ gone: true });
+    it('writes a mark once, and shows it to the next read', async () => {
+      expect(await adapter.markDownloadedFile('Fresh.7z', 'Excluded')).toEqual({ gone: false, wrote: true });
+      expect((await downloadedFile('Fresh.7z'))?.excluded).toBe(true);
+      expect(await adapter.markDownloadedFile('Fresh.7z', 'Excluded')).toEqual({ gone: false, wrote: false });
+      expect(await adapter.markDownloadedFile('Fresh.7z', 'Included')).toEqual({ gone: false, wrote: true });
+      expect((await downloadedFile('Fresh.7z'))?.excluded).toBe(false);
     });
   });
 
@@ -102,8 +112,25 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       expect(await adapter.markOriginFile(ALPHA, 'textures/none.dds', 'Excluded')).toEqual({ gone: true });
     });
 
-    it('marks an origin file that is there', async () => {
-      expect(await adapter.markOriginFile(ALPHA, 'textures/a.dds', 'Excluded')).toMatchObject({ gone: false });
+    it('marks an excluded file with the suffix the manager reads', () => {
+      expect(adapter.exclusionMark).toBe('.mohidden');
+    });
+
+    it('marks an origin file that is there with the mark it names', async () => {
+      const marked = `textures/a.dds${adapter.exclusionMark}`;
+      expect(await adapter.markOriginFile(ALPHA, 'textures/a.dds', 'Excluded')).toEqual({ gone: false, wrote: true, relativePath: marked });
+      expect(await filesOf(ALPHA)).toEqual(['Other.esp', 'Patch.esp', marked]);
+      expect((await adapter.originFile(ALPHA, marked))?.excluded).toBe(true);
+      expect(await adapter.markOriginFile(ALPHA, marked, 'Excluded')).toEqual({ gone: false, wrote: false, relativePath: marked });
+      expect(await adapter.markOriginFile(ALPHA, marked, 'Included')).toEqual({ gone: false, wrote: true, relativePath: 'textures/a.dds' });
+      expect(await filesOf(ALPHA)).toEqual(['Other.esp', 'Patch.esp', 'textures/a.dds']);
+    });
+
+    it.each(['../Beta/Taken.esp', 'textures/../../Beta/Taken.esp', 'textures\\..\\a.dds'])('refuses a path that reaches outside the origin: %s', async (path) => {
+      const notAFile = `Not a file of mod "Alpha": "${path}"`;
+      await expect(adapter.originFile(ALPHA, path)).rejects.toThrow(notAFile);
+      await expect(adapter.markOriginFile(ALPHA, path, 'Excluded')).rejects.toThrow(notAFile);
+      await expect(adapter.trashModFile('Alpha', path, trash)).rejects.toThrow(notAFile);
     });
   });
 
