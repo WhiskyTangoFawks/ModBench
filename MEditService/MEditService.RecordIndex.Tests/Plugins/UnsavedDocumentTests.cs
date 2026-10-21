@@ -214,25 +214,29 @@ public sealed class UnsavedDocumentTests : IDisposable
     }
 
     [Fact]
-    public void AHandOverWhoseStatusPublishIsCancelledOutsideDisposal_LeavesTheNextHandOverValidated()
+    public async Task AHandOverWhoseStatusPublishIsCancelledOutsideDisposal_LeavesTheNextHandOverValidated()
     {
+        using var failedPublishing = new ManualResetEventSlim();
         using var secondHandedOver = new ManualResetEventSlim();
         var statusCancelled = Faults.InTurn(() =>
         {
+            failedPublishing.Set();
             secondHandedOver.Wait(TimeSpan.FromMinutes(1));
             throw new OperationCanceledException();
         });
         var notifications = new InMemoryNotificationPublisher();
         using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: notifications);
         notifications.OnPublish = Faults.On(IsRowsChanged, Faults.Of(typeof(InvalidOperationException)))
-            + (notification => { if (notification is LoadOrderStatusNotification) statusCancelled(); });
+            + (notification => { if (notification is LoadOrderStatusNotification { Status.State: LoadOrderState.Failed }) statusCancelled(); });
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
-        Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
+        Assert.True(failedPublishing.Wait(Waits.Patience), "the failed status being published");
 
         notifications.OnPublish = null;
-        faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedAgain\""))]);
+        var secondHandOver = Task.Run(() => faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedAgain\""))]));
+        var acceptedWhilePublishing = await Waits.CompletesWithin(secondHandOver, TimeSpan.FromSeconds(5));
         secondHandedOver.Set();
 
+        Assert.True(acceptedWhilePublishing, "the next hand-over accepted while the status was publishing");
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");
     }
 

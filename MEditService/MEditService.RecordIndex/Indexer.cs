@@ -123,18 +123,22 @@ internal sealed class Indexer : IDisposable
     // Deliberately not _lock: the reconciling thread takes _lock on every plugin, so a waiter
     // holding it could never be signalled.
     private readonly Lock _exclusive = new();
-    private CancellationTokenSource? _reconcileCancellation;
     // Only disposal stops a plugin read partway, inside the one transaction its rows land in. A newer
     // snapshot waits for the plugin in hand: snapshots come with every source write (ADR-0015), and each
     // reconcile must make progress.
     private readonly CancellationTokenSource _disposal = new();
-    private bool _disposed;
 
     // One worker keeps the index current, one turn at a time: a reconcile when one was asked for, else
-    // the paths handed. Asks made during a turn coalesce into the next. Guarded by _lock.
+    // the paths handed. Asks made during a turn coalesce into the next.
     private bool _reconcileAsked;
     private readonly List<string> _handed = [];
     private bool _working;
+    private bool _disposed;
+    private CancellationTokenSource? _reconcileCancellation;
+
+    // Guards the five fields above. Not _lock, so an arrival never waits on a status read or publish; none
+    // of this class's other locks is taken inside it.
+    private readonly Lock _turns = new();
 
     // The arrivals the last whole reconcile read the disk after, guarded by _lock and pulsed on _reconciled, which a
     // read after a source write waits on.
@@ -149,11 +153,11 @@ internal sealed class Indexer : IDisposable
     // Always paired with ExitExclusive in a finally.
     private void EnterExclusive()
     {
-        lock (_lock) CancelInFlight();
+        lock (_turns) CancelInFlight();
         _exclusive.Enter();
     }
 
-    // Cancel and dispose both happen under _lock, so a token can never be cancelled after it has
+    // Cancel and dispose both happen under _turns, so a token can never be cancelled after it has
     // been disposed.
     private void CancelInFlight()
     {
@@ -170,7 +174,7 @@ internal sealed class Indexer : IDisposable
 
     private bool EnterExclusiveWithin(TimeSpan limit)
     {
-        lock (_lock) CancelInFlight();
+        lock (_turns) CancelInFlight();
         var deadline = _timeProvider.GetUtcNow() + limit;
         while (!_exclusive.TryEnter(SequencePollInterval))
         {
@@ -284,7 +288,7 @@ internal sealed class Indexer : IDisposable
     // overtaken arrival reconciles the newer.
     private void AskReconcile()
     {
-        lock (_lock)
+        lock (_turns)
         {
             _reconcileAsked = true;
             CancelInFlight();
@@ -296,7 +300,7 @@ internal sealed class Indexer : IDisposable
     // never cancelled.
     private void ValidateTreesHolding(IReadOnlyList<string> paths)
     {
-        lock (_lock)
+        lock (_turns)
         {
             _handed.AddRange(paths);
             WakeWorker();
@@ -329,7 +333,7 @@ internal sealed class Indexer : IDisposable
 
     private Action? NextTurn()
     {
-        lock (_lock)
+        lock (_turns)
         {
             if (_disposed || (!_reconcileAsked && _handed.Count == 0))
             {
@@ -371,7 +375,7 @@ internal sealed class Indexer : IDisposable
     // reconcile opens a store after Dispose.
     private void ReconcileHeld() => Reconcile(() =>
     {
-        lock (_lock) return _disposed ? null : _holder.Held;
+        lock (_turns) return _disposed ? null : _holder.Held;
     });
 
     // ADR-0013's one verb, then every plugin validated (ADR-0003). The arrival is read once the
@@ -574,13 +578,13 @@ internal sealed class Indexer : IDisposable
     private CancellationToken BeginReconcile()
     {
         var cts = new CancellationTokenSource();
-        lock (_lock) _reconcileCancellation = cts;
+        lock (_turns) _reconcileCancellation = cts;
         return cts.Token;
     }
 
     private void EndReconcile()
     {
-        lock (_lock)
+        lock (_turns)
         {
             var cts = _reconcileCancellation;
             _reconcileCancellation = null;
@@ -1145,9 +1149,10 @@ internal sealed class Indexer : IDisposable
     private string? ValidationFailure(Action validate, CancellationToken token, out bool busy)
     {
         busy = false;
+        if (_disposal.IsCancellationRequested) return null;
         lock (_lock)
         {
-            if (_disposed || _scope is null) return null;
+            if (_scope is null) return null;
         }
         try
         {
@@ -1276,9 +1281,8 @@ internal sealed class Indexer : IDisposable
         _holder.Arrived -= OnArrived;
         _unsaved.Arrived -= ValidateTreesHolding;
 
-        // Guarded because Dispose owns the scope and the reconcile's cancellation: double disposal
-        // is a supported call pattern here.
-        lock (_lock)
+        // Guarded because Dispose owns the scope: double disposal is a supported call pattern here.
+        lock (_turns)
         {
             if (_disposed) return;
             _disposed = true;
@@ -1295,9 +1299,9 @@ internal sealed class Indexer : IDisposable
         try
         {
             OpenScope? closing;
-            lock (_lock)
+            lock (_lock) closing = DetachCurrent();
+            lock (_turns)
             {
-                closing = DetachCurrent();
                 // EndReconcile already clears this on every reconcile's own exit path; this is the
                 // exclusive-holder's own backstop, not the common case.
                 _reconcileCancellation?.Dispose();
