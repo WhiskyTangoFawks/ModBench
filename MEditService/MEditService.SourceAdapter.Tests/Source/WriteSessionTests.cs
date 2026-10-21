@@ -173,7 +173,7 @@ public sealed class WriteSessionTests : IDisposable
         RenameAContainerThenPutAChildInIt,
         NewDocumentThenItsRename,
         RekeyAContainerThenRemoveIt,
-        RemoveInsideAContainerThenRenameIt,
+        RenameAContainerThenRemoveInsideIt,
         CreateAContainerThenPutAChildInIt,
     }
 
@@ -217,10 +217,10 @@ public sealed class WriteSessionTests : IDisposable
                 repository => repository.ChangesToRekey(Plugin, cell, rekeyed.FormKey),
                 repository => repository.ChangesToRemove(Plugin, rekeyed),
             ],
-            Sequence.RemoveInsideAContainerThenRenameIt =>
+            Sequence.RenameAContainerThenRemoveInsideIt =>
             [
-                repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")),
                 repository => repository.ChangesToPut(Plugin, Renamed(_worldspace, "wrld", WorldspacePath, "RenamedWorld")),
+                repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell")),
             ],
             Sequence.CreateAContainerThenPutAChildInIt =>
             [
@@ -237,13 +237,36 @@ public sealed class WriteSessionTests : IDisposable
     [InlineData(Sequence.RenameAContainerThenPutAChildInIt)]
     [InlineData(Sequence.NewDocumentThenItsRename)]
     [InlineData(Sequence.RekeyAContainerThenRemoveIt)]
-    [InlineData(Sequence.RemoveInsideAContainerThenRenameIt)]
+    [InlineData(Sequence.RenameAContainerThenRemoveInsideIt)]
     [InlineData(Sequence.CreateAContainerThenPutAChildInIt)]
     public void WritesInOneSession_AnswerTheTreeTheyLeaveOneAfterAnother(Sequence sequence)
     {
         var writes = WritesOf(sequence);
 
         Assert.Equal(TreeTheWritesLeaveOneAfterAnother(writes), TreeTheSessionAnswers(writes));
+    }
+
+    [Fact]
+    public void SavingTheRemovalOfAnEmbeddedChild_LeavesItGoneAndItsSiblingHeld()
+    {
+        var repository = Repository;
+
+        repository.SaveChanges(repository.ChangesToRemove(Plugin, Identity(_response, "info"))).Wrote();
+
+        Assert.Null(repository.RecordOf(Plugin, Identity(_response, "info")).Value());
+        Assert.NotNull(repository.RecordOf(Plugin, Identity(_response2, "info")).Value());
+    }
+
+    [Fact]
+    public void SavingTheRemovalOfAContainerWithADirectoryOfItsOwn_TakesTheDirectoryAndLeavesTheWorldspace()
+    {
+        var repository = Repository;
+
+        repository.SaveChanges(repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))).Wrote();
+
+        Assert.False(Directory.Exists(Path.GetDirectoryName(FullPath(ExteriorCellPath))));
+        Assert.Null(repository.RecordOf(Plugin, Identity(_exteriorCell, "cell")).Value());
+        Assert.NotNull(repository.RecordOf(Plugin, Identity(_worldspace, "wrld")).Value());
     }
 
     [Fact]
@@ -481,13 +504,16 @@ public sealed class WriteSessionTests : IDisposable
     private string FileUnderTheRenamedCell =>
         Path.Combine(PluginSourceRoot.For(PluginName), "Cells", "0", "0", $"RenamedCell - {_cell.FormKey.ID:X6}_{PluginName}", "Unsaved.json");
 
-    private Dictionary<string, (string Held, Func<ISourceRepository, Answer<SourceChanges, SourceFailure>> Write)> WritesReachingAHeldFile => new()
+    private string EditedUnsaved(string path) => File.ReadAllText(FullPath(path)) + " ";
+
+    private Dictionary<string, (string Held, string Text, Func<ISourceRepository, Answer<SourceChanges, SourceFailure>> Write)> WritesReachingAHeldFile => new()
     {
-        ["rewriting a file"] = (QuestPath, repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))),
-        ["moving a file"] = (QuestPath, repository => repository.ChangesToPut(Plugin, Renamed(_quest, "qust", QuestPath, "Renamed"))),
-        ["deleting a folder holding a file"] = (ExteriorCellPath, repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))),
+        ["rewriting a file"] = (QuestPath, EditedUnsaved(QuestPath), repository => repository.ChangesToRemove(Plugin, Identity(_response, "info"))),
+        ["moving a file"] = (QuestPath, EditedUnsaved(QuestPath), repository => repository.ChangesToPut(Plugin, Renamed(_quest, "qust", QuestPath, "Renamed"))),
+        ["deleting a folder holding a file"] = (
+            ExteriorCellPath, EditedUnsaved(ExteriorCellPath), repository => repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))),
         ["moving onto a folder holding a file"] = (
-            FileUnderTheRenamedCell, repository => repository.ChangesToPut(Plugin, Renamed(_cell, "cell", CellPath, "RenamedCell"))),
+            FileUnderTheRenamedCell, "{}", repository => repository.ChangesToPut(Plugin, Renamed(_cell, "cell", CellPath, "RenamedCell"))),
     };
 
     public static TheoryData<string> WriteNames { get; } =
@@ -497,8 +523,8 @@ public sealed class WriteSessionTests : IDisposable
     [MemberData(nameof(WriteNames))]
     public void AWriteReachingAFileHeldUnsaved_IsRefusedNamingTheFile_AndWritesNothing(string write)
     {
-        var (held, changes) = WritesReachingAHeldFile[write];
-        var session = Session(new DocumentChange(FullPath(held), File.Exists(FullPath(held)) ? File.ReadAllText(FullPath(held)) + " " : "{}"));
+        var (held, text, changes) = WritesReachingAHeldFile[write];
+        var session = Session(new DocumentChange(FullPath(held), text));
         Assert.Null(Write(session, changes));
         var before = TreeSnapshot.Of(_modFolder);
 
@@ -537,6 +563,14 @@ public sealed class WriteSessionTests : IDisposable
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
+    private static Action VerbOn(ISourceRepository repository, string verb, Action onWrite) =>
+        verb switch
+        {
+            "replace" => () => repository.ReplaceSourceFrom(Plugin, [], "ABCDEF0123"),
+            "moveLast" => () => repository.MoveLastWrittenTo(Plugin.Name, "Renamed.esp"),
+            _ => () => repository.WriteBinary(Plugin, "ABCDEF0123", onWrite),
+        };
+
     [Theory]
     [InlineData("replace")]
     [InlineData("moveLast")]
@@ -547,12 +581,7 @@ public sealed class WriteSessionTests : IDisposable
         var session = Session();
         var wrote = false;
 
-        Assert.Throws<InvalidOperationException>(() => verb switch
-        {
-            "replace" => session.Repository.ReplaceSourceFrom(Plugin, [], "ABCDEF0123"),
-            "moveLast" => session.Repository.MoveLastWrittenTo(Plugin.Name, "Renamed.esp"),
-            _ => session.Repository.WriteBinary(Plugin, "ABCDEF0123", () => wrote = true).Holds(out _, out var failure) ? null : failure,
-        });
+        Assert.Throws<InvalidOperationException>(VerbOn(session.Repository, verb, () => wrote = true));
 
         Assert.False(wrote);
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
