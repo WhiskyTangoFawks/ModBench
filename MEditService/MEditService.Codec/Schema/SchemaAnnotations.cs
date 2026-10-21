@@ -453,7 +453,7 @@ public sealed record SchemaAnnotations(
     // A row no leaf of its union declares hides nothing.
     private IEnumerable<string> UnresolvedUnusedSlotMembers(IReadOnlyList<Type> allTypes, ILookup<string, Type> typesByName)
     {
-        foreach (var (typeName, member) in UnusedSlotMembers.Order())
+        foreach (var (typeName, member) in UnusedSlotMembers.OrderBy(row => row.TypeName, StringComparer.Ordinal).ThenBy(row => row.MemberName, StringComparer.Ordinal))
         {
             var label = $"{nameof(UnusedSlotMembers)}: {typeName}.{member}";
             if (typesByName[typeName].FirstOrDefault(t => t.IsClass) is not { } setterType
@@ -468,7 +468,7 @@ public sealed record SchemaAnnotations(
     // already types nullable, or on something that is no link, it says nothing.
     private IEnumerable<string> UnresolvedPermittedNullLinks(ILookup<string, Type> typesByName)
     {
-        foreach (var entry in PermittedNullFormLinks.Order())
+        foreach (var entry in PermittedNullFormLinks.OrderBy(row => row.TypeName, StringComparer.Ordinal).ThenBy(row => row.MemberName, StringComparer.Ordinal))
         {
             if (Property(typesByName, entry) is not { } prop) continue;
             var label = $"{nameof(PermittedNullFormLinks)}: {entry.TypeName}.{entry.MemberName}";

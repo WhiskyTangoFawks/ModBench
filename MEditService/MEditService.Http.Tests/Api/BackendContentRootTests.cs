@@ -174,6 +174,15 @@ public sealed class BackendContentRootTests
     }
 
     [Fact]
+    public void TheBackendsRuntimeConfig_RunsInvariantGlobalization_SoAMachineWithoutLibicuCanStartIt()
+    {
+        using var config = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(ApiDirectory, "MEditService.Http.runtimeconfig.json")));
+
+        Assert.True(config.RootElement.GetProperty("runtimeOptions").GetProperty("configProperties")
+            .GetProperty("System.Globalization.Invariant").GetBoolean());
+    }
+
+    [Fact]
     public async Task AskedToExitWithItsStdin_ExitsWhenItClosesWhileStillStarting()
     {
         using var workingDirectory = new ScratchDirectory("medit-contentroot-");
