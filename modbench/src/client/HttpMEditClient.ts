@@ -126,7 +126,11 @@ class HttpMEditClient implements MEditClient {
       if (status === 'running') this.notifications.start();
       else this.notifications.stop();
     });
-    this.loadOrderStatusKept = keepLoadOrderStatus(this);
+    this.loadOrderStatusKept = keepLoadOrderStatus({
+      onNotification: (kind, listener) => this.notifications.onNotification(kind, listener),
+      onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
+      onReconnected: (listener) => this.notifications.onReconnected(listener),
+    });
     this.loadOrder = createLoadOrderSender({
       status: () => this.lifecycle.status,
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
@@ -134,6 +138,10 @@ class HttpMEditClient implements MEditClient {
       start: () => this.lifecycle.start(),
       stop: () => this.lifecycle.stop(),
       put: (snapshot, signal) => this.putLoadOrder(snapshot, signal),
+    });
+    // A restarted mEdit holds only what was resent, so every view hears the resend as the change it is.
+    this.loadOrder.onResent((snapshot, outcome) => {
+      if (outcome.outcome === 'applied') this.notifications.announceChanged(snapshot);
     });
     this.handOver = createUnsavedHandOver({
       status: () => this.lifecycle.status,
@@ -163,9 +171,6 @@ class HttpMEditClient implements MEditClient {
   get status(): BackendStatus { return this.lifecycle.status; }
   onStatusChanged(listener: (status: BackendStatus) => void): () => void {
     return this.lifecycle.onStatusChanged(listener);
-  }
-  onReconnected(listener: () => void): () => void {
-    return this.notifications.onReconnected(listener);
   }
   async start(): Promise<void> { await this.loadOrder.launch(); }
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void { return this.loadOrder.onLaunch(listener); }

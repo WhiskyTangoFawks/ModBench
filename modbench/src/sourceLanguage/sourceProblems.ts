@@ -1,5 +1,6 @@
 import type { MEditClient, PluginProblems } from '../client';
 import type { SourceFilesOf } from '../instanceLoader/loadOrderSnapshot';
+import { coalesced } from '../ports/coalesced';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressKey } from '../wire/pluginAddress';
@@ -14,7 +15,7 @@ export interface ProblemOnFile { message: string; start: Position; end: Position
 export type ProblemsByFile = ReadonlyMap<string, ProblemOnFile[]>;
 
 export interface SourceProblemsDeps {
-  client: Pick<MEditClient, 'getPluginProblems' | 'onNotification' | 'onReconnected' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onUnsavedHandOver'>;
+  client: Pick<MEditClient, 'getPluginProblems' | 'onNotification' | 'loadOrderStatus' | 'onLoadOrderSettled' | 'onUnsavedHandOver'>;
   sourceFiles: SourceFilesOf;
   readText: (path: string) => Promise<string>;
   reporter: Pick<Reporter, 'shownOnSurface'>;
@@ -160,12 +161,12 @@ export function feedSourceProblems(deps: SourceProblemsDeps): () => void {
   };
   const reask = () => { void ask(); };
   const ready = () => client.loadOrderStatus?.conflictsComputed ?? answeredAtSubscribe;
-  const reaskWhenReady = () => { if (ready()) reask(); };
+  const reaskOnce = coalesced(reask);
+  const reaskWhenReady = () => { if (ready()) reaskOnce(); };
   const unsubscribe = [
     client.onLoadOrderSettled((status) => { if (status.conflictsComputed) reask(); }),
     client.onNotification('rows-changed', reaskWhenReady),
     client.onNotification('plugin-changed', reaskWhenReady),
-    client.onReconnected(reask),
     client.onUnsavedHandOver(handedOver),
   ];
   void ask(true);

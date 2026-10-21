@@ -136,16 +136,6 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     expect([...shown]).toEqual([]);
   });
 
-  it('asks again when the notification stream reconnects', async () => {
-    const { client, answered, published } = feed({ '/source/ReferringMod/Refers.esp/Npc.json': `"${MISSING}"` });
-    await answered([]);
-
-    client.setQueryAnswer('getPluginProblems', [{ plugin: PLUGIN, problems: [problem()] }]);
-    client.reconnected();
-
-    await vi.waitFor(() => { expect(published.at(-1)?.size).toBe(1); });
-  });
-
   it('asks nothing while the record index is not ready', async () => {
     const { client, answered } = feed({});
     client.emit(loadOrderStatus(false));

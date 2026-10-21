@@ -2,15 +2,15 @@ import type { MEditClient } from '../client';
 import type { RecordTab } from './recordTab';
 import { isReadFailed } from '../wire/readFailed';
 
-// On reconnect, a tab waiting on a missed report reads once mEdit holds it.
+// A plugin re-derived whole is announced with no keys (ADR-0015): a tab waiting on a report reads once mEdit holds its record.
 export function subscribeRecordTabsToNotifications(
-  client: Pick<MEditClient, 'onNotification' | 'onReconnected' | 'getRecordOwner'>,
+  client: Pick<MEditClient, 'onNotification' | 'getRecordOwner'>,
   tabs: Iterable<RecordTab>,
 ): () => void {
   const unsubscribeRows = client.onNotification('rows-changed', (event) => {
     for (const tab of tabs) tab.reported(event.keys);
   });
-  const unsubscribeReconnect = client.onReconnected(() => {
+  const unsubscribePlugin = client.onNotification('plugin-changed', () => {
     for (const tab of tabs) {
       const formKey = tab.waitingFor();
       if (!formKey) continue;
@@ -20,7 +20,7 @@ export function subscribeRecordTabsToNotifications(
         () => undefined);
     }
   });
-  return () => { unsubscribeRows(); unsubscribeReconnect(); };
+  return () => { unsubscribeRows(); unsubscribePlugin(); };
 }
 
 /** A reconcile settled: every record tab reads its comparison again. */

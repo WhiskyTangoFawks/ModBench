@@ -754,6 +754,33 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
+  it('announces every plugin and mod it put again as changed once a reopened stream\'s process has applied it, since views read them again on a change and never on a reconnect', async () => {
+    const streams: { end: () => void }[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => {
+        let controller!: ReadableStreamDefaultController<Uint8Array>;
+        const body = new ReadableStream<Uint8Array>({ start: (c) => { controller = c; } });
+        streams.push({ end: () => controller.close() });
+        return Promise.resolve(new Response(body, { status: 200 }));
+      }],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
+        state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
+      }))],
+      ['/load-order', () => Promise.resolve(jsonResponse(200, appliedBody))],
+    ]);
+    const client = makeClient(fetch, { reconnectDelayMs: 0 });
+    await client.start();
+    const heard: unknown[] = [];
+    client.onNotification('plugin-changed', ({ plugin }) => heard.push(plugin));
+    client.onNotification('mod-status-changed', ({ mods }) => heard.push(mods));
+    await client.sendLoadOrder({ ...snapshot, mods: [{ name: 'ModA', folder: '/mods/ModA', metadataFiles: [] }] });
+    expect(heard).toEqual([]);
+
+    streams[0]?.end();
+
+    await vi.waitFor(() => expect(heard).toEqual([{ name: 'Foo.esp', origin: 'A' }, ['ModA']]));
+  });
+
   it('answers a PUT that heard only an older version\'s tick from the process\'s own status', async () => {
     const { response: stream, push } = pushableStreamResponse();
     let answerPut!: (r: Response) => void;
