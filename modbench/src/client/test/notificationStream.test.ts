@@ -3,6 +3,7 @@ import { SseNotificationSubscriber } from '../notificationStream';
 import { toLoadOrderStatus } from '../apiClient';
 import type { NotificationKind } from '../MEditClient';
 import type { NotificationEvent } from '../apiClient';
+import { leveledLog } from '../../test/leveledLog';
 import { present } from '../../ports/present';
 
 function rowsChanged(keys: string[], overrides: Partial<NotificationEvent> = {}): NotificationEvent {
@@ -108,21 +109,56 @@ describe('SseNotificationSubscriber', () => {
     subscriber.stop();
   });
 
-  it('a throwing listener is logged as an error, the other listeners still hear the frame, and the stream stays open', async () => {
+  it('a throwing listener is logged as an error and does not drop the stream, and the listeners after it hear the frame', async () => {
     const event = rowsChanged(['000001:Test.esp']);
     const openStream = vi.fn().mockResolvedValue(streamResponse([sseFrame(event)]));
-    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const log = leveledLog();
     const subscriber = new SseNotificationSubscriber({ openStream, log, reconnectDelayMs: 1000 });
     const heard: unknown[] = [];
     subscriber.onNotification('rows-changed', () => { throw new Error('listener broke'); });
     subscriber.onNotification('rows-changed', (p) => heard.push(p));
 
     subscriber.start();
-    await vi.waitFor(() => expect(heard).toHaveLength(1));
-    await vi.advanceTimersByTimeAsync(0);
+    await vi.waitFor(() => expect(log.lines.info).toContain('[notifications] stream ended; reconnecting'));
 
-    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('listener broke'));
-    expect(log.warn).not.toHaveBeenCalledWith(expect.stringContaining('stream dropped'));
+    expect(heard).toHaveLength(1);
+    expect(log.lines.error.join('\n')).toContain('listener broke');
+    expect(log.lines.warn.join('\n')).not.toContain('stream dropped');
+    subscriber.stop();
+  });
+
+  it('a throwing reopen listener is logged as an error and does not drop the stream, and the listeners after it hear the reopen', async () => {
+    const openStream = vi.fn().mockImplementation(() => Promise.resolve(streamResponse([])));
+    const log = leveledLog();
+    const subscriber = new SseNotificationSubscriber({ openStream, log, reconnectDelayMs: 1000 });
+    const heard = vi.fn();
+    subscriber.onReconnected(() => { throw new Error('reopen listener broke'); });
+    subscriber.onReconnected(heard);
+
+    subscriber.start();
+    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.waitFor(() => expect(log.lines.info).toHaveLength(2));
+
+    expect(heard).toHaveBeenCalledTimes(1);
+    expect(log.lines.error.join('\n')).toContain('reopen listener broke');
+    expect(log.lines.warn.join('\n')).not.toContain('stream dropped');
+    subscriber.stop();
+  });
+
+  it('aborts the attempt when a malformed frame drops it, so the connection does not stay open', async () => {
+    const signals: AbortSignal[] = [];
+    const openStream = vi.fn().mockImplementation((signal: AbortSignal) => {
+      signals.push(signal);
+      return Promise.resolve(streamResponse([frameOfValidJsonMissingTheFieldsAnEventRequires()]));
+    });
+    const log = leveledLog();
+    const subscriber = new SseNotificationSubscriber({ openStream, log, reconnectDelayMs: 100_000 });
+
+    subscriber.start();
+    await vi.waitFor(() => expect(log.lines.warn.join('\n')).toContain('stream dropped'));
+
+    expect(signals[0]?.aborted).toBe(true);
     subscriber.stop();
   });
 
