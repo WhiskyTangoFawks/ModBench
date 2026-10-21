@@ -2,7 +2,7 @@
   "name": "modbench",
   "displayName": "Modbench",
   "description": "Modbench: install and order mods; view, edit, and compare Bethesda plugin files (.esp/.esm/.esl)",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "whiskytangofawks",
   "license": "GPL-3.0-only",
   "icon": "images/medit.png",
