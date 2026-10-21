@@ -21,7 +21,7 @@ describe('InMemoryMEditClient — recorded calls', () => {
 describe('InMemoryMEditClient — unscripted queries fail', () => {
   it('fails a query with no scripted answer, naming it, rather than answering empty', async () => {
     const client = new InMemoryMEditClient();
-    await expect(client.getPlugins()).resolves.toEqual({ failed: 'refused', refusal: expect.stringContaining('getPlugins') });
+    await expect(client.getPlugins()).resolves.toEqual({ failed: 'refused', refusal: 'InMemoryMEditClient: no scripted answer for query "getPlugins"' });
   });
 
   it('does not fall back to an empty answer once scripted, only before, so a test that forgot to script it fails rather than rendering a plausible but wrong tree', async () => {
