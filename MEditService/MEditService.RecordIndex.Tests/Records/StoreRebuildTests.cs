@@ -169,6 +169,7 @@ public sealed class StoreRebuildTests : IDisposable
             if (state == LoadOrderState.Ready) break;
         }
 
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.True(longestRead < filterTakes / 2, $"The longest status read took {longestRead}; the filter takes {filterTakes}.");
     }
 
