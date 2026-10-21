@@ -62,7 +62,10 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
         Assert.Equal(version, index.Status.Version);
         Assert.Contains("Oblivion", index.Status.Message, StringComparison.Ordinal);
-        Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)).Status.State);
+        var published = Assert.Single(StatusesPublished(notifications)).Status;
+        Assert.Equal(LoadOrderState.Failed, published.State);
+        Assert.Equal(version, published.Version);
+        Assert.Equal(index.Status.Message, published.Message);
     }
 
     private static PluginFixtureData AReadThenB() => new PluginFixtureBuilder("cut-short-door")
