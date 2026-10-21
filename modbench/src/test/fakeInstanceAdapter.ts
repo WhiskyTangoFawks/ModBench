@@ -1,6 +1,7 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import {
   filesWinningFirst, type DecideModOrder, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type SourceMods, type OriginFile, type InstallKeys, type PluginOrderChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
@@ -166,11 +167,24 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   let readings = 0;
   let readingFailure: string | undefined;
 
-  const record = <T>(call: AdapterCall, result: T): Promise<T> => {
+  const write = <T>(call: AdapterCall, run: () => T): Promise<T> => {
     calls.push(call);
     const refusal = answers.refusals?.(call);
-    return refusal === undefined ? Promise.resolve(result) : Promise.reject(new Error(refusal));
+    if (refusal !== undefined) return Promise.reject(new Error(refusal));
+    try {
+      return Promise.resolve(run());
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
   };
+  const record = <T>(call: AdapterCall, result: T): Promise<T> => write(call, () => result);
+  const reorderPlugins = (call: AdapterCall, changes: readonly PluginOrderChange[]): Promise<{ wrote: boolean }> =>
+    write(call, () => {
+      const order = pluginOrderAfter(current.pluginOrder, changes);
+      const wrote = JSON.stringify(order) !== JSON.stringify(current.pluginOrder);
+      current = { ...current, pluginOrder: order };
+      return { wrote };
+    });
   const unreadable = <T>(read: keyof NonNullable<InstanceAnswers['unreadReads']>, found: T): Promise<T> => {
     const why = answers.unreadReads?.[read];
     return why === undefined ? Promise.resolve(found) : Promise.reject(new Error(why));
@@ -234,18 +248,23 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     changeModOrder: (profile, decide: DecideModOrder) => {
       const changes = decide(current.mods, current.modFolders);
-      return record({ verb: 'changeModOrder', profile, changes }, { wrote: changes.length > 0, landed: changes });
+      return write({ verb: 'changeModOrder', profile, changes }, () => {
+        const { order, landed } = modOrderAfter(current.mods, changes);
+        const wrote = JSON.stringify(order) !== JSON.stringify(current.mods);
+        current = { ...current, mods: order, modGroups: groupModOrder(order) };
+        return { wrote, landed };
+      });
     },
     changePluginOrder: (profile, decide: DecidePluginOrder) => {
       const changes = decide(current.pluginOrder);
-      return record({ verb: 'changePluginOrder', profile, changes }, { wrote: changes.length > 0 });
+      return reorderPlugins({ verb: 'changePluginOrder', profile, changes }, changes);
     },
     changePluginOrderOverProvided: (profile, decide) => {
       const changes = decide(current.pluginOrder, pluginsProvidedOf(
         filesWinningFirst(current.mods, current.runtimeOutput.files, (mod) => current.modFiles.get(mod)?.files ?? []),
         current.dataFolderPlugins, loadedWithNoLineOf(current.gameRelease, current.creationClubList),
       ));
-      return record({ verb: 'changePluginOrderOverProvided', profile, changes }, { wrote: changes.length > 0 });
+      return reorderPlugins({ verb: 'changePluginOrderOverProvided', profile, changes }, changes);
     },
     markDownloadedFile: (name, mark) =>
       record({ verb: 'markDownloadedFile', name, mark }, answers.goneDownloadedFiles?.has(name) ? { gone: true } as const : { gone: false, wrote: true } as const),
