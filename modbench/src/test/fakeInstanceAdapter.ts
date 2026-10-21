@@ -366,7 +366,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         const target = mark === 'Excluded' ? relativePath + EXCLUSION_MARK : relativePath.slice(0, -EXCLUSION_MARK.length);
         if ([...held.files, ...held.folders].some((one) => one.relativePath === target)) return { gone: false, refusal: `"${target}" is already there.` };
         const renamedPath = (path: string): string => (path === relativePath || path.startsWith(`${relativePath}/`)
-          ? (mark === 'Excluded' ? relativePath + EXCLUSION_MARK : relativePath.slice(0, -EXCLUSION_MARK.length)) + path.slice(relativePath.length)
+          ? target + path.slice(relativePath.length)
           : path);
         const folder = held.folder ?? '';
         withOriginFiles(origin, {

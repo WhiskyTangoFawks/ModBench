@@ -124,13 +124,15 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
     });
 
     it('refuses to include a file whose folder excludes it, which has no suffix of its own', async () => {
-      expect(await adapter.markOriginFile(GAMMA, 'meshes.mohidden/b.nif', 'Included'))
-        .toEqual({ gone: false, refusal: '"meshes.mohidden/b.nif" has no suffix of its own to remove, and its folder excludes it.' });
+      const path = `meshes${adapter.exclusionMark}/b.nif`;
+      expect(await adapter.markOriginFile(GAMMA, path, 'Included'))
+        .toEqual({ gone: false, refusal: `"${path}" has no suffix of its own to remove, and its folder excludes it.` });
     });
 
     it('refuses to mark a file onto a name that is there', async () => {
-      expect(await adapter.markOriginFile(GAMMA, 'x.dds', 'Excluded')).toEqual({ gone: false, refusal: '"x.dds.mohidden" is already there.' });
-      expect(await adapter.markOriginFile(GAMMA, 'x.dds.mohidden', 'Included')).toEqual({ gone: false, refusal: '"x.dds" is already there.' });
+      const marked = `x.dds${adapter.exclusionMark}`;
+      expect(await adapter.markOriginFile(GAMMA, 'x.dds', 'Excluded')).toEqual({ gone: false, refusal: `"${marked}" is already there.` });
+      expect(await adapter.markOriginFile(GAMMA, marked, 'Included')).toEqual({ gone: false, refusal: '"x.dds" is already there.' });
     });
 
     it.each(['../Beta/Taken.esp', 'textures//a.dds', 'textures/../../Beta/Taken.esp', 'textures\\..\\a.dds'])('refuses a path that reaches outside the origin: %s', async (path) => {
