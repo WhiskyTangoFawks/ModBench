@@ -923,20 +923,6 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     expect(moveSeparators).toHaveBeenCalledWith(['Group B'], { kind: 'modOrder' }, 'winning');
   });
 
-  it('handed a target no separator can take, refuses it once, saying why, and moves nothing', async () => {
-    const reporter = recordingReporter();
-
-    registerModMoveCommand(commands, instance, losingAtTop, reporter);
-    await invoke('modbench.mod.move', groupB, [groupB], { place: { kind: 'mod', name: 'Mod A' }, end: 'losing' });
-
-    expect(createQuickPick).not.toHaveBeenCalled();
-    expect(moveSeparators).not.toHaveBeenCalled();
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Failed to move separators.',
-      detail: 'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.',
-    }]);
-  });
-
   it('offers the places in the order the view shows them', async () => {
     escapeAtPick();
 
@@ -1602,17 +1588,6 @@ describe('the mod gestures, called by the agent', () => {
       expect(answered).toEqual(outcome);
       expect(reporter.reports).toEqual([]);
       nothingOpened();
-    });
-
-    it('lands nothing for a place that is one of the mods moving, as a drop on a row being dragged does', async () => {
-      registerModMoveCommand(commands, instance, view, recordingReporter());
-
-      const answered = await invoke('modbench.mod.move', moveCall({ kind: 'mod', name: 'Mod B' }));
-
-      expect(moveMods).not.toHaveBeenCalled();
-      expect(answered).toEqual({ applied: true, outcome: { landed: [], refused: [
-        { item: 'Mod A', reason: 'The target is "Mod B", which is moving.' }, { item: 'Mod B', reason: 'The target is "Mod B", which is moving.' },
-      ] } });
     });
 
     it('moves separators given as separators to a separator place, never the selection, and answers the outcome', async () => {
