@@ -42,6 +42,15 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
     expect(fake.calls).toEqual([]);
   });
 
+  it.each(['B.esp', 'b.ESP'])('a drop on %s, one of the moving plugins, is refused once, and nothing is written', async (target) => {
+    const fake = fakeOver('A.esp', 'B.esp', 'C.esp');
+
+    const result = await pluginCommandsWith(fake.adapter, NOT_INDEXED).reorderPlugins(moving('A.esp', 'B.esp'), { kind: 'before', name: target });
+
+    expect(result).toEqual({ applied: false, refusal: `The target is "${target}", which is moving.` });
+    expect(fake.calls).toEqual([]);
+  });
+
   it('a refusal by the adapter is the refusal the command returns', async () => {
     const fake = fakeInstanceAdapter(readingFixture({ pluginOrder: lines('Base.esp') }), { refusals: refusing('changePluginOrderOverProvided', 'ENOENT: no plugins.txt') });
 
