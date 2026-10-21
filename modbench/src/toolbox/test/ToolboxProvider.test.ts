@@ -48,17 +48,14 @@ describe('the Toolbox view, given an instance value', () => {
     expect(present(profile.command, 'the Profile row\'s command').command).toBe('modbench.profile.switch');
   });
 
-  it('reads "no repository" on the Modlist row while the instance folder holds none, and a click runs git init', () => {
-    const modlist = row(new FakeInstance(VALUE), 'Modlist');
+  it.each([
+    { holdsRepository: false, description: 'no repository' },
+    { holdsRepository: true, description: 'repository' },
+  ])('reads "$description" on the Modlist row while holdsRepository is $holdsRepository, and a click does nothing', ({ holdsRepository, description }) => {
+    const modlist = row(new FakeInstance({ ...VALUE, holdsRepository }), 'Modlist');
 
-    expect([modlist.description, modlist.iconPath, modlist.tooltip, modlist.contextValue, modlist.command?.command])
-      .toEqual(['no repository', new ThemeIcon('source-control'), 'Git init', 'modlist', 'modbench.modlist.gitInit']);
-  });
-
-  it('reads "repository" on the Modlist row while the instance folder holds one, and a click does nothing', () => {
-    const modlist = row(new FakeInstance({ ...VALUE, holdsRepository: true }), 'Modlist');
-
-    expect([modlist.description, modlist.tooltip, modlist.contextValue, modlist.command]).toEqual(['repository', undefined, 'modlist', undefined]);
+    expect([modlist.description, modlist.iconPath, modlist.tooltip, modlist.contextValue, modlist.command])
+      .toEqual([description, new ThemeIcon('source-control'), undefined, 'modlist', undefined]);
   });
 
   it('marks the Profile row as the profile, which the Profile menu\'s `viewItem` clause keys on, so its menu offers switch', () => {

@@ -104,8 +104,7 @@ Update manifest and restore from manifest sit in the Mods view for a selection, 
 | Mods view, title bar overflow | update manifest · restore from manifest…, on every mod |
 | Source Control view, title bar overflow | update manifest · restore from manifest…, on every mod |
 | Source Control view, welcome content with no repository | git init (Git init, story 3) |
-| Toolbox, Modlist row | click: git init, with no repository ([toolbox.md](toolbox.md)) |
-| Toolbox, Modlist menu | update manifest · restore from manifest…, on every mod |
+| Toolbox, Modlist menu | git init, with no repository · update manifest · restore from manifest…, on every mod |
 
 Each item but git init shows while the instance has a repository.
 
