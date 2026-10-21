@@ -396,6 +396,38 @@ public sealed class ReconcileDoorTests
         }
     }
 
+    private sealed class ValidationCounting() : DelegatingPluginAdapter(TestAdapters.Mutagen())
+    {
+        private int _validated;
+
+        public int Validated => Volatile.Read(ref _validated);
+
+        public override bool Exists(string pluginPath)
+        {
+            Interlocked.Increment(ref _validated);
+            return base.Exists(pluginPath);
+        }
+    }
+
+    [Fact]
+    public async Task ArrivalsDuringAReconcile_AreReconciledOnceAfterIt()
+    {
+        using var data = new PluginFixtureBuilder("coalesced-door").WithPlugin("A.esp").Build();
+        var validations = new ValidationCounting();
+        var holder = new LoadOrderHolder();
+        using var gate = new GatedPluginAdapter(gateBefore: "A.esp", inner: validations);
+        using var index = Indexes.Open(holder, gate);
+        holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        await gate.WaitUntilParkedAsync();
+
+        for (var i = 0; i < 5; i++) holder.Apply(holder.Current);
+        gate.Release();
+        Waits.Reached(() => validations.Validated > 0 && index.Status.State == LoadOrderState.Ready, "the reconcile after the arrivals");
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+
+        Assert.Equal(1, validations.Validated);
+    }
+
     [Fact]
     public void AnAppliedLoadOrder_IsReconciledOffTheAppliersThread_UntilTheStatusAnswersItsVersion()
     {

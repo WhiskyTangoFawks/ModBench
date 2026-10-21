@@ -2,6 +2,7 @@ using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex.Tests.Indexing;
@@ -30,6 +31,36 @@ public class PluginReadInterruptionTests
         var disposing = Task.Run(index.Dispose);
 
         Assert.Same(disposing, await Task.WhenAny(disposing, Task.Delay(TimeSpan.FromSeconds(5))));
+    }
+
+    [Fact]
+    public async Task DisposingTheIndexWhileAReadIgnoresIt_WaitsForTheRead_OnlyUntilTheCloseLimit()
+    {
+        using var fixture = LongPlugin("read-ignores-disposal");
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var holder = new LoadOrderHolder();
+        var reading = new TaskCompletionSource();
+        using var stuck = new ManualResetEventSlim();
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 2, () =>
+        {
+            reading.TrySetResult();
+            stuck.Wait(TimeSpan.FromMinutes(1));
+        }), timeProvider: clock);
+        try
+        {
+            holder.Apply(LoadOrderArrival.Snapshot(fixture.DataFolder, instanceRoot: null, GameRelease.Fallout4, fixture.Plugins));
+            await reading.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+            var disposing = Task.Run(index.Dispose);
+
+            Assert.False(await Waits.CompletesWithin(disposing, TimeSpan.FromMilliseconds(300)), "the close waiting for the read");
+            clock.Advance(TimeSpan.FromSeconds(10));
+            Assert.True(await Waits.CompletesWithin(disposing, TimeSpan.FromSeconds(5)), "the close returning once its limit passed");
+        }
+        finally
+        {
+            stuck.Set();
+        }
     }
 
     [Fact]

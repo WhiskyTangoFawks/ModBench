@@ -130,8 +130,11 @@ internal sealed class Indexer : IDisposable
     private readonly CancellationTokenSource _disposal = new();
     private bool _disposed;
 
+    // One worker keeps the index current, one turn at a time: a reconcile when one was asked for, else
+    // the paths handed. Asks made during a turn coalesce into the next. Guarded by _lock.
+    private bool _reconcileAsked;
     private readonly List<string> _handed = [];
-    private bool _validatingHanded;
+    private bool _working;
 
     // The arrivals the last whole reconcile read the disk after, guarded by _lock and pulsed on _reconciled, which a
     // read after a source write waits on.
@@ -146,20 +149,35 @@ internal sealed class Indexer : IDisposable
     // Always paired with ExitExclusive in a finally.
     private void EnterExclusive()
     {
-        // Cancel and dispose both happen under _lock, so a token can never be cancelled after it has
-        // been disposed.
-        lock (_lock)
-        {
-            if (_reconcileCancellation is { } inFlight)
-            {
-                inFlight.Cancel();
-                _logger.LogDebug("Asked the reconcile in flight to stop");
-            }
-        }
+        lock (_lock) CancelInFlight();
         _exclusive.Enter();
     }
 
+    // Cancel and dispose both happen under _lock, so a token can never be cancelled after it has
+    // been disposed.
+    private void CancelInFlight()
+    {
+        if (_reconcileCancellation is not { } inFlight) return;
+        inFlight.Cancel();
+        _logger.LogDebug("Asked the reconcile in flight to stop");
+    }
+
     private void ExitExclusive() => _exclusive.Exit();
+
+    // A read that ignores cancellation, as a Mutagen read can, would otherwise hold closing mEdit, and
+    // the record index file with it, for ever.
+    private static readonly TimeSpan CloseLimit = TimeSpan.FromSeconds(10);
+
+    private bool EnterExclusiveWithin(TimeSpan limit)
+    {
+        lock (_lock) CancelInFlight();
+        var deadline = _timeProvider.GetUtcNow() + limit;
+        while (!_exclusive.TryEnter(SequencePollInterval))
+        {
+            if (_timeProvider.GetUtcNow() >= deadline) return false;
+        }
+        return true;
+    }
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
@@ -260,59 +278,72 @@ internal sealed class Indexer : IDisposable
     }
 
     /// <summary>A read met DuckDB's invalidation: reconciling reopens the store (ADR-0003).</summary>
-    public void RecoverFromInvalidation() => StartReconcile();
+    public void RecoverFromInvalidation() => AskReconcile();
 
-    // ADR-0013: every arrival, changed or not, reconciles the snapshot held when it runs, so an
+    // ADR-0013: every arrival, changed or not, reconciles the snapshot held when its turn runs, so an
     // overtaken arrival reconciles the newer.
-    private void StartReconcile() =>
-        Task.Factory.StartNew(ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    private void AskReconcile()
+    {
+        lock (_lock)
+        {
+            _reconcileAsked = true;
+            CancelInFlight();
+            WakeWorker();
+        }
+    }
 
     // ADR-0015: a handed path is validated as a change on disk is. A reconcile in flight is waited out,
-    // never cancelled; paths handed meanwhile are validated together.
+    // never cancelled.
     private void ValidateTreesHolding(IReadOnlyList<string> paths)
     {
         lock (_lock)
         {
             _handed.AddRange(paths);
-            if (_validatingHanded) return;
-            _validatingHanded = true;
+            WakeWorker();
         }
-        Task.Factory.StartNew(ValidateHanded, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    private void ValidateHanded()
+    private void WakeWorker()
     {
-        try
-        {
-            while (true)
-            {
-                List<string> paths;
-                lock (_lock)
-                {
-                    if (_handed.Count == 0 || _disposed)
-                    {
-                        _validatingHanded = false;
-                        return;
-                    }
-                    paths = [.. _handed];
-                    _handed.Clear();
-                }
+        if (_working || _disposed) return;
+        _working = true;
+        Task.Factory.StartNew(Work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    }
 
-                try { ValidateAndPublish(paths); }
-                catch (Exception ex) when (!CancelledBy(ex, CancellationToken.None))
+    private void Work()
+    {
+        while (NextTurn() is { } turn)
+        {
+            try { turn(); }
+            catch (Exception ex) when (!CancelledBy(ex, CancellationToken.None))
+            {
+                _logger.LogError(ex, "Keeping the record index current failed unexpectedly");
+                try { PublishStatus(); }
+                catch (Exception publishFault) when (!CancelledBy(publishFault, CancellationToken.None))
                 {
-                    _logger.LogError(ex, "Handing over the documents failed unexpectedly");
-                    try { PublishStatus(); }
-                    catch (Exception publishFault) when (!CancelledBy(publishFault, CancellationToken.None))
-                    {
-                        _logger.LogError(publishFault, "Publishing the status after a failed hand-over failed");
-                    }
+                    _logger.LogError(publishFault, "Publishing the status after a failed turn failed");
                 }
             }
         }
-        catch (OperationCanceledException) when (_disposal.IsCancellationRequested)
+    }
+
+    private Action? NextTurn()
+    {
+        lock (_lock)
         {
-            return;
+            if (_disposed || (!_reconcileAsked && _handed.Count == 0))
+            {
+                _working = false;
+                return null;
+            }
+            if (_reconcileAsked)
+            {
+                _reconcileAsked = false;
+                return ReconcileHeld;
+            }
+            List<string> paths = [.. _handed];
+            _handed.Clear();
+            return () => ValidateAndPublish(paths);
         }
     }
 
@@ -405,7 +436,7 @@ internal sealed class Indexer : IDisposable
     private bool ReconcileOrRefuse(
         Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long arrivals, out bool refused)
     {
-        EnterExclusive();
+        _exclusive.Enter();
         var token = CancellationToken.None;
         var superseded = false;
         var progressed = false;
@@ -1191,7 +1222,7 @@ internal sealed class Indexer : IDisposable
             var handedOut = Sequence;
             if (!Close())
             {
-                StartReconcile();
+                AskReconcile();
                 return false;
             }
             heldElsewhere = whileClosed(new ClosedStore(_storeFactory, handedOut));
@@ -1199,7 +1230,7 @@ internal sealed class Indexer : IDisposable
             Swap(standing => standing with { HeldElsewhere = refusal });
         }
         finally { ExitExclusive(); }
-        if (heldElsewhere is null) StartReconcile();
+        if (heldElsewhere is null) AskReconcile();
         else PublishStatus();
         return true;
     }
@@ -1210,7 +1241,7 @@ internal sealed class Indexer : IDisposable
         _unsaved.Arrived += ValidateTreesHolding;
     }
 
-    private void OnArrived(LoadOrderSnapshot snapshot, long version) => StartReconcile();
+    private void OnArrived(LoadOrderSnapshot snapshot, long version) => AskReconcile();
 
     // False when a read outlived Store.EndReads: that index stays open, so nothing opens a store on
     // its file.
@@ -1253,7 +1284,13 @@ internal sealed class Indexer : IDisposable
         }
 
         _disposal.Cancel();
-        EnterExclusive();
+        if (!EnterExclusiveWithin(CloseLimit))
+        {
+            _logger.LogWarning(
+                "Closed with a read of the record index still running after {Seconds}s; the process's exit releases its file",
+                CloseLimit.TotalSeconds);
+            return;
+        }
         try
         {
             OpenScope? closing;
