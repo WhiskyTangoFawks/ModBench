@@ -160,17 +160,18 @@ const sentence = (reason: string): string => ` ${reason.charAt(0).toUpperCase()}
 
 async function namedGameFiles(
   adapter: Adapter, folder: NamedGameFolder | string, notFound: readonly NotFound[],
-): Promise<{ found: readonly GameFile[]; unread: (mod: string) => string }> {
+): Promise<{ found: readonly GameFile[]; unread: (mod: string) => string; unreadReason: (mod: string) => string | undefined }> {
   const found = new Map<string, GameFile>();
   const unread = new Map<string, string>();
+  const unreadReason = new Map<string, string>();
   for (const { mod, gameFiles } of notFound) {
     if (gameFiles.length === 0) continue;
     if (typeof folder === 'string') { unread.set(mod, sentence(folder)); continue; }
     const read = await adapter.gameFiles(folder.dataFolder, gameFiles);
-    if (read.kind === 'unreadable') { unread.set(mod, ` The game files could not be read: ${read.reason}.`); continue; }
+    if (read.kind === 'unreadable') { unreadReason.set(mod, `was skipped: its game files could not be read: ${read.reason}.`); continue; }
     for (const file of read.answer) found.set(file.path.toLowerCase(), file);
   }
-  return { found: [...found.values()], unread: (mod) => unread.get(mod) ?? '' };
+  return { found: [...found.values()], unread: (mod) => unread.get(mod) ?? '', unreadReason: (mod) => unreadReason.get(mod) };
 }
 
 async function namedDownloadedFiles(adapter: Adapter, notFound: readonly NotFound[]): Promise<{
@@ -331,7 +332,9 @@ async function restoreFolders(
     landed: [...first.landed, ...second.landed],
     refused: [
       ...firstRefused,
-      ...second.refused.map((refused) => ({ ...refused, reason: refused.reason + (unreadFor.get(refused.item) ?? '') })),
+      ...second.refused.map((refused) => ({
+        ...refused, reason: (named.unreadReason(refused.item) ?? refused.reason) + (unreadFor.get(refused.item) ?? ''),
+      })),
       ...read.refused,
     ],
     ...cancelRefused(second.cancelRefusal, cancelRefusal),

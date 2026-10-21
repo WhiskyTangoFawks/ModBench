@@ -382,7 +382,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     expect(outcome).toMatchObject({
       landed: [{ mod: 'ModB' }],
-      refused: [{ item: 'ModA', reason: 'was skipped: game file is missing. The game files could not be read: EACCES.' }],
+      refused: [{ item: 'ModA', reason: 'was skipped: its game files could not be read: EACCES.' }],
     });
   });
 
