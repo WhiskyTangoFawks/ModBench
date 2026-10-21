@@ -216,7 +216,12 @@ public sealed class UnsavedDocumentTests : IDisposable
     [Fact]
     public void AHandOverWhoseStatusPublishIsCancelledOutsideDisposal_LeavesTheNextHandOverValidated()
     {
-        var statusCancelled = Faults.InTurn(typeof(OperationCanceledException));
+        using var secondHandedOver = new ManualResetEventSlim();
+        var statusCancelled = Faults.InTurn(() =>
+        {
+            secondHandedOver.Wait(TimeSpan.FromMinutes(1));
+            throw new OperationCanceledException();
+        });
         var notifications = new InMemoryNotificationPublisher();
         using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: notifications);
         notifications.OnPublish = Faults.On(IsRowsChanged, Faults.Of(typeof(InvalidOperationException)))
@@ -226,6 +231,7 @@ public sealed class UnsavedDocumentTests : IDisposable
 
         notifications.OnPublish = null;
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedAgain\""))]);
+        secondHandedOver.Set();
 
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");
     }
