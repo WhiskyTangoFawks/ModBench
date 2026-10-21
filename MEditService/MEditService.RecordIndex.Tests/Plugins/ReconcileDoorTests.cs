@@ -201,6 +201,54 @@ public sealed class ReconcileDoorTests
     }
 
     [Fact]
+    public void AStatusThatFailsToPublish_StrandsNeitherTheReconcileNorTheNext()
+    {
+        using var data = new PluginFixtureBuilder("publish-fault-door").WithPlugin("A.esp").Build();
+        var notifications = new InMemoryNotificationPublisher { FaultsOn = n => n is LoadOrderStatusNotification };
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, notifications: notifications);
+        var first = holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        index.AwaitVersion(first);
+        notifications.FaultsOn = null;
+
+        var second = holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, []));
+
+        Assert.True(
+            Waits.ReachedWithin(() => index.Status.Version >= second && index.Status.State == LoadOrderState.Ready, TimeSpan.FromSeconds(30)),
+            "the next reconcile answering after a status failed to publish");
+    }
+
+    [Fact]
+    public async Task AFailureCleared_ByAnAttemptSupersededBeforeItsClosingSwap_IsToldByItsSuccessor()
+    {
+        using var data = new PluginFixtureBuilder("superseded-untold-door")
+            .WithPlugin("NonCompiledPlugin.esp", mod => mod.Npcs.AddNew("FromA"))
+            .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("FromOther"))
+            .Build();
+        var notifications = new InMemoryNotificationPublisher { FaultsOn = n => n is PluginChangedNotification };
+        var holder = new LoadOrderHolder();
+        using var gate = new GatedPluginAdapter();
+        using var index = Indexes.Open(holder, gate, notifications: notifications);
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        PluginBinaries.Rewrite(data.Plugins[0].Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
+        index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Failed, "the failed status");
+        notifications.FaultsOn = null;
+        PluginBinaries.Rewrite(data.Plugins[0].Path, mod => mod.Npcs.AddNew("WrittenAgain"));
+        gate.ParkNextOpenOf(data.Plugins[0].Name);
+        holder.Apply(holder.Current);
+        Assert.True(await Waits.CompletesWithin(gate.WaitUntilParkedAsync(), TimeSpan.FromSeconds(20)), "the validation re-reading the plugin");
+
+        holder.Apply(holder.Current);
+        await Task.Delay(300);
+        gate.Release();
+
+        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the successor answering Ready");
+        Assert.True(
+            Waits.ReachedWithin(() => StatusesPublished(notifications).LastOrDefault()?.Status.State == LoadOrderState.Ready, TimeSpan.FromSeconds(20)),
+            "the successor publishing the Ready it answers");
+    }
+
+    [Fact]
     public void AReconcileThatStillFails_IsTriedOncePerEqualSnapshot()
     {
         using var data = new PluginFixtureBuilder("retry-once-door").WithPlugin("A.esp").Build();

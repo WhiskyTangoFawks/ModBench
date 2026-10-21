@@ -69,9 +69,6 @@ internal sealed class Indexer : IDisposable
     private int _plannedCount;
     private int _activeCount;
     private IReadOnlyList<PluginLoadFailure> _collisionFailures = [];
-    // Version: the one the reconcile door last finished answering for, never a superseded attempt's.
-    // The refusals are cleared at the top of every attempt: a repeated refusal re-sets it a moment
-    // later, a successful one leaves it clear.
     private sealed record Standing(long Version, string? HeldElsewhere, string? Failure, string? HandOverFailure)
     {
         public Standing WithoutRefusals() => this with { HeldElsewhere = null, Failure = null, HandOverFailure = null };
@@ -80,19 +77,43 @@ internal sealed class Indexer : IDisposable
     // Replaced whole under _lock, never edited in place, so a reader sees a version with its own refusals.
     private Standing _standing = new(0, null, null, null);
 
-    // Swaps under _lock and publishes (ADR-0015). Only an attempt's opening clear is quiet: its closing
-    // swap publishes, and a retry that fails again must not flicker the failure away in between.
-    private bool Swap(Func<Standing, Standing> change, bool publish = true)
+    private bool Swap(Func<Standing, Standing> change)
     {
         lock (_lock)
         {
             var next = change(_standing);
             if (next == _standing) return false;
             _standing = next;
-            if (publish) PublishStatus();
             return true;
         }
     }
+
+    private (long Version, LoadOrderState State, string? Message) _told;
+
+    // ADR-0015: every site that changes what Status reports calls this after, outside the exclusive
+    // right, so a publisher that throws strands nothing. _lock is reentrant, so this is safe to call
+    // from inside a lock a caller already holds.
+    private void PublishStatus()
+    {
+        LoadOrderStatus status;
+        lock (_lock)
+        {
+            status = Status;
+            _told = (status.Version, status.State, status.Message);
+        }
+        _notifications?.Publish(new LoadOrderStatusNotification(status));
+    }
+
+    // A swap whose publish never came, such as a superseded attempt's, is told by the next attempt's close.
+    private bool Untold()
+    {
+        lock (_lock)
+        {
+            var status = Status;
+            return _told != (status.Version, status.State, status.Message);
+        }
+    }
+
     // A detached index whose reads outlived the drain: it stays open, so a retry drains it again
     // before any store is opened on its path.
     private OpenScope? _undrained;
@@ -210,9 +231,6 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // ADR-0015: every site that changes what Status reports calls this after. _lock is reentrant,
-    // so this is safe to call from inside a lock a caller already holds.
-    private void PublishStatus() => _notifications?.Publish(new LoadOrderStatusNotification(Status));
 
     public long Sequence { get { lock (_lock) return _scope?.Store.Sequence ?? 0; } }
 
@@ -295,13 +313,15 @@ internal sealed class Indexer : IDisposable
 
     private void ValidateAndPublish(List<string> paths)
     {
+        bool moved;
         _exclusive.Enter();
         try
         {
             var failure = ValidationFailure(() => ValidateTreesOf(paths), CancellationToken.None, out _);
-            Swap(standing => standing with { HandOverFailure = failure });
+            moved = Swap(standing => standing with { HandOverFailure = failure });
         }
         finally { _exclusive.Exit(); }
+        if (moved) PublishStatus();
     }
 
     private void ValidateTreesOf(List<string> paths)
@@ -324,13 +344,11 @@ internal sealed class Indexer : IDisposable
     private void Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival)
     {
         long arrivals = 0;
+        bool arrived;
+        bool refused;
         try
         {
-            if (!ReconcileOrRefuse(arrival, ref arrivals, out var refused)) return;
-            if (!refused)
-            {
-                lock (_lock) _arrivalReconciled = Math.Max(_arrivalReconciled, arrivals);
-            }
+            arrived = ReconcileOrRefuse(arrival, ref arrivals, out refused);
         }
         catch (OperationCanceledException ex)
         {
@@ -340,7 +358,14 @@ internal sealed class Indexer : IDisposable
             _logger.LogInformation(ex, "Load order reconcile was superseded before it completed");
             return;
         }
-        lock (_reconciled) Monitor.PulseAll(_reconciled);
+        if (arrived)
+        {
+            if (!refused)
+            {
+                lock (_lock) _arrivalReconciled = Math.Max(_arrivalReconciled, arrivals);
+            }
+            lock (_reconciled) Monitor.PulseAll(_reconciled);
+        }
     }
 
     // ADR-0015, read-your-writes: a source write reaches the record index through the next snapshot, so a read after one waits
@@ -372,8 +397,8 @@ internal sealed class Indexer : IDisposable
 
     // A superseded reconcile throws OperationCanceledException, leaving its work for its
     // successor; a second window's hold is answered in the status. False when the arrival
-    // resolved to none. The status is published here, with its version and refusals swapped in
-    // together, once the plugins are validated (ADR-0003).
+    // resolved to none. The closing swap and its publish share one hold of _lock, so a reader cannot
+    // see the version before the status answering it is out.
     private bool ReconcileOrRefuse(
         Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long arrivals, out bool refused)
     {
@@ -399,7 +424,7 @@ internal sealed class Indexer : IDisposable
 
             // A fresh attempt starting: whatever the previous attempt's own refusal set is stale the
             // moment this one is asked for, whichever way this one goes.
-            progressed = Swap(standing => standing.WithoutRefusals(), publish: false);
+            progressed = Swap(standing => standing.WithoutRefusals());
             token = BeginReconcile();
             if (EnsureScope(snapshot, out heldElsewhere, out failure) is not { } scope)
             {
@@ -430,21 +455,24 @@ internal sealed class Indexer : IDisposable
         {
             EndReconcile();
             refused = heldElsewhere is not null || failure is not null;
-            if (!superseded)
+            try
             {
-                lock (_lock)
+                if (!superseded)
                 {
-                    _validating = false;
-                    var swapped = Swap(standing => standing with
+                    lock (_lock)
                     {
-                        Version = Math.Max(standing.Version, version),
-                        HeldElsewhere = heldElsewhere ?? standing.HeldElsewhere,
-                        Failure = failure ?? standing.Failure,
-                    });
-                    if (progressed && !swapped) PublishStatus();
+                        _validating = false;
+                        var swapped = Swap(standing => standing with
+                        {
+                            Version = Math.Max(standing.Version, version),
+                            HeldElsewhere = heldElsewhere ?? standing.HeldElsewhere,
+                            Failure = failure ?? standing.Failure,
+                        });
+                        if (swapped || progressed || Untold()) PublishStatus();
+                    }
                 }
             }
-            ExitExclusive();
+            finally { ExitExclusive(); }
         }
     }
 
@@ -1164,11 +1192,12 @@ internal sealed class Indexer : IDisposable
                 return false;
             }
             heldElsewhere = whileClosed(new ClosedStore(_storeFactory, handedOut));
-            var held = heldElsewhere;
-            Swap(standing => standing with { HeldElsewhere = held });
+            var refusal = heldElsewhere;
+            Swap(standing => standing with { HeldElsewhere = refusal });
         }
         finally { ExitExclusive(); }
         if (heldElsewhere is null) StartReconcile();
+        else PublishStatus();
         return true;
     }
 
