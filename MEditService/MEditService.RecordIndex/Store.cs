@@ -134,7 +134,7 @@ internal sealed class Store : IDisposable
     {
         lock (_readsGate)
         {
-            ObjectDisposedException.ThrowIf(_closedToReads, this);
+            if (_closedToReads) throw new IndexNotReadyException("mEdit's record index is closed to new reads while it is replaced.");
             var connection = _databasePath == null ? Connection.Duplicate() : new DuckDBConnection($"DataSource={_databasePath}");
             connection.Open();
             _readsInFlight++;
