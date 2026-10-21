@@ -7,6 +7,8 @@ import { errorMessage } from '../ports/errorMessage';
 // Dispatching for the one stream kind this file opens (SSE); `whenConnected`'s
 // default answer below is settled, which `SseNotificationSubscriber` overrides with its own.
 class NotificationListenerRegistry {
+  constructor(protected readonly log: Log) {}
+
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
     'load-order-status': new Set(), 'decompile-and-commit-progress': new Set(), 'update-manifest-progress': new Set(), 'restore-from-manifest-progress': new Set(), 'external-change': new Set(),
     'plugin-source-unreadable': new Set(), 'record-filter-cleared': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
@@ -67,7 +69,17 @@ class NotificationListenerRegistry {
   }
 
   private deliver<K extends NotificationKind>(kind: K, payload: NotificationPayloads[K]): void {
-    for (const listener of this.typedListeners[kind]) listener(payload);
+    for (const listener of this.typedListeners[kind]) this.callListener(kind, () => listener(payload));
+  }
+
+  // One listener's throw is a failure to report, never the stream's: the listeners after it
+  // still hear, and the stream stays open.
+  protected callListener(what: string, call: () => void): void {
+    try {
+      call();
+    } catch (e) {
+      this.log.error(`[notifications] a ${what} listener threw: ${errorMessage(e)}`);
+    }
   }
 }
 
@@ -150,7 +162,6 @@ function delay(ms: number): Promise<void> {
  *  idempotent and follow the backend's status; a dropped or ended stream reconnects on its
  *  own, on `reconnectDelayMs`, until `stop()` ends the loop. */
 export class SseNotificationSubscriber extends NotificationListenerRegistry {
-  private readonly log: Log;
   private readonly reconnectDelayMs: number;
   private abortController: AbortController | undefined;
   private stopped = true;
@@ -163,8 +174,7 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
   private readonly reopenListeners = new Set<() => void>();
 
   constructor(private readonly deps: SseNotificationSubscriberDeps) {
-    super();
-    this.log = deps.log ?? SILENT_LOG;
+    super(deps.log ?? SILENT_LOG);
     this.reconnectDelayMs = deps.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS;
   }
 
@@ -217,7 +227,7 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
     if (this.generation !== generation) return;
     const reopened = this.openedThisStart;
     this.openedThisStart = true;
-    if (reopened) for (const listener of [...this.reopenListeners]) listener();
+    if (reopened) for (const listener of [...this.reopenListeners]) this.callListener('reconnected', listener);
   }
 
   private async connectOnce(generation: number): Promise<void> {
@@ -242,6 +252,8 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
       // A failed attempt releases the waiting caller too: no stream is a degraded load, not a
       // stalled one.
       settleConnected();
+      // A dropped attempt leaves its socket open on both sides unless aborted.
+      controller.abort();
     }
   }
 }
