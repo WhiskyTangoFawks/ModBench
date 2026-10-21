@@ -148,7 +148,6 @@ export function modFoldersOf(...entries: readonly (string | (EntryRef & { modNam
 const foldersHolding = (all: readonly ModFolder[]): ModFolders =>
   ({ all, holding: (entry) => all.find((folder) => entryKey(folder) === entryKey(entry)) });
 
-/** Where a folder of the given name is: beside the folders held, or under `/mods`. */
 function folderBeside(folders: ModFolders | undefined, name: string): string {
   const held = folders?.all[0]?.path ?? '/mods/';
   return `${held.slice(0, Math.max(held.lastIndexOf('/'), held.lastIndexOf('\\')))}/${name}`;
@@ -157,7 +156,7 @@ function folderBeside(folders: ModFolders | undefined, name: string): string {
 const separatorFolderOf = (folders: ModFolders | undefined, separator: string): ModFolder =>
   ({ kind: 'separator', name: separator, path: folderBeside(folders, `${separator}_separator`), modName: `${separator}_separator` });
 
-/** A separator's folder is made with its line and moves with it; a mod's folder is left where it is. */
+// MO2 makes a separator's folder with its line and moves it with the line; a mod's folder is left where it is.
 function separatorFoldersAfter(folders: ModFolders | undefined, landed: readonly ModOrderChange[]): ModFolders | undefined {
   return landed.reduce((held, change) => {
     const all = held?.all ?? [];
