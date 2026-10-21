@@ -83,12 +83,6 @@ describe('downloadedFileReader, spawning the binary itself', () => {
     expect(await argvAsked()).toEqual(['l', '-slt', '-ba', '-sccUTF-8', '/tmp/mod.7z']);
   });
 
-  it('rejects a listing with the exit code in the message when the binary exits non-zero', async () => {
-    fakeNodeAs7zPreloadedToExit(2);
-
-    await expect(downloadedFileReader.list('/tmp/bad.7z')).rejects.toThrow(/Failed to list \/tmp\/bad\.7z.*exited with code 2/);
-  });
-
   it.each([
     ['carries 7z\'s stderr, trimmed, as why', 'ERROR: /tmp/bad.7z : opening : errno=13 : Permission denied\n', /Failed to list \/tmp\/bad\.7z: ERROR: .*Permission denied$/],
     ['keeps the exit code when 7z writes nothing to stderr', '', /Failed to list \/tmp\/bad\.7z: .*exited with code 2$/],
