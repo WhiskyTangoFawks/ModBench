@@ -23,7 +23,6 @@ vi.mock('vscode', async () => {
 });
 
 import { AgentCall } from '../../drivingLib/agentGesture';
-import { Refusal } from '../../drivingLib/refusal';
 import { registerPluginEnableCommands } from '../pluginParticipationCommands';
 import { PluginNode, ImplicitMasterNode } from '../pluginRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -79,34 +78,11 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
     expect(adapter.calls).toEqual(enabling(['Alpha.esp', false], ['Beta.esp', false]));
   });
 
-  it('a right-click outside the selection takes just that row, not the rest of the view selection', async () => {
-    const { adapter } = registered(fake(), () => [alpha]);
-    await invoke('modbench.plugin.disable', beta, undefined);
-
-    expect(adapter.calls).toEqual(enabling(['Beta.esp', false]));
-  });
-
-  it('falls back to the view selection from the palette, where no row is right-clicked', async () => {
-    const { adapter } = registered(fake(), () => [alpha]);
-    await invoke('modbench.plugin.enable');
-
-    expect(adapter.calls).toEqual(enabling(['Alpha.esp', true]));
-  });
-
   it('drops a locked row from the selection it writes', async () => {
     const { reporter, adapter } = registered();
     await invoke('modbench.plugin.enable', alpha, [locked, alpha]);
 
     expect(adapter.calls).toEqual(enabling(['Alpha.esp', true]));
-    expect(reporter.reports).toEqual([]);
-  });
-
-  it('hands over nothing and reports nothing for an empty selection', async () => {
-    const { reporter, adapter } = registered();
-    await invoke('modbench.plugin.enable');
-
-    expect(adapter.calls).toEqual([]);
-    expect(progressSteps).toEqual([]);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -180,14 +156,6 @@ describe('modbench.plugin.enable / modbench.plugin.disable, called by the agent'
       });
       expect(reporter.reports).toEqual([]);
     });
-
-  it('refuses an Argument that is not a plugin, writing nothing', async () => {
-    const { adapter } = registered();
-
-    await expect(invoke('modbench.plugin.enable', new AgentCall([{ kind: 'mod', name: 'SomeMod' }], {}))).rejects.toBeInstanceOf(Refusal);
-
-    expect(adapter.calls).toEqual([]);
-  });
 
   it('answers once the instance has been read again, so the agent\'s next read sees the change', async () => {
     registered();

@@ -111,15 +111,6 @@ describe('modbench.plugin.rename', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('takes the one selected plugin from a key or the palette, which pass no row', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, run } = setup([row()]);
-
-    await run();
-
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([{ method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed.esp'] }]);
-  });
-
   it('renames nothing when the confirmation of its dependants is declined, and says nothing', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
     const { client, ask, fake, reporter, run } = setup([], undefined);

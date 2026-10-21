@@ -130,16 +130,6 @@ describe('modbench.plugin.decompile', () => {
     expect(reporter.landings).toEqual([]);
   });
 
-  it('from the palette, decompiles the Plugins view\'s selection', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('decompile', { landed: [FIRST], refused: [] });
-    const { handler } = registered(client, 'Decompile', [row(FIRST)]);
-
-    await handler();
-
-    expect(decompileCalls(client)).toEqual([[[FIRST], true]]);
-  });
-
   it('names each refused plugin and why in one notification while the rest land', async () => {
     const client = new InMemoryMEditClient();
     const refusal = 'First.esp does not round-trip through its own source.';

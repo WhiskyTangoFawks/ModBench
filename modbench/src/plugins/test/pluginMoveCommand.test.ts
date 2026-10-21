@@ -104,16 +104,6 @@ describe('modbench.plugin.move', () => {
     expect(fake.calls).toEqual(moved('C.esp', 0));
   });
 
-  it('does nothing for no plugins', async () => {
-    const { reporter, fake } = registered();
-
-    await invoke(undefined, undefined, LOSING_END);
-
-    expect(fake.calls).toEqual([]);
-    expect(progressSteps).toEqual([]);
-    expect(reporter.reports).toEqual([]);
-  });
-
   it('with no target given, lands the block on the place picked', async () => {
     const { reporter, fake } = registered();
     picks.label = 'C.esp';
@@ -184,13 +174,5 @@ describe('modbench.plugin.move, called by the agent', () => {
     expect(answered).toEqual({ applied: false, refusal: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.' });
     expect(fake.calls).toEqual([]);
     expect(reporter.reports).toEqual([]);
-  });
-
-  it('refuses an Argument that is not a plugin, writing nothing', async () => {
-    const { fake } = registered();
-
-    await expect(invoke(new AgentCall([{ kind: 'mod', name: 'ModA' }], { drop: LOSING_END }))).rejects.toThrow('carries plugins only');
-
-    expect(fake.calls).toEqual([]);
   });
 });

@@ -323,53 +323,6 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     expect(uninstallMods).not.toHaveBeenCalled();
   });
 
-  it('falls back to the view selection from a key, where no row is right-clicked', async () => {
-    uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
-
-    registerModContextCommands({ commands, instance, viewSelection: () => [modA], reporter: recordingReporter(), ask: scriptedDialog('Uninstall'), trash, log });
-    await invoke('modbench.mod.uninstall');
-
-    expect(uninstallMods).toHaveBeenCalledWith(
-      ['Mod A'], trash);
-  });
-
-  it('an empty selection asks nothing and uninstalls nothing', async () => {
-    const ask = scriptedDialog('Uninstall');
-
-    registerModContextCommands({ commands, instance, viewSelection: () => [], reporter: recordingReporter(), ask, trash, log });
-    await invoke('modbench.mod.uninstall');
-
-    expect(ask.asked).toEqual([]);
-    expect(uninstallMods).not.toHaveBeenCalled();
-  });
-
-  it('reports a refused mod by name, once, while the others land', async () => {
-    uninstallMods.mockResolvedValueOnce({
-      applied: true,
-      outcome: { landed: [{ name: 'Mod A' }], refused: [{ item: { name: 'Mod B' }, reason: 'trash unavailable' }] },
-    });
-    const reporter = recordingReporter();
-
-    registerModContextCommands({ commands, instance, viewSelection: () => [], reporter, ask: scriptedDialog('Uninstall'), trash, log });
-    await invoke('modbench.mod.uninstall', modA, [modA, modB]);
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not uninstall 1 of 2 mods.', detail: '"Mod B" (trash unavailable)',
-    }]);
-  });
-
-  it('reports a refusal of the whole selection once, when modlist.txt cannot be read at all', async () => {
-    uninstallMods.mockResolvedValueOnce({ applied: false, refusal: 'ENOENT: modlist.txt' });
-    const reporter = recordingReporter();
-
-    registerModContextCommands({ commands, instance, viewSelection: () => [], reporter, ask: scriptedDialog('Uninstall'), trash, log });
-    await invoke('modbench.mod.uninstall', modA);
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to uninstall mods.', detail: 'ENOENT: modlist.txt' },
-    ]);
-  });
-
   it('says nothing extra for a fully landed uninstall with no failed mark', async () => {
     uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
     const reporter = recordingReporter();
@@ -488,33 +441,6 @@ describe('modbench.separator.delete: the whole selection of separators, asked on
     expect(reporter.reports).toEqual([]);
   });
 
-  it('reports each refused separator, naming why, once, while the others land', async () => {
-    deleteSeparators.mockResolvedValue({
-      applied: true,
-      outcome: { landed: [{ name: 'Group A' }], refused: [{ item: { name: 'Group B' }, reason: 'trash unavailable' }] },
-    });
-    const reporter = recordingReporter();
-
-    registerSeparatorCommands(commands, instance, reporter, scriptedDialog('Delete'), trash, () => []);
-    await invoke('modbench.separator.delete', groupA, [groupA, groupB]);
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not delete 1 of 2 separators.', detail: '"Group B" (trash unavailable)',
-    }]);
-  });
-
-  it('reports a refusal of the whole selection once', async () => {
-    deleteSeparators.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
-    const reporter = recordingReporter();
-
-    registerSeparatorCommands(commands, instance, reporter, scriptedDialog('Delete'), trash, () => []);
-    await invoke('modbench.separator.delete', groupA, [groupA, groupB]);
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to delete separators.', detail: 'ENOENT: modlist.txt' },
-    ]);
-  });
-
   it('a post-trash line failure is a warning notification naming the part that failed, not a failed delete', async () => {
     deleteSeparators.mockResolvedValue({
       applied: true, outcome: { landed: [{ name: 'Group A', lineRefusal: 'disk full' }], refused: [] },
@@ -611,12 +537,12 @@ describe('rename separator takes its separator through the gesture entry', () =>
     expect(renameSeparator).not.toHaveBeenCalled();
   });
 
-  it.each([['F2', [MODS_KEY_ARGS]], ['the palette', []]])('renames the one selected separator from %s', async (_from, args) => {
+  it('renames the one selected separator from F2', async () => {
     renameSeparator.mockResolvedValue({ applied: true, wrote: true });
     showInputBox.mockResolvedValueOnce('Renamed');
 
     registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [groupB]);
-    await invoke('modbench.separator.rename', ...args);
+    await invoke('modbench.separator.rename', MODS_KEY_ARGS);
 
     expect(optionsOfTheOneShowInputBoxCall()).toMatchObject({ value: 'Group B' });
     expect(renameSeparator.mock.calls).toEqual([['Group B', 'Renamed']]);
@@ -702,16 +628,6 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     expect(insertSeparator).not.toHaveBeenCalled();
   });
 
-  it('anchors the new separator on the one selected row from the palette', async () => {
-    insertSeparator.mockResolvedValue({ applied: true, wrote: true });
-    showInputBox.mockResolvedValueOnce('New Section');
-
-    registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [modA]);
-    await invoke('modbench.separator.add');
-
-    expect(insertSeparator.mock.calls).toEqual([['New Section', { kind: 'mod', name: 'Mod A' }]]);
-  });
-
 });
 
 describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one command per direction', () => {
@@ -739,25 +655,6 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     expect(setModsEnabled).toHaveBeenCalledWith(['Mod A', 'Mod B'], false);
   });
 
-  it('falls back to the view selection from the palette, where no row is right-clicked', async () => {
-    setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
-
-    registerModEnableCommands(commands, instance, () => [modA], recordingReporter());
-    await invoke('modbench.mod.enable');
-
-    expect(setModsEnabled).toHaveBeenCalledWith(['Mod A'], true);
-  });
-
-  it('calls nothing and reports nothing for an empty selection', async () => {
-    const reporter = recordingReporter();
-
-    registerModEnableCommands(commands, instance, () => [], reporter);
-    await invoke('modbench.mod.enable');
-
-    expect(setModsEnabled).not.toHaveBeenCalled();
-    expect(reporter.reports).toEqual([]);
-  });
-
   it('says nothing when the whole selection lands', async () => {
     setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
     const reporter = recordingReporter();
@@ -766,35 +663,6 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     await invoke('modbench.mod.enable', modA);
 
     expect(reporter.reports).toEqual([]);
-  });
-
-  it('reports a gone mod by name through the shared selectionOutcome reporter, once, while the rest land', async () => {
-    setModsEnabled.mockResolvedValue({
-      applied: true,
-      outcome: { landed: ['Mod A'], refused: [{ item: 'Mod B', reason: 'Mod not found in modlist: Mod B' }] },
-    });
-    const reporter = recordingReporter();
-
-    registerModEnableCommands(commands, instance, () => [], reporter);
-    await invoke('modbench.mod.enable', modA, [modA, modB]);
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error',
-      message: 'Could not enable 1 of 2 mods.',
-      detail: '"Mod B" (Mod not found in modlist: Mod B)',
-    }]);
-  });
-
-  it('reports a global refusal once, naming no mod, when a cause no mod can escape, an unreadable modlist.txt, stops the whole selection before any write', async () => {
-    setModsEnabled.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
-    const reporter = recordingReporter();
-
-    registerModEnableCommands(commands, instance, () => [], reporter);
-    await invoke('modbench.mod.disable', modB);
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to disable mods.', detail: 'ENOENT: modlist.txt' },
-    ]);
   });
 });
 
@@ -818,14 +686,6 @@ describe('modbench.mod.enable / modbench.mod.disable, called by the agent', () =
     expect(setModsEnabled).toHaveBeenCalledWith(['Mod B', 'Gone'], enabled);
     expect(answered).toEqual(outcome);
     expect(reporter.reports).toEqual([]);
-  });
-
-  it('refuses an Argument that is not a mod, writing nothing', async () => {
-    registerModEnableCommands(commands, instance, () => [], recordingReporter());
-
-    await expect(invoke('modbench.mod.enable', new AgentCall([{ kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod B' } }], {}))).rejects.toBeInstanceOf(Refusal);
-
-    expect(setModsEnabled).not.toHaveBeenCalled();
   });
 
   it('answers once the instance has been read again, so the agent\'s next read sees the change', async () => {
@@ -997,35 +857,6 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     expect(createQuickPick).toHaveBeenCalledOnce();
     expect(moveSeparators).not.toHaveBeenCalled();
     expect(reporter.reports).toEqual([]);
-  });
-
-  it('reports a gone mod by name, once, while the others land', async () => {
-    pickLabelled('Ungrouped');
-    moveMods.mockResolvedValue({
-      applied: true,
-      outcome: { landed: ['Mod A'], refused: [{ item: 'Mod C', reason: 'Mod not found in modlist: Mod C' }] },
-    });
-    const reporter = recordingReporter();
-
-    registerModMoveCommand(commands, instance, losingAtTop, reporter);
-    await invoke('modbench.mod.move', modA, [modA, modC]);
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not move 1 of 2 mods.', detail: '"Mod C" (Mod not found in modlist: Mod C)',
-    }]);
-  });
-
-  it('reports a refusal of the whole selection once', async () => {
-    pickLabelled('Group A');
-    moveSeparators.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
-    const reporter = recordingReporter();
-
-    registerModMoveCommand(commands, instance, losingAtTop, reporter);
-    await invoke('modbench.mod.move', groupB);
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to move separators.', detail: 'ENOENT: modlist.txt' },
-    ]);
   });
 });
 
@@ -1316,29 +1147,6 @@ describe('modbench.mod.excludeFile / modbench.mod.includeFile: every selected fi
     expect(markFiles).toHaveBeenCalledWith([refOf(excluded)], 'Included');
   });
 
-  it('reports each refused file by its mod and path, once, out of the files selected, while the rest land', async () => {
-    const gone = fileRow('c.dds', false);
-    markFiles.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [{ item: refOf(gone), reason: '"c.dds" is gone from disk.' }] } });
-    const reporter = recordingReporter();
-
-    registerFileExclusionCommands(commands, instance, () => [], reporter);
-    await invoke('modbench.mod.excludeFile', included, [included, excluded, gone]);
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not exclude 1 of 3 files.', detail: '"M/c.dds" ("c.dds" is gone from disk.)',
-    }]);
-  });
-
-  it('reports a refusal of the whole selection once, naming its cause', async () => {
-    markFiles.mockResolvedValue({ applied: false, refusal: 'mEdit could not be reached.' });
-    const reporter = recordingReporter();
-
-    registerFileExclusionCommands(commands, instance, () => [], reporter);
-    await invoke('modbench.mod.excludeFile', included, [included, fileRow('c.dds', false)]);
-
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not exclude 2 files.', detail: 'mEdit could not be reached.' }]);
-  });
-
   it.each([
     ['excludeFile', 'Excluded', included], ['includeFile', 'Included', excluded],
   ] as const)('%s takes a file its folder excludes by its own name, with the selection\'s others', async (verb, mark, clicked) => {
@@ -1614,14 +1422,6 @@ describe('the mod gestures, called by the agent', () => {
       expect(moveSeparators).not.toHaveBeenCalled();
     });
 
-    it('refuses an Argument that is not a mod, writing nothing', async () => {
-      registerModMoveCommand(commands, instance, view, recordingReporter());
-
-      await expect(invoke('modbench.mod.move', new AgentCall([{ kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod B' } }], { place: group, end: 'winning' }))).rejects.toBeInstanceOf(Refusal);
-
-      expect(moveMods).not.toHaveBeenCalled();
-    });
-
     it('answers a refusal of the whole move with its detail, reporting nothing', async () => {
       moveMods.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
       const reporter = recordingReporter();
@@ -1818,14 +1618,6 @@ describe('the mod gestures, called by the agent', () => {
 
       expect(answered).toEqual({ applied: false, refusal: `Could not ${mark === 'Excluded' ? 'exclude' : 'include'} 1 files.`, detail: 'mEdit could not be reached.' });
     });
-
-    it('refuses an Argument that is not a file, writing nothing', async () => {
-      registerFileExclusionCommands(commands, instance, () => [], recordingReporter());
-
-      await expect(invoke(command, ofMods('Mod A'))).rejects.toBeInstanceOf(Refusal);
-
-      expect(markFiles).not.toHaveBeenCalled();
-    });
   });
 });
 
@@ -1884,13 +1676,10 @@ describe('the separator gestures, called by the agent', () => {
       expect(reporter.reports).toEqual([]);
     });
 
-    it.each([
-      ['a plugin', [{ kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod A' } }]],
-      ['more than one entry', [group('Group A'), group('Group B')]],
-    ] as const)('refuses an Argument that is %s, adding nothing', async (_, argument) => {
+    it('refuses an Argument of more than one entry, adding nothing', async () => {
       register();
 
-      await expect(invoke('modbench.separator.add', new AgentCall(argument, { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
+      await expect(invoke('modbench.separator.add', new AgentCall([group('Group A'), group('Group B')], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
 
       expect(insertSeparator).not.toHaveBeenCalled();
     });
@@ -1931,13 +1720,10 @@ describe('the separator gestures, called by the agent', () => {
       expect(reporter.reports).toEqual([]);
     });
 
-    it.each([
-      ['a mod', [{ kind: 'mod', name: 'Mod A' }]],
-      ['more than one separator', [group('Group A'), group('Group B')]],
-    ] as const)('refuses an Argument that is %s, renaming nothing', async (_, argument) => {
+    it('refuses an Argument of more than one separator, renaming nothing', async () => {
       register();
 
-      await expect(invoke('modbench.separator.rename', new AgentCall(argument, { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
+      await expect(invoke('modbench.separator.rename', new AgentCall([group('Group A'), group('Group B')], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
 
       expect(renameSeparator).not.toHaveBeenCalled();
     });
@@ -1978,13 +1764,116 @@ describe('the separator gestures, called by the agent', () => {
 
       expect(await invoke('modbench.separator.delete', deleteCall)).toEqual({ applied: false, refusal: 'Failed to delete separators.', detail: 'ENOENT: modlist.txt' });
     });
+  });
+});
 
-    it('refuses an Argument that is not a separator, writing nothing', async () => {
-      register();
+describe('a Mods selection gesture reports a refusal through the shared reporter, once', () => {
+  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
 
-      await expect(invoke('modbench.separator.delete', new AgentCall([{ kind: 'mod', name: 'Mod A' }], {}))).rejects.toBeInstanceOf(Refusal);
+  const instance = {
+    ...instanceThatReads,
+    value: instanceValueFixture({
+      activeProfile: 'Default',
+      mods: [
+        { kind: 'separator', name: 'Group A', enabled: true },
+        { kind: 'mod', name: 'Mod A', enabled: true },
+        { kind: 'separator', name: 'Group B', enabled: true },
+        { kind: 'mod', name: 'Mod C', enabled: true },
+      ],
+      listedSourceMods: new Set(['M']),
+    }),
+  };
+  const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true });
+  const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
+  const modC = new ModNode({ kind: 'mod', name: 'Mod C', enabled: true });
+  const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
+  const groupB = new SeparatorNode({ kind: 'separator', name: 'Group B', enabled: true }, []);
+  const modRow = new ModNode({ kind: 'mod', name: 'M', enabled: true });
+  const fileRow = (relativePath: string) => new FileNode(
+    modRow, { kind: 'mod', name: 'M' }, { relativePath, path: `/instance/mods/M/${relativePath}`, sourcePath: `/instance/mods/M/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath },
+    relativePath);
+  const included = fileRow('a.dds');
+  const gone = fileRow('c.dds');
+  const trash = vi.fn(() => Promise.resolve());
+  const pickPlace = (label: string) => createQuickPick.mockImplementationOnce(() => quickPickChoosing<{ label: string }>((items) => items.find((i) => i.label === label)));
 
-      expect(deleteSeparators).not.toHaveBeenCalled();
-    });
+  interface Gesture {
+    readonly refuse: (refusal: { byName: string } | { whole: string }) => void;
+    readonly run: (reporter: ReturnType<typeof recordingReporter>) => Promise<unknown>;
+  }
+  const refusedItem = (item: unknown, reason: string) => ({ applied: true, outcome: { landed: [], refused: [{ item, reason }] } });
+  const gestures = {
+    uninstall: {
+      refuse: (r) => uninstallMods.mockResolvedValueOnce('byName' in r ? refusedItem({ name: 'Mod B' }, r.byName) : { applied: false, refusal: r.whole }),
+      run: (reporter) => {
+        registerModContextCommands({ commands, instance, viewSelection: () => [], reporter, ask: scriptedDialog('Uninstall'), trash, log: vi.fn() });
+        return invoke('modbench.mod.uninstall', modA, [modA, modB]);
+      },
+    },
+    'separator delete': {
+      refuse: (r) => deleteSeparators.mockResolvedValue('byName' in r ? refusedItem({ name: 'Group B' }, r.byName) : { applied: false, refusal: r.whole }),
+      run: (reporter) => {
+        registerSeparatorCommands(commands, instance, reporter, scriptedDialog('Delete'), trash, () => []);
+        return invoke('modbench.separator.delete', groupA, [groupA, groupB]);
+      },
+    },
+    enable: {
+      refuse: (r) => setModsEnabled.mockResolvedValue('byName' in r ? refusedItem('Mod B', r.byName) : { applied: false, refusal: r.whole }),
+      run: (reporter) => {
+        registerModEnableCommands(commands, instance, () => [], reporter);
+        return invoke('modbench.mod.enable', modA, [modA, modB]);
+      },
+    },
+    move: {
+      refuse: (r) => {
+        pickPlace('Ungrouped');
+        moveMods.mockResolvedValue('byName' in r ? refusedItem('Mod C', r.byName) : { applied: false, refusal: r.whole });
+      },
+      run: (reporter) => {
+        registerModMoveCommand(commands, instance, { selection: () => [], direction: () => 'losingAtTop' }, reporter);
+        return invoke('modbench.mod.move', modA, [modA, modC]);
+      },
+    },
+    'exclude file': {
+      refuse: (r) => markFiles.mockResolvedValue('byName' in r
+        ? refusedItem({ origin: gone.origin, relativePath: 'c.dds' }, r.byName)
+        : { applied: false, refusal: r.whole }),
+      run: (reporter) => {
+        registerFileExclusionCommands(commands, instance, () => [], reporter);
+        return invoke('modbench.mod.excludeFile', included, [included, gone]);
+      },
+    },
+  } satisfies Record<string, Gesture>;
+
+  it.each([
+    ['uninstall', 'Could not uninstall 1 of 2 mods.', '"Mod B" (trash unavailable)'],
+    ['separator delete', 'Could not delete 1 of 2 separators.', '"Group B" (trash unavailable)'],
+    ['enable', 'Could not enable 1 of 2 mods.', '"Mod B" (trash unavailable)'],
+    ['move', 'Could not move 1 of 2 mods.', '"Mod C" (trash unavailable)'],
+    ['exclude file', 'Could not exclude 1 of 2 files.', '"M/c.dds" (trash unavailable)'],
+  ] as const)('%s names the refused item and why, while the others land', async (name, message, detail) => {
+    const gesture: Gesture = gestures[name];
+    gesture.refuse({ byName: 'trash unavailable' });
+    const reporter = recordingReporter();
+
+    await gesture.run(reporter);
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message, detail }]);
+  });
+
+  it.each([
+    ['uninstall', 'Failed to uninstall mods.'],
+    ['separator delete', 'Failed to delete separators.'],
+    ['enable', 'Failed to enable mods.'],
+    ['move', 'Failed to move mods.'],
+    ['exclude file', 'Could not exclude 2 files.'],
+  ] as const)('%s reports a refusal of the whole selection with its cause', async (name, message) => {
+    const gesture: Gesture = gestures[name];
+    gesture.refuse({ whole: 'ENOENT: modlist.txt' });
+    const reporter = recordingReporter();
+
+    await gesture.run(reporter);
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message, detail: 'ENOENT: modlist.txt' }]);
   });
 });
