@@ -193,7 +193,7 @@ export class RecordEditorProvider implements vscode.CustomTextEditorProvider {
         const reason = failureReason(failure);
         if (reason === shownReason) return;
         shownReason = reason;
-        this.deps.channel.warn(`Failed to read ${fsPath}: ${reason}`);
+        if (failure.failed === 'local') this.deps.channel.warn(`Failed to read ${fsPath}: ${reason}`);
         showWebviewPage(panel.webview, this.deps.context.extensionUri, { script: WEBVIEW_SCRIPTS.RECORD_PANEL, globals: { mEditLoadError: failure } satisfies RecordPageGlobals });
       };
       try {

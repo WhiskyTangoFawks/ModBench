@@ -35,7 +35,6 @@ import {
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { RecordWrite } from '../../drivingLib/writingGesture';
 import { readReferencedBy } from '../referencedByList';
-import { SILENT_LOG } from '../../ports/log';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -75,7 +74,7 @@ async function referencedByCopy(record: RecordAt, editorId: string) {
     formKey: record.formKey, plugin: record.plugin.name, origin: record.plugin.origin, fieldPath: 'Keywords[0]',
     recordType: 'npc_', recordTypeName: 'Non-Player Character', editorId,
   }]);
-  const { provider } = await readReferencedBy(client, SILENT_LOG, '000001:A.esp', 'a list');
+  const { provider } = await readReferencedBy(client, '000001:A.esp', 'a list');
   const [referrer] = provider.getChildren();
   const [copy] = provider.getChildren(present(referrer, 'the referrer'));
   return present(copy, 'its plugin copy');

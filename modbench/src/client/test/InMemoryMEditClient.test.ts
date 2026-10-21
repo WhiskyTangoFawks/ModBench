@@ -92,7 +92,7 @@ describe('InMemoryMEditClient — a scripted command failure', () => {
 });
 
 describe('InMemoryMEditClient — a disconnected script', () => {
-  it('is one call: status goes disconnected and every query rejects', async () => {
+  it('is one call: status goes disconnected and every unscripted query answers unreachable', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', []);
     client.setQueryAnswer('getDiagnoses', []);
@@ -100,17 +100,17 @@ describe('InMemoryMEditClient — a disconnected script', () => {
     client.disconnected();
 
     expect(client.status).toBe('disconnected');
-    await expect(client.getPlugins()).rejects.toThrow();
-    await expect(client.getDiagnoses()).rejects.toThrow();
+    await expect(client.getPlugins()).resolves.toEqual({ failed: 'unreachable' });
+    await expect(client.getDiagnoses()).resolves.toEqual({ failed: 'unreachable' });
   });
 
-  it('clears a scripted failure too, not just a fixed answer, so a disconnected read rejects with the adapter\'s own generic reason rather than a stale one', async () => {
+  it('clears a scripted failure too, not just a fixed answer, so a disconnected read answers unreachable rather than a stale reason', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
 
     client.disconnected();
 
-    await expect(client.getPlugins()).rejects.toThrow(/no scripted answer for query "getPlugins"/);
+    await expect(client.getPlugins()).resolves.toEqual({ failed: 'unreachable' });
   });
 });
 

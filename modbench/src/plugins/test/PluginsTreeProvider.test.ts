@@ -154,7 +154,6 @@ interface Harness {
   client: InMemoryMEditClient;
   records: RecordBrowser;
   instance: FakeInstance;
-  logged: { level: string; msg: string }[];
 }
 
 function makeTree(
@@ -170,14 +169,12 @@ function makeTree(
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins, extra.loadedWithNoLine));
   const client = extra.client ?? makeClient();
   const records = new RecordBrowser(client);
-  const logged: { level: string; msg: string }[] = [];
   const tree = pluginsTreeOver(instance, {
     client, records,
-    log: (level, msg) => logged.push({ level, msg }),
     ...(extra.publishDiagnoses && { publishDiagnoses: extra.publishDiagnoses }),
     ...(extra.publishChangedOutside && { publishChangedOutside: extra.publishChangedOutside }),
   });
-  return { tree, client, records, instance, logged };
+  return { tree, client, records, instance };
 }
 
 async function reconcile(
@@ -2204,30 +2201,6 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
     await h.tree.facts.refresh();
 
     expect(callCount(h.client, 'getPlugins')).toBe(2);
-  });
-
-  it('reports a failed plugin read at error, naming the reason once', async () => {
-    const h = makeTree([A_ROW()]);
-    h.client.setQueryFailure('getPlugins', { failed: 'refused', refusal: 'No load order has been received.' });
-
-    await h.tree.facts.reconciled([]);
-
-    const failures = h.logged.filter((l) => l.msg.includes('about each plugin failed'));
-    expect(failures).toHaveLength(1);
-    expect(present(failures[0], 'the sole logged failure').level).toBe('error');
-    expect(present(failures[0], 'the sole logged failure').msg).toContain('No load order has been received.');
-  });
-
-  it('reports a failed malformed-plugin scan at warn, below the read that succeeded', async () => {
-    const h = makeTree([A_ROW()]);
-    h.client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: 'mEdit could not answer.' });
-
-    await reconcile(h, [held('A.esp')]);
-
-    const scan = h.logged.filter((l) => l.msg.includes('malformed-plugin scan'));
-    expect(scan).toHaveLength(1);
-    expect(present(scan[0], 'the sole scan-failure log entry').level).toBe('warn');
-    expect(h.logged.some((l) => l.level === 'error')).toBe(false);
   });
 });
 
