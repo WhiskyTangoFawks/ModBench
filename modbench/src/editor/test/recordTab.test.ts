@@ -23,6 +23,8 @@ const EDITED_MOD_ESP_FROM_MODA = { formKey: '000800:Mod.esp', plugin: { name: 'M
 const rowsChanged = (keys: string[]) =>
   ({ kind: 'rows-changed' as const, plugin: 'Mod.esp', origin: 'ModA', keys, sequence: 2 });
 
+const PLUGIN_CHANGED = { kind: 'plugin-changed' as const, plugin: 'Mod.esp', origin: 'ModA', keys: [], sequence: 2 };
+
 const loadsOf = (panel: ReturnType<typeof fakePanel>) => (panel.webview.postMessage.mock.calls as unknown[][]).map(([m]) => m);
 
 function writeAnsweredWhenTheTestChooses() {
@@ -251,13 +253,13 @@ describe('a record tab going with the record to its new FormKey and reading it t
     expect(closed.tab.copy).toBeUndefined();
   });
 
-  describe('on the stream\'s reconnect, a tab waiting for its new FormKey, since a report missed while the stream was down would leave it waiting for ever', () => {
+  describe('when mEdit re-derives a plugin whole, a tab waiting for its new FormKey, since no report names its key', () => {
     it('reads it once the Index holds it, and refreshes as usual afterwards', async () => {
       const { client, panel, tab, tabs } = openOn('000800:Mod.esp');
       client.setQueryAnswer('getRecordOwner', { name: 'Mod.esp', origin: 'ModA' });
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
-      client.reconnected();
+      client.emit(PLUGIN_CHANGED);
       await vi.waitFor(() => expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]));
       announceConflictsComputed(tabs);
 
@@ -272,7 +274,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
       client.setQueryAnswer('getRecordOwner', undefined);
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
-      client.reconnected();
+      client.emit(PLUGIN_CHANGED);
       await vi.waitFor(() => expect(client.calls.some(c => c.method === 'getRecordOwner')).toBe(true));
       await Promise.resolve();
       expect(loadsOf(panel)).toEqual([]);
@@ -286,7 +288,7 @@ describe('a record tab going with the record to its new FormKey and reading it t
       client.setQueryFailure('getRecordOwner', { failed: 'refused', refusal: 'backend down' });
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
-      client.reconnected();
+      client.emit(PLUGIN_CHANGED);
       await vi.waitFor(() => expect(client.calls.some(c => c.method === 'getRecordOwner')).toBe(true));
       await Promise.resolve();
       expect(loadsOf(panel)).toEqual([]);

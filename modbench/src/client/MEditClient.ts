@@ -421,9 +421,6 @@ export interface MEditClient {
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
   /** The port this window's mEdit answers on, heard as soon as it is known and again if it changes. */
   onPort(listener: (port: number) => void): () => void;
-  /** The notification stream opened again while `running`. The process behind the stream may
-   *  be a restarted one, holding nothing sent before. */
-  onReconnected(listener: () => void): () => void;
   /** commands.md, No lifecycle gestures for mEdit: it starts with the extension. Never rejects;
    *  a launch that fails leaves mEdit stopped, and `onLaunch` hears why. */
   start(): Promise<void>;

@@ -8,7 +8,7 @@ export interface LoadOrderStatusKeeper {
 }
 
 export function keepLoadOrderStatus(
-  client: Pick<MEditClient, 'onNotification' | 'onStatusChanged' | 'onReconnected'>,
+  client: Pick<MEditClient, 'onNotification' | 'onStatusChanged'> & { onReconnected(listener: () => void): () => void },
 ): LoadOrderStatusKeeper {
   let latest: LoadOrderStatus | undefined;
   let settledVersion = -1;

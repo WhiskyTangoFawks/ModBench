@@ -99,6 +99,12 @@ export class InMemoryMEditClient implements MEditClient {
     },
   });
 
+  constructor() {
+    this.sender.onResent((snapshot, outcome) => {
+      if (outcome.outcome === 'applied') this.notifications.announceChanged(snapshot);
+    });
+  }
+
   /** Answers each PUT of a snapshot, as the backend would, from the snapshot and its abort signal. */
   answerPuts(answer: LoadOrderWire['put']): void {
     this.putAnswer = answer;
@@ -212,7 +218,8 @@ export class InMemoryMEditClient implements MEditClient {
     return () => { this.reconnectListeners.delete(listener); };
   }
 
-  /** The notification stream dropped and opened again, the status never leaving `attached`. */
+  /** The notification stream dropped and opened again, the status never leaving `attached`: the newest
+   *  snapshot sent is put again, and its plugins and mods are announced changed once that applies. */
   reconnected(): void {
     for (const listener of [...this.reconnectListeners]) listener();
   }

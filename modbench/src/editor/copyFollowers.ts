@@ -7,7 +7,7 @@ import { followReportedCopies } from './recordCopy';
 
 /** A report names the records that changed. A change to any of them can be in a child's file, and a move can move its carrier. */
 export function followCopiesIntoDocuments(
-  client: Pick<MEditClient, 'onNotification' | 'onReconnected'>,
+  client: Pick<MEditClient, 'onNotification'>,
   children: Pick<ChildRecordDocuments, 'changedWhere'>,
   carrier: { followCarried(affects: CopyChanged): Promise<void> },
 ): vscode.Disposable {

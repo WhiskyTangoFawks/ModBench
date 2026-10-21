@@ -1,4 +1,5 @@
 import type { MEditClient } from '../client';
+import { coalesced } from '../ports/coalesced';
 
 // Each rows-changed event (ADR-0015) re-reads the whole tree, which has no per-row
 // identity to check it against. The plugin facts too, as a changed record can start or stop
@@ -6,7 +7,7 @@ import type { MEditClient } from '../client';
 export function subscribeTreeToNotifications(
   client: Pick<MEditClient, 'onNotification'>, tree: { refresh(): void }, refreshPluginFacts: () => void,
 ): () => void {
-  const reread = () => { tree.refresh(); refreshPluginFacts(); };
+  const reread = coalesced(() => { tree.refresh(); refreshPluginFacts(); });
   const unsubscribeRows = client.onNotification('rows-changed', reread);
   const unsubscribePlugin = client.onNotification('plugin-changed', reread);
   return () => { unsubscribeRows(); unsubscribePlugin(); };
