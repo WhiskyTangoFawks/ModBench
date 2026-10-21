@@ -38,11 +38,17 @@ function clientFindingNoDefects(): InMemoryMEditClient {
   return client;
 }
 
-function feedOver(client = clientFindingNoDefects(), shown: readonly PluginAddress[] = [A], publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void) {
+interface FeedOptions {
+  readonly client?: InMemoryMEditClient;
+  readonly shownPlugins?: () => readonly PluginAddress[];
+  readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
+}
+
+function feedOver({ client = clientFindingNoDefects(), shownPlugins = () => [A], publishDiagnoses }: FeedOptions = {}) {
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
   const feed = new PluginFactsFeed({
-    client, shownPlugins: () => shown,
+    client, shownPlugins,
     publishDiagnoses: publishDiagnoses ?? diagnoses.push,
     publishChangedOutside: changedOutside.push,
     publishFailedToRead: () => undefined,
@@ -226,19 +232,15 @@ describe('PluginFactsFeed', () => {
 
   describe('a throw that is no failed read', () => {
     it('is not folded into the unreadable-plugin-list rows, and reaches the caller', async () => {
-      const client = new InMemoryMEditClient();
+      const { feed, client } = feedOver({ shownPlugins: () => { throw new Error('the tree broke'); } });
       client.setQueryAnswer('getPlugins', [held()]);
-      const feed = new PluginFactsFeed({
-        client, shownPlugins: () => { throw new Error('the tree broke'); },
-        publishDiagnoses: () => undefined, publishChangedOutside: () => undefined, publishFailedToRead: () => undefined,
-      });
 
       await expect(feed.reconciled([])).rejects.toThrow('the tree broke');
       expect(feed.rows.readFailureMessage()).toBeUndefined();
     });
 
     it('is not folded into a failed scan on the rows, and is left unhandled', async () => {
-      const { feed, client } = feedOver(undefined, undefined, () => { throw new Error('the Problems panel broke'); });
+      const { feed, client } = feedOver({ publishDiagnoses: () => { throw new Error('the Problems panel broke'); } });
       client.setQueryAnswer('getPlugins', [held()]);
       client.setQueryAnswer('getDiagnoses', []);
 
