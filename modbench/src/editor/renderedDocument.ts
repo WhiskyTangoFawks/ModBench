@@ -13,7 +13,7 @@ export class RenderedDocuments implements vscode.TextDocumentContentProvider, vs
   readonly onDidChange = this.changes.event;
   private readonly registrations: vscode.Disposable[];
 
-  constructor(private readonly client: Pick<MEditClient, 'getRenderedDocument' | 'onNotification' | 'onReconnected'>) {
+  constructor(private readonly client: Pick<MEditClient, 'getRenderedDocument' | 'onNotification'>) {
     this.registrations = [
       vscode.workspace.registerTextDocumentContentProvider(RENDERED_DOCUMENT_SCHEME, this),
       followReportedCopies(client, (affects) => { this.changedWhere(affects); },

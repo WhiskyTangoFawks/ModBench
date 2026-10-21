@@ -94,17 +94,6 @@ describe('an open rendered document, when mEdit reports a change', () => {
     expect(changed).toEqual([]);
   });
 
-  it('changes, every one, when the stream of mEdit\'s reports opens again', () => {
-    const client = new InMemoryMEditClient();
-    const { changed } = rendered(client);
-    const [gun, other] = [GUN_URI, renderedUri(`/ModB/B.esp/${NAME}`, 'formKey=000801%3AA.esp&name=B.esp&origin=ModB')];
-    h.textDocuments.push({ uri: gun }, { uri: other }, { uri: { scheme: 'file', path: gun.path, query: gun.query } });
-
-    client.reconnected();
-
-    expect(changed).toEqual([gun, other]);
-  });
-
   it('changes when mEdit read its plugin again whole', () => {
     const client = new InMemoryMEditClient();
     const { changed } = rendered(client);

@@ -115,7 +115,7 @@ import { NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider';
 import { PluginNode } from '../pluginRows';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
-import type { PluginMetadata, RecordSummary } from '../../client';
+import type { LoadOrderProgress, LoadOrderSnapshot, PluginMetadata, RecordSummary } from '../../client';
 import { recordTypeCountFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -264,6 +264,21 @@ describe('the Plugins view\'s selection for a key', () => {
   });
 });
 
+const APPLIED_STATUS: LoadOrderProgress = {
+  totalPlugins: 3, activePlugins: 3, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
+};
+
+function snapshotOf(...names: string[]): LoadOrderSnapshot {
+  return {
+    plugins: names.map((name) => ({
+      name, path: `/mods/A/${name}`, origin: 'A', provider: { kind: 'Mod' as const, mod: 'A', folder: '/mods/A' },
+      lineNamesIt: true, archives: [], stringsFiles: [],
+    })),
+    active: [], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache',
+    dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
+  };
+}
+
 describe('the Plugins view follows mEdit\'s pushes', () => {
   it('re-reads the record browser and the plugin facts on mEdit\'s changed rows', async () => {
     const { client, recordBrowser } = pluginsView();
@@ -271,8 +286,8 @@ describe('the Plugins view follows mEdit\'s pushes', () => {
 
     client.emit(rowsChanged);
 
-    expect(refresh).toHaveBeenCalledTimes(1);
     await settle();
+    expect(refresh).toHaveBeenCalledTimes(1);
     expect(pluginReads(client)).toBe(1);
   });
 
@@ -282,8 +297,23 @@ describe('the Plugins view follows mEdit\'s pushes', () => {
 
     client.emit({ ...rowsChanged, kind: 'plugin-changed' });
 
-    expect(refresh).toHaveBeenCalledTimes(1);
     await settle();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(pluginReads(client)).toBe(1);
+  });
+
+  it('re-reads once when mEdit holds the load order again after a dropped connection, however many plugins it names', async () => {
+    const { client, recordBrowser } = pluginsView();
+    client.answerPuts(() => Promise.resolve({ outcome: 'applied', status: APPLIED_STATUS }));
+    client.setStatus('running');
+    await client.sendLoadOrder(snapshotOf('A.esp', 'B.esp', 'C.esp'));
+    const refresh = vi.spyOn(recordBrowser, 'refresh');
+
+    client.reconnected();
+    await client.latestLoadOrder();
+    await settle();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
     expect(pluginReads(client)).toBe(1);
   });
 
@@ -407,6 +437,7 @@ describe('a record row\'s badge, from mEdit\'s stream', () => {
 
     client.setQueryAnswer('getRecords', { items: [summary('Modified')], total: 1 });
     client.emit({ ...rowsChanged, keys: [FORM_KEY] });
+    await settle();
     await asVsCodeReReadsAnExpandedGroupOnTreeChange(recordBrowser, group);
 
     expect(badgeChanges).toEqual([undefined, [uri]]);

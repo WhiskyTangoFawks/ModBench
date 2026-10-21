@@ -14,19 +14,15 @@ const settled = () => new Promise((resolve) => { setTimeout(resolve, 0); });
 
 const UNREACHABLE: ReadFailed = { failed: 'unreachable' };
 
-function statusesOver(read: ReadModStatus, mods: readonly string[] = []) {
+function statusesOver(read: ReadModStatus) {
   const client = new InMemoryMEditClient();
   const logged: string[] = [];
-  const statuses = new ModStatuses(client, read, (line) => { logged.push(line); }, () => mods);
+  const statuses = new ModStatuses(client, read, (line) => { logged.push(line); });
   const pushed = async (...names: string[]) => {
     client.emit({ kind: 'mod-status-changed', plugin: '', origin: '', keys: [], sequence: 0, mods: names });
     await settled();
   };
-  const reconnected = async () => {
-    client.reconnected();
-    await settled();
-  };
-  return { statuses, logged, pushed, reconnected };
+  return { statuses, logged, pushed };
 }
 
 const unreadable = (mod: string, why: string): ModStatus => status(mod, { unreadable: { manifest: false, why } });
@@ -43,15 +39,6 @@ describe('each mod\'s status (modlist-repository.md, Status)', () => {
 
     expect(read.mock.calls).toEqual([[['ModA', 'ModB']], [['ModB']]]);
     expect([statuses.of('ModA'), statuses.of('ModB')]).toEqual([status('ModA', { noManifest: true }), status('ModB', { differing: ['a.nif'] })]);
-  });
-
-  it('is read for every mod when the stream opens again, since a push made while it was down is lost', async () => {
-    const read = vi.fn<ReadModStatus>().mockResolvedValue([status('ModA'), status('ModB')]);
-    const { statuses, reconnected } = statusesOver(read, ['ModA', 'ModB']);
-
-    await reconnected();
-
-    expect([read.mock.calls, statuses.of('ModB')]).toEqual([[[['ModA', 'ModB']]], status('ModB')]);
   });
 
   it('keeps the answer to the later push when an earlier read answers last', async () => {
