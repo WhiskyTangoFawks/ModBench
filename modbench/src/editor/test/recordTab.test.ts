@@ -7,16 +7,7 @@ import { RecordTabs } from '../recordTabs';
 import type { RecordTab } from '../recordTab';
 import { announceConflictsComputed, subscribeRecordTabsToNotifications } from '../notificationWiring';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-
-function fakePanel(title: string) {
-  const disposed: (() => void)[] = [];
-  return {
-    title, active: false, viewColumn: 1,
-    webview: { postMessage: vi.fn(() => Promise.resolve(true)) },
-    onDidDispose: (listener: () => void) => { disposed.push(listener); return { dispose: () => undefined }; },
-    close: () => { disposed.forEach((listener) => { listener(); }); },
-  };
-}
+import { fakePanel } from './editorVscode';
 
 const EDITED_MOD_ESP_FROM_MODA = { formKey: '000800:Mod.esp', plugin: { name: 'Mod.esp', origin: 'ModA' } };
 
@@ -40,7 +31,7 @@ function heard(client: InMemoryMEditClient) {
 }
 
 function showing(tabs: RecordTabs, formKey: string, title = 'MovedNpc') {
-  const panel = fakePanel(title);
+  const panel = fakePanel({ title, active: false, viewColumn: 1 });
   const tab = tabs.open(panel, fakeUri(`/${formKey}.json`));
   tab.show({ formKey, plugin: EDITED_MOD_ESP_FROM_MODA.plugin });
   return { panel, tab };

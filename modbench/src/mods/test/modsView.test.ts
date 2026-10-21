@@ -7,7 +7,7 @@ import {
   uriFile, uriFrom, DataTransferItem, DataTransfer,
 } from '../../test/vscodeMock';
 import {
-  filterBoxWindowMock, filterBoxCommandsMock, currentBoxOf, waitForMessage,
+  filterBoxWindowMock, filterBoxCommandsMock, currentBoxOf, waitForMessage, FakeTreeViews, type FakeTreeView,
 } from '../../drivingLib/test/nameFilterViewHarness';
 
 const h = vi.hoisted(() => ({
@@ -16,16 +16,7 @@ const h = vi.hoisted(() => ({
     contextKeys: new Map<string, unknown>(),
     boxes: [],
   },
-  trees: new Map<string, { description?: string; message?: string }>(),
-  providers: new Map<string, vscode.TreeDataProvider<unknown>>(),
-  reveals: [] as { label: unknown; options: unknown }[],
-  visible: { value: true },
-  visibilityListeners: [] as ((e: { visible: boolean }) => void)[],
-  selectionListeners: [] as ((e: { selection: readonly unknown[] }) => void)[],
-  revealRefusal: { value: undefined as Error | undefined },
   decorationProviders: [] as vscode.FileDecorationProvider[],
-  expandListeners: [] as ((e: { element: unknown }) => void)[],
-  collapseListeners: [] as ((e: { element: unknown }) => void)[],
   picked: [] as string[][],
 }));
 
@@ -42,37 +33,7 @@ vi.mock('vscode', () => ({
   Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
   window: {
     ...filterBoxWindowMock(h.state),
-    createTreeView: (id: string, options: { treeDataProvider: vscode.TreeDataProvider<unknown> }) => {
-      const view = {
-        ...options, description: undefined, message: undefined, selection: [] as readonly unknown[],
-        onDidChangeSelection: (listener: (e: { selection: readonly unknown[] }) => void) => {
-          h.selectionListeners.push(listener);
-          return { dispose: () => undefined };
-        },
-        get visible() { return h.visible.value; },
-        onDidChangeVisibility: (listener: (e: { visible: boolean }) => void) => {
-          h.visibilityListeners.push(listener);
-          return { dispose: () => undefined };
-        },
-        onDidChangeCheckboxState: () => ({ dispose: () => undefined }),
-        onDidExpandElement: (listener: (e: { element: unknown }) => void) => {
-          h.expandListeners.push(listener);
-          return { dispose: () => undefined };
-        },
-        onDidCollapseElement: (listener: (e: { element: unknown }) => void) => {
-          h.collapseListeners.push(listener);
-          return { dispose: () => undefined };
-        },
-        reveal: (element: { label: unknown }, revealOptions: unknown) => {
-          if (h.revealRefusal.value) return Promise.reject(h.revealRefusal.value);
-          h.reveals.push({ label: element.label, options: revealOptions });
-          return Promise.resolve();
-        },
-      };
-      h.trees.set(id, view);
-      h.providers.set(id, options.treeDataProvider);
-      return view;
-    },
+    createTreeView: (id: string, options: { treeDataProvider: vscode.TreeDataProvider<unknown> }) => treeViews.create(id, options),
     showQuickPick: (items: { label: string }[]) => {
       h.picked.push(items.map((item) => item.label));
       return Promise.resolve(undefined);
@@ -111,9 +72,10 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const unscriptedMEdit = { changeBuildConfiguration: () => Promise.reject(new Error('unscripted')) };
 
+const treeViews = new FakeTreeViews();
 const currentBox = currentBoxOf(h.state);
 
-const shownRows = async () => (await present(h.providers.get('modbench.modList'), 'the Mods tree data provider').getChildren()) ?? [];
+const shownRows = async () => (await treeViews.view('modbench.modList').treeDataProvider.getChildren()) ?? [];
 const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row));
 
 const otherDeps = () => ({
@@ -153,15 +115,9 @@ const SEQUENCE_NOT_READ_YET = 0;
 beforeEach(() => {
   h.state.boxes.length = 0;
   h.state.commands.clear();
-  h.reveals.length = 0;
-  h.visible.value = true;
-  h.visibilityListeners.length = 0;
-  h.selectionListeners.length = 0;
+  treeViews.clear();
   h.state.contextKeys.clear();
-  h.revealRefusal.value = undefined;
   h.decorationProviders.length = 0;
-  h.expandListeners.length = 0;
-  h.collapseListeners.length = 0;
   h.picked.length = 0;
 });
 
@@ -259,14 +215,9 @@ describe('the Mods title-bar sort icons', () => {
 });
 
 describe('the Mods view tells its keys, which are handed no row, what the selection holds', () => {
-  const select = (view: { selection: readonly unknown[] }, rows: readonly unknown[]) => {
-    view.selection = rows;
-    for (const listener of h.selectionListeners) listener({ selection: rows });
-  };
-
   it('sets the Space direction and the Delete and F2 kind off the selection', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+    createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
 
     const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod']
       .map((name) => `modbench.mod.${name}`);
@@ -274,13 +225,13 @@ describe('the Mods view tells its keys, which are handed no row, what the select
     const harderVats = new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false });
     const separatorRow = (name: string) => new SeparatorNode({ kind: 'separator', name, enabled: true }, []);
 
-    select(modListView, [harderVats]);
+    treeViews.view().selectRows([harderVats]);
     expect(keys()).toEqual({
       'modbench.mod.selectionToggle': 'enable', 'modbench.mod.selectionKind': 'mod', 'modbench.mod.singleRow': true,
       'modbench.mod.holdsEnabledMod': false, 'modbench.mod.holdsDisabledMod': true,
     });
 
-    select(modListView, [separatorRow('Radfall - All-In-One Survival Overhaul'), separatorRow('Unassigned (Modlist Development)')]);
+    treeViews.view().selectRows([separatorRow('Radfall - All-In-One Survival Overhaul'), separatorRow('Unassigned (Modlist Development)')]);
     expect(keys()).toEqual({
       'modbench.mod.selectionToggle': undefined, 'modbench.mod.selectionKind': 'separator', 'modbench.mod.singleRow': false,
       'modbench.mod.holdsEnabledMod': false, 'modbench.mod.holdsDisabledMod': false,
@@ -289,8 +240,8 @@ describe('the Mods view tells its keys, which are handed no row, what the select
 
   it('follows a mod enabled in a new instance value while the selection still holds the row built before', () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
-    const { view: modListView } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
-    select(modListView, [new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
+    createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+    treeViews.view().selectRows([new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
 
     instance.publish(listing(LISTED_MODS.map((m) => (m.name === 'Harder VATS' ? mod('Harder VATS') : m))));
 
@@ -299,8 +250,11 @@ describe('the Mods view tells its keys, which are handed no row, what the select
 });
 
 describe('the Mods view expands by reveal a separator a filter shows for its matching mods', () => {
-  const mountFiltered = async (term: string, log: (line: string) => void = () => undefined) => {
+  const mountFiltered = async (
+    term: string, log: (line: string) => void = () => undefined, prepare: (view: FakeTreeView) => void = () => undefined,
+  ) => {
     createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log, ...noSync() }).nameFilter.open();
+    prepare(treeViews.view());
     currentBox().type(term);
     await new Promise((resolve) => setTimeout(resolve, 20));
   };
@@ -308,7 +262,7 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   it('reveals it expanded, neither selecting nor focusing it', async () => {
     await mountFiltered('source');
 
-    expect(h.reveals).toEqual([
+    expect(treeViews.view().reveals).toEqual([
       { label: 'Unassigned (Modlist Development)', options: { select: false, focus: false, expand: true } },
     ]);
   });
@@ -316,13 +270,12 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   it('leaves a separator shown for its own name as the user left it', async () => {
     await mountFiltered('radfall - all');
 
-    expect(h.reveals).toEqual([]);
+    expect(treeViews.view().reveals).toEqual([]);
   });
 
   it('writes a reveal VS Code refuses to the Output, naming the separator and why', async () => {
-    h.revealRefusal.value = new Error('Cannot resolve tree item');
     const lines: string[] = [];
-    await mountFiltered('source', (line) => lines.push(line));
+    await mountFiltered('source', (line) => lines.push(line), (view) => { view.revealRefusal = new Error('Cannot resolve tree item'); });
 
     expect(lines).toEqual([
       'Could not expand "Unassigned (Modlist Development)" for the filter: Cannot resolve tree item',
@@ -330,14 +283,12 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   });
 
   it('reveals nothing while the view is hidden, and reveals it once the view is shown', async () => {
-    h.visible.value = false;
-    await mountFiltered('source');
-    expect(h.reveals).toEqual([]);
+    await mountFiltered('source', undefined, (view) => { view.visible = false; });
+    expect(treeViews.view().reveals).toEqual([]);
 
-    h.visible.value = true;
-    for (const listener of h.visibilityListeners) listener({ visible: true });
+    treeViews.view().setVisible(true);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(h.reveals.map((r) => r.label)).toEqual(['Unassigned (Modlist Development)']);
+    expect(treeViews.view().reveals.map((r) => r.label)).toEqual(['Unassigned (Modlist Development)']);
   });
 });
 
@@ -384,7 +335,7 @@ describe('the Mods view says when the list is empty', () => {
 describe('the Mods view finds a file the filter matches, however deep', () => {
   const file = (relativePath: string) => ({ relativePath, path: `/instance/${relativePath}`, sourcePath: `/instance/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath });
   const folder = (relativePath: string) => ({ relativePath, path: `/instance/${relativePath}`, excluded: false });
-  const revealed = () => h.reveals.map((r) => r.label);
+  const revealed = () => treeViews.view().reveals.map((r) => r.label);
   const open = { select: false, focus: false, expand: true };
 
   const mountFiltered = (term: string, overwrite = false) => {
@@ -409,7 +360,7 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
     mountFiltered('b.dds');
     await vi.waitFor(() => expect(revealed()).toContain('armour'));
 
-    expect(h.reveals).toEqual(['Gear', 'Armour', 'textures', 'armour'].map((label) => ({ label, options: open })));
+    expect(treeViews.view().reveals).toEqual(['Gear', 'Armour', 'textures', 'armour'].map((label) => ({ label, options: open })));
   });
 
   it('does not reveal a row shown for its own name, nor the rows under it, while it reveals one shown for a match', async () => {
@@ -445,9 +396,9 @@ describe('the Mods view tells the indicator decorations when a separator opens o
     for (const provider of h.decorationProviders.slice(1)) provider.onDidChangeFileDecorations?.(fired);
     const row = present((await shownRows()).find((node) => node instanceof SeparatorNode), 'the separator row');
 
-    h.expandListeners.forEach((listener) => { listener({ element: row }); });
+    treeViews.view().expand(row);
     const afterExpand = fired.mock.calls.length;
-    h.collapseListeners.forEach((listener) => { listener({ element: row }); });
+    treeViews.view().collapse(row);
 
     expect([afterExpand, fired.mock.calls.length]).toEqual([4, 8]);
   });
