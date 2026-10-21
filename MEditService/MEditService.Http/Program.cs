@@ -130,7 +130,7 @@ try
     // The extension holds this process's stdin open and never writes to it. The OS closes it when the
     // extension host dies, however it dies, so the end of stdin is the end of the window that owns this backend.
     if (app.Configuration.GetValue<bool>("ExitWhenStdinCloses"))
-        app.Lifetime.ApplicationStarted.Register(() => _ = StopWhenStdinCloses(app.Lifetime));
+        _ = StopWhenStdinCloses(app.Lifetime);
 
     await app.RunAsync();
 }

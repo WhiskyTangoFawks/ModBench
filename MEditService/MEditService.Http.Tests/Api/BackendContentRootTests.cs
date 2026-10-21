@@ -174,6 +174,28 @@ public sealed class BackendContentRootTests
     }
 
     [Fact]
+    public async Task AskedToExitWithItsStdin_ExitsWhenItClosesWhileStillStarting()
+    {
+        using var workingDirectory = new ScratchDirectory("medit-contentroot-");
+        var lines = new List<string>();
+        using var process = SpawnThroughTheDotnetMuxer(AskedToExitWithItsStdin, workingDirectory, lines, pipeStdin: true, stallStartup: true);
+        try
+        {
+            var stalled = await WaitForLineAsync(lines, l => l.Contains(StalledStartup.Marker, StringComparison.Ordinal), TimeSpan.FromSeconds(15));
+            Assert.True(stalled, $"backend never reached its stalled start; captured output:\n{string.Join('\n', Snapshot(lines))}");
+
+            process.StandardInput.Close();
+
+            Assert.True(await ExitsWithinAsync(process, TimeSpan.FromSeconds(3)),
+                $"captured output:\n{string.Join('\n', Snapshot(lines))}");
+        }
+        finally
+        {
+            KillUnlessAlreadyExitedBetweenTheCheckAndTheKill(process);
+        }
+    }
+
+    [Fact]
     public async Task NotAsked_KeepsRunningWhenItsStdinCloses()
     {
         using var workingDirectory = new ScratchDirectory("medit-contentroot-");
@@ -206,7 +228,7 @@ public sealed class BackendContentRootTests
         return await process.WaitForExitAsync(deadline.Token).ContinueWith(t => t.IsCompletedSuccessfully, TaskScheduler.Default);
     }
 
-    private static Process SpawnThroughTheDotnetMuxer(IReadOnlyList<string> extraArgs, string workingDirectory, List<string> capturedLines, bool pipeStdin = false)
+    private static Process SpawnThroughTheDotnetMuxer(IReadOnlyList<string> extraArgs, string workingDirectory, List<string> capturedLines, bool pipeStdin = false, bool stallStartup = false)
     {
         var psi = new ProcessStartInfo("dotnet")
         {
@@ -216,6 +238,11 @@ public sealed class BackendContentRootTests
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+        if (stallStartup)
+        {
+            psi.Environment["ASPNETCORE_HOSTINGSTARTUPASSEMBLIES"] = typeof(StalledStartup).Assembly.GetName().Name;
+            psi.Environment["DOTNET_STARTUP_HOOKS"] = typeof(StalledStartup).Assembly.Location;
+        }
         psi.ArgumentList.Add(Path.Combine(ApiDirectory, "MEditService.Http.dll"));
         psi.ArgumentList.Add("--LogDirectory");
         psi.ArgumentList.Add(LogDirectory(workingDirectory));
