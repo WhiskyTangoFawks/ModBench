@@ -1734,6 +1734,9 @@ export interface components {
             installationFile?: components["schemas"]["InstallationFileRequest"] | null;
             metadataFiles: string[];
             submodule?: components["schemas"]["SubmoduleRequest"] | null;
+            unreadable?: {
+                [key: string]: string;
+            } | null;
         };
         RestoreFromManifestRequest: {
             mods: components["schemas"]["RestoreFromManifestModRequest"][];
