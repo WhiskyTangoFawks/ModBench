@@ -332,11 +332,12 @@ export class Instance implements Subscription {
   }
 
   private tellReading({
-    linkNotes, archiveListNotes, orderNotes, sourceMods, mods: entries, modFiles, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes, managerRunning,
+    linkNotes, archiveListNotes, orderNotes, sourceMods, modFiles, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes, managerRunning,
   }: InstanceReading): void {
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
     this.tellOnce('notes', notes.map((note) => `[instance] ${note}`), 'info');
-    this.tellOnce('listingNotes', entries.flatMap((entry) => entry.kind === 'mod' ? (modFiles.get(entry.name)?.notes ?? []).map((note) => `[instance] ${entry.name}: ${note}`) : []), 'info');
+    const listingNotes = [...modFiles].flatMap(([name, listing]) => listing.notes.map((note) => `[instance] ${name}: ${note}`));
+    this.tellOnce('listingNotes', listingNotes, 'info');
     this.tellOnce('links', linkNotes.map((note) => `[instance] ${note}`), 'info');
     this.tellOnce('orderNotes', orderNotes.map((note) => `[instance] ${note}`), 'warn');
     this.tellOnce('archiveListNotes', archiveListNotes.map((note) => `[instance] ${note}`), 'warn');

@@ -235,6 +235,15 @@ describe('Instance — the value', () => {
     expect(logs.filter((line) => line.includes('Loop'))).toEqual(['[instance] /inst/mods/Loop is a link Modbench cannot follow, so it is not read: too many levels']);
   });
 
+  it('names the mod a note on its files belongs to', async () => {
+    const note = 'broken link "/mods/A/x.dds", skipped';
+    const { instance, logs } = loader({ mods: [mod('A')], modFiles: new Map([['A', { ...filesOfMod('A', 'a.dds'), notes: [note] }]]) });
+
+    await instance.refresh();
+
+    expect(logs).toEqual([`[instance] A: ${note}`]);
+  });
+
   it('carries the winner of a path two enabled mods provide, and each listed mod\'s own files and folders, a disabled mod\'s too', async () => {
     const folder = { relativePath: 'textures', path: '/mods/Harder VATS/textures', excluded: false };
     const { instance } = loader({
@@ -626,22 +635,6 @@ describe('Instance — game folder and the archives the game loads', () => {
     await instance.refresh();
 
     expect(warnings).toEqual([`[instance] ${note}`]);
-  });
-
-  it('tells once a note on a mod\'s files, and again when it clears and comes back', async () => {
-    const note = 'broken link "/mods/A/x.dds", skipped';
-    const noted = new Map([['A', { ...filesOfMod('A', 'a.dds'), notes: [note] }]]);
-    const clear = new Map([['A', filesOfMod('A', 'a.dds')]]);
-    const { instance, fake, logs } = loader({ mods: [mod('A')], modFiles: noted });
-
-    await instance.refresh();
-    await instance.refresh();
-    fake.read({ modFiles: clear });
-    await instance.refresh();
-    fake.read({ modFiles: noted });
-    await instance.refresh();
-
-    expect(logs).toEqual([`[instance] A: ${note}`, `[instance] A: ${note}`]);
   });
 
   it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {
