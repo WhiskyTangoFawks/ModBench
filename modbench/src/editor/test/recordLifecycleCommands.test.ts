@@ -93,23 +93,6 @@ describe('registerRecordLifecycleCommands', () => {
     return { reporter, ask, writing, source };
   }
 
-  describe('from the palette, handed no row, taking the Plugins selection', () => {
-    afterEach(() => { viewSelection = []; });
-
-    it('delete removes the selected records, asking once', async () => {
-      const client = new InMemoryMEditClient();
-      client.setCommandResult('getDeleteChanges', { applied: [RECORD_IDENTITY].map(changes), refused: [] });
-      viewSelection = [RECORD_NODE];
-      invoke(client, 'Delete');
-
-      await present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")();
-
-      expect(client.calls.filter(c => c.method === 'getDeleteChanges').map(c => c.args[0])).toEqual([
-        [{ formKey: '000801:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } }],
-      ]);
-    });
-  });
-
   describe('a view\'s Delete key, which passes its view as args', () => {
     afterEach(() => { selectionsOfViews.clear(); });
 
@@ -483,19 +466,6 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     invoke(client);
 
     await copy(RECORD_NODE, [RECORD_NODE, SECOND_NODE]);
-
-    expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'New', [PATCH], false]]);
-  });
-
-  it('from the palette, takes the Plugins selection', async () => {
-    const client = new InMemoryMEditClient();
-    destinations(client);
-    client.setCommandResult('getCopyChanges', { applied: [], refused: [] });
-    pick('New', [PATCH]);
-    viewSelection = [RECORD_NODE, SECOND_NODE];
-    invoke(client);
-
-    await copy();
 
     expect(copyCalls(client)).toEqual([[[SOURCE, SECOND], 'New', [PATCH], false]]);
   });

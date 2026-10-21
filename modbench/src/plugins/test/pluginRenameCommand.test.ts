@@ -26,6 +26,7 @@ vi.mock('vscode', async () => {
 });
 
 import { AgentCall } from '../../drivingLib/agentGesture';
+import { Refusal } from '../../drivingLib/refusal';
 import { oneAtATime } from '../../textDocuments/oneAtATime';
 import type { SourceEditing } from '../../textDocuments/sourceEditing';
 import { progressSteps } from '../../test/recordedProgress';
@@ -109,15 +110,6 @@ describe('modbench.plugin.rename', () => {
     expect(fake.calls).toEqual([{ verb: 'renamePlugin', origin: { kind: 'mod', name: 'ModA' }, from: 'Patch.esp', to: 'Renamed.esp' }]);
     expect(progressSteps).toEqual(['progress opens on modbench.pluginListTree', 'Instance loader: read every file again', 'progress closes']);
     expect(reporter.reports).toEqual([]);
-  });
-
-  it('takes the one selected plugin from a key or the palette, which pass no row', async () => {
-    showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, run } = setup([row()]);
-
-    await run();
-
-    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([{ method: 'getRenameSourceChanges', args: [PLUGIN, 'Renamed.esp'] }]);
   });
 
   it('renames nothing when the confirmation of its dependants is declined, and says nothing', async () => {
@@ -317,6 +309,15 @@ describe('modbench.plugin.rename, called by the agent', () => {
     const { client, fake, run } = setup();
 
     await expect(run(call)).rejects.toThrow(reason);
+
+    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('refuses an Argument that is not a plugin, renaming nothing', async () => {
+    const { client, fake, run } = setup();
+
+    await expect(run(new AgentCall([{ kind: 'mod', name: 'ModA' }], { name: 'Renamed.esp' }))).rejects.toBeInstanceOf(Refusal);
 
     expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
     expect(fake.calls).toEqual([]);

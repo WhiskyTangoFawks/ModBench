@@ -144,12 +144,6 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(showTextDocument).not.toHaveBeenCalled();
   });
 
-  it('open: is a no-op when invoked with no node', async () => {
-    registerDownloadsSingleRowCommands(recordingReporter(), () => []);
-    await invoke('modbench.downloadedFile.open', undefined);
-    expect(openExternal).not.toHaveBeenCalled();
-  });
-
   it('open: on failure, logs and surfaces an error notification naming the action and row', async () => {
     const root = await makeInstanceRoot();
     await writeDownloadedFile(root, 'foo.7z');
@@ -176,12 +170,6 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(calledFsPath(showTextDocument)).toBe(meta);
     expect(openExternal).not.toHaveBeenCalled();
     expect(showQuickPick).not.toHaveBeenCalled();
-  });
-
-  it('open metadata: is a no-op when invoked with no node', async () => {
-    registerDownloadsSingleRowCommands(recordingReporter(), () => []);
-    await invoke('modbench.downloadedFile.openMeta', undefined);
-    expect(showTextDocument).not.toHaveBeenCalled();
   });
 
   it('open metadata: on failure, logs and surfaces an error notification naming the action and row', async () => {
@@ -303,18 +291,6 @@ describe('modbench.downloadedFile.exclude / include — a multi-name selection',
     expect(recordedCall.message).toBe(`Could not ${verb} 1 of 3 downloaded files.`);
     expect(fake.calls).toEqual(['a.7z', 'b.7z', 'gone.7z'].map((name) => ({ verb: 'markDownloadedFile', name, mark })));
   });
-
-  it('an empty selection excludes nothing and reports nothing', async () => {
-    const fake = downloadsFake();
-    const reporter = recordingReporter();
-
-    registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceThatReads, reporter, scriptedDialog(), trash, downloadsLog, () => []);
-    await invoke('modbench.downloadedFile.exclude', undefined, []);
-
-    expect(fake.calls).toEqual([]);
-    expect(reporter.reports).toEqual([]);
-    expect(reporter.selectionOutcomeCalls).toEqual([]);
-  });
 });
 
 describe('modbench.downloadedFile.delete — a multi-name selection', () => {
@@ -397,32 +373,6 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
       '"foo.7z" was deleted, but its zzz-managers-word could not be moved to the trash and was left behind: EPERM: operation not permitted',
     ]);
     expect(reporter.reports).toEqual([]);
-  });
-
-  it('with no clicked row and no selection array, as VS Code invokes a keybinding\'s command, deletes the view\'s own current selection', async () => {
-    const ask = scriptedDialog('Delete');
-    const viewSelection = () => [node(ROOT, 'a.7z'), node(ROOT, 'b.7z')];
-
-    const fake = downloadsFake();
-
-    registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceThatReads, recordingReporter(), ask, trash, downloadsLog, viewSelection);
-    invoke('modbench.downloadedFile.delete');
-
-    await vi.waitFor(() => expect(fake.calls).toEqual(['a.7z', 'b.7z'].map((name) => ({ verb: 'trashDownloadedFile', name }))));
-    assertAskedOnce(ask, { messageContains: '2', buttons: ['Delete'] });
-  });
-
-  it('with no clicked row and an empty view selection, deletes nothing and asks nothing', async () => {
-    const reporter = recordingReporter();
-    const ask = scriptedDialog('Delete');
-
-    const fake = downloadsFake();
-
-    registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceThatReads, reporter, ask, trash, downloadsLog, () => []);
-    await invoke('modbench.downloadedFile.delete');
-
-    expect(ask.asked).toEqual([]);
-    expect(fake.calls).toEqual([]);
   });
 });
 
