@@ -29,8 +29,7 @@ public sealed class SourceRepositoryFormKeysUsedTests : IDisposable
     {
         if (files.Length == 0) PluginBaselines.InitWithNoRecords(_modFolder);
         else PluginBaselines.Init(_modFolder, files);
-        return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
+        return TestAdapters.OpenSourceMod(_modFolder, Release);
     }
 
     private (ISourceRepository Repository, string Relative) UnreadableDocument()

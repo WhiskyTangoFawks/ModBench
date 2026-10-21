@@ -12,38 +12,10 @@ public class SchemaReflectorAtomicValueTests
     private ColumnSpec Column(string table, string column) =>
         _reflector.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(c => c.Name == column);
 
-    private FieldMetadata FieldAt(string table, string dottedPathWithArrayHopsAsBrackets)
-    {
-        var hops = dottedPathWithArrayHopsAsBrackets.Split('.');
-        var field = Column(table, hops[0]).Field;
-        foreach (var hop in hops[1..])
-        {
-            field = hop == "[]"
-                ? field.ElementType ?? throw new InvalidOperationException($"Expected '{field.Name}' to be an array.")
-                : (field.Fields ?? throw new InvalidOperationException($"Expected '{field.Name}' to have members.")).Single(f => f.Name == hop);
-        }
-        return field;
-    }
-
     [Fact]
     public void Color_IsAColorLeaf_WithNoMembersOfItsOwn_AsXEditDefinesLightColorAsWbByteColors()
     {
-        var color = Column("ligh", "Color");
-
-        Assert.Equal("color", color.ApiType);
-        Assert.Null(color.Field.Fields);
-    }
-
-    [Fact]
-    public void Color_NestedInsideAStruct_IsAColorLeaf_ReachedBelowAColumnNotOnlyAtTheTopLevel()
-    {
-        var lighting = Column("cell", "Lighting");
-        var subFields = lighting.Field.Fields
-            ?? throw new InvalidOperationException("Expected 'cell.Lighting' to have sub-fields.");
-        var ambient = subFields.Single(f => f.Name == "AmbientColor");
-
-        Assert.Equal("color", ambient.Type);
-        Assert.Null(ambient.Fields);
+        Assert.Equal("color", Column("ligh", "Color").ApiType);
     }
 
     [Theory]
@@ -56,9 +28,10 @@ public class SchemaReflectorAtomicValueTests
     [InlineData("lens", "Sprites.[].Data.Tint", false)]
     public void AColorHoldsAlpha_AsMutagensBinaryTranslationKeepsIt(string table, string path, bool holdsAlpha)
     {
-        var color = FieldAt(table, path);
+        var color = SchemaFields.At(GameRelease.Fallout4, table, path);
 
         Assert.Equal("color", color.Type);
+        Assert.Null(color.Fields);
         Assert.Equal(holdsAlpha, color.HoldsAlpha);
     }
 

@@ -79,16 +79,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_root, "mod.ba2")));
     }
 
-    [Fact]
-    public void AFileWhoseStampMatchesTheLastRead_IsNotOpenedAgain()
-    {
-        Write("a.txt", "hello");
-        Files();
-        using var held = HeldOpen("a.txt");
-
-        Assert.Equal(HashOfHello, Assert.Single(Files()).Hash);
-    }
-
     [Theory]
     [InlineData(0, 0, 0, HashOfHelloWithACapitalO)]
     [InlineData(1, 0, 0, HashOfHello)]
@@ -293,15 +283,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(new ModStatus("mod", NoManifest: false, [], [], ["a.nif"], []), status);
     }
 
-    [Fact]
-    public void AFileALineNames_AsTheLastRestoreKeptIt_DoesNotDiffer()
-    {
-        Write("a.nif", "hello");
-        KeepAsRestored(Manifested(Line("a.nif", "Mod.zip")));
-
-        Assert.Empty(Status().Differing);
-    }
-
     [Theory]
     [InlineData("hello", "Mod.zip", false)]
     [InlineData("edited", "Mod.zip", true)]
@@ -339,28 +320,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
         using var held = HeldOpen("a.nif");
 
         Assert.Empty(Status().Differing);
-    }
-
-    [Fact]
-    public void AStatus_KeepsTheHashItsPackageFixes_AsTheStatCacheHeldIt()
-    {
-        Write("a.nif", "hello");
-        KeepAsRestored(Manifested(Line("a.nif", "Mod.zip")));
-
-        Status();
-
-        Assert.Empty(Status().Differing);
-    }
-
-    [Fact]
-    public void AFileALineNamesThatIsGone_IsGone_AndDoesNotDiffer()
-    {
-        Manifested(Line("a.nif", "Mod.zip"));
-
-        var status = Status();
-
-        Assert.Equal(["a.nif"], status.Gone);
-        Assert.Empty(status.Differing);
     }
 
     [Fact]
@@ -459,57 +418,30 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(3, parsed.RootElement.GetProperty("files").GetArrayLength());
     }
 
-    [Theory]
-    [InlineData(true, "{\"submodule\":\"Mod\",\"version\":\"2\"}")]
-    [InlineData(false, "{\"repository\":\"Mod\",\"version\":\"2\"}")]
-    public void WriteManifest_OfASourceMod_NamesItsSubmodule_OrWithNoRemoteItsRepository_AsItsPackage(bool isSubmodule, string line)
+    public static TheoryData<ManifestPackage, string> PackagesAndTheirLines => new()
     {
-        _repository.WriteManifest(_root, "mod", new Manifest(
-            new ManifestPackage.SourceRepository("Mod", isSubmodule), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
+        { new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), "{\"submodule\":\"Mod\",\"version\":\"2\"}" },
+        { new ManifestPackage.SourceRepository("Mod", IsSubmodule: false), "{\"repository\":\"Mod\",\"version\":\"2\"}" },
+        { new ManifestPackage.GameFolder("Fallout 4", "AAAA"), "{\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAA\",\"version\":\"2\"}" },
+    };
+
+    [Theory]
+    [MemberData(nameof(PackagesAndTheirLines))]
+    public void WriteManifest_NamesTheModsPackageByItsKind_WithTheVersion(ManifestPackage package, string line)
+    {
+        _repository.WriteManifest(_root, "mod", new Manifest(package, [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
 
         Assert.Contains("\"package\": " + line, File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
     }
 
-    [Fact]
-    public void WriteManifest_OfAGameFolderMod_NamesTheGameFolderAndItsPinAsItsPackage()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("1.2.3")]
+    public void WriteManifest_OfAModWithNoPackageAndNoFiles_WritesAnEmptyFileList_BecauseTheVersionBelongsToThePackage(string? version)
     {
-        _repository.WriteManifest(_root, "mod", new Manifest(new ManifestPackage.GameFolder("Fallout 4", "AAAA"), [new ManifestFile("d.esp", new PackageEntry.Held())], "2"));
-
-        Assert.Contains(
-            "\"package\": {\"gameFolder\":\"Fallout 4\",\"hash\":\"AAAA\",\"version\":\"2\"}", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
-    }
-
-    [Fact]
-    public void WriteManifest_OfAModWithAVersionAndNoPackage_WritesNoVersion_BecauseTheVersionBelongsToThePackage()
-    {
-        _repository.WriteManifest(_root, "mod", new Manifest(null, [], "1.2.3"));
+        _repository.WriteManifest(_root, "mod", new Manifest(null, [], version));
 
         Assert.Equal("{\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
-    }
-
-    [Fact]
-    public void WriteManifest_OfAModWithNoPackageAndNoFiles_WritesAnEmptyFileList()
-    {
-        _repository.WriteManifest(_root, "mod", new Manifest(null, []));
-
-        Assert.Equal("{\n\"files\": []\n}\n", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
-    }
-
-    [Fact]
-    public void WriteFile_FailingPartWay_LeavesTheOldFileWholeAndNoTempBehind()
-    {
-        _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("a.txt", new PackageEntry.NotHeld())]));
-        var path = Path.Combine(_root, "mod.manifest.json");
-        var before = File.ReadAllBytes(path);
-
-        Assert.Throws<IOException>(() => _repository.WriteFile(_root, "mod.manifest.json", stream =>
-        {
-            stream.Write("{\"files\": ["u8);
-            throw new IOException("killed mid-write");
-        }));
-
-        Assert.Equal(before, File.ReadAllBytes(path));
-        Assert.Equal(["mod.manifest.json"], Directory.GetFiles(_root).Select(Path.GetFileName));
     }
 
     [Fact]

@@ -25,8 +25,7 @@ public sealed class SourceRepositoryUnreadableReadsTests : IDisposable
     private ISourceRepository SourceMod(params TreeFile[] files)
     {
         PluginBaselines.Init(_modFolder, files);
-        return TestAdapters.Source().Open(TestMod.In(_modFolder), Release)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be a source mod.");
+        return TestAdapters.OpenSourceMod(_modFolder, Release);
     }
 
     private string Unreadable(string relativePath)

@@ -1,5 +1,6 @@
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
+using Mutagen.Bethesda;
 
 namespace MEditService.TestSupport;
 
@@ -10,4 +11,8 @@ public static class TestAdapters
     public static IPluginAdapter Mutagen() => new MutagenPluginAdapter(TimeProvider.System);
 
     public static ISourceAdapter Source() => new GitSourceAdapter(new UnsavedDocuments());
+
+    public static ISourceRepository OpenSourceMod(string modFolder, GameRelease release) =>
+        Source().Open(TestMod.In(modFolder), release)
+        ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be a source mod.");
 }
