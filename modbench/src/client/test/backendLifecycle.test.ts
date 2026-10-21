@@ -78,15 +78,14 @@ describe('BackendLifecycle', () => {
     const hangs = () => new Promise<HealthAnswer>(() => {});
 
     it('says the backend did not answer in time when the deadline cuts off a request that hangs, and destroys the request', async () => {
-      const connected = Promise.withResolvers<Socket>();
       const silent = createServer(() => {});
-      silent.on('connection', connected.resolve);
+      const connected = new Promise<Socket>((resolve) => silent.on('connection', resolve));
       await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
       const logged = leveledLog();
       const lifecycle = new BackendLifecycle({ attachPort: addressInfo(silent.address()).port, pollIntervalMs: 1000, pollTimeoutMs: 1000, log: logged });
 
       const started = lifecycle.start();
-      const socket = await connected.promise;
+      const socket = await connected;
       const closed = new Promise((resolve) => socket.on('close', resolve));
       await vi.advanceTimersByTimeAsync(1000);
       await started;
