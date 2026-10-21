@@ -140,7 +140,6 @@ try
     }
     catch (OperationCanceledException) when (lifetime.ApplicationStopping.IsCancellationRequested)
     {
-        // A stop requested while the host was still starting is a requested exit, not a failure.
     }
 }
 catch (Exception ex) when (ex is not OutOfMemoryException)
