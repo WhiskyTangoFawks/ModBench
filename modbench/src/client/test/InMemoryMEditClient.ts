@@ -5,7 +5,7 @@ import type {
 import type { LoadOrderStatus, NotificationEvent } from '../apiClient';
 import { SseNotificationSubscriber } from '../notificationStream';
 import { createLoadOrderSender, type LoadOrderWire } from '../loadOrderSender';
-import { isReadFailed, type ReadFailed } from '../../wire/readFailed';
+import type { ReadFailed } from '../../wire/readFailed';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
 export type { NotificationEvent };
@@ -38,9 +38,9 @@ export interface RecordedCall {
   args: unknown[];
 }
 
-// One scripted step, queued per method: resolves an answer or rejects with an error. An answer
+// One scripted step, queued per method: resolves an answer or a ReadFailed. An answer
 // may be a pending `PromiseLike`, held in flight on a test's own schedule.
-type ScriptedStep<T> = { kind: 'answer'; value: T | PromiseLike<T> } | { kind: 'failure'; error: Error | ReadFailed };
+type ScriptedStep<T> = { kind: 'answer'; value: T | PromiseLike<T> } | { kind: 'failure'; failure: ReadFailed };
 
 // Homomorphic over `QueryMethod`, for the same reason `Answers` is: `QueryQueues[K]` (not
 // `ScriptedStep<Answer<K>>[]` inline) is what keeps a generic-keyed write sound.
@@ -52,10 +52,6 @@ type Scripted<T> = { value: T };
 type ScriptedAnswers = { [K in QueryMethod]: Scripted<Answer<K>>[] };
 type ScriptedResults = { [K in CommandMethod]: Scripted<Answer<K>>[] };
 
-function failed(failure: Error | ReadFailed): Promise<unknown> {
-  return isReadFailed(failure) ? Promise.resolve(failure) : Promise.reject(failure);
-}
-
 /** The in-memory adapter (target-architecture.d2, mEdit client): a test scripts each answer by
  *  method name, drives notifications with `emit`, and reads every recorded call back. An
  *  unscripted query rejects, so a forgotten script fails loudly, not silently empty. */
@@ -65,7 +61,7 @@ export class InMemoryMEditClient implements MEditClient {
   // Not readonly: `disconnected()` clears both wholesale by reassignment — the one mutation the
   // rest of this class does through `set`/`get`-shaped access instead.
   private queryAnswers: { [K in QueryMethod]?: ScriptedAnswers[K] } = {};
-  private readonly queryFailures = new Map<QueryMethod, Error | ReadFailed>();
+  private readonly queryFailures = new Map<QueryMethod, ReadFailed>();
   private queryQueues: { [K in QueryMethod]?: QueryQueues[K] } = {};
   private readonly commandResults: { [K in CommandMethod]?: ScriptedResults[K] } = {};
   private readonly commandFailures = new Map<CommandMethod, Error>();
@@ -129,9 +125,8 @@ export class InMemoryMEditClient implements MEditClient {
     this.queryAnswers[method] = boxed;
   }
 
-  /** Every call to `method` fails until re-scripted, answering a ReadFailed or rejecting
-   *  with an Error — the failure-shaped sibling of {@link setQueryAnswer}. */
-  setQueryFailure(method: QueryMethod, failure: Error | ReadFailed): void {
+  /** Every call to `method` answers a ReadFailed until re-scripted — the failure-shaped sibling of {@link setQueryAnswer}. */
+  setQueryFailure(method: QueryMethod, failure: ReadFailed): void {
     this.queryFailures.set(method, failure);
   }
 
@@ -141,9 +136,9 @@ export class InMemoryMEditClient implements MEditClient {
     this.pushQueryStep(method, { kind: 'answer', value: answer });
   }
 
-  /** {@link setQueryAnswerOnce}'s failure-shaped sibling — queues one failure, answered or rejected as setQueryFailure does. */
-  setQueryFailureOnce(method: QueryMethod, failure: Error | ReadFailed): void {
-    this.pushQueryStep(method, { kind: 'failure', error: failure });
+  /** {@link setQueryAnswerOnce}'s failure-shaped sibling — queues one ReadFailed. */
+  setQueryFailureOnce(method: QueryMethod, failure: ReadFailed): void {
+    this.pushQueryStep(method, { kind: 'failure', failure });
   }
 
   private pushQueryStep<K extends QueryMethod>(method: K, step: ScriptedStep<Answer<K>>): void {
@@ -272,10 +267,10 @@ export class InMemoryMEditClient implements MEditClient {
   private query(method: QueryMethod, args: unknown[]): Promise<unknown> {
     this.record(method, args);
     const step = this.queryQueues[method]?.shift();
-    if (step?.kind === 'failure') return failed(step.error);
+    if (step?.kind === 'failure') return Promise.resolve(step.failure);
     if (step) return Promise.resolve(step.value);
     const failure = this.queryFailures.get(method);
-    if (failure) return failed(failure);
+    if (failure) return Promise.resolve(failure);
     const scripted = this.queryAnswers[method]?.[0];
     if (!scripted && this.gone) return Promise.resolve({ failed: 'unreachable' });
     if (!scripted) {

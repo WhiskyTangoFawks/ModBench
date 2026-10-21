@@ -1035,10 +1035,10 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await vi.waitFor(() => expect(settled).toHaveBeenCalledWith({ failed: 'refused', refusal: 'Not plugin source.' }));
   });
 
-  it('rejects a thrown request with the words for it, never fetch\'s text', async () => {
+  it('answers a thrown request as an unknown refusal in the words for it, never fetch\'s text', async () => {
     const client = makeClient(vi.fn(() => Promise.reject(new Error('fetch failed'))));
 
-    await expect(client.getEditChanges(record.formKey, plugin, envelope)).rejects.toThrow(new Error('mEdit could not be reached.'));
+    expect(await client.getEditChanges(record.formKey, plugin, envelope)).toEqual({ applied: false, refusal: 'Unknown', message: 'mEdit could not be reached.' });
   });
 
 });
