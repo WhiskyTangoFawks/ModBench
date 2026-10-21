@@ -56,24 +56,25 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
     [Fact]
     public async Task Init_OfAPluginInAModThatAlreadyHasARepository_RefusesTheMod_PointingAtDecompile_AndCommitsNothing()
     {
-        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
         var source = new FakeSourceAdapter().WithSourceMod(_modFolder);
 
-        var result = await Init(TestAdapters.Mutagen(), source);
+        var message = await RefusedByARepositoryHeldIn(source);
 
-        Assert.Empty(result.Applied);
-        var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, DecompileAndCommitRefusal.AlreadyInitialized), (refused.Item, refused.Refusal));
-        Assert.Contains("decompile", refused.Message, StringComparison.Ordinal);
-        Assert.Empty(source.InitCalls);
+        Assert.Contains("decompile", message, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Init_IntoAModWhoseRepositoryHasHistoryButNoMain_RefusesTheMod_AndChangesNothingOfTheRepository()
     {
-        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         var source = new FakeSourceAdapter().HoldingAnotherRepository(_modFolder);
+
+        await RefusedByARepositoryHeldIn(source);
+    }
+
+    private async Task<string> RefusedByARepositoryHeldIn(FakeSourceAdapter source)
+    {
+        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
         var result = await Init(TestAdapters.Mutagen(), source);
 
@@ -82,69 +83,33 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
         Assert.Equal((ModName, DecompileAndCommitRefusal.AlreadyInitialized), (refused.Item, refused.Refusal));
         Assert.Contains(_modFolder, refused.Message, StringComparison.Ordinal);
         Assert.Empty(source.InitCalls);
+        return refused.Message;
     }
 
-    [Fact]
-    public async Task Init_OfAModWhereOnePluginFailsItsRoundTripGate_RefusesTheWholeMod_WritingNothing()
+    public static TheoryData<string[], string[], string[], string[]> PluginsFailingTheRoundTripGate() => new()
     {
-        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
-        WritePluginReturningItsBinarySha256("Third.esp", "ThirdNpc");
+        { ["First", "Second", "Third"], ["Second"], ["SecondNpc"], [] },
+        { ["First", "Second", "Third"], ["First", "Third"], ["First.esp", "Third.esp"], ["Second.esp"] },
+        { ["Second"], ["Second"], ["SecondNpc"], [] },
+        { ["First", "Second"], ["First", "Second"], ["FirstNpc", "SecondNpc"], [] },
+    };
 
+    [Theory]
+    [MemberData(nameof(PluginsFailingTheRoundTripGate))]
+    public async Task Init_OfAModWithPluginsThatFailTheRoundTripGate_RefusesTheWholeMod_NamingEachRefusedPluginAndNoOther_WritingNothing(
+        string[] plugins, string[] failing, string[] named, string[] notNamed)
+    {
+        foreach (var plugin in plugins) WritePluginReturningItsBinarySha256($"{plugin}.esp", $"{plugin}Npc");
         var source = new FakeSourceAdapter();
 
-        var result = await Init(new RoundTripFailsFor("Second.esp"), source);
+        var result = await Init(new RoundTripFailsForEvery([.. failing.Select(plugin => $"{plugin}.esp")]), source);
 
         Assert.Empty(result.Applied);
-        var refusedMod = Assert.Single(result.Refused);
-        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, refusedMod.Refusal);
-        Assert.Contains("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
-        Assert.Empty(source.InitCalls);
-    }
-
-    [Fact]
-    public async Task Init_OfAModWhereTwoPluginsAreRefused_NamesEachRefusedPluginAndNoOther()
-    {
-        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
-        WritePluginReturningItsBinarySha256("Third.esp", "ThirdNpc");
-
-        var result = await Init(new RoundTripFailsForEvery("First.esp", "Third.esp"));
-
-        var refusedMod = Assert.Single(result.Refused);
-        Assert.Contains("First.esp", refusedMod.Message, StringComparison.Ordinal);
-        Assert.Contains("Third.esp", refusedMod.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("Second.esp", refusedMod.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Init_OfASelectionWhereEveryPluginIsRefused_CreatesNoRepository()
-    {
-        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
-
-        var source = new FakeSourceAdapter();
-
-        var result = await Init(new RoundTripFailsFor("Second.esp"), source);
-
-        Assert.Empty(result.Applied);
-        var refusedMod = Assert.Single(result.Refused);
-        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, refusedMod.Refusal);
-        Assert.Contains("SecondNpc", refusedMod.Message, StringComparison.Ordinal);
-        Assert.Empty(source.InitCalls);
-    }
-
-    [Fact]
-    public async Task Init_OfAModWhoseEveryPluginIsRefusedForOneCause_KeepsThatCauseAsTheModsRefusal()
-    {
-        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
-
-        var result = await Init(new RoundTripFailsForEvery("First.esp", "Second.esp"));
-
         var refused = Assert.Single(result.Refused);
         Assert.Equal((ModName, DecompileAndCommitRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
-        Assert.Contains("FirstNpc", refused.Message, StringComparison.Ordinal);
-        Assert.Contains("SecondNpc", refused.Message, StringComparison.Ordinal);
+        Assert.All(named, name => Assert.Contains(name, refused.Message, StringComparison.Ordinal));
+        Assert.All(notNamed, name => Assert.DoesNotContain(name, refused.Message, StringComparison.Ordinal));
+        Assert.Empty(source.InitCalls);
     }
 
     [Fact]
@@ -155,7 +120,7 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
 
         var source = new FakeSourceAdapter();
 
-        var result = await Init(new RoundTripFailsFor("First.esp"), source);
+        var result = await Init(new RoundTripFailsForEvery("First.esp"), source);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal((ModName, DecompileAndCommitRefusal.PluginsRefused), (refused.Item, refused.Refusal));
@@ -188,23 +153,6 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
         mod.UsingLocalization = true;
         mod.WriteToBinary(Path.Combine(_modFolder, name));
         Directory.Delete(Path.Combine(_modFolder, "Strings"), recursive: true);
-    }
-
-    private sealed class RoundTripFailsFor(string plugin) : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        public override Task<Answer<string, PluginFailure>> WriteFromTreeAsync(
-            IReadOnlyList<TreeFile> files, string destinationPath,
-            IReadOnlyList<string> masterOrder, LoadOrderSnapshot loadOrder, CancellationToken cancel = default) =>
-            Path.GetFileName(destinationPath) == plugin
-                ? new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc).WriteFromTreeAsync(files, destinationPath, masterOrder, loadOrder, cancel)
-                : TestAdapters.Mutagen().WriteFromTreeAsync(files, destinationPath, masterOrder, loadOrder, cancel);
-
-        private static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken cancel)
-        {
-            var deserialized = await Fallout4WholeMod.Deserialize(folder, cancel);
-            deserialized.Npcs.First().EditorID += "Corrupted";
-            return deserialized;
-        }
     }
 
     private string WritePluginReturningItsBinarySha256(string name, string editorId)

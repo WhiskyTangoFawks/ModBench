@@ -187,201 +187,6 @@ public sealed class DecompileAndCommitModTests
     }
 
     [Fact]
-    public async Task InitMod_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()
-    {
-        using var modFolder = new ScratchDirectory("medit-initservice-badroundtrip-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-badroundtrip-data-");
-        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        var npc = mod.Npcs.AddNew("OriginalName");
-        mod.WriteToBinary(pluginPath);
-
-        var loadOrder = SnapshotPlugins.Snapshot(
-            dataFolder, dataFolder, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-
-        static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken ct)
-        {
-            var deserialized = await Fallout4WholeMod.Deserialize(folder, ct);
-            deserialized.Npcs.First().EditorID += "Corrupted";
-            return deserialized;
-        }
-
-        var adapter = new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc);
-
-        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
-
-        Assert.False(result.Applied);
-        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
-
-        Assert.Contains(npc.FormKey.ToString(), result.Message);
-        Assert.Contains("OriginalName", result.Message);
-        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
-    }
-
-    [Fact]
-    public async Task InitMod_WithAFloatFieldThatFailsToRoundTrip_RefusesNamingTheRecordAndTheField()
-    {
-        using var modFolder = new ScratchDirectory("medit-initservice-floatroundtrip-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-floatroundtrip-data-");
-        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        var npc = mod.Npcs.AddNew("SomeNpc");
-        const float nonDefaultSoTheMutationUnambiguouslyChangesIt = 1.5f;
-        npc.HeightMin = nonDefaultSoTheMutationUnambiguouslyChangesIt;
-        mod.WriteToBinary(pluginPath);
-
-        var loadOrder = SnapshotPlugins.Snapshot(
-            dataFolder, dataFolder, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-
-        static async Task<IMod> DeserializeThenMutateTheFloat(string folder, CancellationToken ct)
-        {
-            var deserialized = await Fallout4WholeMod.Deserialize(folder, ct);
-            deserialized.Npcs.First().HeightMin += 1.0f;
-            return deserialized;
-        }
-
-        var adapter = new ForgedTreeWriteAdapter(DeserializeThenMutateTheFloat);
-
-        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
-
-        Assert.False(result.Applied);
-        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
-
-        Assert.Contains(npc.FormKey.ToString(), result.Message);
-        Assert.Contains("Npc", result.Message);
-        Assert.Contains("HeightMin", result.Message);
-        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
-    }
-
-    [Fact]
-    public async Task InitMod_WithOpaqueTes4HeaderSubrecordsSet_Lands()
-    {
-        using var modFolder = new ScratchDirectory("medit-initservice-opaqueheader-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-opaqueheader-data-");
-        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        mod.Npcs.AddNew("SomeNpc");
-        mod.ModHeader.INTV = new byte[] { 1, 0, 0, 0 };
-        mod.ModHeader.INCC = 42;
-        mod.ModHeader.TypeOffsets = new byte[] { 9, 8, 7 };
-        mod.ModHeader.Deleted = new byte[] { 1, 2, 3 };
-        mod.ModHeader.Screenshot = new byte[] { 4, 5, 6 };
-        mod.ModHeader.Author = "Some Author";
-        mod.ModHeader.Description = "Some Description";
-        mod.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
-        mod.WriteToBinary(pluginPath);
-
-        var loadOrder = SnapshotPlugins.Snapshot(
-            dataFolder, dataFolder, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-
-        await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
-
-        Assert.True(TestAdapters.Source().IsSourceMod(modFolder));
-    }
-
-    public static IEnumerable<object[]> HeaderFieldCorruptionsMirroringCodecsOpaqueHeaderFields()
-    {
-        yield return new object[] { "TypeOffsets", Setter(h => h.TypeOffsets = new byte[] { 1, 2, 3 }), Setter(h => h.TypeOffsets = new byte[] { 9, 9, 9 }) };
-        yield return new object[] { "Deleted", Setter(h => h.Deleted = new byte[] { 1, 2, 3 }), Setter(h => h.Deleted = new byte[] { 9, 9, 9 }) };
-        yield return new object[] { "Screenshot", Setter(h => h.Screenshot = new byte[] { 1, 2, 3 }), Setter(h => h.Screenshot = new byte[] { 9, 9, 9 }) };
-        yield return new object[] { "INTV", Setter(h => h.INTV = new byte[] { 1, 0, 0, 0 }), Setter(h => h.INTV = new byte[] { 99, 0, 0, 0 }) };
-        yield return new object[] { "INCC", Setter(h => h.INCC = 1), Setter(h => h.INCC = 2) };
-        yield return new object[] { "Author", Setter(h => h.Author = "Original"), Setter(h => h.Author = "Corrupted") };
-        yield return new object[] { "Description", Setter(h => h.Description = "Original"), Setter(h => h.Description = "Corrupted") };
-
-        static Action<Fallout4ModHeader> Setter(Action<Fallout4ModHeader> action) => action;
-    }
-
-    [Theory]
-    [MemberData(nameof(HeaderFieldCorruptionsMirroringCodecsOpaqueHeaderFields))]
-    public async Task InitMod_ForEveryAllowListedHeaderField_RefusesNamingItWhenCorruptedAlone(
-        string fieldName, Action<Fallout4ModHeader> setBaseline, Action<Fallout4ModHeader> corrupt)
-    {
-        using var modFolder = new ScratchDirectory($"medit-initservice-header-{fieldName}-");
-        using var dataFolder = new ScratchDirectory($"medit-initservice-header-{fieldName}-data-");
-        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        mod.Npcs.AddNew("SomeNpc");
-        setBaseline(mod.ModHeader);
-        mod.WriteToBinary(pluginPath);
-
-        var loadOrder = SnapshotPlugins.Snapshot(
-            dataFolder, dataFolder, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-
-        async Task<IMod> DeserializeThenCorrupt(string folder, CancellationToken ct)
-        {
-            var deserialized = await Fallout4WholeMod.Deserialize(folder, ct);
-            corrupt(deserialized.ModHeader);
-            return deserialized;
-        }
-
-        var adapter = new ForgedTreeWriteAdapter(DeserializeThenCorrupt);
-
-        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod", adapter)).Only();
-
-        Assert.False(result.Applied);
-        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
-
-        Assert.Contains($"TES4 header field '{fieldName}'", result.Message);
-        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
-    }
-
-    [Fact]
-    public async Task InitMod_WithARecordThatOnlyGainsSubrecordsOnRewrite_RefusesNamingTheRealFieldNotSubrecordInventory()
-    {
-        using var modFolder = new ScratchDirectory("medit-initservice-furn-insert-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-furn-insert-data-");
-        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        mod.Furniture.AddNew("TestFurn");
-        mod.WriteToBinary(pluginPath);
-        await File.WriteAllBytesAsync(pluginPath, PluginBinaryForge.WithoutSubrecords(await File.ReadAllBytesAsync(pluginPath), "FURN", "FNAM", "MNAM"));
-
-        var loadOrder = SnapshotPlugins.Snapshot(
-            dataFolder, dataFolder, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true)]);
-        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
-
-        Assert.False(result.Applied);
-        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
-
-        Assert.DoesNotContain("is missing", result.Message);
-        Assert.DoesNotContain("FNAM", result.Message);
-        Assert.DoesNotContain("MNAM", result.Message);
-        Assert.Contains("Furniture", result.Message);
-        Assert.Contains("Flags", result.Message);
-        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
-    }
-
-    [Fact]
-    public async Task InitMod_LocalizedPluginWithABsaBesideIt_ReadsItsStringsFromTheModFolder_AndMaterializesTheRealStringInTheSourceFolder()
-    {
-        using var modFolder = new ScratchDirectory("medit-initservice-localized-");
-        using var sourceFolder = new ScratchDirectory("medit-initservice-localized-source-");
-        using var dataFolder = new ScratchDirectory("medit-initservice-localized-data-");
-        var (pluginPath, door) = WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(modFolder);
-
-        var anyBa2MakesMutagenResolveArchivePriorityNeedingWindowsPluginListings =
-            Path.Combine(modFolder, "UnrelatedMod - Main.ba2");
-        File.WriteAllBytes(anyBa2MakesMutagenResolveArchivePriorityNeedingWindowsPluginListings, []);
-
-        var loadOrder = SnapshotPlugins.Snapshot(
-            dataFolder, dataFolder, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true,
-                NamedProvider: new PluginProvider.FromMod("FixtureMod", modFolder, sourceFolder))]);
-        await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
-
-        Assert.True(TestAdapters.Source().IsSourceMod(sourceFolder));
-
-        var sourceText = SourceModTree.Document(sourceFolder, new PluginAddress("Fixture.esp", "FixtureMod"), door.FormKey.ToString()).Require().Body;
-        Assert.Contains("The Big Door", sourceText);
-    }
-
-    [Fact]
     public async Task InitMod_LocalizedPluginMissingItsStringsFile_RefusesNamingTheMissingFile_SinceMutagenLookupOfAMissingFileDoesNotThrow()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-localized-missing-");
@@ -407,103 +212,64 @@ public sealed class DecompileAndCommitModTests
         Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
-    [Fact]
-    public async Task InitMod_ADeletedRecordStillHoldingFields_RefusesNamingIt_SinceMutagenWritesADeletedRecordAsItsHeader()
+    public static TheoryData<Action<string>, string> PluginsTheGateRefusesNamingARecord() => new()
     {
-        using var modFolder = new ScratchDirectory("medit-init-deleted-fields-");
-        using var dataFolder = new ScratchDirectory("medit-init-deleted-fields-data-");
+        {
+            path => DeletedNpcPlugin.WriteHoldingEveryField(path, new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800)),
+            "Fixture.esp does not round-trip through its own source: NPC_ 000800:Fixture.esp is flagged Deleted " +
+            "and still holds fields, which Mutagen does not write for a deleted record."
+        },
+        {
+            path =>
+            {
+                var mod = ModKey.FromFileName("Fixture.esp");
+                UnknownGroupPlugin.Write(path, new FormKey(mod, 0x800), new FormKey(mod, 0x801));
+            },
+            "Fixture.esp does not round-trip through its own source: MISC 000801:Fixture.esp is absent from the rewrite, " +
+            "so its records cannot be proven intact."
+        },
+        {
+            path => WriteNpcWithFormId(path, withMaster: false, formId: 0u),
+            "Fixture.esp cannot become source: NPC_ 00000000 holds the null FormID, so the plugin is malformed."
+        },
+        {
+            path => WriteNpcWithFormId(path, withMaster: true, formId: 0x01000000),
+            "Fixture.esp cannot become source: NPC_ 000000:Fixture.esp holds object ID 000000, " +
+            "the FormKey its plugin header's source holds."
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(PluginsTheGateRefusesNamingARecord))]
+    public async Task InitMod_OfAPluginTheGateRefusesNamingARecord_RefusesTheModWithThatCause_CommittingNothing(Action<string> writePlugin, string message)
+    {
+        using var modFolder = new ScratchDirectory("medit-init-gate-refusal-");
+        using var dataFolder = new ScratchDirectory("medit-init-gate-refusal-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        var npc = new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800);
-        DeletedNpcPlugin.WriteHoldingEveryField(pluginPath, npc);
+        writePlugin(pluginPath);
 
         var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
         var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
 
         Assert.Equal((false, DecompileAndCommitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
-        Assert.Equal(
-            $"Fixture.esp does not round-trip through its own source: NPC_ {npc} is flagged Deleted " +
-            "and still holds fields, which Mutagen does not write for a deleted record.",
-            result.Message);
+        Assert.Equal(message, result.Message);
         Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
-    [Fact]
-    public async Task InitMod_ARecordInAGroupMutagenDrops_RefusesNamingIt_SinceTheRewriteLacksIt()
+    private static void WriteNpcWithFormId(string pluginPath, bool withMaster, uint formId)
     {
-        using var modFolder = new ScratchDirectory("medit-init-dropped-group-");
-        using var dataFolder = new ScratchDirectory("medit-init-dropped-group-data-");
-        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        var mod = ModKey.FromFileName("Fixture.esp");
-        var dropped = new FormKey(mod, 0x801);
-        UnknownGroupPlugin.Write(pluginPath, new FormKey(mod, 0x800), dropped);
-
-        var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
-        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
-
-        Assert.Equal((false, DecompileAndCommitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
-        Assert.Equal(
-            $"Fixture.esp does not round-trip through its own source: MISC {dropped} is absent from the rewrite, " +
-            "so its records cannot be proven intact.",
-            result.Message);
-        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
-    }
-
-    [Fact]
-    public async Task InitMod_ARecordWithANullFormId_RefusesNamingIt_SinceThePluginIsMalformed()
-    {
-        using var modFolder = new ScratchDirectory("medit-init-null-formid-");
-        using var dataFolder = new ScratchDirectory("medit-init-null-formid-data-");
-        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        mod.Npcs.AddNew("NullGuy");
-        mod.WriteToBinary(pluginPath);
-        var bytes = File.ReadAllBytes(pluginPath);
-        const int formIdOffset = 12;
-        BitConverter.GetBytes(0u).CopyTo(bytes, bytes.AsSpan().LastIndexOf("NPC_"u8) + formIdOffset);
-        File.WriteAllBytes(pluginPath, bytes);
-
-        var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
-        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
-
-        Assert.Equal((false, DecompileAndCommitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
-        Assert.Equal(
-            "Fixture.esp cannot become source: NPC_ 00000000 holds the null FormID, so the plugin is malformed.",
-            result.Message);
-        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
-    }
-
-    [Fact]
-    public async Task InitMod_ARecordOfObjectIdZero_RefusesNamingIt_SinceItsFormKeyIsTheHeaders()
-    {
-        using var modFolder = new ScratchDirectory("medit-init-object-id-zero-");
-        using var dataFolder = new ScratchDirectory("medit-init-object-id-zero-data-");
-        var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Master.esm") });
-        mod.Npcs.AddNew("ZeroGuy");
+        if (withMaster) mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Master.esm") });
+        mod.Npcs.AddNew("Npc");
         mod.WriteToBinary(pluginPath, new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
         {
             MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
         });
         var bytes = File.ReadAllBytes(pluginPath);
         const int formIdOffset = 12;
-        const uint ownObjectIdZero = 0x01000000;
-        BitConverter.GetBytes(ownObjectIdZero).CopyTo(bytes, bytes.AsSpan().LastIndexOf("NPC_"u8) + formIdOffset);
+        BitConverter.GetBytes(formId).CopyTo(bytes, bytes.AsSpan().LastIndexOf("NPC_"u8) + formIdOffset);
         File.WriteAllBytes(pluginPath, bytes);
-
-        var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
-            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);
-        var result = (await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod")).Only();
-
-        Assert.Equal((false, DecompileAndCommitRefusal.RoundTripFailed), (result.Applied, result.Refusal));
-        Assert.Equal(
-            "Fixture.esp cannot become source: NPC_ 000000:Fixture.esp holds object ID 000000, " +
-            "the FormKey its plugin header's source holds.",
-            result.Message);
-        Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
     private static (string PluginPath, Door Door) WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(string modFolder)
