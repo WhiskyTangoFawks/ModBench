@@ -123,15 +123,20 @@ internal sealed class Indexer : IDisposable
     // Deliberately not _lock: the reconciling thread takes _lock on every plugin, so a waiter
     // holding it could never be signalled.
     private readonly Lock _exclusive = new();
-    private CancellationTokenSource? _reconcileCancellation;
     // Only disposal stops a plugin read partway, inside the one transaction its rows land in. A newer
     // snapshot waits for the plugin in hand: snapshots come with every source write (ADR-0015), and each
     // reconcile must make progress.
     private readonly CancellationTokenSource _disposal = new();
-    private bool _disposed;
 
+    private bool _reconcileAsked;
     private readonly List<string> _handed = [];
-    private bool _validatingHanded;
+    private bool _working;
+    private bool _disposed;
+    private CancellationTokenSource? _reconcileCancellation;
+
+    // Guards the five fields above. Not _lock, so an arrival never waits on a status read or publish; none
+    // of this class's other locks is taken inside it.
+    private readonly Lock _turns = new();
 
     // The arrivals the last whole reconcile read the disk after, guarded by _lock and pulsed on _reconciled, which a
     // read after a source write waits on.
@@ -142,24 +147,39 @@ internal sealed class Indexer : IDisposable
     // LoadOrder: the snapshot the scope last reconciled, which holds the masters a plugin is read against.
     private sealed record OpenScope(HeldPlugins Held, Store Store, Projector Projector, FailedReads Failed, LoadOrderSnapshot LoadOrder);
 
-    // Takes the exclusive right to reconcile or tear down, waiting out any in-flight reconcile.
+    // Takes the exclusive right to tear down, waiting out the worker's turn and cancelling its reconcile.
     // Always paired with ExitExclusive in a finally.
     private void EnterExclusive()
     {
-        // Cancel and dispose both happen under _lock, so a token can never be cancelled after it has
-        // been disposed.
-        lock (_lock)
-        {
-            if (_reconcileCancellation is { } inFlight)
-            {
-                inFlight.Cancel();
-                _logger.LogDebug("Asked the reconcile in flight to stop");
-            }
-        }
+        lock (_turns) CancelInFlight();
         _exclusive.Enter();
     }
 
+    // Cancel and dispose both happen under _turns, so a token can never be cancelled after it has
+    // been disposed.
+    private void CancelInFlight()
+    {
+        if (_reconcileCancellation is not { } inFlight) return;
+        inFlight.Cancel();
+        _logger.LogDebug("Asked the reconcile in flight to stop");
+    }
+
     private void ExitExclusive() => _exclusive.Exit();
+
+    // A read that ignores cancellation, as a Mutagen read can, would otherwise hold closing mEdit, and
+    // the record index file with it, for ever.
+    private static readonly TimeSpan CloseLimit = TimeSpan.FromSeconds(10);
+
+    private bool EnterExclusiveWithin(TimeSpan limit)
+    {
+        lock (_turns) CancelInFlight();
+        var deadline = _timeProvider.GetUtcNow() + limit;
+        while (!_exclusive.TryEnter(SequencePollInterval))
+        {
+            if (_timeProvider.GetUtcNow() >= deadline) return false;
+        }
+        return true;
+    }
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
@@ -260,59 +280,72 @@ internal sealed class Indexer : IDisposable
     }
 
     /// <summary>A read met DuckDB's invalidation: reconciling reopens the store (ADR-0003).</summary>
-    public void RecoverFromInvalidation() => StartReconcile();
+    public void RecoverFromInvalidation() => AskReconcile();
 
-    // ADR-0013: every arrival, changed or not, reconciles the snapshot held when it runs, so an
+    // ADR-0013: every arrival, changed or not, reconciles the snapshot held when its turn runs, so an
     // overtaken arrival reconciles the newer.
-    private void StartReconcile() =>
-        Task.Factory.StartNew(ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-
-    // ADR-0015: a handed path is validated as a change on disk is. A reconcile in flight is waited out,
-    // never cancelled; paths handed meanwhile are validated together.
-    private void ValidateTreesHolding(IReadOnlyList<string> paths)
+    private void AskReconcile()
     {
-        lock (_lock)
+        lock (_turns)
         {
-            _handed.AddRange(paths);
-            if (_validatingHanded) return;
-            _validatingHanded = true;
+            _reconcileAsked = true;
+            CancelInFlight();
+            WakeWorker();
         }
-        Task.Factory.StartNew(ValidateHanded, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    private void ValidateHanded()
+    // ADR-0015: a handed path is validated as a change on disk is. A reconcile in flight is waited out,
+    // never cancelled.
+    private void ValidateTreesHolding(IReadOnlyList<string> paths)
     {
-        try
+        lock (_turns)
         {
-            while (true)
-            {
-                List<string> paths;
-                lock (_lock)
-                {
-                    if (_handed.Count == 0 || _disposed)
-                    {
-                        _validatingHanded = false;
-                        return;
-                    }
-                    paths = [.. _handed];
-                    _handed.Clear();
-                }
+            _handed.AddRange(paths);
+            WakeWorker();
+        }
+    }
 
-                try { ValidateAndPublish(paths); }
-                catch (Exception ex) when (!CancelledBy(ex, CancellationToken.None))
+    private void WakeWorker()
+    {
+        if (_working || _disposed) return;
+        _working = true;
+        Task.Factory.StartNew(Work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    }
+
+    private void Work()
+    {
+        while (NextTurn() is { } turn)
+        {
+            try { turn(); }
+            catch (Exception ex) when (!CancelledBy(ex, CancellationToken.None))
+            {
+                _logger.LogError(ex, "Keeping the record index current failed unexpectedly");
+                try { PublishStatus(); }
+                catch (Exception publishFault) when (!CancelledBy(publishFault, CancellationToken.None))
                 {
-                    _logger.LogError(ex, "Handing over the documents failed unexpectedly");
-                    try { PublishStatus(); }
-                    catch (Exception publishFault) when (!CancelledBy(publishFault, CancellationToken.None))
-                    {
-                        _logger.LogError(publishFault, "Publishing the status after a failed hand-over failed");
-                    }
+                    _logger.LogError(publishFault, "Publishing the status after a failed turn failed");
                 }
             }
         }
-        catch (OperationCanceledException) when (_disposal.IsCancellationRequested)
+    }
+
+    private Action? NextTurn()
+    {
+        lock (_turns)
         {
-            return;
+            if (_disposed || (!_reconcileAsked && _handed.Count == 0))
+            {
+                _working = false;
+                return null;
+            }
+            if (_reconcileAsked)
+            {
+                _reconcileAsked = false;
+                return ReconcileHeld;
+            }
+            List<string> paths = [.. _handed];
+            _handed.Clear();
+            return () => ValidateAndPublish(paths);
         }
     }
 
@@ -340,7 +373,7 @@ internal sealed class Indexer : IDisposable
     // reconcile opens a store after Dispose.
     private void ReconcileHeld() => Reconcile(() =>
     {
-        lock (_lock) return _disposed ? null : _holder.Held;
+        lock (_turns) return _disposed ? null : _holder.Held;
     });
 
     // ADR-0013's one verb, then every plugin validated (ADR-0003). The arrival is read once the
@@ -405,7 +438,7 @@ internal sealed class Indexer : IDisposable
     private bool ReconcileOrRefuse(
         Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long arrivals, out bool refused)
     {
-        EnterExclusive();
+        _exclusive.Enter();
         var token = CancellationToken.None;
         var superseded = false;
         var progressed = false;
@@ -519,14 +552,14 @@ internal sealed class Indexer : IDisposable
 
         var snapshot = current.LoadOrder;
         var held = current.Held;
-        var fresh = _storeFactory.Create(
-            snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
-            () => Status.State == LoadOrderState.Ready, out var heldElsewhere);
-        if (fresh is null) return heldElsewhere ?? "another process holds it";
-        lock (_lock)
+        // Held to the swap, as EnsureScope holds it.
+        using (_gate.Enter())
         {
-            _scope = ScopeOn(held, fresh, snapshot);
-            _filter.Reapply(fresh);
+            var fresh = _storeFactory.Create(
+                snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
+                () => Status.State == LoadOrderState.Ready, out var heldElsewhere);
+            if (fresh is null) return heldElsewhere ?? "another process holds it";
+            lock (_lock) _scope = ScopeOn(held, fresh, snapshot);
         }
         PublishStatus();
         return null;
@@ -543,13 +576,13 @@ internal sealed class Indexer : IDisposable
     private CancellationToken BeginReconcile()
     {
         var cts = new CancellationTokenSource();
-        lock (_lock) _reconcileCancellation = cts;
+        lock (_turns) _reconcileCancellation = cts;
         return cts.Token;
     }
 
     private void EndReconcile()
     {
-        lock (_lock)
+        lock (_turns)
         {
             var cts = _reconcileCancellation;
             _reconcileCancellation = null;
@@ -593,11 +626,23 @@ internal sealed class Indexer : IDisposable
         OpenScope scope;
         try
         {
+            // Held from the open, whose commit materializes the filter in force, to the swap: a filter set or
+            // cleared meanwhile waits and lands on this store, and the filter's SQL never runs under _lock.
+            using var writes = _gate.Enter();
             fresh = _storeFactory.Create(
                 snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
                 () => Status.State == LoadOrderState.Ready, out heldElsewhere);
             if (fresh is null) return null;
             scope = ScopeOn(held, fresh, snapshot);
+            lock (_lock)
+            {
+                _indexed.Clear();
+                _conflictsComputed = false;
+                _plannedCount = 0;
+                _activeCount = 0;
+                _collisionFailures = [];
+                _scope = scope;
+            }
             fresh = null;
         }
         finally
@@ -607,17 +652,6 @@ internal sealed class Indexer : IDisposable
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("DuckDB record index initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
-        }
-
-        lock (_lock)
-        {
-            _indexed.Clear();
-            _conflictsComputed = false;
-            _plannedCount = 0;
-            _activeCount = 0;
-            _collisionFailures = [];
-            _scope = scope;
-            _filter.Reapply(scope.Store);
         }
         PublishStatus();
         return scope;
@@ -1113,9 +1147,10 @@ internal sealed class Indexer : IDisposable
     private string? ValidationFailure(Action validate, CancellationToken token, out bool busy)
     {
         busy = false;
+        if (_disposal.IsCancellationRequested) return null;
         lock (_lock)
         {
-            if (_disposed || _scope is null) return null;
+            if (_scope is null) return null;
         }
         try
         {
@@ -1191,7 +1226,7 @@ internal sealed class Indexer : IDisposable
             var handedOut = Sequence;
             if (!Close())
             {
-                StartReconcile();
+                AskReconcile();
                 return false;
             }
             heldElsewhere = whileClosed(new ClosedStore(_storeFactory, handedOut));
@@ -1199,7 +1234,7 @@ internal sealed class Indexer : IDisposable
             Swap(standing => standing with { HeldElsewhere = refusal });
         }
         finally { ExitExclusive(); }
-        if (heldElsewhere is null) StartReconcile();
+        if (heldElsewhere is null) AskReconcile();
         else PublishStatus();
         return true;
     }
@@ -1210,7 +1245,7 @@ internal sealed class Indexer : IDisposable
         _unsaved.Arrived += ValidateTreesHolding;
     }
 
-    private void OnArrived(LoadOrderSnapshot snapshot, long version) => StartReconcile();
+    private void OnArrived(LoadOrderSnapshot snapshot, long version) => AskReconcile();
 
     // False when a read outlived Store.EndReads: that index stays open, so nothing opens a store on
     // its file.
@@ -1244,22 +1279,27 @@ internal sealed class Indexer : IDisposable
         _holder.Arrived -= OnArrived;
         _unsaved.Arrived -= ValidateTreesHolding;
 
-        // Guarded because Dispose owns the scope and the reconcile's cancellation: double disposal
-        // is a supported call pattern here.
-        lock (_lock)
+        // Guarded because Dispose owns the scope: double disposal is a supported call pattern here.
+        lock (_turns)
         {
             if (_disposed) return;
             _disposed = true;
         }
 
         _disposal.Cancel();
-        EnterExclusive();
+        if (!EnterExclusiveWithin(CloseLimit))
+        {
+            _logger.LogWarning(
+                "Closed with a read of the record index still running after {Seconds}s; the process's exit releases its file",
+                CloseLimit.TotalSeconds);
+            return;
+        }
         try
         {
             OpenScope? closing;
-            lock (_lock)
+            lock (_lock) closing = DetachCurrent();
+            lock (_turns)
             {
-                closing = DetachCurrent();
                 // EndReconcile already clears this on every reconcile's own exit path; this is the
                 // exclusive-holder's own backstop, not the common case.
                 _reconcileCancellation?.Dispose();

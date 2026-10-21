@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
@@ -77,6 +78,8 @@ public sealed class StoreRebuildTests : IDisposable
 
     private const string MatchesNpcA = "SELECT form_key FROM npc_ WHERE editor_id = 'NpcA'";
 
+    private const string SlowlyMatchesNpcA = MatchesNpcA + " UNION ALL SELECT NULL FROM range(1) WHERE (SELECT sum(range % 7) FROM range(200000000)) < 0";
+
     private static PluginFixtureData NpcAAndNpcOtherInAespAndNpcBInBespFixture(string name) => new PluginFixtureBuilder(name)
         .WithPlugin("A.esp", mod => { mod.Npcs.AddNew("NpcA"); mod.Npcs.AddNew("NpcOther"); })
         .WithPlugin("B.esp", mod => mod.Npcs.AddNew("NpcB"))
@@ -141,6 +144,33 @@ public sealed class StoreRebuildTests : IDisposable
 
         Assert.Null(index.Queries.GetFilter().Value());
         Assert.Equal(["NpcA", "NpcB", "NpcOther"], ListedNpcs(index).Order());
+    }
+
+    [Fact]
+    public void WhileARebuildReopensTheStore_AStatusReadNeverWaitsOnTheRecordFilter()
+    {
+        using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-status");
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        index.SetFilter(MatchesNpcA, "npc-a.sql");
+        var filtering = Stopwatch.StartNew();
+        index.SetFilter(SlowlyMatchesNpcA, "slow.sql");
+        var filterTakes = filtering.Elapsed;
+
+        Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
+        var longestRead = TimeSpan.Zero;
+        var refilling = Stopwatch.StartNew();
+        while (refilling.Elapsed < Waits.Patience)
+        {
+            var reading = Stopwatch.StartNew();
+            var state = index.Status.State;
+            if (reading.Elapsed > longestRead) longestRead = reading.Elapsed;
+            if (state == LoadOrderState.Ready) break;
+        }
+
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.True(longestRead < filterTakes / 2, $"The longest status read took {longestRead}; the filter takes {filterTakes}.");
     }
 
     [ForeignIndexHolderFact]
