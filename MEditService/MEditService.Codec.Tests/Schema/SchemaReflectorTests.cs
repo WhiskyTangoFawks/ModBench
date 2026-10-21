@@ -131,14 +131,26 @@ public class SchemaReflectorTests
         Assert.Empty(missing);
     }
 
-    [Fact]
-    public void GetSchemas_Npc_BoolColumn_MapsToBool()
+    [Theory]
+    [InlineData("npc_", "AggroRadiusBehaviorEnabled", "bool")]
+    [InlineData("npc_", "Weight", "struct")]
+    [InlineData("imad", "Unknown", "int")]
+    [InlineData("npc_", "Name", "translatedString")]
+    [InlineData("npc_", "Flags", "flags")]
+    [InlineData("header", "Author", "string")]
+    public void AColumnsApiType_IsTheLeafTheCodecSpellsItAs(string table, string column, string apiType)
     {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "AggroRadiusBehaviorEnabled");
-        Assert.NotNull(col);
-        Assert.Equal("bool", col.ApiType);
+        var col = _reflector.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(c => c.Name == column);
+
+        Assert.Equal(apiType, col.ApiType);
     }
+
+    [Theory]
+    [InlineData("npc_", "Race", false)]
+    [InlineData("npc_", "Voice", true)]
+    [InlineData("npc_", "Factions.[].Faction", false)]
+    public void AFormLinkAllowsNull_ExactlyWhenItsPropertyIsNullable(string table, string path, bool allowsNull) =>
+        Assert.Equal(allowsNull, SchemaFields.At(GameRelease.Fallout4, table, path).AllowsNull);
 
     [Fact]
     public void GetSchemas_Npc_EnumColumn_MapsToEnumWithMembers()
@@ -159,44 +171,6 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.Equal("formKey", col.ApiType);
         Assert.Contains("race", col.Field.ValidFormKeyTypes);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_Race_IsNonNullableFormLink()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Race");
-        Assert.NotNull(col);
-        Assert.False(col.Field.AllowsNull);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_Voice_IsNullableFormLink()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Voice");
-        Assert.NotNull(col);
-        Assert.True(col.Field.AllowsNull);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_Factions_Faction_SubField_IsNonNullableFormLink()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Factions");
-        Assert.NotNull(col);
-        var faction = col.Field.ElementType?.Fields?.FirstOrDefault(f => f.Name == "Faction");
-        Assert.NotNull(faction);
-        Assert.False(faction.AllowsNull);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_TranslatedStringColumn_IsATranslatedStringLeaf()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Name");
-        Assert.NotNull(col);
-        Assert.Equal("translatedString", col.ApiType);
     }
 
     [Fact]
@@ -224,33 +198,6 @@ public class SchemaReflectorTests
         Assert.NotNull(fields);
         Assert.Contains(fields, f => f.Name == "Faction" && f.Type == "formKey");
         Assert.Contains(fields, f => f.Name == "Rank" && f.Type == "int");
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_FloatColumn_HasFloatApiType()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "HeightMin");
-        Assert.NotNull(col);
-        Assert.Equal("float", col.ApiType);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_Weight_IsStructNotFormkey_BecauseINpcWeightGetterIsANonGenericInterfaceAndIsFormLinkRequiresBothInterfaceAndGeneric()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Weight");
-        Assert.NotNull(col);
-        Assert.Equal("struct", col.ApiType);
-    }
-
-    [Fact]
-    public void GetSchemas_ImageSpaceAdapter_UInt64Column_PresentsAsInt()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["imad"].RecordColumns.FirstOrDefault(c => c.Name == "Unknown");
-        Assert.NotNull(col);
-        Assert.Equal("int", col.ApiType);
     }
 
     [Theory]
@@ -283,24 +230,6 @@ public class SchemaReflectorTests
         var subField = subFields.FirstOrDefault(f => f.Name == subFieldName);
         Assert.NotNull(subField);
         Assert.Equal(expectedApiType, subField.Type);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_FlagColumn_IsAFlagsLeaf_TheCodecSpellsAsNames()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Flags");
-        Assert.NotNull(col);
-        Assert.Equal("flags", col.ApiType);
-    }
-
-    [Fact]
-    public void GetSchemas_Npc_EnumColumn_IsAPlainEnum()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Aggression");
-        Assert.NotNull(col);
-        Assert.Equal("enum", col.ApiType);
     }
 
     [Fact]
@@ -340,15 +269,6 @@ public class SchemaReflectorTests
         Assert.Contains(LowPriorityPushable2Pow53, bits);
         Assert.Contains(CannotUsePlayableItems2Pow54, bits);
         Assert.Contains(PlayableLowBitSanityCheck, bits);
-    }
-
-    [Fact]
-    public void GetSchemas_Header_AuthorColumn_IsStringType()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "Author");
-        Assert.NotNull(col);
-        Assert.Equal("string", col.ApiType);
     }
 
     [Theory]

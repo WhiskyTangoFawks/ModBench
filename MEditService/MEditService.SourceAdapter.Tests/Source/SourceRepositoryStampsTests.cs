@@ -23,8 +23,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     public SourceRepositoryStampsTests()
     {
         PluginBaselines.InitWithNoRecords(_modFolder);
-        _repository = TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to be a source mod.");
+        _repository = TestAdapters.OpenSourceMod(_modFolder, GameRelease.Fallout4);
         _repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody)).Wrote();
     }
 
