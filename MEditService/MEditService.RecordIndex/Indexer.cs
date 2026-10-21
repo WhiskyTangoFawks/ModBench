@@ -145,7 +145,7 @@ internal sealed class Indexer : IDisposable
     // LoadOrder: the snapshot the scope last reconciled, which holds the masters a plugin is read against.
     private sealed record OpenScope(HeldPlugins Held, Store Store, Projector Projector, FailedReads Failed, LoadOrderSnapshot LoadOrder);
 
-    // Takes the exclusive right to reconcile or tear down, waiting out any in-flight reconcile.
+    // Takes the exclusive right to tear down, waiting out the worker's turn and cancelling its reconcile.
     // Always paired with ExitExclusive in a finally.
     private void EnterExclusive()
     {
@@ -550,14 +550,14 @@ internal sealed class Indexer : IDisposable
 
         var snapshot = current.LoadOrder;
         var held = current.Held;
-        var fresh = _storeFactory.Create(
-            snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
-            () => Status.State == LoadOrderState.Ready, out var heldElsewhere);
-        if (fresh is null) return heldElsewhere ?? "another process holds it";
-        lock (_lock)
+        // Held to the swap, as EnsureScope holds it.
+        using (_gate.Enter())
         {
-            _scope = ScopeOn(held, fresh, snapshot);
-            _filter.Reapply(fresh);
+            var fresh = _storeFactory.Create(
+                snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
+                () => Status.State == LoadOrderState.Ready, out var heldElsewhere);
+            if (fresh is null) return heldElsewhere ?? "another process holds it";
+            lock (_lock) _scope = ScopeOn(held, fresh, snapshot);
         }
         PublishStatus();
         return null;
@@ -624,11 +624,23 @@ internal sealed class Indexer : IDisposable
         OpenScope scope;
         try
         {
+            // Held from the open, whose commit materializes the filter in force, to the swap: a filter set or
+            // cleared meanwhile waits and lands on this store, and the filter's SQL never runs under _lock.
+            using var writes = _gate.Enter();
             fresh = _storeFactory.Create(
                 snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
                 () => Status.State == LoadOrderState.Ready, out heldElsewhere);
             if (fresh is null) return null;
             scope = ScopeOn(held, fresh, snapshot);
+            lock (_lock)
+            {
+                _indexed.Clear();
+                _conflictsComputed = false;
+                _plannedCount = 0;
+                _activeCount = 0;
+                _collisionFailures = [];
+                _scope = scope;
+            }
             fresh = null;
         }
         finally
@@ -638,17 +650,6 @@ internal sealed class Indexer : IDisposable
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("DuckDB record index initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
-        }
-
-        lock (_lock)
-        {
-            _indexed.Clear();
-            _conflictsComputed = false;
-            _plannedCount = 0;
-            _activeCount = 0;
-            _collisionFailures = [];
-            _scope = scope;
-            _filter.Reapply(scope.Store);
         }
         PublishStatus();
         return scope;
