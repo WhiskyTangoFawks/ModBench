@@ -139,6 +139,7 @@ internal sealed class Indexer : IDisposable
         {
             if (_scope != invalidated || _recovering) throw InvalidatedMidRecovery();
             _recovering = true;
+            _validating = true;
         }
         PublishStatus();
         Task.Factory.StartNew(ReopenInvalidated, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
