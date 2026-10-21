@@ -17,7 +17,6 @@ import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { MODS_KEY_ARGS, modsKeyContext } from './gestureEntry';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
-import { modNameOf } from '../instanceLoader/modName';
 import { ModStatuses } from './modStatuses';
 import type { MEditClient, ReadModStatus } from '../client';
 import { registerModDecorations } from './modDecorations';
@@ -67,7 +66,7 @@ interface ModsViewDeps {
   sourceGestures: SourceGestureDeps;
   manifestGestures: ManifestDeps;
   /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
-  modStatus: { push: Pick<MEditClient, 'onNotification' | 'onReconnected'>; readStatus: ReadModStatus };
+  modStatus: { push: Pick<MEditClient, 'onNotification'>; readStatus: ReadModStatus };
 }
 
 interface ModsView extends vscode.Disposable {
@@ -186,7 +185,7 @@ function registerSourceGestures(
 // modlist-repository.md, Status, story 1: status shows while the instance holds a repository.
 function modStatusesOf({ instance, modStatus, log }: Pick<ModsViewDeps, 'instance' | 'modStatus' | 'log'>) {
   const statuses = new ModStatuses(
-    modStatus.push, modStatus.readStatus, log, () => instance.value.mods.flatMap((entry) => modNameOf(instance.value.modNames, entry) ?? []));
+    modStatus.push, modStatus.readStatus, log);
   return { statuses, statusMessage: () => (instance.value.holdsRepository ? statuses.message() : undefined) };
 }
 

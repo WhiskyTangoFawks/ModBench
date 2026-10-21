@@ -62,6 +62,11 @@ function routedFetch(routes: [match: string, handle: (req: Request) => Promise<R
   });
 }
 
+const EMPTY_SNAPSHOT = {
+  plugins: [], active: [], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache',
+  dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
+};
+
 describe('HttpMEditClient — the process is the client\'s own', () => {
   beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => { vi.restoreAllMocks(); });
@@ -749,6 +754,33 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
+  it('announces every plugin and mod it put again as changed once a reopened stream\'s process has applied it, since views read them again on a change and never on a reconnect', async () => {
+    const streams: { end: () => void }[] = [];
+    const fetch = routedFetch([
+      ['/notifications/stream', () => {
+        let controller!: ReadableStreamDefaultController<Uint8Array>;
+        const body = new ReadableStream<Uint8Array>({ start: (c) => { controller = c; } });
+        streams.push({ end: () => controller.close() });
+        return Promise.resolve(new Response(body, { status: 200 }));
+      }],
+      ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
+        state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
+      }))],
+      ['/load-order', () => Promise.resolve(jsonResponse(200, appliedBody))],
+    ]);
+    const client = makeClient(fetch, { reconnectDelayMs: 0 });
+    await client.start();
+    const heard: unknown[] = [];
+    client.onNotification('plugin-changed', ({ plugin }) => heard.push(plugin));
+    client.onNotification('mod-status-changed', ({ mods }) => heard.push(mods));
+    await client.sendLoadOrder({ ...snapshot, mods: [{ name: 'ModA', folder: '/mods/ModA', metadataFiles: [] }] });
+    expect(heard).toEqual([]);
+
+    streams[0]?.end();
+
+    await vi.waitFor(() => expect(heard).toEqual([{ name: 'Foo.esp', origin: 'A' }, ['ModA']]));
+  });
+
   it('answers a PUT that heard only an older version\'s tick from the process\'s own status', async () => {
     const { response: stream, push } = pushableStreamResponse();
     let answerPut!: (r: Response) => void;
@@ -1031,10 +1063,7 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     ]);
     const client = makeClient(fetch);
     await client.start();
-    void client.sendLoadOrder({
-      plugins: [], active: [], loadedWithNoLine: [], archives: [], stringsFiles: [], places: [], mods: [], statCache: '/instance/stat-cache',
-      dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
-    });
+    void client.sendLoadOrder(EMPTY_SNAPSHOT);
     await vi.waitFor(() => expect(putLoadOrder).toBe(true));
 
     const gesturing = gesture(client);
@@ -1082,15 +1111,16 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
 
   async function cancelled(
     [route, kind, call]: [string, ProgressKind, (client: MEditClient, signal: AbortSignal) => Promise<unknown>], cancelAnswer = noContent,
-    { ownProgress = true } = {},
+    { ownProgress = true, loadOrderPending = false } = {},
   ) {
     const log = leveledLog();
-    const seen: { gesture?: unknown; cancelPath?: string; aborted?: boolean } = {};
+    const seen: { gesture?: unknown; cancelPath?: string; aborted?: boolean; putLoadOrder?: boolean } = {};
     let answer = (): void => {};
     const answered = new Promise<void>((resolve) => { answer = resolve; });
     const { response, push } = pushableStreamResponse();
     const client = makeClient(routedFetch([
       ['/notifications/stream', () => Promise.resolve(response)], ['/unsaved-documents', noContent],
+      ['/load-order', () => { seen.putLoadOrder = true; return new Promise<Response>(() => {}); }],
       ['/modlist-gestures/', (req) => { seen.cancelPath = new URL(req.url).pathname; answer(); return cancelAnswer(); }],
       [route, async (req) => {
         const body: unknown = await req.clone().json();
@@ -1106,6 +1136,10 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
     const outcome = call(client, cancel.signal);
     cancel.abort();
     await vi.waitFor(() => expect(seen.gesture).toBeDefined());
+    if (loadOrderPending) {
+      void client.sendLoadOrder(EMPTY_SNAPSHOT);
+      await vi.waitFor(() => expect(seen.putLoadOrder).toBe(true));
+    }
     const heard: unknown[] = [];
     client.onNotification(kind, (progress) => heard.push(progress.gesture));
     push(progressFrame(kind, 'another-gesture'));
@@ -1128,6 +1162,13 @@ describe('HttpMEditClient — a modlist gesture the user cancels', () => {
     const { client, seen, outcome } = await cancelled(gesture, noContent, { ownProgress: false });
 
     expect([seen.cancelPath, outcome]).toMatchObject([undefined, { landed: [{ mod: 'ModA' }] }]);
+    await client.stop();
+  });
+
+  it.each(gestures)('%s sends its cancel while a load order is still being put, since a cancel depends on none', async (_name, ...gesture) => {
+    const { client, seen, outcome } = await cancelled(gesture, noContent, { loadOrderPending: true });
+
+    expect([seen.cancelPath, outcome]).toMatchObject([`/modlist-gestures/${String(seen.gesture)}/cancel`, { landed: [{ mod: 'ModA' }] }]);
     await client.stop();
   });
 

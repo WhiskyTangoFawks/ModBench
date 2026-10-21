@@ -1,6 +1,6 @@
 import { toLoadOrderStatus, type NotificationEvent } from './apiClient';
 import { SILENT_LOG, type Log } from '../ports/log';
-import { isNotificationKind, type NotificationKind, type NotificationPayloads } from './MEditClient';
+import { isNotificationKind, type LoadOrderSnapshot, type NotificationKind, type NotificationPayloads } from './MEditClient';
 import { isString, isStringArray } from '../wire/messages';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -32,6 +32,12 @@ class NotificationListenerRegistry {
 
   whenConnected(): Promise<void> {
     return Promise.resolve();
+  }
+
+  /** Every plugin and mod a snapshot holds, announced changed as any change to them is. */
+  announceChanged(snapshot: LoadOrderSnapshot): void {
+    for (const { name, origin } of snapshot.plugins) this.deliver('plugin-changed', { plugin: { name, origin } });
+    this.deliver('mod-status-changed', { mods: snapshot.mods.map(({ name }) => name) });
   }
 
   dispatch(event: NotificationEvent): void {

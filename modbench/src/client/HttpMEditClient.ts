@@ -33,6 +33,14 @@ import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 // so nothing tries to tell them apart.
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
+interface PostSpec<T> {
+  op: string;
+  failMsg: string;
+  post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
+  /** What a 2xx with no body answers. */
+  noContent?: T;
+}
+
 interface HttpMEditClientDeps {
   /** The process this client is the front of. It spawns the bundled backend unless told otherwise. */
   backend?: Omit<BackendLifecycleOptions, 'onOutput' | 'serilogLevelArgs' | 'log'>;
@@ -118,7 +126,11 @@ class HttpMEditClient implements MEditClient {
       if (status === 'running') this.notifications.start();
       else this.notifications.stop();
     });
-    this.loadOrderStatusKept = keepLoadOrderStatus(this);
+    this.loadOrderStatusKept = keepLoadOrderStatus({
+      onNotification: (kind, listener) => this.notifications.onNotification(kind, listener),
+      onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
+      onReconnected: (listener) => this.notifications.onReconnected(listener),
+    });
     this.loadOrder = createLoadOrderSender({
       status: () => this.lifecycle.status,
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),
@@ -126,6 +138,10 @@ class HttpMEditClient implements MEditClient {
       start: () => this.lifecycle.start(),
       stop: () => this.lifecycle.stop(),
       put: (snapshot, signal) => this.putLoadOrder(snapshot, signal),
+    });
+    // A restarted mEdit holds only what was resent, so every view hears the resend as the change it is.
+    this.loadOrder.onResent((snapshot, outcome) => {
+      if (outcome.outcome === 'applied') this.notifications.announceChanged(snapshot);
     });
     this.handOver = createUnsavedHandOver({
       status: () => this.lifecycle.status,
@@ -155,9 +171,6 @@ class HttpMEditClient implements MEditClient {
   get status(): BackendStatus { return this.lifecycle.status; }
   onStatusChanged(listener: (status: BackendStatus) => void): () => void {
     return this.lifecycle.onStatusChanged(listener);
-  }
-  onReconnected(listener: () => void): () => void {
-    return this.notifications.onReconnected(listener);
   }
   async start(): Promise<void> { await this.loadOrder.launch(); }
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void { return this.loadOrder.onLaunch(listener); }
@@ -193,19 +206,22 @@ class HttpMEditClient implements MEditClient {
 
   // ── writes ───────────────────────────────────────────────────────────────
 
-  // Every write verb below shares this shape: POST, map a non-ok response or a thrown request
-  // onto WriteRefused, otherwise hand back the wire data untouched. No refresh, no toast — the
-  // caller does both, from what this returns.
-  private async mutate<T>(spec: {
-    op: string;
-    failMsg: string;
-    post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
-    /** What a 2xx with no body answers. */
-    noContent?: T;
-  }): Promise<T | WriteRefused> {
+  // Every write verb below shares this shape: wait for the load order and unsaved documents it
+  // depends on, then `sendNow`. No refresh, no toast — the caller does both, from what this returns.
+  private async mutate<T>(spec: PostSpec<T>): Promise<T | WriteRefused> {
     try {
       await this.handOver.sent();
       await this.loadOrder.latest();
+    } catch (e) {
+      return this.refusedUnreachable(spec, e);
+    }
+    return this.sendNow(spec);
+  }
+
+  // POST, map a non-ok response or a thrown request onto WriteRefused, otherwise hand back the wire
+  // data untouched. For a request that depends on neither the load order nor the unsaved documents.
+  private async sendNow<T>(spec: PostSpec<T>): Promise<T | WriteRefused> {
+    try {
       const { data, error, response } = await spec.post();
       if (!response.ok) {
         const text = errorText(error);
@@ -214,9 +230,13 @@ class HttpMEditClient implements MEditClient {
       }
       return data ?? spec.noContent ?? { refused: true, message: `${spec.failMsg} — no answer` };
     } catch (e) {
-      this.log.error(`[HttpMEditClient] ${spec.op} threw: ${errorMessage(e)}`);
-      return { refused: true, message: `${spec.failMsg} — ${failureReason(UNREACHABLE)}`, unreachable: true };
+      return this.refusedUnreachable(spec, e);
     }
+  }
+
+  private refusedUnreachable(spec: { op: string; failMsg: string }, e: unknown): WriteRefused {
+    this.log.error(`[HttpMEditClient] ${spec.op} threw: ${errorMessage(e)}`);
+    return { refused: true, message: `${spec.failMsg} — ${failureReason(UNREACHABLE)}`, unreachable: true };
   }
 
   // A write over a selection: each item lands or is refused on its own, and the counted phrase
@@ -500,7 +520,7 @@ class HttpMEditClient implements MEditClient {
     let begun = false;
     let cancelling: Promise<{ cancelled: true } | WriteRefused> | undefined;
     const cancel = (): void => {
-      cancelling ??= this.mutate({
+      cancelling ??= this.sendNow({
         op: `cancel(${gesture})`, failMsg: 'Could not cancel', noContent: { cancelled: true as const },
         post: () => this.apiClient.POST('/modlist-gestures/{gesture}/cancel', { params: { path: { gesture } } }),
       });
