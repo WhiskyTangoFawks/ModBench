@@ -380,7 +380,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
 
-    expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModA', unreadable: { 'textures/a.dds': 'EACCES' } }, { name: 'ModB', unreadable: {} }]);
+    expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModA', unreadableGameFiles: { 'textures/a.dds': 'EACCES' } }, { name: 'ModB', unreadableGameFiles: {} }]);
     expect(outcome).toMatchObject({ landed: [{ mod: 'ModB' }], refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }] });
   });
 
@@ -392,7 +392,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     await commands.restoreFromManifest(['ModA']);
 
-    expect(client.calls[1]?.args[0]).toMatchObject([{ unreadable: { 'a.nif': 'the game folder was not found', 'b.nif': 'the game folder was not found' } }]);
+    expect(client.calls[1]?.args[0]).toMatchObject([{ unreadableGameFiles: { 'a.nif': 'the game folder was not found', 'b.nif': 'the game folder was not found' } }]);
   });
 
   it('sends a mod skipped for a submodule the call did not hand again, with where git checks it out, its pin and its branch, and answers both sends as one', async () => {
@@ -482,7 +482,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     await commands.restoreFromManifest(['ModA']);
 
-    expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModA', unreadable: { 'ModA-1.0.7z': 'EACCES' } }]);
+    expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModA', unreadableInstallationFile: 'EACCES' }]);
   });
 
   it('sends no skipped mod again once its signal aborts, handing mEdit the signal, so a cancel stops after the mod in hand', async () => {

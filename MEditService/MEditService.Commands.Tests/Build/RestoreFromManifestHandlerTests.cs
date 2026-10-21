@@ -390,7 +390,7 @@ public sealed class RestoreFromManifestHandlerTests
     {
         _folders.WithFile(Mod, "a.nif", "a").WithFile(Mod, "b.dds", "b");
         GameFolderModManifested(("a.nif", "a"), ("b.dds", "b"));
-        var unread = ModFrom(Mod) with { Unreadable = new Dictionary<string, string> { ["a.nif"] = "EACCES", ["b.dds"] = "EACCES" } };
+        var unread = ModFrom(Mod) with { UnreadableGameFiles = new Dictionary<string, string> { ["a.nif"] = "EACCES", ["b.dds"] = "EACCES" } };
 
         var refused = Assert.Single((await Handler.RestoreAsync([unread], Instance())).Refused);
 
@@ -404,7 +404,7 @@ public sealed class RestoreFromManifestHandlerTests
         _folders.WithFile(Mod, "a.nif", "a");
         _folders.Manifests[Mod] = new Manifest(
             new ManifestPackage.GameFolder("Fallout 4", "#"), [Line("a.nif", new PackageEntry.Held()), Line("mine.txt", new PackageEntry.NotHeld())]);
-        var unread = ModFrom(Mod) with { Unreadable = new Dictionary<string, string> { ["a.nif"] = "EACCES" } };
+        var unread = ModFrom(Mod) with { UnreadableGameFiles = new Dictionary<string, string> { ["a.nif"] = "EACCES" } };
 
         var refused = Assert.Single((await Handler.RestoreAsync([unread], Instance())).Refused);
 
@@ -417,7 +417,7 @@ public sealed class RestoreFromManifestHandlerTests
         var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"));
         _folders.WithFile(Mod, "a.nif", "a");
         Manifested(Mod, downloadedFile, Line("a.nif", new PackageEntry.Held()));
-        var unread = ModFrom(Mod) with { Unreadable = new Dictionary<string, string> { ["Mod.zip"] = "EACCES" } };
+        var unread = ModFrom(Mod) with { UnreadableInstallationFile = "EACCES" };
 
         var refused = Assert.Single((await Handler.RestoreAsync([unread], Instance())).Refused);
 

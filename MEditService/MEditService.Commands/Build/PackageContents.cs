@@ -4,9 +4,9 @@ namespace MEditService.Commands.Build;
 
 /// <summary>Each manifest line's entry in the mod's one package, with the hash that fixes its bytes, and what the package lacks.</summary>
 internal sealed class PackageContents(IModFolderRepository repository, Manifest manifest, InstallationFile? installationFile, GameFolder? gameFolder,
-    IReadOnlyDictionary<string, string>? unreadable = null)
+    IReadOnlyDictionary<string, string>? unreadableGameFiles = null, string? unreadableInstallationFile = null)
 {
-    private readonly Dictionary<string, string> _unreadable = new(unreadable ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _unreadableGameFiles = new(unreadableGameFiles ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
 
     internal record Lack(string Text)
     {
@@ -87,7 +87,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
             : (null, GameFileLack(held.Path));
 
     private Lack GameFileLack(string path) =>
-        _unreadable.TryGetValue(path, out var why) ? new Lack.GameFileUnreadable(path, why) : new Lack.GameFileMissing(path);
+        _unreadableGameFiles.TryGetValue(path, out var why) ? new Lack.GameFileUnreadable(path, why) : new Lack.GameFileMissing(path);
 
     private (Handed? Handed, Lack? Lack) Package(ManifestPackage.InstallationFile named) => _package ??= Find(named);
 
@@ -96,7 +96,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         var handed = installationFile is not null && repository.InstallationFileName(installationFile.Path) == named.Name ? installationFile : null;
         if (handed is null)
         {
-            return (null, _unreadable.TryGetValue(named.Name, out var why) ? new Lack.InstallationFileUnreadable(named.Name, why) : new Lack.InstallationFileMissing(named.Name));
+            return (null, unreadableInstallationFile is { } why ? new Lack.InstallationFileUnreadable(named.Name, why) : new Lack.InstallationFileMissing(named.Name));
         }
         if (!repository.InstallationFileExists(handed.Path)) return (null, new Lack($"installation file '{named.Name}' is not in the downloads folder"));
         if (named.Hash != handed.Hash) return (null, new Lack($"installation file '{named.Name}' has other bytes"));

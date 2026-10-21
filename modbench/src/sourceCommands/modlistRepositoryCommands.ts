@@ -174,7 +174,7 @@ async function namedGameFiles(
 
 async function namedDownloadedFiles(adapter: Adapter, notFound: readonly NotFound[]): Promise<{
   handed: (name: string | undefined) => RestoreMod['installationFile'];
-  unreadable: (name: string | undefined) => Record<string, string>;
+  unreadable: (name: string | undefined) => string | undefined;
 }> {
   const read = new Map<string, FileRead<InstallationFile | undefined>>();
   for (const name of new Set(notFound.flatMap(({ installationFile }) => installationFile === undefined ? [] : [installationFile]))) {
@@ -187,7 +187,7 @@ async function namedDownloadedFiles(adapter: Adapter, notFound: readonly NotFoun
     },
     unreadable: (name) => {
       const file = name === undefined ? undefined : read.get(name);
-      return name !== undefined && file?.kind === 'unreadable' ? { [name]: file.reason } : {};
+      return file?.kind === 'unreadable' ? file.reason : undefined;
     },
   };
 }
@@ -321,7 +321,7 @@ async function restoreFolders(
     return notFound === undefined
       ? [] : [{
         ...mod, installationFile: downloaded.handed(notFound.installationFile), submodule: submodules.handed(notFound.submodule),
-        unreadable: { ...named.unreadable(mod.name), ...downloaded.unreadable(notFound.installationFile) },
+        unreadableGameFiles: named.unreadable(mod.name), unreadableInstallationFile: downloaded.unreadable(notFound.installationFile),
       }];
   });
   const second = await restoreOnce(client, again, { ...facts, gameFolder: wireGameFolder(folder, named.found), asksWhatItLacks: false }, restoring);

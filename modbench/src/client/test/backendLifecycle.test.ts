@@ -70,56 +70,71 @@ describe('BackendLifecycle', () => {
     expect(lifecycle.status).toBe('disconnected');
   });
 
-  it('says the backend did not answer in time when the deadline cuts off a request that hangs, and destroys the request', async () => {
-    const sockets: Socket[] = [];
-    const silent = createServer(() => {});
-    silent.on('connection', (socket) => sockets.push(socket));
-    await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
-    const logged = leveledLog();
-    const lifecycle = new BackendLifecycle({ attachPort: addressInfo(silent.address()).port, pollIntervalMs: 5, pollTimeoutMs: 40, log: logged });
+  describe('why nothing answered', () => {
+    beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] }); });
+    afterEach(() => { vi.useRealTimers(); });
 
-    await lifecycle.start();
-    await vi.waitFor(() => expect(sockets.every((socket) => socket.destroyed)).toBe(true));
-    silent.close();
+    const refused: HealthAnswer = { healthy: false, reason: 'refused' };
+    const hangs = () => new Promise<HealthAnswer>(() => {});
 
-    expect(sockets).not.toHaveLength(0);
-    expect(logged.lines.error).toEqual([expect.stringMatching(/Timed out waiting for backend on port \d+: it did not answer in time/)]);
-  });
+    it('says the backend did not answer in time when the deadline cuts off a request that hangs, and destroys the request', async () => {
+      const connected = Promise.withResolvers<Socket>();
+      const silent = createServer(() => {});
+      silent.on('connection', connected.resolve);
+      await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
+      const logged = leveledLog();
+      const lifecycle = new BackendLifecycle({ attachPort: addressInfo(silent.address()).port, pollIntervalMs: 1000, pollTimeoutMs: 1000, log: logged });
 
-  it('reports the cut-off attempt, not the reason of an earlier one', async () => {
-    let call = 0;
-    const checkHealth = () => call++ === 0 ? Promise.resolve<HealthAnswer>({ healthy: false, reason: 'refused' }) : new Promise<HealthAnswer>(() => {});
-    const logged = leveledLog();
+      const started = lifecycle.start();
+      const socket = await connected.promise;
+      const closed = new Promise((resolve) => socket.on('close', resolve));
+      await vi.advanceTimersByTimeAsync(1000);
+      await started;
+      await closed;
+      silent.close();
 
-    await new BackendLifecycle({ attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 40, checkHealth, log: logged }).start();
+      expect(logged.lines.error).toEqual([expect.stringMatching(/Timed out waiting for backend on port \d+: it did not answer in time/)]);
+    });
 
-    expect(logged.lines.error).toEqual([expect.stringContaining('it did not answer in time')]);
-  });
+    it('logs once, at the deadline, why a refused connection did not answer, and not on each poll before it', async () => {
+      const closed = createServer();
+      await new Promise<void>((resolve) => closed.listen(0, '127.0.0.1', resolve));
+      const { port } = addressInfo(closed.address());
+      await new Promise((resolve) => closed.close(resolve));
+      const logged = leveledLog();
 
-  it('reports no reason from an earlier start', async () => {
-    const logged = leveledLog();
-    const refusing = new BackendLifecycle({ attachPort: 5172, pollTimeoutMs: 0, log: logged, checkHealth: () => Promise.resolve<HealthAnswer>({ healthy: false, reason: 'refused' }) });
-    const hanging = new BackendLifecycle({ attachPort: 5172, pollTimeoutMs: 0, log: logged, checkHealth: () => new Promise<HealthAnswer>(() => {}) });
+      await new BackendLifecycle({ attachPort: port, pollIntervalMs: 1000, pollTimeoutMs: 1000, log: logged }).start();
 
-    await refusing.start();
-    await hanging.start();
+      expect(logged.lines.warn).toEqual([]);
+      expect(logged.lines.error).toEqual([expect.stringMatching(/Timed out waiting for backend on port \d+: .*ECONNREFUSED/)]);
+    });
 
-    expect(logged.lines.error).toEqual([expect.stringContaining('refused'), expect.stringContaining('it did not answer in time')]);
-  });
+    it('reports the attempt the deadline cut off, not the reason of an earlier one', async () => {
+      const checkHealth = vi.fn().mockResolvedValueOnce(refused).mockImplementation(hangs);
+      const logged = leveledLog();
 
-  it('logs once, at the deadline, why nothing answered, and not on each poll before it', async () => {
-    const closed = createServer();
-    await new Promise<void>((resolve) => closed.listen(0, '127.0.0.1', resolve));
-    const { port } = addressInfo(closed.address());
-    await new Promise((resolve) => closed.close(resolve));
-    const logged = leveledLog();
-    const lifecycle = new BackendLifecycle({ attachPort: port, pollIntervalMs: 150, pollTimeoutMs: 200, log: logged });
+      const started = new BackendLifecycle({ attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 40, checkHealth, log: logged }).start();
+      await vi.advanceTimersByTimeAsync(40);
+      await started;
 
-    await lifecycle.start();
+      expect(logged.lines.error).toEqual([expect.stringContaining('it did not answer in time')]);
+    });
 
-    expect(logged.lines.warn).toEqual([]);
-    expect(logged.lines.error).toHaveLength(1);
-    expect(logged.lines.error[0]).toMatch(/Timed out waiting for backend on port \d+: .*ECONNREFUSED/);
+    it('reports no reason from an earlier start of the same lifecycle', async () => {
+      let check: () => Promise<HealthAnswer> = () => Promise.resolve(refused);
+      const logged = leveledLog();
+      const lifecycle = new BackendLifecycle({ attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 40, checkHealth: () => check(), log: logged });
+
+      const first = lifecycle.start();
+      await vi.advanceTimersByTimeAsync(40);
+      await first;
+      check = hangs;
+      const second = lifecycle.start();
+      await vi.advanceTimersByTimeAsync(40);
+      await second;
+
+      expect(logged.lines.error).toEqual([expect.stringContaining('refused'), expect.stringContaining('it did not answer in time')]);
+      });
   });
 });
 
