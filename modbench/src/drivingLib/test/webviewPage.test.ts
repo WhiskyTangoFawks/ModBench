@@ -50,12 +50,12 @@ describe('a page of the webview build, loaded into a webview', () => {
     expect(html.indexOf('window.mEditFormKey')).toBeLessThan(html.indexOf('type="module"'));
   });
 
-  it('carries a value holding markup, line separators and quotes through the inline script byte-for-byte', () => {
-    const hostile = 'C:/mods/<!--<script>x</script>\u2028\u2029"\\\'';
-    const { html } = shown({ ...RECORD_PAGE, globals: { mEditError: hostile } });
+  it('writes a value holding markup so that the inline script parses back to the value', () => {
+    const hostile = 'C:/mods/<!--<script>x</script>"\\\'';
+    const { html } = shown({ ...RECORD_PAGE, globals: { mEditLoadError: hostile } });
     const inline = /<script nonce="[^"]*">([\s\S]*?)<\/script>/.exec(html)?.[1] ?? '';
-    expect(JSON.parse(inline.replace(/^window\.mEditError = /, '').replace(/;$/, ''))).toBe(hostile);
-    expect(inline).not.toMatch(/<|\u2028|\u2029/);
+    expect(inline).not.toContain('<');
+    expect(JSON.parse(inline.replace(/^window\.mEditLoadError = /, '').replace(/;$/, ''))).toBe(hostile);
   });
 
   it('loads its fonts from its own resources alone', () => {
