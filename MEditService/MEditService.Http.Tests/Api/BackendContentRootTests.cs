@@ -174,12 +174,13 @@ public sealed class BackendContentRootTests
     }
 
     [Fact]
-    public void TheBackendsRuntimeConfig_RunsInvariantGlobalization_SoAMachineWithoutLibicuCanStartIt()
+    public void TheBackendsRuntimeConfig_RunsInvariantGlobalization_SoAMachineWithoutLibicuCanStartIt_AndMutagenCanStillBuildItsEnglishCulture()
     {
         using var config = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(ApiDirectory, "MEditService.Http.runtimeconfig.json")));
 
-        Assert.True(config.RootElement.GetProperty("runtimeOptions").GetProperty("configProperties")
-            .GetProperty("System.Globalization.Invariant").GetBoolean());
+        var properties = config.RootElement.GetProperty("runtimeOptions").GetProperty("configProperties");
+        Assert.True(properties.GetProperty("System.Globalization.Invariant").GetBoolean());
+        Assert.False(properties.GetProperty("System.Globalization.PredefinedCulturesOnly").GetBoolean());
     }
 
     [Fact]
