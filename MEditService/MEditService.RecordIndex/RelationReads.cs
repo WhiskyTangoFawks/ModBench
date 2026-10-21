@@ -129,7 +129,7 @@ internal sealed class RelationReads(
         var cols = $"""
             form_key, plugin, load_order_idx, is_winner, editor_id, origin, r.working_tree_state,
             EXISTS (
-                SELECT 1 FROM {scope.ContainerChildren} cc
+                SELECT 1 FROM {NavigatorSql.ContainerChildren} cc
                 WHERE cc.parent = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
                   {filter?.AlsoKeeps("cc", "child")}
             ) AS has_container_children,
@@ -141,7 +141,8 @@ internal sealed class RelationReads(
             {FullNameOf("r")} AS full_name
             """;
 
-        var total = DuckDbSql.Scalar<long>(connection, $"SELECT COUNT(*) FROM {scope.Records} r{unheld}{where}", [.. paramValues]);
+        var total = DuckDbSql.Scalar<long>(
+            connection, $"WITH {NavigatorSql.HeldFor(scope, holdings)} SELECT COUNT(*) FROM {scope.Records} r{unheld}{where}", [.. dataParams]);
 
         // xEdit's navigator lists a group in FormID order, and its record picker lists by EditorID.
         // (plugin, origin) makes either order total, so LIMIT/OFFSET pages stably.
@@ -201,7 +202,9 @@ internal sealed class RelationReads(
         using var connection = store.OpenReadConnection();
         var (where, paramValues) = BuildWhere(
             plugin.Name, null, store.Filter.Listing, plugin.Origin);
+        var holdings = HoldingsOf(plugin.Name, plugin.Origin, paramValues);
         var counts = DuckDbSql.Rows(connection, $"""
+            WITH {NavigatorSql.HeldFor(RecordScope.Active, holdings)}
             SELECT record_type, COUNT(*), BOOL_OR(parse_diagnosis IS NOT NULL)
             FROM records r{NavigatorSql.Unheld("r")}{where}
             GROUP BY record_type
@@ -260,6 +263,7 @@ internal sealed class RelationReads(
             UNION
             SELECT TRUE, r.record_type, a.fact FROM above_change a
             JOIN {scope.Records} r ON r.form_key = a.form_key AND r.plugin = a.plugin AND r.origin = a.origin{NavigatorSql.Unheld("r")}
+            WHERE r.plugin = $1 AND r.origin = $2
             """, reader => (IsGroup: reader.GetBoolean(0), Key: reader.GetString(1), State: WorkingTreeStates.FromStored(reader.GetString(2))),
             plugin.Name, plugin.Origin);
 
@@ -437,7 +441,7 @@ internal sealed class RelationReads(
         CellLocations(plugin, $"NOT EXISTS ({HeldBy("cl")})", "cl.block_x, cl.sub_x", []);
 
     private static string HeldBy(string cell, string? parent = null) => $"""
-        SELECT 1 FROM holdings h
+        SELECT 1 FROM held h
         WHERE h.child = {cell}.cell_form_key AND h.plugin = {cell}.plugin AND h.origin = {cell}.origin{(parent is null ? "" : $" AND h.parent = {parent}")}
         """;
 
@@ -456,7 +460,7 @@ internal sealed class RelationReads(
                    EXISTS (
                        SELECT 1 FROM ({NavigatorSql.CellChildren}) p
                        JOIN records pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
-                       WHERE p.parent_cell = cl.cell_form_key AND p.plugin = cl.plugin AND p.origin = cl.origin
+                       WHERE p.parent_cell = cl.cell_form_key AND pr.plugin = $1 AND pr.origin = $2
                          {store.Filter.AlsoKeeps("p")}
                    ),
                    c.working_tree_state
@@ -496,19 +500,29 @@ internal sealed class RelationReads(
         // `base` column; json_extract_string unquotes the stored FormLink text, and a placed ref
         // with no base reads NULL.
         var children = DuckDbSql.Rows(connection, $"""
-            SELECT p.placement_group, r.record_type, p.form_key, r.editor_id,
-                   json_extract_string(r.body, '$.Base'), r.parse_diagnosis IS NOT NULL, {FullNameOf("r")},
-                   r.parse_diagnosis,
-                   -- The base record's EditorID (plugins.md, Record). Its copy in the reference's own plugin, else the winning copy.
-                   (SELECT b.editor_id FROM records b
-                    WHERE b.form_key = json_extract_string(r.body, '$.Base')
-                    ORDER BY (b.plugin = r.plugin AND b.origin = r.origin) DESC, b.is_winner DESC, b.plugin, b.origin
-                    LIMIT 1),
-                   r.working_tree_state
-            FROM ({NavigatorSql.CellChildren}) p
-            JOIN records r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
-            WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3{store.Filter.AlsoKeeps("p")}
-            ORDER BY {NavigatorSql.FormIdOrder("r.form_key_plugin", "p.form_key")}
+            WITH {NavigatorSql.HeldFor(RecordScope.Active, "WHERE h.plugin = $2 AND h.origin = $3")},
+            children AS (
+                SELECT p.placement_group, r.record_type, p.form_key, r.editor_id, json_extract_string(r.body, '$.Base') AS base,
+                       r.parse_diagnosis, {FullNameOf("r")} AS full_name, r.working_tree_state, r.form_key_plugin
+                FROM ({NavigatorSql.CellChildren}) p
+                JOIN records r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
+                WHERE p.parent_cell = $1 AND r.plugin = $2 AND r.origin = $3{store.Filter.AlsoKeeps("p")}
+            ),
+            -- The base record's EditorID (plugins.md, Record). Its copy in the reference's own plugin, else the winning copy.
+            -- Beside the records view, not through it: DuckDB pushes no join key past the view's winners join.
+            base_names AS (
+                SELECT b.form_key, b.editor_id FROM (SELECT DISTINCT base FROM children) cb
+                JOIN {TableDdlBuilder.MirrorSchema}.records b ON b.form_key = cb.base
+                {TableDdlBuilder.ActiveJoin("b", "plugin", "origin")}
+                {TableDdlBuilder.WinnerJoin("b", "plugin", "origin")}
+                QUALIFY row_number() OVER (
+                    PARTITION BY b.form_key ORDER BY (b.plugin = $2 AND b.origin = $3) DESC, w.form_key IS NOT NULL DESC, b.plugin, b.origin) = 1
+            )
+            SELECT c.placement_group, c.record_type, c.form_key, c.editor_id, c.base, c.parse_diagnosis IS NOT NULL, c.full_name,
+                   c.parse_diagnosis, n.editor_id, c.working_tree_state
+            FROM children c
+            LEFT JOIN base_names n ON n.form_key = c.base
+            ORDER BY {NavigatorSql.FormIdOrder("c.form_key_plugin", "c.form_key")}
             """, reader => (
                 Group: reader.GetString(0),
                 Summary: new ChildRecordSummary(
