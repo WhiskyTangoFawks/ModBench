@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -16,11 +17,12 @@ public sealed class ReadMeetsSwapTests : IDisposable
 
     private readonly LoadOrderHolder _holder = new();
     private readonly ParkingSource _source = new();
+    private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly OpenedIndex _index;
 
     public ReadMeetsSwapTests()
     {
-        _index = Indexes.Open(_holder, source: _source);
+        _index = Indexes.Open(_holder, source: _source, notifications: _notifications);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
     }
 
@@ -56,5 +58,23 @@ public sealed class ReadMeetsSwapTests : IDisposable
 
         Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
         Assert.Contains("invalidated", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARead_OfAnIndexFileDuckDbInvalidated_ReopensTheIndex_ReportsItReconcilingMeanwhile_AndAnswersAgain()
+    {
+        IndexFiles.AbortNextCheckpoint(_fixture.InstanceRoot);
+        Assert.Throws<DuckDB.NET.Data.DuckDBException>(() =>
+            IndexFiles.Execute(_fixture.InstanceRoot, "CREATE TABLE aborts_the_checkpoint AS SELECT range AS n FROM range(100000)"));
+        var statusesBefore = _notifications.Notifications.Count;
+
+        var refused = _index.Queries.GetPlugins().Refused();
+
+        Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
+        Assert.Contains("invalidated", refused.Message, StringComparison.Ordinal);
+        Waits.Reached(() => _index.Status.State == LoadOrderState.Ready && _index.Queries.GetPlugins().Holds(out _, out _), "the reopened index");
+        Assert.Contains(LoadOrderState.Reconciling, _notifications.Notifications.Skip(statusesBefore)
+            .OfType<LoadOrderStatusNotification>().Select(n => n.Status.State));
+        Assert.NotEmpty(_index.ListedIn(_fixture.Plugins.Single().KeyOf()));
     }
 }
