@@ -44,6 +44,7 @@ import { downloadedFileNodeFixture } from '../../test/mo2/downloadedFileNodeFixt
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { downloadedFileCommands } from '../../downloadedFileCommands/downloads';
 import { AgentCall } from '../../drivingLib/agentGesture';
+import { Refusal } from '../../drivingLib/refusal';
 import type { MoveToTrash } from '../../ports/trash';
 import type { LocatedDownloadedFileRow, DownloadedFileRow, Instance, InstanceValue } from '../../instanceLoader/instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce, assertSelectionOutcome } from '../../test/surfacingDoubles';
@@ -441,6 +442,15 @@ describe('the Downloads gestures called by the agent', () => {
     const answered = await invoke('modbench.downloadedFile.delete', named('a.7z', 'gone.7z'));
 
     expect(answered).toMatchObject({ applied: true, outcome: { landed: [{ name: 'a.7z' }], refused: [{ item: { name: 'gone.7z' } }] } });
+  });
+
+  it.each(['delete', 'exclude', 'include'])('%s refuses an Argument that is not a downloaded file, writing nothing', async (verb) => {
+    const fake = downloadsFake();
+
+    registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), listing('a.7z'), recordingReporter(), scriptedDialog(), trash, downloadsLog, viewSelection);
+    await expect(invoke(`modbench.downloadedFile.${verb}`, new AgentCall([{ kind: 'mod', name: 'a.7z' }], {}))).rejects.toBeInstanceOf(Refusal);
+
+    expect(fake.calls).toEqual([]);
   });
 });
 

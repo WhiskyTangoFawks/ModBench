@@ -26,6 +26,7 @@ vi.mock('vscode', async () => {
 });
 
 import { AgentCall } from '../../drivingLib/agentGesture';
+import { Refusal } from '../../drivingLib/refusal';
 import { oneAtATime } from '../../textDocuments/oneAtATime';
 import type { SourceEditing } from '../../textDocuments/sourceEditing';
 import { progressSteps } from '../../test/recordedProgress';
@@ -308,6 +309,15 @@ describe('modbench.plugin.rename, called by the agent', () => {
     const { client, fake, run } = setup();
 
     await expect(run(call)).rejects.toThrow(reason);
+
+    expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('refuses an Argument that is not a plugin, renaming nothing', async () => {
+    const { client, fake, run } = setup();
+
+    await expect(run(new AgentCall([{ kind: 'mod', name: 'ModA' }], { name: 'Renamed.esp' }))).rejects.toBeInstanceOf(Refusal);
 
     expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
     expect(fake.calls).toEqual([]);

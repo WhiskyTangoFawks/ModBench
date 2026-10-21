@@ -1798,36 +1798,40 @@ describe('a Mods selection gesture reports a refusal through the shared reporter
   const pickPlace = (label: string) => createQuickPick.mockImplementationOnce(() => quickPickChoosing<{ label: string }>((items) => items.find((i) => i.label === label)));
 
   interface Gesture {
-    readonly refuse: (refusal: { byName: string } | { whole: string }) => void;
+    readonly refused: unknown;
+    readonly answer: (result: unknown) => void;
     readonly run: (reporter: ReturnType<typeof recordingReporter>) => Promise<unknown>;
   }
-  const refusedItem = (item: unknown, reason: string) => ({ applied: true, outcome: { landed: [], refused: [{ item, reason }] } });
   const gestures = {
     uninstall: {
-      refuse: (r) => uninstallMods.mockResolvedValueOnce('byName' in r ? refusedItem({ name: 'Mod B' }, r.byName) : { applied: false, refusal: r.whole }),
+      refused: { name: 'Mod B' },
+      answer: (result) => uninstallMods.mockResolvedValueOnce(result),
       run: (reporter) => {
         registerModContextCommands({ commands, instance, viewSelection: () => [], reporter, ask: scriptedDialog('Uninstall'), trash, log: vi.fn() });
         return invoke('modbench.mod.uninstall', modA, [modA, modB]);
       },
     },
     'separator delete': {
-      refuse: (r) => deleteSeparators.mockResolvedValue('byName' in r ? refusedItem({ name: 'Group B' }, r.byName) : { applied: false, refusal: r.whole }),
+      refused: { name: 'Group B' },
+      answer: (result) => deleteSeparators.mockResolvedValue(result),
       run: (reporter) => {
         registerSeparatorCommands(commands, instance, reporter, scriptedDialog('Delete'), trash, () => []);
         return invoke('modbench.separator.delete', groupA, [groupA, groupB]);
       },
     },
     enable: {
-      refuse: (r) => setModsEnabled.mockResolvedValue('byName' in r ? refusedItem('Mod B', r.byName) : { applied: false, refusal: r.whole }),
+      refused: 'Mod B',
+      answer: (result) => setModsEnabled.mockResolvedValue(result),
       run: (reporter) => {
         registerModEnableCommands(commands, instance, () => [], reporter);
         return invoke('modbench.mod.enable', modA, [modA, modB]);
       },
     },
     move: {
-      refuse: (r) => {
+      refused: 'Mod C',
+      answer: (result) => {
         pickPlace('Ungrouped');
-        moveMods.mockResolvedValue('byName' in r ? refusedItem('Mod C', r.byName) : { applied: false, refusal: r.whole });
+        moveMods.mockResolvedValue(result);
       },
       run: (reporter) => {
         registerModMoveCommand(commands, instance, { selection: () => [], direction: () => 'losingAtTop' }, reporter);
@@ -1835,9 +1839,8 @@ describe('a Mods selection gesture reports a refusal through the shared reporter
       },
     },
     'exclude file': {
-      refuse: (r) => markFiles.mockResolvedValue('byName' in r
-        ? refusedItem({ origin: gone.origin, relativePath: 'c.dds' }, r.byName)
-        : { applied: false, refusal: r.whole }),
+      refused: { origin: gone.origin, relativePath: 'c.dds' },
+      answer: (result) => markFiles.mockResolvedValue(result),
       run: (reporter) => {
         registerFileExclusionCommands(commands, instance, () => [], reporter);
         return invoke('modbench.mod.excludeFile', included, [included, gone]);
@@ -1853,7 +1856,7 @@ describe('a Mods selection gesture reports a refusal through the shared reporter
     ['exclude file', 'Could not exclude 1 of 2 files.', '"M/c.dds" (trash unavailable)'],
   ] as const)('%s names the refused item and why, while the others land', async (name, message, detail) => {
     const gesture: Gesture = gestures[name];
-    gesture.refuse({ byName: 'trash unavailable' });
+    gesture.answer({ applied: true, outcome: { landed: [], refused: [{ item: gesture.refused, reason: 'trash unavailable' }] } });
     const reporter = recordingReporter();
 
     await gesture.run(reporter);
@@ -1869,11 +1872,41 @@ describe('a Mods selection gesture reports a refusal through the shared reporter
     ['exclude file', 'Could not exclude 2 files.'],
   ] as const)('%s reports a refusal of the whole selection with its cause', async (name, message) => {
     const gesture: Gesture = gestures[name];
-    gesture.refuse({ whole: 'ENOENT: modlist.txt' });
+    gesture.answer({ applied: false, refusal: 'ENOENT: modlist.txt' });
     const reporter = recordingReporter();
 
     await gesture.run(reporter);
 
     expect(reporter.reports).toEqual([{ severity: 'error', message, detail: 'ENOENT: modlist.txt' }]);
+  });
+});
+
+describe('a Mods gesture called by the agent refuses an Argument of a kind it does not take, writing nothing', () => {
+  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
+
+  const instance = { ...instanceThatReads, value: instanceValueFixture({ activeProfile: 'Default' }) };
+  const plugin = { kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod A' } } as const;
+  const mod = { kind: 'mod', name: 'Mod A' } as const;
+  const registerContext = () =>
+    registerModContextCommands({ commands, instance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(), trash: vi.fn(), log: vi.fn() });
+  const registerSeparators = () => registerSeparatorCommands(commands, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => []);
+
+  it.each([
+    ['modbench.mod.enable', plugin, () => registerModEnableCommands(commands, instance, () => [], recordingReporter()), setModsEnabled],
+    ['modbench.mod.disable', plugin, () => registerModEnableCommands(commands, instance, () => [], recordingReporter()), setModsEnabled],
+    ['modbench.mod.move', plugin, () => registerModMoveCommand(commands, instance, { selection: () => [], direction: () => 'losingAtTop' }, recordingReporter()), moveMods],
+    ['modbench.mod.uninstall', plugin, registerContext, uninstallMods],
+    ['modbench.mod.rename', plugin, registerContext, renameMod],
+    ['modbench.mod.excludeFile', mod, () => registerFileExclusionCommands(commands, instance, () => [], recordingReporter()), markFiles],
+    ['modbench.mod.includeFile', mod, () => registerFileExclusionCommands(commands, instance, () => [], recordingReporter()), markFiles],
+    ['modbench.separator.add', plugin, registerSeparators, insertSeparator],
+    ['modbench.separator.rename', mod, registerSeparators, renameSeparator],
+    ['modbench.separator.delete', mod, registerSeparators, deleteSeparators],
+  ] as const)('%s', async (command, argument, register, write) => {
+    register();
+
+    await expect(invoke(command, new AgentCall([argument], { name: 'X' }))).rejects.toBeInstanceOf(Refusal);
+
+    expect(write).not.toHaveBeenCalled();
   });
 });

@@ -23,6 +23,7 @@ vi.mock('vscode', async () => {
 });
 
 import { AgentCall } from '../../drivingLib/agentGesture';
+import { Refusal } from '../../drivingLib/refusal';
 import { registerPluginEnableCommands } from '../pluginParticipationCommands';
 import { PluginNode, ImplicitMasterNode } from '../pluginRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -156,6 +157,14 @@ describe('modbench.plugin.enable / modbench.plugin.disable, called by the agent'
       });
       expect(reporter.reports).toEqual([]);
     });
+
+  it('refuses an Argument that is not a plugin, writing nothing', async () => {
+    const { adapter } = registered();
+
+    await expect(invoke('modbench.plugin.enable', new AgentCall([{ kind: 'mod', name: 'SomeMod' }], {}))).rejects.toBeInstanceOf(Refusal);
+
+    expect(adapter.calls).toEqual([]);
+  });
 
   it('answers once the instance has been read again, so the agent\'s next read sees the change', async () => {
     registered();

@@ -29,6 +29,7 @@ vi.mock('vscode', async () => {
 import type { MEditClient, PluginMetadata } from '../../client';
 import type { PluginsDrop } from '../../pluginCommands/plugins';
 import { AgentCall } from '../../drivingLib/agentGesture';
+import { Refusal } from '../../drivingLib/refusal';
 import { registerPluginMoveCommand } from '../pluginMoveCommand';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -174,5 +175,13 @@ describe('modbench.plugin.move, called by the agent', () => {
     expect(answered).toEqual({ applied: false, refusal: 'Could not move plugins.', detail: '"A.esp" is a master of "B.esp", so it must load before it.' });
     expect(fake.calls).toEqual([]);
     expect(reporter.reports).toEqual([]);
+  });
+
+  it('refuses an Argument that is not a plugin, writing nothing', async () => {
+    const { fake } = registered();
+
+    await expect(invoke(new AgentCall([{ kind: 'mod', name: 'ModA' }], { drop: LOSING_END }))).rejects.toBeInstanceOf(Refusal);
+
+    expect(fake.calls).toEqual([]);
   });
 });
