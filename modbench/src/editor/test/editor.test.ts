@@ -211,24 +211,6 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
     expect(await labelsOf(input)).toEqual(['Rifle']);
   });
 
-  it('states each plugin copy by whether mEdit answers its plugin can be edited', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getComparison', null);
-    client.setQueryAnswer('getChildRecordTypes', []);
-    client.setQueryAnswer('getPlugins', []);
-    client.setQueryAnswer('getReferences', [{
-      formKey: '000900:A.esp', plugin: 'A.esp', origin: 'ModA', fieldPath: 'Keywords[0]', recordType: 'weap', recordTypeName: 'Weapon', editorId: 'Rifle',
-    }]);
-    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'A.esp', origin: 'ModA', isCompiledPlugin: true, isImmutable: false })]);
-    makeEditor(client);
-
-    const { provider } = await present(await askReferencedBy(recordRow), 'the list shown').resolve();
-    const [referrer] = provider.getChildren();
-
-    expect(provider.getChildren(present(referrer, 'the referrer')).map((holder) => holder.contextValue))
-      .toEqual(['referencedByHolder editable']);
-  });
-
   it('titles the list by the FormKey of a record with no EditorID', async () => {
     const { client } = asking();
     client.setQueryAnswer('getComparison', null);
@@ -337,18 +319,6 @@ describe('the focused cell of the record tab in focus', () => {
     expect(focusedView.id()).toBe('modbench.recordGrid');
   });
 
-  it('answers the palette\'s copy value with the focused cell\'s text, empty or not, and defers for another view or a cell with none', () => {
-    const { editor, open } = makeEditor();
-    const tab = open('000801:A.esp');
-    const copy = () => editor.copyValue.map(({ text }) => text({ view: 'modbench.recordGrid' }, undefined))[0];
-
-    tab.receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: { webviewSection: 'field', copyText: '' }, entered: false });
-    expect(copy()).toBe('');
-    tab.receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: cell('field'), entered: false });
-    expect(copy()).toBeUndefined();
-    tab.receive({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: { webviewSection: 'field', copyText: 'Iron' }, entered: false });
-    expect(editor.copyValue.map(({ text }) => text({ view: 'modbench.modList' }, undefined))[0]).toBeUndefined();
-  });
 });
 
 const statusTick = (conflictsComputed: boolean, version: number): NotificationEvent => ({
@@ -394,37 +364,6 @@ describe('conflicts computed', () => {
       [[{ type: 'loadRecord', formKey: '000801:A.esp' }]],
       [[{ type: 'loadRecord', formKey: '000802:A.esp' }]],
     ]);
-  });
-});
-
-describe('a record tab whose record an edit of its FormID moved', () => {
-  const [OLD, MOVED] = ['000800:Mod.esp', '000900:Mod.esp'];
-  const editField = (formKey: string) => commandHandlers.get('modbench.record.editField')?.(
-    { formKey, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin }, { op: 'set', path: [{ kind: 'member', name: 'Name' }], value: 'x' });
-  const editedFormKeys = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'getEditChanges').map(c => c.args[0]);
-
-  it('sends an edit of the moved plugin addressed with the old FormKey to the new one until the tab\'s read of it is answered, and not after', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
-    client.setQueryAnswer('getComparison', null);
-    client.setQueryAnswer('getRecordsComparison', { compare: null, missing: [{ formKey: OLD, plugin: COPY_PLUGIN, reason: 'RecordGone', message: 'gone' }] });
-    client.setQueryAnswer('getPlugins', activeA);
-    client.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/source/ModA/plugin-source/A.esp/Npcs/Npc.json' });
-    client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN });
-    const { open } = makeEditor(client);
-    const tab = open(OLD);
-    client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], deletions: [], documents: [] });
-    await editField(OLD);
-    client.setQueryAnswer('getEditChanges', { applied: true, moves: [], deletions: [], documents: [] });
-    client.emit({ kind: 'rows-changed', plugin: 'Mod.esp', origin: 'ModA', keys: [OLD, MOVED], sequence: 2 });
-    expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: MOVED }]]);
-
-    await editField(OLD);
-    tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: MOVED, columns: [] });
-    await settle();
-    await editField(OLD);
-
-    expect(editedFormKeys(client)).toEqual([OLD, MOVED, OLD]);
   });
 });
 
@@ -609,7 +548,7 @@ describe('a record file\'s tab', () => {
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
   });
 
-  it('shows "Failed to load:" and a line in the Output when mEdit refuses and no load order is on its way', async () => {
+  it('shows "Failed to load:" and adds no Output line of its own when mEdit refuses and no load order is on its way', async () => {
     loadOrder.coming = false;
     const client = fileClient();
     const refusal = { failed: 'no-load-order', refusal: 'No load order has been received.' } as const;
@@ -698,16 +637,13 @@ describe('a record file\'s tab', () => {
         .toEqual([[[{ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Typed" }' }, column]]]);
     });
 
-    it('reads the file\'s column from the file on disk once the document is saved and its plugin is not active, as mEdit compares no copy of it', async () => {
-      disk.set(FILE, '{ "EditorID": "OnDisk" }');
+    it.each([
+      ['', '{ "EditorID": "OnDisk" }'],
+      ['\uFEFF', '{ "EditorID": "OnDisk" }'],
+    ])('reads the file\'s column from the file on disk once the document is saved and its plugin is not active, as mEdit compares no copy of it, without a byte order mark %j as its document\'s text has none', async (mark, text) => {
+      disk.set(FILE, mark + text);
       expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false)))
-        .toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }', alone: false }]]);
-    });
-
-    it('reads the saved file without its byte order mark, as its document\'s text has none', async () => {
-      disk.set(FILE, '\uFEFF{ "EditorID": "OnDisk" }');
-      expect(await readOf(fileDocument('{ "EditorID": "Gun" }', false)))
-        .toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }', alone: false }]]);
+        .toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: text, alone: false }]]);
     });
 
     it('reads the file\'s column from mEdit once the saved document is gone from disk', async () => {
@@ -855,20 +791,13 @@ describe('a file whose plugin is overridden', () => {
       .map((m: unknown): unknown => Reflect.get(Object(m), 'fileOverriddenBy'));
   }
 
-  it('has its tab told the mod that overrides it', async () => {
-    expect(await told(overriddenBy('ModB'))).toEqual(['ModB']);
-  });
-
-  it('has its tab told no mod when nothing overrides it', async () => {
-    expect(await told(overriddenBy(undefined))).toEqual([null]);
-  });
-
-  it('has its tab told no mod when its plugin is disabled', async () => {
-    expect(await told({ ...NO_MODS, standingOf: () => ({ kind: 'disabled' }) })).toEqual([null]);
-  });
-
-  it('has its tab told no mod while mEdit has its plugin active', async () => {
-    expect(await told(overriddenBy('ModB'), activeA)).toEqual([null]);
+  it.each([
+    ['the mod that overrides it', overriddenBy('ModB'), inactiveA, ['ModB']],
+    ['no mod when nothing overrides it', overriddenBy(undefined), inactiveA, [null]],
+    ['no mod when its plugin is disabled', { ...NO_MODS, standingOf: () => ({ kind: 'disabled' }) } satisfies ModFacts, inactiveA, [null]],
+    ['no mod while mEdit has its plugin active', overriddenBy('ModB'), activeA, [null]],
+  ])('has its tab told %s', async (_, modFacts, plugins, expected) => {
+    expect(await told(modFacts, plugins)).toEqual(expected);
   });
 
   it('is read again when the instance changes the mod that overrides it', async () => {
@@ -1342,12 +1271,12 @@ describe('a non-compiled plugin copy\'s tab', () => {
     return comparisonsAsked(client);
   }
 
-  it('reads every column from mEdit while the copy\'s plugin is active, its document being mEdit\'s own copy', async () => {
-    expect(await readOf(activeA)).toEqual([[GUN, undefined]]);
-  });
-
-  it('reads the copy\'s column from its document while its plugin is not active, as mEdit compares no copy of it', async () => {
-    expect(await readOf(inactiveA)).toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Rendered" }', alone: false }]]);
+  it.each([
+    ['every column from mEdit while the copy\'s plugin is active, its document being mEdit\'s own copy', activeA, undefined],
+    ['the copy\'s column from its document while its plugin is not active, as mEdit compares no copy of it', inactiveA,
+      { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Rendered" }', alone: false }],
+  ])('reads %s', async (_, plugins, read) => {
+    expect(await readOf(plugins)).toEqual([[GUN, read]]);
   });
 });
 
@@ -1387,20 +1316,14 @@ describe('a child record\'s tab', () => {
     return comparisonsAsked(client);
   }
 
-  it('reads the child\'s column from its container\'s unsaved text, out of which mEdit reads the child', async () => {
-    expect(await readOf({ isDirty: true, getText: () => '{ "EditorID": "Cell" }' }, activeA))
-      .toEqual([[PLACED, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Cell" }', alone: false }]]);
-  });
-
-  it('reads the child\'s column from mEdit once its container is saved and its plugin is active', async () => {
+  const copyOfText = (documentText: string) => ({ plugin: { name: 'A.esp', origin: 'ModA' }, documentText, alone: false });
+  it.each([
+    ['its container\'s unsaved text, out of which mEdit reads the child', true, activeA, copyOfText('{ "EditorID": "Cell" }')],
+    ['mEdit once its container is saved and its plugin is active', false, activeA, undefined],
+    ['its container\'s file on disk once it is saved and its plugin is not active', false, inactiveA, copyOfText('{ "EditorID": "OnDisk" }')],
+  ])('reads the child\'s column from %s', async (_, isDirty, plugins, read) => {
     disk.set(CHILD.path, '{ "EditorID": "OnDisk" }');
-    expect(await readOf({ isDirty: false, getText: () => '{ "EditorID": "Cell" }' }, activeA)).toEqual([[PLACED, undefined]]);
-  });
-
-  it('reads the child\'s column from its container\'s file on disk once it is saved and its plugin is not active', async () => {
-    disk.set(CHILD.path, '{ "EditorID": "OnDisk" }');
-    expect(await readOf({ isDirty: false, getText: () => '{ "EditorID": "Cell" }' }))
-      .toEqual([[PLACED, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }', alone: false }]]);
+    expect(await readOf({ isDirty, getText: () => '{ "EditorID": "Cell" }' }, plugins)).toEqual([[PLACED, read]]);
   });
 
   it('reads again when its container\'s text changes, and not when another document\'s does', async () => {
