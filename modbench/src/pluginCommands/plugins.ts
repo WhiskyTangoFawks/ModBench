@@ -103,6 +103,9 @@ async function reorderPlugins(
   { adapter, client: masters }: { adapter: InstanceAdapter; client: PluginMasters }, plugins: readonly PluginAddress[], drop: Drop,
 ): Promise<CommandResult> {
   const pluginNames = plugins.map((plugin) => plugin.name);
+  if ('name' in drop && pluginNames.some((name) => pluginKey(name) === pluginKey(drop.name))) {
+    return { applied: false, refusal: `The target is "${drop.name}", which is moving.` };
+  }
   const factsOf = await orderFactsFrom(masters);
   // Settled against the order the change lands on, so a tree a generation behind plugins.txt
   // cannot land the block at a stale index.

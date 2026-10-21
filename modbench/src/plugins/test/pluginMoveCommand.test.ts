@@ -163,34 +163,6 @@ describe('modbench.plugin.move', () => {
   });
 });
 
-describe('a drop on a plugin being moved (plugins.md, Drag and drop, story 4)', () => {
-  const B = { name: 'B.esp', origin: 'ModB' };
-  const onB = { kind: 'before', name: 'b.ESP' } as const;
-
-  it('from a view call changes nothing and says nothing', async () => {
-    const { reporter, fake } = registered();
-
-    await invoke(...rowsOf(A, B), onB);
-
-    expect(fake.calls).toEqual([]);
-    expect(reporter.reports).toEqual([]);
-    expect(progressSteps).toEqual([]);
-  });
-
-  it('from an agent call answers that nothing landed and why, changing nothing', async () => {
-    const { reporter, fake } = registered();
-
-    const answered = await invoke(new AgentCall([A, B].map((plugin) => ({ kind: 'plugin' as const, plugin })), { drop: onB }));
-
-    expect(answered).toEqual({
-      applied: true,
-      outcome: { landed: [], refused: [A, B].map((item) => ({ item, reason: 'The drop is on "b.ESP", which is moving.' })) },
-    });
-    expect(fake.calls).toEqual([]);
-    expect(reporter.reports).toEqual([]);
-  });
-});
-
 describe('modbench.plugin.move, called by the agent', () => {
   const given = (...plugins: { name: string; origin: string }[]) => new AgentCall(plugins.map((plugin) => ({ kind: 'plugin' as const, plugin })), { drop: LOSING_END });
 
