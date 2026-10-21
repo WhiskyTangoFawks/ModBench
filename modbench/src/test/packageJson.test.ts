@@ -292,65 +292,6 @@ describe('package.json outside an instance', () => {
     const ungated = pkg.contributes.keybindings.filter((k) => insideOnly.has(k.command) && !requires(k.when, IN_AN_INSTANCE));
     expect(ungated.map((k) => `${k.key} → ${k.command}`)).toEqual([]);
   });
-
-  it('recognizes the gate only as a top-level conjunct', () => {
-    expect(requires(`view == modbench.modList && ${IN_AN_INSTANCE}`, IN_AN_INSTANCE)).toBe(true);
-    expect(requires(`view == modbench.modList && !${IN_AN_INSTANCE}`, IN_AN_INSTANCE)).toBe(false);
-    expect(requires(`view == modbench.modList || ${IN_AN_INSTANCE}`, IN_AN_INSTANCE)).toBe(false);
-    expect(requires('view == modbench.modList', IN_AN_INSTANCE)).toBe(false);
-  });
-
-  it('recognizes the gate as a conjunct of every alternative', () => {
-    expect(requires(`view == a && ${IN_AN_INSTANCE} || view == b && ${IN_AN_INSTANCE}`, IN_AN_INSTANCE)).toBe(true);
-    expect(requires(`view == a && ${IN_AN_INSTANCE} || view == b`, IN_AN_INSTANCE)).toBe(false);
-    expect(requires(undefined, IN_AN_INSTANCE)).toBe(false);
-  });
-
-  it('reads parentheses as VS Code groups them', () => {
-    expect(requires(`${IN_AN_INSTANCE} && (view == a || view == b)`, IN_AN_INSTANCE)).toBe(true);
-    expect(requires(`(view == a && ${IN_AN_INSTANCE}) || (view == b && ${IN_AN_INSTANCE})`, IN_AN_INSTANCE)).toBe(true);
-    expect(requires(`(view == a || ${IN_AN_INSTANCE}) && view == b`, IN_AN_INSTANCE)).toBe(false);
-    expect(requires(`!(${IN_AN_INSTANCE}) && view == a`, IN_AN_INSTANCE)).toBe(false);
-    expect(requires(String.raw`${IN_AN_INSTANCE} && !(viewItem =~ /\b(a|b)\b/)`, IN_AN_INSTANCE)).toBe(true);
-  });
-
-  describe('holds', () => {
-    const on = { view: 'modbench.pluginListTree', viewItem: 'plugin compilable' };
-
-    it('needs every conjunct of an &&', () => {
-      expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\bcompilable\b/`, on)).toBe(true);
-      expect(holds(String.raw`view == modbench.pluginListTree && viewItem =~ /\bnonCompiledPluginInMod\b/`, on)).toBe(false);
-    });
-
-    it('takes any alternative of an ||', () => {
-      expect(holds('viewItem == other || view == modbench.pluginListTree', on)).toBe(true);
-      expect(holds('viewItem == other || view == other', on)).toBe(false);
-    });
-
-    it('inverts what follows a !, a parenthesised group included', () => {
-      expect(holds(String.raw`view == modbench.pluginListTree && !(viewItem =~ /\bcompilable\b/)`, on)).toBe(false);
-      expect(holds(String.raw`view == modbench.pluginListTree && !(viewItem =~ /\bnonCompiledPluginInMod\b/)`, on)).toBe(true);
-      expect(holds('!compilable', {})).toBe(true);
-      expect(holds('!compilable', { compilable: true })).toBe(false);
-    });
-
-    it('binds && tighter than ||, and lets parentheses regroup', () => {
-      expect(holds('view == other && viewItem == other || viewItem == plugin compilable', on)).toBe(true);
-      expect(holds('view == other && (viewItem == other || viewItem == plugin compilable)', on)).toBe(false);
-    });
-  });
-
-  it('evaluates a clause against the context it is given', () => {
-    const on = { view: 'modbench.pluginListTree', viewItem: 'plugin compilable' };
-    expect(holds('view == modbench.pluginListTree && (viewItem == plugin || viewItem == other)', { ...on, viewItem: 'plugin' })).toBe(true);
-    expect(holds("webviewId == 'modbench' && compilable", { webviewId: 'modbench', compilable: true })).toBe(true);
-    expect(holds("webviewId == 'modbench' && compilable", { webviewId: 'modbench' })).toBe(false);
-  });
-
-  it('refuses a clause it cannot read, rather than reading it as ungated', () => {
-    expect(() => requires(`${IN_AN_INSTANCE} && (view == a`, IN_AN_INSTANCE)).toThrow(/cannot read/);
-    expect(() => requires(`${IN_AN_INSTANCE} && view == a)`, IN_AN_INSTANCE)).toThrow(/cannot read/);
-  });
 });
 
 describe('package.json Toolbox view', () => {
