@@ -6,7 +6,7 @@ using Mutagen.Bethesda;
 namespace MEditService.SourceAdapter;
 
 /// <summary>What a document's text and bytes declare, read as text rather than through the codec. The
-/// OrNull readers answer null for a file that vanished or locked since a listing named it.</summary>
+/// Listed readers answer null for a file that vanished since a listing named it.</summary>
 internal static class DocumentText
 {
     private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
@@ -28,7 +28,9 @@ internal static class DocumentText
         }
     }
 
-    internal static byte[]? BytesOrNull(ISourceFiles files, string path)
+    /// <summary>The file's bytes: null when a listing named a file that is gone since, and a stop naming
+    /// the file when it is there and cannot be read, since it still holds its keys.</summary>
+    internal static byte[]? ListedBytes(ISourceFiles files, string sourceFolder, string path)
     {
         try
         {
@@ -36,21 +38,16 @@ internal static class DocumentText
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return null;
+            throw SourceStopException.UnreadableIn(sourceFolder, path, $"it could not be read: {ex.Message}");
         }
     }
 
-    internal static string? ReadOrNull(ISourceFiles files, string path) =>
-        BytesOrNull(files, path) is { } bytes ? Encoding.UTF8.GetString(bytes) : null;
+    internal static string? ListedText(ISourceFiles files, string sourceFolder, string path) =>
+        ListedBytes(files, sourceFolder, path) is { } bytes ? Encoding.UTF8.GetString(bytes) : null;
 
-    /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
-    /// owner's, since the file is the owner's document. Null when it cannot be read or declares
-    /// none.</summary>
-    internal static string? FormKeyDeclaredBy(ISourceFiles files, string filePath, string pluginFileName) =>
-        ReadOrNull(files, filePath) is { } text ? FormKeyDeclaredIn(text, filePath, pluginFileName) : null;
-
-    /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each
-    /// file once.</summary>
+    /// <summary>The FormKey the document at <paramref name="filePath"/> declares, read from
+    /// <paramref name="text"/> (an embedded child's owner's, since the file is the owner's document), or
+    /// null when it declares none.</summary>
     internal static string? FormKeyDeclaredIn(string text, string filePath, string pluginFileName)
     {
         // The header's document carries a ModKey rather than a FormKey; PluginHeader computes the

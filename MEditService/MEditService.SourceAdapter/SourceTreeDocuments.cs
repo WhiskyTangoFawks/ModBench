@@ -114,7 +114,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             var own = SourceRepositoryLayout.ContainerDocumentHeldBy(_files, worldspaceDirectory);
             foreach (var document in DocumentsAt(own, cell: null, holders)) yield return document;
 
-            var worldspaceFormKey = DocumentText.FormKeyDeclaredBy(_files, own, _pluginFileName);
+            var worldspaceFormKey = Read(own) is { } ownText ? DocumentText.FormKeyDeclaredIn(ownText, own, _pluginFileName) : null;
             foreach (var blockDirectory in _files.DirectoriesIn(worldspaceDirectory))
             {
                 var (blockX, blockY) = Coordinates(Path.GetFileName(blockDirectory));
