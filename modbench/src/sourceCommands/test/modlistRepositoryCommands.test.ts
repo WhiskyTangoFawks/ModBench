@@ -381,6 +381,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     expect(client.calls[1]?.args[0]).toEqual([
       expect.objectContaining({ name: 'ModA', unreadableGameFiles: { 'textures/a.dds': 'EACCES' } }), expect.objectContaining({ name: 'ModB', unreadableGameFiles: {} })]);
+    expect(client.calls[1]?.args[1]).toMatchObject({ gameFolder: { files: [{ path: 'Meshes/B.nif', hash: '#b' }] } });
     expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'was skipped: game file is missing.' }] });
   });
 
