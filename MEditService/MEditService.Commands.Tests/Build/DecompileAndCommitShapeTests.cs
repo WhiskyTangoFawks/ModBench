@@ -99,7 +99,7 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
     public async Task Init_OfAModWithPluginsThatFailTheRoundTripGate_RefusesTheWholeMod_NamingEachRefusedPluginAndNoOther_WritingNothing(
         string[] plugins, string[] failing, string[] named, string[] notNamed)
     {
-        foreach (var plugin in plugins) WritePluginReturningItsBinarySha256($"{plugin}.esp", $"{plugin}Npc");
+        WritePluginsOf(plugins);
         var source = new FakeSourceAdapter();
 
         var result = await Init(new RoundTripFailsForEvery([.. failing.Select(plugin => $"{plugin}.esp")]), source);
@@ -153,6 +153,11 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
         mod.UsingLocalization = true;
         mod.WriteToBinary(Path.Combine(_modFolder, name));
         Directory.Delete(Path.Combine(_modFolder, "Strings"), recursive: true);
+    }
+
+    private void WritePluginsOf(IEnumerable<string> plugins)
+    {
+        foreach (var plugin in plugins) WritePluginReturningItsBinarySha256($"{plugin}.esp", $"{plugin}Npc");
     }
 
     private string WritePluginReturningItsBinarySha256(string name, string editorId)

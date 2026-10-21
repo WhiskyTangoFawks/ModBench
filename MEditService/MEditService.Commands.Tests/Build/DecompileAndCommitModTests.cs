@@ -187,6 +187,26 @@ public sealed class DecompileAndCommitModTests
     }
 
     [Fact]
+    public async Task InitMod_LocalizedPluginWithABsaBesideIt_MaterializesTheRealStringInTheNamedSourceFolder()
+    {
+        using var modFolder = new ScratchDirectory("medit-initservice-localized-");
+        using var sourceFolder = new ScratchDirectory("medit-initservice-localized-source-");
+        using var dataFolder = new ScratchDirectory("medit-initservice-localized-data-");
+        var (pluginPath, door) = WriteLocalizedPluginWhoseStringsMutagenWritesBesideIt(modFolder);
+        File.WriteAllBytes(Path.Combine(modFolder, "UnrelatedMod - Main.ba2"), []);
+
+        var loadOrder = SnapshotPlugins.Snapshot(
+            dataFolder, dataFolder, GameRelease.Fallout4,
+            [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Line: 0, Enabled: true, Winning: true,
+                NamedProvider: new PluginProvider.FromMod("FixtureMod", modFolder, sourceFolder))]);
+        await DecompileAndCommitEveryPluginOf.ModAsync(loadOrder, "FixtureMod");
+
+        Assert.True(TestAdapters.Source().IsSourceMod(sourceFolder));
+        var sourceText = SourceModTree.Document(sourceFolder, new PluginAddress("Fixture.esp", "FixtureMod"), door.FormKey.ToString()).Require().Body;
+        Assert.Contains("The Big Door", sourceText);
+    }
+
+    [Fact]
     public async Task InitMod_LocalizedPluginMissingItsStringsFile_RefusesNamingTheMissingFile_SinceMutagenLookupOfAMissingFileDoesNotThrow()
     {
         using var modFolder = new ScratchDirectory("medit-initservice-localized-missing-");

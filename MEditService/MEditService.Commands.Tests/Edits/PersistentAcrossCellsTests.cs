@@ -260,17 +260,17 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     private static Fallout4Mod MiddleHoldingTheCellAtTheGrid() => Middle((mod, world) =>
         world.SubCells.Add(CellBlocks.Exterior(new Cell(mod) { EditorID = "MiddlesCell", Grid = new CellGrid { Point = new P2Int(9, 9) } })));
 
-    public static TheoryData<bool, Func<Fallout4Mod>?> MastersHoldingAPersistentCell() => new()
+    public static TheoryData<bool, Fallout4Mod?> MastersHoldingAPersistentCell() => new()
     {
         { false, null },
-        { false, MiddleOverridingThePersistentCell },
+        { false, MiddleOverridingThePersistentCell() },
     };
 
     [Theory]
     [MemberData(nameof(MastersHoldingAPersistentCell))]
-    public void SettingPersistent_WhereTheWorldspaceHoldsNoPersistentCell_CopiesItInFromItsMaster(bool masterCompiledPlugin, Func<Fallout4Mod>? nonMaster)
+    public void SettingPersistent_WhereTheWorldspaceHoldsNoPersistentCell_CopiesItInFromItsMaster(bool masterCompiledPlugin, Fallout4Mod? nonMaster)
     {
-        Load(masterCompiledPlugin, middle: nonMaster?.Invoke());
+        Load(masterCompiledPlugin, middle: nonMaster);
 
         SetFlags("Mover", Persistent);
 
@@ -282,17 +282,17 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Empty(Group(Document(_keys["Here"]), "Temporary"));
     }
 
-    public static TheoryData<Func<Fallout4Mod>?> PluginsHoldingNoPersistentCellToCopy() => new()
+    public static TheoryData<Fallout4Mod?> PluginsHoldingNoPersistentCellToCopy() => new()
     {
         { null },
-        { MiddleHoldingAPersistentCell },
+        { MiddleHoldingAPersistentCell() },
     };
 
     [Theory]
     [MemberData(nameof(PluginsHoldingNoPersistentCellToCopy))]
-    public void SettingPersistent_WithNoPersistentCellInAMaster_CreatesOne(Func<Fallout4Mod>? nonMaster)
+    public void SettingPersistent_WithNoPersistentCellInAMaster_CreatesOne(Fallout4Mod? nonMaster)
     {
-        Load(masterCompiledPlugin: false, masterHasPersistentCell: false, middle: nonMaster?.Invoke());
+        Load(masterCompiledPlugin: false, masterHasPersistentCell: false, middle: nonMaster);
 
         SetFlags("Mover", Persistent);
 
@@ -303,18 +303,18 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Empty(Group(Document(_keys["Here"]), "Temporary"));
     }
 
-    public static TheoryData<bool, Func<Fallout4Mod>?> MastersHoldingTheCellAtThePosition() => new()
+    public static TheoryData<bool, Fallout4Mod?> MastersHoldingTheCellAtThePosition() => new()
     {
         { true, null },
         { false, null },
-        { false, MiddleOverridingTheGridCell },
+        { false, MiddleOverridingTheGridCell() },
     };
 
     [Theory]
     [MemberData(nameof(MastersHoldingTheCellAtThePosition))]
-    public void ClearingPersistent_WhereThePluginLacksTheCellAtItsPosition_CopiesItInFromItsMaster(bool masterCompiledPlugin, Func<Fallout4Mod>? nonMaster)
+    public void ClearingPersistent_WhereThePluginLacksTheCellAtItsPosition_CopiesItInFromItsMaster(bool masterCompiledPlugin, Fallout4Mod? nonMaster)
     {
-        Load(masterCompiledPlugin, middle: nonMaster?.Invoke());
+        Load(masterCompiledPlugin, middle: nonMaster);
 
         SetFlags("Leaver", 0);
 
@@ -325,17 +325,17 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Equal(["Wanderer"], Group(Document(_keys["Here"]), "Persistent"));
     }
 
-    public static TheoryData<bool, Func<Fallout4Mod>?> PluginsHoldingNoCellAtThePosition() => new()
+    public static TheoryData<bool, Fallout4Mod?> PluginsHoldingNoCellAtThePosition() => new()
     {
         { true, null },
-        { false, MiddleHoldingTheCellAtTheGrid },
+        { false, MiddleHoldingTheCellAtTheGrid() },
     };
 
     [Theory]
     [MemberData(nameof(PluginsHoldingNoCellAtThePosition))]
-    public void ClearingPersistent_WithNoCellAtItsPositionInAMaster_CreatesOneAtItsGrid(bool masterCompiledPlugin, Func<Fallout4Mod>? nonMaster)
+    public void ClearingPersistent_WithNoCellAtItsPositionInAMaster_CreatesOneAtItsGrid(bool masterCompiledPlugin, Fallout4Mod? nonMaster)
     {
-        Load(masterCompiledPlugin, middle: nonMaster?.Invoke());
+        Load(masterCompiledPlugin, middle: nonMaster);
 
         SetFlags("Wanderer", 0);
 

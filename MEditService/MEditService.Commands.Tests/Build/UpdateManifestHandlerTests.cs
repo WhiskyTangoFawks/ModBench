@@ -32,6 +32,11 @@ public sealed class UpdateManifestHandlerTests
         return built;
     }
 
+    private void WithFiles(IEnumerable<(string Path, string Text)> files)
+    {
+        foreach (var (path, text) in files) _folders.WithFile(Mod, path, text);
+    }
+
     private static ModToUpdate SourceMod => new("Mod", Mod, null, [], IsSourceMod: true, Version: null);
 
     private InstallationFile DownloadedFile(string path, params (string Path, string Hash)[] entries)
@@ -185,7 +190,7 @@ public sealed class UpdateManifestHandlerTests
     public async Task AFileNothingHoldsAtItsPath_IsNotInThePackage_IsReported_AndNoInstallationFileIsOpened(
         (string Path, string Text)[] modFiles, (string Path, string Hash)[] entries, string notHeld)
     {
-        foreach (var (path, text) in modFiles) _folders.WithFile(Mod, path, text);
+        WithFiles(modFiles);
 
         var updated = await Landed(ModFrom("Mod", DownloadedFile("dl/Base.zip", entries)));
 
