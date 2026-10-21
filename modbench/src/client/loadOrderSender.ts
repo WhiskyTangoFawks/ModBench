@@ -16,6 +16,7 @@ export interface LoadOrderSender {
   send(snapshot: LoadOrderSnapshot): Promise<LoadOrderOutcome>;
   latest(): Promise<LoadOrderOutcome | undefined>;
   onResent(listener: (snapshot: LoadOrderSnapshot, outcome: LoadOrderOutcome) => void): () => void;
+  onAppliedAfterReopen(listener: (snapshot: LoadOrderSnapshot) => void): () => void;
   onLaunch(listener: (launched: Promise<LaunchOutcome>) => void): () => void;
   onExit(listener: () => void): () => void;
   launch(): Promise<LaunchOutcome>;
@@ -88,11 +89,13 @@ function createSendSlot(wire: LoadOrderWire) {
   };
 }
 
-/** A restarted mEdit holds only what was resent, so every view hears the resend as the change it is. */
-export function announceResends(sender: Pick<LoadOrderSender, 'onResent'>, notifications: { announceChanged(snapshot: LoadOrderSnapshot): void }): void {
-  sender.onResent((snapshot, outcome) => {
-    if (outcome.outcome === 'applied') notifications.announceChanged(snapshot);
-  });
+interface ChangeAnnouncer {
+  announceChanged(snapshot: LoadOrderSnapshot): void;
+}
+
+/** A restarted mEdit holds only what was resent, so every view hears the first snapshot applied after a reopen as the change it is. */
+export function announceAfterReopen(sender: Pick<LoadOrderSender, 'onAppliedAfterReopen'>, notifications: ChangeAnnouncer): void {
+  sender.onAppliedAfterReopen((snapshot) => { notifications.announceChanged(snapshot); });
 }
 
 function listeners<A extends unknown[]>() {
@@ -113,6 +116,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
   let newestHanded: LoadOrderSnapshot | undefined;
   let reopenUnannounced = false;
   const resent = listeners<[LoadOrderSnapshot, LoadOrderOutcome]>();
+  const appliedAfterReopen = listeners<[LoadOrderSnapshot]>();
   const launches = listeners<[Promise<LaunchOutcome>]>();
   const exits = listeners<[]>();
   const launcher = createLauncher(wire, launches.fire);
@@ -129,19 +133,19 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     newestHanded = snapshot;
     const sent = slot.hold(snapshot);
     void sent.then((outcome) => {
-      if (!reopenUnannounced || outcome.outcome === 'abandoned' || snapshot !== newestHanded) return;
+      if (!reopenUnannounced || outcome.outcome !== 'applied' || snapshot !== newestHanded) return;
       reopenUnannounced = false;
-      resent.fire(snapshot, outcome);
+      appliedAfterReopen.fire(snapshot);
     });
     return sent;
   };
 
-  // The newest snapshot to apply after a reopen is the resend, whether it is the one handed again
-  // or one that was already waiting.
   const resend = (): void => {
-    if (!newestHanded) return;
+    const snapshot = newestHanded;
+    if (!snapshot) return;
     reopenUnannounced = true;
-    if (!slot.holdsOne()) void hand(newestHanded);
+    if (slot.holdsOne()) return;
+    void hand(snapshot).then((outcome) => { resent.fire(snapshot, outcome); });
   };
 
   // A send in flight when mEdit goes answers abandoned, never a killed backend as a network failure.
@@ -160,6 +164,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     send: hand,
     latest: () => slot.latest(),
     onResent: resent.add,
+    onAppliedAfterReopen: appliedAfterReopen.add,
     onLaunch: launches.add,
     onExit: exits.add,
     launch,
