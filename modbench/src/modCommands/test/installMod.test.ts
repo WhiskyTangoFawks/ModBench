@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { modCommands, type ModPackage } from '../modCommands';
 import type { DownloadedFile, DownloadedFileMeta, InstallPackage, InstallTarget } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ModStatus } from '../../client';
 import type { ReadModStatus } from '../../client';
 import type { ReadFailed } from '../../wire/readFailed';
@@ -20,9 +20,9 @@ const FRESHLY = downloadedFile(DOWNLOADED_FILE.name, DOWNLOADED_FILE_PATH, { mod
 
 function install(
   installed: ModPackage, target: InstallTarget = NEW_MOD, answers: InstanceAnswers = {}, force = true, readStatus: ReadModStatus = unreadStatus,
-  files: readonly DownloadedFile[] = [FRESHLY],
+  files: readonly DownloadedFile[] = [FRESHLY], folders: readonly string[] = [UPGRADED.name],
 ) {
-  const fake = fakeInstanceAdapter(readingFixture({ downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files } }), answers);
+  const fake = fakeInstanceAdapter(readingFixture({ modFolders: modFoldersOf(...folders), downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files } }), answers);
   const outcome = modCommands(fake.adapter, new InMemoryMEditClient(), readStatus).installMod(installed, target, force);
   return outcome.then((result) => ({ result, calls: fake.calls }));
 }
@@ -76,12 +76,12 @@ describe('installMod', () => {
       expect(calls).toEqual([]);
     });
 
-    it('leaves a mod whose name gives no folder to the adapter, whose claim refuses it', async () => {
+    it('leaves a mod whose folder is gone from disk to the adapter, whose claim refuses it', async () => {
       const answers = { installed: { landed: false } } as const;
 
-      const { result } = await install(INSTALLATION_FILE, { kind: 'upgrade', name: 'Vanished/Mod' }, answers, false, reading([]));
+      const { result } = await install(INSTALLATION_FILE, UPGRADED, answers, false, reading([]), [FRESHLY], []);
 
-      expect(result).toEqual({ applied: false, refusal: 'Cannot upgrade "Vanished/Mod": there is no folder by that name under mods/.' });
+      expect(result).toEqual({ applied: false, refusal: 'Cannot upgrade "Harder VATS": there is no folder by that name under mods/.' });
     });
 
     it('installs over a mod whose folder only lacks files its manifest names, which the upgrade does not lose', async () => {
