@@ -260,35 +260,39 @@ internal sealed class Indexer : IDisposable
                     _handed.Clear();
                 }
 
-                bool moved;
-                _exclusive.Enter();
-                try
+                try { ValidateAndPublish(paths); }
+                catch (Exception ex) when (!CancelledBy(ex, CancellationToken.None))
                 {
-                    var failure = ValidationFailure(() => ValidateTreesOf(paths), CancellationToken.None, out _);
-                    lock (_lock)
+                    _logger.LogError(ex, "Validating the handed documents failed unexpectedly");
+                    try { PublishStatus(); }
+                    catch (Exception publishFault) when (!CancelledBy(publishFault, CancellationToken.None))
                     {
-                        moved = _handOverFailure != failure;
-                        _handOverFailure = failure;
+                        _logger.LogError(publishFault, "Publishing the status after a failed hand-over failed");
                     }
                 }
-                finally { _exclusive.Exit(); }
-                if (moved) PublishStatus();
             }
         }
         catch (OperationCanceledException) when (_disposal.IsCancellationRequested)
         {
             return;
         }
-        catch (Exception ex) when (!CancelledBy(ex, CancellationToken.None))
+    }
+
+    private void ValidateAndPublish(List<string> paths)
+    {
+        bool moved;
+        _exclusive.Enter();
+        try
         {
-            _logger.LogError(ex, "Validating the handed documents failed unexpectedly");
-            lock (_lock) _validatingHanded = false;
-            try { PublishStatus(); }
-            catch (Exception publishFault) when (!CancelledBy(publishFault, CancellationToken.None))
+            var failure = ValidationFailure(() => ValidateTreesOf(paths), CancellationToken.None, out _);
+            lock (_lock)
             {
-                _logger.LogError(publishFault, "Publishing the status after a failed hand-over failed");
+                moved = _handOverFailure != failure;
+                _handOverFailure = failure;
             }
         }
+        finally { _exclusive.Exit(); }
+        if (moved) PublishStatus();
     }
 
     private void ValidateTreesOf(List<string> paths)
