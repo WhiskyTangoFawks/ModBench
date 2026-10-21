@@ -11,7 +11,7 @@ import { bundledBackendPath, spawnPiped } from './bundledBackend';
 import { backendLogLevelArgs, makeBackendLogForwarder, type BackendLogChannel } from './backendLog';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber, type ListenerThrows } from './notificationStream';
-import { createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
+import { announceAfterReopen, createLoadOrderSender, type LoadOrderSender } from './loadOrderSender';
 import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
@@ -139,10 +139,7 @@ class HttpMEditClient implements MEditClient {
       stop: () => this.lifecycle.stop(),
       put: (snapshot, signal) => this.putLoadOrder(snapshot, signal),
     });
-    // A restarted mEdit holds only what was resent, so every view hears the resend as the change it is.
-    this.loadOrder.onResent((snapshot, outcome) => {
-      if (outcome.outcome === 'applied') this.notifications.announceChanged(snapshot);
-    });
+    announceAfterReopen(this.loadOrder, this.notifications);
     this.handOver = createUnsavedHandOver({
       status: () => this.lifecycle.status,
       onStatusChanged: (listener) => this.lifecycle.onStatusChanged(listener),

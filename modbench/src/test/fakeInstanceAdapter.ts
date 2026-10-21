@@ -133,7 +133,7 @@ export interface FakeInstanceAdapter {
   readonly subscribers: number;
 }
 
-const EXCLUSION_MARK = '.excluded';
+const EXCLUSION_MARK = '.mohidden';
 
 const entryKey = (entry: EntryRef): string => (entry.kind === 'separator' ? `${entry.name}_separator` : entry.name).toLowerCase();
 
@@ -148,7 +148,17 @@ export function modFoldersOf(...entries: readonly (string | (EntryRef & { modNam
 const foldersHolding = (all: readonly ModFolder[]): ModFolders =>
   ({ all, holding: (entry) => all.find((folder) => entryKey(folder) === entryKey(entry)) });
 
+function folderBeside(folders: ModFolders | undefined, name: string): string {
+  const held = folders?.all[0]?.path ?? '/mods/';
+  return `${held.slice(0, Math.max(held.lastIndexOf('/'), held.lastIndexOf('\\')))}/${name}`;
+}
+
 const namesNoFolder = (name: string): boolean => name === '' || name === '.' || name === '..' || /[\\/]/.test(name);
+
+const reachesOut = (relativePath: string): boolean => relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
+
+const notAFileOf = (origin: FileOrigin, relativePath: string): Error =>
+  new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${relativePath}"`);
 
 const inTheWay = (path: string): Error => new Error(`The folder "${path}" is in the way`);
 
@@ -162,7 +172,8 @@ export function fileIn(folder: string, relativePath: string): OriginFile {
 export function pluginFilesHeld(...held: readonly { readonly origin: FileOrigin; readonly name: string }[]): Pick<InstanceReading, 'modFiles' | 'runtimeOutput'> {
   const originsFiles = (origin: string, folder: string, names: readonly string[]): OriginFiles =>
     ({ origin, folder, files: names.map((name) => fileIn(folder, name)), folders: [], notes: [] });
-  const namesIn = (wanted: FileOrigin): string[] => held.filter((one) => one.origin.kind === wanted.kind && (one.origin.kind !== 'mod' || (wanted.kind === 'mod' && one.origin.name === wanted.name))).map((one) => one.name);
+  const sameOrigin = (a: FileOrigin, b: FileOrigin): boolean => (a.kind === 'mod' && b.kind === 'mod' ? a.name === b.name : a.kind === b.kind);
+  const namesIn = (wanted: FileOrigin): string[] => held.filter((one) => sameOrigin(one.origin, wanted)).map((one) => one.name);
   const mods = [...new Set(held.flatMap((one) => (one.origin.kind === 'mod' ? [one.origin.name] : [])))];
   return {
     modFiles: new Map(mods.map((name) => [name, originsFiles(name, `/mods/${name}`, namesIn({ kind: 'mod', name }))])),
@@ -241,7 +252,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     sourceMods: () => unreadable('sourceMods', current.sourceMods),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
-    modFolderPath: (mod) => Promise.resolve(namesNoFolder(mod) ? undefined : foldersNow().holding({ kind: 'mod', name: mod })?.path ?? `/mods/${mod}`),
+    modFolderPath: (mod) => Promise.resolve(namesNoFolder(mod) ? undefined : foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod)),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? { kind: 'read', answer: undefined }),
@@ -298,7 +309,15 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       return reorderPlugins({ verb: 'changePluginOrderOverProvided', profile, changes }, changes);
     },
     markDownloadedFile: (name, mark) =>
-      write({ verb: 'markDownloadedFile', name, mark }, () => (downloadedFileNamed(name) === undefined ? { gone: true } as const : { gone: false, wrote: true } as const)),
+      write({ verb: 'markDownloadedFile', name, mark }, () => {
+        const held = downloadedFileNamed(name);
+        if (held === undefined) return { gone: true } as const;
+        const excluded = mark === 'Excluded';
+        if (current.downloadedFiles.kind === 'listed' && held.excluded !== excluded) {
+          current = { ...current, downloadedFiles: { ...current.downloadedFiles, files: current.downloadedFiles.files?.map((file) => (file === held ? { ...file, excluded } : file)) } };
+        }
+        return { gone: false, wrote: held.excluded !== excluded } as const;
+      }),
     trashDownloadedFile: (name) =>
       write({ verb: 'trashDownloadedFile', name }, () => {
         if (downloadedFileNamed(name) === undefined) return { gone: true } as const;
@@ -307,12 +326,17 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         }
         return { gone: false, ...(answers.metadataLeftBehind === undefined ? {} : { metadataLeftBehind: answers.metadataLeftBehind }) } as const;
       }),
-    selectProfile: (profile) => record({ verb: 'selectProfile', profile }, { wrote: profile !== current.profile }),
+    selectProfile: (profile) =>
+      write({ verb: 'selectProfile', profile }, () => {
+        const wrote = profile !== current.profile;
+        current = { ...current, profile };
+        return { wrote };
+      }),
     createModFolder: (mod) =>
       write({ verb: 'createModFolder', mod }, () => {
         const held = foldersNow().holding({ kind: 'mod', name: mod });
         if (held !== undefined) throw inTheWay(held.path);
-        current = { ...current, modFolders: foldersHolding([...foldersNow().all, { kind: 'mod', name: mod, path: `/mods/${mod}`, modName: mod }]) };
+        current = { ...current, modFolders: foldersHolding([...foldersNow().all, { kind: 'mod', name: mod, path: folderBeside(current.modFolders, mod), modName: mod }]) };
       }),
     renameModFolder: (from, to) =>
       write({ verb: 'renameModFolder', from, to }, () => {
@@ -320,18 +344,37 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         if (held === undefined) throw new Error(entryNotFound({ kind: 'mod', name: from }));
         const taken = foldersNow().holding({ kind: 'mod', name: to });
         if (taken !== undefined && taken !== held) throw inTheWay(taken.path);
-        current = { ...current, modFolders: foldersHolding(foldersNow().all.map((folder) => (folder === held ? { ...folder, name: to, path: `/mods/${to}`, modName: to } : folder))) };
+        current = { ...current, modFolders: foldersHolding(foldersNow().all.map((folder) => (folder === held ? { ...folder, name: to, path: folderBeside(current.modFolders, to), modName: to } : folder))) };
       }),
     originFile: (origin, relativePath) => {
+      if (reachesOut(relativePath)) return Promise.reject(notAFileOf(origin, relativePath));
       const unread = answers.unreadOriginFile?.({ origin, relativePath });
       if (unread !== undefined) return Promise.reject(new Error(unread));
       return Promise.resolve(originFilesOf(origin)?.files.find((file) => file.relativePath === relativePath));
     },
     markOriginFile: (origin, relativePath, mark) =>
       write<OriginFileMarked>({ verb: 'markOriginFile', origin, relativePath, mark }, () => {
+        if (reachesOut(relativePath)) throw notAFileOf(origin, relativePath);
         const held = originFilesOf(origin);
         const there = [...held?.files ?? [], ...held?.folders ?? []].some((one) => one.relativePath === relativePath);
-        return there ? { gone: false, wrote: true, relativePath } : { gone: true };
+        if (held === undefined || !there) return { gone: true };
+        const ownMark = relativePath.toLowerCase().endsWith(EXCLUSION_MARK);
+        if (mark === 'Included' && !ownMark && relativePath.split('/').slice(0, -1).some((segment) => segment.toLowerCase().endsWith(EXCLUSION_MARK))) {
+          return { gone: false, refusal: `"${relativePath}" has no suffix of its own to remove, and its folder excludes it.` };
+        }
+        if (ownMark === (mark === 'Excluded')) return { gone: false, wrote: false, relativePath };
+        const target = mark === 'Excluded' ? relativePath + EXCLUSION_MARK : relativePath.slice(0, -EXCLUSION_MARK.length);
+        if ([...held.files, ...held.folders].some((one) => one.relativePath === target)) return { gone: false, refusal: `"${target}" is already there.` };
+        const renamedPath = (path: string): string => (path === relativePath || path.startsWith(`${relativePath}/`)
+          ? target + path.slice(relativePath.length)
+          : path);
+        const folder = held.folder ?? '';
+        withOriginFiles(origin, {
+          ...held,
+          files: held.files.map((file) => fileIn(folder, renamedPath(file.relativePath))),
+          folders: held.folders.map((one) => ({ ...one, relativePath: renamedPath(one.relativePath), path: `${folder}/${renamedPath(one.relativePath)}`, excluded: renamedPath(one.relativePath).includes(EXCLUSION_MARK) })),
+        });
+        return { gone: false, wrote: true, relativePath: renamedPath(relativePath) };
       }),
     entryKey,
     exclusionMark: EXCLUSION_MARK,
@@ -356,7 +399,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         current = { ...current, modFolders: foldersHolding(foldersNow().all.filter((folder) => folder !== held)) };
         return true;
       }),
-    trashModFile: (mod, relativePath) => record({ verb: 'trashModFile', mod, relativePath }, undefined),
+    trashModFile: (mod, relativePath) =>
+      write({ verb: 'trashModFile', mod, relativePath }, () => {
+        if (reachesOut(relativePath)) throw notAFileOf({ kind: 'mod', name: mod }, relativePath);
+      }),
     trashSourceFolder: (mod) => record({ verb: 'trashSourceFolder', mod }, true),
     install: (installed, target, keys) =>
       record<InstallOutcome>({ verb: 'install', package: installed, target, keys }, answers.installed ?? { landed: true, isFomod: false }),

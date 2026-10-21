@@ -100,6 +100,14 @@ describe.each(implementations)('$name holds the order changes\' contract', (impl
     });
   });
 
+  describe('profile', () => {
+    it('shows the profile it selected to the next read, and writes nothing for the one selected', async () => {
+      expect(await adapter.selectProfile('Default')).toEqual({ wrote: false });
+      expect(await adapter.selectProfile('Other')).toEqual({ wrote: true });
+      expect((await adapter.reading()).profile).toBe('Other');
+    });
+  });
+
   describe('plugin order', () => {
     it('refuses a plugin that is not listed, and writes nothing of the batch it was in', async () => {
       await expect(changePlugins({ kind: 'enable', plugin: 'B.esp', enabled: true }, { kind: 'drop', plugin: 'Nope.esp' }))
