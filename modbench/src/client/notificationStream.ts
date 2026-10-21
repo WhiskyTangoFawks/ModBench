@@ -21,7 +21,7 @@ class NotificationListenerRegistry {
   private readonly typedListeners: { [K in NotificationKind]: Set<(payload: NotificationPayloads[K]) => void> } = {
     'load-order-status': new Set(), 'decompile-and-commit-progress': new Set(), 'update-manifest-progress': new Set(), 'restore-from-manifest-progress': new Set(), 'external-change': new Set(),
     'plugin-source-unreadable': new Set(), 'record-filter-cleared': new Set(), 'rows-changed': new Set(), 'plugin-changed': new Set(),
-    'mod-status-changed': new Set(), 'reconnected': new Set(),
+    'mod-status-changed': new Set(),
   };
 
   onNotification<K extends NotificationKind>(kind: K, listener: (payload: NotificationPayloads[K]) => void): () => void {
@@ -32,10 +32,6 @@ class NotificationListenerRegistry {
 
   whenConnected(): Promise<void> {
     return Promise.resolve();
-  }
-
-  announceReconnected(): void {
-    this.deliver('reconnected', undefined);
   }
 
   dispatch(event: NotificationEvent): void {
@@ -77,8 +73,6 @@ class NotificationListenerRegistry {
         break;
       case 'mod-status-changed':
         this.deliver('mod-status-changed', { mods: event.mods ?? [] });
-        break;
-      case 'reconnected':
         break;
     }
   }
@@ -187,6 +181,7 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
   private connected: Promise<void> = Promise.resolve();
   private markConnected: (() => void) | undefined;
   private openedThisStart = false;
+  private readonly reopenListeners = new Set<() => void>();
 
   constructor(private readonly deps: SseNotificationSubscriberDeps) {
     super(deps.log ?? SILENT_LOG, deps.listenerThrows);
@@ -208,6 +203,13 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
     this.abortController?.abort();
     // Nothing waits on a stream the session has closed.
     this.markConnected?.();
+  }
+
+  /** Hears each open after the first since `start()`: a stream that dropped and opened again,
+   *  perhaps onto another process listening on the same port. */
+  onReconnected(listener: () => void): () => void {
+    this.reopenListeners.add(listener);
+    return () => { this.reopenListeners.delete(listener); };
   }
 
   /** Settles once the stream carries events, or once the attempt to open it failed; never
@@ -235,7 +237,7 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
     if (this.generation !== generation) return;
     const reopened = this.openedThisStart;
     this.openedThisStart = true;
-    if (reopened) this.announceReconnected();
+    if (reopened) for (const listener of [...this.reopenListeners]) this.callListener(listener, listener);
   }
 
   private async connectOnce(generation: number): Promise<void> {

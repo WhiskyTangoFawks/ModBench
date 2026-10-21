@@ -4,13 +4,13 @@ import { isReadFailed } from '../wire/readFailed';
 
 // On reconnect, a tab waiting on a missed report reads once mEdit holds it.
 export function subscribeRecordTabsToNotifications(
-  client: Pick<MEditClient, 'onNotification' | 'getRecordOwner'>,
+  client: Pick<MEditClient, 'onNotification' | 'onReconnected' | 'getRecordOwner'>,
   tabs: Iterable<RecordTab>,
 ): () => void {
   const unsubscribeRows = client.onNotification('rows-changed', (event) => {
     for (const tab of tabs) tab.reported(event.keys);
   });
-  const unsubscribeReconnect = client.onNotification('reconnected', () => {
+  const unsubscribeReconnect = client.onReconnected(() => {
     for (const tab of tabs) {
       const formKey = tab.waitingFor();
       if (!formKey) continue;

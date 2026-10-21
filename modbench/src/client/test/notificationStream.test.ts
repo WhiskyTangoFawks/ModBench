@@ -151,8 +151,8 @@ describe('SseNotificationSubscriber', () => {
     const { sink, threw } = recordedThrows();
     const subscriber = new SseNotificationSubscriber({ openStream, log, listenerThrows: sink, reconnectDelayMs: 1000 });
     const heard = vi.fn();
-    subscriber.onNotification('reconnected', () => { throw new Error('reopen listener broke'); });
-    subscriber.onNotification('reconnected', heard);
+    subscriber.onReconnected(() => { throw new Error('reopen listener broke'); });
+    subscriber.onReconnected(heard);
 
     subscriber.start();
     await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
@@ -260,7 +260,7 @@ describe('SseNotificationSubscriber', () => {
       .mockResolvedValue(new Response(new ReadableStream(), { status: 200 }));
     const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
     const reconnects = vi.fn();
-    subscriber.onNotification('reconnected', reconnects);
+    subscriber.onReconnected(reconnects);
 
     subscriber.start();
     await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
@@ -277,7 +277,7 @@ describe('SseNotificationSubscriber', () => {
     const openStream = vi.fn().mockResolvedValue(new Response(new ReadableStream(), { status: 200 }));
     const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
     const reconnects = vi.fn();
-    subscriber.onNotification('reconnected', reconnects);
+    subscriber.onReconnected(reconnects);
 
     subscriber.start();
     await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
@@ -295,7 +295,7 @@ describe('SseNotificationSubscriber', () => {
       .mockRejectedValue(new Error('ECONNREFUSED'));
     const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
     const reconnects = vi.fn();
-    subscriber.onNotification('reconnected', reconnects);
+    subscriber.onReconnected(reconnects);
 
     subscriber.start();
     await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));

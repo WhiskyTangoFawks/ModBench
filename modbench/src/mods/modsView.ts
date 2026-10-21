@@ -67,7 +67,7 @@ interface ModsViewDeps {
   sourceGestures: SourceGestureDeps;
   manifestGestures: ManifestDeps;
   /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
-  modStatus: { push: Pick<MEditClient, 'onNotification'>; readStatus: ReadModStatus };
+  modStatus: { push: Pick<MEditClient, 'onNotification' | 'onReconnected'>; readStatus: ReadModStatus };
 }
 
 interface ModsView extends vscode.Disposable {

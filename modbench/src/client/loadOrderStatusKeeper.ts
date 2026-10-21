@@ -8,7 +8,7 @@ export interface LoadOrderStatusKeeper {
 }
 
 export function keepLoadOrderStatus(
-  client: Pick<MEditClient, 'onNotification' | 'onStatusChanged'>,
+  client: Pick<MEditClient, 'onNotification' | 'onStatusChanged' | 'onReconnected'>,
 ): LoadOrderStatusKeeper {
   let latest: LoadOrderStatus | undefined;
   let settledVersion = -1;
@@ -31,7 +31,7 @@ export function keepLoadOrderStatus(
   };
   client.onNotification('load-order-status', hear);
   client.onStatusChanged((status) => { if (isMEditGone(status)) reset(); });
-  client.onNotification('reconnected', reset);
+  client.onReconnected(reset);
   return {
     current: () => latest,
     onStatus: (listener) => { statusListeners.add(listener); return () => { statusListeners.delete(listener); }; },

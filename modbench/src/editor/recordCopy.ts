@@ -7,14 +7,14 @@ import type { CopyChanged } from '../wire/recordCopy';
  *  `touches` reads it, each copy of a plugin mEdit read again whole, and every copy when its reports
  *  resume, since one may have been missed. */
 export function followReportedCopies(
-  client: Pick<MEditClient, 'onNotification'>,
+  client: Pick<MEditClient, 'onNotification' | 'onReconnected'>,
   changedWhere: (affects: CopyChanged) => void,
   touches: (report: NotificationPayloads['rows-changed']) => CopyChanged,
 ): vscode.Disposable {
   const unsubscribes = [
     client.onNotification('rows-changed', (report) => { changedWhere(touches(report)); }),
     client.onNotification('plugin-changed', ({ plugin }) => { changedWhere((copy) => samePluginAddress(copy.plugin, plugin)); }),
-    client.onNotification('reconnected', () => { changedWhere(() => true); }),
+    client.onReconnected(() => { changedWhere(() => true); }),
   ];
   return new vscode.Disposable(() => { for (const unsubscribe of unsubscribes) unsubscribe(); });
 }

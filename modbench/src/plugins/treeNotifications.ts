@@ -9,6 +9,5 @@ export function subscribeTreeToNotifications(
   const reread = () => { tree.refresh(); refreshPluginFacts(); };
   const unsubscribeRows = client.onNotification('rows-changed', reread);
   const unsubscribePlugin = client.onNotification('plugin-changed', reread);
-  const unsubscribeReconnect = client.onNotification('reconnected', reread);
-  return () => { unsubscribeRows(); unsubscribePlugin(); unsubscribeReconnect(); };
+  return () => { unsubscribeRows(); unsubscribePlugin(); };
 }
