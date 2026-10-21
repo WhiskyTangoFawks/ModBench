@@ -171,4 +171,51 @@ describe('PluginHeader', () => {
     const { header } = renderHeader({}, { vscodeContext });
     expect(header).toHaveAttribute('data-vscode-context', vscodeContext);
   });
+
+  it('marks the file\u2019s column to the eye and to a screen reader, and takes no opening gesture', () => {
+    const onOpen = vi.fn();
+    const { header } = renderHeader({}, { isFile: true, onOpen });
+
+    fireEvent.click(header);
+    fireEvent.keyDown(header, { key: 'Enter' });
+
+    expect(header).toHaveAttribute('aria-current', 'true');
+    expect(header.querySelector('.codicon.codicon-edit')).not.toBeNull();
+    expect(header).not.toHaveAttribute('tabindex');
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('opens its copy on a click, and is no marked column', () => {
+    const onOpen = vi.fn();
+    const { header } = renderHeader({}, { onOpen });
+
+    fireEvent.click(header);
+
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(header).not.toHaveAttribute('aria-current');
+    expect(header.querySelector('.codicon-edit')).toBeNull();
+  });
+
+  it('opens its copy on Enter or Space on the focused header, and on no other key or a key of its button', () => {
+    const onOpen = vi.fn();
+    const { header } = renderHeader({}, { onOpen });
+
+    expect(header).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(header, { key: 'ArrowDown' });
+    fireEvent.keyDown(within(header).getByRole('button'), { key: 'Enter' });
+    expect(onOpen).not.toHaveBeenCalled();
+    fireEvent.keyDown(header, { key: 'Enter' });
+    fireEvent.keyDown(header, { key: ' ' });
+
+    expect(onOpen).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens nothing on a click on its collapse button', () => {
+    const onOpen = vi.fn();
+    const { header } = renderHeader({}, { onOpen });
+
+    fireEvent.click(within(header).getByRole('button'));
+
+    expect(onOpen).not.toHaveBeenCalled();
+  });
 });

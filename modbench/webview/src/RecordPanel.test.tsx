@@ -428,31 +428,6 @@ describe('RecordPanel — the file\'s column', () => {
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  it('is marked in its header, to the eye and to a screen reader, and no other column is', async () => {
-    renderPanel(twoCompiledPlugin, { plugins: bothCompiledPlugin, fileColumn: 'MyMod.esp|ModA' });
-    await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
-
-    expect(headerOf('MyMod.esp')).toHaveAttribute('aria-current', 'true');
-    expect(headerOf('MyMod.esp').querySelector('.codicon.codicon-edit')).not.toBeNull();
-    expect(headerOf('Other.esp')).not.toHaveAttribute('aria-current');
-    expect(headerOf('Other.esp').querySelector('.codicon-edit')).toBeNull();
-  });
-
-  it('opens another column\'s copy on Enter or Space on its focused header, and nothing on another key or on its own header', async () => {
-    renderPanel(twoCompiledPlugin, { plugins: bothCompiledPlugin, fileColumn: 'MyMod.esp|ModA' });
-    await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
-    vi.mocked(vscode.postMessage).mockClear();
-
-    expect(headerOf('Other.esp')).toHaveAttribute('tabindex', '0');
-    fireEvent.keyDown(headerOf('MyMod.esp'), { key: 'Enter' });
-    fireEvent.keyDown(headerOf('Other.esp'), { key: 'ArrowDown' });
-    fireEvent.keyDown(within(headerOf('Other.esp')).getByRole('button'), { key: 'Enter' });
-    fireEvent.keyDown(headerOf('Other.esp'), { key: 'Enter' });
-    fireEvent.keyDown(headerOf('Other.esp'), { key: ' ' });
-
-    expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_COLUMNS)).toHaveLength(2);
-  });
-
   it('opens another column\'s copy on a click on its header, and nothing on a click on its own or on a collapse control', async () => {
     renderPanel(twoCompiledPlugin, { plugins: bothCompiledPlugin, fileColumn: 'MyMod.esp|ModA' });
     await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
