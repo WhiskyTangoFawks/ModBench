@@ -221,6 +221,9 @@ internal sealed class Indexer : IDisposable
         }
     }
 
+    /// <summary>A read met DuckDB's invalidation: reconciling reopens the store (ADR-0003).</summary>
+    public void RecoverFromInvalidation() => StartReconcile();
+
     // ADR-0013: every arrival, changed or not, reconciles the snapshot held when it runs, so an
     // overtaken arrival reconciles the newer.
     private void StartReconcile() =>
