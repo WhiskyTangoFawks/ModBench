@@ -667,13 +667,8 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
       .toEqual([{ names: ['B.esp', 'C.esp', 'D.esp'], drop: { kind: 'before', name: 'A.esp' } }]);
   });
 
-  it('a drop on a row being dragged asks for nothing', async () => {
-    await drag(['A.esp', 'C.esp'], 'C.esp');
-    expect(moves()).toEqual([]);
-  });
-
-  it('a drop on a row being dragged asks for nothing, whatever the case of the dragged name', async () => {
-    await drag(['A.esp', 'c.ESP'], 'C.esp');
+  it.each(['C.esp', 'c.ESP'])('a drop on a row being dragged asks for nothing, the dragged name being %s', async (dragged) => {
+    await drag(['A.esp', dragged], 'C.esp');
     expect(moves()).toEqual([]);
   });
 
