@@ -216,7 +216,7 @@ export function registerModContextCommands(
       const newName = await promptRename('Rename mod', oldName, modNamePrompt(commands, oldName));
       return newName === undefined ? undefined : { oldName, newName };
     },
-    fromAgent: async ({ argument, options: { name } }) => {
+    fromAgent: ({ argument, options: { name } }) => {
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a mod carries one mod.');
       const oldName = modNameOf(only);
@@ -313,7 +313,7 @@ function renameGesture(
       const newName = await promptRename('Rename separator', oldName, separatorNamePrompt(commands, oldName));
       return newName === undefined ? undefined : { oldName, newName };
     },
-    fromAgent: async ({ argument, options: { name } }) => {
+    fromAgent: ({ argument, options: { name } }) => {
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to rename a separator carries one separator.');
       const oldName = separatorNameOf(only);
@@ -344,7 +344,7 @@ function renameGesture(
       const anchor = node.kind === 'mod' ? node.mod : node.separator;
       return { name, anchor: { kind: anchor.kind, name: anchor.name } };
     },
-    fromAgent: async ({ argument, options: { name } }) => {
+    fromAgent: ({ argument, options: { name } }) => {
       const [only, ...more] = argument;
       if (only === undefined || more.length > 0) throw new Refusal('An agent call to add a separator carries one mod or separator, the anchor.');
       return { name, anchor: entryRefOf(only) };

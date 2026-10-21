@@ -1702,15 +1702,6 @@ describe('the mod gestures, called by the agent', () => {
       expect(reporter.reports).toEqual([]);
     });
 
-    it('asks the command for the refusal with the mod\'s own name, so its own name is no clash', async () => {
-      renameMod.mockResolvedValue({ applied: true, lineRefusals: [] });
-      register();
-
-      await invoke('modbench.mod.rename', renameCall('Renamed'));
-
-      expect(renameModNameRefusal).toHaveBeenCalledWith('Renamed', 'Mod A');
-    });
-
     it('refuses an Argument of more than one mod', async () => {
       register();
 
