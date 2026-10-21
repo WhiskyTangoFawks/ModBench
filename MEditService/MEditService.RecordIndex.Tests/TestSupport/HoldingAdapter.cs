@@ -8,9 +8,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>Opens <paramref name="plugin"/> as quests made up rather than read, each holding
-/// <paramref name="topicsPerQuest"/> topics: as many holdings as a test needs, at no cost of building a
-/// plugin. Every other plugin reads as it is.</summary>
+/// <summary>As <see cref="LinkingAdapter"/>, for <paramref name="plugin"/> alone: quests, each holding
+/// <paramref name="topicsPerQuest"/> topics.</summary>
 internal sealed class HoldingAdapter(string plugin, int quests, int topicsPerQuest)
     : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {
@@ -30,8 +29,9 @@ internal sealed class HoldingAdapter(string plugin, int quests, int topicsPerQue
         public IEnumerable<PluginDocument> Records => Enumerable.Range(0, quests).SelectMany(quest =>
         {
             var questKey = FormKeyAt(quest * (topicsPerQuest + 1));
-            var topics = Enumerable.Range(1, topicsPerQuest)
-                .Select(topic => new PluginDocument("dial", FormKeyAt(quest * (topicsPerQuest + 1) + topic), $$"""{"FormKey": "{{FormKeyAt(quest * (topicsPerQuest + 1) + topic)}}"}"""))
+            var topics = Enumerable.Range(quest * (topicsPerQuest + 1) + 1, topicsPerQuest)
+                .Select(FormKeyAt)
+                .Select(topicKey => new PluginDocument("dial", topicKey, $$"""{"FormKey": "{{topicKey}}"}"""))
                 .ToList();
             var held = string.Join(", ", topics.Select(topic => topic.Text));
             return topics.Prepend(new PluginDocument("qust", questKey, $$"""{"FormKey": "{{questKey}}", "DialogTopics": [{{held}}]}"""));

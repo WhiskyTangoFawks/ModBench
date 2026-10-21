@@ -52,20 +52,24 @@ public sealed class OnePluginReadMemoryTests(OnePluginReadMemoryTests.SmallBesid
         }
     }
 
-    private static readonly Dictionary<string, Func<IQueries, SmallBesideLarge, object?>> ReadsAboutOnePlugin = new()
+    private static readonly Dictionary<string, Action<IQueries, SmallBesideLarge>> ReadsAboutOnePlugin = new()
     {
-        ["records"] = (q, s) => q.GetRecords(null, s.Plugin, null, 100, 0).Value(),
-        ["record types"] = (q, s) => q.GetPluginRecordTypes(s.Plugin).Value(),
-        ["states beneath"] = (q, s) => q.GetWorkingTreeStatesBeneath(s.Plugin).Value(),
-        ["child record types"] = (q, s) => q.GetChildRecordTypes(s.Plugin, s.Quest).Value(),
-        ["rendered document"] = (q, s) => q.GetRenderedDocument(s.Plugin, s.Quest).Value(),
-        ["copy document"] = (q, s) => q.GetCopyDocument(s.Plugin, s.Quest).Value(),
-        ["worldspaces"] = (q, s) => q.GetWorldspaces(s.Plugin).Value(),
-        ["worldspace blocks"] = (q, s) => q.GetWorldspaceBlocks(s.Plugin, s.Keys.Worldspace.ToString()).Value(),
-        ["cell children"] = (q, s) => q.GetCellChildRecords(s.Plugin, s.Keys.EmbedCell.ToString()).Value(),
-        ["interior cells"] = (q, s) => q.GetInteriorCells(s.Plugin).Value(),
-        ["container children"] = (q, s) => q.GetContainerChildren(s.Plugin, s.Quest).Value(),
-        ["dependants"] = (q, s) => q.GetDependants(s.Plugin).Value(),
+        ["records"] = (q, s) => Assert.Contains("SmallQuest", q.GetRecords(null, s.Plugin, null, 100, 0).Value().Items.Select(r => r.EditorId)),
+        ["record types"] = (q, s) => Assert.Contains("qust", q.GetPluginRecordTypes(s.Plugin).Value().Select(t => t.Type)),
+        ["states beneath"] = (q, s) => Assert.Empty(q.GetWorkingTreeStatesBeneath(s.Plugin).Value().Plugin),
+        ["child record types"] = (q, s) => Assert.Contains("dial", (q.GetChildRecordTypes(s.Plugin, s.Quest).Value() ?? []).Select(t => t.Type)),
+        ["rendered document"] = (q, s) => Assert.Contains("SmallQuest", q.GetRenderedDocument(s.Plugin, s.Quest).Value()?.Text),
+        ["copy document"] = (q, s) => Assert.Equal(CopyDocumentKind.Rendered, q.GetCopyDocument(s.Plugin, s.Quest).Value()?.Kind),
+        ["worldspaces"] = (q, s) => Assert.Equal([ContainerModPlugin.WorldspaceEditorId], q.GetWorldspaces(s.Plugin).Value().Select(w => w.EditorId)),
+        ["worldspace blocks"] = (q, s) => Assert.Equal(
+            [ContainerModPlugin.TopCellEditorId], q.GetWorldspaceBlocks(s.Plugin, s.Keys.Worldspace.ToString()).Value().TopCells.Select(c => c.EditorId)),
+        ["cell children"] = (q, s) => Assert.Equal(
+            [ContainerModPlugin.PersistentRefEditorId], q.GetCellChildRecords(s.Plugin, s.Keys.EmbedCell.ToString()).Value().Persistent.Select(c => c.EditorId)),
+        ["interior cells"] = (q, s) => Assert.Contains(
+            ContainerModPlugin.EmbedCellEditorId,
+            q.GetInteriorCells(s.Plugin).Value().SelectMany(b => b.SubBlocks).SelectMany(sb => sb.Cells).Select(c => c.EditorId)),
+        ["container children"] = (q, s) => Assert.Equal(["SmallTopic"], q.GetContainerChildren(s.Plugin, s.Quest).Value().Select(c => c.EditorId)),
+        ["dependants"] = (q, s) => Assert.Empty(q.GetDependants(s.Plugin).Value().Dependants),
     };
 
     public static TheoryData<string> Reads => [.. ReadsAboutOnePlugin.Keys];
@@ -73,5 +77,5 @@ public sealed class OnePluginReadMemoryTests(OnePluginReadMemoryTests.SmallBesid
     [Theory]
     [MemberData(nameof(Reads))]
     public void AReadAboutOnePlugin_Answers_InMemoryAnotherPluginsHoldingsOutgrow(string read) =>
-        Assert.NotNull(ReadsAboutOnePlugin[read](shared.Index.Queries, shared));
+        ReadsAboutOnePlugin[read](shared.Index.Queries, shared);
 }

@@ -56,7 +56,7 @@ internal sealed class FilterMatches(Store store)
         }
         DuckDbSql.Execute(connection, $"""
             CREATE OR REPLACE TABLE {Holders} AS
-            WITH RECURSIVE held AS (SELECT plugin, origin, parent, child FROM ({NavigatorSql.Held}) h),
+            WITH RECURSIVE {NavigatorSql.HeldFor(RecordScope.Active, "")},
             holders(plugin, origin, form_key) AS (
                 SELECT held.plugin, held.origin, held.parent FROM held
                 JOIN {Matches} m ON held.child = m.form_key

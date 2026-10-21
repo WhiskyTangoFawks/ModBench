@@ -9,16 +9,15 @@ internal static class NavigatorSql
 {
     /// <summary>One row per record a record holds in the same plugin: a topic in its quest, a
     /// response in its topic, a placed reference in its cell, an exterior cell in its worldspace.</summary>
-    internal static readonly string Held = HeldIn("");
-
     internal static string HeldIn(string schema) => $"SELECT plugin, origin, parent, child, slot FROM {schema}holdings";
 
     /// <summary>The <c>held</c> CTE every holdings read below reads: the holdings <paramref name="where"/>
-    /// keeps, so a read about one plugin states that plugin once and DuckDB never reads another's.</summary>
+    /// keeps. DuckDB pushes no join key into a holdings read, so a read about one plugin keeps that
+    /// plugin's here, or reads every plugin's.</summary>
     internal static string HeldFor(RecordScope scope, string where) =>
         $"held AS (SELECT plugin, origin, parent, child, slot FROM ({scope.Held}) h {where})";
 
-    /// <summary>What a cell holds, by <c>parent_cell</c>: a record held outside a placement group,
+    /// <summary>What a cell holds in <c>held</c>, by <c>parent_cell</c>: a record held outside a placement group,
     /// such as its landscape or a navmesh, lists among the temporary ones as xEdit lists it.</summary>
     internal static readonly string CellChildren = $"""
         SELECT plugin, origin, parent AS parent_cell, child AS form_key,
@@ -26,7 +25,7 @@ internal static class NavigatorSql
         FROM held
         """;
 
-    /// <summary>What a record holds that no spatial read lists: not its placed references or its cells.</summary>
+    /// <summary>What a record holds in <c>held</c> that no spatial read lists: not its placed references or its cells.</summary>
     internal static readonly string ContainerChildren =
         $"(SELECT * FROM held WHERE slot NOT IN ({HoldingSlots.Placed}, {HoldingSlots.TopCell}, {HoldingSlots.Exterior}))";
 
@@ -54,7 +53,7 @@ internal static class NavigatorSql
         )
         """;
 
-    // Joined rather than a correlated NOT EXISTS, which DuckDB answers by materializing the records
+    // Reads `held`. Joined rather than a correlated NOT EXISTS, which DuckDB answers by materializing the records
     // beside it, bodies and all: a plugin's bodies outgrow the memory the record index is held to.
     internal static string Unheld(string alias) =>
         $" ANTI JOIN held holding ON holding.child = {alias}.form_key AND holding.plugin = {alias}.plugin AND holding.origin = {alias}.origin";

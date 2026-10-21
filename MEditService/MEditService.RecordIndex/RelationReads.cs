@@ -263,6 +263,7 @@ internal sealed class RelationReads(
             UNION
             SELECT TRUE, r.record_type, a.fact FROM above_change a
             JOIN {scope.Records} r ON r.form_key = a.form_key AND r.plugin = a.plugin AND r.origin = a.origin{NavigatorSql.Unheld("r")}
+            -- above_change holds only the plugin's rows, but DuckDB pushes none of it into records.
             WHERE r.plugin = $1 AND r.origin = $2
             """, reader => (IsGroup: reader.GetBoolean(0), Key: reader.GetString(1), State: WorkingTreeStates.FromStored(reader.GetString(2))),
             plugin.Name, plugin.Origin);
