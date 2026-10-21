@@ -304,10 +304,21 @@ internal sealed class SourceRepositoryLocator(string sourceFolder, GameRelease r
             [.. documents.SelectMany(document => Enumerable.Repeat(document, 1 + ChildrenCarrying(document, formKey)))],
             formKey, _sourceFolder);
 
-    private int ChildrenCarrying(string document, string formKey) =>
-        DocumentText.ListedBytes(_files, _sourceFolder, document) is { } bytes
-            ? DocumentTokens.FormKeysIn(bytes, _release).Count(key => key.Position == FormKeyPosition.Embedded && FormKeyComparer.Instance.Equals(key.FormKey, formKey))
-            : 0;
+    // An unreadable candidate counts none: it is either the only one, the file a Remove deletes and a
+    // read opens and stops on, or one of several, which stop as ambiguous.
+    private int ChildrenCarrying(string document, string formKey)
+    {
+        try
+        {
+            return DocumentText.BytesIfPresent(_files, document) is { } bytes
+                ? DocumentTokens.FormKeysIn(bytes, _release).Count(key => key.Position == FormKeyPosition.Embedded && FormKeyComparer.Instance.Equals(key.FormKey, formKey))
+                : 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return 0;
+        }
+    }
 
     // Every read that finds a document by its text remembers it, so no put later in this operation
     // misses it by name and writes a second document beside it.

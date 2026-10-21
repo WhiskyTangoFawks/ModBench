@@ -168,16 +168,15 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [PosixFact]
-    public void Remove_OfAFlatRecordWhoseFileCannotBeRead_StopsNamingIt_AndDeletesNothing()
+    public void Remove_OfAFlatRecordWhoseFileCannotBeRead_StillDeletesIt()
     {
         var repository = Opened();
         var file = Directory.EnumerateFiles(NpcGroupFolder).Single();
         FileModes.Set(file, "000");
 
-        var stopped = Assert.IsType<SourceFailure.Unreadable>(repository.Remove(Plugin, Npc));
+        repository.Remove(Plugin, Npc).Wrote();
 
-        Assert.Equal(Path.GetRelativePath(_modFolder, file), stopped.File?.SourceRelativePath);
-        Assert.True(File.Exists(file));
+        Assert.Empty(Directory.EnumerateFiles(NpcGroupFolder));
     }
 
     [Fact]
