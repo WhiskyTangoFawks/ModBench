@@ -95,13 +95,12 @@ describe('an edit of a record', () => {
     expect(refreshSourceControlFor).not.toHaveBeenCalled();
   });
 
-  it('reports a transport failure as an error naming the field', async () => {
-    const { deps, meditClient, reporter } = makeDeps({ applied: true, moves: [], deletions: [], documents: [] });
-    meditClient.setQueryFailure('getEditChanges', new Error('ECONNREFUSED'));
+  it('reports a transport failure as a warning naming the field', async () => {
+    const { deps, reporter } = makeDeps({ applied: false, refusal: 'Unknown', message: 'mEdit could not be reached.' });
 
     await applyRecordEdit(deps, address, height);
 
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not edit Height.', detail: 'ECONNREFUSED' }]);
+    expect(reporter.reports).toEqual([{ severity: 'warning', message: 'Height: mEdit could not be reached.', detail: undefined }]);
   });
 
   it('reports an edit VS Code did not apply as one that may have partly landed, and refreshes Source Control', async () => {

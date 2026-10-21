@@ -33,15 +33,16 @@ describe('InMemoryMEditClient — unscripted queries reject', () => {
 });
 
 describe('InMemoryMEditClient — a scripted query failure', () => {
-  it('rejects every call with the scripted error until re-scripted, an answer alone not clearing a standing failure', async () => {
+  it('answers every call with the scripted failure until re-scripted, an answer alone not clearing a standing failure', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
+    const econnrefused = { failed: 'refused', refusal: 'ECONNREFUSED' } as const;
+    client.setQueryFailure('getPlugins', econnrefused);
 
-    await expect(client.getPlugins()).rejects.toThrow('ECONNREFUSED');
-    await expect(client.getPlugins()).rejects.toThrow('ECONNREFUSED');
+    await expect(client.getPlugins()).resolves.toEqual(econnrefused);
+    await expect(client.getPlugins()).resolves.toEqual(econnrefused);
 
     client.setQueryAnswer('getPlugins', []);
-    await expect(client.getPlugins()).rejects.toThrow('ECONNREFUSED');
+    await expect(client.getPlugins()).resolves.toEqual(econnrefused);
   });
 });
 
@@ -56,12 +57,12 @@ describe('InMemoryMEditClient — a queued once-form script', () => {
     await expect(client.getPlugins()).resolves.toEqual([]);
   });
 
-  it('setQueryFailureOnce rejects the next call, then falls back to the fixed answer', async () => {
+  it('setQueryFailureOnce answers the next call with the failure, then falls back to the fixed answer', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', []);
-    client.setQueryFailureOnce('getPlugins', new Error('boom'));
+    client.setQueryFailureOnce('getPlugins', { failed: 'refused', refusal: 'boom' });
 
-    await expect(client.getPlugins()).rejects.toThrow('boom');
+    await expect(client.getPlugins()).resolves.toEqual({ failed: 'refused', refusal: 'boom' });
     await expect(client.getPlugins()).resolves.toEqual([]);
   });
 
@@ -70,11 +71,11 @@ describe('InMemoryMEditClient — a queued once-form script', () => {
     const first = pluginMetadataFixture({ name: 'first' });
     const retry = pluginMetadataFixture({ name: 'retry' });
     client.setQueryAnswerOnce('getPlugins', [first]);
-    client.setQueryFailureOnce('getPlugins', new Error('mid-sequence failure'));
+    client.setQueryFailureOnce('getPlugins', { failed: 'refused', refusal: 'mid-sequence failure' });
     client.setQueryAnswerOnce('getPlugins', [retry]);
 
     await expect(client.getPlugins()).resolves.toEqual([first]);
-    await expect(client.getPlugins()).rejects.toThrow('mid-sequence failure');
+    await expect(client.getPlugins()).resolves.toEqual({ failed: 'refused', refusal: 'mid-sequence failure' });
     await expect(client.getPlugins()).resolves.toEqual([retry]);
   });
 });
@@ -106,7 +107,7 @@ describe('InMemoryMEditClient — a disconnected script', () => {
 
   it('clears a scripted failure too, not just a fixed answer, so a disconnected read answers unreachable rather than a stale reason', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
+    client.setQueryFailure('getPlugins', { failed: 'refused', refusal: 'ECONNREFUSED' });
 
     client.disconnected();
 
