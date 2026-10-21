@@ -36,7 +36,7 @@ export function createEditor(deps: EditorDeps): Editor {
   const tabs = new RecordTabs((cell) => { publishFocusedCell(cell, setContext); }, () => focusedView.enter(GRID_VIEW));
 
   own(registerReferencedBy({
-    client: deps.meditClient, log: deps.outputChannel, reporter: deps.reporterFor('referencedBy'),
+    client: deps.meditClient, reporter: deps.reporterFor('referencedBy'),
     locateRecord: deps.locateRecord, recordInFocus: () => tabs.activeTab()?.formKey,
   }));
 

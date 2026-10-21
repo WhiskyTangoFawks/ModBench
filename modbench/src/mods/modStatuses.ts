@@ -66,7 +66,6 @@ export class ModStatuses implements SyncMessage, vscode.Disposable {
   private readFailed(reason: string | undefined): void {
     if (reason === this.readFailure) return;
     this.readFailure = reason;
-    if (reason !== undefined) this.log(`The mods' status could not be read: ${reason}`);
     this.messageChanged.fire();
   }
 

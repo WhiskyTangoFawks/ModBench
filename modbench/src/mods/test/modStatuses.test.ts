@@ -129,7 +129,7 @@ describe('a status read that fails (common.md, Reporting)', () => {
     await pushed('ModA');
     await pushed('ModA');
 
-    expect(logged).toEqual(['The mods\' status could not be read: mEdit could not be reached.', 'The status of "ModA" could not be read: EACCES']);
+    expect(logged).toEqual(['The status of "ModA" could not be read: EACCES']);
   });
 
   it('shows the status of a mod whose stat cache mEdit could not write, and says so on the message line until it writes', async () => {
