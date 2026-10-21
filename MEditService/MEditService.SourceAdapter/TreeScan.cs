@@ -64,7 +64,7 @@ internal sealed class TreeScan
     // bytes are unchanged.
     private DocumentKeys? KeysOf(string documentPath)
     {
-        if (DocumentText.BytesOrNull(_files, documentPath) is not { } bytes) return null;
+        if (DocumentText.BytesIfPresent(_files, documentPath) is not { } bytes) return null;
         if (_keysByDocument.TryGetValue(documentPath, out var known) && known.Bytes.AsSpan().SequenceEqual(bytes))
             return known;
 
@@ -82,7 +82,7 @@ internal sealed class TreeScan
         foreach (var documentPath in listed)
         {
             if (SourceRepositoryLayout.CarriesNoRecord(documentPath)) continue;
-            if (DocumentText.BytesOrNull(_files, documentPath) is not { } bytes) continue;
+            if (DocumentText.BytesIfPresent(_files, documentPath) is not { } bytes) continue;
             if (_onlyKey is { } key && !DocumentTokens.MayCarry(bytes, key)) continue;
 
             var keys = DocumentTokens.FormKeysIn(bytes, _release);

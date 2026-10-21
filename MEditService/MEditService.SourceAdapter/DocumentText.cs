@@ -5,8 +5,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>What a document's text and bytes declare, read as text rather than through the codec. The
-/// OrNull readers answer null for a file that vanished or locked since a listing named it.</summary>
+/// <summary>What a document's text and bytes declare, read as text rather than through the codec.</summary>
 internal static class DocumentText
 {
     private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
@@ -28,29 +27,11 @@ internal static class DocumentText
         }
     }
 
-    internal static byte[]? BytesOrNull(ISourceFiles files, string path)
-    {
-        try
-        {
-            return BytesIfPresent(files, path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
+    internal static string? TextIfPresent(ISourceFiles files, string path) =>
+        BytesIfPresent(files, path) is { } bytes ? Encoding.UTF8.GetString(bytes) : null;
 
-    internal static string? ReadOrNull(ISourceFiles files, string path) =>
-        BytesOrNull(files, path) is { } bytes ? Encoding.UTF8.GetString(bytes) : null;
-
-    /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
-    /// owner's, since the file is the owner's document. Null when it cannot be read or declares
-    /// none.</summary>
-    internal static string? FormKeyDeclaredBy(ISourceFiles files, string filePath, string pluginFileName) =>
-        ReadOrNull(files, filePath) is { } text ? FormKeyDeclaredIn(text, filePath, pluginFileName) : null;
-
-    /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each
-    /// file once.</summary>
+    /// <summary>The FormKey the document at <paramref name="filePath"/> declares (an embedded child's
+    /// owner's, since the file is the owner's document), or null when it declares none.</summary>
     internal static string? FormKeyDeclaredIn(string text, string filePath, string pluginFileName)
     {
         // The header's document carries a ModKey rather than a FormKey; PluginHeader computes the
