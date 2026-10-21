@@ -109,6 +109,8 @@ export class BackendLifecycle {
   private readonly serilogLevelArgs?: () => string[];
   private readonly checkHealthFn: () => Promise<boolean>;
 
+  private lastHealthFailure?: string;
+
   private _status: BackendStatus = 'starting';
   private readonly listeners = new Set<(status: BackendStatus) => void>();
   private readonly portListeners = new Set<(port: number) => void>();
@@ -249,7 +251,8 @@ export class BackendLifecycle {
         }
 
         if (Date.now() >= deadline) {
-          this.log.error(`[backend] Timed out waiting for backend on port ${this.port}`);
+          const why = this.lastHealthFailure === undefined ? '' : `: ${this.lastHealthFailure}`;
+          this.log.error(`[backend] Timed out waiting for backend on port ${this.port}${why}`);
           this.setStatus('disconnected');
           resolve();
           return;
@@ -265,9 +268,10 @@ export class BackendLifecycle {
   private checkHealthOverHttp(): Promise<boolean> {
     return new Promise((resolve) => {
       const req = http.get(`http://localhost:${this.port}/health`, (res) => {
+        this.lastHealthFailure = res.statusCode === 200 ? undefined : `/health answered ${res.statusCode}`;
         resolve(res.statusCode === 200);
       });
-      req.on('error', (err) => { this.log.warn(`[backend] Health check error: ${err.message}`); resolve(false); });
+      req.on('error', (err) => { this.lastHealthFailure = failureReason(err); resolve(false); });
     });
   }
 
@@ -275,6 +279,12 @@ export class BackendLifecycle {
     this._status = status;
     for (const listener of this.listeners) listener(status);
   }
+}
+
+// A refused connection arrives as an AggregateError with an empty message; its reasons are the inner errors'.
+function failureReason(err: Error): string {
+  const inner = err instanceof AggregateError ? err.errors.map((e: unknown) => e instanceof Error ? e.message : String(e)) : [];
+  return inner.length > 0 ? inner.join('; ') : err.message || err.name;
 }
 
 async function withinDeadline(check: Promise<boolean>, deadline: number): Promise<boolean> {

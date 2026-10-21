@@ -67,6 +67,21 @@ describe('BackendLifecycle', () => {
     expect(statuses).toContain('disconnected');
     expect(lifecycle.status).toBe('disconnected');
   });
+
+  it('logs once, at the deadline, why nothing answered, and not on each poll before it', async () => {
+    const closed = createServer();
+    await new Promise<void>((resolve) => closed.listen(0, '127.0.0.1', resolve));
+    const { port } = addressInfo(closed.address());
+    await new Promise((resolve) => closed.close(resolve));
+    const logged = leveledLog();
+    const lifecycle = new BackendLifecycle({ attachPort: port, pollIntervalMs: 5, pollTimeoutMs: 40, log: logged });
+
+    await lifecycle.start();
+
+    expect(logged.lines.warn).toEqual([]);
+    expect(logged.lines.error).toHaveLength(1);
+    expect(logged.lines.error[0]).toMatch(/Timed out waiting for backend on port \d+: .*ECONNREFUSED/);
+  });
 });
 
 function makeChild() {
