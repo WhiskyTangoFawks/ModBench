@@ -628,6 +628,22 @@ describe('Instance — game folder and the archives the game loads', () => {
     expect(warnings).toEqual([`[instance] ${note}`]);
   });
 
+  it('tells once a note on a mod\'s files, and again when it clears and comes back', async () => {
+    const note = 'broken link "/mods/A/x.dds", skipped';
+    const noted = new Map([['A', { ...filesOfMod('A', 'a.dds'), notes: [note] }]]);
+    const clear = new Map([['A', filesOfMod('A', 'a.dds')]]);
+    const { instance, fake, logs } = loader({ mods: [mod('A')], modFiles: noted });
+
+    await instance.refresh();
+    await instance.refresh();
+    fake.read({ modFiles: clear });
+    await instance.refresh();
+    fake.read({ modFiles: noted });
+    await instance.refresh();
+
+    expect(logs).toEqual([`[instance] A: ${note}`, `[instance] A: ${note}`]);
+  });
+
   it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {
     const { instance, logs } = loader({
       ...GAME_FOUND,

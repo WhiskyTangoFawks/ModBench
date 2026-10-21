@@ -52,7 +52,6 @@ const builtIndex = (filesByMod: Record<string, OriginFile[]>, overwrite: readonl
     Object.keys(filesByMod).map((name) => ({ kind: 'mod', name, enabled: true })),
     overwrite,
     new Map(Object.entries(filesByMod).map(([name, files]) => [name, { origin: name, folder: undefined, files, folders: [], notes: [] }])),
-    () => undefined,
   );
 
 describe('buildLoadOrderRows, its origins asserted as the literal reserved values of the wire contract rather than the constants the module produces them from', () => {

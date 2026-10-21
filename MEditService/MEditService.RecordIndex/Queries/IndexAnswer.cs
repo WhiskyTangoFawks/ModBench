@@ -38,13 +38,17 @@ internal static class IndexAnswer
             return true;
         }).Holds(out _, out var unwound) ? null : unwound;
 
+    private static string FirstLine(Exception ex) => ex.Message.Split('\n')[0];
+
     private static IndexRefused? RefusalOf(Exception ex) => ex switch
     {
         NoLoadOrderException => new IndexRefused(IndexRefusal.NoLoadOrder, ex.Message),
         IndexNotReadyException => new IndexRefused(IndexRefusal.IndexNotReady, ex.Message),
+        DuckDBException when Store.IsInvalidation(ex) => new IndexRefused(
+            IndexRefusal.IndexNotReady, $"mEdit's record index was invalidated by a fatal error: {FirstLine(ex)}"),
         // DuckDB's message goes on to advise tuning it, which is mEdit's to do and not the user's.
         DuckDBException { ErrorType: DuckDBErrorType.OutOfMemory } => new IndexRefused(
-            IndexRefusal.OutOfMemory, $"mEdit's record index ran out of memory for this read: {ex.Message.Split('\n')[0]}"),
+            IndexRefusal.OutOfMemory, $"mEdit's record index ran out of memory for this read: {FirstLine(ex)}"),
         _ => null,
     };
 }

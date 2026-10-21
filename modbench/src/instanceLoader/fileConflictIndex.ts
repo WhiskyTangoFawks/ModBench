@@ -106,17 +106,6 @@ export interface FileConflictIndex {
   foldersByMod: Map<string, readonly OriginFolder[]>;
 }
 
-// A mod's own files and folders as the reading lists them; each entry the listing skipped is one
-// Output line.
-function modListing(
-  modFiles: ReadonlyMap<string, OriginFiles>, modName: string, log: (msg: string) => void,
-): OriginFiles {
-  const listing = modFiles.get(modName);
-  if (listing === undefined) throw new Error(`The reading holds no files for ${modName}`);
-  for (const note of listing.notes) log(`[fileConflictIndex] ${modName}: ${note}`);
-  return listing;
-}
-
 // A later provider loses to the earlier, winning one. A case variant of a path its origin already
 // provides is one more name for that origin's copy, never a second provider.
 function provide(files: FileConflictLookup, file: OriginFile, origin: FileOrigin): void {
@@ -132,14 +121,14 @@ export function buildFileConflictIndex(
   entries: readonly ModlistEntry[],
   overwriteFiles: readonly OriginFile[],
   modFiles: ReadonlyMap<string, OriginFiles>,
-  log: (msg: string) => void,
 ): FileConflictIndex {
   const files = new FileConflictLookup();
   const filesByMod = new Map<string, readonly OriginFile[]>();
   const foldersByMod = new Map<string, readonly OriginFolder[]>();
 
   for (const mod of entries.filter((entry) => entry.kind === 'mod')) {
-    const listing = modListing(modFiles, mod.name, log);
+    const listing = modFiles.get(mod.name);
+    if (listing === undefined) throw new Error(`The reading holds no files for ${mod.name}`);
     filesByMod.set(mod.name, listing.files);
     foldersByMod.set(mod.name, listing.folders);
   }

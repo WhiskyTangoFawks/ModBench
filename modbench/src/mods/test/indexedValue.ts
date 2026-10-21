@@ -25,7 +25,7 @@ export function indexedValueOf(
     const listing = listings[entry.name] ?? { files: [] };
     return [[entry.name, { origin: entry.name, folder: `/instance/${entry.name}`, files: listing.files, folders: listing.folders ?? [], notes: [] }] as const];
   }));
-  const index = buildFileConflictIndex(mods, overwrite.files, modFiles, () => undefined);
+  const index = buildFileConflictIndex(mods, overwrite.files, modFiles);
   return Promise.resolve(instanceValueFixture({
     mods, files: index.files, filesByMod: index.filesByMod, foldersByMod: index.foldersByMod,
     overwriteFiles: overwrite.files, overwriteFolders: overwrite.folders ?? [],

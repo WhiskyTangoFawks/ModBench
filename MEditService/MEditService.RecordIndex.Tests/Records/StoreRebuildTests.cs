@@ -289,8 +289,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Contains(indexPath, _index.Status.Message);
     }
 
-    private static bool ReadMetAClosedScopeOrARefusal(Exception ex) =>
-        ex is ObjectDisposedException or InvalidOperationException;
+    private static bool ReadMetARefusal(Exception ex) => ex is InvalidOperationException;
 
     [Fact]
     public async Task ARebuildWithReadsInFlight_Completes_AndReadsThePluginAgain()
@@ -306,7 +305,7 @@ public sealed class StoreRebuildTests : IDisposable
                 {
                     if (_index.ListedIn(Key) is { Count: > 0 }) Interlocked.Increment(ref answered);
                 }
-                catch (Exception ex) when (ReadMetAClosedScopeOrARefusal(ex))
+                catch (Exception ex) when (ReadMetARefusal(ex))
                 {
                 }
             }
