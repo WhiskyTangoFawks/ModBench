@@ -551,8 +551,8 @@ class HttpMEditClient implements MEditClient {
     }));
   }
 
-  /** A refusal (non-compiled plugin, a link that would dangle) comes back typed (ADR-0014); only a
-   *  transport failure rejects. */
+  /** A refusal (non-compiled plugin, a link that would dangle) comes back typed (ADR-0014), and so does a
+   *  transport failure, as the unknown refusal. */
   async getEditChanges(
     formKey: string, { name: plugin, origin }: PluginAddress, envelope: RecordEditEnvelope,
   ): Promise<RecordEditChangesOutcome> {
@@ -565,7 +565,7 @@ class HttpMEditClient implements MEditClient {
       });
     } catch (e) {
       this.log.error(`[HttpMEditClient] getEditChanges(${formKey}) threw: ${errorMessage(e)}`);
-      throw new Error(failureReason(UNREACHABLE));
+      return { applied: false, refusal: 'Unknown', message: failureReason(UNREACHABLE) };
     }
     const { data, error, response } = result;
     if (response.ok && data) {
