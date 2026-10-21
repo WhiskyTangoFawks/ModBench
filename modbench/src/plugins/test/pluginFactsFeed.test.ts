@@ -39,12 +39,12 @@ function clientFindingNoDefects(): InMemoryMEditClient {
 }
 
 interface FeedOptions {
-  readonly client?: InMemoryMEditClient;
   readonly shownPlugins?: () => readonly PluginAddress[];
   readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
 }
 
-function feedOver({ client = clientFindingNoDefects(), shownPlugins = () => [A], publishDiagnoses }: FeedOptions = {}) {
+function feedOver({ shownPlugins = () => [A], publishDiagnoses }: FeedOptions = {}) {
+  const client = clientFindingNoDefects();
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
   const feed = new PluginFactsFeed({

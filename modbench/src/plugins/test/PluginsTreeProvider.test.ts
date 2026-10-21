@@ -672,6 +672,11 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(moves()).toEqual([]);
   });
 
+  it('a drop on a row being dragged asks for nothing, whatever the case of the dragged name', async () => {
+    await drag(['A.esp', 'c.ESP'], 'C.esp');
+    expect(moves()).toEqual([]);
+  });
+
   it('non-contiguous multi-selection names every dragged row, in one drop', async () => {
     await drag(['A.esp', 'C.esp', 'E.esp'], 'D.esp');
     expect(moves())

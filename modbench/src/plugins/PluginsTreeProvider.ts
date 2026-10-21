@@ -9,7 +9,7 @@ import { failurePrefixIcon } from './failurePrefixIcon';
 import { IndexingNode, type RecordBrowser } from './RecordBrowser';
 import { ImplicitMasterNode, PluginNode, rowIdentity, type PluginListNode, type PluginsTreeNode } from './pluginRows';
 import { ErrorNode } from '../drivingLib/errorNode';
-import { samePluginAddress } from '../wire/pluginAddress';
+import { pluginNameKey, samePluginAddress } from '../wire/pluginAddress';
 import { placeOf, type PluginProblem } from './pluginFacts';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
@@ -461,7 +461,7 @@ export class PluginsTreeProvider
     const losingAtTop = this.direction === 'losingAtTop';
     if (target instanceof ImplicitMasterNode) return LOSING_END;
     if (target instanceof PluginNode) {
-      if (names.includes(target.plugin.name)) return undefined;
+      if (names.some((name) => pluginNameKey(name) === pluginNameKey(target.plugin.name))) return undefined;
       return { kind: losingAtTop ? 'before' : 'after', name: target.plugin.name };
     }
     return losingAtTop ? WINNING_END : LOSING_END;
