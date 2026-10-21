@@ -47,15 +47,16 @@ describe.each(implementations)('$name holds the order changes\' contract', (impl
       await expect(changeMods({ kind: 'renameMod', from: 'Alpha', to: 'gamma' })).rejects.toThrow('Mod already in modlist: gamma');
     });
 
-    it.each<[string, ModOrderChange]>([
-      ['an entry added that is listed', { kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'alpha' } }],
-      ['a mod dropped that is not listed', { kind: 'dropMod', mod: 'Nope' }],
-      ['a separator dropped that is not listed', { kind: 'dropSeparator', separator: 'Nope' }],
-      ['a mod enabled as it is', { kind: 'enable', mod: 'Alpha', enabled: true }],
-      ['a mod moved where it already is', { kind: 'moveMods', mods: ['Alpha'], place: { kind: 'modOrder' }, end: 'winning' }],
-    ])('does nothing for %s', async (_, change) => {
+    const MOVED_WHERE_IT_IS: ModOrderChange = { kind: 'moveMods', mods: ['Alpha'], place: { kind: 'modOrder' }, end: 'winning' };
+    it.each<[string, ModOrderChange, ModOrderChange[]]>([
+      ['an entry added that is listed', { kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'alpha' } }, []],
+      ['a mod dropped that is not listed', { kind: 'dropMod', mod: 'Nope' }, []],
+      ['a separator dropped that is not listed', { kind: 'dropSeparator', separator: 'Nope' }, []],
+      ['a mod enabled as it is', { kind: 'enable', mod: 'Alpha', enabled: true }, [{ kind: 'enable', mod: 'Alpha', enabled: true }]],
+      ['a mod moved where it already is', MOVED_WHERE_IT_IS, [MOVED_WHERE_IT_IS]],
+    ])('does nothing for %s, and lands only what the order lists', async (_, change, landed) => {
       const written = await changeMods(change);
-      expect(written.wrote).toBe(false);
+      expect(written).toEqual({ wrote: false, landed });
       expect(await modOrderOf(adapter)).toEqual(MODS_AS_LISTED);
     });
 

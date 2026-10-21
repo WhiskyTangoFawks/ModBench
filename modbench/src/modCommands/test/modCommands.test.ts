@@ -4,7 +4,7 @@ import { modSyncOver, modCommands, type ModCommands } from '../modCommands';
 import type {
   EntryRef, InstanceReading, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, modFoldersOf, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, fileIn, modFoldersOf, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const mod = (name: string, enabled = true): ModlistEntry => ({ kind: 'mod', name, enabled });
@@ -23,7 +23,7 @@ const NO_TRASH = () => Promise.resolve();
 function over(
   order: readonly ModlistEntry[] = FIXTURE_ORDER, answers: InstanceAnswers = {}, mEdit = new InMemoryMEditClient(), reading: Partial<InstanceReading> = {},
 ) {
-  const fake = fakeInstanceAdapter(readingFixture({ mods: order, ...reading }), answers);
+  const fake = fakeInstanceAdapter(readingFixture({ mods: order, modFolders: modFoldersOf(...order), ...reading }), answers);
   return { fake, mEdit, commands: modCommands(fake.adapter, mEdit, unreadStatus) };
 }
 
@@ -222,7 +222,7 @@ describe('deleteSeparators', () => {
   });
 
   it('a separator whose line cannot go after its folder was trashed still lands, carrying the part that failed, and one with no folder to trash is refused with the write\'s reason', async () => {
-    const { commands } = over(FIXTURE_ORDER, { refusals: refusing('changeModOrder', 'disk full'), foldersAbsent: new Set([RADFALL]) });
+    const { commands } = over(FIXTURE_ORDER, { refusals: refusing('changeModOrder', 'disk full') }, undefined, { modFolders: modFoldersOf(...FIXTURE_ORDER.filter((entry) => entry.name !== RADFALL)) });
 
     const outcome = await commands.deleteSeparators([UNASSIGNED, RADFALL], NO_TRASH);
 
@@ -337,7 +337,7 @@ describe('uninstallMods', () => {
   });
 
   it('lands the mod whose downloaded file is gone from disk, with no refusal', async () => {
-    const { commands } = over(FIXTURE_ORDER, { ...installedFrom(['Harder VATS', 'Long Gone-1-0.7z']), goneDownloadedFiles: new Set(['Long Gone-1-0.7z']) });
+    const { commands } = over(FIXTURE_ORDER, installedFrom(['Harder VATS', 'Long Gone-1-0.7z']));
 
     const outcome = await commands.uninstallMods(['Harder VATS'], NO_TRASH);
 
@@ -486,8 +486,12 @@ const configuredBy = (mEdit: InMemoryMEditClient) =>
 describe('markFiles', () => {
   const SOURCE = '/instance/source/Harder VATS';
   const OTHER = '/instance/source/ENBoost';
-  const SOURCES = sourceMods(new Map([['Harder VATS', SOURCE]]));
-  const TWO_SOURCES = sourceMods(new Map([['Harder VATS', SOURCE], ['ENBoost', OTHER]]));
+  const MOD_FILES = new Map(['Harder VATS', 'ENBoost'].map((name) => [name, {
+    origin: name, folder: `/mods/${name}`, folders: [], notes: [],
+    files: ['a.dds', 'b.dds', 'c.dds', 'bad.dds', 'Textures/a.dds', 'Textures/a.dds.excluded'].map((path) => fileIn(`/mods/${name}`, path)),
+  }]));
+  const SOURCES = { ...sourceMods(new Map([['Harder VATS', SOURCE]])), modFiles: MOD_FILES };
+  const TWO_SOURCES = { ...sourceMods(new Map([['Harder VATS', SOURCE], ['ENBoost', OTHER]])), modFiles: MOD_FILES };
   const fileOf = (name: string, relativePath: string) => ({ origin: { kind: 'mod', name }, relativePath }) as const;
   const markOf = (file: ReturnType<typeof fileOf>, mark: OriginFileMark): AdapterCall =>
     ({ verb: 'markOriginFile', origin: file.origin, relativePath: file.relativePath, mark });
@@ -586,7 +590,7 @@ describe('markFiles', () => {
   });
 
   it('leaves a file gone from disk out of the configuration, and lands the rest', async () => {
-    const { mEdit, commands } = over(FIXTURE_ORDER, { goneOriginFiles: [fileOf('Harder VATS', 'gone.dds')] }, undefined, SOURCES);
+    const { mEdit, commands } = over(FIXTURE_ORDER, {}, undefined, SOURCES);
     mEdit.setCommandResult('changeBuildConfiguration', { changed: true });
     const marked = fileOf('Harder VATS', 'a.dds');
     const gone = fileOf('Harder VATS', 'gone.dds');
