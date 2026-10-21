@@ -6,7 +6,7 @@ Each story cites what decides it. A story that cites nothing is owned here.
 
 ## The view
 
-A native tree view, `modbench.toolbox`, first in the `modbench` container and open by default (commands.md, Where surfaces live). It is a readout, not a list: each row is one fact about the instance, and a row's click is that fact's gesture. So the list rules in common do not apply to it: it has no name filter, no sort direction, no Collapse All, and selecting several rows means nothing.
+A native tree view, `modbench.toolbox`, first in the `modbench` container and open by default (commands.md, Where surfaces live). It is a readout, not a list: each row is one fact about the instance, and a row's click is that fact's gesture. So the list rules in common do not apply to it: it has no name filter, no sort direction, no Collapse All, and selecting several rows means nothing. A click never runs a gesture that writes with no prompt, so a stray click changes nothing.
 
 As a user, I want every row to read the instance value and nothing else, so the Toolbox never disagrees with the views below it. Cites: ADR-0015
 
@@ -16,7 +16,7 @@ As a user, I want every row to read the instance value and nothing else, so the 
 |---|---|---|---|---|
 | Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder | none |
 | Profile | the active profile's name | `$(account)` | "Switch profile" | `switch` |
-| Modlist | "no repository", or "repository" ([modlist-repository.md](modlist-repository.md)) | `$(source-control)` | "Git init" with no repository | `git init` with no repository, else none |
+| Modlist | "no repository", or "repository" ([modlist-repository.md](modlist-repository.md)) | `$(source-control)` | none | none |
 
 As a user, I want the game folder to be the one my setting names, else the one the mod manager's configuration names, else the one Modbench finds on this machine.
 

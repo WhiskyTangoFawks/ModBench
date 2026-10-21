@@ -42,13 +42,7 @@ function modlistRow({ holdsRepository }: InstanceValue): vscode.TreeItem {
   const row = new vscode.TreeItem('Modlist');
   row.iconPath = new vscode.ThemeIcon('source-control');
   row.contextValue = 'modlist';
-  if (holdsRepository) {
-    row.description = 'repository';
-    return row;
-  }
-  row.description = 'no repository';
-  row.tooltip = 'Git init';
-  row.command = { command: 'modbench.modlist.gitInit', title: 'Git Init Modlist' };
+  row.description = holdsRepository ? 'repository' : 'no repository';
   return row;
 }
 

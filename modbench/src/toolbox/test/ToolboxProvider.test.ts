@@ -48,11 +48,11 @@ describe('the Toolbox view, given an instance value', () => {
     expect(present(profile.command, 'the Profile row\'s command').command).toBe('modbench.profile.switch');
   });
 
-  it('reads "no repository" on the Modlist row while the instance folder holds none, and a click runs git init', () => {
+  it('reads "no repository" on the Modlist row while the instance folder holds none, and a click does nothing', () => {
     const modlist = row(new FakeInstance(VALUE), 'Modlist');
 
-    expect([modlist.description, modlist.iconPath, modlist.tooltip, modlist.contextValue, modlist.command?.command])
-      .toEqual(['no repository', new ThemeIcon('source-control'), 'Git init', 'modlist', 'modbench.modlist.gitInit']);
+    expect([modlist.description, modlist.iconPath, modlist.tooltip, modlist.contextValue, modlist.command])
+      .toEqual(['no repository', new ThemeIcon('source-control'), undefined, 'modlist', undefined]);
   });
 
   it('reads "repository" on the Modlist row while the instance folder holds one, and a click does nothing', () => {
