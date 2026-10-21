@@ -1,3 +1,4 @@
+import type { ListenerThrows } from '../notificationStream';
 import type { NotificationEvent } from '../apiClient';
 import type { PluginAddress, PluginMetadata, PluginRecordTypeCount, RecordSummary } from '../index';
 import type { components } from '../../wire/generated/api';
@@ -92,4 +93,16 @@ export function notificationEventFixture(
     sequence: 0,
     ...overrides,
   };
+}
+
+export const IGNORED_THROWS: ListenerThrows = { threw: () => {}, recovered: () => {} };
+
+export function recordedThrows() {
+  const threw: { message: string; detail: string }[] = [];
+  const recovered: object[] = [];
+  const sink: ListenerThrows = {
+    threw: (_listener, message, detail) => { threw.push({ message, detail }); },
+    recovered: (listener) => { recovered.push(listener); },
+  };
+  return { sink, threw, recovered };
 }

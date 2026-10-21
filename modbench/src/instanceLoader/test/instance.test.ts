@@ -235,6 +235,15 @@ describe('Instance — the value', () => {
     expect(logs.filter((line) => line.includes('Loop'))).toEqual(['[instance] /inst/mods/Loop is a link Modbench cannot follow, so it is not read: too many levels']);
   });
 
+  it('names the mod a note on its files belongs to', async () => {
+    const note = 'broken link "/mods/A/x.dds", skipped';
+    const { instance, logs } = loader({ mods: [mod('A')], modFiles: new Map([['A', { ...filesOfMod('A', 'a.dds'), notes: [note] }]]) });
+
+    await instance.refresh();
+
+    expect(logs).toEqual([`[instance] A: ${note}`]);
+  });
+
   it('carries the winner of a path two enabled mods provide, and each listed mod\'s own files and folders, a disabled mod\'s too', async () => {
     const folder = { relativePath: 'textures', path: '/mods/Harder VATS/textures', excluded: false };
     const { instance } = loader({
@@ -498,8 +507,10 @@ describe('Instance — a value that survives a bad read', () => {
   });
 
   it('keeps recomputing after a subscriber throws', async () => {
-    const { instance, errorLines } = loader();
+    const { instance } = loader();
     const seen: number[] = [];
+    const thrown: (string | undefined)[] = [];
+    instance.onListenerOutcome(({ threw }) => thrown.push(threw));
     instance.subscribe(() => {
       throw new Error('subscriber exploded');
     });
@@ -509,7 +520,19 @@ describe('Instance — a value that survives a bad read', () => {
     await instance.refresh();
 
     expect(seen).toEqual([1, 2]);
-    expect(errorLines.filter((m) => m.includes('subscriber threw'))).toHaveLength(2);
+    expect(thrown).toEqual(['subscriber exploded', undefined, 'subscriber exploded', undefined]);
+  });
+
+  it('tells of a read-failure listener that throws, as one that follows a failed read', async () => {
+    const { instance, fake } = loader();
+    const outcomes: { during: string; threw: string | undefined }[] = [];
+    instance.onListenerOutcome(({ during, threw }) => outcomes.push({ during, threw }));
+    instance.onReadFailure(() => { throw new Error('failure listener exploded'); });
+    fake.failReading('unreadable');
+
+    await instance.refresh();
+
+    expect(outcomes).toEqual([{ during: 'read-failure', threw: 'failure listener exploded' }]);
   });
 });
 
@@ -626,22 +649,6 @@ describe('Instance — game folder and the archives the game loads', () => {
     await instance.refresh();
 
     expect(warnings).toEqual([`[instance] ${note}`]);
-  });
-
-  it('tells once a note on a mod\'s files, and again when it clears and comes back', async () => {
-    const note = 'broken link "/mods/A/x.dds", skipped';
-    const noted = new Map([['A', { ...filesOfMod('A', 'a.dds'), notes: [note] }]]);
-    const clear = new Map([['A', filesOfMod('A', 'a.dds')]]);
-    const { instance, fake, logs } = loader({ mods: [mod('A')], modFiles: noted });
-
-    await instance.refresh();
-    await instance.refresh();
-    fake.read({ modFiles: clear });
-    await instance.refresh();
-    fake.read({ modFiles: noted });
-    await instance.refresh();
-
-    expect(logs).toEqual([`[instance] A: ${note}`, `[instance] A: ${note}`]);
   });
 
   it('tells once, until it changes, each archive the INIs list that nothing holds', async () => {

@@ -1,3 +1,4 @@
+import { IGNORED_THROWS } from './fixtures';
 import type {
   MEditClient, NotificationKind, NotificationPayloads, BackendStatus, LaunchOutcome, LoadOrderOutcome, LoadOrderSnapshot, UnsavedDocument,
 } from '../MEditClient';
@@ -69,7 +70,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly commandResults: { [K in CommandMethod]?: ScriptedResults[K] } = {};
   private readonly commandFailures = new Map<CommandMethod, Error>();
   private readonly commandHandlers: { [K in CommandMethod]?: Handlers[K] } = {};
-  private readonly notifications = new SseNotificationSubscriber({ openStream: () => Promise.reject(new Error('never started')) });
+  private readonly notifications = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream: () => Promise.reject(new Error('never started')) });
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private readonly portListeners = new Set<(port: number) => void>();
   private readonly reconnectListeners = new Set<() => void>();
