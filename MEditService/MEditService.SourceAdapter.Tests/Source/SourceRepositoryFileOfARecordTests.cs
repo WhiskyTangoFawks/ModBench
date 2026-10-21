@@ -148,6 +148,18 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     }
 
     [Fact]
+    public void ADeletedFileWithAnUnsavedText_IsNoDocument_ForTheTextMakesNoFile()
+    {
+        var unsaved = new UnsavedDocuments();
+        unsaved.Apply([new DocumentChange(NpcFile, "{\"FormKey\": \"000900:Filed.esp\", \"EditorID\": \"FiledNpc\"}")]);
+        File.Delete(NpcFile);
+
+        var answer = new GitSourceAdapter(unsaved).RecordOfFile(LoadOrder(), NpcFile);
+
+        Assert.IsType<RecordOfFileAnswer.Refused>(answer);
+    }
+
+    [Fact]
     public void TheRootHeaderDocument_HoldsThePluginHeaderRecord()
     {
         Assert.Equal(new RecordAt(Plugin, Header.FormKey), RecordOf(HeaderFile));
