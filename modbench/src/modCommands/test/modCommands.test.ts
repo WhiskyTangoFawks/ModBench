@@ -119,6 +119,37 @@ describe('moveMods and moveSeparators', () => {
     });
     expect(fake.calls).toEqual([orderWrite([{ kind: 'moveSeparators', separators: [UNASSIGNED], place, end: 'winning' }])]);
   });
+
+  it('refuses once a mod move whose target is one of the moving mods, and writes nothing', async () => {
+    const { fake, commands } = over();
+
+    const outcome = await commands.moveMods(['ENBoost', 'Harder VATS'], { kind: 'mod', name: 'ENBoost' }, 'losing');
+
+    expect(outcome).toEqual({ applied: false, refusal: 'The target is "ENBoost", which is moving.' });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('refuses once a separator move whose target is one of the moving separators, and writes nothing', async () => {
+    const { fake, commands } = over();
+
+    const outcome = await commands.moveSeparators([UNASSIGNED, RADFALL], { kind: 'separator', name: RADFALL }, 'losing');
+
+    expect(outcome).toEqual({ applied: false, refusal: `The target is "${RADFALL}", which is moving.` });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it.each<MovePlace>([{ kind: 'mod', name: 'ENBoost' }, { kind: 'ungrouped' }])(
+    'refuses once a separator move to the place %j, which no separator can take, and writes nothing', async (place) => {
+      const { fake, commands } = over();
+
+      const outcome = await commands.moveSeparators([UNASSIGNED], place, 'winning');
+
+      expect(outcome).toEqual({
+        applied: false,
+        refusal: 'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.',
+      });
+      expect(fake.calls).toEqual([]);
+    });
 });
 
 describe('insertSeparator', () => {

@@ -50,6 +50,14 @@ describe('a page of the webview build, loaded into a webview', () => {
     expect(html.indexOf('window.mEditFormKey')).toBeLessThan(html.indexOf('type="module"'));
   });
 
+  it('writes a value holding markup so that the inline script parses back to the value', () => {
+    const hostile = 'C:/mods/<!--<script>x</script>"\\\'';
+    const { html } = shown({ ...RECORD_PAGE, globals: { mEditLoadError: hostile } });
+    const inline = /<script nonce="[^"]*">([\s\S]*?)<\/script>/.exec(html)?.[1] ?? '';
+    expect(inline).not.toContain('<');
+    expect(JSON.parse(inline.replace(/^window\.mEditLoadError = /, '').replace(/;$/, ''))).toBe(hostile);
+  });
+
   it('loads its fonts from its own resources alone', () => {
     expect(shown(RECORD_PAGE).html).toMatch(/font-src vscode-webview-resource:;/);
   });
