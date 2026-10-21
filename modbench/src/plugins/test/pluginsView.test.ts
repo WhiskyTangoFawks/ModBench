@@ -237,6 +237,7 @@ describe('the Plugins view\'s selection for a key', () => {
     const [row] = await rows();
 
     treeViews.view().selectRows([present(row, 'the plugin row')]);
+    expect(view().selection).toEqual([row]);
     Object.assign(view(), { selection: [] });
 
     expect(focused.selectionOf('modbench.pluginListTree')).toEqual([row]);

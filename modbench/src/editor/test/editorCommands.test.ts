@@ -39,9 +39,10 @@ describe('modbench.record.open from the palette, with no Argument', () => {
     await open();
 
     expect(pickRecord.mock.calls).toEqual([[{ meditClient: expect.any(InMemoryMEditClient) as unknown, reporter }, '', []]]);
-    expect(executeCommand).toHaveBeenCalledWith(
-      'vscode.openWith', expect.objectContaining({ path: '/ModA/A.esp/Gun.json', query: 'formKey=000801%3AA.esp&name=A.esp&origin=ModA' }),
-      'modbench.record', { viewColumn: -1, preview: true });
+    expect(executeCommand.mock.calls.map(([id, uri, ...rest]) => [id, String(uri), ...rest])).toContainEqual([
+      'vscode.openWith', 'modbench-rendered:/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record',
+      { viewColumn: -1, preview: true },
+    ]);
   });
 
   it('opens nothing when the picker is dismissed', async () => {
