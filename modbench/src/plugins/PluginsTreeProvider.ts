@@ -51,9 +51,6 @@ interface PluginsTreeProviderOptions {
   /** The Failed to read status's other surface, the Problems panel, for a read a defect in the
    *  plugin's bytes stopped. */
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
-  /** This provider states the severity (ADR-0019), so a background blip and a failed
-   *  read land on different channel levels. */
-  log: (level: 'info' | 'warn' | 'error', msg: string) => void;
 }
 
 
@@ -123,7 +120,6 @@ export class PluginsTreeProvider
       publishDiagnoses: options.publishDiagnoses,
       publishChangedOutside: options.publishChangedOutside,
       publishFailedToRead: options.publishFailedToRead,
-      log: options.log,
     });
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);

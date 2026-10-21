@@ -83,7 +83,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
   const changedOutsideDiagnostics = vscode.languages.createDiagnosticCollection('modbench-changed-outside');
   const failedToReadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-failed-to-read');
   const tree = new PluginsTreeProvider({
-    instance, log,
+    instance,
     records: recordBrowser,
     client,
     // A malformed plugin and one changed outside Modbench still load and play; one that failed to read does not.

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { PluginAddress, PluginDiagnosisReport, PluginMetadata } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
+import type { ReadFailed } from '../../wire/readFailed';
 import { EventEmitter } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({ EventEmitter }));
@@ -31,20 +32,37 @@ function watched<T>() {
   };
 }
 
-function feedOver(client = new InMemoryMEditClient(), shown: readonly PluginAddress[] = [A]) {
-  const logged = watched<{ level: string; msg: string }>();
+function clientFindingNoDefects(): InMemoryMEditClient {
+  const client = new InMemoryMEditClient();
+  client.setQueryAnswer('getDiagnoses', []);
+  return client;
+}
+
+function feedOver(client = clientFindingNoDefects(), shown: readonly PluginAddress[] = [A], publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void) {
   const diagnoses = watched<readonly PluginDiagnosisReport[]>();
   const changedOutside = watched<readonly { plugin: string; origin: string }[]>();
   const feed = new PluginFactsFeed({
     client, shownPlugins: () => shown,
-    log: (level, msg) => logged.push({ level, msg }),
-    publishDiagnoses: diagnoses.push,
+    publishDiagnoses: publishDiagnoses ?? diagnoses.push,
     publishChangedOutside: changedOutside.push,
     publishFailedToRead: () => undefined,
   });
   const changes = vi.fn();
   feed.onDidChange(changes);
-  return { feed, client, logged, diagnoses, changedOutside, changes };
+  return { feed, client, diagnoses, changedOutside, changes };
+}
+
+async function nextUnhandledRejection(trigger: () => Promise<unknown>): Promise<unknown> {
+  const others = process.listeners('unhandledRejection');
+  process.removeAllListeners('unhandledRejection');
+  try {
+    return await new Promise((resolve) => {
+      process.once('unhandledRejection', resolve);
+      void trigger();
+    });
+  } finally {
+    for (const listener of others) process.on('unhandledRejection', listener);
+  }
 }
 
 const compiledPluginFlag = (feed: PluginFactsFeed) => feed.rows.contextFlags(A).includes('compiledPlugin');
@@ -62,22 +80,21 @@ describe('PluginFactsFeed', () => {
     expect(changes).toHaveBeenCalled();
   });
 
-  it('names an unreadable plugin list on the rows and the message line, logs it as an error, and answers undefined', async () => {
-    const { feed, client, logged } = feedOver();
+  it('names an unreadable plugin list on the rows and the message line, and answers undefined', async () => {
+    const { feed, client } = feedOver();
     client.setQueryFailure('getPlugins', { failed: 'unreachable' });
 
     expect(await feed.reconciled([])).toBeUndefined();
 
     expect(feed.rows.expansion(A)).toEqual({ kind: 'error', message: 'mEdit could not be reached.' });
     expect(feed.rows.readFailureMessage()).toBe("Failed to load: mEdit's facts about each plugin: mEdit could not be reached.");
-    expect(logged.items.map((l) => l.level)).toEqual(['error']);
   });
 
   it.each([
     ['re-read', (feed: PluginFactsFeed) => feed.refresh()],
     ['hand-off', (feed: PluginFactsFeed) => feed.reconciled([])],
-  ] as const)('a failed %s that mEdit going away superseded logs its line and leaves the rows to the disconnect', async (_read, read) => {
-    const { feed, client, logged } = feedOver();
+  ] as const)('a failed %s that mEdit going away superseded leaves the rows to the disconnect', async (_read, read) => {
+    const { feed, client } = feedOver();
     client.setQueryFailure('getPlugins', { failed: 'unreachable' });
 
     const reading = read(feed);
@@ -86,7 +103,6 @@ describe('PluginFactsFeed', () => {
 
     expect(feed.rows.readFailureMessage()).toBeUndefined();
     expect(feed.rows.expansion(A)).toEqual({ kind: 'error', message: 'mEdit is disconnected.' });
-    expect(logged.items.map((l) => l.level)).toEqual(['error']);
   });
 
   it('drops a reconcile answer that lands after a newer event', async () => {
@@ -138,43 +154,37 @@ describe('PluginFactsFeed', () => {
     expect(feed.rows.description(A)).toBe('malformed');
   });
 
-  it('a failed scan only warns and leaves the last answer', async () => {
-    const { feed, client, logged, diagnoses } = feedOver();
+  it('a failed scan leaves the last answer', async () => {
+    const { feed, client, diagnoses } = feedOver();
     client.setQueryAnswer('getPlugins', [held()]);
     client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: '503' });
-    const warned = logged.next();
 
     await feed.reconciled([]);
-    await warned;
+    await vi.waitFor(() => { expect(feed.rows.readFailureMessage()).toContain('503'); });
 
-    expect(logged.items.map((l) => l.level)).toEqual(['warn']);
     expect(diagnoses.items).toEqual([]);
   });
 
   it('keeps the last diagnoses on the rows when the next scan fails', async () => {
-    const { feed, client, logged } = feedOver();
+    const { feed, client } = feedOver();
     client.setQueryAnswer('getPlugins', [held()]);
     client.setQueryAnswer('getDiagnoses', [diagnosis('first')]);
     await feed.reconciled([]);
     client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: '503' });
-    const warned = logged.next();
 
     await feed.reconciled([]);
-    await warned;
+    await vi.waitFor(() => { expect(feed.rows.readFailureMessage()).toContain('503'); });
 
     expect(feed.rows.description(A)).toBe('malformed');
   });
 
   it('records a failed scan on the rows and fires a change, and the next answer clears it', async () => {
-    const { feed, client, logged, changes } = feedOver();
+    const { feed, client, changes } = feedOver();
     client.setQueryAnswer('getPlugins', [held()]);
     client.setQueryAnswer('getDiagnoses', []);
     client.setQueryFailureOnce('getDiagnoses', { failed: 'refused', refusal: '503' });
-    const warned = logged.next();
     await feed.reconciled([]);
-    await warned;
-
-    expect(feed.rows.readFailureMessage()).toContain('503');
+    await vi.waitFor(() => { expect(feed.rows.readFailureMessage()).toContain('503'); });
 
     const before = changes.mock.calls.length;
     await feed.reconciled([]);
@@ -183,41 +193,19 @@ describe('PluginFactsFeed', () => {
     expect(feed.rows.readFailureMessage()).toBeUndefined();
   });
 
-  it('logs a failed scan once, and again only when the reason changes', async () => {
-    const { feed, client, logged, changes } = feedOver();
+  it('drops a failed scan that a newer event superseded, and changes no facts', async () => {
+    const { feed, client, changes } = feedOver();
     client.setQueryAnswer('getPlugins', [held()]);
-    client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: '503' });
-    const warned = logged.next();
-    await feed.reconciled([]);
-    await warned;
-    const before = changes.mock.calls.length;
-    await feed.reconciled([]);
-    await vi.waitFor(() => { expect(changes.mock.calls.length).toBeGreaterThan(before + 1); });
-    expect(logged.items).toHaveLength(1);
-
-    client.setQueryFailure('getDiagnoses', { failed: 'refused', refusal: '500' });
-    const changed = logged.next();
-    await feed.reconciled([]);
-    await changed;
-
-    expect(logged.items).toHaveLength(2);
-  });
-
-  it('logs a failed scan that a newer event superseded, and changes no facts', async () => {
-    const { feed, client, logged, changes } = feedOver();
-    client.setQueryAnswer('getPlugins', [held()]);
-    const slowScan = deferred<PluginDiagnosisReport[]>();
+    const slowScan = deferred<PluginDiagnosisReport[] | ReadFailed>();
     client.setQueryAnswerOnce('getDiagnoses', slowScan.promise);
     await feed.reconciled([]);
     feed.unreachable('gone');
     const before = changes.mock.calls.length;
-    const warned = logged.next();
 
-    slowScan.reject(new Error('late'));
-    await warned;
+    slowScan.resolve({ failed: 'refused', refusal: 'late' });
+    await feed.refresh();
 
-    expect(logged.items.map((l) => l.level)).toEqual(['warn']);
-    expect(changes.mock.calls.length).toBe(before);
+    expect(changes.mock.calls.length).toBe(before + 1);
     expect(feed.rows.readFailureMessage()).toBeUndefined();
   });
 
@@ -230,10 +218,35 @@ describe('PluginFactsFeed', () => {
     feed.indexed([], []);
 
     slowScan.resolve([diagnosis('stale')]);
-    await slowScan.promise;
+    await feed.refresh();
 
     expect(diagnoses.items).toEqual([]);
     expect(feed.rows.description(A)).toBeUndefined();
+  });
+
+  describe('a throw that is no failed read', () => {
+    it('is not folded into the unreadable-plugin-list rows, and reaches the caller', async () => {
+      const client = new InMemoryMEditClient();
+      client.setQueryAnswer('getPlugins', [held()]);
+      const feed = new PluginFactsFeed({
+        client, shownPlugins: () => { throw new Error('the tree broke'); },
+        publishDiagnoses: () => undefined, publishChangedOutside: () => undefined, publishFailedToRead: () => undefined,
+      });
+
+      await expect(feed.reconciled([])).rejects.toThrow('the tree broke');
+      expect(feed.rows.readFailureMessage()).toBeUndefined();
+    });
+
+    it('is not folded into a failed scan on the rows, and is left unhandled', async () => {
+      const { feed, client } = feedOver(undefined, undefined, () => { throw new Error('the Problems panel broke'); });
+      client.setQueryAnswer('getPlugins', [held()]);
+      client.setQueryAnswer('getDiagnoses', []);
+
+      const thrown = await nextUnhandledRejection(() => feed.reconciled([]));
+
+      expect(thrown).toEqual(new Error('the Problems panel broke'));
+      expect(feed.rows.readFailureMessage()).toBeUndefined();
+    });
   });
 
   it('takes the external-change notification itself: publishes A\'s warning and fires the change event', () => {
@@ -256,16 +269,6 @@ describe('PluginFactsFeed', () => {
 
   describe('a later read that failed', () => {
     const failing = (message: string) => held({ laterReadFailure: [{ sourceRelativePath: 'A.esp/Npc.json', message }] });
-    it('logs nothing of its own across reads, as mEdit logs the failure once', async () => {
-      const { feed, client, logged } = feedOver();
-      for (const answer of [failing('Unexpected end at 1.'), failing('Unexpected end at 2.'), held(), failing('Unexpected end at 3.')]) {
-        client.setQueryAnswer('getPlugins', [answer]);
-        await feed.refresh();
-      }
-
-      expect(logged.items).toEqual([]);
-    });
-
     it('is on the rows after a refresh and gone after the next good read, with no notification', async () => {
       const { feed, client } = feedOver();
       client.setQueryAnswer('getPlugins', [failing('bad')]);

@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { SILENT_LOG, type Log } from '../ports/log';
 import { ErrorNode } from '../drivingLib/errorNode';
 import type {
   RecordSummary, RecordPage,
@@ -15,7 +14,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { SyncMessage } from '../drivingLib/syncFailureReport';
 import { blankIcon } from '../drivingLib/blankIcon';
 import { UNLIMITED_RECORDS } from '../client';
-import { answerOf } from '../wire/readFailed';
+import { answerOf, ReadFailedError } from '../wire/readFailed';
 
 // "Could not be read into its document" rather than "Mutagen could not parse it": ingest's one
 // catch spans the read, the reference walk and the codec write, and only the diagnosis knows which.
@@ -304,11 +303,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   private reopening = new Set<string>();
   // Bumped by each refresh, so a read answered before mEdit's rows changed caches nothing.
   private generation = 0;
-  private readonly log: Log;
-
-  constructor(private readonly repository: RecordBrowserClient, log?: Log) {
-    this.log = log ?? SILENT_LOG;
-  }
+  constructor(private readonly repository: RecordBrowserClient) {}
 
   refresh(): void {
     this.generation++;
@@ -353,7 +348,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
     return held?.answer;
   }
 
-  // A failed read is logged once and not retried until the next refresh, so no row asks again.
+  // A failed read is not retried until the next refresh, so no row asks again.
   private loadBeneath(plugin: PluginAddress, key: string): void {
     if (this.beneathLoading.has(key)) return;
     this.beneathLoading.add(key);
@@ -366,7 +361,6 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
     }, (e: unknown) => {
       if (generation !== this.generation) return;
       const reason = this.err(e);
-      this.log.error(`[RecordBrowser] getWorkingTreeStatesBeneath(${plugin.name}) failed: ${reason}`);
       const message = this.beneath.has(key) ? `Showing the last good read: ${reason}` : `Failed to load: ${reason}`;
       if (this.beneathFailures.get(key) !== message) {
         this.beneathFailures.set(key, message);
@@ -466,13 +460,12 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
 
   // A failed fetch renders as the error row in place of the children (plugins.md, Rows that stand
   // in for records).
-  private async orErrorNode(op: string, build: () => Promise<RecordBrowserNode[]>): Promise<RecordBrowserNode[]> {
+  private async orErrorNode(build: () => Promise<RecordBrowserNode[]>): Promise<RecordBrowserNode[]> {
     try {
       return await build();
     } catch (e) {
-      const message = this.err(e);
-      this.log.error(`[RecordBrowser] ${op} failed: ${message}`);
-      return [new ErrorNode(message)];
+      if (!(e instanceof ReadFailedError)) throw e;
+      return [new ErrorNode(this.err(e))];
     }
   }
 
@@ -495,7 +488,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
    *  its own rows, whose whole knowledge of this side is the plugin and the
    *  conditions that row states. */
   async getPluginChildren(plugin: PluginAddress, conditions: PluginConditions = NOT_EDITABLE): Promise<RecordBrowserNode[]> {
-    return this.orErrorNode(`getPluginChildren(${plugin.name})`, async () => {
+    return this.orErrorNode(async () => {
       const types = answerOf(await this.repository.getRecordTypes(plugin));
       return types.map(t => new RecordTypeNode(plugin.name, t, plugin.origin, conditions));
     });
@@ -508,7 +501,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   }
 
   private fetchWorldspaces(node: RecordTypeNode): Promise<RecordBrowserNode[]> {
-    return this.orErrorNode(`fetchWorldspaces(${node.plugin})`, async () => {
+    return this.orErrorNode(async () => {
       const generation = this.generation;
       const worldspaces = answerOf(await this.repository.getWorldspaces(pluginAddressOf(node)));
       this.readRows(generation, worldspaces.map(w => ({ ...w, plugin: pluginAddressOf(node) })));
@@ -517,7 +510,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   }
 
   private fetchWorldspaceChildren(node: WorldspaceNode): Promise<RecordBrowserNode[]> {
-    return this.orErrorNode(`fetchWorldspaceChildren(${node.worldspace.formKey})`, async () => {
+    return this.orErrorNode(async () => {
       const generation = this.generation;
       const data = answerOf(await this.repository.getWorldspaceBlocks(pluginAddressOf(node), node.worldspace.formKey));
       const cells = [...data.topCells, ...data.blocks.flatMap(b => b.subBlocks.flatMap(s => s.cells))];
@@ -530,7 +523,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   }
 
   private fetchCellGroups(node: CellNode): Promise<RecordBrowserNode[]> {
-    return this.orErrorNode(`fetchCellGroups(${node.cell.formKey})`, async () => {
+    return this.orErrorNode(async () => {
       const generation = this.generation;
       const refs = await this.getOrLoad('cellRefs', pluginAddressOf(node), node.cell.formKey,
         async () => answerOf(await this.repository.getCellChildRecords(pluginAddressOf(node), node.cell.formKey)));
@@ -543,7 +536,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   }
 
   private fetchContainerChildren(node: RecordNode): Promise<RecordBrowserNode[]> {
-    return this.orErrorNode(`fetchContainerChildren(${node.record.formKey})`, async () => {
+    return this.orErrorNode(async () => {
       const owner = { name: node.record.plugin, origin: node.origin };
       const generation = this.generation;
       const children = await this.getOrLoad('containerChildren', owner, node.record.formKey, async () => {
@@ -557,7 +550,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
 
   // Every interior cell in one call (plugins.md, The tree, story 8).
   private fetchInteriorCells(node: RecordTypeNode): Promise<RecordBrowserNode[]> {
-    return this.orErrorNode(`fetchInteriorCells(${node.plugin})`, async () => {
+    return this.orErrorNode(async () => {
       const generation = this.generation;
       const blocks = await this.getOrLoad('interior', pluginAddressOf(node), '',
         async () => answerOf(await this.repository.getInteriorCells(pluginAddressOf(node))));
@@ -568,7 +561,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   }
 
   private fetchRecords(node: RecordTypeNode): Promise<RecordBrowserNode[]> {
-    return this.orErrorNode(`fetchRecords(${node.plugin}, ${node.recordType})`, async () => {
+    return this.orErrorNode(async () => {
       const generation = this.generation;
       const page = await this.getOrLoad('records', pluginAddressOf(node), node.recordType, async () => {
         const loaded = answerOf(await this.repository.getRecords(pluginAddressOf(node), node.recordType, 0, UNLIMITED_RECORDS));

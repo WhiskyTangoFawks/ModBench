@@ -134,11 +134,17 @@ class HttpMEditClient implements MEditClient {
   }
 
   // The port is the lifecycle's to choose, so the generated client is built once it is known.
-  private get apiClient(): ApiClient {
+  private get startedApiClient(): ApiClient | undefined {
     const port = this.lifecycle.port;
-    if (port === undefined) throw new Error('mEdit has not started');
+    if (port === undefined) return undefined;
     if (this.api?.port !== port) this.api = { port, client: createApiClient(port, this.fetchImpl) };
     return this.api.client;
+  }
+
+  private get apiClient(): ApiClient {
+    const client = this.startedApiClient;
+    if (client === undefined) throw new Error('mEdit has not started');
+    return client;
   }
 
   // ── lifecycle ────────────────────────────────────────────────────────────
@@ -174,7 +180,7 @@ class HttpMEditClient implements MEditClient {
   onUnsavedHandOver(listener: (failure: ReadFailed | undefined) => void): () => void { return this.handOver.onSettled(listener); }
 
   private putUnsavedDocuments(documents: readonly UnsavedDocument[]): Promise<ReadFailed | undefined> {
-    return this.read('putUnsavedDocuments', (signal) => this.apiClient.PUT('/unsaved-documents', { body: { documents: [...documents] }, signal }), () => undefined);
+    return this.read('putUnsavedDocuments', (api, signal) => api.PUT('/unsaved-documents', { body: { documents: [...documents] }, signal }), () => undefined);
   }
 
   // ── notifications ────────────────────────────────────────────────────────
@@ -573,16 +579,21 @@ class HttpMEditClient implements MEditClient {
   // ── reads ────────────────────────────────────────────────────────────────
 
   // A read that does not land answers a ReadFailed, never an empty list (common.md, States, story 2).
-  // The transport's verb, path and status go to the log alone (ADR-0019).
+  // This is the one log line per failed read, with the transport's detail (ADR-0019); views do not repeat it.
   private async read<D, A>(
     what: string,
-    call: (signal: AbortSignal) => Promise<{ data?: D; error?: unknown; response: Response }>,
+    call: (api: ApiClient, signal: AbortSignal) => Promise<{ data?: D; error?: unknown; response: Response }>,
     answer: (data: D | undefined) => A | ReadFailed,
     { timed = false, absent }: { timed?: boolean; absent?: { status: number; answers: A } } = {},
   ): Promise<A | ReadFailed> {
+    const api = this.startedApiClient;
+    if (api === undefined) {
+      this.log.error(`[HttpMEditClient] ${what}: mEdit has not started`);
+      return UNREACHABLE;
+    }
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const settled = (async () => call(controller.signal))().then(({ data, error, response }): A | ReadFailed => {
+    const settled = call(api, controller.signal).then(({ data, error, response }): A | ReadFailed => {
       if (absent && response.status === absent.status) return absent.answers;
       if (!response.ok) {
         const text = errorText(error);
@@ -615,57 +626,57 @@ class HttpMEditClient implements MEditClient {
   }
 
   getPlugins(): Promise<PluginMetadata[] | ReadFailed> {
-    return this.read('GET /plugins', (signal) => this.apiClient.GET('/plugins', { signal }), (data) => data ?? []);
+    return this.read('GET /plugins', (api, signal) => api.GET('/plugins', { signal }), (data) => data ?? []);
   }
 
   getDiagnoses(): Promise<PluginDiagnosisReport[] | ReadFailed> {
-    return this.read('GET /plugins/diagnoses', (signal) => this.apiClient.GET('/plugins/diagnoses', { signal }), (data) => data ?? []);
+    return this.read('GET /plugins/diagnoses', (api, signal) => api.GET('/plugins/diagnoses', { signal }), (data) => data ?? []);
   }
 
   getPluginDependants({ name: plugin, origin }: PluginAddress): Promise<PluginDependants | ReadFailed> {
-    return this.read(`getPluginDependants(${plugin})`, (signal) => this.apiClient.GET('/plugins/{plugin}/dependants', {
+    return this.read(`getPluginDependants(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/dependants', {
       params: { path: { plugin }, query: { origin } }, signal,
     }), noBodyFails, { timed: true });
   }
 
   getPluginProblems(): Promise<PluginProblems[] | ReadFailed> {
-    return this.read('getPluginProblems', (signal) => this.apiClient.GET('/plugins/problems', { signal }), noBodyFails, { timed: true });
+    return this.read('getPluginProblems', (api, signal) => api.GET('/plugins/problems', { signal }), noBodyFails, { timed: true });
   }
 
   getRecordTypes({ name: plugin, origin }: PluginAddress): Promise<PluginRecordTypeCount[] | ReadFailed> {
-    return this.read(`getRecordTypes(${plugin})`, (signal) => this.apiClient.GET('/plugins/{plugin}/record-types', {
+    return this.read(`getRecordTypes(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/record-types', {
       params: { path: { plugin }, query: { origin } }, signal,
     }), (data) => data ?? [], { timed: true });
   }
 
   getWorkingTreeStatesBeneath({ name: plugin, origin }: PluginAddress): Promise<WorkingTreeStatesBeneath | ReadFailed> {
-    return this.read(`getWorkingTreeStatesBeneath(${plugin})`, (signal) => this.apiClient.GET('/plugins/{plugin}/working-tree-states-beneath', {
+    return this.read(`getWorkingTreeStatesBeneath(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/working-tree-states-beneath', {
       params: { path: { plugin }, query: { origin } }, signal,
     }), noBodyFails, { timed: true });
   }
 
   getCreatableRecordTypes(): Promise<RecordTypeChoice[] | ReadFailed> {
-    return this.read('getCreatableRecordTypes', (signal) => this.apiClient.GET('/record-types/creatable', { signal }), (data) => data ?? [], { timed: true });
+    return this.read('getCreatableRecordTypes', (api, signal) => api.GET('/record-types/creatable', { signal }), (data) => data ?? [], { timed: true });
   }
 
   getChildRecordTypes({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RecordTypeChoice[] | ReadFailed> {
-    return this.read(`getChildRecordTypes(${plugin}, ${formKey})`, (signal) => this.apiClient.GET('/plugins/{plugin}/records/{formKey}/child-record-types', {
+    return this.read(`getChildRecordTypes(${plugin}, ${formKey})`, (api, signal) => api.GET('/plugins/{plugin}/records/{formKey}/child-record-types', {
       params: { path: { plugin, formKey }, query: { origin } }, signal,
     }), (data) => data ?? [], { timed: true });
   }
 
   getCreatablePluginExtensions(): Promise<string[] | ReadFailed> {
-    return this.read('getCreatablePluginExtensions', (signal) => this.apiClient.GET('/plugins/creatable-extensions', { signal }), (data) => data ?? [], { timed: true });
+    return this.read('getCreatablePluginExtensions', (api, signal) => api.GET('/plugins/creatable-extensions', { signal }), (data) => data ?? [], { timed: true });
   }
 
   getRecords({ name: plugin, origin }: PluginAddress, type: string, offset: number, limit: number): Promise<RecordPage | ReadFailed> {
-    return this.read(`getRecords(${plugin}, ${type})`, (signal) => this.apiClient.GET('/records', {
+    return this.read(`getRecords(${plugin}, ${type})`, (api, signal) => api.GET('/records', {
       params: { query: { plugin, type: [type], offset, limit, origin } }, signal,
     }), (data) => data ?? { items: [], total: 0 }, { timed: true });
   }
 
   searchRecords(query: string, validTypes: string[], plugin?: PluginAddress): Promise<RecordPage | ReadFailed> {
-    return this.read(`searchRecords(${query})`, (signal) => this.apiClient.GET('/records', {
+    return this.read(`searchRecords(${query})`, (api, signal) => api.GET('/records', {
       params: { query: {
         search: query, ...(validTypes.length > 0 ? { type: validTypes } : {}), limit: 20,
         ...(plugin && { plugin: plugin.name, origin: plugin.origin }),
@@ -675,72 +686,72 @@ class HttpMEditClient implements MEditClient {
   }
 
   getRecordOwner(formKey: string): Promise<PluginAddress | undefined | ReadFailed> {
-    return this.read(`getRecordOwner(${formKey})`, (signal) => this.apiClient.GET('/records/{formKey}', { params: { path: { formKey } }, signal }),
+    return this.read(`getRecordOwner(${formKey})`, (api, signal) => api.GET('/records/{formKey}', { params: { path: { formKey } }, signal }),
       (data) => (data ? { name: data.plugin, origin: data.origin } : undefined), { absent: { status: 404, answers: undefined } });
   }
 
   // A 404 (unknown FormKey) is "nothing holds it yet", not a fault, as getRecordOwner's own 404 is.
   getRecordHolders(formKey: string): Promise<PluginAddress[] | ReadFailed> {
-    return this.read(`getRecordHolders(${formKey})`, (signal) => this.apiClient.GET('/records/{formKey}/compare', { params: { path: { formKey } }, signal }),
+    return this.read(`getRecordHolders(${formKey})`, (api, signal) => api.GET('/records/{formKey}/compare', { params: { path: { formKey } }, signal }),
       (data) => (data?.overrides ?? []).map((o) => ({ name: o.plugin, origin: o.origin })), { absent: { status: 404, answers: [] } });
   }
 
   resolveNames(names: readonly NameQuery[]): Promise<NamedObject[] | ReadFailed> {
-    return this.read('resolveNames', (signal) => this.apiClient.POST('/names/resolve', { body: { names: [...names] }, signal }), noBodyFails);
+    return this.read('resolveNames', (api, signal) => api.POST('/names/resolve', { body: { names: [...names] }, signal }), noBodyFails);
   }
 
   getWhatRestoreDestroys(mods: readonly ModByFolder[], statCache: string): Promise<WhatRestoreDestroys | ReadFailed> {
-    return this.read('getWhatRestoreDestroys', (signal) => this.apiClient.POST('/what-restore-destroys', { body: { mods: [...mods], statCache }, signal }),
+    return this.read('getWhatRestoreDestroys', (api, signal) => api.POST('/what-restore-destroys', { body: { mods: [...mods], statCache }, signal }),
       (data) => (data ? { destroys: data.mods, refused: itemRefusals(data.refused), manifests: data.manifests } : NO_ANSWER));
   }
 
   getModStatus(mods: readonly ModByFolder[], statCache: string): Promise<ModStatus[] | ReadFailed> {
-    return this.read('getModStatus', (signal) => this.apiClient.POST('/mod-status', { body: { mods: [...mods], statCache }, signal }),
+    return this.read('getModStatus', (api, signal) => api.POST('/mod-status', { body: { mods: [...mods], statCache }, signal }),
       (data) => (data ?? NO_ANSWER));
   }
 
   selectRows(sql: string): Promise<unknown[] | ReadFailed> {
-    return this.read('selectRows', (signal) => this.apiClient.POST('/records/select', { body: { sql }, signal }),
+    return this.read('selectRows', (api, signal) => api.POST('/records/select', { body: { sql }, signal }),
       (data) => (data ? data.rows : NO_ANSWER));
   }
 
   getComparison(formKey: string, text?: CopyText): Promise<CompareResult | null | ReadFailed> {
     const params = { params: { path: { formKey } } };
-    return this.read(`getComparison(${formKey})`, (signal) => (text
-      ? this.apiClient.POST('/records/{formKey}/compare', { ...params, body: text, signal })
-      : this.apiClient.GET('/records/{formKey}/compare', { ...params, signal })),
+    return this.read(`getComparison(${formKey})`, (api, signal) => (text
+      ? api.POST('/records/{formKey}/compare', { ...params, body: text, signal })
+      : api.GET('/records/{formKey}/compare', { ...params, signal })),
     noBodyFails, { absent: { status: 404, answers: null } });
   }
 
   getRecordsComparison(copies: components['schemas']['RecordCopy'][]): Promise<CompareRecordsAnswer | ReadFailed> {
-    return this.read('getRecordsComparison', (signal) => this.apiClient.POST('/records/compare', { body: { copies }, signal }), noBodyFails);
+    return this.read('getRecordsComparison', (api, signal) => api.POST('/records/compare', { body: { copies }, signal }), noBodyFails);
   }
 
   getReferences(formKey: string): Promise<ReferenceResult[] | ReadFailed> {
-    return this.read(`getReferences(${formKey})`, (signal) => this.apiClient.GET('/records/{formKey}/references', { params: { path: { formKey } }, signal }),
+    return this.read(`getReferences(${formKey})`, (api, signal) => api.GET('/records/{formKey}/references', { params: { path: { formKey } }, signal }),
       (data) => data ?? []);
   }
 
   getReferencesInActiveOrCompiledPlugins(formKey: string): Promise<ReferenceResult[] | ReadFailed> {
     return this.read(`getReferencesInActiveOrCompiledPlugins(${formKey})`,
-      (signal) => this.apiClient.GET('/records/{formKey}/references-in-active-or-compiled-plugins', { params: { path: { formKey } }, signal }),
+      (api, signal) => api.GET('/records/{formKey}/references-in-active-or-compiled-plugins', { params: { path: { formKey } }, signal }),
       (data) => data ?? []);
   }
 
   getRenderedDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<RenderedDocument | null | ReadFailed> {
-    return this.read(`getRenderedDocument(${plugin}, ${formKey})`, (signal) => this.apiClient.GET('/plugins/{plugin}/records/{formKey}/rendered-document', {
+    return this.read(`getRenderedDocument(${plugin}, ${formKey})`, (api, signal) => api.GET('/plugins/{plugin}/records/{formKey}/rendered-document', {
       params: { path: { plugin, formKey }, query: { origin } }, signal,
     }), noBodyFails, { timed: true, absent: { status: 404, answers: null } });
   }
 
   getCopyDocument({ name: plugin, origin }: PluginAddress, formKey: string): Promise<CopyDocument | null | ReadFailed> {
-    return this.read(`getCopyDocument(${plugin}, ${formKey})`, (signal) => this.apiClient.GET('/plugins/{plugin}/records/{formKey}/document', {
+    return this.read(`getCopyDocument(${plugin}, ${formKey})`, (api, signal) => api.GET('/plugins/{plugin}/records/{formKey}/document', {
       params: { path: { plugin, formKey }, query: { origin } }, signal,
     }), noBodyFails, { timed: true, absent: { status: 404, answers: null } });
   }
 
   getRecordOfFile(path: string): Promise<RecordAt | null | ReadFailed> {
-    return this.read(`getRecordOfFile(${path})`, (signal) => this.apiClient.GET('/plugin-source/record', { params: { query: { path } }, signal }),
+    return this.read(`getRecordOfFile(${path})`, (api, signal) => api.GET('/plugin-source/record', { params: { query: { path } }, signal }),
       noBodyFails, { timed: true, absent: { status: 204, answers: null } });
   }
 
@@ -775,36 +786,36 @@ class HttpMEditClient implements MEditClient {
   }
 
   getActiveFilter(): Promise<RecordFilter | null | ReadFailed> {
-    return this.read('getActiveFilter', (signal) => this.apiClient.GET('/load-order/filter', { signal }), noBodyFails,
+    return this.read('getActiveFilter', (api, signal) => api.GET('/load-order/filter', { signal }), noBodyFails,
       { absent: { status: 204, answers: null } });
   }
 
   getWorldspaces({ name: plugin, origin }: PluginAddress): Promise<WorldspaceSummary[] | ReadFailed> {
-    return this.read(`getWorldspaces(${plugin})`, (signal) => this.apiClient.GET('/plugins/{plugin}/worldspaces', {
+    return this.read(`getWorldspaces(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/worldspaces', {
       params: { path: { plugin }, query: { origin } }, signal,
     }), (data) => data ?? [], { timed: true });
   }
 
   getWorldspaceBlocks({ name: plugin, origin }: PluginAddress, worldspaceFormKey: string): Promise<WorldspaceBlocks | ReadFailed> {
-    return this.read(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, (signal) => this.apiClient.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
+    return this.read(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, (api, signal) => api.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
       params: { path: { plugin, formKey: worldspaceFormKey }, query: { origin } }, signal,
     }), (data) => data ?? { topCells: [], blocks: [] }, { timed: true });
   }
 
   getCellChildRecords({ name: plugin, origin }: PluginAddress, cellFormKey: string): Promise<CellChildRecords | ReadFailed> {
-    return this.read(`getCellChildRecords(${plugin}, ${cellFormKey})`, (signal) => this.apiClient.GET('/plugins/{plugin}/cells/{formKey}/children', {
+    return this.read(`getCellChildRecords(${plugin}, ${cellFormKey})`, (api, signal) => api.GET('/plugins/{plugin}/cells/{formKey}/children', {
       params: { path: { plugin, formKey: cellFormKey }, query: { origin } }, signal,
     }), (data) => data ?? { persistent: [], temporary: [] }, { timed: true });
   }
 
   getInteriorCells({ name: plugin, origin }: PluginAddress): Promise<InteriorCellBlock[] | ReadFailed> {
-    return this.read(`getInteriorCells(${plugin})`, (signal) => this.apiClient.GET('/plugins/{plugin}/interior-cells', {
+    return this.read(`getInteriorCells(${plugin})`, (api, signal) => api.GET('/plugins/{plugin}/interior-cells', {
       params: { path: { plugin }, query: { origin } }, signal,
     }), (data) => data ?? [], { timed: true });
   }
 
   getContainerChildren({ name: plugin, origin }: PluginAddress, parentFormKey: string): Promise<ContainerChildSummary[] | ReadFailed> {
-    return this.read(`getContainerChildren(${plugin}, ${parentFormKey})`, (signal) => this.apiClient.GET('/plugins/{plugin}/records/{formKey}/children', {
+    return this.read(`getContainerChildren(${plugin}, ${parentFormKey})`, (api, signal) => api.GET('/plugins/{plugin}/records/{formKey}/children', {
       params: { path: { plugin, formKey: parentFormKey }, query: { origin } }, signal,
     }), (data) => data ?? [], { timed: true });
   }
