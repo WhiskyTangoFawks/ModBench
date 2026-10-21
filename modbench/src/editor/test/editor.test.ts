@@ -548,7 +548,7 @@ describe('a record file\'s tab', () => {
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
   });
 
-  it('shows "Failed to load:" and a line in the Output when mEdit refuses and no load order is on its way', async () => {
+  it('shows "Failed to load:" and adds no Output line of its own when mEdit refuses and no load order is on its way', async () => {
     loadOrder.coming = false;
     const client = fileClient();
     const refusal = { failed: 'no-load-order', refusal: 'No load order has been received.' } as const;
