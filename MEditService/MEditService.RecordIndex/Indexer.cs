@@ -272,15 +272,19 @@ internal sealed class Indexer : IDisposable
                 if (moved) PublishStatus();
             }
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (_disposal.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex) when (!CancelledBy(ex, CancellationToken.None))
         {
             _logger.LogError(ex, "Validating the handed documents failed unexpectedly");
-            lock (_lock)
+            lock (_lock) _validatingHanded = false;
+            try { PublishStatus(); }
+            catch (Exception publishFault) when (!CancelledBy(publishFault, CancellationToken.None))
             {
-                _handOverFailure = ex.Message;
-                _validatingHanded = false;
+                _logger.LogError(publishFault, "Publishing the status after a failed hand-over failed");
             }
-            throw;
         }
     }
 

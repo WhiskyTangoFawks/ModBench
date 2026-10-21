@@ -5,8 +5,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>What a document's text and bytes declare, read as text rather than through the codec. A
-/// file may vanish or lock since a listing named it, so a failed read answers null.</summary>
+/// <summary>What a document's text and bytes declare, read as text rather than through the codec. The
+/// OrNull readers answer null for a file that vanished or locked since a listing named it.</summary>
 internal static class DocumentText
 {
     private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
@@ -14,11 +14,25 @@ internal static class DocumentText
     internal static byte[] StripUtf8Bom(byte[] bytes) =>
         bytes.AsSpan(0, Math.Min(bytes.Length, Utf8Bom.Length)).SequenceEqual(Utf8Bom) ? bytes[Utf8Bom.Length..] : bytes;
 
-    internal static byte[]? BytesOrNull(ISourceFiles files, string path)
+    /// <summary>The file's bytes: null when it is gone, and the file system's exception when it is there
+    /// and cannot be read.</summary>
+    internal static byte[]? BytesIfPresent(ISourceFiles files, string path)
     {
         try
         {
             return files.FileExists(path) ? StripUtf8Bom(files.ReadAllBytes(path)) : null;
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    internal static byte[]? BytesOrNull(ISourceFiles files, string path)
+    {
+        try
+        {
+            return BytesIfPresent(files, path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
