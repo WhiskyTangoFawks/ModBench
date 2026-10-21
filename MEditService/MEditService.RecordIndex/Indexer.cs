@@ -395,10 +395,8 @@ internal sealed class Indexer : IDisposable
         get { lock (_lock) return _arrivalReconciled; }
     }
 
-    // A superseded reconcile throws OperationCanceledException, leaving its work for its
-    // successor; a second window's hold is answered in the status. False when the arrival
-    // resolved to none. The closing swap and its publish share one hold of _lock, so a reader cannot
-    // see the version before the status answering it is out.
+    // A superseded reconcile throws, leaving its work to its successor. The closing swap and its publish
+    // share one hold of _lock, so no reader sees a version before the status answering it.
     private bool ReconcileOrRefuse(
         Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long arrivals, out bool refused)
     {
