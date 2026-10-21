@@ -88,6 +88,13 @@ function createSendSlot(wire: LoadOrderWire) {
   };
 }
 
+/** A restarted mEdit holds only what was resent, so every view hears the resend as the change it is. */
+export function announceResends(sender: Pick<LoadOrderSender, 'onResent'>, notifications: { announceChanged(snapshot: LoadOrderSnapshot): void }): void {
+  sender.onResent((snapshot, outcome) => {
+    if (outcome.outcome === 'applied') notifications.announceChanged(snapshot);
+  });
+}
+
 function listeners<A extends unknown[]>() {
   const held = new Set<(...args: A) => void>();
   return {
@@ -104,6 +111,7 @@ function listeners<A extends unknown[]>() {
 export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
   const slot = createSendSlot(wire);
   let newestHanded: LoadOrderSnapshot | undefined;
+  let reopenUnannounced = false;
   const resent = listeners<[LoadOrderSnapshot, LoadOrderOutcome]>();
   const launches = listeners<[Promise<LaunchOutcome>]>();
   const exits = listeners<[]>();
@@ -119,13 +127,21 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     if (launcher.stopped()) return Promise.resolve(ABANDONED);
     if (isMEditGone(wire.status()) && !launcher.launching()) return Promise.resolve(BACKEND_FAILED);
     newestHanded = snapshot;
-    return slot.hold(snapshot);
+    const sent = slot.hold(snapshot);
+    void sent.then((outcome) => {
+      if (!reopenUnannounced || outcome.outcome === 'abandoned' || snapshot !== newestHanded) return;
+      reopenUnannounced = false;
+      resent.fire(snapshot, outcome);
+    });
+    return sent;
   };
 
+  // The newest snapshot to apply after a reopen is the resend, whether it is the one handed again
+  // or one that was already waiting.
   const resend = (): void => {
-    const snapshot = newestHanded;
-    if (!snapshot || slot.holdsOne()) return;
-    void hand(snapshot).then((outcome) => { resent.fire(snapshot, outcome); });
+    if (!newestHanded) return;
+    reopenUnannounced = true;
+    if (!slot.holdsOne()) void hand(newestHanded);
   };
 
   // A send in flight when mEdit goes answers abandoned, never a killed backend as a network failure.
@@ -150,6 +166,7 @@ export function createLoadOrderSender(wire: LoadOrderWire): LoadOrderSender {
     async stop() {
       launcher.stop();
       newestHanded = undefined;
+      reopenUnannounced = false;
       slot.abortInFlight();
       slot.drop(ABANDONED);
       await wire.stop();
