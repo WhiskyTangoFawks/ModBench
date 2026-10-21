@@ -396,36 +396,28 @@ public sealed class ReconcileDoorTests
         }
     }
 
-    private sealed class ValidationCounting() : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        private int _validated;
-
-        public int Validated => Volatile.Read(ref _validated);
-
-        public override bool Exists(string pluginPath)
-        {
-            Interlocked.Increment(ref _validated);
-            return base.Exists(pluginPath);
-        }
-    }
-
     [Fact]
     public async Task ArrivalsDuringAReconcile_AreReconciledOnceAfterIt()
     {
         using var data = new PluginFixtureBuilder("coalesced-door").WithPlugin("A.esp").Build();
-        var validations = new ValidationCounting();
+        var log = new List<LogEntry>();
+        using var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(log)));
+        int Reconciles()
+        {
+            lock (log) return log.Count(e => e.Message.StartsWith("Reconciling load order", StringComparison.Ordinal));
+        }
         var holder = new LoadOrderHolder();
-        using var gate = new GatedPluginAdapter(gateBefore: "A.esp", inner: validations);
-        using var index = Indexes.Open(holder, gate);
+        using var gate = new GatedPluginAdapter(gateBefore: "A.esp");
+        using var index = Indexes.Open(holder, gate, loggerFactory: loggerFactory);
         holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
         await gate.WaitUntilParkedAsync();
 
         for (var i = 0; i < 5; i++) holder.Apply(holder.Current);
         gate.Release();
-        Waits.Reached(() => validations.Validated > 0 && index.Status.State == LoadOrderState.Ready, "the reconcile after the arrivals");
+        Waits.Reached(() => Reconciles() >= 2 && index.Status.State == LoadOrderState.Ready, "the reconcile after the arrivals");
         await Task.Delay(TimeSpan.FromMilliseconds(500));
 
-        Assert.Equal(1, validations.Validated);
+        Assert.Equal(2, Reconciles());
     }
 
     [Fact]

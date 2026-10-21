@@ -214,7 +214,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     }
 
     [Fact]
-    public async Task AHandOverWhoseStatusPublishIsCancelledOutsideDisposal_LeavesTheNextHandOverValidated()
+    public async Task AHandOverArrivingWhileAStatusPublishes_IsAcceptedAtOnce_AndValidatedThoughThatPublishIsCancelledOutsideDisposal()
     {
         using var failedPublishing = new ManualResetEventSlim();
         using var secondHandedOver = new ManualResetEventSlim();

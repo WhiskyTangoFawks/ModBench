@@ -128,8 +128,6 @@ internal sealed class Indexer : IDisposable
     // reconcile must make progress.
     private readonly CancellationTokenSource _disposal = new();
 
-    // One worker keeps the index current, one turn at a time: a reconcile when one was asked for, else
-    // the paths handed. Asks made during a turn coalesce into the next.
     private bool _reconcileAsked;
     private readonly List<string> _handed = [];
     private bool _working;
