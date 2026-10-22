@@ -1,3 +1,4 @@
+using MEditService.RecordIndex.Store;
 using Mutagen.Bethesda;
 
 namespace MEditService.RecordIndex;

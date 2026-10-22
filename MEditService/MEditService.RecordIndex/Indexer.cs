@@ -113,10 +113,6 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    // A detached index whose reads outlived the drain: it stays open, so a retry drains it again
-    // before any store is opened on its path.
-    private OpenScope? _undrained;
-
     // Two mechanisms, because one is not enough: the token asks the reconcile loop to stop, the
     // exclusive lock waits until it has. Cancelling without draining would let a teardown dispose
     // the store connection mid-write, a native crash.
@@ -544,12 +540,8 @@ internal sealed class Indexer : IDisposable
             _scope = null;
         }
         if (current is null) return null;
-        if (!current.Store.EndReads())
-        {
-            lock (_lock) _undrained = current;
+        if (!_storeFactory.Close(current.Store))
             return IndexWriteGate.NotDrained("It was not reopened", "It is retried with the next load order.");
-        }
-        current.Store.Dispose();
 
         var snapshot = current.LoadOrder;
         var held = current.Held;
@@ -604,19 +596,13 @@ internal sealed class Indexer : IDisposable
                 _scope = current with { LoadOrder = snapshot };
                 return _scope;
             }
-            leaving = DetachCurrent() ?? _undrained;
-            _undrained = null;
+            leaving = DetachCurrent();
             _filter.DropWhenOutside(snapshot);
         }
-        if (leaving is not null)
+        if (!_storeFactory.Close(leaving?.Store, snapshot.InstanceRoot))
         {
-            if (SharesFile(leaving, snapshot) && !leaving.Store.EndReads())
-            {
-                lock (_lock) _undrained = leaving;
-                failure = IndexWriteGate.NotDrained("mEdit's record index was not reopened", "It is retried with the next load order.");
-                return null;
-            }
-            leaving.Store.Dispose();
+            failure = IndexWriteGate.NotDrained("mEdit's record index was not reopened", "It is retried with the next load order.");
+            return null;
         }
 
         _logger.LogDebug("Initializing record index");
@@ -657,11 +643,6 @@ internal sealed class Indexer : IDisposable
         PublishStatus();
         return scope;
     }
-
-    // A different file has its own store instance, so a stuck read on the old one cannot reach the new.
-    private static bool SharesFile(OpenScope leaving, LoadOrderSnapshot snapshot) =>
-        leaving.Held.InstanceRoot is { } from && snapshot.InstanceRoot is { } to
-        && string.Equals(IndexFile.For(from), IndexFile.For(to), StringComparison.OrdinalIgnoreCase);
 
     // The diff is computed first and without side effects, so a snapshot that moves nothing writes nothing and publishes no status.
 
@@ -1248,8 +1229,7 @@ internal sealed class Indexer : IDisposable
 
     private void OnArrived(LoadOrderSnapshot snapshot, long version) => AskReconcile();
 
-    // False when a read outlived Store.EndReads: that index stays open, so nothing opens a store on
-    // its file.
+    // False when a read outlived the drain: the store stays open, and no store opens beside it.
     private bool Close()
     {
         // Cancels an in-flight reconcile and waits for it to stop *before* disposing anything,
@@ -1260,14 +1240,8 @@ internal sealed class Indexer : IDisposable
         try
         {
             OpenScope? closing;
-            lock (_lock)
-            {
-                closing = DetachCurrent() ?? _undrained;
-                _undrained = null;
-            }
-            readsEnded = closing?.Store.EndReads() ?? true;
-            if (readsEnded) closing?.Store.Dispose();
-            else lock (_lock) _undrained = closing;
+            lock (_lock) closing = DetachCurrent();
+            readsEnded = _storeFactory.Close(closing?.Store);
         }
         finally { ExitExclusive(); }
 
@@ -1307,7 +1281,7 @@ internal sealed class Indexer : IDisposable
                 _reconcileCancellation = null;
             }
             closing?.Store.Dispose();
-            _undrained?.Store.Dispose();
+            _storeFactory.Dispose();
         }
         finally { ExitExclusive(); }
         _disposal.Dispose();
