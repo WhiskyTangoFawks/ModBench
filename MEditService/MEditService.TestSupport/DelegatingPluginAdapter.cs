@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.PluginAdapter.Repair;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -35,6 +36,17 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
     public virtual void KeepHashesOf(IReadOnlySet<string> pluginPaths) => inner.KeepHashesOf(pluginPaths);
 
     public virtual Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => inner.ClaimOf(pluginPath, gameRelease);
+
+    public virtual Answer<RepairPreviews, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease) =>
+        inner.RepairsOf(pluginPath, gameRelease);
+
+    public virtual Answer<string, PluginFailure> WriteRepaired(
+        string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string destinationPath, GameRelease gameRelease) =>
+        inner.WriteRepaired(pluginPath, previewedHash, chosen, destinationPath, gameRelease);
+
+    public virtual Answer<string, PluginFailure> VerifyRepaired(
+        string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string repairedPath, GameRelease gameRelease) =>
+        inner.VerifyRepaired(pluginPath, previewedHash, chosen, repairedPath, gameRelease);
 
     public virtual Answer<IReadOnlyList<string>, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         inner.StringsPlacesOf(modPath, loadOrder, strings);
