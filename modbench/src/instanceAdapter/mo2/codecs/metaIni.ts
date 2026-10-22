@@ -17,6 +17,7 @@ export interface InstalledFileId {
 /** What meta.ini says, `[installedFiles]` as its pairs. */
 export interface MetaIni extends Omit<ModMeta, 'installedFileKeys' | 'updateAvailable'> {
   newestVersion?: string;
+  nexusFileStatus?: number;
   installedFiles?: readonly InstalledFileId[];
 }
 
@@ -32,6 +33,7 @@ const OWNED_GENERAL_KEYS = [
   ['gameName', 'gameName'],
   ['nexusId', 'modid'],
   ['version', 'version'],
+  ['newestVersion', 'newestVersion'],
   ['installationFileName', 'installationFile'],
 ] as const;
 
@@ -63,6 +65,9 @@ function parseInstalledFiles(text: string): InstalledFileId[] | undefined {
     .map(([, { modid, fileid }]) => ({ nexusId: modid ?? '', fileId: fileid ?? '' }));
 }
 
+const nexusFileStatusOf = (text: string | undefined): number | undefined =>
+  (text !== undefined && Number.isInteger(Number(text)) ? Number(text) : undefined);
+
 export function parseMetaIni(text: string): MetaIni {
   const general = readIniSection(text, GENERAL_SECTION);
   const present = (key: string): string | undefined => general.get(key) || undefined; // blank == absent
@@ -71,6 +76,7 @@ export function parseMetaIni(text: string): MetaIni {
     gameName: present('gameName'),
     version: present('version'),
     newestVersion: present('newestVersion'),
+    nexusFileStatus: nexusFileStatusOf(present('nexusFileStatus')),
     nexusId: modid && modid !== '0' && modid !== '-1' ? modid : undefined,
     installationFileName: present('installationFile'),
     installedFiles: parseInstalledFiles(text),
@@ -86,7 +92,7 @@ function installedFileOfKey(key: string): InstalledFileId {
 }
 
 /** What meta.ini says of a mod, in the words every mod manager shares. */
-export const modMetaOf = ({ installedFiles, newestVersion, ...rest }: MetaIni): ModMeta =>
+export const modMetaOf = ({ installedFiles, newestVersion, nexusFileStatus: _status, ...rest }: MetaIni): ModMeta =>
   ({ ...rest, installedFileKeys: installedFiles?.map(installedFileKey), updateAvailable: isUpdateAvailable(rest.version, newestVersion) });
 
 /** The meta.ini a mod's meta says. */

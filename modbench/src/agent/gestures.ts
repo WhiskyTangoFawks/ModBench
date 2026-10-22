@@ -131,18 +131,18 @@ const INSTALL = gestureInput(
 
 const GIT_INIT = gestureInput('', z.object({}), () => new AgentCall([], {}));
 
-const MANIFEST_MODS_TAKES = 'argument?: the mods or separators, each { name, kind? } as list_mods names it, or none for every mod';
-const MANIFEST_MODS = z.object({ argument: z.array(ENTRY_NAME).optional() });
+const EVERY_MOD_BY_DEFAULT_TAKES = 'argument?: the mods or separators, each { name, kind? } as list_mods names it, or none for every mod';
+const EVERY_MOD_BY_DEFAULT = z.object({ argument: z.array(ENTRY_NAME).optional() });
 
-const UPDATE_MANIFEST = gestureInput(
-  MANIFEST_MODS_TAKES,
-  MANIFEST_MODS,
+const MODS_OR_EVERY_MOD = gestureInput(
+  EVERY_MOD_BY_DEFAULT_TAKES,
+  EVERY_MOD_BY_DEFAULT,
   (value, { argument }) => new AgentCall(entryArguments(value, argument ?? []), {}),
 );
 
 const RESTORE_FROM_MANIFEST = gestureInput(
-  `${MANIFEST_MODS_TAKES}; options: { force?: true to overwrite a file whose bytes differ from its manifest, or the version or installation files in its metadata, each otherwise refused for that mod, listing what it would overwrite }`,
-  MANIFEST_MODS.extend({ options: z.object({ force: z.boolean().optional() }).optional() }),
+  `${EVERY_MOD_BY_DEFAULT_TAKES}; options: { force?: true to overwrite a file whose bytes differ from its manifest, or the version or installation files in its metadata, each otherwise refused for that mod, listing what it would overwrite }`,
+  EVERY_MOD_BY_DEFAULT.extend({ options: z.object({ force: z.boolean().optional() }).optional() }),
   (value, { argument, options }) => new AgentCall(entryArguments(value, argument ?? []), { force: options?.force }),
 );
 
@@ -236,7 +236,8 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.plugin.rename', RENAME_PLUGIN],
   ['modbench.record.open', OPEN_RECORD],
   ['modbench.modlist.gitInit', GIT_INIT],
-  ['modbench.mod.updateManifest', UPDATE_MANIFEST],
+  ['modbench.mod.updateManifest', MODS_OR_EVERY_MOD],
+  ['modbench.mod.checkForUpdates', MODS_OR_EVERY_MOD],
   ['modbench.mod.restoreFromManifest', RESTORE_FROM_MANIFEST],
 ]);
 

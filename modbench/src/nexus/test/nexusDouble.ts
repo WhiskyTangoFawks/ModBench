@@ -17,7 +17,7 @@ export function memorySecrets(): SecretStore & { held: Map<string, string> } {
 export interface Sent { url: string; headers: Headers }
 
 /** The real Nexus box over a memory secret store and a network that answers as told. */
-export function nexusAnswering(answer: (key: string) => Response | Error): { nexus: Nexus; sent: Sent[]; secrets: ReturnType<typeof memorySecrets> } {
+export function nexusAnswering(answer: (key: string, url: string) => Response | Error): { nexus: Nexus; sent: Sent[]; secrets: ReturnType<typeof memorySecrets> } {
   const sent: Sent[] = [];
   const secrets = memorySecrets();
   const nexus = createNexus({
@@ -25,7 +25,7 @@ export function nexusAnswering(answer: (key: string) => Response | Error): { nex
     applicationVersion: '1.2.3',
     fetch: (url, init) => {
       sent.push({ url, headers: new Headers(init.headers) });
-      const result = answer(init.headers.apikey ?? '');
+      const result = answer(init.headers.apikey ?? '', url);
       return result instanceof Error ? Promise.reject(result) : Promise.resolve(result);
     },
   });

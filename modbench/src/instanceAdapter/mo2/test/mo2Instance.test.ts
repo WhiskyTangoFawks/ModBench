@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../../ports/trash';
 import { ignoreSkippedLink } from '../../files';
 import {
-  access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, writeFile,
+  access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, utimes, writeFile,
 } from 'node:fs/promises';
 import type { PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../../test/mo2/fakeVscodeWatcher';
@@ -1862,6 +1862,74 @@ describe('the MO2 Instance adapter', () => {
           await adapter.writeModMetadata('Brand New', written);
 
           expect(await adapter.modMetadata('Brand New')).toEqual(read(written));
+        });
+      });
+
+      describe('its place on Nexus and its newest version', () => {
+        const PATCH = 'Unofficial Fallout 4 Patch';
+        const metaOf = (mod: string): string => join(root, 'mods', mod, 'meta.ini');
+        const holding = async (text: string): Promise<string> => {
+          await writeFile(metaOf(PATCH), text);
+          return text;
+        };
+        const general = (keys: string): string => `[General]\r\n${keys}comments=mine\r\n`;
+
+        it('names the mod, the file installed and the installation file, on the Nexus domain of the mod\'s game', async () => {
+          await holding(`${general(`gameName=SkyrimSE\r\nmodid=4598\r\nnexusFileStatus=3\r\ninstallationFile=${DOWNLOADED_FILE}\r\n`)}\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
+
+          expect(await adapter.nexusFile(PATCH)).toEqual({ kind: 'read', answer: { game: 'skyrimspecialedition', modId: '4598', fileId: '77', fileName: DOWNLOADED_FILE, fileStatus: 3 } });
+        });
+
+        it('names no file ID for a mod no file is recorded for', async () => {
+          await holding(general('gameName=Fallout4\r\nmodid=4598\r\n'));
+
+          expect(await adapter.nexusFile(PATCH)).toEqual({ kind: 'read', answer: { game: 'fallout4', modId: '4598', fileId: undefined, fileName: undefined, fileStatus: undefined } });
+        });
+
+        it('answers none for a mod with no Nexus mod ID', async () => {
+          await holding(general('gameName=Fallout4\r\n'));
+
+          expect(await adapter.nexusFile(PATCH)).toEqual({ kind: 'read', answer: undefined });
+        });
+
+        it('answers unreadable, naming the game, when Nexus has no domain for the mod\'s game', async () => {
+          await holding(general('gameName=Nowhere\r\nmodid=4598\r\n'));
+
+          expect(await adapter.nexusFile(PATCH)).toEqual({ kind: 'unreadable', reason: expect.stringContaining('Nowhere') as unknown });
+        });
+
+        it('writes the newest version where MO2 reads it, keeping every other key, and says an update is available', async () => {
+          await holding(general('gameName=Fallout4\r\nmodid=4598\r\nversion=2.1.5.0\r\n'));
+
+          const outcome = await adapter.writeNewestVersion(PATCH, '3.0');
+
+          expect(outcome).toEqual({ updateAvailable: true });
+          expect(await readFile(metaOf(PATCH), 'utf8')).toBe('[General]\r\nnewestVersion=3.0\r\ngameName=Fallout4\r\nmodid=4598\r\nversion=2.1.5.0\r\ncomments=mine\r\n');
+        });
+
+        it('says no update is available when the mod holds the newest version', async () => {
+          await holding(general('gameName=Fallout4\r\nmodid=4598\r\nversion=3.0\r\n'));
+
+          expect(await adapter.writeNewestVersion(PATCH, '3.0')).toEqual({ updateAvailable: false });
+        });
+
+        it('replaces the newest version it holds', async () => {
+          await holding(general('gameName=Fallout4\r\nversion=1.0\r\nnewestVersion=2.0\r\n'));
+
+          await adapter.writeNewestVersion(PATCH, '3.0');
+
+          expect(await readFile(metaOf(PATCH), 'utf8')).toBe(general('gameName=Fallout4\r\nversion=1.0\r\nnewestVersion=3.0\r\n'));
+        });
+
+        it('leaves metadata byte for byte when it already says the newest version', async () => {
+          const held = await holding(general('gameName=Fallout4\r\nversion=1.0\r\nnewestVersion=3.0\r\n'));
+          const longAgo = new Date(2001, 1, 1);
+          await utimes(metaOf(PATCH), longAgo, longAgo);
+
+          await adapter.writeNewestVersion(PATCH, '3.0');
+
+          expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
+          expect((await stat(metaOf(PATCH))).mtime).toEqual(longAgo);
         });
       });
 
