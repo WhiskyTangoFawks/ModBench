@@ -55,6 +55,7 @@ As a user, I want:
 2. My agent's request for a gesture to end when the read model shows the gesture, so my agent's next read sees its change. Cites: commands.md, Principles, A gesture that writes ends when the read model shows it; ADR-0015
 3. My agent never to refresh the instance. Refresh is my safety net, not how changes arrive. Cites: catalog, Instance, `refresh`
 4. Each gesture my agent runs to be a tool of its own, named for the gesture, whose input says the JSON type of its Argument and Options. Cites: VS Code's interaction
+5. My agent never to log in or log out. My Nexus API key is mine.
 
 ## Reporting
 

@@ -13,10 +13,10 @@ What MO2 does: [the surface audit](../research/mo2-surface-audit.md).
 | An ADR decides it | A watcher feeds the read model, so a list needs no refresh gesture ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)). Modbench never assumes it owns a file, so it never deletes one silently ([ADR-0003](../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)). A mod folder has one package, so an install never merges into a mod ([ADR-0023](../adr/0023-a-mod-folder-has-only-one-package.md)). | 3 | Delete orphaned .meta files on refresh, without asking; Refresh the list |
 | Platform | MO2 runs programs through a virtual file system. Modbench has no virtual file system. | 1 | Conflicts tab: preview, execute with the virtual file system |
 | Scripts, tasks or the agent | The gesture runs an external tool or exports data. A task or the agent does the same job. | 1 | Export to CSV |
-| Metadata chrome | The feature annotates or organizes a mod list inside MO2's UI. Separators already organize the list, and nothing in Modbench consumes the rest. | 16 | Endorse, un-endorse or decline to endorse; Start or stop tracking on Nexus; Change categories |
+| Metadata chrome | The feature annotates or organizes a mod list inside MO2's UI. Separators already organize the list, and nothing in Modbench consumes the rest. | 15 | Endorse, un-endorse or decline to endorse; Start or stop tracking on Nexus; Change categories |
 | Backups belong to git | Git tracks the history of a mod, the mod list and the plugin list. A backup is a git action. | 5 | Back up or restore the mod list; Back up or restore the plugin lists; Create a backup of a mod |
 | Dead in MO2 | MO2 has it by accident, or it has no working effect there. | 1 | Enable or disable a separator with Space (effect inferred) |
-| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 5 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) |
+| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 6 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) |
 
 ## Divergences
 
@@ -25,16 +25,16 @@ Gestures Modbench does differently.
 | # | Where | Modbench | MO2 | Why |
 |---|---|---|---|---|
 | 1 | The top bar | The Toolbox, the container's first view: a small readout of the instance value, Game and Profile, with the workspace actions in its title bar ([toolbox.md](../architecture/surfaces/toolbox.md)) | MO2's top bar | Limitation: VS Code has no container-title contribution point. |
-| 2 | Downloads | Starts collapsed. The status-bar item for the ambient glance waits for Nexus integration and the `nxm://` handler ([downloads.md](../architecture/surfaces/downloads.md)). | A tab, always visible | Ruling: Downloads is occasional, unlike Mods and Plugins. |
+| 2 | Downloads | Starts collapsed. The status-bar item for the ambient glance waits for the `nxm://` handler ([downloads.md](../architecture/surfaces/downloads.md)). | A tab, always visible | Ruling: Downloads is occasional, unlike Mods and Plugins. |
 | 3 | Archives | No Archives view. | An Archives tab | Ruling. |
 | 5 | Downloads rows | Excluded rows, when shown, are dimmed | Hidden rows look like the rest | Ruling: show excluded mixes them into the list, and the dim is the only way to tell them apart. |
 | 6 | Downloads order | Newest file first | By status, newest first within each | Ruling: the file just downloaded is the one wanted next. |
-| 7 | Downloads selection | Several rows selected at once; delete, exclude and include act on the whole selection | One row at a time, plus bulk items: hide or delete all, installed or uninstalled, and query info for every incomplete file | Ruling: selecting several is VS Code's native way to act on many. |
+| 7 | Downloads selection | Several rows selected at once; delete, exclude, include and query info act on the whole selection | One row at a time, plus bulk items: hide or delete all, installed or uninstalled, and query info for every incomplete file | Ruling: selecting several is VS Code's native way to act on many. |
 | 8 | Drag indicator | VS Code's tree indicator: onto a row, or between rows | An insertion line | Limitation: a tree view cannot style it. |
 | 9 | Conflicts | One table: a row for each file the mod shares, a column for each mod with a copy, coloured as the record panel colours a record order conflict ([mods-conflicts.md](../architecture/surfaces/mods-conflicts.md)) | The Information dialog's Conflicts tab: lists of winning, losing and non-conflicting files, and an Advanced list of each file's other mods | Ruling: every copy of a file in one view, read the same way as a record. |
 | 10 | Data tab | The Mods tree: each mod opens into its files, and the name filter finds a file at every level ([mods.md](../architecture/surfaces/mods.md)) | The Data tab (not audited): the game's Data folder as one merged tree, each path once | Ruling: one tree shows each mod's files; a second tree of the same files is not offered. |
 | 11 | Restore hidden files | Select the excluded files in the Mods tree, then include | Restore hidden files, on the mod | Ruling: select all, then include, as for every all variant (commands.md, Principles). |
-| 12 | Conflicts and Flags columns | A badge at the mod row's right edge and a colour on its name, each switched in settings, most off by default. A mod that wins and loses carries two badges. Contains excluded files stands for Contains hidden files ([mods.md](../architecture/surfaces/mods.md), Indicators) | Icons in the Conflicts and Flags columns, all shown, with Mixed as one icon of its own | Limitation: a tree view has no columns. Ruling: winning is the ordinary case. In Modbench, hide acts on the view alone (commands.md), so a renamed file is excluded. |
+| 12 | Conflicts and Flags columns | A badge at the mod row's right edge and a colour on its name, each switched in settings, most off by default. A mod that wins and loses carries two badges. Contains excluded files stands for Contains hidden files, and Update available for the Version column in bold ([mods.md](../architecture/surfaces/mods.md), Indicators) | Icons in the Conflicts and Flags columns, all shown, with Mixed as one icon of its own; a newer version on Nexus as the Version column in bold | Limitation: a tree view has no columns. Ruling: winning is the ordinary case. In Modbench, hide acts on the view alone (commands.md), so a renamed file is excluded. |
 | 13 | Information dialog | No dialog. A mod's files are in the Mods tree, its conflicts in the conflict table, and its Nexus page opens from view on Nexus. A text, INI or image file opens in a VS Code tab. Exclude file keeps a plugin from the game. | One dialog with tabs: Text Files, INI Files, Images, Optional Plugins, Conflicts, Categories, Nexus Info, Notes, Filetree | Ruling: each tab's job has a home of its own. Categories and Notes are Metadata chrome. |
 
 ## Omissions by object
@@ -98,7 +98,7 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Auto-assign categories | Mod list: All Mods menu | Metadata chrome |
 | Select or reset mod color | Mod list: Select Color..., Reset Color | Metadata chrome |
 | Change versioning scheme | Mod list | Metadata chrome |
-| Ignore or un-ignore an update | Mod list: Ignore update | Metadata chrome |
+| Ignore or un-ignore an update (the badge shows every newer version) | Mod list: Ignore update | Maintainer ruling |
 | Ignore missing data | Mod list | Metadata chrome |
 | Mark as converted or working | Mod list | Metadata chrome |
 | Visit the uploader's profile | Mod list | Metadata chrome |

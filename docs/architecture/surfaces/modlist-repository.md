@@ -87,12 +87,13 @@ As a user, I want:
 1. Each mod's folder to become what its manifest says: every file whose bytes differ written, and every file no line names sent to the trash. A file whose bytes already match is left alone, so a restore after a checkout costs only what the checkout changed. Cites: ADR-0022
 2. One confirmation, only when the restore destroys something: a file whose bytes differ from the manifest's, a file no line names, or metadata whose version or installation file's page on its host differs from the manifest's. It names the mods, or says every mod, and says that a change no manifest holds is lost. A restore after a fresh clone asks nothing. Cites: Confirm what destroys
 3. A source mod with a remote rebuilt from its submodule at the commit the repository pins, and the submodule cloned when it is absent. When the branch the submodule follows is at that commit, restore checks out the branch, so I land on a branch. One at another commit is skipped and named with the commit, because Modbench never moves my repository. Cites: ADR-0023; ADR-0003
-4. A mod skipped, and named with what it lacks, when its installation file or a game file its manifest names is missing or has other bytes, or when its package does not hold a file or has no host. Every other mod lands. Nothing is downloaded. Cites: A selection is one gesture, and each item lands on its own
+4. A mod skipped, and named with what it lacks, when its installation file or a game file its manifest names is missing or has other bytes, or when its package does not hold a file or has no host. An installation file story 10 downloads is not missing. Every other mod lands. Cites: A selection is one gesture, and each item lands on its own
 5. A file the build makes, a compiled plugin or a packed archive, to come back as the build makes it, which can differ in bytes. Only what comes from the installation file or the game folder is byte-checked. Cites: ADR-0006
 6. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. This is an exception to A failed gesture writes nothing. Cites: mods.md, What install does, story 5
 7. A mod folder with no manifest left as it is and named in the report, because it can be a mod I have not recorded yet. Uninstall removes it. Cites: Never silently wrong
 8. Restore to find each mod's files from its manifest alone, never from the mod's metadata, so a clone restores under a mod manager whose metadata git does not hold. Restore finds the installation file the manifest names by its name in the downloads folder. Cites: Orthogonality; ADR-0022
 9. Restore to write each mod's metadata from its manifest, and to keep what the metadata holds that the manifest does not. Notes, colour and category stay on the machine that set them: they are Metadata chrome. Cites: Never break the instance for its owner; commands.md, Metadata chrome
+10. An installation file the downloads folder lacks, whose page on Nexus the manifest names, downloaded from Nexus while I am logged in, checked against the manifest's size and hash, and its metadata written as MO2 writes it. A clone then restores with no file fetched by hand. Cites: Wabbajack's installer; Minimal by default
 
 ## Menus and keys
 
@@ -118,11 +119,10 @@ What I expect to need and choose not to build yet, each with why.
 
 1. Deltas: a file whose bytes differ from its installation file's copy recorded as a binary diff from that copy, so the modlist rebuilds a mod I changed. ADR-0022 ships a change as a patch instead. The one job only a delta does is an official master cleaned with xEdit, rebuilt from the game's own file.
 2. A hash on every file's line. With no deltas, the installation file's hash and the path fix a file's bytes.
-3. Fetching an installation file by its hash from a remote, git or Nexus. Restore from manifest names what it lacks, and I fetch it.
-4. Update manifest run by the gestures that change a mod: install, upgrade and uninstall. Minimal by default: I chain the gestures, then commit.
-5. Which side changed: a mark of the manifest each folder was last restored from, so a mod reads as changed by a checkout or by me, and a checkout restores in one click. I know whether I pulled or edited.
-6. A gesture that validates the modlist and writes nothing, for a CI job. Update manifest's report is the validation.
-7. An archive built in a mod from its installation file's files, each entry with a line of its own naming its path in the installation file, so a change to one entry is one line in a diff.
+3. Fetching an installation file from a host other than Nexus. Restore from manifest names what it lacks, and I fetch it.
+4. Which side changed: a mark of the manifest each folder was last restored from, so a mod reads as changed by a checkout or by me, and a checkout restores in one click. I know whether I pulled or edited.
+5. A gesture that validates the modlist and writes nothing, for a CI job. Update manifest's report is the validation.
+6. An archive built in a mod from its installation file's files, each entry with a line of its own naming its path in the installation file, so a change to one entry is one line in a diff.
 
 ## Test seam
 
