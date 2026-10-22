@@ -151,7 +151,7 @@ export interface DownloadedFile {
   readonly excluded: boolean;
   readonly meta: DownloadedFileMeta | undefined;
   /** The Nexus mod ID the file's name carries, which install takes when the metadata has none. */
-  readonly modIDFromName: string | undefined;
+  readonly modIDFromName?: string;
 }
 
 /** The downloaded files, or why their folder could not be resolved. `files` is undefined when the
