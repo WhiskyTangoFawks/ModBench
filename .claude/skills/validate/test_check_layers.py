@@ -102,6 +102,7 @@ modbench_repositories: "MODBENCH · Repositories" {
   instanceadapter: "Instance adapter" {class: repositories}
   client: "mEdit client" {class: repositories}
   deployment: "deployment" {class: repositories}
+  nexus: "Nexus" {class: repositories}
 }
 medit_data: "MEDIT · Systems of record" {
   class: band; grid-rows: 1
@@ -110,6 +111,7 @@ medit_data: "MEDIT · Systems of record" {
 modbench_data: "MODBENCH · Systems of record" {
   class: band; grid-rows: 1
   instance: "Instance" {class: sor}
+  nexus: "Nexus the site" {class: other}
 }
 """
 
@@ -179,6 +181,12 @@ class ModbenchProjectReferencesAgainstLayers(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = fixture(pathlib.Path(tmp))
             tsconfig(root, 'mods', ['drivingLib'])
+            self.assertEqual(cl.run(root), [])
+
+    def test_a_folder_named_for_a_module_box_is_not_taken_for_a_system_of_record_of_the_same_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = fixture(pathlib.Path(tmp))
+            tsconfig(root, 'mods', ['nexus'])
             self.assertEqual(cl.run(root), [])
 
     def test_the_composition_root_is_the_activation_box(self):

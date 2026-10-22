@@ -20,6 +20,7 @@
     { "path": "./sourceCommands" },
     { "path": "./downloadedFileCommands" },
     { "path": "./client" },
+    { "path": "./nexus" },
     { "path": "./drivingLib" },
     { "path": "./textDocuments" },
     { "path": "./toolbox" },

@@ -1,4 +1,5 @@
 export const FOLDER_KEY = 'modbench.folder';
+export const LOGGED_IN_KEY = 'modbench.nexus.loggedIn';
 export const INSTANCE_READ_KEY = 'modbench.instanceRead';
 export const ANY_SOURCE_MOD_KEY = 'modbench.mod.anySource';
 export const HAS_REPOSITORY_KEY = 'modbench.modlist.hasRepository';

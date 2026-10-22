@@ -126,8 +126,8 @@ def reaches_its_bands_lib(src_id: str, dst_id: str):
 
 
 def load_boxes(zoom_out: Path):
-    """Every box the zoom-out draws, a part of a box included, and each band's lib, which it
-    does not draw, by column and name:
+    """Every box the zoom-out draws, the first of a repeated id, a part of a box included, and
+    each band's lib, by column and name:
     {'medit': {'recordindex': 'medit_readmodel.recordindex', 'queries': 'medit_readmodel.recordindex.queries'}}."""
     boxes = {}
     column, path = None, []
@@ -141,6 +141,9 @@ def load_boxes(zoom_out: Path):
         if m and column:
             depth = len(m.group('indent')) // 2
             path = path[:depth] + [m.group('id')]
+            # A system of record is no project: it never takes a module box's id.
+            if path[0].endswith('_data') and m.group('id') in boxes[column]:
+                continue
             boxes.setdefault(column, {})[m.group('id')] = '.'.join(path)
     return boxes
 
