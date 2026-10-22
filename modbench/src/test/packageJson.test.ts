@@ -336,15 +336,20 @@ describe('package.json Toolbox view', () => {
     expect(present(sidebarViews()[0], 'the first view of the Modbench container').id).toBe('modbench.toolbox');
   });
 
-  it('has refresh as its one title icon and open settings in its title bar\'s overflow', () => {
-    const toolboxTitle = present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']")
-      .filter((e) => requires(e.when, 'view == modbench.toolbox'));
+  const toolboxTitle = (loggedIn: boolean) =>
+    placed(present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']")
+      .filter((e) => holds(e.when, { view: 'modbench.toolbox', 'modbench.folder': 'instance', 'modbench.nexus.loggedIn': loggedIn })));
 
-    expect(toolboxTitle.map((e) => ({ command: e.command, icon: (e.group ?? '').startsWith('navigation') })))
-      .toEqual([
-        { command: 'modbench.instance.refresh', icon: true },
-        { command: 'modbench.settings.open', icon: false },
-      ]);
+  it('has refresh as its one title icon, then open settings and log in in its overflow while logged out', () => {
+    expect(toolboxTitle(false)).toEqual([
+      ['modbench.instance.refresh', 'navigation'], ['modbench.settings.open', 'settings'], ['modbench.instance.logIn', 'settings'],
+    ]);
+  });
+
+  it('has log out in the overflow in place of log in while logged in', () => {
+    expect(toolboxTitle(true)).toEqual([
+      ['modbench.instance.refresh', 'navigation'], ['modbench.settings.open', 'settings'], ['modbench.instance.logOut', 'settings'],
+    ]);
   });
 
   it('offers switch, and only switch, on the Profile row\'s menu', () => {

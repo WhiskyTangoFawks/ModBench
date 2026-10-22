@@ -12,6 +12,7 @@
     { "path": "../drivingLib" },
     { "path": "../instanceLoader" },
     { "path": "../instanceCommands" },
+    { "path": "../nexus" },
     { "path": "../ports" },
     { "path": "../sourceCommands" },
     { "path": "../wire" }

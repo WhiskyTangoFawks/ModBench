@@ -403,6 +403,16 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.instance.logIn",
+        "title": "Log In Instance to Nexus",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.instance.logOut",
+        "title": "Log Out Instance from Nexus",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.instance.putLoadOrder",
         "title": "Put Instance Load Order",
         "category": "Modbench"
@@ -994,6 +1004,14 @@
           "when": "modbench.folder == instance"
         },
         {
+          "command": "modbench.instance.logIn",
+          "when": "modbench.folder == instance && !modbench.nexus.loggedIn"
+        },
+        {
+          "command": "modbench.instance.logOut",
+          "when": "modbench.folder == instance && modbench.nexus.loggedIn"
+        },
+        {
           "command": "modbench.mod.sortWinningAtTop",
           "when": "modbench.folder == instance"
         },
@@ -1068,6 +1086,16 @@
           "command": "modbench.settings.open",
           "when": "view == modbench.toolbox && modbench.folder == instance",
           "group": "settings@1"
+        },
+        {
+          "command": "modbench.instance.logIn",
+          "when": "view == modbench.toolbox && modbench.folder == instance && !modbench.nexus.loggedIn",
+          "group": "settings@2"
+        },
+        {
+          "command": "modbench.instance.logOut",
+          "when": "view == modbench.toolbox && modbench.folder == instance && modbench.nexus.loggedIn",
+          "group": "settings@2"
         },
         {
           "command": "modbench.pluginListTree.filterHere",

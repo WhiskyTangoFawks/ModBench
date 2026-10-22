@@ -21,6 +21,7 @@
     { "path": "./src/sourceCommands" },
     { "path": "./src/downloadedFileCommands" },
     { "path": "./src/client" },
+    { "path": "./src/nexus" },
     { "path": "./src/drivingLib" },
     { "path": "./src/textDocuments" },
     { "path": "./src/toolbox" },
