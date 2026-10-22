@@ -1,3 +1,4 @@
+using System.Data.Common;
 using DuckDB.NET.Data;
 using MEditService.LoadOrder;
 
@@ -9,7 +10,7 @@ namespace MEditService.RecordIndex.Store;
 internal static class DuckDbSql
 {
     public static List<T> Rows<T>(
-        DuckDBConnection connection, string sql, Func<DuckDBDataReader, T> map, params object?[] args)
+        DuckDBConnection connection, string sql, Func<DbDataReader, T> map, params object?[] args)
     {
         using var cmd = Command(connection, sql, args);
         using var reader = cmd.ExecuteReader();
@@ -39,10 +40,10 @@ internal static class DuckDbSql
             : throw new InvalidOperationException($"Expected a {typeof(T).Name} from: {sql}");
     }
 
-    public static string? GetStringOrNull(this DuckDBDataReader reader, int ordinal) =>
+    public static string? GetStringOrNull(this DbDataReader reader, int ordinal) =>
         reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
 
-    public static PluginAddress ReadPluginAddress(DuckDBDataReader reader) =>
+    public static PluginAddress ReadPluginAddress(DbDataReader reader) =>
         new(reader.GetString(0), reader.GetString(1));
 
     private static DuckDBCommand Command(DuckDBConnection connection, string sql, object?[] args)

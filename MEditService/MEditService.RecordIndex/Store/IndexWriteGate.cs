@@ -1,4 +1,3 @@
-
 namespace MEditService.RecordIndex.Store;
 
 /// <summary>The one gate every index write passes through; reads never take it. A reentrant

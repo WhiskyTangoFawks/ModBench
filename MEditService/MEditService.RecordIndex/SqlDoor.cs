@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Text.Json;
-using DuckDB.NET.Data;
 using MEditService.RecordIndex.Store;
 using MEditService.RepositoriesLib;
 
@@ -28,10 +27,10 @@ internal static class SqlDoor
     }
 
     /// <summary>Why <paramref name="sql"/> may not pass the door, or null when it may.</summary>
-    internal static string? RefusalOf(DuckDBConnection connection, string sql, string schema)
+    internal static string? RefusalOf(ReadContext context, string sql, string schema)
     {
         using var parsed = JsonDocument.Parse(
-            DuckDbSql.ScalarString(connection, "SELECT json_serialize_sql($1::VARCHAR)", sql) ?? "{}");
+            context.ScalarString("SELECT json_serialize_sql($1::VARCHAR)", sql) ?? "{}");
         var root = parsed.RootElement;
 
         if (root.GetProperty("error").GetBoolean())
@@ -39,9 +38,7 @@ internal static class SqlDoor
         if (root.GetProperty("statements").GetArrayLength() != 1)
             return "Only one SELECT statement is read.";
 
-        var views = DuckDbSql.Rows(
-            connection,
-            "SELECT table_name FROM information_schema.tables WHERE table_catalog = current_database() AND table_schema = $1 AND table_type = 'VIEW' AND table_name <> $2",
+        var views = context.Rows("SELECT table_name FROM information_schema.tables WHERE table_catalog = current_database() AND table_schema = $1 AND table_type = 'VIEW' AND table_name <> $2",
             reader => reader.GetString(0), schema, TableDdlBuilder.PluginRecordsView);
         return new SchemaViews(schema, views).RefusalIn(root, ImmutableHashSet<string>.Empty.WithComparer(StringComparer.OrdinalIgnoreCase));
     }

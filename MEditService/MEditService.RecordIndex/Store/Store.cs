@@ -43,8 +43,13 @@ internal sealed class Store : IDisposable
 
     private DuckDBConnection? _connection;
 
-    public DuckDBConnection Connection =>
+    private DuckDBConnection Connection =>
         _connection ?? throw new InvalidOperationException("The store is not open.");
+
+    /// <summary>Replaces <paramref name="table"/> with the rows of <paramref name="select"/>. The filter's matches
+    /// live in the store's own tables, not in a read's context.</summary>
+    internal void Materialize(string table, string select) =>
+        DuckDbSql.Execute(Connection, $"CREATE OR REPLACE TABLE {table} AS ({select}\n)");
 
     /// <summary>Every read the record index answers.</summary>
     public RelationReads Reads { get; }
@@ -130,7 +135,7 @@ internal sealed class Store : IDisposable
 
     // DuckDB.NET duplicates in-memory connections only; a file opened again on the same path shares
     // this process's database instance. Either way the read gets its own transaction context.
-    public DuckDBConnection OpenReadConnection()
+    public ReadContext OpenRead()
     {
         lock (_readsGate)
         {
@@ -139,7 +144,7 @@ internal sealed class Store : IDisposable
             connection.Open();
             _readsInFlight++;
             connection.Disposed += (_, _) => { lock (_readsGate) { _readsInFlight--; Monitor.PulseAll(_readsGate); } };
-            return connection;
+            return new ReadContext(connection, owned: true);
         }
     }
 
@@ -177,8 +182,8 @@ internal sealed class Store : IDisposable
     {
         try
         {
-            using var connection = OpenReadConnection();
-            DuckDbSql.Scalar<int>(connection, "SELECT 1");
+            using var connection = OpenRead();
+            connection.Scalar<int>("SELECT 1");
             return false;
         }
         catch (DuckDBException ex) when (IsInvalidation(ex))
@@ -404,9 +409,8 @@ internal sealed class Store : IDisposable
     /// <summary>The hash of the file <paramref name="key"/>'s rows were built from, or null when none.</summary>
     public string? IndexedContentHash(PluginAddress key)
     {
-        using var connection = OpenReadConnection();
-        return DuckDbSql.ScalarString(connection,
-            $"SELECT content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2",
+        using var connection = OpenRead();
+        return connection.ScalarString($"SELECT content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2",
             key.Name, key.Origin);
     }
 
@@ -577,8 +581,8 @@ internal sealed class Store : IDisposable
         {
             lock (_projectionLock)
             {
-                using var connection = OpenReadConnection();
-                return DuckDbSql.Scalar<long>(connection, $"SELECT value FROM {SequenceRelation}");
+                using var connection = OpenRead();
+                return connection.Scalar<long>($"SELECT value FROM {SequenceRelation}");
             }
         }
     }
@@ -822,9 +826,8 @@ internal sealed class Store : IDisposable
     /// registrations.</summary>
     public IReadOnlyList<PluginAddress> RegisteredPlugins()
     {
-        using var connection = OpenReadConnection();
-        return DuckDbSql.Rows(
-            connection, $"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation}",
+        using var connection = OpenRead();
+        return connection.Rows($"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation}",
             DuckDbSql.ReadPluginAddress);
     }
 
