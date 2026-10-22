@@ -15,6 +15,7 @@ internal static class GameSpecifics
         SubrecordSizes: new Dictionary<(string, string), int>
         {
             [("REGN", "RDAT")] = 8, // Type u32, Override u8, Priority u8, unused ×2
+            [("PERK", "EPF3")] = 2, // Script Flags u16
         },
         SubrecordCounts: new Dictionary<(string, string), int>
         {

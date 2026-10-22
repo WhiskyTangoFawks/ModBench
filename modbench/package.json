@@ -230,6 +230,16 @@
           "type": "boolean",
           "default": false,
           "description": "Contains excluded files: colour a mod's name in the Mods view when the mod has an excluded file."
+        },
+        "modbench.mods.indicators.updateAvailable.badge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Update available: badge a mod's row in the Mods view when the mod's version is older than the newest version check for updates found."
+        },
+        "modbench.mods.indicators.updateAvailable.colour": {
+          "type": "boolean",
+          "default": false,
+          "description": "Update available: colour a mod's name in the Mods view when the mod's version is older than the newest version check for updates found."
         }
       }
     },
@@ -1808,6 +1818,16 @@
           "light": "charts.yellow",
           "highContrast": "charts.yellow",
           "highContrastLight": "charts.yellow"
+        }
+      },
+      {
+        "id": "modbench.modUpdateAvailable",
+        "description": "The name of a mod in the Mods view that carries Update available.",
+        "defaults": {
+          "dark": "charts.blue",
+          "light": "charts.blue",
+          "highContrast": "charts.blue",
+          "highContrastLight": "charts.blue"
         }
       },
       {

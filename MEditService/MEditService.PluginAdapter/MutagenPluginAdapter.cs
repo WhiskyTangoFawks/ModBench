@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter.Repair;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -108,6 +109,40 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     public Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease) => PluginBinaryHash.ClaimOfFile(pluginPath, gameRelease);
 
+    public Answer<RepairPreviews, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease) =>
+        PluginFailure.Answer(() => PluginRepair.Preview(File.ReadAllBytes(pluginPath), gameRelease));
+
+    public Answer<string, PluginFailure> WriteRepaired(
+        string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string destinationPath, GameRelease gameRelease)
+    {
+        try
+        {
+            if (!PluginRepair.Repaired(File.ReadAllBytes(pluginPath), previewedHash, chosen, gameRelease).Holds(out var repaired, out var refused))
+                return refused;
+            File.WriteAllBytes(destinationPath, repaired);
+            return destinationPath;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new PluginFailure.Inaccessible(ex);
+        }
+    }
+
+    public Answer<string, PluginFailure> VerifyRepaired(
+        string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string repairedPath, GameRelease gameRelease)
+    {
+        try
+        {
+            return PluginRepair.Unverified(File.ReadAllBytes(pluginPath), previewedHash, chosen, File.ReadAllBytes(repairedPath), gameRelease) is { } refused
+                ? refused
+                : repairedPath;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new PluginFailure.Inaccessible(ex);
+        }
+    }
+
     public Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
         ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings? strings = null) =>
         Opened(modPath, strings, loadOrder, loaded =>
@@ -189,7 +224,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             if (PluginBinaryWalk.FindFirstSubrecordLoss(pairing.Pairs) is not { } loss)
                 return new PluginByteComparison(Identical: false, DeletedRecordEmptied: deletedRecordEmptied, Unverified: unverified);
 
-            var cause = MalformedPluginScan.Scan(originalBytes, loadOrder.GameRelease).FirstOrDefault(d =>
+            var cause = Malformations.In(originalBytes, loadOrder.GameRelease).Select(found => found.Diagnosis).FirstOrDefault(d =>
                 d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
             return new PluginByteComparison(Identical: false, loss, cause, deletedRecordEmptied, unverified);
         });

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using MEditService.Codec.Serialization;
+using MEditService.PluginAdapter.Repair;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 
@@ -48,7 +49,7 @@ internal static class PluginBinaryHash
             return new PluginFailure.Inaccessible(ex);
         }
 
-        return PluginAnswer.Of(new FileClaim(OfBytes(bytes), PluginFailure.Answer<IReadOnlyList<PluginDiagnosis>>(() => MalformedPluginScan.Scan(bytes, gameRelease))));
+        return PluginAnswer.Of(new FileClaim(OfBytes(bytes), PluginFailure.Answer<IReadOnlyList<PluginDiagnosis>>(() => [.. Malformations.In(bytes, gameRelease).Select(found => found.Diagnosis)])));
     }
 }
 

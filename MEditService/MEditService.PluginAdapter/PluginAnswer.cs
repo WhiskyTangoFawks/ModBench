@@ -141,6 +141,38 @@ public abstract record PluginFailure
         public override bool OfItsBytes => false;
     }
 
+    /// <summary>The plugin's bytes are not the ones its repair preview read (ADR-0003).</summary>
+    internal sealed record ChangedSincePreview : PluginFailure
+    {
+        internal ChangedSincePreview() : base(error: null)
+        {
+        }
+
+        public override string Reason => "its bytes changed since the repair preview";
+
+        public override bool OfItsBytes => false;
+    }
+
+    /// <summary>A diagnosis chosen for repair that no repair answers.</summary>
+    internal sealed record NoRepair : PluginFailure
+    {
+        private readonly string _reason;
+
+        internal NoRepair(PluginDiagnosis diagnosis) : base(error: null) => _reason = $"no repair answers {diagnosis.Describe()}";
+
+        public override string Reason => _reason;
+    }
+
+    /// <summary>A repaired plugin whose records are not its original's with the repairs its preview planned.</summary>
+    internal sealed record RepairUnverified : PluginFailure
+    {
+        private readonly string _reason;
+
+        internal RepairUnverified(string reason) : base(error: null) => _reason = reason;
+
+        public override string Reason => _reason;
+    }
+
     /// <summary>The failure <paramref name="ex"/> stands for: a file system refusal is
     /// <see cref="Inaccessible"/>, anything else a read Mutagen could not make. Mutagen reaches some
     /// readers by reflection, whose wrapper says nothing of the read.</summary>
