@@ -119,6 +119,30 @@ describe('Log in', () => {
     expect(await nexus.loggedIn()).toBe(false);
   });
 
+  it('keeps nothing and says nothing when Esc closes the prompt while Nexus is checking', async () => {
+    const { nexus, reporter } = registered();
+    const { box, done } = openPrompt();
+    box.value = GOOD_KEY;
+
+    const accepting = box.accept();
+    box.hide();
+    await accepting;
+    await done;
+
+    expect(await nexus.loggedIn()).toBe(false);
+    expect(reporter.shownFailures).toEqual([]);
+  });
+
+  it('sends one request for a key accepted twice while the check is in flight', async () => {
+    const { sent } = registered();
+    const { box } = openPrompt();
+    box.value = GOOD_KEY;
+
+    await Promise.all([box.accept(), box.accept()]);
+
+    expect(sent).toHaveLength(1);
+  });
+
   it('sends one request for the key it accepts, closes the prompt, and marks the user logged in', async () => {
     const { sent } = registered();
     const { box, done } = openPrompt();

@@ -17,10 +17,13 @@ function askForKey(commands: NexusLogin, reporter: Reporter): Promise<void> {
   box.title = 'Nexus API key';
   box.password = true;
   box.ignoreFocusOut = true;
+  const closed = new AbortController();
   box.onDidAccept(async () => {
+    if (box.busy) return;
     box.busy = true;
-    const outcome = await commands.logIn(box.value);
+    const outcome = await commands.logIn(box.value, closed.signal);
     box.busy = false;
+    if (closed.signal.aborted) return;
     if (outcome.applied) {
       box.hide();
       return;
@@ -29,7 +32,7 @@ function askForKey(commands: NexusLogin, reporter: Reporter): Promise<void> {
     reporter.shownOnSurface('error', 'Nexus did not take the key.', outcome.refusal);
   });
   return new Promise((resolve) => {
-    box.onDidHide(() => { box.dispose(); resolve(); });
+    box.onDidHide(() => { closed.abort(); box.dispose(); resolve(); });
     box.show();
   });
 }
