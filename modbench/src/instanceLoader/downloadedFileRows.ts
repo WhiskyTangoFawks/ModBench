@@ -109,7 +109,7 @@ export function buildDownloadedFileRows(
       modName: meta?.modName,
       gameName: meta?.gameName,
       author: meta?.author,
-      upgrades: upgradeCandidates(mods, { name: file.name, modID: meta?.modID, installedKey: meta?.installedKey }),
+      upgrades: upgradeCandidates(mods, { name: file.name, modID: file.modID, installedKey: meta?.installedKey }),
       path: file.path,
       metadataPath: file.metadataPath,
     };

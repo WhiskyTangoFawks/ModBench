@@ -2,6 +2,7 @@
 // order is not guaranteed, so it's read scoped to the section and keyed by index.
 
 import type { ModMeta } from '../../instanceAdapter';
+import { qtToInt } from './qtInt';
 import { isUpdateAvailable } from './versionInfo';
 import { GENERAL_SECTION, readIniSection, replaceIniSection, setIniValue } from './qSettingsIni';
 
@@ -17,6 +18,7 @@ export interface InstalledFileId {
 /** What meta.ini says, `[installedFiles]` as its pairs. */
 export interface MetaIni extends Omit<ModMeta, 'installedFileKeys' | 'updateAvailable'> {
   newestVersion?: string;
+  nexusFileStatus?: number;
   installedFiles?: readonly InstalledFileId[];
 }
 
@@ -32,6 +34,8 @@ const OWNED_GENERAL_KEYS = [
   ['gameName', 'gameName'],
   ['nexusId', 'modid'],
   ['version', 'version'],
+  ['newestVersion', 'newestVersion'],
+  ['nexusFileStatus', 'nexusFileStatus'],
   ['installationFileName', 'installationFile'],
 ] as const;
 
@@ -63,6 +67,9 @@ function parseInstalledFiles(text: string): InstalledFileId[] | undefined {
     .map(([, { modid, fileid }]) => ({ nexusId: modid ?? '', fileId: fileid ?? '' }));
 }
 
+const nexusFileStatusOf = (text: string | undefined): number | undefined =>
+  (text === undefined ? undefined : qtToInt(text));
+
 export function parseMetaIni(text: string): MetaIni {
   const general = readIniSection(text, GENERAL_SECTION);
   const present = (key: string): string | undefined => general.get(key) || undefined; // blank == absent
@@ -71,6 +78,7 @@ export function parseMetaIni(text: string): MetaIni {
     gameName: present('gameName'),
     version: present('version'),
     newestVersion: present('newestVersion'),
+    nexusFileStatus: nexusFileStatusOf(present('nexusFileStatus')),
     nexusId: modid && modid !== '0' && modid !== '-1' ? modid : undefined,
     installationFileName: present('installationFile'),
     installedFiles: parseInstalledFiles(text),
@@ -86,11 +94,11 @@ function installedFileOfKey(key: string): InstalledFileId {
 }
 
 /** What meta.ini says of a mod, in the words every mod manager shares. */
-export const modMetaOf = ({ installedFiles, newestVersion, ...rest }: MetaIni): ModMeta =>
+export const modMetaOf = ({ installedFiles, newestVersion, nexusFileStatus: _status, ...rest }: MetaIni): ModMeta =>
   ({ ...rest, installedFileKeys: installedFiles?.map(installedFileKey), updateAvailable: isUpdateAvailable(rest.version, newestVersion) });
 
 /** The meta.ini a mod's meta says. */
-export const metaIniOf = ({ installedFileKeys, ...rest }: Omit<ModMeta, 'updateAvailable'>): MetaIni =>
+export const metaIniOf = ({ installedFileKeys, ...rest }: Omit<ModMeta, 'updateAvailable'> & Pick<MetaIni, 'nexusFileStatus'>): MetaIni =>
   ({ ...rest, installedFiles: installedFileKeys?.map(installedFileOfKey) });
 
 function installedFilesBody(pairs: readonly InstalledFileId[] | undefined): string[] {
@@ -106,14 +114,14 @@ function installedFilesBody(pairs: readonly InstalledFileId[] | undefined): stri
 export function changeOwnedKeysInText(text: string, changes: MetaKeys): string {
   const general = [...OWNED_GENERAL_KEYS]
     .reverse()
-    .reduce((acc, [field, key]) => (field in changes ? setIniValue(acc, GENERAL_SECTION, key, changes[field]) : acc), text);
+    .reduce((acc, [field, key]) => (field in changes ? setIniValue(acc, GENERAL_SECTION, key, changes[field]?.toString()) : acc), text);
   return 'installedFiles' in changes ? replaceIniSection(general, INSTALLED_FILES, installedFilesBody(changes.installedFiles)) : general;
 }
 
 /** Sets every key Modbench owns, an absent one cleared. */
 export function setOwnedKeysInText(text: string, keys: MetaKeys): string {
-  const { gameName, nexusId, version, installationFileName, installedFiles } = keys;
-  return changeOwnedKeysInText(text, { gameName, nexusId, version, installationFileName, installedFiles });
+  const { gameName, nexusId, version, installationFileName, installedFiles, nexusFileStatus } = keys;
+  return changeOwnedKeysInText(text, { gameName, nexusId, version, installationFileName, installedFiles, nexusFileStatus });
 }
 
 /** Keys use MO2's own names, so the result round-trips through `parseMetaIni`. */

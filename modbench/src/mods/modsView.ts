@@ -27,6 +27,8 @@ import { registerBuildCommand } from './buildCommand';
 import { BuildProblems } from './buildProblems';
 import { registerDecompileAndCommitCommand } from './decompileAndCommitCommand';
 import { registerManifestGestures, type ManifestGestureDeps } from './manifestGestures';
+import { registerCheckForUpdatesGestures, type CheckForUpdatesDeps } from './checkForUpdatesGestures';
+import type { CheckForUpdates } from '../modCommands/checkForUpdates';
 import { registerConflictTable } from './conflictTableEditor';
 import { sameCopies, type CopyReads } from './sameCopies';
 import {
@@ -65,9 +67,14 @@ interface ModsViewDeps {
   modSync: SyncMessage;
   sourceGestures: SourceGestureDeps;
   manifestGestures: ManifestDeps;
+  checkForUpdates: CheckForUpdates;
   /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
   modStatus: { push: Pick<MEditClient, 'onNotification'>; readStatus: ReadModStatus };
 }
+
+const checkForUpdatesDeps = (
+  { checkForUpdates, manifestGestures: { focusedView } }: ModsViewDeps, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+): CheckForUpdatesDeps => ({ commands: { checkForUpdates }, instance, reporter, focusedView });
 
 interface ModsView extends vscode.Disposable {
   view: vscode.TreeView<ModlistNode>;
@@ -128,6 +135,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     }),
     ...registerSourceGestures(deps, provider),
     ...registerManifestGestures({ ...deps.manifestGestures, instance, reporter: reporterFor('modlist'), ask }),
+    ...registerCheckForUpdatesGestures(checkForUpdatesDeps(deps, instance, reporterFor('mod.checkForUpdates'))),
     ...registerModEnableCommands(commands, instance, () => view.selection, reporterFor('mod.enableDisable')),
     ...registerFileExclusionCommands(commands, instance, () => view.selection, reporterFor('mod.excludeFile')),
     registerModMoveCommand(

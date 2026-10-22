@@ -119,7 +119,7 @@ export type MovePlace =
 export type SeparatorsPlace = Extract<MovePlace, { kind: 'separator' | 'modOrder' }>;
 
 /** What the caller supplies for the record an install leaves with the mod; the adapter adds what it knows of the instance. */
-export type InstallKeys = Pick<ModMeta, 'nexusId' | 'version' | 'installationFileName' | 'installedFileKeys'>;
+export type InstallKeys = Pick<ModMeta, 'nexusId' | 'version' | 'installationFileName' | 'installedFileKeys'> & { readonly nexusFileStatus?: number };
 
 export type DownloadedFileStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 
@@ -128,6 +128,8 @@ export type DownloadedFileStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 export interface DownloadedFileMeta {
   status: DownloadedFileStatus;
   modID?: string;
+  /** The Nexus file category the metadata records; absent when it records none. */
+  fileCategory?: number;
   name?: string;
   version?: string;
   modName?: string;
@@ -148,6 +150,8 @@ export interface DownloadedFile {
   readonly mtimeMs: number;
   readonly excluded: boolean;
   readonly meta: DownloadedFileMeta | undefined;
+  /** The Nexus mod ID install gives the mod: the metadata's, else the file name's. `meta.modID` stays the metadata's own claim. */
+  readonly modID?: string;
 }
 
 /** The downloaded files, or why their folder could not be resolved. `files` is undefined when the
@@ -372,6 +376,16 @@ interface MetadataInstallationFile {
   readonly page?: string;
 }
 
+/** A mod's place on Nexus: its game's Nexus domain, its ID, and the file installed, by ID and by name when the metadata records them. */
+export interface NexusModFile {
+  readonly game: string;
+  readonly modId: string;
+  readonly fileId: string | undefined;
+  readonly fileName: string | undefined;
+  /** Nexus's category of the installed file, as the metadata recorded it. */
+  readonly fileStatus: number | undefined;
+}
+
 export interface ModMetadata {
   readonly version?: string;
   readonly installationFile?: MetadataInstallationFile;
@@ -474,6 +488,10 @@ export interface InstanceAdapter {
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
   /** What the mod manager's metadata says of `mod`'s version and installation file; none when it says none. */
   modMetadata(mod: string): Promise<FileRead<ModMetadata>>;
+  /** Where `mod` is on Nexus; none when its metadata holds no Nexus mod ID, unreadable when the metadata cannot say. */
+  nexusFile(mod: string): Promise<FileRead<NexusModFile | undefined>>;
+  /** Records `version` as the newest version of `mod`, where the mod manager reads it, and says whether the manager now shows an update. Writes nothing when it already holds it. */
+  writeNewestVersion(mod: string, version: string): Promise<{ readonly updateAvailable: boolean }>;
   /** What a meta already read says, as `modMetadata` answers it. */
   metadataOf(meta: ModMeta): Promise<ModMetadata>;
   /** Why `metadata` cannot be written into the metadata of `mod`, as a reason; undefined when it can. */

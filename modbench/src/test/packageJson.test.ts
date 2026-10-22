@@ -167,6 +167,7 @@ const inInstance: Context = { [FOLDER_KEY]: 'instance' };
 const GIT_INIT = 'modbench.modlist.gitInit';
 const UPDATE_MANIFEST = 'modbench.mod.updateManifest';
 const RESTORE_FROM_MANIFEST = 'modbench.mod.restoreFromManifest';
+const CHECK_FOR_UPDATES_HERE = 'modbench.modList.checkForUpdatesHere';
 const EVERY_MOD_ENTRY_POINTS = ['modbench.modList.updateManifestHere', 'modbench.modList.restoreFromManifestHere'];
 type Key = { key: string; mac?: string; command: string };
 const expectKeysFiring = (context: Context, expected: readonly Key[]): void => {
@@ -1126,6 +1127,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.mod.sortLosingAtTop', 'navigation'],
       ['modbench.mod.install', '3_create'],
       ['modbench.mod.createEmpty', '3_create'],
+      [CHECK_FOR_UPDATES_HERE, '3_update'],
       ...EVERY_MOD_ENTRY_POINTS.map((command): [string, string] => [command, '4_sourceControl']),
     ]);
   });
@@ -1140,6 +1142,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.mod.disable', '2_change'],
       ['modbench.mod.move', '2_change'],
       ['modbench.mod.rename', '2_change'],
+      ['modbench.mod.checkForUpdates', '2_change'],
       ['modbench.separator.add', '3_create'],
       ['modbench.mod.createEmpty', '3_create'],
       ['modbench.mod.install', '3_create'],
@@ -1200,6 +1203,19 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['file conflict excluded', [OPEN_FOLDER_ENTRY, GO_TO_MOD_ENTRY, INCLUDE_FILE_ENTRY, COPY_VALUE_ENTRY]],
     ['folder', [OPEN_FOLDER_ENTRY, COPY_VALUE_ENTRY]],
   ];
+
+  const CHECK_FOR_UPDATES = 'modbench.mod.checkForUpdates';
+  it.each([
+    ['a mod with a Nexus mod ID', 'mod enabled hasNexus', true, true],
+    ['a mod with a Nexus mod ID', 'mod enabled hasNexus', false, false],
+    ['a mod with no Nexus mod ID', 'mod enabled', true, false],
+    ['a separator', 'separator', true, true],
+    ['a separator', 'separator', false, false],
+  ])('check for updates on %s (%s), logged in %s: offered %s', (_name, viewItem, loggedIn, offered) => {
+    const entry = inModsView('view/item/context').find((e) => e.command === CHECK_FOR_UPDATES && holds(e.when, { view: 'modbench.modList', viewItem, [LOGGED_IN_KEY]: loggedIn }));
+
+    expect(entry !== undefined).toBe(offered);
+  });
 
   it.each(menus)('the menu on a %s row', (contextValue, entries) => {
     expect(menuOn(contextValue)).toEqual(entries);
@@ -1283,7 +1299,7 @@ const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
-const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, ...EVERY_MOD_ENTRY_POINTS];
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, ...EVERY_MOD_ENTRY_POINTS, CHECK_FOR_UPDATES_HERE];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);

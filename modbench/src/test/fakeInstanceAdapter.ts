@@ -1,6 +1,6 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import {
-  entryNotFound, filesWinningFirst, type DecideModOrder, type DownloadedFile, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type SourceMods, type OriginFile, type InstallKeys, type PluginOrderChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+  entryNotFound, filesWinningFirst, type DecideModOrder, type DownloadedFile, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type SourceMods, type OriginFile, type InstallKeys, type PluginOrderChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
@@ -63,6 +63,7 @@ export type AdapterCall =
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
   | { readonly verb: 'trashModFile'; readonly mod: string; readonly relativePath: string }
   | { readonly verb: 'trashSourceFolder'; readonly mod: string }
+  | { readonly verb: 'writeNewestVersion'; readonly mod: string; readonly version: string }
   | { readonly verb: 'writeModMetadata'; readonly mod: string; readonly metadata: ModMetadata }
   | { readonly verb: 'writeIgnoreList' }
   | { readonly verb: 'removeIgnoreList' }
@@ -98,6 +99,10 @@ export interface InstanceAnswers {
   unwritableMetadata?: ReadonlyMap<string, string>;
   /** What each mod's metadata says, by mod name; a mod not there says none. */
   metadata?: ReadonlyMap<string, ModMetadata>;
+  /** Where each mod is on Nexus, by mod name; a mod not there has no Nexus mod ID. */
+  nexusFiles?: ReadonlyMap<string, FileRead<NexusModFile>>;
+  /** The mods the mod manager shows an update for once a newest version is written. */
+  updatable?: ReadonlySet<string>;
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
   /** The reads beside `reading()` that reject, with the message each rejects with. */
@@ -268,6 +273,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       const reason = answers.unreadableMetadata?.get(mod);
       return Promise.resolve(reason === undefined ? { kind: 'read', answer: answers.metadata?.get(mod) ?? {} } : { kind: 'unreadable', reason });
     },
+    nexusFile: (mod) => Promise.resolve(answers.nexusFiles?.get(mod) ?? { kind: 'read', answer: undefined }),
+    writeNewestVersion: (mod, version) => record({ verb: 'writeNewestVersion', mod, version }, { updateAvailable: answers.updatable?.has(mod) === true }),
     metadataOf: ({ version, installationFileName }) =>
       Promise.resolve({ version, installationFile: installationFileName === undefined ? undefined : { name: installationFileName } }),
     unwritableMetadata: (mod) => Promise.resolve(answers.unwritableMetadata?.get(mod)),

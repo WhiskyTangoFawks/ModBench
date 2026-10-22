@@ -1,41 +1,26 @@
 import * as vscode from 'vscode';
-import { AgentCall, argumentOfKind, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
-import { carriedArgument, rowNameOf } from '../drivingLib/argument';
-import { gestureEntry, isClickedRow } from '../drivingLib/gestureEntry';
-import type { FocusedView } from '../drivingLib/focusedView';
+import { AgentCall, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { MODS_KEY_ARGS } from './gestureEntry';
-import { sameEntry, type EntryRef, type Instance, type InstanceValue } from '../instanceLoader/instance';
-import { modLabelsOf, modNameOf } from '../instanceLoader/modName';
+import type { Instance } from '../instanceLoader/instance';
+import { modLabelsOf } from '../instanceLoader/modName';
+import { everyModHere, modsOfAgent, modsToRun, type ModsToRun, type ModsToRunDeps } from './modsToRun';
 import type { AskQuestion } from '../ports/dialog';
 import type { ItemRefusal } from '../ports/selectionOutcome';
-import type { Argument } from '../wire/argument';
 import type { Reporter } from '../ports/reporter';
 import type {
   ModlistRepositoryCommands, ModNote, RestoreResult, RestoreStatus, UpdateManifestResult, UpdateManifestStatus,
 } from '../sourceCommands/modlistRepositoryCommands';
 
-const NEITHER = 'it is not a mod or a separator';
 const RESTORE = 'Restore';
 
-export interface ManifestGestureDeps {
-  /** The Toolbox's id, whose bar a gesture with no Argument runs under. */
-  toolboxView: string;
+export interface ManifestGestureDeps extends ModsToRunDeps {
   commands: Pick<ModlistRepositoryCommands, 'updateManifest' | 'restoreFromManifest' | 'whatRestoreDestroys'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
   ask: AskQuestion;
   /** The Toolbox's message line: `undefined` gives it back to whatever else had something to say. */
   say: (message: string | undefined) => void;
-  /** The palette has no clicked row, so it takes the focused view's selection. */
-  focusedView: Pick<FocusedView, 'id' | 'selection'>;
-}
-
-interface ModsToRun {
-  readonly mods: readonly string[];
-  readonly refused: readonly ItemRefusal<string>[];
-  readonly everyMod: boolean;
-  readonly view: string;
 }
 
 type ModlistCall = AgentCall<{ force?: boolean }>;
@@ -45,14 +30,13 @@ const isAgentCall = (value: unknown): value is ModlistCall => value instanceof A
 // A view's title bar hands its command nothing, so the Mods view's is an entry point that names every mod and the
 // view (commands.md, Entry points are not gestures).
 export function registerManifestGestures(deps: ManifestGestureDeps): vscode.Disposable[] {
-  const everyModHere = (): ModsToRun => ({ mods: everyMod(deps.instance.value), refused: [], everyMod: true, view: MODS_KEY_ARGS.view });
   return [
     vscode.commands.registerCommand('modbench.mod.updateManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
       (isAgentCall(clicked) ? updateManifestForAgent(deps, clicked) : updateManifest(deps, modsToRun(deps, clicked, selected)))),
     vscode.commands.registerCommand('modbench.mod.restoreFromManifest', (clicked?: unknown, selected?: readonly unknown[]) =>
       (isAgentCall(clicked) ? restoreFromManifestForAgent(deps, clicked) : restoreFromManifest(deps, modsToRun(deps, clicked, selected)))),
-    vscode.commands.registerCommand('modbench.modList.updateManifestHere', () => updateManifest(deps, everyModHere())),
-    vscode.commands.registerCommand('modbench.modList.restoreFromManifestHere', () => restoreFromManifest(deps, everyModHere())),
+    vscode.commands.registerCommand('modbench.modList.updateManifestHere', () => updateManifest(deps, everyModHere(deps))),
+    vscode.commands.registerCommand('modbench.modList.restoreFromManifestHere', () => restoreFromManifest(deps, everyModHere(deps))),
   ];
 }
 
@@ -67,57 +51,6 @@ const named = <Outcome extends { landed: readonly { mod: string }[]; refused: re
 
 type AgentOutcome<Landed> = GestureResult<Landed, string>;
 type Restored = Extract<RestoreResult, { applied: true }>['landed'];
-
-const kindOf = (row: unknown): unknown => Reflect.get(carriedArgument(row) ?? {}, 'kind');
-const isModOrSeparator = (row: unknown): boolean => kindOf(row) === 'mod' || kindOf(row) === 'separator';
-
-function rowsOf(deps: ManifestGestureDeps, clicked: unknown, selected: readonly unknown[] | undefined): readonly unknown[] {
-  if (clicked === undefined) return deps.focusedView.id() === MODS_KEY_ARGS.view ? deps.focusedView.selection() : [];
-  return isModOrSeparator(clicked) ? gestureEntry(clicked, selected, () => [], isClickedRow).selection : [];
-}
-
-// modlist-repository.md, Every mod: every mod folder, in every profile, never the Mods view's rows.
-const everyMod = (value: InstanceValue): string[] => (value.modFolders ?? []).map(({ modName }) => modName);
-
-// modlist-repository.md, Every mod, story 3: a separator stands for itself and its mods.
-function modsHeldBy(kind: unknown, name: string, value: InstanceValue): string[] | undefined {
-  if (kind !== 'mod' && kind !== 'separator') return undefined;
-  const asked: EntryRef = { kind, name };
-  const entry = value.mods.find((listed) => sameEntry(value, listed, asked)) ?? asked;
-  const modName = (held: EntryRef): string => modNameOf(value.modNames, held) ?? held.name;
-  if (kind === 'mod') return [modName(entry)];
-  const group = value.modGroups.groups.find(({ separator }) => separator.name === entry.name);
-  const itself = modNameOf(value.modNames, entry);
-  return [...(itself === undefined ? [] : [itself]), ...(group?.mods.map(modName) ?? [])];
-}
-
-function modsOf(row: unknown, value: InstanceValue): string[] | undefined {
-  const name: unknown = Reflect.get(carriedArgument(row) ?? {}, 'name');
-  return typeof name === 'string' ? modsHeldBy(kindOf(row), name, value) : undefined;
-}
-
-// commands.md, The surface supplies the Argument: an agent call may supply all of it, and none is every mod.
-function modsOfAgent(argument: readonly Argument[], value: InstanceValue): string[] {
-  if (argument.length === 0) return everyMod(value);
-  const held = argument.flatMap((entry) => {
-    const { kind, name } = argumentOfKind(entry, 'mod', 'separator');
-    return modsHeldBy(kind, name, value) ?? [];
-  });
-  return [...new Set(held)];
-}
-
-function modsToRun(deps: ManifestGestureDeps, clicked: unknown, selected: readonly unknown[] | undefined): ModsToRun {
-  const { value } = deps.instance;
-  const rows = rowsOf(deps, clicked, selected);
-  if (rows.length === 0) return { mods: everyMod(value), refused: [], everyMod: true, view: deps.toolboxView };
-  const refused: ItemRefusal<string>[] = [];
-  const mods = rows.flatMap((row) => {
-    const held = modsOf(row, value);
-    if (held === undefined) refused.push({ item: rowNameOf(row), reason: NEITHER });
-    return held ?? [];
-  });
-  return { mods: [...new Set(mods)], refused, everyMod: false, view: MODS_KEY_ARGS.view };
-}
 
 // modlist-repository.md, Every mod, story 5: progress by mod with Cancel, which stops after the mod in hand. The
 // Toolbox's message line says what the notification says (Reporting).
