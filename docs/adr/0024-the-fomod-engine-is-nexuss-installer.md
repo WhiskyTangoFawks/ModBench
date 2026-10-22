@@ -1,6 +1,6 @@
 # The FOMOD engine is Nexus's installer
 
-Modbench runs FOMODs on Nexus's installer, the engine Vortex uses, and writes no engine of its own. It is maintained, and it runs on Windows and Linux alike ([principles](../principles.md): Existing tools).
+Modbench runs FOMODs on Nexus's installer, the engine Vortex uses. It is maintained, and it runs on Windows and Linux alike ([principles](../principles.md): Existing tools).
 
 ## Consequences
 
