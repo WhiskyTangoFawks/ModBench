@@ -27,7 +27,7 @@ function makeDocumentDeclaringEveryTextDocumentMember(text: string, fsPath: stri
   const uri = fakeUri(fsPath);
   const notImplemented = (): never => { throw new Error('not implemented in this fixture'); };
   return {
-    uri, fileName: fsPath, isUntitled, languageId: 'sql',
+    uri, fileName: fsPath, isUntitled, languageId: 'sql', encoding: 'utf8',
     version: 1, isDirty: false, isClosed: false, eol: 1, lineCount: 1,
     save: () => Promise.resolve(true),
     lineAt: notImplemented,

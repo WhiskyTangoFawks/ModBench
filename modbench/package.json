@@ -11,7 +11,7 @@
     "url": "https://github.com/WhiskyTangoFawks/ModBench.git"
   },
   "engines": {
-    "vscode": "^1.96.0"
+    "vscode": "^1.101.0"
   },
   "categories": [
     "Other"
@@ -27,6 +27,12 @@
   },
   "main": "./out/extension.js",
   "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "modbench",
+        "label": "Modbench"
+      }
+    ],
     "walkthroughs": [
       {
         "id": "gettingStarted",
@@ -113,11 +119,12 @@
           {
             "id": "agent",
             "title": "Connect your agent",
-            "description": "Modbench serves an MCP server, so an agent in VS Code reads your instance, runs its gestures and writes scripts.\n[Set up your agent](https://github.com/WhiskyTangoFawks/ModBench/blob/main/docs/wiki/agent.md)",
+            "description": "Modbench serves an MCP server, so an agent in VS Code reads your instance, runs its gestures and writes scripts.\n[List MCP Servers](command:workbench.mcp.listServer)\n[Set up your agent](https://github.com/WhiskyTangoFawks/ModBench/blob/main/docs/wiki/agent.md)",
             "media": {
               "markdown": "walkthrough/getting-started.md"
             },
             "completionEvents": [
+              "onCommand:workbench.mcp.listServer",
               "onLink:https://github.com/WhiskyTangoFawks/ModBench/blob/main/docs/wiki/agent.md"
             ]
           }
@@ -1867,7 +1874,7 @@
     "@types/node": "^20.0.0",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
-    "@types/vscode": "1.96.0",
+    "@types/vscode": "1.101.0",
     "@vitejs/plugin-react": "^4.0.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "2.5.2",
