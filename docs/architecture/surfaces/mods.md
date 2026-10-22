@@ -118,7 +118,7 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod · check for updates, on every mod (I am logged in) · update manifest · restore from manifest…, on every mod (the instance has a repository). Collapse All last. |
 | Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · decompile and commit (a mod with no source that holds a plugin) · build (a source mod) · update manifest · restore from manifest… (the instance has a repository) · copy value · uninstall |
-| Separator menu | move… · add separator · rename… · update manifest · restore from manifest… (the instance has a repository) · copy value · delete |
+| Separator menu | move… · add separator · rename… · check for updates (I am logged in) · update manifest · restore from manifest… (the instance has a repository) · copy value · delete |
 | Overwrite menu | open folder |
 | File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · copy value |
 | Folder menu | open folder · copy value |
@@ -211,7 +211,7 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 
 1. Install never to merge into an existing folder, or to replace one I did not confirm.
 2. A new mod to appear at the winning end of the mod order, disabled, as any folder new in `mods/` does.
-3. An upgrade to replace the mod's files in place, and to keep its folder name and its manifest. Its repository is beside `mods/`, and an upgrade never touches it. Cites: ADR-0007; ADR-0022
+3. An upgrade to replace the mod's files in place, and to keep its folder name. Its repository is beside `mods/`, and an upgrade never touches it. Cites: ADR-0007; ADR-0022
 4. An upgrade to keep every value in the mod's metadata that the new file does not know, so an unknown version never blanks a known one. Cites: ADR-0017
 5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery, and a source mod's plugin source stays in git. This is an exception to A failed gesture writes nothing.
 6. Install and upgrade to write the mod's manifest as update manifest does, while the instance has a repository, so Source Control shows the change I made. Cites: modlist-repository.md, Update manifest

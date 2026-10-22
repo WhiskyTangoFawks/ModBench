@@ -575,7 +575,12 @@ describe('package.json command titles and categories', () => {
     expect(RETIRED_AHEAD_OF_CODE.filter((id) => !declared.has(id))).toEqual([]);
   });
 
-  const PALETTE_AHEAD_OF_CODE: string[] = [];
+  const PALETTE_AHEAD_OF_CODE: string[] = [
+    'modbench.instance.logIn',
+    'modbench.instance.logOut',
+    'modbench.mod.checkForUpdates',
+    'modbench.downloadedFile.queryInfo',
+  ];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',

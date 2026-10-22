@@ -120,9 +120,9 @@ What I expect to need and choose not to build yet, each with why.
 1. Deltas: a file whose bytes differ from its installation file's copy recorded as a binary diff from that copy, so the modlist rebuilds a mod I changed. ADR-0022 ships a change as a patch instead. The one job only a delta does is an official master cleaned with xEdit, rebuilt from the game's own file.
 2. A hash on every file's line. With no deltas, the installation file's hash and the path fix a file's bytes.
 3. Fetching an installation file from a host other than Nexus. Restore from manifest names what it lacks, and I fetch it.
-5. Which side changed: a mark of the manifest each folder was last restored from, so a mod reads as changed by a checkout or by me, and a checkout restores in one click. I know whether I pulled or edited.
-6. A gesture that validates the modlist and writes nothing, for a CI job. Update manifest's report is the validation.
-7. An archive built in a mod from its installation file's files, each entry with a line of its own naming its path in the installation file, so a change to one entry is one line in a diff.
+4. Which side changed: a mark of the manifest each folder was last restored from, so a mod reads as changed by a checkout or by me, and a checkout restores in one click. I know whether I pulled or edited.
+5. A gesture that validates the modlist and writes nothing, for a CI job. Update manifest's report is the validation.
+6. An archive built in a mod from its installation file's files, each entry with a line of its own naming its path in the installation file, so a change to one entry is one line in a diff.
 
 ## Test seam
 
