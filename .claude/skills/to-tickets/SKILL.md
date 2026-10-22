@@ -65,7 +65,7 @@ Iterate until the user approves the breakdown, and every pointer in the epic's s
 
 ### 5. Publish the tickets to the tracker
 
-Publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Make each one a native sub-issue of the epic and set its blocking edges natively, as `docs/agents/issue-tracker.md` describes. Apply the `ready-for-agent` triage label unless instructed otherwise — the tickets are agent-grabbable by construction.
+Publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Make each one a native sub-issue of the epic, on the epic's milestone, and set its blocking edges natively, as `docs/agents/issue-tracker.md` describes. Apply the `ready-for-agent` triage label unless instructed otherwise — the tickets are agent-grabbable by construction.
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 

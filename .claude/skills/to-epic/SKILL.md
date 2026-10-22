@@ -20,7 +20,7 @@ The issue tracker's conventions are in `docs/agents/issue-tracker.md`, and the t
 
    Check the scope with the user.
 
-3. Write the epic using the template below, then publish it to the project issue tracker with the epic label and a release milestone, as `docs/agents/issue-tracker.md` names them.
+3. Write the epic using the template below, then publish it to the project issue tracker with the epic label and a goal or a lane milestone, as `docs/agents/issue-tracker.md` names them.
 
 <epic-template>
 
