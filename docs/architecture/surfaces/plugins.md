@@ -42,12 +42,12 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 
 | Status | When | Icon | Words |
 |---|---|---|---|
+| Malformed | a catalogued malformation diagnoses its bytes | `$(warning)` yellow | malformed |
 | Failed to read | mEdit could not read it | `$(error)` red | failed to read |
 | Master issues | it is active, and a master in its header is not (xedit.md, divergence 28); once the snapshot is indexed | `$(error)` red | 1 master issue, N master issues |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
 | Plugin source unreadable | it is a compiled plugin, and its plugin source is missing or cannot be read | `$(warning)` yellow | plugin source unreadable |
 | Changed outside Modbench | it is a compiled plugin, and its bytes differ from what Modbench last wrote, or either cannot be read | `$(warning)` yellow | changed outside Modbench |
-| Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 
 - A master issue never disables the plugin or cascades to its dependants. The check box stays as I set it. Cites: xedit.md, divergence 28
 - Before the snapshot is indexed, a plugin shows no master status. That means not yet checked, not no issues.

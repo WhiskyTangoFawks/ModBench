@@ -17,8 +17,22 @@ As a user, I want:
 
 1. To decompile any plugin in my modlist, whatever tool wrote it and however it bends convention.
 2. To trust the source: it says what the plugin means, and compiling it unchanged gives a plugin that means the same, though its bytes may differ. Cites: ADR-0006
-3. To be told when a plugin cannot become source without losing meaning, and never to get a source that quietly lost it. The refusal names the record, and says whether the plugin is malformed or Mutagen mishandles it, because the remedy differs. Cites: Never silently wrong; CONTEXT.md, Malformed plugin
+3. To be told when a plugin cannot become source without losing meaning, and never to get a source that quietly lost it. The refusal names the record, and says whether the plugin is malformed (Mutagen refuses it) or Mutagen mishandles it, because the remedy differs. Cites: Never silently wrong; CONTEXT.md, Malformed plugin
 4. To take the author's new release into my edits myself: decompile it onto the mod's `main`, then merge my branch with git, where each conflict lands in one record's file. Cites: ADR-0007
+
+## Decompile and repair
+
+This is an exception to Refuse, do not repair ([commands.md](../commands.md)): I run it on purpose, and it names every change before it writes.
+
+As a user, I want:
+
+1. To run Decompile and repair on a malformed plugin from its Problems entry or its row in the plugins list. Cites: CONTEXT.md, Malformed plugin
+2. A preview that names each change with its record, and any data the change drops, before anything is written. Cites: Never silently wrong
+3. A repair that drops data to write nothing until I agree to that data. Cites: Never silently wrong
+4. A plugin the engine cannot repair to show its reason, with no repair offered. Cites: Refuse, do not repair
+5. A repair refused, naming the change, when the plugin's bytes changed after the preview. Cites: ADR-0003
+6. Two commits in the mod's plugin source. The first decompiles the plugin with each malformed record kept as it is, and a field in its file holds the error Mutagen gave. Every other record is as it is. The second holds only the repaired records. The history then shows what the repair changed. Cites: ADR-0006; ADR-0007
+7. When the mod has no source repository, the repair creates one, as Decompile and commit does. Cites: commands.md, decompile and commit
 
 ## Changes outside Modbench
 
