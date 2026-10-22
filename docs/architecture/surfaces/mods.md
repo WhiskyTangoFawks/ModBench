@@ -82,6 +82,7 @@ A mod row carries an indicator for each status that holds. A disabled mod carrie
 | Overwritten loose files | a file of the mod loses to another copy, and the mod is not Redundant | on | off |
 | Redundant | the mod has a file the game could get, and every such file loses to another copy | on | off |
 | Contains excluded files | the mod has an excluded file | off | off |
+| Update available | the newest version check for updates wrote in the mod's metadata differs from the mod's version | on | off |
 
 The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Cites: mo2.md, divergence 12
 
@@ -115,8 +116,8 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 
 | Where | Items, in order |
 |---|---|
-| Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod · update manifest · restore from manifest…, on every mod (the instance has a repository). Collapse All last. |
-| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add separator · create empty mod · install… · decompile and commit (a mod with no source that holds a plugin) · build (a source mod) · update manifest · restore from manifest… (the instance has a repository) · copy value · uninstall |
+| Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod · check for updates, on every mod (I am logged in) · update manifest · restore from manifest…, on every mod (the instance has a repository). Collapse All last. |
+| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · decompile and commit (a mod with no source that holds a plugin) · build (a source mod) · update manifest · restore from manifest… (the instance has a repository) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · update manifest · restore from manifest… (the instance has a repository) · copy value · delete |
 | Overwrite menu | open folder |
 | File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · copy value |
@@ -213,10 +214,19 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 3. An upgrade to replace the mod's files in place, and to keep its folder name and its manifest. Its repository is beside `mods/`, and an upgrade never touches it. Cites: ADR-0007; ADR-0022
 4. An upgrade to keep every value in the mod's metadata that the new file does not know, so an unknown version never blanks a known one. Cites: ADR-0017
 5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery, and a source mod's plugin source stays in git. This is an exception to A failed gesture writes nothing.
+6. Install and upgrade to write the mod's manifest as update manifest does, while the instance has a repository, so Source Control shows the change I made. Cites: modlist-repository.md, Update manifest
 
 ### Uninstall
 
 As a user, I want one confirmation for the whole selection, naming the mod when there is one and listing the mods when there are several, and saying the folders go to the trash, and a source mod's source with them. Cites: Confirm what destroys; MO2's recycle bin; A source mod, story 5
+
+### Check for updates
+
+As a user, I want:
+
+1. No prompt. Each mod with a Nexus mod ID asked about once, and its installation file followed along its update chain to the newest file, as MO2 does. Cites: MO2
+2. The newest version written in the mod's metadata, where MO2 reads it, so MO2 shows the same update. Cites: Never break the instance for its owner
+3. A mod with no Nexus mod ID, or one Nexus no longer has, left as it was and named in the Output. Cites: Never silently wrong
 
 ### Go to mod
 
@@ -230,6 +240,7 @@ By [common.md](common.md#reporting). As a user, I want:
 2. When `mods/` cannot be listed, the mod order untouched, and the reason in the view's message line and the Output.
 3. An uninstall or a separator delete that trashed the folder, and then failed on its line, reported as done, with a line in the Output: `mod sync` drops the line. This is an exception to A failed gesture writes nothing.
 4. An uninstall that landed, and then failed to mark its downloaded file uninstalled, not reported as failed. The failed metadata write is a line in the Output.
+5. Check for updates to say in one line how many mods have an update, and how many it could not ask about.
 
 ## Test seam
 
