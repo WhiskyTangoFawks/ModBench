@@ -20,11 +20,13 @@ export function parseDownloadedFileMeta(text: string): { meta: DownloadedFileMet
     return value && value !== '0' ? value : undefined;
   };
   const modID = id('modID');
+  const fileCategory = values.get('fileCategory');
   const fileID = id('fileID');
   const installedKey = modID && fileID ? installedFileKey({ nexusId: modID, fileId: fileID }) : undefined;
   const meta: DownloadedFileMeta = {
     status,
     modID,
+    fileCategory: fileCategory === undefined ? undefined : Number.isInteger(Number(fileCategory)) ? Number(fileCategory) : 0,
     name: values.get('name'),
     version: values.get('version'),
     modName: values.get('modName'),

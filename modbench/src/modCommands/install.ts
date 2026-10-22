@@ -35,12 +35,17 @@ async function resolve(adapter: InstanceAdapter, installed: ModPackage): Promise
   return { extracted: { kind: 'archive', path: file.path }, file };
 }
 
+const DEFAULT_FILE_CATEGORY = 1;
+
 function keysFor(installed: ModPackage, file: DownloadedFile | undefined): InstallKeys {
   if (file !== undefined) {
-    const { modID, installedKey, version } = file.meta ?? {};
-    return { installationFileName: file.name, nexusId: modID, version, installedFileKeys: installedKey === undefined ? undefined : [installedKey] };
+    const { modID, installedKey, version, fileCategory } = file.meta ?? {};
+    return {
+      installationFileName: file.name, nexusId: modID ?? file.modIDFromName, version, nexusFileStatus: fileCategory ?? DEFAULT_FILE_CATEGORY,
+      installedFileKeys: installedKey === undefined ? undefined : [installedKey],
+    };
   }
-  return installed.kind === 'archive' ? { installationFileName: basename(installed.path) } : {};
+  return { ...(installed.kind === 'archive' ? { installationFileName: basename(installed.path) } : {}), nexusFileStatus: DEFAULT_FILE_CATEGORY };
 }
 
 // The folder can appear or vanish between the caller's decision and the install, as the mod

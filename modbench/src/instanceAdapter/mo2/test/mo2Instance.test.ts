@@ -77,7 +77,7 @@ async function installHeld(root: string, target: InstallTarget): Promise<{ extra
       await held;
     },
   };
-  const installing = adapterAt(root, undefined, undefined, installationFileReader).install({ kind: 'archive', path: '/elsewhere/New.7z' }, target, {});
+  const installing = adapterAt(root, undefined, undefined, installationFileReader).install({ kind: 'archive', path: '/elsewhere/New.7z' }, target, { nexusFileStatus: 1 });
   return {
     extraction: await extraction,
     settle: () => {
@@ -435,6 +435,18 @@ describe('the MO2 Instance adapter', () => {
       expect(byName.get('manual.zip')?.size).toBe(3);
       expect(byName.get('manual.zip')?.path).toBe(join(root, 'downloads', 'manual.zip'));
       expect(byName.get('manual.zip')?.metadataPath).toBe(join(root, 'downloads', 'manual.zip.meta'));
+    });
+
+    it('carries the Nexus mod ID a file\'s name holds, beside its metadata', async () => {
+      await writeFile(join(root, 'downloads', 'Named Mod-4321-1-0-1700000000.7z'), '7z');
+      await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
+
+      const downloadedFiles = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
+
+      if (downloadedFiles.kind !== 'listed') throw new Error(`expected listed, got ${downloadedFiles.reason}`);
+      const idsByName = new Map((downloadedFiles.files ?? []).map((file) => [file.name, file.modIDFromName]));
+      expect(idsByName.get('Named Mod-4321-1-0-1700000000.7z')).toBe('4321');
+      expect(idsByName.get('manual.zip')).toBeUndefined();
     });
 
     it('answers metadata that is there but empty as metadata, so a file whose metadata is there to open does not show none', async () => {

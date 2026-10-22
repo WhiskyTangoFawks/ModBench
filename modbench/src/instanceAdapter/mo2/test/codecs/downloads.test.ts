@@ -24,6 +24,14 @@ describe('parseDownloadedFileMeta', () => {
     expect(metaOf('[General]\r\nmodID=0\r\n').modID).toBeUndefined();
   });
 
+  it.each([
+    ['[General]\r\nfileCategory=3\r\n', 3],
+    ['[General]\r\nfileCategory=abc\r\n', 0],
+    ['[General]\r\n', undefined],
+  ])('reads the file category of %j as %s', (text, expected) => {
+    expect(metaOf(text).fileCategory).toBe(expected);
+  });
+
   it('keys the installed file by its mod and file ids, and by nothing when either is absent', () => {
     expect(metaOf('[General]\r\nmodID=9\r\nfileID=78\r\n').installedKey).toBe('9:78');
     expect(metaOf('[General]\r\nmodID=9\r\n').installedKey).toBeUndefined();

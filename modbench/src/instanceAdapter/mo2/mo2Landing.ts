@@ -26,6 +26,7 @@ function keysOver(keys: OwnedMetaKeys, carried: MetaIni): OwnedMetaKeys {
     version: keys.version ?? carried.version,
     installationFileName: keys.installationFileName ?? carried.installationFileName,
     installedFiles: keys.installedFiles ?? carried.installedFiles,
+    nexusFileStatus: keys.nexusFileStatus,
   };
 }
 

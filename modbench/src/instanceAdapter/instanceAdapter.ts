@@ -119,7 +119,7 @@ export type MovePlace =
 export type SeparatorsPlace = Extract<MovePlace, { kind: 'separator' | 'modOrder' }>;
 
 /** What the caller supplies for the record an install leaves with the mod; the adapter adds what it knows of the instance. */
-export type InstallKeys = Pick<ModMeta, 'nexusId' | 'version' | 'installationFileName' | 'installedFileKeys'>;
+export type InstallKeys = Pick<ModMeta, 'nexusId' | 'version' | 'installationFileName' | 'installedFileKeys'> & { readonly nexusFileStatus: number };
 
 export type DownloadedFileStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 
@@ -128,6 +128,8 @@ export type DownloadedFileStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 export interface DownloadedFileMeta {
   status: DownloadedFileStatus;
   modID?: string;
+  /** The Nexus file category the metadata records; absent when it records none. */
+  fileCategory?: number;
   name?: string;
   version?: string;
   modName?: string;
@@ -148,6 +150,8 @@ export interface DownloadedFile {
   readonly mtimeMs: number;
   readonly excluded: boolean;
   readonly meta: DownloadedFileMeta | undefined;
+  /** The Nexus mod ID the file's name carries, which install takes when the metadata has none. */
+  readonly modIDFromName: string | undefined;
 }
 
 /** The downloaded files, or why their folder could not be resolved. `files` is undefined when the

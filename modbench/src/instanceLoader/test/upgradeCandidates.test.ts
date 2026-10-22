@@ -9,11 +9,12 @@ const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): I
   ...over,
 });
 
-const downloadedFile = (over: { modID?: string; installedKey?: string; name?: string }): DownloadedFile => {
-  const { name = 'foo.7z', ...ids } = over;
+const downloadedFile = (over: { modID?: string; modIDFromName?: string; installedKey?: string; name?: string }): DownloadedFile => {
+  const { name = 'foo.7z', modIDFromName, ...ids } = over;
   return {
     name, path: `/downloads/${name}`, metadataPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1, excluded: false,
     meta: { status: 'Downloaded', ...ids },
+    modIDFromName,
   };
 };
 
@@ -27,6 +28,16 @@ describe('the upgrade candidates of a downloaded file', () => {
   it('is empty when the downloaded file carries no mod id', () => {
     const value = [mod({ name: 'Harder VATS', nexusId: '111' })];
     expect(offered(value, downloadedFile({}))).toEqual([]);
+  });
+
+  it('takes the mod id from the file name when the metadata has none', () => {
+    const value = [mod({ name: 'Harder VATS', nexusId: '111' })];
+    expect(offered(value, downloadedFile({ modIDFromName: '111' }))).toEqual([['Harder VATS', undefined]]);
+  });
+
+  it('prefers the metadata\'s mod id to the file name\'s', () => {
+    const value = [mod({ name: 'Harder VATS', nexusId: '111' }), mod({ name: 'Other', nexusId: '222' })];
+    expect(offered(value, downloadedFile({ modID: '111', modIDFromName: '222' }))).toEqual([['Harder VATS', undefined]]);
   });
 
   it('is empty when no installed mod carries the downloaded file\'s mod id', () => {
