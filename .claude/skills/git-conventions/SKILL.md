@@ -11,7 +11,7 @@ description: This repo's git workflow — every stream of work gets its own work
 
 1. `git worktree list` and `ListAgents` — see what's already live before adding to it.
 2. For every live worktree, `git -C <worktree> diff --name-only main` and compare against the files your own work expects to touch. Overlap on a shared file: wait, negotiate order, or pick a different slice. No overlap: proceed.
-3. `git worktree add ../<repo>-fix-<n>-<slug> fix-<n>-<slug>` — a sibling directory, never the main checkout. `.claude/worktrees/` belongs to the `Agent` tool's own auto-managed isolation; don't hand-create worktrees there. An orchestrated executor works in one of those, cut from local `HEAD` (`worktree.baseRef` is `head`), creates its `fix-<n>-<slug>` branch inside it, and the orchestrator removes it at land.
+3. `git worktree add ../fix-<n>-<slug> fix-<n>-<slug>` — a sibling directory, never the main checkout. `.claude/worktrees/` belongs to the `Agent` tool's own auto-managed isolation; don't hand-create worktrees there. An orchestrated executor works in one of those, cut from local `HEAD` (`worktree.baseRef` is `head`), creates its `fix-<n>-<slug>` branch inside it, and the orchestrator removes it at land.
 4. Claim tracked-ticket work immediately: `gh issue edit <n> --add-assignee @me` or a claiming comment.
 
 ## While working
