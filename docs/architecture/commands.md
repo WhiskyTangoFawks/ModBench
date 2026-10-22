@@ -127,7 +127,7 @@ What every list view does to whatever it shows, whatever the object. common.md s
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
 | open settings | reads | `modbench.settings.open` | - | - | MO2 toolbar | Open VS Code's Settings editor, filtered to Modbench's settings. | none |
-| log in / log out | writes | `modbench.instance.logIn`, `modbench.instance.logOut` | - | key | MO2 settings, Nexus tab, Enter API Key Manually | Keep my Nexus API key in VS Code's secret storage, or forget it. Every gesture that asks Nexus uses it. | none |
+| log in / log out | writes | `modbench.instance.logIn`, `modbench.instance.logOut` | - | key | MO2 settings, Nexus tab, Enter API Key Manually | Keep my Nexus API key, or forget it. Every gesture that asks Nexus uses it. | none |
 | refresh | writes | `modbench.instance.refresh` | - | - | MO2 toolbar | Drop and rebuild the record index, then re-read the instance from disk. One gesture for all of Modbench. It is a safety net, not how changes normally arrive. It is refused while another window holds the record index. | load-instance |
 
 ## Profile
@@ -159,7 +159,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | build | writes | `modbench.mod.build` | mods | - | none | Write a source mod's folder from its source as its build configuration says: copy its assets, compile its plugins, pack loose files into archives where configured, and write its manifest. A file it did not make stays. On a plugin row or an Editor column, it acts on the plugin's mod. | build-mod |
 | update manifest | writes | `modbench.mod.updateManifest` | mods or separators, or none for every mod | - | none | Write each mod's manifest from the mod and its metadata: where each file comes from, or that nothing does, and the mod's version. A source mod's manifest is left to its build. | update-manifest |
 | restore from manifest | writes | `modbench.mod.restoreFromManifest` | mods or separators, or none for every mod | force: [agent.md](surfaces/agent.md#any-agent), story 7 | none | Make each mod's folder what its manifest says: write every file whose bytes differ, from the downloaded files it names, or by building its submodule at the commit the modlist pins, cloned when absent, write the mod's metadata, and send every other file the manifest does not name to the trash. An installation file the downloads folder lacks is first downloaded from Nexus. | restore-from-manifest |
-| check for updates | writes | `modbench.mod.checkForUpdates` | mods or separators, or none for every mod | - | MO2 mod list | Ask Nexus for the newest version of each mod's installation file along its update chain, and write it in the mod's metadata, as MO2's `newestVersion`. | - |
+| check for updates | writes | `modbench.mod.checkForUpdates` | mods or separators, or none for every mod | - | MO2 mod list | Ask Nexus for the newest version of each mod, and write it in the mod's metadata, as MO2 does. | - |
 | sort direction | reads | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
 | open folder | reads | `modbench.mod.openFolder` | mod, or overwrite, or a file or folder in one | - | MO2 mod list, Overwrite row | Show a mod's folder, or a file or folder in it, in VS Code's Explorer. The Overwrite row opens the overwrite folder. | none |
 | open source | reads | `modbench.mod.openSource` | mod | - | none | Show a source mod's source folder in VS Code's Explorer. | none |
@@ -216,7 +216,7 @@ A field gesture from the palette acts on the focused cell of the record tab in f
 |---|---|---|---|---|---|---|---|
 | exclude / include | writes | `modbench.downloadedFile.exclude`, `modbench.downloadedFile.include` | downloaded files | - | MO2 Downloads | Mark downloaded files excluded in the metadata the mod manager keeps for them, as MO2's `.meta`, or clear the mark. `show excluded` decides whether the list shows them. | update-load-order-file |
 | delete | writes | `modbench.downloadedFile.delete` | downloaded files | - | MO2 Downloads | Delete downloaded files. | update-load-order-file |
-| query info | writes | `modbench.downloadedFile.queryInfo` | downloaded files | - | MO2 Downloads, Query Info (MD5) | Look each file up on Nexus by its MD5, and write what Nexus knows of it in its metadata, as MO2's `.meta`. | - |
+| query info | writes | `modbench.downloadedFile.queryInfo` | downloaded files | - | MO2 Downloads, Query Info (MD5) | Look each file up on Nexus, and write what Nexus knows of it in its metadata, as MO2 does. | - |
 | open | reads | `modbench.downloadedFile.open` | downloaded file | - | MO2 Downloads | Open a downloaded file in its system application. | none |
 | open metadata | reads | `modbench.downloadedFile.openMeta` | downloaded file | - | MO2 Downloads | Open the file that holds a downloaded file's metadata, as MO2's `.meta`, in an editor tab. | none |
 | sort | reads | `modbench.downloadedFile.sort` | - | field | MO2 Downloads | Choose the field the downloaded files sort by. | none |

@@ -56,7 +56,7 @@ As a user, I want:
 3. My agent never to refresh the instance. Refresh is my safety net, not how changes arrive. Cites: catalog, Instance, `refresh`
 4. Each gesture my agent runs to be a tool of its own, named for the gesture, whose input says the JSON type of its Argument and Options. Cites: VS Code's interaction
 5. My agent never to log in or log out. My Nexus API key is mine.
-6. My agent's install of a FOMOD to name its choices by step, group and option, as the installer shows them. A request whose choices leave a step I would see unanswered is refused, and the refusal lists that step's groups and options, so my agent answers step by step. Nothing is chosen for it, not even the author's defaults. Cites: Names, story 2; mods-fomod.md
+6. My agent's install of a FOMOD to name its choices by step, group and option, as the installer shows them. A request whose choices leave a step I would see unanswered is refused, and the refusal lists that step's groups and options, so my agent answers step by step. Nothing is chosen for it, not even the author's defaults. A step that needs no pick is answered with none, my agent may ask for Manual in place of choices, and the result names each file the FOMOD names and its archive lacks. Cites: Names, story 2; mods-fomod.md
 
 ## Reporting
 

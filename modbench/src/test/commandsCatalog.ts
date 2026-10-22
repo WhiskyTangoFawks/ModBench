@@ -15,6 +15,8 @@ export const SPECIFIED_AHEAD_OF_CODE = [
   'modbench.downloadedFile.queryInfo',
 ];
 
+export const RETIRED_AHEAD_OF_CODE: string[] = [];
+
 /** The Command IDs of the catalog's rows, or of those whose Effect is `effect`. */
 export function catalogCommandIds(markdown: string, effect?: string): Set<string> {
   const ids = new Set<string>();

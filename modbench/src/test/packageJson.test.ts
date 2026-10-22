@@ -6,7 +6,7 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
 } from './vscodeMock';
 import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
-import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN, SPECIFIED_AHEAD_OF_CODE } from './commandsCatalog';
+import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN, SPECIFIED_AHEAD_OF_CODE, RETIRED_AHEAD_OF_CODE } from './commandsCatalog';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
 const orderOf = (entry: MenuEntry): number => Number((entry.group ?? '').split('@')[1] ?? Number.NaN);
@@ -565,7 +565,7 @@ describe('package.json command titles and categories', () => {
     ).toEqual([]);
   });
 
-  it('registers no gesture the catalog lists as specified ahead of its code', () => {
+  it('registers no gesture still listed as specified ahead of its code, so the list expires with the code', () => {
     const declared = new Set(commands.map((c) => c.command));
     expect(SPECIFIED_AHEAD_OF_CODE.filter((id) => declared.has(id))).toEqual([]);
   });
@@ -1243,7 +1243,6 @@ const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'mod
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
 const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_PINNED, OPEN_REFERENCE, ...EVERY_MOD_ENTRY_POINTS];
-const RETIRED_AHEAD_OF_CODE: string[] = [];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);

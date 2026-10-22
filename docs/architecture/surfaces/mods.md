@@ -82,7 +82,7 @@ A mod row carries an indicator for each status that holds. A disabled mod carrie
 | Overwritten loose files | a file of the mod loses to another copy, and the mod is not Redundant | on | off |
 | Redundant | the mod has a file the game could get, and every such file loses to another copy | on | off |
 | Contains excluded files | the mod has an excluded file | off | off |
-| Update available | the newest version check for updates wrote in the mod's metadata differs from the mod's version | on | off |
+| Update available | the mod's version is older than the newest version check for updates found | on | off |
 
 The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Cites: mo2.md, divergence 12
 
@@ -224,7 +224,7 @@ As a user, I want one confirmation for the whole selection, naming the mod when 
 
 As a user, I want:
 
-1. No prompt. Each mod with a Nexus mod ID asked about once, and its installation file followed along its update chain to the newest file, as MO2 does. Cites: MO2
+1. No prompt. Each mod with a Nexus mod ID asked about, as MO2 does. Cites: MO2
 2. The newest version written in the mod's metadata, where MO2 reads it, so MO2 shows the same update. Cites: Never break the instance for its owner
 3. A mod with no Nexus mod ID, or one Nexus does not hold, left as it was and named in the Output. Cites: Never silently wrong
 
