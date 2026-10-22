@@ -50,9 +50,6 @@ const shared = {
   version: '1.140.0',
   cachePath,
   extensionDevelopmentPath: '.',
-  // Installing a dependency downloads a second VS Code into the checkout, and the one dependency,
-  // vscode.git, ships with VS Code.
-  skipExtensionDependencies: true,
   launchArgs: [
     '--user-data-dir', path.join(runDir, 'user-data'), '--extensions-dir', path.join(runDir, 'extensions'),
     '--logsPath', logs,

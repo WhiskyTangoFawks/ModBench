@@ -21,13 +21,10 @@
   ],
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": false,
-      "description": "Modbench writes to your mod manager's instance and runs its own service, so it needs the folder trusted."
+      "supported": "limited",
+      "description": "Modbench is off until you trust this folder. It changes your mod files and runs git here."
     }
   },
-  "extensionDependencies": [
-    "vscode.git"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "walkthroughs": [
@@ -39,7 +36,7 @@
           {
             "id": "openInstance",
             "title": "Open your mod manager's instance",
-            "description": "Open the folder where your mod manager keeps this instance, and trust it when VS Code asks.\n[Open Folder](command:workbench.action.files.openFolder)",
+            "description": "Open the folder where your mod manager keeps this instance. If VS Code opens it in Restricted Mode, Modbench is off until you trust it from the banner or from Modbench's views.\n[Open Folder](command:workbench.action.files.openFolder)",
             "media": {
               "markdown": "walkthrough/getting-started.md"
             },
@@ -260,6 +257,26 @@
       ]
     },
     "viewsWelcome": [
+      {
+        "view": "modbench.toolbox",
+        "contents": "Modbench is off until you trust this folder. It changes your mod files and runs git here.\n[Trust This Folder](command:workbench.trust.manage)",
+        "when": "modbench.folder == untrustedInstance"
+      },
+      {
+        "view": "modbench.modList",
+        "contents": "Modbench is off until you trust this folder. It changes your mod files and runs git here.\n[Trust This Folder](command:workbench.trust.manage)",
+        "when": "modbench.folder == untrustedInstance"
+      },
+      {
+        "view": "modbench.pluginListTree",
+        "contents": "Modbench is off until you trust this folder. It changes your mod files and runs git here.\n[Trust This Folder](command:workbench.trust.manage)",
+        "when": "modbench.folder == untrustedInstance"
+      },
+      {
+        "view": "modbench.downloads",
+        "contents": "Modbench is off until you trust this folder. It changes your mod files and runs git here.\n[Trust This Folder](command:workbench.trust.manage)",
+        "when": "modbench.folder == untrustedInstance"
+      },
       {
         "view": "modbench.toolbox",
         "contents": "No mod manager instance is open.\nOpen the folder of an instance Modbench recognizes.\n[Open Folder…](command:vscode.openFolder)",
@@ -709,6 +726,14 @@
     ],
     "menus": {
       "commandPalette": [
+        {
+          "command": "modbench.record.open",
+          "when": "isWorkspaceTrusted"
+        },
+        {
+          "command": "modbench.copyValue",
+          "when": "isWorkspaceTrusted"
+        },
         {
           "command": "modbench.record.openPinned",
           "when": "false"

@@ -35,7 +35,7 @@ import { hostGit } from './hostGit';
 import { registerModlistCommands } from './toolbox/modlistGestures';
 import { publishRepository } from './toolbox/repositoryContext';
 import { registerRefreshCommand, registerToolboxCommands, TOOLBOX_VIEW } from './toolbox/toolboxCommands';
-import { openedFolder, whenOpened } from './toolbox/instanceCheck';
+import { afterTrust, openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
 import { toastOncePerFailure } from './drivingLib/toastOncePerFailure';
 import { reportSubscriberThrows } from './drivingLib/reportSubscriberThrows';
@@ -227,6 +227,10 @@ function buildViews(opened: Opened, { own, dispose }: ReturnType<typeof ownershi
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  context.subscriptions.push(afterTrust(isInstance, () => { start(context); }));
+}
+
+function start(context: vscode.ExtensionContext): void {
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);
 
