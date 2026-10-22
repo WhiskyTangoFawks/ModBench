@@ -225,6 +225,12 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
     expect(steps.find(({ id }) => id === 'gitInit')?.completionEvents).toEqual([`onContext:${HAS_REPOSITORY_KEY} == true`]);
   });
 
+  it('ticks the agent step when I list my MCP servers, where VS Code Chat already has Modbench, or open the page that sets up another agent (story 3)', () => {
+    expect(steps.find(({ id }) => id === 'agent')?.completionEvents).toEqual([
+      'onCommand:workbench.mcp.listServer', `onLink:${REPOSITORY}/blob/main/docs/wiki/agent.md`,
+    ]);
+  });
+
   it('ticks the decompile step when a source mod exists (story 3)', () => {
     expect(steps.find(({ id }) => id === 'decompile')?.completionEvents).toEqual([`onContext:${ANY_SOURCE_MOD_KEY} == true`]);
   });

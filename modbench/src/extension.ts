@@ -22,6 +22,7 @@ import { sourceFiles, NO_SOURCE_FILES, type SourceFilesOf } from './instanceLoad
 import { downloadedFileReader, type InstanceAdapter } from './instanceAdapter/instanceAdapter';
 import { adapterForInstance, isInstance } from './instanceAdapter/openInstance';
 import { serveAgent } from './agent/agentServer';
+import { offerToVsCodeChat } from './agent/vsCodeChat';
 import { agentPort } from './agent/agentPort';
 import { attachPort, gameFolderSetting, onStringsLanguageChange, stringsLanguage } from './workspaceConfig';
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
@@ -276,11 +277,13 @@ function start(context: vscode.ExtensionContext): void {
     focusedView,
     editor,
   });
+  const agentServer = serveAgent({ port: agentPort(), instance: views.instance, readStatus: views.readStatus, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel });
   context.subscriptions.push(
     views,
     plugins,
     editor,
-    serveAgent({ port: agentPort(), instance: views.instance, readStatus: views.readStatus, mEdit: meditClient, terminalEnvironment: context.environmentVariableCollection, reporter: reporterFor('agent'), log: outputChannel }),
+    agentServer,
+    offerToVsCodeChat(agentServer),
     reachMEditFromTerminals(context.environmentVariableCollection, meditClient, vscode.Uri.joinPath(context.extensionUri, 'scripts').fsPath),
     createSourceLanguage({
       client: meditClient, sourceFiles: (origin) => views.sourceFiles(origin), reporter: makeReporter(outputChannel, 'sourceLanguage'),
