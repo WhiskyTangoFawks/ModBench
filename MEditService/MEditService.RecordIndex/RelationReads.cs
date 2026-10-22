@@ -184,7 +184,7 @@ internal sealed class RelationReads(
             return context.Rows($"SELECT to_json(__row) FROM ({sql}\n) __row",
                 reader => JsonDocument.Parse(reader.GetString(0)).RootElement.Clone()).ToArray();
         }
-        catch (IndexFaultException ex) when (ex.Fault == IndexFault.BadSql)
+        catch (IndexFaultException ex) when (ex.Fault is IndexFault.Refused or IndexFault.RowValue)
         {
             return ex.Message;
         }
@@ -306,7 +306,7 @@ internal sealed class RelationReads(
                     AND own.plugin = fr.source_plugin AND own.origin = fr.source_origin)
             ORDER BY fr.source_plugin, fr.source_origin, fr.source_form_key, fr.field_path
             """, reader => new MissingReference(
-                ReadContext.ReadPluginAddress(reader), reader.GetString(2), reader.GetString(3),
+                reader.GetPluginAddress(), reader.GetString(2), reader.GetString(3),
                 reader.GetStringOrNull(4), reader.GetString(5), reader.GetString(6)))
             .Where(reference => FormKeyResolution.From(reference.TargetFormKey, null, [], release).State == FormKeyResolutionState.Unresolved)
             .ToList();
@@ -370,7 +370,7 @@ internal sealed class RelationReads(
 
         return new HashSet<PluginAddress>(
             context.Rows($"SELECT DISTINCT plugin, origin FROM records{where}",
-                ReadContext.ReadPluginAddress, [.. paramValues]),
+                reader => reader.GetPluginAddress(), [.. paramValues]),
             PluginAddress.Comparer);
     }
 
@@ -384,7 +384,7 @@ internal sealed class RelationReads(
             FROM {TableDdlBuilder.PluginDiagnosisTable}
             ORDER BY plugin, origin, ordinal
             """, reader => new PluginDiagnosisRow(
-                ReadContext.ReadPluginAddress(reader),
+                reader.GetPluginAddress(),
                 new PluginDiagnosis(
                     reader.GetStringOrNull(2), reader.GetString(3), reader.GetStringOrNull(4), reader.GetString(5))));
     }
@@ -394,7 +394,7 @@ internal sealed class RelationReads(
     {
         using var context = store.OpenRead();
         var rows = context.Rows($"SELECT plugin, origin, strings_read FROM {Store.Store.FilesRelation} WHERE strings_read IS NOT NULL",
-            reader => KeyValuePair.Create(ReadContext.ReadPluginAddress(reader), reader.GetString(2)));
+            reader => KeyValuePair.Create(reader.GetPluginAddress(), reader.GetString(2)));
         return new Dictionary<PluginAddress, string>(rows, PluginAddress.Comparer);
     }
 
@@ -404,7 +404,7 @@ internal sealed class RelationReads(
         using var context = store.OpenRead();
         var rows = context.Rows($"SELECT plugin, origin, derived_from FROM {TableDdlBuilder.PluginDerivationTable}",
             reader => KeyValuePair.Create(
-                ReadContext.ReadPluginAddress(reader), Enum.Parse<DerivedFrom>(reader.GetString(2))));
+                reader.GetPluginAddress(), Enum.Parse<DerivedFrom>(reader.GetString(2))));
         return new Dictionary<PluginAddress, DerivedFrom>(rows, PluginAddress.Comparer);
     }
 
@@ -420,7 +420,7 @@ internal sealed class RelationReads(
                 WHERE r.parse_diagnosis IS NOT NULL
                 UNION
                 SELECT DISTINCT plugin, origin FROM record_type_failure
-                """, ReadContext.ReadPluginAddress),
+                """, reader => reader.GetPluginAddress()),
             PluginAddress.Comparer);
     }
 

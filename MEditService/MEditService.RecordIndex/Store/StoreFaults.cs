@@ -3,17 +3,8 @@ using DuckDB.NET.Native;
 
 namespace MEditService.RecordIndex.Store;
 
-/// <summary>Restates what the engine throws in the record index's own exceptions, so no client type
-/// leaves the Store.</summary>
 internal static class StoreFaults
 {
-    public static Exception Of(DuckDBException ex) => ex.ErrorType switch
-    {
-        DuckDBErrorType.Fatal => new IndexFaultException(ex.Message, ex) { Fault = IndexFault.Invalidated },
-        DuckDBErrorType.OutOfMemory => new IndexFaultException(ex.Message, ex) { Fault = IndexFault.OutOfMemory },
-        _ => new IndexFaultException(ex.Message, ex) { Fault = IndexFault.BadSql },
-    };
-
     public static T Translating<T>(Func<T> act)
     {
         try
@@ -25,4 +16,21 @@ internal static class StoreFaults
             throw Of(ex);
         }
     }
+
+    public static void Translating(Action act) => Translating(() =>
+    {
+        act();
+        return true;
+    });
+
+    private static IndexFaultException Of(DuckDBException ex) => new(ex.Message)
+    {
+        Fault = ex.ErrorType switch
+        {
+            DuckDBErrorType.Fatal => IndexFault.Invalidated,
+            DuckDBErrorType.OutOfMemory => IndexFault.OutOfMemory,
+            DuckDBErrorType.Conversion or DuckDBErrorType.OutOfRange or DuckDBErrorType.InvalidInput => IndexFault.RowValue,
+            _ => IndexFault.Refused,
+        },
+    };
 }

@@ -1,5 +1,6 @@
 using System.Data.Common;
 using DuckDB.NET.Data;
+using MEditService.LoadOrder;
 
 namespace MEditService.RecordIndex.Store;
 
@@ -53,6 +54,9 @@ internal static class DuckDbSql
 
     public static string? GetStringOrNull(this DbDataReader reader, int ordinal) =>
         reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+
+    public static PluginAddress GetPluginAddress(this DbDataReader reader) =>
+        new(reader.GetString(0), reader.GetString(1));
 
     private static DuckDBCommand Command(DuckDBConnection connection, string sql, object?[] args)
     {

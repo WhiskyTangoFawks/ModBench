@@ -30,6 +30,21 @@ internal static class IndexFiles
     internal static void AbortNextCheckpoint(string instanceRoot) =>
         Execute(instanceRoot, "SET GLOBAL checkpoint_threshold = '1KB'; SET GLOBAL debug_checkpoint_abort = 'before_header'");
 
+    /// <summary>Invalidates the open Index's database: a checkpoint aborted by a fatal error.</summary>
+    internal static void Invalidate(string instanceRoot)
+    {
+        AbortNextCheckpoint(instanceRoot);
+        try
+        {
+            Execute(instanceRoot, "CREATE TABLE aborts_the_checkpoint AS SELECT range AS n FROM range(100000)");
+        }
+        catch (DuckDBException)
+        {
+            return;
+        }
+        throw new InvalidOperationException("Expected the aborted checkpoint to invalidate the database.");
+    }
+
     /// <summary>Every row <paramref name="sql"/> yields over the public relations, sorted, as text.
     /// DuckDB.NET shares one database per path in a process, so this joins the open Index's own and
     /// leaves its filter alone.</summary>

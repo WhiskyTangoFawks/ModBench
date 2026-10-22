@@ -1,6 +1,5 @@
 using System.Data.Common;
 using DuckDB.NET.Data;
-using MEditService.LoadOrder;
 
 namespace MEditService.RecordIndex.Store;
 
@@ -16,9 +15,6 @@ internal sealed class ReadContext : IDisposable
         _connection = connection;
         _owned = owned;
     }
-
-    public static PluginAddress ReadPluginAddress(DbDataReader reader) =>
-        new(reader.GetString(0), reader.GetString(1));
 
     public List<T> Rows<T>(string sql, Func<DbDataReader, T> map, params object?[] args) =>
         DuckDbSql.Rows(_connection, sql, map, args);

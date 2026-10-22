@@ -95,9 +95,7 @@ internal sealed class Store : IDisposable
     {
         if (_databasePath == null)
         {
-            var memory = new DuckDBConnection("DataSource=:memory:");
-            memory.Open();
-            _connection = memory;
+            _connection = Opened("DataSource=:memory:");
             return null;
         }
 
@@ -139,8 +137,7 @@ internal sealed class Store : IDisposable
         lock (_readsGate)
         {
             if (_closedToReads) throw new IndexNotReadyException("mEdit's record index is closed to new reads while it is replaced.");
-            var connection = _databasePath == null ? Connection.Duplicate() : new DuckDBConnection($"DataSource={_databasePath}");
-            connection.Open();
+            var connection = _databasePath == null ? Opened(Connection.Duplicate()) : Opened($"DataSource={_databasePath}");
             _readsInFlight++;
             connection.Disposed += (_, _) => { lock (_readsGate) { _readsInFlight--; Monitor.PulseAll(_readsGate); } };
             return new ReadContext(connection, owned: true);
@@ -172,6 +169,24 @@ internal sealed class Store : IDisposable
             return _readsInFlight == 0;
         }
     }
+
+    private static DuckDBConnection Opened(string connectionString) => Opened(new DuckDBConnection(connectionString));
+
+    private static DuckDBConnection Opened(DuckDBConnection connection)
+    {
+        try
+        {
+            StoreFaults.Translating(connection.Open);
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
+    }
+
+    private StoreTransaction BeginTransaction() => new(StoreFaults.Translating(Connection.BeginTransaction));
 
     internal bool IsInvalidated()
     {
@@ -206,8 +221,7 @@ internal sealed class Store : IDisposable
 
     private static DuckDBConnection OpenFile(string databasePath)
     {
-        var connection = new DuckDBConnection($"DataSource={databasePath}");
-        connection.Open();
+        var connection = Opened($"DataSource={databasePath}");
         DuckDbSql.Execute(connection, $"SET GLOBAL memory_limit = '{MemoryLimit}'");
         return connection;
     }
@@ -339,7 +353,7 @@ internal sealed class Store : IDisposable
     {
         return DuckDbSql.Rows(
             Connection, $"SELECT plugin, origin, file_path, content_hash FROM {FilesRelation}",
-            reader => (ReadContext.ReadPluginAddress(reader), ResolvedFilePath(reader.GetString(2)), reader.GetString(3)));
+            reader => (reader.GetPluginAddress(), ResolvedFilePath(reader.GetString(2)), reader.GetString(3)));
     }
 
     // Null when the file cannot be read (mid-write, permissions) counts as a mismatch: an unreadable
@@ -381,7 +395,7 @@ internal sealed class Store : IDisposable
     /// is still the file on disk.</summary>
     public void RestampDerivation(PluginAddress key, DerivedFrom derivedFrom)
     {
-        using var tx = Connection.BeginTransaction();
+        using var tx = BeginTransaction();
         var restamped = DuckDbSql.Execute(
             Connection,
             $"UPDATE {PluginDerivationRelation} SET derived_from = $1 WHERE plugin = $2 AND origin = $3 AND derived_from <> $1",
@@ -696,7 +710,7 @@ internal sealed class Store : IDisposable
 
         // One transaction for the whole reindex so a throw partway leaves the read model intact
         // rather than a partial snapshot.
-        using var tx = Connection.BeginTransaction();
+        using var tx = BeginTransaction();
 
         // The `registrations` row lands in the same transaction as the rows, which answer nothing
         // without it.
@@ -705,7 +719,7 @@ internal sealed class Store : IDisposable
         // with them rather than beside them.
         StampPluginFacts(plugin, origin, filePath, derivedFrom, stringsRead);
 
-        var ingested = Ingest.IndexPlugin(documents, plugin, origin, schemas, token);
+        var ingested = StoreFaults.Translating(() => Ingest.IndexPlugin(documents, plugin, origin, schemas, token));
         if (derivedFrom != DerivedFrom.SourceTree && BinaryRefused(registered, ingested.Records) is { } refused) return refused;
         BumpSequence();
 
@@ -752,7 +766,7 @@ internal sealed class Store : IDisposable
         {
             _logger.LogInformation("Unindexing {Plugin} from {Origin}", plugin, origin);
         }
-        using var tx = Connection.BeginTransaction();
+        using var tx = BeginTransaction();
 
         Ingest.DeleteAllRowsFor(plugin, origin);
         // The plugin's facts go with the rows they describe — Unindex is the file-gone verb, so
@@ -778,7 +792,7 @@ internal sealed class Store : IDisposable
     /// (ADR-0012). Winners stay stale until the next sweep.</summary>
     public void Register(PluginMetadata registered)
     {
-        using var tx = Connection.BeginTransaction();
+        using var tx = BeginTransaction();
         Respell(registered.Key, registered.Path);
         UpsertRegistration(registered);
         BumpSequence();
@@ -791,7 +805,7 @@ internal sealed class Store : IDisposable
     {
         var registered = DuckDbSql.Rows(
             Connection, $"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2",
-            ReadContext.ReadPluginAddress, now.Name, now.Origin);
+            reader => reader.GetPluginAddress(), now.Name, now.Origin);
         if (registered is not [var spelled] || spelled == now) return;
 
         foreach (var (relation, pluginColumn, originColumn) in TableDdlBuilder.MirroredPluginNames)
@@ -812,7 +826,7 @@ internal sealed class Store : IDisposable
         {
             _logger.LogInformation("Unregistering {Plugin} from {Origin}", key.Name, key.Origin);
         }
-        using var tx = Connection.BeginTransaction();
+        using var tx = BeginTransaction();
         DeleteRegistration(key.Name, key.Origin);
         BumpSequence();
         tx.Commit();
@@ -825,7 +839,7 @@ internal sealed class Store : IDisposable
     {
         using var connection = OpenRead();
         return connection.Rows($"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation}",
-            ReadContext.ReadPluginAddress);
+            reader => reader.GetPluginAddress());
     }
 
     private void DeleteRegistration(string plugin, string origin)
@@ -839,7 +853,7 @@ internal sealed class Store : IDisposable
     /// on a 48,000-record, 60-plugin fixture.</summary>
     public void UpdateWinners(IReadOnlyList<RegisteredPlugin> active)
     {
-        using var tx = Connection.BeginTransaction();
+        using var tx = BeginTransaction();
         ReplaceActive(active);
         UpdateWinnersCore();
         BumpSequence();
@@ -851,7 +865,7 @@ internal sealed class Store : IDisposable
     private void SweepWinners()
     {
         var timer = Stopwatch.StartNew();
-        using (var tx = Connection.BeginTransaction())
+        using (var tx = BeginTransaction())
         {
             UpdateWinnersCore();
             BumpSequence();
@@ -902,8 +916,8 @@ internal sealed class Store : IDisposable
     {
         if (deltas.Count == 0) return [];
 
-        using var tx = Connection.BeginTransaction();
-        var projected = Overlay.ProjectDocuments(key, deltas);
+        using var tx = BeginTransaction();
+        var projected = StoreFaults.Translating(() => Overlay.ProjectDocuments(key, deltas));
         BumpSequence();
         tx.Commit();
         // Only a delta that added or removed a row can move winner status. Re-swept for the whole
@@ -916,7 +930,7 @@ internal sealed class Store : IDisposable
     /// <summary>Sets each listed row to the state it is now in (ADR-0007), in one advance.</summary>
     public void SetWorkingTreeStates(PluginAddress key, IReadOnlyList<(string FormKey, WorkingTreeState State)> moved)
     {
-        using var tx = Connection.BeginTransaction();
+        using var tx = BeginTransaction();
         foreach (var (formKey, state) in moved)
         {
             DuckDbSql.Execute(Connection, $"""
