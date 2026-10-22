@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.RecordIndex.Queries;
+using MEditService.RecordIndex.Store;
 
 namespace MEditService.RecordIndex;
 
@@ -12,7 +13,7 @@ internal static class NavigatorSql
     internal static string HeldIn(string schema) => $"SELECT plugin, origin, parent, child, slot FROM {schema}holdings";
 
     /// <summary>The <c>held</c> CTE the holdings reads below read: the holdings <paramref name="where"/>
-    /// keeps. DuckDB pushes no join key into it, so a read about one plugin names the plugin here.</summary>
+    /// keeps. the planner pushes no join key into it, so a read about one plugin names the plugin here.</summary>
     internal static string HeldFor(RecordScope scope, string where) =>
         $"held AS (SELECT plugin, origin, parent, child, slot FROM ({scope.Held}) h {where})";
 
@@ -52,7 +53,7 @@ internal static class NavigatorSql
         )
         """;
 
-    // Reads `held`. Joined rather than a correlated NOT EXISTS, which DuckDB answers by materializing the records
+    // Reads `held`. Joined rather than a correlated NOT EXISTS, which the planner answers by materializing the records
     // beside it, bodies and all: a plugin's bodies outgrow the memory the record index is held to.
     internal static string Unheld(string alias) =>
         $" ANTI JOIN held holding ON holding.child = {alias}.form_key AND holding.plugin = {alias}.plugin AND holding.origin = {alias}.origin";

@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RecordIndex.Store;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -27,7 +28,7 @@ internal sealed class StoreFactory(
     /// <summary>A null <paramref name="instanceRoot"/> means an in-memory store that dies with this
     /// object. <paramref name="openedPlugins"/> answers <see cref="RelationReads.OpenedPlugins"/>;
     /// <paramref name="indexed"/> says whether the whole set is read.</summary>
-    public Store? Create(
+    public Store.Store? Create(
         GameRelease gameRelease, string? instanceRoot,
         Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed, out string? refusal)
     {
@@ -55,12 +56,12 @@ internal sealed class StoreFactory(
         return refusal;
     }
 
-    private Store? Open(
+    private Store.Store? Open(
         GameRelease gameRelease, string? instanceRoot,
         Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed,
         long? atLeastSequence, out string? refusal)
     {
-        var store = new Store(
+        var store = new Store.Store(
             _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), instanceRoot, schemaReflector, ddlBuilder, plugins,
             timeProvider, openedPlugins, indexed, gate, filter, notifications);
         refusal = store.Open();

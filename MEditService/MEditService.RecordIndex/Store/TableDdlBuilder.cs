@@ -5,7 +5,7 @@ using MEditService.RecordIndex.Queries;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Strings;
 
-namespace MEditService.RecordIndex;
+namespace MEditService.RecordIndex.Store;
 
 internal sealed class TableDdlBuilder(SchemaReflector reflector)
 {

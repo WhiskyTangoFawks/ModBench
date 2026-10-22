@@ -1,7 +1,7 @@
 using DuckDB.NET.Data;
 using MEditService.LoadOrder;
 
-namespace MEditService.RecordIndex;
+namespace MEditService.RecordIndex.Store;
 
 /// <summary>Parameterized-command plumbing shared by two or more index collaborators; the
 /// connection is an explicit first parameter. A member with exactly one consumer belongs on that

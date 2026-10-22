@@ -20,7 +20,7 @@ internal sealed class IndexAnswer(Action onInvalidation)
         }
         catch (Exception ex) when (RefusalOf(ex) is { } refused)
         {
-            if (Store.IsInvalidation(ex)) onInvalidation();
+            if (Store.Store.IsInvalidation(ex)) onInvalidation();
             return refused;
         }
     }
@@ -45,7 +45,7 @@ internal sealed class IndexAnswer(Action onInvalidation)
     {
         NoLoadOrderException => new IndexRefused(IndexRefusal.NoLoadOrder, ex.Message),
         IndexNotReadyException => new IndexRefused(IndexRefusal.IndexNotReady, ex.Message),
-        DuckDBException when Store.IsInvalidation(ex) => new IndexRefused(
+        DuckDBException when Store.Store.IsInvalidation(ex) => new IndexRefused(
             IndexRefusal.IndexNotReady, $"mEdit's record index was invalidated by a fatal error: {FirstLine(ex)}"),
         // DuckDB's message goes on to advise tuning it, which is mEdit's to do and not the user's.
         DuckDBException { ErrorType: DuckDBErrorType.OutOfMemory } => new IndexRefused(

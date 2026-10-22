@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
+using MEditService.RecordIndex.Store;
 
 namespace MEditService.RecordIndex;
 

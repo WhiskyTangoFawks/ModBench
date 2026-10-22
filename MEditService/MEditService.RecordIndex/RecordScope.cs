@@ -1,3 +1,5 @@
+using MEditService.RecordIndex.Store;
+
 namespace MEditService.RecordIndex;
 
 /// <summary>Which rows a read of records sees: the active plugins' (ADR-0012), or every registered

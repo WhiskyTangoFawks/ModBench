@@ -9,8 +9,8 @@ public sealed class IndexFileSystemScanTests
 
     private static readonly string[] FilesThatNameTheFileSystem =
     [
-        "MEditService.RecordIndex/Store.cs",
-        "MEditService.RecordIndex/IndexFile.cs",
+        "MEditService.RecordIndex/Store/Store.cs",
+        "MEditService.RecordIndex/Store/IndexFile.cs",
         "MEditService.RecordIndex/Indexer.cs",
         "MEditService.RecordIndex/HeldPlugins.cs",
         "MEditService.RecordIndex/IndexScope.cs",
