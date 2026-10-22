@@ -34,14 +34,14 @@ internal sealed class FilterMatches(Store.Store store)
             return null;
         }
 
-        var connection = store.Connection;
         store.CreateRecordTypeViews();
-        if (SqlDoor.RefusalOf(connection, sql, TableDdlBuilder.ActiveSchema) is { } refusal)
+        using var context = store.OpenRead();
+        if (SqlDoor.RefusalOf(context, sql, TableDdlBuilder.ActiveSchema) is { } refusal)
             return refusal;
 
         try
         {
-            if (!ReturnsFormKey(connection, sql)) return "Filter SQL must return a form_key column";
+            if (!ReturnsFormKey(context, sql)) return "Filter SQL must return a form_key column";
         }
         catch (DuckDBException ex) when (!Store.Store.IsInvalidation(ex))
         {
@@ -49,14 +49,13 @@ internal sealed class FilterMatches(Store.Store store)
         }
         try
         {
-            DuckDbSql.Execute(connection, $"CREATE OR REPLACE TABLE {Matches} AS ({sql}\n)");
+            store.Materialize(Matches, sql);
         }
         catch (DuckDBException ex) when (FailedOnARow(ex))
         {
             return ex.Message;
         }
-        DuckDbSql.Execute(connection, $"""
-            CREATE OR REPLACE TABLE {Holders} AS
+        store.Materialize(Holders, $"""
             WITH RECURSIVE {NavigatorSql.HeldFor(RecordScope.Active, "")},
             holders(plugin, origin, form_key) AS (
                 SELECT held.plugin, held.origin, held.parent FROM held
@@ -77,14 +76,7 @@ internal sealed class FilterMatches(Store.Store store)
     private static bool FailedOnARow(DuckDBException ex) =>
         RowFaultKinds.Any(kind => ex.Message.StartsWith(kind, StringComparison.Ordinal));
 
-    // Parses and binds the filter's SQL and reads no row, so what it throws is the SQL's own unless DuckDB has been invalidated.
-    private static bool ReturnsFormKey(DuckDBConnection connection, string sql)
-    {
-        using var probeCmd = connection.CreateCommand();
-        // The newline keeps a trailing line comment in the filter from swallowing the wrapper.
-        probeCmd.CommandText = $"SELECT * FROM ({sql}\n) __probe LIMIT 0";
-        using var probeReader = probeCmd.ExecuteReader();
-        return Enumerable.Range(0, probeReader.FieldCount)
-            .Any(i => string.Equals(probeReader.GetName(i), "form_key", StringComparison.OrdinalIgnoreCase));
-    }
+    // Parses and binds the filter's SQL and reads no row, so what it throws is the SQL's own unless the database has been invalidated.
+    private static bool ReturnsFormKey(ReadContext context, string sql) =>
+        context.ColumnNames(sql).Any(name => string.Equals(name, "form_key", StringComparison.OrdinalIgnoreCase));
 }

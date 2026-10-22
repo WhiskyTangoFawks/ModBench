@@ -1,4 +1,3 @@
-
 namespace MEditService.RecordIndex.Store;
 
 /// <summary>One index file per instance, inside the instance root (ADR-0010).</summary>

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Store;
@@ -28,15 +27,15 @@ internal static class RequiredMasters
     /// <summary><paramref name="fields"/> with the header's masters field answered for
     /// <paramref name="plugin"/>.</summary>
     internal static List<FieldValue> InHeader(
-        List<FieldValue> fields, DuckDBConnection connection, PluginAddress plugin)
+        List<FieldValue> fields, ReadContext context, PluginAddress plugin)
     {
         var at = fields.FindIndex(f => f.Metadata.Name == PluginHeader.MastersFieldName);
         if (at < 0) return fields;
-        var masters = Of(connection, plugin).Select(master => new { Master = master });
+        var masters = Of(context, plugin).Select(master => new { Master = master });
         fields[at] = fields[at] with { Value = JsonSerializer.SerializeToElement(masters) };
         return fields;
     }
 
-    private static List<string> Of(DuckDBConnection connection, PluginAddress plugin) =>
-        DuckDbSql.Rows(connection, InLoadOrder, reader => reader.GetString(0), plugin.Name, plugin.Origin);
+    private static List<string> Of(ReadContext context, PluginAddress plugin) =>
+        context.Rows(InLoadOrder, reader => reader.GetString(0), plugin.Name, plugin.Origin);
 }

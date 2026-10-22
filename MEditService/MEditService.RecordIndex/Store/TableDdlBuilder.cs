@@ -133,8 +133,16 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    public void CreateRecordTypeViews(DuckDBConnection connection, GameRelease release) =>
-        RecordViewBuilder.CreateViews(connection, _reflector.GetSchemas(release));
+    public void CreateRecordTypeViews(DuckDBConnection connection, GameRelease release)
+    {
+        // The header's columns sit a level deeper in the document ($.ModHeader.Author); that nesting
+        // is in the column's own PropertyName, so Projection needs nothing special.
+        foreach (var (tableName, schema) in _reflector.GetSchemas(release))
+        {
+            DuckDbSql.Execute(connection, RecordViewBuilder.BuildViewSql(tableName, schema, ActiveSchema));
+            DuckDbSql.Execute(connection, RecordViewBuilder.BuildViewSql(tableName, schema, IndexedSchema));
+        }
+    }
 
     /// <summary>A plugin's own facts answer while the snapshot names it.</summary>
     internal static string RegisteredJoin(string alias, string pluginColumn, string originColumn) => $"""
