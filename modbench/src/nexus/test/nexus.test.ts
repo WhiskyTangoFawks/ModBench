@@ -96,6 +96,13 @@ describe('asking for a mod\'s newest version', () => {
     expect(result).toEqual({ found: true, version: '1.2' });
   });
 
+  it('prefers the newest of several active successors', async () => {
+    const files = [file(1, '1.0', OLD), file(2, '1.1', MAIN), file(3, '1.2', MAIN)];
+    const { result } = await asking({ [FILES]: json({ files, file_updates: [update(1, 2), update(2, 3)] }) }, { fileId: '1' });
+
+    expect(result).toEqual({ found: true, version: '1.2' });
+  });
+
   it('skips a successor the files list lacks', async () => {
     const files = [file(1, '1.0', MAIN), file(2, '1.1', MAIN)];
     const { result } = await asking({ [FILES]: json({ files, file_updates: [update(1, 2), update(2, 3)] }) }, { fileId: '1' });

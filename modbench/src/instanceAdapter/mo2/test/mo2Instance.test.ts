@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../../ports/trash';
 import { ignoreSkippedLink } from '../../files';
 import {
-  access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, writeFile,
+  access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, utimes, writeFile,
 } from 'node:fs/promises';
 import type { PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../../test/mo2/fakeVscodeWatcher';
@@ -1895,7 +1895,7 @@ describe('the MO2 Instance adapter', () => {
         it('answers unreadable, naming the game, when Nexus has no domain for the mod\'s game', async () => {
           await holding(general('gameName=Nowhere\r\nmodid=4598\r\n'));
 
-          expect(await adapter.nexusFile(PATCH)).toEqual({ kind: 'unreadable', reason: expect.stringContaining('Nowhere') });
+          expect(await adapter.nexusFile(PATCH)).toEqual({ kind: 'unreadable', reason: expect.stringContaining('Nowhere') as unknown });
         });
 
         it('writes the newest version where MO2 reads it, keeping every other key, and says an update is available', async () => {
@@ -1923,12 +1923,13 @@ describe('the MO2 Instance adapter', () => {
 
         it('leaves metadata byte for byte when it already says the newest version', async () => {
           const held = await holding(general('gameName=Fallout4\r\nversion=1.0\r\nnewestVersion=3.0\r\n'));
-          const before = (await stat(metaOf(PATCH))).mtimeMs;
+          const longAgo = new Date(2001, 1, 1);
+          await utimes(metaOf(PATCH), longAgo, longAgo);
 
           await adapter.writeNewestVersion(PATCH, '3.0');
 
           expect(await readFile(metaOf(PATCH), 'utf8')).toBe(held);
-          expect((await stat(metaOf(PATCH))).mtimeMs).toBe(before);
+          expect((await stat(metaOf(PATCH))).mtime).toEqual(longAgo);
         });
       });
 

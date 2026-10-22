@@ -16,7 +16,7 @@ vi.mock('vscode', async () => {
   return {
     commands: { registerCommand },
     window: { withProgress: (options: { location: { viewId: string } }, task: () => Promise<unknown>) => recordedWithProgress(options, task) },
-    TreeItem: class {},
+    TreeItem: class { constructor(readonly label: string) {} },
   };
 });
 

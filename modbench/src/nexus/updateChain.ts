@@ -1,16 +1,18 @@
-import { z } from 'zod';
+interface NexusFileEntry { file_id: number; version: string; category_id: number; file_name: string }
+interface NexusFileUpdate { old_file_id: number; new_file_id: number; old_file_name?: string; new_file_name?: string }
+export interface FileList { files: NexusFileEntry[]; file_updates: NexusFileUpdate[] }
 
-export const FILE_LIST = z.object({
-  files: z.array(z.object({ file_id: z.number(), version: z.string(), category_id: z.number(), file_name: z.string() })),
-  file_updates: z.array(z.object({
-    old_file_id: z.number(),
-    new_file_id: z.number(),
-    old_file_name: z.string().optional(),
-    new_file_name: z.string().optional(),
-  })),
-});
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+const isEntry = (value: unknown): value is NexusFileEntry => isRecord(value) && typeof value.file_id === 'number' && typeof value.version === 'string'
+  && typeof value.category_id === 'number' && typeof value.file_name === 'string';
+const isUpdate = (value: unknown): value is NexusFileUpdate => isRecord(value) && typeof value.old_file_id === 'number' && typeof value.new_file_id === 'number';
 
-type FileList = z.infer<typeof FILE_LIST>;
+/** The file list Nexus answers, or undefined when the answer is not one. */
+export function fileListOf(json: unknown): FileList | undefined {
+  if (!isRecord(json) || !Array.isArray(json.files) || !Array.isArray(json.file_updates)) return undefined;
+  const { files, file_updates } = json;
+  return files.every(isEntry) && file_updates.every(isUpdate) ? { files, file_updates } : undefined;
+}
 
 export interface InstalledFile {
   readonly fileId?: string;
@@ -41,7 +43,7 @@ function successorsOf(start: number, { file_updates }: FileList): number[] {
   return chain;
 }
 
-/** The version of the file an installed file's update chain ends in, as MO2 walks it; undefined when the installed file cannot be told. */
+/** The version of the file an installed file's update chain ends in; undefined when the installed file cannot be told. */
 export function newestVersionOf(list: FileList, installed: InstalledFile): string | undefined {
   const start = installedFileId(list, installed);
   if (start === undefined) return undefined;

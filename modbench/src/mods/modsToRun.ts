@@ -34,7 +34,7 @@ function rowsOf(deps: ModsToRunDeps, clicked: unknown, selected: readonly unknow
 }
 
 // modlist-repository.md, Every mod: every mod folder, in every profile, never the Mods view's rows.
-export const everyMod = (value: InstanceValue): string[] => (value.modFolders ?? []).map(({ modName }) => modName);
+const everyMod = (value: InstanceValue): string[] => (value.modFolders ?? []).map(({ modName }) => modName);
 
 /** The Mods view's title bar hands its command nothing, so it names every mod and the view (commands.md, Entry points are not gestures). */
 export const everyModHere = ({ instance }: Pick<ModsToRunDeps, 'instance'>): ModsToRun =>
