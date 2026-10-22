@@ -1875,15 +1875,15 @@ describe('the MO2 Instance adapter', () => {
         const general = (keys: string): string => `[General]\r\n${keys}comments=mine\r\n`;
 
         it('names the mod, the file installed and the installation file, on the Nexus domain of the mod\'s game', async () => {
-          await holding(`${general(`gameName=SkyrimSE\r\nmodid=4598\r\ninstallationFile=${DOWNLOADED_FILE}\r\n`)}\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
+          await holding(`${general(`gameName=SkyrimSE\r\nmodid=4598\r\nnexusFileStatus=3\r\ninstallationFile=${DOWNLOADED_FILE}\r\n`)}\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=77\r\nsize=1\r\n`);
 
-          expect(await adapter.nexusFile(PATCH)).toEqual({ kind: 'read', answer: { game: 'skyrimspecialedition', modId: '4598', fileId: '77', fileName: DOWNLOADED_FILE } });
+          expect(await adapter.nexusFile(PATCH)).toEqual({ kind: 'read', answer: { game: 'skyrimspecialedition', modId: '4598', fileId: '77', fileName: DOWNLOADED_FILE, fileStatus: 3 } });
         });
 
         it('names no file ID for a mod no file is recorded for', async () => {
           await holding(general('gameName=Fallout4\r\nmodid=4598\r\n'));
 
-          expect(await adapter.nexusFile(PATCH)).toEqual({ kind: 'read', answer: { game: 'fallout4', modId: '4598', fileId: undefined, fileName: undefined } });
+          expect(await adapter.nexusFile(PATCH)).toEqual({ kind: 'read', answer: { game: 'fallout4', modId: '4598', fileId: undefined, fileName: undefined, fileStatus: undefined } });
         });
 
         it('answers none for a mod with no Nexus mod ID', async () => {

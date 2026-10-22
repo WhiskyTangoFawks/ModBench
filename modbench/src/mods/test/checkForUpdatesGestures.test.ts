@@ -51,7 +51,7 @@ const folderRow = { argument: { kind: 'folder', path: '/instance/mods/ModA/meshe
 function register() {
   const reporter = recordingReporter();
   registerCheckForUpdatesGestures({
-    toolboxView: 'modbench.toolbox', commands: { checkForUpdates },
+    commands: { checkForUpdates },
     instance: { value, refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
     reporter, focusedView: { id: () => undefined, selection: () => [] },
   });
@@ -80,15 +80,15 @@ describe('check for updates, from a view', () => {
 
     await run('modbench.modList.checkForUpdatesHere');
 
-    expect(checkForUpdates).toHaveBeenCalledWith(['ModA', 'Weapons_separator', 'ModB']);
+    expect(checkForUpdates).toHaveBeenCalledWith(['ModA', 'ModB']);
   });
 
   it('says in one line how many mods have an update, and names each mod it could not ask about in the Output', async () => {
     checkForUpdates.mockResolvedValue({
       applied: true,
       outcome: {
-        landed: [{ name: 'ModA', updateAvailable: true }, { name: 'ModB', updateAvailable: false }],
-        refused: [{ item: { name: 'Weapons_separator' }, reason: 'it has no Nexus mod ID' }],
+        landed: [{ name: 'ModA', updateAvailable: true }],
+        refused: [{ item: { name: 'ModB' }, reason: 'it has no Nexus mod ID' }],
       },
     });
     const { reporter, run } = register();
@@ -97,7 +97,7 @@ describe('check for updates, from a view', () => {
 
     expect(reporter.reports).toEqual([{
       severity: 'warning', message: 'Check for updates: 1 mod has an update, 2 could not be asked about.',
-      detail: '"separator Weapons" (it has no Nexus mod ID)\n"meshes" (it is not a mod or a separator)',
+      detail: '"ModB" (it has no Nexus mod ID)\n"meshes" (it is not a mod or a separator)',
     }]);
   });
 
@@ -120,20 +120,40 @@ describe('check for updates, from a view', () => {
   });
 });
 
+describe('check for updates, on a separator', () => {
+  const separatorRow = { argument: { kind: 'separator', name: 'Weapons' }, name: 'Weapons' };
+
+  it('asks about the mods the separator holds, and not about the separator', async () => {
+    const { run } = register();
+
+    await run(CHECK, separatorRow, [separatorRow]);
+
+    expect(checkForUpdates).toHaveBeenCalledWith(['ModA']);
+  });
+
+  it('runs under the Mods view when no row is selected', async () => {
+    const { run } = register();
+
+    await run(CHECK);
+
+    expect(progressSteps[0]).toBe('progress opens on modbench.modList');
+  });
+});
+
 describe('check for updates, from an agent', () => {
   it('asks about every mod when the call names none, and answers the outcome by the names the Mods view shows', async () => {
     checkForUpdates.mockResolvedValue({
       applied: true,
-      outcome: { landed: [{ name: 'ModA', updateAvailable: true }], refused: [{ item: { name: 'Weapons_separator' }, reason: 'it has no Nexus mod ID' }] },
+      outcome: { landed: [{ name: 'ModA', updateAvailable: true }], refused: [{ item: { name: 'ModB' }, reason: 'it has no Nexus mod ID' }] },
     });
     const { run } = register();
 
     const answer = await run(CHECK, new AgentCall([], {}));
 
-    expect(checkForUpdates).toHaveBeenCalledWith(['ModA', 'Weapons_separator', 'ModB']);
+    expect(checkForUpdates).toHaveBeenCalledWith(['ModA', 'ModB']);
     expect(answer).toEqual({
       applied: true,
-      outcome: { landed: [{ name: 'ModA', updateAvailable: true }], refused: [{ item: { name: 'separator Weapons' }, reason: 'it has no Nexus mod ID' }] },
+      outcome: { landed: [{ name: 'ModA', updateAvailable: true }], refused: [{ item: { name: 'ModB' }, reason: 'it has no Nexus mod ID' }] },
     });
   });
 });

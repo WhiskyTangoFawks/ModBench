@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
 import { AgentCall, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
-import type { FocusedView } from '../drivingLib/focusedView';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { MODS_KEY_ARGS } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
 import { modLabelsOf } from '../instanceLoader/modName';
-import { everyModHere, modsOfAgent, modsToRun, type ModsToRun } from './modsToRun';
+import { everyModHere, modsOfAgent, modsToRun, type ModsToRun, type ModsToRunDeps } from './modsToRun';
 import type { AskQuestion } from '../ports/dialog';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
@@ -15,17 +14,13 @@ import type {
 
 const RESTORE = 'Restore';
 
-export interface ManifestGestureDeps {
-  /** The Toolbox's id, whose bar a gesture with no Argument runs under. */
-  toolboxView: string;
+export interface ManifestGestureDeps extends ModsToRunDeps {
   commands: Pick<ModlistRepositoryCommands, 'updateManifest' | 'restoreFromManifest' | 'whatRestoreDestroys'>;
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
   ask: AskQuestion;
   /** The Toolbox's message line: `undefined` gives it back to whatever else had something to say. */
   say: (message: string | undefined) => void;
-  /** The palette has no clicked row, so it takes the focused view's selection. */
-  focusedView: Pick<FocusedView, 'id' | 'selection'>;
 }
 
 type ModlistCall = AgentCall<{ force?: boolean }>;

@@ -58,10 +58,13 @@ async function pageChanges(carried: MetaIni, page: string, context: Mo2Context):
   };
 }
 
+async function metaFileOf(context: Mo2Context, mod: string): Promise<string> {
+  return modMetaFileIn((await folderHolding(context, { kind: 'mod', name: mod }))?.path ?? newModFolder(context, mod));
+}
+
 // MO2 holds one installation file: the one it holds if the manifest names it, else the manifest's first.
 async function planMetadata(context: Mo2Context, mod: string, { version, installationFile: chosen }: ModMetadata): Promise<MetadataPlan> {
-  const folder = (await folderHolding(context, { kind: 'mod', name: mod }))?.path ?? newModFolder(context, mod);
-  const file = modMetaFileIn(folder);
+  const file = await metaFileOf(context, mod);
   if (entryNamed(mod).kind === 'separator') return { file, held: '', changes: {} };
   const held = await get(file, '');
   const carried = parseMetaIni(held);
@@ -92,7 +95,7 @@ async function nexusFileOf(meta: MetaIni, context: Mo2Context): Promise<NexusMod
   const { page, unpagedGame } = await nexusPageOf(meta, context);
   if (unpagedGame !== undefined) throw new Error(`Nexus has no game for '${unpagedGame}'`);
   const nexus = page === undefined ? undefined : parseNexusPage(page);
-  return nexus === undefined ? undefined : { game: nexus.game, modId: nexus.modId, fileId: nexus.fileId, fileName: meta.installationFileName === undefined ? undefined : basename(meta.installationFileName) };
+  return nexus === undefined ? undefined : { game: nexus.game, modId: nexus.modId, fileId: nexus.fileId, fileName: meta.installationFileName === undefined ? undefined : basename(meta.installationFileName), fileStatus: meta.nexusFileStatus };
 }
 
 export function mo2Installation(
@@ -104,8 +107,7 @@ export function mo2Installation(
     nexusFile: (mod) => readOrReason(async () => nexusFileOf(await readMetaIni(context, mod, 'list'), context)),
 
     writeNewestVersion: (mod, version) => withLock(context.instanceRoot, async () => {
-      const folder = (await folderHolding(context, { kind: 'mod', name: mod }))?.path ?? newModFolder(context, mod);
-      const file = modMetaFileIn(folder);
+      const file = await metaFileOf(context, mod);
       const held = await get(file, '');
       const carried = parseMetaIni(held);
       if (carried.newestVersion !== version) await write(file, changeOwnedKeysInText(held, { newestVersion: version }));

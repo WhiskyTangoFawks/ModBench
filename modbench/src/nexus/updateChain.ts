@@ -5,7 +5,9 @@ export interface FileList { files: NexusFileEntry[]; file_updates: NexusFileUpda
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 const isEntry = (value: unknown): value is NexusFileEntry => isRecord(value) && typeof value.file_id === 'number' && typeof value.version === 'string'
   && typeof value.category_id === 'number' && typeof value.file_name === 'string';
-const isUpdate = (value: unknown): value is NexusFileUpdate => isRecord(value) && typeof value.old_file_id === 'number' && typeof value.new_file_id === 'number';
+const isOptionalString = (value: unknown): boolean => value === undefined || typeof value === 'string';
+const isUpdate = (value: unknown): value is NexusFileUpdate => isRecord(value) && typeof value.old_file_id === 'number' && typeof value.new_file_id === 'number'
+  && isOptionalString(value.old_file_name) && isOptionalString(value.new_file_name);
 
 /** The file list Nexus answers, or undefined when the answer is not one. */
 export function fileListOf(json: unknown): FileList | undefined {

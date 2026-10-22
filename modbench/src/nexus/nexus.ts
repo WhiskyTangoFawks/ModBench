@@ -18,7 +18,13 @@ type KeyCheck = { valid: true } | { valid: false; reason: string };
 interface NexusFile extends InstalledFile {
   readonly game: string;
   readonly modId: string;
+  /** Nexus's category of the installed file, as the mod's metadata recorded it. */
+  readonly fileStatus?: number;
 }
+
+export const NOT_LOGGED_IN = 'You are not logged in to Nexus.';
+const OPTIONAL_FILE = 3;
+const MISCELLANEOUS_FILE = 5;
 
 type NewestVersion = { found: true; version: string } | { found: false; reason: string };
 
@@ -48,7 +54,7 @@ export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): 
       const response = await get(key, path);
       if (response.status === 404) return { reason: 'Nexus does not hold this mod.' };
       if (!response.ok) return { reason: `Nexus answered ${response.status}.` };
-      return { json: await response.json() };
+      return { json: await response.json().catch(() => undefined) };
     } catch (error) {
       return { reason: `Could not reach Nexus: ${errorMessage(error)}` };
     }
@@ -66,15 +72,19 @@ export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): 
     keep: async (key) => { await secrets.store(KEY_NAME, key); },
     forget: async () => { await secrets.delete(KEY_NAME); },
     loggedIn: async () => (await secrets.get(KEY_NAME)) !== undefined,
-    newestVersion: async ({ game, modId, ...installed }) => {
+    newestVersion: async ({ game, modId, fileStatus, ...installed }) => {
       const key = await secrets.get(KEY_NAME);
-      if (key === undefined) return { found: false, reason: 'You are not logged in to Nexus.' };
+      if (key === undefined) return { found: false, reason: NOT_LOGGED_IN };
       const mod = `/v1/games/${game}/mods/${modId}`;
       const listed = await read(key, `${mod}/files.json`);
       if ('reason' in listed) return { found: false, ...listed };
       const list = fileListOf(listed.json);
-      const chained = list && newestVersionOf(list, installed);
+      if (list === undefined) return { found: false, reason: 'Nexus answered its file list in a form Modbench does not read.' };
+      const chained = newestVersionOf(list, installed);
       if (chained !== undefined) return { found: true, version: chained };
+      if (fileStatus === OPTIONAL_FILE || fileStatus === MISCELLANEOUS_FILE) {
+        return { found: false, reason: "its file is an optional or miscellaneous file, whose version is not the mod's" };
+      }
       const page = await read(key, `${mod}.json`);
       if ('reason' in page) return { found: false, ...page };
       const version = typeof page.json === 'object' && page.json !== null && 'version' in page.json ? page.json.version : undefined;

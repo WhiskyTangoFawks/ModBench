@@ -73,8 +73,8 @@ interface ModsViewDeps {
 }
 
 const checkForUpdatesDeps = (
-  { checkForUpdates, manifestGestures: { toolboxView, focusedView } }: ModsViewDeps, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
-): CheckForUpdatesDeps => ({ commands: { checkForUpdates }, instance, reporter, toolboxView, focusedView });
+  { checkForUpdates, manifestGestures: { focusedView } }: ModsViewDeps, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+): CheckForUpdatesDeps => ({ commands: { checkForUpdates }, instance, reporter, focusedView });
 
 interface ModsView extends vscode.Disposable {
   view: vscode.TreeView<ModlistNode>;

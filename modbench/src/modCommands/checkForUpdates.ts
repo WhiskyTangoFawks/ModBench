@@ -1,11 +1,10 @@
 import { refuse } from '../coreLib/refuse';
 import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '../coreLib/commandResult';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
-import type { Nexus } from '../nexus/nexus';
+import { NOT_LOGGED_IN, type Nexus } from '../nexus/nexus';
 
 export interface UpdateChecked {
   name: string;
-  /** Set on a mod whose newest version was written. */
   updateAvailable?: boolean;
 }
 
@@ -27,7 +26,7 @@ async function checkMod(adapter: InstanceAdapter, nexus: NexusAsked, mod: string
 /** `modbench.mod.checkForUpdates` over the mods: each lands on its own (commands.md, A selection is one gesture). */
 export const checkForUpdatesOver = (adapter: InstanceAdapter, nexus: NexusAsked) =>
   async (mods: readonly string[]): Promise<SelectionResult<UpdateChecked>> => {
-    if (!(await nexus.loggedIn())) return { applied: false, refusal: 'You are not logged in to Nexus.' };
+    if (!(await nexus.loggedIn())) return { applied: false, refusal: NOT_LOGGED_IN };
     const toItem = (name: string, landed?: { updateAvailable: boolean }): UpdateChecked =>
       (landed === undefined ? { name } : { name, updateAvailable: landed.updateAvailable });
     return { applied: true, outcome: await selectionOutcomeOf(mods, (mod) => checkMod(adapter, nexus, mod), toItem) };

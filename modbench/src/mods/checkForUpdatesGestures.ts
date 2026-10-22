@@ -9,7 +9,7 @@ import type { ItemRefusal } from '../ports/selectionOutcome';
 import { MODS_KEY_ARGS } from './gestureEntry';
 import { everyModHere, modsOfAgent, modsToRun, type ModsToRun, type ModsToRunDeps } from './modsToRun';
 
-export interface CheckForUpdatesDeps extends ModsToRunDeps {
+export interface CheckForUpdatesDeps extends Omit<ModsToRunDeps, 'toolboxView'> {
   commands: { checkForUpdates: CheckForUpdates };
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporter: Reporter;
@@ -17,11 +17,13 @@ export interface CheckForUpdatesDeps extends ModsToRunDeps {
 
 const isAgentCall = (value: unknown): value is AgentCall => value instanceof AgentCall;
 
-export function registerCheckForUpdatesGestures(deps: CheckForUpdatesDeps): vscode.Disposable[] {
+// mods.md offers the gesture on the Mods view only, so a gesture with no row runs under it.
+export function registerCheckForUpdatesGestures(given: CheckForUpdatesDeps): vscode.Disposable[] {
+  const deps = { ...given, toolboxView: MODS_KEY_ARGS.view };
   return [
     vscode.commands.registerCommand('modbench.mod.checkForUpdates', (clicked?: unknown, selected?: readonly unknown[]) =>
-      (isAgentCall(clicked) ? checkForAgent(deps, clicked) : checkForView(deps, modsToRun(deps, clicked, selected)))),
-    vscode.commands.registerCommand('modbench.modList.checkForUpdatesHere', () => checkForView(deps, everyModHere(deps))),
+      (isAgentCall(clicked) ? checkForAgent(deps, clicked) : checkForView(deps, modsToRun(deps, clicked, selected, 'modsOnly')))),
+    vscode.commands.registerCommand('modbench.modList.checkForUpdatesHere', () => checkForView(deps, everyModHere(deps, 'modsOnly'))),
   ];
 }
 
@@ -48,7 +50,7 @@ async function checkForAgent(
 ): Promise<GestureResult<UpdateChecked>> {
   const label = modLabelsOf(instance.value.modFolders);
   const named = (checked: UpdateChecked): UpdateChecked => ({ ...checked, name: label(checked.name) });
-  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.checkForUpdates(modsOfAgent(argument, instance.value)));
+  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.checkForUpdates(modsOfAgent(argument, instance.value, 'modsOnly')));
   if (!result.applied) return { applied: false, refusal: result.refusal };
   const { landed, refused } = result.outcome;
   return { applied: true, outcome: { landed: landed.map(named), refused: refused.map(({ item, reason }) => ({ item: named(item), reason })) } };

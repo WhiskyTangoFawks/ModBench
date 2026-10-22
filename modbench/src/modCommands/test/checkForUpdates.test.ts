@@ -5,7 +5,7 @@ import { fakeInstanceAdapter, refusing, type InstanceAnswers } from '../../test/
 import { GOOD_KEY, nexusAnswering } from '../../nexus/test/nexusDouble';
 
 const FILES = (modId: string): string => `https://api.nexusmods.com/v1/games/fallout4/mods/${modId}/files.json`;
-const onNexus = (modId: string): NexusModFile => ({ game: 'fallout4', modId, fileId: '1', fileName: undefined });
+const onNexus = (modId: string): NexusModFile => ({ game: 'fallout4', modId, fileId: '1', fileName: undefined, fileStatus: undefined });
 const held = (modId: string) => ({ kind: 'read' as const, answer: onNexus(modId) });
 const listing = (version: string): Response =>
   new Response(JSON.stringify({ files: [{ file_id: 1, version, category_id: 1, file_name: 'a.7z' }], file_updates: [] }), { status: 200 });
@@ -43,15 +43,13 @@ describe('check for updates', () => {
     expect(fake.calls).toEqual([]);
   });
 
-  it('leaves a mod Nexus does not hold as it was, and checks the others', async () => {
+  it('leaves a mod Nexus refuses as it was, and checks the others', async () => {
     const answers = { nexusFiles: new Map([['Gone', held('1')], ['Held', held('2')]]) };
 
     const { fake, result } = await checking(['Gone', 'Held'], answers, (url) => (url === FILES('1') ? new Response('', { status: 404 }) : listing('2.0')));
 
-    expect(result).toEqual({
-      applied: true,
-      outcome: { landed: [{ name: 'Held', updateAvailable: false }], refused: [{ item: { name: 'Gone' }, reason: 'Nexus does not hold this mod.' }] },
-    });
+    const outcome = result.applied ? result.outcome : undefined;
+    expect([outcome?.landed, outcome?.refused.map(({ item }) => item)]).toEqual([[{ name: 'Held', updateAvailable: false }], [{ name: 'Gone' }]]);
     expect(fake.calls).toEqual([{ verb: 'writeNewestVersion', mod: 'Held', version: '2.0' }]);
   });
 

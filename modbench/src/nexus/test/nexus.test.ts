@@ -89,39 +89,16 @@ describe('asking for a mod\'s newest version', () => {
     expect(result).toEqual({ found: true, version: '1.0' });
   });
 
-  it('walks the update chain to the newest active file', async () => {
-    const files = [file(1, '1.0', OLD), file(2, '1.1', OLD), file(3, '1.2', MAIN)];
-    const { result } = await asking({ [FILES]: json({ files, file_updates: [update(1, 2), update(2, 3)] }) }, { fileId: '1' });
+  it.each([
+    ['walks the update chain to the newest active file', [file(1, '1.0', OLD), file(2, '1.1', OLD), file(3, '1.2', MAIN)], [update(1, 2), update(2, 3)], '1.2'],
+    ['prefers the newest of several active successors', [file(1, '1.0', OLD), file(2, '1.1', MAIN), file(3, '1.2', MAIN)], [update(1, 2), update(2, 3)], '1.2'],
+    ['skips a successor the files list lacks', [file(1, '1.0', MAIN), file(2, '1.1', MAIN)], [update(1, 2), update(2, 3)], '1.1'],
+    ['gives an obsolete file the newest successor that can still be downloaded', [file(1, '1.0', OLD), file(2, '1.1', OLD), file(3, '1.2', REMOVED)], [update(1, 2), update(2, 3)], '1.1'],
+    ['ends a chain that loops, at the file the loop leaves it on', [file(1, '1.0', OLD), file(2, '1.1', OLD)], [update(1, 2), update(2, 1)], '1.0'],
+  ])('%s', async (_name, files, file_updates, version) => {
+    const { result } = await asking({ [FILES]: json({ files, file_updates }) }, { fileId: '1' });
 
-    expect(result).toEqual({ found: true, version: '1.2' });
-  });
-
-  it('prefers the newest of several active successors', async () => {
-    const files = [file(1, '1.0', OLD), file(2, '1.1', MAIN), file(3, '1.2', MAIN)];
-    const { result } = await asking({ [FILES]: json({ files, file_updates: [update(1, 2), update(2, 3)] }) }, { fileId: '1' });
-
-    expect(result).toEqual({ found: true, version: '1.2' });
-  });
-
-  it('skips a successor the files list lacks', async () => {
-    const files = [file(1, '1.0', MAIN), file(2, '1.1', MAIN)];
-    const { result } = await asking({ [FILES]: json({ files, file_updates: [update(1, 2), update(2, 3)] }) }, { fileId: '1' });
-
-    expect(result).toEqual({ found: true, version: '1.1' });
-  });
-
-  it('gives an obsolete file the newest successor that can still be downloaded', async () => {
-    const files = [file(1, '1.0', OLD), file(2, '1.1', OLD), file(3, '1.2', REMOVED)];
-    const { result } = await asking({ [FILES]: json({ files, file_updates: [update(1, 2), update(2, 3)] }) }, { fileId: '1' });
-
-    expect(result).toEqual({ found: true, version: '1.1' });
-  });
-
-  it('ends a chain that loops', async () => {
-    const files = [file(1, '1.0', OLD), file(2, '1.1', OLD)];
-    const { result } = await asking({ [FILES]: json({ files, file_updates: [update(1, 2), update(2, 1)] }) }, { fileId: '1' });
-
-    expect(result.found).toBe(true);
+    expect(result).toEqual({ found: true, version });
   });
 
   it('finds the installed file by its name when no file ID is recorded', async () => {
@@ -145,6 +122,40 @@ describe('asking for a mod\'s newest version', () => {
 
     expect(result).toEqual({ found: true, version: '3.0' });
     expect(sent.map(({ url }) => url)).toEqual([FILES, PAGE]);
+  });
+
+  it.each([
+    ['an optional file', 3],
+    ['a miscellaneous file', 5],
+  ])('refuses the mod page\'s version for %s, which Nexus versions apart from the mod', async (_name, fileStatus) => {
+    const answers = { [FILES]: json({ files: [], file_updates: [] }), [PAGE]: json({ version: '3.0' }) };
+    const { nexus, sent } = nexusAnswering((_key, url) => answers[url] ?? new Response('', { status: 404 }));
+    await nexus.keep(GOOD_KEY);
+
+    const result = await nexus.newestVersion({ game: 'fallout4', modId: '7', fileName: 'unknown.7z', fileStatus });
+
+    expect(result.found).toBe(false);
+    expect(sent.map(({ url }) => url)).toEqual([FILES]);
+  });
+
+  it('still gives the chain\'s version for an optional file', async () => {
+    const { nexus } = nexusAnswering(() => json({ files: [file(1, '1.0', 3)], file_updates: [] }));
+    await nexus.keep(GOOD_KEY);
+
+    expect(await nexus.newestVersion({ game: 'fallout4', modId: '7', fileId: '1', fileStatus: 3 })).toEqual({ found: true, version: '1.0' });
+  });
+
+  it.each([
+    ['a file list in a form it does not read', '{"files":"none"}'],
+    ['an answer that is not JSON', '<html>'],
+  ])('refuses the mod, and does not fall back to the mod page, for %s', async (_name, body) => {
+    const { nexus, sent } = nexusAnswering(() => new Response(body, { status: 200 }));
+    await nexus.keep(GOOD_KEY);
+
+    const result = await nexus.newestVersion({ game: 'fallout4', modId: '7', fileId: '1' });
+
+    expect(result.found).toBe(false);
+    expect(sent).toHaveLength(1);
   });
 
   it.each([

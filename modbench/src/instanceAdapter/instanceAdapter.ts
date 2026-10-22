@@ -378,6 +378,8 @@ export interface NexusModFile {
   readonly modId: string;
   readonly fileId: string | undefined;
   readonly fileName: string | undefined;
+  /** Nexus's category of the installed file, as the metadata recorded it. */
+  readonly fileStatus: number | undefined;
 }
 
 export interface ModMetadata {
