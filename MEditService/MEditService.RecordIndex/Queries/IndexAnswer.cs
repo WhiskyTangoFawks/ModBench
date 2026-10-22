@@ -1,5 +1,3 @@
-using DuckDB.NET.Data;
-using DuckDB.NET.Native;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
@@ -20,7 +18,7 @@ internal sealed class IndexAnswer(Action onInvalidation)
         }
         catch (Exception ex) when (RefusalOf(ex) is { } refused)
         {
-            if (Store.Store.IsInvalidation(ex)) onInvalidation();
+            if (ex is IndexFaultException { Fault: IndexFault.Invalidated }) onInvalidation();
             return refused;
         }
     }
@@ -45,10 +43,10 @@ internal sealed class IndexAnswer(Action onInvalidation)
     {
         NoLoadOrderException => new IndexRefused(IndexRefusal.NoLoadOrder, ex.Message),
         IndexNotReadyException => new IndexRefused(IndexRefusal.IndexNotReady, ex.Message),
-        DuckDBException when Store.Store.IsInvalidation(ex) => new IndexRefused(
+        IndexFaultException { Fault: IndexFault.Invalidated } => new IndexRefused(
             IndexRefusal.IndexNotReady, $"mEdit's record index was invalidated by a fatal error: {FirstLine(ex)}"),
-        // DuckDB's message goes on to advise tuning it, which is mEdit's to do and not the user's.
-        DuckDBException { ErrorType: DuckDBErrorType.OutOfMemory } => new IndexRefused(
+        // The engine's message goes on to advise tuning it, which is mEdit's to do and not the user's.
+        IndexFaultException { Fault: IndexFault.OutOfMemory } => new IndexRefused(
             IndexRefusal.OutOfMemory, $"mEdit's record index ran out of memory for this read: {FirstLine(ex)}"),
         _ => null,
     };
