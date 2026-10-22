@@ -54,7 +54,8 @@ vi.mock('vscode', () => ({
   window: { createInputBox },
 }));
 
-import { LOGGED_IN_KEY, registerNexusCommands } from '../nexusCommands';
+import { registerNexusCommands } from '../nexusCommands';
+import { LOGGED_IN_KEY } from '../../test/manifest';
 import { nexusLogin } from '../../instanceCommands/nexusLogin';
 import { acceptingGoodKey, GOOD_KEY, nexusAnswering } from '../../nexus/test/nexusDouble';
 import { recordingReporter } from '../../test/surfacingDoubles';

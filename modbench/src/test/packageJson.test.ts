@@ -5,7 +5,7 @@ import { present } from '../ports/present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
 } from './vscodeMock';
-import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
+import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, LOGGED_IN_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN, SPECIFIED_AHEAD_OF_CODE, RETIRED_AHEAD_OF_CODE } from './commandsCatalog';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
@@ -21,7 +21,6 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile, from: uriFrom },
 }));
 
-import { LOGGED_IN_KEY as NEXUS_LOGGED_IN_KEY } from '../toolbox/nexusCommands';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
 import { MANIFEST } from './scanSource';
 import { NO_MOD_STATUSES } from './noModStatuses';
@@ -339,7 +338,7 @@ describe('package.json Toolbox view', () => {
 
   const toolboxTitle = (loggedIn: boolean) =>
     placed(present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']")
-      .filter((e) => holds(e.when, { view: 'modbench.toolbox', [FOLDER_KEY]: 'instance', [NEXUS_LOGGED_IN_KEY]: loggedIn })));
+      .filter((e) => holds(e.when, { view: 'modbench.toolbox', [FOLDER_KEY]: 'instance', [LOGGED_IN_KEY]: loggedIn })));
 
   it('has refresh as its one title icon, then open settings and log in in its overflow while logged out', () => {
     expect(toolboxTitle(false)).toEqual([

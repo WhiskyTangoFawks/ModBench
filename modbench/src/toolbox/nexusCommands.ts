@@ -4,7 +4,7 @@ import type { NexusLogin } from '../instanceCommands/nexusLogin';
 import { errorMessage } from '../ports/errorMessage';
 import type { Reporter } from '../ports/reporter';
 
-export const LOGGED_IN_KEY = 'modbench.nexus.loggedIn';
+const LOGGED_IN_KEY = 'modbench.nexus.loggedIn';
 
 interface NexusCommandDeps {
   commands: NexusLogin;
