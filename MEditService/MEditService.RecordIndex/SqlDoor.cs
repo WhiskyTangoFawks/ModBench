@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Text.Json;
 using DuckDB.NET.Data;
+using MEditService.RecordIndex.Store;
 using MEditService.RepositoriesLib;
 
 namespace MEditService.RecordIndex;

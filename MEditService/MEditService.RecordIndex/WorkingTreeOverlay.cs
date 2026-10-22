@@ -2,6 +2,7 @@ using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Store;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 

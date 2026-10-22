@@ -7,7 +7,7 @@ namespace MEditService.RecordIndex;
 
 /// <summary>A plugin that failed to read stays in its error state (ADR-0013) until what it reads
 /// from changes, which the state taken before the read detects.</summary>
-internal sealed class FailedReads(Store index, ISourceAdapter source, ILogger logger)
+internal sealed class FailedReads(Store.Store index, ISourceAdapter source, ILogger logger)
 {
     // RowsStand: unsaved text alone stopped the read, so the rows are the last good read's (common.md,
     // States, story 6), and the next good read clears it.

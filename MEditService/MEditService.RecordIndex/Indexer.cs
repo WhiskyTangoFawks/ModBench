@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.RecordIndex.Store;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -118,7 +119,7 @@ internal sealed class Indexer : IDisposable
 
     // Two mechanisms, because one is not enough: the token asks the reconcile loop to stop, the
     // exclusive lock waits until it has. Cancelling without draining would let a teardown dispose
-    // the DuckDB connection mid-write, a native crash.
+    // the store connection mid-write, a native crash.
 
     // Deliberately not _lock: the reconciling thread takes _lock on every plugin, so a waiter
     // holding it could never be signalled.
@@ -145,7 +146,7 @@ internal sealed class Indexer : IDisposable
     private static readonly TimeSpan SourceWriteReadLimit = TimeSpan.FromSeconds(60);
 
     // LoadOrder: the snapshot the scope last reconciled, which holds the masters a plugin is read against.
-    private sealed record OpenScope(HeldPlugins Held, Store Store, Projector Projector, FailedReads Failed, LoadOrderSnapshot LoadOrder);
+    private sealed record OpenScope(HeldPlugins Held, Store.Store Store, Projector Projector, FailedReads Failed, LoadOrderSnapshot LoadOrder);
 
     // Takes the exclusive right to tear down, waiting out the worker's turn and cancelling its reconcile.
     // Always paired with ExitExclusive in a finally.
@@ -279,7 +280,7 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    /// <summary>A read met DuckDB's invalidation: reconciling reopens the store (ADR-0003).</summary>
+    /// <summary>A read met the store's invalidation: reconciling reopens the store (ADR-0003).</summary>
     public void RecoverFromInvalidation() => AskReconcile();
 
     // ADR-0013: every arrival, changed or not, reconciles the snapshot held when its turn runs, so an
@@ -519,7 +520,7 @@ internal sealed class Indexer : IDisposable
     // plugins and the indexed list stay. Runs with the exclusive right held.
     private string FailureAfterReopening(Exception cause)
     {
-        if (!Store.IsInvalidation(cause)) return cause.Message;
+        if (!Store.Store.IsInvalidation(cause)) return cause.Message;
         try
         {
             return ReopenStore() is { } reason ? $"{cause.Message} mEdit's record index was not reopened: {reason}" : cause.Message;
@@ -531,7 +532,7 @@ internal sealed class Indexer : IDisposable
         }
     }
 
-    private OpenScope ScopeOn(HeldPlugins held, Store store, LoadOrderSnapshot snapshot) =>
+    private OpenScope ScopeOn(HeldPlugins held, Store.Store store, LoadOrderSnapshot snapshot) =>
         new(held, store, new Projector(store, held.Find, _source, _logger), new FailedReads(store, _source, _logger), snapshot);
 
     private string? ReopenStore()
@@ -566,7 +567,7 @@ internal sealed class Indexer : IDisposable
     }
 
     private bool FailsOnePlugin(Exception ex, CancellationToken token) =>
-        !Store.IsInvalidation(ex) && !CancelledBy(ex, token);
+        !Store.Store.IsInvalidation(ex) && !CancelledBy(ex, token);
 
     // A whole read after a validation that ran out of memory would run out again.
     private bool RetriedByAWholeRead(Exception ex, CancellationToken token) =>
@@ -618,11 +619,11 @@ internal sealed class Indexer : IDisposable
             leaving.Store.Dispose();
         }
 
-        _logger.LogDebug("Initializing DuckDB record index");
+        _logger.LogDebug("Initializing record index");
         var createTimer = Stopwatch.StartNew();
         var held = new HeldPlugins(
             _adapter, snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease, _logger);
-        Store? fresh = null;
+        Store.Store? fresh = null;
         OpenScope scope;
         try
         {
@@ -651,13 +652,13 @@ internal sealed class Indexer : IDisposable
         }
         if (_logger.IsEnabled(LogLevel.Debug))
         {
-            _logger.LogDebug("DuckDB record index initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
+            _logger.LogDebug("Record index initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
         }
         PublishStatus();
         return scope;
     }
 
-    // A different file has its own DuckDB instance, so a stuck read on the old one cannot reach the new.
+    // A different file has its own store instance, so a stuck read on the old one cannot reach the new.
     private static bool SharesFile(OpenScope leaving, LoadOrderSnapshot snapshot) =>
         leaving.Held.InstanceRoot is { } from && snapshot.InstanceRoot is { } to
         && string.Equals(IndexFile.For(from), IndexFile.For(to), StringComparison.OrdinalIgnoreCase);
@@ -988,7 +989,7 @@ internal sealed class Indexer : IDisposable
     }
 
     // A tree that fails at every snapshot reads its binary once per change of its bytes.
-    private static bool BinaryStandsIn(Store store, PluginAddress key, ReadState state) =>
+    private static bool BinaryStandsIn(Store.Store store, PluginAddress key, ReadState state) =>
         store.DerivationOf(key) == DerivedFrom.BinaryForUnreadableSource
         && state.Binary is { } binary && store.IndexedContentHash(key) == binary;
 
@@ -1021,7 +1022,7 @@ internal sealed class Indexer : IDisposable
     // handed with it, or why a place could not be read (ADR-0003).
     private string StringsReadBy(LoadOrderSnapshot loadOrder, RegisteredPlugin plugin) =>
         $"{_readLanguage}\n" + (_adapter.StringsPlacesOf(ModPathOf(plugin.Path), loadOrder, plugin.Strings).Holds(out var places, out var failure)
-            ? string.Join('\n', places.Select(place => $"{Store.RelativeWithin(loadOrder.DataFolderPath, place)}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
+            ? string.Join('\n', places.Select(place => $"{Store.Store.RelativeWithin(loadOrder.DataFolderPath, place)}|{plugin.Strings.StampOf(place) ?? loadOrder.StampOf(place)}"))
             : failure.Reason);
 
     // ADR-0015.

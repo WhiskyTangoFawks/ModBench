@@ -1,4 +1,5 @@
 using DuckDB.NET.Data;
+using MEditService.RecordIndex.Store;
 
 namespace MEditService.RecordIndex;
 
