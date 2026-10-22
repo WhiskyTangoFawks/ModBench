@@ -6,23 +6,26 @@ Issues live as GitHub issues. Use `gh` for all operations.
 
 Four kinds of open issue, nothing else:
 
-- Epic (`epic` label) — the bounded scope of one batch of work, drawn as pointers into the specs, minted only by the maintainer's grill → `/to-epic` pipeline. Always assigned to a release milestone. Future tense; spent when its slices ship. The specs it points at are written before its slices are built, never updated afterwards to match them.
+- Epic (`epic` label) — the bounded scope of one batch of work, drawn as pointers into the specs, minted only by the maintainer's grill → `/to-epic` pipeline. Always assigned to a goal or a lane. Future tense; spent when its slices ship. The specs it points at are written before its slices are built, never updated afterwards to match them.
 - Implementation ticket — a slice of an epic, minted by `/to-tickets` run against that epic; a native sub-issue of it, pointing at the spec lines it makes true, with native blocked-by edges. No parentless implementation tickets.
 - Enhancement (`enhancement` label) — a request for new behaviour that no spec draws yet, from the maintainer or a user. A grill turns it into spec and then an epic, or it closes. It carries no tickets.
 - Bug (`bug` label) — something doesn't work, reported by the maintainer or a user. Triage verifies it; the fix is an in-loop fix or an epic.
 
 Every open issue carries one state label (`triage-labels.md`).
 
-Agents never create issues outside `/to-epic` and `/to-tickets` — the tracker holds no agent-filed findings. A finding met mid-task is fixed in the same session, reported to the maintainer in the session summary, or dropped. Only the maintainer escalates a finding into tracked work, through grill → `/to-epic` → `/to-tickets`.
+Agents never create issues outside `/to-epic` and `/to-tickets`, with one exception. In a session the maintainer is in, an agent files a `bug` the maintainer approves. The bug goes on the current goal, labelled `ready-for-agent` when it breaks a spec line and `needs-triage` otherwise. A finding met mid-task is fixed in the same session, reported to the maintainer in the session summary, or dropped. Only the maintainer escalates a finding into tracked work, through grill → `/to-epic` → `/to-tickets`.
 
-## Milestones = releases
+## Milestones = goals
 
-Exactly four: `1 — Alpha`, `2 — v1`, `3 — v2` — releases, priority-ordered by numeric title prefix — and `Mutagen Bugs`, the unnumbered parking lot for upstream Mutagen defects (paired with the `mutagen` label). Assigning a milestone schedules an issue for that release. Every open issue carries a milestone except one that needs triage, which may be unscheduled.
+A milestone is a plan. An open issue with no milestone is not planned.
+
+- Goal: a numbered milestone, such as `2 — LitR is in Modbench`. Its description states the outcome and the acceptance the maintainer runs. The number is its priority. A goal closes when its acceptance passes, and the maintainer tags a release.
+- Lane: an unnumbered milestone that never closes. `Upkeep` holds hygiene that serves no goal. `Mutagen Bugs` holds upstream Mutagen defects, paired with the `mutagen` label.
 
 Traverse with `gh`:
 
 - List: `gh api repos/WhiskyTangoFawks/ModBench/milestones --jq '.[] | "\(.title): \(.open_issues)o/\(.closed_issues)c"'`
-- A release's issues: `gh issue list --milestone "1 — Alpha"`
+- A goal's issues: `gh issue list --milestone "2 — LitR is in Modbench"`
 - Assign/move: `gh issue edit <n> --milestone "<title>"`
 
 ## Conventions
