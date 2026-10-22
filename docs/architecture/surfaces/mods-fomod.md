@@ -11,7 +11,7 @@ As a user, I want:
 1. Install of a file or folder that holds a FOMOD to open the installer before anything is written: after the name prompt for a new mod, and after the install target pick for an upgrade. Cites: MO2
 2. The tab titled `FOMOD: <module name>`.
 3. A FOMOD with no step I can see to show its header and Install alone. Cites: MO2
-4. A FOMOD whose installer is a script to install as a plain copy, as Manual does. Cites: ADR-0024; mo2.md, divergence 15
+4. A FOMOD whose installer is a script to install as a plain copy, as Manual does. Cites: Windows and Linux alike; mo2.md, divergence 15
 
 ## The header
 
