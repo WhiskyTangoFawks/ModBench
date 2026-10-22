@@ -515,7 +515,7 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('answers an empty meta for a mod with none', async () => {
-      expect(await source.modMeta('DragIn Manual Extract', 'list')).toEqual({});
+      expect(await source.modMeta('DragIn Manual Extract', 'list')).toEqual({ updateAvailable: false });
     });
 
     it('rejects a meta that is there but cannot be read, not publishing an unreadable meta as an empty one', async () => {

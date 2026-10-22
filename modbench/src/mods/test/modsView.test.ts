@@ -400,7 +400,7 @@ describe('the Mods view tells the indicator decorations when a separator opens o
     const afterExpand = fired.mock.calls.length;
     treeViews.view().collapse(row);
 
-    expect([afterExpand, fired.mock.calls.length]).toEqual([4, 8]);
+    expect([afterExpand, fired.mock.calls.length]).toEqual([5, 10]);
   });
 });
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseMetaIni, writeMetaIni, setOwnedKeysInText } from '../../codecs/metaIni';
+import { modMetaOf, parseMetaIni, writeMetaIni, setOwnedKeysInText } from '../../codecs/metaIni';
 
 const modsDir = join(__dirname, '..', '..', '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance', 'mods');
 const meta = (mod: string) => readFileSync(join(modsDir, mod, 'meta.ini'), 'utf8');
@@ -38,6 +38,16 @@ describe('parseMetaIni', () => {
     });
   });
 
+});
+
+describe('modMetaOf', () => {
+  it.each([
+    ['1.0', '1.1', true],
+    ['1.1', '1.1', false],
+    ['1.0', '', false],
+  ])('a mod at %s with newestVersion %s has updateAvailable %s', (version, newestVersion, updateAvailable) => {
+    expect(modMetaOf(parseMetaIni(`[General]\r\nversion=${version}\r\nnewestVersion=${newestVersion}\r\n`)).updateAvailable).toBe(updateAvailable);
+  });
 });
 
 describe('parseMetaIni — sections', () => {

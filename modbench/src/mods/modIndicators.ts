@@ -1,7 +1,7 @@
 // mods.md, Indicators: a badge and a colour on a mod's row for each status that holds.
 
 import * as vscode from 'vscode';
-import type { InstanceValue, InstanceView, OriginFile } from '../instanceLoader/instance';
+import type { InstanceValue, InstanceView, Mod, OriginFile } from '../instanceLoader/instance';
 import { fileOrderConflictOf, modOrigin, outranksACopy, winsPath } from '../instanceLoader/fileConflictIndex';
 import { onSettingChange } from '../drivingLib/setting';
 import type { WorkspaceSettings } from './workspaceSettings';
@@ -13,13 +13,14 @@ export const MOD_INDICATORS = [
   { id: 'overwrittenLooseFiles', name: 'Overwritten loose files', badge: '\u2296', colour: 'modbench.modOverwrittenLooseFiles' },
   { id: 'redundant', name: 'Redundant', badge: '\u2297', colour: 'modbench.modRedundant' },
   { id: 'containsExcludedFiles', name: 'Contains excluded files', badge: '\u2298', colour: 'modbench.modContainsExcludedFiles' },
+  { id: 'updateAvailable', name: 'Update available', badge: '\u2191', colour: 'modbench.modUpdateAvailable' },
 ] as const;
 
 type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
 type IndicatorsValue = Pick<InstanceValue, 'mods' | 'modGroups' | 'files' | 'filesByMod'>;
 
-function indicatorsOf(value: IndicatorsValue, name: string, files: readonly OriginFile[]): ModIndicator[] {
+function indicatorsOf(value: IndicatorsValue, { name, updateAvailable }: Mod, files: readonly OriginFile[]): ModIndicator[] {
   const own = modOrigin(name);
   const entries = files.filter((file) => !file.excluded).map((file) => value.files.get(file.relativePath));
   const gets = entries.some((entry) => winsPath(entry, own));
@@ -30,6 +31,7 @@ function indicatorsOf(value: IndicatorsValue, name: string, files: readonly Orig
     overwrittenLooseFiles: loses && !redundant,
     redundant,
     containsExcludedFiles: files.some((file) => file.excluded),
+    updateAvailable: updateAvailable === true,
   };
   return MOD_INDICATORS.flatMap(({ id }) => (holds[id] ? [id] : []));
 }
@@ -38,7 +40,7 @@ function modIndicators(value: IndicatorsValue): ReadonlyMap<string, readonly Mod
   const carriers = new Map<string, readonly ModIndicator[]>();
   for (const entry of value.mods) {
     if (entry.kind !== 'mod' || !entry.enabled) continue;
-    carriers.set(entry.name, indicatorsOf(value, entry.name, value.filesByMod.get(entry.name) ?? []));
+    carriers.set(entry.name, indicatorsOf(value, entry, value.filesByMod.get(entry.name) ?? []));
   }
   return carriers;
 }

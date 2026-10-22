@@ -565,6 +565,7 @@ describe('package.json contributes the Mods view\'s indicators and grey as setti
       'overwrittenLooseFiles badge': true, 'overwrittenLooseFiles colour': false,
       'redundant badge': true, 'redundant colour': false,
       'containsExcludedFiles badge': false, 'containsExcludedFiles colour': false,
+      'updateAvailable badge': true, 'updateAvailable colour': false,
     });
   });
 

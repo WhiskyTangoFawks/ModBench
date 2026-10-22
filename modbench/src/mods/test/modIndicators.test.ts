@@ -37,6 +37,12 @@ describe('the indicators each mod carries (mods.md, Indicators)', () => {
     expect(carriedBy(value, 'Loser')).toEqual(['overwrittenLooseFiles']);
   });
 
+  it('a mod the Instance adapter says has an update carries Update available', async () => {
+    const value = await indexedValueOf([{ ...mod('Patch'), updateAvailable: true }, { ...mod('Current'), updateAvailable: false }, mod('Unchecked')], {});
+
+    expect([carriedBy(value, 'Patch'), carriedBy(value, 'Current'), carriedBy(value, 'Unchecked')]).toEqual([['updateAvailable'], [], []]);
+  });
+
   it('a mod every file of which loses is redundant, and not overwritten', async () => {
     const value = await indexedValueOf([mod('Winner'), mod('Loser')], {
       Winner: { files: [file('Winner', 'a.dds'), file('Winner', 'b.dds')] },
@@ -151,6 +157,7 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
       { badge: '\u2296', color: new ThemeColor('modbench.modOverwrittenLooseFiles'), tooltip: 'Overwritten loose files' },
       undefined,
       { badge: '\u2298', color: new ThemeColor('modbench.modContainsExcludedFiles'), tooltip: 'Contains excluded files' },
+      undefined,
     ]);
   });
 
@@ -166,13 +173,14 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
       { badge: undefined, color: new ThemeColor('modbench.modOverwrittenLooseFiles'), tooltip: 'Overwritten loose files' },
       undefined,
       undefined,
+      undefined,
     ]);
   });
 
   it('decorates no mod\'s folder where the Explorer shows it', async () => {
     const decorations = new ModIndicatorDecorations(new FakeInstance(await middleOfThree()), settingsOf(allOn).settings);
 
-    expect(decorationsOn(decorations, vscode.Uri.file('/instance/Middle'))).toEqual([undefined, undefined, undefined, undefined]);
+    expect(decorationsOn(decorations, vscode.Uri.file('/instance/Middle'))).toEqual([undefined, undefined, undefined, undefined, undefined]);
   });
 
   it('asks VS Code to decorate again on each new instance value, and answers from that value', async () => {
@@ -188,8 +196,8 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
 
     instance.publish(await indexedValueOf([mod('Low')], { Low: { files: [file('Low', 'a.dds')] } }));
 
-    expect(fired.map((listener) => listener.mock.calls)).toEqual([[[undefined]], [[undefined]], [[undefined]], [[undefined]]]);
-    expect(decorationsOn(decorations, uri)).toEqual([undefined, undefined, undefined, undefined]);
+    expect(fired.map((listener) => listener.mock.calls)).toEqual([[[undefined]], [[undefined]], [[undefined]], [[undefined]], [[undefined]]]);
+    expect(decorationsOn(decorations, uri)).toEqual([undefined, undefined, undefined, undefined, undefined]);
   });
 
   it('asks VS Code to decorate again only for the indicator whose setting changed', async () => {
@@ -205,7 +213,7 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
     changed.fire({ affectsConfiguration: (key) => key === 'modbench.something' });
     changed.fire({ affectsConfiguration: changing('redundant') });
 
-    expect(fired.map((listener) => listener.mock.calls.length)).toEqual([0, 0, 1, 0]);
+    expect(fired.map((listener) => listener.mock.calls.length)).toEqual([0, 0, 1, 0, 0]);
   });
 });
 
@@ -221,7 +229,7 @@ const groupedMiddleOfThree = () => indexedValueOf([mod('High'), mod('Middle'), m
 describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', () => {
   const collapsedInstance = async () => new FakeInstance(await groupedMiddleOfThree());
   const section = separatorRowUri('Section');
-  const nothing = [undefined, undefined, undefined, undefined];
+  const nothing = [undefined, undefined, undefined, undefined, undefined];
 
   it('carries the indicators of the mods beneath it as a mod row carries its own', async () => {
     const decorations = new ModIndicatorDecorations(await collapsedInstance(), settingsOf(allOn).settings);
@@ -231,6 +239,7 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
       { badge: '⊖', color: new ThemeColor('modbench.modOverwrittenLooseFiles'), tooltip: 'Overwritten loose files' },
       { badge: '⊗', color: new ThemeColor('modbench.modRedundant'), tooltip: 'Redundant' },
       { badge: '⊘', color: new ThemeColor('modbench.modContainsExcludedFiles'), tooltip: 'Contains excluded files' },
+      undefined,
     ]);
   });
 
@@ -240,7 +249,7 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
     }).settings);
 
     expect(decorationsOn(decorations, section)).toEqual([
-      { badge: '⊕', color: undefined, tooltip: 'Overwrites loose files' }, undefined, undefined, undefined,
+      { badge: '⊕', color: undefined, tooltip: 'Overwrites loose files' }, undefined, undefined, undefined, undefined,
     ]);
   });
 
