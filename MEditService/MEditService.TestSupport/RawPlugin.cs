@@ -104,6 +104,51 @@ public static class RawPlugin
 
     public static byte[] Plugin(byte[] tes4, params byte[][] groups) => Concat([tes4, .. groups]);
 
+    /// <summary>The plugin with the subrecords of its uncompressed record <paramref name="formId"/> as
+    /// <paramref name="edit"/> makes them, and every group around the record resized.</summary>
+    public static byte[] EditRecord(
+        byte[] plugin, uint formId, Func<List<(string Signature, byte[] Payload)>, IEnumerable<(string Signature, byte[] Payload)>> edit)
+    {
+        var openGroups = new Stack<(int Start, int End)>();
+        for (var at = 0; at < plugin.Length;)
+        {
+            while (openGroups.TryPeek(out var group) && group.End <= at) openGroups.Pop();
+            var type = Encoding.ASCII.GetString(plugin, at, 4);
+            var size = (int)BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(at + 4));
+            if (type == "GRUP")
+            {
+                openGroups.Push((at, at + size));
+                at += HeaderLength;
+                continue;
+            }
+            var end = at + HeaderLength + size;
+            if (type == "TES4" || BinaryPrimitives.ReadUInt32LittleEndian(plugin.AsSpan(at + 12)) != formId)
+            {
+                at = end;
+                continue;
+            }
+
+            var subrecords = new List<(string, byte[])>();
+            for (var sub = at + HeaderLength; sub < end;)
+            {
+                var length = BinaryPrimitives.ReadUInt16LittleEndian(plugin.AsSpan(sub + 4));
+                subrecords.Add((Encoding.ASCII.GetString(plugin, sub, 4), plugin[(sub + 6)..(sub + 6 + length)]));
+                sub += 6 + length;
+            }
+            var record = Concat([plugin[at..(at + HeaderLength)], .. edit(subrecords).Select(s => Subrecord(s.Signature, s.Payload))]);
+            BinaryPrimitives.WriteUInt32LittleEndian(record.AsSpan(4), (uint)(record.Length - HeaderLength));
+
+            var edited = Concat(plugin[..at], record, plugin[end..]);
+            foreach (var (start, _) in openGroups)
+            {
+                var groupSize = BinaryPrimitives.ReadUInt32LittleEndian(edited.AsSpan(start + 4));
+                BinaryPrimitives.WriteUInt32LittleEndian(edited.AsSpan(start + 4), (uint)(groupSize + record.Length - (end - at)));
+            }
+            return edited;
+        }
+        throw new InvalidOperationException($"The plugin holds no record {formId:X8}.");
+    }
+
     public static byte[] Concat(params byte[][] parts) => parts.SelectMany(p => p).ToArray();
 
     private static byte[] RecordAroundPayload(string type, uint formId, uint flags, ushort formVersion, byte[] payload)

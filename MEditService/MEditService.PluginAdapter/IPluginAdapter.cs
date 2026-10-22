@@ -1,6 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter.Repair;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -42,6 +43,20 @@ public interface IPluginAdapter
 
     /// <summary>The hash and malformed-record diagnoses from one fresh read of the file.</summary>
     Answer<FileClaim, PluginFailure> ClaimOf(string pluginPath, GameRelease gameRelease);
+
+    /// <summary>The malformed-record diagnoses from one fresh read of the file, each with the change that
+    /// repairs it, or none.</summary>
+    Answer<RepairPreviews, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease);
+
+    /// <summary>The plugin with the repair of each of <paramref name="chosen"/> written to <paramref name="destinationPath"/>.
+    /// Refused, writing nothing, when the bytes changed since the preview or no repair answers a chosen one.</summary>
+    Answer<string, PluginFailure> WriteRepaired(
+        string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string destinationPath, GameRelease gameRelease);
+
+    /// <summary>Refused unless the plugin at <paramref name="repairedPath"/> holds every record of the plugin,
+    /// and differs from it only by the repairs of <paramref name="chosen"/>. Answers the repaired path.</summary>
+    Answer<string, PluginFailure> VerifyRepaired(
+        string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string repairedPath, GameRelease gameRelease);
 
     /// <summary>The loose strings files and archives a read of the localized plugin under <paramref name="loadOrder"/>
     /// takes its strings from.</summary>
