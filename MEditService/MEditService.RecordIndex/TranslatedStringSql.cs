@@ -1,3 +1,5 @@
+using MEditService.RecordIndex.Store;
+
 namespace MEditService.RecordIndex;
 
 /// <summary>The codec writes a translated string as <c>{TargetLanguage, Value}</c>, or as

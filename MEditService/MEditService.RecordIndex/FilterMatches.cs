@@ -1,10 +1,11 @@
 using DuckDB.NET.Data;
+using MEditService.RecordIndex.Store;
 
 namespace MEditService.RecordIndex;
 
 /// <summary>The record filter: the matches of one SQL query, and the records holding a match in the
 /// match's own plugin so it stays reachable beneath them.</summary>
-internal sealed class FilterMatches(Store store)
+internal sealed class FilterMatches(Store.Store store)
 {
     private const string Holders = "_filter_holders";
     private const string Matches = "_filter";
@@ -42,7 +43,7 @@ internal sealed class FilterMatches(Store store)
         {
             if (!ReturnsFormKey(connection, sql)) return "Filter SQL must return a form_key column";
         }
-        catch (DuckDBException ex) when (!Store.IsInvalidation(ex))
+        catch (DuckDBException ex) when (!Store.Store.IsInvalidation(ex))
         {
             return ex.Message;
         }

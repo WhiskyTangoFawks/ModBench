@@ -3,7 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.RecordIndex.Queries;
 
-namespace MEditService.RecordIndex;
+namespace MEditService.RecordIndex.Store;
 
 /// <summary>Indexes the ModHeader as an ordinary <c>records</c> row at FormKey
 /// <c>000000:&lt;plugin&gt;</c> — the null form, which no major record can occupy — with the root

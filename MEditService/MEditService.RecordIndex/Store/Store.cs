@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Strings;
 
-namespace MEditService.RecordIndex;
+namespace MEditService.RecordIndex.Store;
 
 /// <summary>The connection, DDL, validate and rebuild of the record index file, every read over it, and
 /// every write verb: each transaction boundary, registration and the winner sweep.</summary>

@@ -5,6 +5,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.RecordIndex.Queries;
+using MEditService.RecordIndex.Store;
 using MEditService.RepositoriesLib;
 using MEditService.SourceAdapter;
 using Mutagen.Bethesda;
@@ -14,7 +15,7 @@ namespace MEditService.RecordIndex;
 /// <summary>Every read the record index answers, over the Store's relations (ADR-0010). A record read sees
 /// only the active plugins (ADR-0012), unless it names one plugin and returns that plugin's copy.</summary>
 internal sealed class RelationReads(
-    Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed)
+    Store.Store store, Func<IReadOnlyDictionary<PluginAddress, PluginContent>> openedPlugins, Func<bool> indexed)
 {
     /// <summary>What the Index read out of each plugin it has open, keyed by identity. A plugin it has
     /// not reached, or could not open, is absent, so this is also "which plugins are open?".
@@ -189,7 +190,7 @@ internal sealed class RelationReads(
             return DuckDbSql.Rows(connection, $"SELECT to_json(__row) FROM ({sql}\n) __row",
                 reader => JsonDocument.Parse(reader.GetString(0)).RootElement.Clone()).ToArray();
         }
-        catch (DuckDBException ex) when (!Store.IsInvalidation(ex))
+        catch (DuckDBException ex) when (!Store.Store.IsInvalidation(ex))
         {
             return ex.Message;
         }
@@ -401,7 +402,7 @@ internal sealed class RelationReads(
     {
         using var connection = store.OpenReadConnection();
         var rows = DuckDbSql.Rows(
-            connection, $"SELECT plugin, origin, strings_read FROM {Store.FilesRelation} WHERE strings_read IS NOT NULL",
+            connection, $"SELECT plugin, origin, strings_read FROM {Store.Store.FilesRelation} WHERE strings_read IS NOT NULL",
             reader => KeyValuePair.Create(DuckDbSql.ReadPluginAddress(reader), reader.GetString(2)));
         return new Dictionary<PluginAddress, string>(rows, PluginAddress.Comparer);
     }

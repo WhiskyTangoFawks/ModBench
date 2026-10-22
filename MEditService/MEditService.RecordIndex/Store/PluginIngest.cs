@@ -8,7 +8,7 @@ using MEditService.RecordIndex.Queries;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
-namespace MEditService.RecordIndex;
+namespace MEditService.RecordIndex.Store;
 
 /// <summary>The prepare/append/collectors collaborator of <see cref="Store"/>, which
 /// owns the transaction. <c>WorkingTreeOverlay</c> reuses the collectors so an edit's derived rows

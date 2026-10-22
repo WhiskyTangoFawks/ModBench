@@ -49,12 +49,12 @@ internal sealed class FilterInForce(ILogger logger, INotificationPublisher? noti
 
     /// <summary>Materializes the filter in force again after rows moved, or none: a store opened while a
     /// clear waited still holds the cleared one. One that cannot apply again is cleared and published.</summary>
-    public void Reapply(Store store)
+    public void Reapply(Store.Store store)
     {
         if (ReapplyOrClear(store) is { } cleared) notifications?.Publish(cleared);
     }
 
-    private RecordFilterClearedNotification? ReapplyOrClear(Store store)
+    private RecordFilterClearedNotification? ReapplyOrClear(Store.Store store)
     {
         lock (_lock)
         {

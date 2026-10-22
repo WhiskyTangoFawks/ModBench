@@ -2,7 +2,7 @@ namespace MEditService.RecordIndex;
 
 /// <summary>The store in force, handed to one write inside the write gate and the scope. A ref struct, so the
 /// write cannot keep it past the call, where a write may race it or a reconcile close it.</summary>
-internal readonly ref struct GatedStore(Store store, IndexScope scope)
+internal readonly ref struct GatedStore(Store.Store store, IndexScope scope)
 {
     public IndexScope Scope => scope;
 
