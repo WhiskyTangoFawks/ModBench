@@ -141,6 +141,9 @@ def load_boxes(zoom_out: Path):
         if m and column:
             depth = len(m.group('indent')) // 2
             path = path[:depth] + [m.group('id')]
+            # A system of record is no project: it never takes a module box's id.
+            if path[0].endswith('_data') and m.group('id') in boxes[column]:
+                continue
             boxes.setdefault(column, {})[m.group('id')] = '.'.join(path)
     return boxes
 
