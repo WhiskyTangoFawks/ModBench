@@ -226,7 +226,7 @@ As a user, I want:
 
 1. No prompt. Each mod with a Nexus mod ID asked about once, and its installation file followed along its update chain to the newest file, as MO2 does. Cites: MO2
 2. The newest version written in the mod's metadata, where MO2 reads it, so MO2 shows the same update. Cites: Never break the instance for its owner
-3. A mod with no Nexus mod ID, or one Nexus no longer has, left as it was and named in the Output. Cites: Never silently wrong
+3. A mod with no Nexus mod ID, or one Nexus does not hold, left as it was and named in the Output. Cites: Never silently wrong
 
 ### Go to mod
 

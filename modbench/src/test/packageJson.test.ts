@@ -6,7 +6,7 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
 } from './vscodeMock';
 import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
-import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN } from './commandsCatalog';
+import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN, SPECIFIED_AHEAD_OF_CODE } from './commandsCatalog';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
 const orderOf = (entry: MenuEntry): number => Number((entry.group ?? '').split('@')[1] ?? Number.NaN);
@@ -558,7 +558,7 @@ describe('package.json command titles and categories', () => {
   it('offers every catalog gesture in the palette, but a gesture specified ahead of its code', () => {
     const gestureIds = catalogCommandIds(GESTURES_MARKDOWN);
     const declared = new Set(commands.map((c) => c.command));
-    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || (!declared.has(id) && !PALETTE_AHEAD_OF_CODE.includes(id)));
+    const hidden = [...gestureIds].filter((id) => gatedFalse().has(id) || (!declared.has(id) && !SPECIFIED_AHEAD_OF_CODE.includes(id)));
     expect(
       hidden,
       'commands.md, Entry points are not gestures: every gesture is also in the command palette.',
@@ -567,20 +567,13 @@ describe('package.json command titles and categories', () => {
 
   it('registers no gesture the catalog lists as specified ahead of its code', () => {
     const declared = new Set(commands.map((c) => c.command));
-    expect(PALETTE_AHEAD_OF_CODE.filter((id) => declared.has(id))).toEqual([]);
+    expect(SPECIFIED_AHEAD_OF_CODE.filter((id) => declared.has(id))).toEqual([]);
   });
 
   it('still registers every gesture named as retired ahead of its code, so the list expires with the code', () => {
     const declared = new Set(commands.map((c) => c.command));
     expect(RETIRED_AHEAD_OF_CODE.filter((id) => !declared.has(id))).toEqual([]);
   });
-
-  const PALETTE_AHEAD_OF_CODE: string[] = [
-    'modbench.instance.logIn',
-    'modbench.instance.logOut',
-    'modbench.mod.checkForUpdates',
-    'modbench.downloadedFile.queryInfo',
-  ];
 
   const INTERNAL_COMMANDS = [
     'modbench.instance.putLoadOrder',
