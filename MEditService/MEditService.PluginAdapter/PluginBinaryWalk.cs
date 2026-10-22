@@ -71,21 +71,31 @@ public static class PluginBinaryWalk
 
     /// <summary>Every record, the plugin header first, in document order. A GRUP's children follow its
     /// header: the format nests by adjacency, so stepping over the header alone descends.</summary>
-    internal static IEnumerable<MajorRecordPinFrame> Records(byte[] pluginBytes, GameRelease release)
+    internal static IEnumerable<MajorRecordPinFrame> Records(byte[] pluginBytes, GameRelease release) =>
+        RecordsInGroups(pluginBytes, release).Select(walked => walked.Record);
+
+    /// <summary><see cref="Records"/>, each with where every group around it starts, read before the walk
+    /// moves on.</summary>
+    internal static IEnumerable<(MajorRecordPinFrame Record, IEnumerable<int> GroupStarts)> RecordsInGroups(byte[] pluginBytes, GameRelease release)
     {
         var constants = GameConstants.Get(release);
         var bytes = new ReadOnlyMemorySlice<byte>(pluginBytes);
+        var openGroups = new Stack<(int Start, long End)>();
+        var groupStarts = openGroups.Select(group => group.Start);
         var position = 0;
         while (position < pluginBytes.Length)
         {
+            while (openGroups.TryPeek(out var group) && group.End <= position) openGroups.Pop();
             var rest = bytes.Slice(position);
-            if (constants.VariableHeader(rest).IsGroup)
+            var header = constants.VariableHeader(rest);
+            if (header.IsGroup)
             {
+                openGroups.Push((position, position + header.TotalLength));
                 position += constants.GroupConstants.HeaderLength;
                 continue;
             }
             var record = new MajorRecordPinFrame(constants, rest, position);
-            yield return record;
+            yield return (record, groupStarts);
             position += checked((int)record.TotalLength);
         }
     }
