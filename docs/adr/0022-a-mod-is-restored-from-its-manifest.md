@@ -1,6 +1,6 @@
 # A mod is restored from its manifest
 
-Each mod has one manifest file, and the mod is restored from it: the manifest names where each of the mod's files comes from. For a source mod the build writes it, because the mod folder is the build's output; for any other mod, update manifest writes it from the mod as it is, and install and upgrade write it, because they change the mod's package. Nothing else maintains it.
+Each mod has one manifest file, and the mod is restored from it: the manifest names where each of the mod's files comes from. For a source mod the build writes it, because the mod folder is the build's output; for any other mod, a gesture the user runs writes it from the mod as it is. Nothing else maintains it.
 
 ## Consequences
 
