@@ -14,6 +14,7 @@ const downloadedFile = (over: { modID?: string; installedKey?: string; name?: st
   return {
     name, path: `/downloads/${name}`, metadataPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1, excluded: false,
     meta: { status: 'Downloaded', ...ids },
+    modID: ids.modID,
   };
 };
 

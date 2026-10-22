@@ -173,6 +173,18 @@ describe('installMod', () => {
     expect(calls[0]).toEqual({ verb: 'install', package: handed, target: NEW_MOD, keys });
   });
 
+  it.each([
+    ['the metadata records', { fileCategory: 3 }, 3],
+    ['the metadata records none', {}, undefined],
+    ['there is no metadata', undefined, undefined],
+  ])('records the Nexus file status when %s', async (_, meta, expected) => {
+    const file = downloadedFile(DOWNLOADED_FILE.name, DOWNLOADED_FILE_PATH, meta);
+
+    const { calls } = await install(DOWNLOADED_FILE, NEW_MOD, {}, true, unreadStatus, [file]);
+
+    expect(calls[0]).toMatchObject({ verb: 'install', keys: { nexusFileStatus: expected } });
+  });
+
   it('records no Nexus id for a downloaded file whose metadata holds none', async () => {
     const { calls } = await install(DOWNLOADED_FILE, NEW_MOD, {}, true, unreadStatus, [downloadedFile(DOWNLOADED_FILE.name, DOWNLOADED_FILE_PATH)]);
 

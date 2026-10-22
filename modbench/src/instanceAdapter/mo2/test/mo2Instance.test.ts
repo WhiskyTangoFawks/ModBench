@@ -437,6 +437,18 @@ describe('the MO2 Instance adapter', () => {
       expect(byName.get('manual.zip')?.metadataPath).toBe(join(root, 'downloads', 'manual.zip.meta'));
     });
 
+    it('gives each file the Nexus mod ID install gives its mod, beside the metadata\'s own', async () => {
+      await writeFile(join(root, 'downloads', 'Named Mod-4321-1-0-1700000000.7z'), '7z');
+      await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
+
+      const downloadedFiles = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
+
+      if (downloadedFiles.kind !== 'listed') throw new Error(`expected listed, got ${downloadedFiles.reason}`);
+      const idsByName = new Map((downloadedFiles.files ?? []).map((file) => [file.name, file.modID]));
+      expect(idsByName.get('Named Mod-4321-1-0-1700000000.7z')).toBe('4321');
+      expect(idsByName.get('manual.zip')).toBeUndefined();
+    });
+
     it('answers metadata that is there but empty as metadata, so a file whose metadata is there to open does not show none', async () => {
       await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
       await writeFile(join(root, 'downloads', 'manual.zip.meta'), '');

@@ -2,6 +2,7 @@
 // order is not guaranteed, so it's read scoped to the section and keyed by index.
 
 import type { ModMeta } from '../../instanceAdapter';
+import { qtToInt } from './qtInt';
 import { isUpdateAvailable } from './versionInfo';
 import { GENERAL_SECTION, readIniSection, replaceIniSection, setIniValue } from './qSettingsIni';
 
@@ -34,6 +35,7 @@ const OWNED_GENERAL_KEYS = [
   ['nexusId', 'modid'],
   ['version', 'version'],
   ['newestVersion', 'newestVersion'],
+  ['nexusFileStatus', 'nexusFileStatus'],
   ['installationFileName', 'installationFile'],
 ] as const;
 
@@ -66,7 +68,7 @@ function parseInstalledFiles(text: string): InstalledFileId[] | undefined {
 }
 
 const nexusFileStatusOf = (text: string | undefined): number | undefined =>
-  (text !== undefined && Number.isInteger(Number(text)) ? Number(text) : undefined);
+  (text === undefined ? undefined : qtToInt(text));
 
 export function parseMetaIni(text: string): MetaIni {
   const general = readIniSection(text, GENERAL_SECTION);
@@ -96,7 +98,7 @@ export const modMetaOf = ({ installedFiles, newestVersion, nexusFileStatus: _sta
   ({ ...rest, installedFileKeys: installedFiles?.map(installedFileKey), updateAvailable: isUpdateAvailable(rest.version, newestVersion) });
 
 /** The meta.ini a mod's meta says. */
-export const metaIniOf = ({ installedFileKeys, ...rest }: Omit<ModMeta, 'updateAvailable'>): MetaIni =>
+export const metaIniOf = ({ installedFileKeys, ...rest }: Omit<ModMeta, 'updateAvailable'> & Pick<MetaIni, 'nexusFileStatus'>): MetaIni =>
   ({ ...rest, installedFiles: installedFileKeys?.map(installedFileOfKey) });
 
 function installedFilesBody(pairs: readonly InstalledFileId[] | undefined): string[] {
@@ -112,14 +114,14 @@ function installedFilesBody(pairs: readonly InstalledFileId[] | undefined): stri
 export function changeOwnedKeysInText(text: string, changes: MetaKeys): string {
   const general = [...OWNED_GENERAL_KEYS]
     .reverse()
-    .reduce((acc, [field, key]) => (field in changes ? setIniValue(acc, GENERAL_SECTION, key, changes[field]) : acc), text);
+    .reduce((acc, [field, key]) => (field in changes ? setIniValue(acc, GENERAL_SECTION, key, changes[field]?.toString()) : acc), text);
   return 'installedFiles' in changes ? replaceIniSection(general, INSTALLED_FILES, installedFilesBody(changes.installedFiles)) : general;
 }
 
 /** Sets every key Modbench owns, an absent one cleared. */
 export function setOwnedKeysInText(text: string, keys: MetaKeys): string {
-  const { gameName, nexusId, version, installationFileName, installedFiles } = keys;
-  return changeOwnedKeysInText(text, { gameName, nexusId, version, installationFileName, installedFiles });
+  const { gameName, nexusId, version, installationFileName, installedFiles, nexusFileStatus } = keys;
+  return changeOwnedKeysInText(text, { gameName, nexusId, version, installationFileName, installedFiles, nexusFileStatus });
 }
 
 /** Keys use MO2's own names, so the result round-trips through `parseMetaIni`. */

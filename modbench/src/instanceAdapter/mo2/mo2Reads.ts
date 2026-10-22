@@ -4,6 +4,7 @@
 import { basename, dirname } from 'node:path';
 import { parsePlugins } from '../../loadOrderFileCodec/pluginsText';
 import { isInstallationFileName } from '../downloadedFileContents/installationFileNames';
+import { effectiveModId } from './codecs/nexusFileName';
 import { METADATA_FILE_SUFFIX, parseDownloadedFileMeta } from './codecs/downloads';
 import { type MetaIni, modMetaOf, parseMetaIni } from './codecs/metaIni';
 import { entryNamed, MODLIST_FILE_NAME, modLineKey, parseModlist } from './codecs/modlistText';
@@ -35,7 +36,7 @@ async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLin
       readOrAbsent<string | undefined>(() => get(metadataPath), undefined),
     ]);
     const parsed = metaText === undefined ? undefined : parseDownloadedFileMeta(metaText);
-    return { name, path, metadataPath, size: facts.size, mtimeMs: facts.mtimeMs, excluded: parsed?.hidden ?? false, meta: parsed?.meta };
+    return { name, path, metadataPath, size: facts.size, mtimeMs: facts.mtimeMs, excluded: parsed?.hidden ?? false, meta: parsed?.meta, modID: effectiveModId(parsed?.meta.modID, name) };
   }));
 }
 
