@@ -21,6 +21,7 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile, from: uriFrom },
 }));
 
+import { LOGGED_IN_KEY as NEXUS_LOGGED_IN_KEY } from '../toolbox/nexusCommands';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
 import { MANIFEST } from './scanSource';
 import { NO_MOD_STATUSES } from './noModStatuses';
@@ -338,7 +339,7 @@ describe('package.json Toolbox view', () => {
 
   const toolboxTitle = (loggedIn: boolean) =>
     placed(present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']")
-      .filter((e) => holds(e.when, { view: 'modbench.toolbox', 'modbench.folder': 'instance', 'modbench.nexus.loggedIn': loggedIn })));
+      .filter((e) => holds(e.when, { view: 'modbench.toolbox', [FOLDER_KEY]: 'instance', [NEXUS_LOGGED_IN_KEY]: loggedIn })));
 
   it('has refresh as its one title icon, then open settings and log in in its overflow while logged out', () => {
     expect(toolboxTitle(false)).toEqual([

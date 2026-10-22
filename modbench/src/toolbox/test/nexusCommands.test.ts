@@ -1,109 +1,174 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-interface PromptOptions { password?: boolean; validateInput: (value: string) => Promise<string | undefined> }
+interface FakeInputBox {
+  title?: string;
+  password?: boolean;
+  value: string;
+  busy: boolean;
+  validationMessage?: string;
+  hidden: boolean;
+  accept: () => Promise<void>;
+  hide: () => void;
+  onDidAccept: (listener: () => Promise<void>) => void;
+  onDidHide: (listener: () => void) => void;
+  show: () => void;
+  dispose: () => void;
+}
 
-const { handlers, registerCommand, executeCommand, showInputBox } = vi.hoisted(() => {
+const { handlers, contextKeys, boxes, registerCommand, executeCommand, createInputBox } = vi.hoisted(() => {
   const handlers = new Map<string, () => Promise<void>>();
+  const contextKeys = new Map<string, unknown>();
+  const boxes: FakeInputBox[] = [];
   return {
     handlers,
+    contextKeys,
+    boxes,
     registerCommand: vi.fn((command: string, handler: () => Promise<void>) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
     }),
-    executeCommand: vi.fn(),
-    showInputBox: vi.fn<(options: PromptOptions) => Promise<string | undefined>>(),
+    executeCommand: vi.fn((command: string, key: string, value: unknown) => {
+      if (command === 'setContext') contextKeys.set(key, value);
+      return Promise.resolve();
+    }),
+    createInputBox: vi.fn((): FakeInputBox => {
+      let accepted: () => Promise<void> = () => Promise.resolve();
+      let hid: () => void = () => undefined;
+      const box: FakeInputBox = {
+        value: '', busy: false, hidden: false,
+        accept: () => accepted(),
+        hide: () => { box.hidden = true; hid(); },
+        onDidAccept: (listener) => { accepted = listener; },
+        onDidHide: (listener) => { hid = listener; },
+        show: () => undefined,
+        dispose: () => undefined,
+      };
+      boxes.push(box);
+      return box;
+    }),
   };
 });
 
 vi.mock('vscode', () => ({
   commands: { registerCommand, executeCommand },
-  window: { showInputBox },
+  window: { createInputBox },
 }));
 
-import { registerNexusCommands } from '../nexusCommands';
+import { LOGGED_IN_KEY, registerNexusCommands } from '../nexusCommands';
+import { nexusLogin } from '../../instanceCommands/nexusLogin';
+import { acceptingGoodKey, GOOD_KEY, nexusAnswering } from '../../nexus/test/nexusDouble';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
-import type { Nexus } from '../../nexus/nexus';
 
-const LOGGED_IN_KEY = 'modbench.nexus.loggedIn';
-
-function fakeNexus(over: Partial<Nexus> = {}) {
-  const nexus = {
-    check: vi.fn<Nexus['check']>(() => Promise.resolve({ valid: true })),
-    keep: vi.fn<Nexus['keep']>(() => Promise.resolve()),
-    forget: vi.fn<Nexus['forget']>(() => Promise.resolve()),
-    loggedIn: vi.fn<Nexus['loggedIn']>(() => Promise.resolve(false)),
-    ...over,
-  };
-  registerNexusCommands({ nexus });
-  return nexus;
+function registered(secretsFail?: 'get' | 'delete') {
+  const over = nexusAnswering(acceptingGoodKey);
+  if (secretsFail === 'get') over.secrets.get = () => Promise.reject(new Error('keyring locked'));
+  if (secretsFail === 'delete') over.secrets.delete = () => Promise.reject(new Error('keyring locked'));
+  const reporter = recordingReporter();
+  registerNexusCommands({ commands: nexusLogin(over.nexus), nexus: over.nexus, reporter });
+  return { ...over, reporter };
 }
 
 const run = (id: string) => present(handlers.get(id), `the registered handler for "${id}"`)();
-const promptOptions = () => present(showInputBox.mock.calls[0]?.[0], 'the options the prompt opened with');
+
+function openPrompt() {
+  const done = run('modbench.instance.logIn');
+  return { done, box: present(boxes.at(-1), 'the input box the gesture opened') };
+}
 
 beforeEach(() => {
   handlers.clear();
+  contextKeys.clear();
+  boxes.length = 0;
   vi.clearAllMocks();
 });
 
 describe('Log in', () => {
-  it('prompts for the key as a password, which Esc closes without keeping anything', async () => {
-    showInputBox.mockResolvedValue(undefined);
-    const nexus = fakeNexus();
+  it('prompts for the key as a password', async () => {
+    registered();
 
-    await run('modbench.instance.logIn');
+    const { box } = openPrompt();
 
-    expect(promptOptions().password).toBe(true);
-    expect(nexus.keep).not.toHaveBeenCalled();
-    expect(executeCommand).not.toHaveBeenCalledWith('setContext', LOGGED_IN_KEY, true);
+    expect(box.password).toBe(true);
   });
 
-  it('refuses in the prompt a key Nexus refuses, with Nexus\'s reason', async () => {
-    showInputBox.mockResolvedValue(undefined);
-    const nexus = fakeNexus({ check: vi.fn(() => Promise.resolve({ valid: false, reason: 'Nexus refused this key.' })) });
+  it('asks Nexus nothing until the key is accepted, and nothing when Esc closes the prompt', async () => {
+    const { sent, nexus } = registered();
+    const { box, done } = openPrompt();
+    box.value = 'typing';
 
-    await run('modbench.instance.logIn');
+    box.hide();
+    await done;
 
-    expect(await promptOptions().validateInput('bad')).toBe('Nexus refused this key.');
-    expect(nexus.check).toHaveBeenCalledWith('bad');
+    expect(sent).toEqual([]);
+    expect(await nexus.loggedIn()).toBe(false);
   });
 
-  it('lets the prompt accept a key Nexus accepts', async () => {
-    showInputBox.mockResolvedValue(undefined);
-    fakeNexus();
+  it('keeps the prompt open on a refused key, saying why in the prompt and in the Output', async () => {
+    const { reporter, nexus } = registered();
+    const { box } = openPrompt();
+    box.value = 'wrong';
 
-    await run('modbench.instance.logIn');
+    await box.accept();
 
-    expect(await promptOptions().validateInput('good')).toBeUndefined();
+    expect(box.hidden).toBe(false);
+    expect(box.validationMessage).toBe('Nexus refused this key.');
+    expect(reporter.shownFailures).toEqual([{ severity: 'error', message: 'Nexus did not take the key.', detail: 'Nexus refused this key.' }]);
+    expect(reporter.reports).toEqual([]);
+    expect(await nexus.loggedIn()).toBe(false);
   });
 
-  it('keeps the accepted key and marks the user logged in', async () => {
-    showInputBox.mockResolvedValue('good');
-    const nexus = fakeNexus();
+  it('sends one request for the key it accepts, closes the prompt, and marks the user logged in', async () => {
+    const { sent } = registered();
+    const { box, done } = openPrompt();
+    box.value = `${GOOD_KEY}\n`;
 
-    await run('modbench.instance.logIn');
+    await box.accept();
+    await done;
 
-    expect(nexus.keep).toHaveBeenCalledWith('good');
-    expect(executeCommand).toHaveBeenCalledWith('setContext', LOGGED_IN_KEY, true);
+    expect(sent).toHaveLength(1);
+    await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(true));
   });
 });
 
 describe('Log out', () => {
   it('forgets the key and marks the user logged out, asking nothing', async () => {
-    const nexus = fakeNexus();
+    const { nexus } = registered();
+    await nexus.keep(GOOD_KEY);
+    await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(true));
 
     await run('modbench.instance.logOut');
 
-    expect(nexus.forget).toHaveBeenCalled();
-    expect(executeCommand).toHaveBeenCalledWith('setContext', LOGGED_IN_KEY, false);
-    expect(showInputBox).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(false));
+    expect(boxes).toEqual([]);
+  });
+
+  it('says why in a notification when the key cannot be forgotten', async () => {
+    const { reporter } = registered('delete');
+
+    await run('modbench.instance.logOut');
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to log out of Nexus.', detail: 'keyring locked' }]);
   });
 });
 
-describe('Registration', () => {
-  it('marks the user logged in when a key is already kept', async () => {
-    fakeNexus({ loggedIn: vi.fn(() => Promise.resolve(true)) });
+describe('The logged-in context key', () => {
+  it('follows a key kept or forgotten elsewhere, since the secret store tells every window', async () => {
+    const { secrets } = registered();
+    await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(false));
 
-    await vi.waitFor(() => expect(executeCommand).toHaveBeenCalledWith('setContext', LOGGED_IN_KEY, true));
+    await secrets.store('modbench.nexus.apiKey', GOOD_KEY);
+    await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(true));
+
+    await secrets.delete('modbench.nexus.apiKey');
+    await vi.waitFor(() => expect(contextKeys.get(LOGGED_IN_KEY)).toBe(false));
+  });
+
+  it('is reported, not thrown, when the secret store cannot be read', async () => {
+    const { reporter } = registered('get');
+
+    await vi.waitFor(() => expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not read whether you are logged in to Nexus.', detail: 'keyring locked' },
+    ]));
   });
 });

@@ -6,5 +6,5 @@ function versionOf(packageJson: unknown): string {
 }
 
 export function createHttpNexus(secrets: SecretStore, extensionPackage: unknown): Nexus {
-  return createNexus({ secrets, applicationVersion: versionOf(extensionPackage), fetch: (url, init) => fetch(url, init) });
+  return createNexus({ secrets, applicationVersion: versionOf(extensionPackage), fetch });
 }

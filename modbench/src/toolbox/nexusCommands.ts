@@ -1,34 +1,54 @@
 import * as vscode from 'vscode';
 import type { Nexus } from '../nexus/nexus';
+import type { NexusLogin } from '../instanceCommands/nexusLogin';
+import { errorMessage } from '../ports/errorMessage';
+import type { Reporter } from '../ports/reporter';
 
-const LOGGED_IN_KEY = 'modbench.nexus.loggedIn';
+export const LOGGED_IN_KEY = 'modbench.nexus.loggedIn';
 
 interface NexusCommandDeps {
-  nexus: Pick<Nexus, 'check' | 'keep' | 'forget' | 'loggedIn'>;
+  commands: NexusLogin;
+  nexus: Nexus;
+  reporter: Reporter;
 }
 
-// The log in / log out gestures (toolbox.md, Log in), and the context key the title bar's menu reads.
-export function registerNexusCommands({ nexus }: NexusCommandDeps): vscode.Disposable[] {
-  const markLoggedIn = (loggedIn: boolean) => vscode.commands.executeCommand('setContext', LOGGED_IN_KEY, loggedIn);
-  void nexus.loggedIn().then(markLoggedIn);
+function askForKey(commands: NexusLogin, reporter: Reporter): Promise<void> {
+  const box = vscode.window.createInputBox();
+  box.title = 'Nexus API key';
+  box.password = true;
+  box.ignoreFocusOut = true;
+  box.onDidAccept(async () => {
+    box.busy = true;
+    const outcome = await commands.logIn(box.value);
+    box.busy = false;
+    if (outcome.applied) {
+      box.hide();
+      return;
+    }
+    box.validationMessage = outcome.refusal;
+    reporter.shownOnSurface('error', 'Nexus did not take the key.', outcome.refusal);
+  });
+  return new Promise((resolve) => {
+    box.onDidHide(() => { box.dispose(); resolve(); });
+    box.show();
+  });
+}
+
+export function registerNexusCommands({ commands, nexus, reporter }: NexusCommandDeps): vscode.Disposable[] {
+  const markLoggedIn = async (): Promise<void> => {
+    try {
+      await vscode.commands.executeCommand('setContext', LOGGED_IN_KEY, await nexus.loggedIn());
+    } catch (err) {
+      reporter.report('error', 'Could not read whether you are logged in to Nexus.', errorMessage(err));
+    }
+  };
+  void markLoggedIn();
   return [
-    vscode.commands.registerCommand('modbench.instance.logIn', async () => {
-      const key = await vscode.window.showInputBox({
-        title: 'Nexus API key',
-        password: true,
-        ignoreFocusOut: true,
-        validateInput: async (value) => {
-          const checked = await nexus.check(value);
-          return checked.valid ? undefined : checked.reason;
-        },
-      });
-      if (key === undefined) return;
-      await nexus.keep(key);
-      await markLoggedIn(true);
-    }),
+    nexus.onDidChangeLogin(() => { void markLoggedIn(); }),
+    vscode.commands.registerCommand('modbench.instance.logIn', () => askForKey(commands, reporter)),
     vscode.commands.registerCommand('modbench.instance.logOut', async () => {
-      await nexus.forget();
-      await markLoggedIn(false);
+      const outcome = await commands.logOut();
+      if (!outcome.applied) reporter.report('error', 'Failed to log out of Nexus.', outcome.refusal);
     }),
   ];
 }

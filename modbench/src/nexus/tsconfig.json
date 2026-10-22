@@ -4,6 +4,9 @@
     "rootDir": ".",
     "outDir": "../../out/projects/nexus"
   },
+  "references": [
+    { "path": "../ports" }
+  ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]
 }

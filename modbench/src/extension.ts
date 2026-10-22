@@ -38,6 +38,7 @@ import { publishRepository } from './toolbox/repositoryContext';
 import { createHttpNexus } from './nexus/httpNexus';
 import type { Nexus } from './nexus/nexus';
 import { registerNexusCommands } from './toolbox/nexusCommands';
+import { nexusLogin } from './instanceCommands/nexusLogin';
 import { registerRefreshCommand, registerToolboxCommands, TOOLBOX_VIEW } from './toolbox/toolboxCommands';
 import { afterTrust, openedFolder, whenOpened } from './toolbox/instanceCheck';
 import { markFirstReadLanded } from './drivingLib/instanceFirstRead';
@@ -179,7 +180,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(loadOrderPutOnEachLanguageChange(onStringsLanguageChange, instance, putLoadOrder));
   own(vscode.commands.registerCommand('modbench.instance.putLoadOrder', putLoadOrder));
   ownAll(own, registerToolboxCommands({ commands, instance, extensionId, reporterFor }));
-  ownAll(own, registerNexusCommands({ nexus: deps.nexus }));
+  ownAll(own, registerNexusCommands({ commands: nexusLogin(deps.nexus), nexus: deps.nexus, reporter: reporterFor('nexus') }));
   own(publishRepository(instance, instanceRoot));
   ownAll(own, registerModlistCommands({ commands: modlist, instance, reporter: reporterFor('modlist') }));
   own(deps.focusedView.follow(MODS_KEY_ARGS.view, mods.view));
