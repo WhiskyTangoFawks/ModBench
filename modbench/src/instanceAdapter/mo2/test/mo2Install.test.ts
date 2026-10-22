@@ -26,7 +26,7 @@ const UPGRADED = 'Unofficial Fallout 4 Patch';
 const DOWNLOADED_FILE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 const PAYLOAD = ['Installed.esp', 'textures/added.dds', 'meshes/deep/nested.nif'];
 const INSTALLATION_FILE: InstallPackage = { kind: 'archive', path: '/elsewhere/Release-1-0.7z' };
-const KEYS = { nexusFileStatus: 1 };
+const KEYS = {};
 
 const errnoError = (code: string, message: string): NodeJS.ErrnoException =>
   Object.assign(new Error(`${code}: ${message}`), { code });
@@ -55,18 +55,33 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     it('puts an archive\'s files into a new folder and writes nothing else, its meta holding only the keys it is given', async () => {
       const before = await snapshotTree(root);
 
-      const outcome = await holding([...PAYLOAD, 'meta.ini']).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { ...KEYS, installationFileName: 'Release-1-0.7z' });
+      const outcome = await holding([...PAYLOAD, 'meta.ini']).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { installationFileName: 'Release-1-0.7z' });
 
       expect(outcome).toEqual({ landed: true, isFomod: false });
       expect(await filesIn(folder(MOD))).toEqual([...PAYLOAD, 'meta.ini'].sort());
-      expect(await meta(MOD)).toBe('[General]\ngameName=Fallout 4\nnexusFileStatus=1\ninstallationFile=Release-1-0.7z\n');
+      expect(await meta(MOD)).toBe('[General]\ngameName=Fallout 4\ninstallationFile=Release-1-0.7z\n');
       assertOnlyChanged(before, await snapshotTree(root), new Set([...PAYLOAD, 'meta.ini'].map((file) => `mods/${MOD}/${file}`)));
     });
 
-    it('records the file it was installed from as a pair with the mod\'s Nexus id', async () => {
-      await holding([...PAYLOAD, 'meta.ini']).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { ...KEYS, nexusId: '111', installedFileKeys: ['111:222'] });
+    it('records the Nexus file status the new file knows', async () => {
+      await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { nexusFileStatus: 3 });
 
-      expect(await meta(MOD)).toBe('[General]\ngameName=Fallout 4\nmodid=111\nnexusFileStatus=1\n[installedFiles]\n1\\modid=111\n1\\fileid=222\nsize=1\n');
+      expect(await meta(MOD)).toBe('[General]\ngameName=Fallout 4\nnexusFileStatus=3\n');
+    });
+
+    it.each([
+      ['takes the mod ID from the name of the file', { installationFileName: 'Release-1234-1-0.7z' }, 'modid=1234'],
+      ['keeps the metadata\'s mod ID over the name\'s', { installationFileName: 'Release-1234-1-0.7z', nexusId: '111' }, 'modid=111'],
+    ])('%s', async (_, keys, expected) => {
+      await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, keys);
+
+      expect(await meta(MOD)).toContain(expected);
+    });
+
+    it('records the file it was installed from as a pair with the mod\'s Nexus id', async () => {
+      await holding([...PAYLOAD, 'meta.ini']).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { nexusId: '111', installedFileKeys: ['111:222'] });
+
+      expect(await meta(MOD)).toBe('[General]\ngameName=Fallout 4\nmodid=111\n[installedFiles]\n1\\modid=111\n1\\fileid=222\nsize=1\n');
     });
 
     it('copies a folder\'s files in, leaving the folder where the user put it', async () => {
@@ -229,19 +244,24 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     });
 
     it('sets the keys it is given over the meta the mod had, keeping each value they leave out, and never over a meta the release ships', async () => {
-      await holding(['meta.ini']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, { ...KEYS, version: '2.2' });
+      await holding(['meta.ini']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, { version: '2.2' });
 
       expect(await meta(UPGRADED)).toBe(
-        `[General]\r\nnexusFileStatus=1\r\ngameName=Fallout 4\r\nmodid=4598\r\nversion=2.2\r\ncategory="-1,"\r\ninstallationFile=${DOWNLOADED_FILE}\r\n`,
+        `[General]\r\ngameName=Fallout 4\r\nmodid=4598\r\nversion=2.2\r\ncategory="-1,"\r\ninstallationFile=${DOWNLOADED_FILE}\r\n`,
       );
     });
 
-    it('records the Nexus file status over the one the mod carried, as MO2 does', async () => {
+    it.each([
+      ['keeps the status the mod carried when the new file knows none', undefined, 'nexusFileStatus=3'],
+      ['replaces it when the new file knows one', 5, 'nexusFileStatus=5'],
+    ])('%s', async (_, status, expected) => {
       await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, { nexusFileStatus: 3 });
-      await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, { nexusFileStatus: 5 });
 
-      expect(await meta(UPGRADED)).toMatch(/^nexusFileStatus=5\r$/m);
-      expect(await meta(UPGRADED)).not.toContain('nexusFileStatus=3');
+      await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, { nexusFileStatus: status });
+
+      const text = await meta(UPGRADED);
+      expect(text).toContain(expected);
+      expect(text.match(/nexusFileStatus=/g)).toHaveLength(1);
     });
 
     it('lands nothing and writes nothing for a mod no folder holds', async () => {

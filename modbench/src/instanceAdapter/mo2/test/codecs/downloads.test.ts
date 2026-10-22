@@ -27,6 +27,7 @@ describe('parseDownloadedFileMeta', () => {
   it.each([
     ['[General]\r\nfileCategory=3\r\n', 3],
     ['[General]\r\nfileCategory=abc\r\n', 0],
+    ['[General]\r\nfileCategory=0x10\r\n', 0],
     ['[General]\r\n', undefined],
   ])('reads the file category of %j as %s', (text, expected) => {
     expect(metaOf(text).fileCategory).toBe(expected);

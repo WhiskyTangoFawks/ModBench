@@ -3,6 +3,7 @@
 // Status, which `uninstalled=true` carries.
 
 import type { DownloadedFileMeta, DownloadedFileStatus } from '../../instanceAdapter';
+import { qtToInt } from './qtInt';
 import { installedFileKey } from './metaIni';
 import { GENERAL_SECTION, readIniSection, setIniValue } from './qSettingsIni';
 
@@ -26,7 +27,7 @@ export function parseDownloadedFileMeta(text: string): { meta: DownloadedFileMet
   const meta: DownloadedFileMeta = {
     status,
     modID,
-    fileCategory: fileCategory === undefined ? undefined : Number.isInteger(Number(fileCategory)) ? Number(fileCategory) : 0,
+    fileCategory: fileCategory === undefined ? undefined : qtToInt(fileCategory),
     name: values.get('name'),
     version: values.get('version'),
     modName: values.get('modName'),

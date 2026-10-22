@@ -1,6 +1,7 @@
 // How MO2's implementation installs a mod: extracted inside the mod's own folder, then settled as
 // its contents. An upgrade keeps its folder, so every watcher armed on it survives the release.
 
+import { effectiveModId } from './codecs/nexusFileName';
 import { type MetaIni, metaIniOf, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
 import type { InstallationFileReader } from '../downloadedFileContents/installationFileReader';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from '../files';
@@ -26,7 +27,7 @@ function keysOver(keys: OwnedMetaKeys, carried: MetaIni): OwnedMetaKeys {
     version: keys.version ?? carried.version,
     installationFileName: keys.installationFileName ?? carried.installationFileName,
     installedFiles: keys.installedFiles ?? carried.installedFiles,
-    nexusFileStatus: keys.nexusFileStatus,
+    nexusFileStatus: keys.nexusFileStatus ?? carried.nexusFileStatus,
   };
 }
 
@@ -102,7 +103,7 @@ export function mo2Landing(context: Mo2Context, installationFileReader: Installa
       try {
         await fill(installed, extraction.path);
         const { root, isFomod } = await releaseRoot(extraction.path);
-        await extraction.land(root, { ...metaIniOf(keys), gameName });
+        await extraction.land(root, { ...metaIniOf(keys), nexusId: effectiveModId(keys.nexusId, keys.installationFileName), gameName });
         return { landed: true, isFomod };
       } catch (err) {
         return abandonAfter(extraction, err);
