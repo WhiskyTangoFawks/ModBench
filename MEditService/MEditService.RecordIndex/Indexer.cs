@@ -520,7 +520,7 @@ internal sealed class Indexer : IDisposable
     // plugins and the indexed list stay. Runs with the exclusive right held.
     private string FailureAfterReopening(Exception cause)
     {
-        if (!Store.Store.IsInvalidation(cause)) return cause.Message;
+        if (cause is not IndexFaultException { Fault: IndexFault.Invalidated }) return cause.Message;
         try
         {
             return ReopenStore() is { } reason ? $"{cause.Message} mEdit's record index was not reopened: {reason}" : cause.Message;
@@ -567,7 +567,7 @@ internal sealed class Indexer : IDisposable
     }
 
     private bool FailsOnePlugin(Exception ex, CancellationToken token) =>
-        !Store.Store.IsInvalidation(ex) && !CancelledBy(ex, token);
+        ex is not IndexFaultException { Fault: IndexFault.Invalidated } && !CancelledBy(ex, token);
 
     // A whole read after a validation that ran out of memory would run out again.
     private bool RetriedByAWholeRead(Exception ex, CancellationToken token) =>

@@ -1,5 +1,6 @@
 using System.Data.Common;
 using DuckDB.NET.Data;
+using MEditService.LoadOrder;
 
 namespace MEditService.RecordIndex.Store;
 
@@ -16,6 +17,9 @@ internal sealed class ReadContext : IDisposable
         _owned = owned;
     }
 
+    public static PluginAddress ReadPluginAddress(DbDataReader reader) =>
+        new(reader.GetString(0), reader.GetString(1));
+
     public List<T> Rows<T>(string sql, Func<DbDataReader, T> map, params object?[] args) =>
         DuckDbSql.Rows(_connection, sql, map, args);
 
@@ -28,11 +32,14 @@ internal sealed class ReadContext : IDisposable
     /// <summary>The names of the columns <paramref name="sql"/> returns, read without running it over a row.</summary>
     public List<string> ColumnNames(string sql)
     {
-        using var command = _connection.CreateCommand();
-        // The newline keeps a trailing line comment in the SQL from swallowing the wrapper.
-        command.CommandText = $"SELECT * FROM ({sql}\n) __probe LIMIT 0";
-        using var reader = command.ExecuteReader();
-        return Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
+        return StoreFaults.Translating(() =>
+        {
+            using var command = _connection.CreateCommand();
+            // The newline keeps a trailing line comment in the SQL from swallowing the wrapper.
+            command.CommandText = $"SELECT * FROM ({sql}\n) __probe LIMIT 0";
+            using var reader = command.ExecuteReader();
+            return Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
+        });
     }
 
     public void Dispose()

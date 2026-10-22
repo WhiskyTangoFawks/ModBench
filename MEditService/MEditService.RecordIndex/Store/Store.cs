@@ -2,7 +2,6 @@ using System.Data;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using DuckDB.NET.Data;
-using DuckDB.NET.Native;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -174,10 +173,6 @@ internal sealed class Store : IDisposable
         }
     }
 
-    /// <summary>DuckDB invalidates its database at a fatal error, a failed checkpoint among them, and
-    /// answers nothing from it until the file is opened again.</summary>
-    internal static bool IsInvalidation(Exception ex) => ex is DuckDBException { ErrorType: DuckDBErrorType.Fatal };
-
     internal bool IsInvalidated()
     {
         try
@@ -186,7 +181,7 @@ internal sealed class Store : IDisposable
             connection.Scalar<int>("SELECT 1");
             return false;
         }
-        catch (DuckDBException ex) when (IsInvalidation(ex))
+        catch (IndexFaultException ex) when (ex.Fault == IndexFault.Invalidated)
         {
             return true;
         }
@@ -344,7 +339,7 @@ internal sealed class Store : IDisposable
     {
         return DuckDbSql.Rows(
             Connection, $"SELECT plugin, origin, file_path, content_hash FROM {FilesRelation}",
-            reader => (DuckDbSql.ReadPluginAddress(reader), ResolvedFilePath(reader.GetString(2)), reader.GetString(3)));
+            reader => (ReadContext.ReadPluginAddress(reader), ResolvedFilePath(reader.GetString(2)), reader.GetString(3)));
     }
 
     // Null when the file cannot be read (mid-write, permissions) counts as a mismatch: an unreadable
@@ -597,7 +592,15 @@ internal sealed class Store : IDisposable
     /// <summary>The one way the rows change (ADR-0015). The outermost commit then lands them, thrown
     /// or not: the sweep they owe, a checkpoint, the filter again, one advance and their
     /// announcements. The first throw reaches the caller.</summary>
-    public T Commit<T>(Func<Projection, T> write)
+    public T Commit<T>(Func<Projection, T> write) => StoreFaults.Translating(() => CommitUntranslated(write));
+
+    public void Commit(Action<Projection> write) => Commit(projection =>
+    {
+        write(projection);
+        return true;
+    });
+
+    private T CommitUntranslated<T>(Func<Projection, T> write)
     {
         using var held = _gate.Enter();
         using var scope = BeginProjection();
@@ -616,12 +619,6 @@ internal sealed class Store : IDisposable
         Land(scope, first: null);
         return written;
     }
-
-    public void Commit(Action<Projection> write) => Commit(projection =>
-    {
-        write(projection);
-        return true;
-    });
 
     // Each step runs whatever threw before it. A later throw is logged rather than rethrown, which
     // would hide the first.
@@ -794,7 +791,7 @@ internal sealed class Store : IDisposable
     {
         var registered = DuckDbSql.Rows(
             Connection, $"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2",
-            DuckDbSql.ReadPluginAddress, now.Name, now.Origin);
+            ReadContext.ReadPluginAddress, now.Name, now.Origin);
         if (registered is not [var spelled] || spelled == now) return;
 
         foreach (var (relation, pluginColumn, originColumn) in TableDdlBuilder.MirroredPluginNames)
@@ -828,7 +825,7 @@ internal sealed class Store : IDisposable
     {
         using var connection = OpenRead();
         return connection.Rows($"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation}",
-            DuckDbSql.ReadPluginAddress);
+            ReadContext.ReadPluginAddress);
     }
 
     private void DeleteRegistration(string plugin, string origin)
