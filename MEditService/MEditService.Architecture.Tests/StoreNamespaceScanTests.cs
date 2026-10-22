@@ -7,15 +7,6 @@ public sealed class StoreNamespaceScanTests
 {
     private const string StoreFolder = "MEditService.RecordIndex/Store/";
 
-    private const string Root = "MEditService.RecordIndex/";
-
-    private static readonly HashSet<string> Exemptions = new(StringComparer.Ordinal)
-    {
-        Root + "Queries/IndexAnswer.cs",
-        Root + "FilterMatches.cs",
-        Root + "RelationReads.cs",
-    };
-
     [Fact]
     public void NothingOutsideTheStore_NamesDuckDb_BecauseTheStoreHidesIt()
     {
@@ -32,19 +23,6 @@ public sealed class StoreNamespaceScanTests
             "A .cs file outside RecordIndex/Store names DuckDB. The Store part hides it "
             + "(target-architecture.md § Maintaining):\n"
             + string.Join("\n", named));
-    }
-
-    [Fact]
-    public void EveryExemption_StillNamesDuckDb_SoTheListShrinksWithTheCode()
-    {
-        var root = ServiceProjects.SolutionDirectory();
-
-        var stale = Exemptions
-            .Where(relative => !File.ReadAllText(Path.Combine(root, relative)).Contains("duckdb", StringComparison.OrdinalIgnoreCase))
-            .Order(StringComparer.Ordinal)
-            .ToList();
-
-        Assert.True(stale.Count == 0, "These exemptions name no DuckDB; delete them:\n" + string.Join("\n", stale));
     }
 
     [Fact]
@@ -68,7 +46,6 @@ public sealed class StoreNamespaceScanTests
         [.. files
             .Select(file => Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'))
             .Where(relative => !relative.StartsWith(StoreFolder, StringComparison.Ordinal))
-            .Where(relative => !Exemptions.Contains(relative))
             .Where(relative => Regex.IsMatch(
                 File.ReadAllText(Path.Combine(root, relative)), "duckdb", RegexOptions.IgnoreCase))
             .Order(StringComparer.Ordinal)];

@@ -23,4 +23,28 @@ public sealed class ReadOutOfMemoryTests : IDisposable
         Assert.Equal(IndexRefusal.OutOfMemory, refused.Refusal);
         Assert.Matches(@"\AmEdit's record index ran out of memory for this read: Out of Memory Error: [^\n]*\z", refused.Message);
     }
+
+    private const string MoreThanAMegabyte = "SELECT n AS form_key FROM range(20000000) t(n) ORDER BY random()";
+
+    [Fact]
+    public void ASelectDuckDbRunsOutOfMemoryFor_IsRefusedSayingSo_NotAnsweredAsBadSql()
+    {
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        IndexFiles.Execute(_fixture.InstanceRoot, "SET GLOBAL memory_limit = '1MB'");
+
+        var refused = index.Queries.SelectRows(MoreThanAMegabyte).Refused();
+
+        Assert.Equal(IndexRefusal.OutOfMemory, refused.Refusal);
+    }
+
+    [Fact]
+    public void AFilterWhoseMatchesDuckDbRunsOutOfMemoryFor_IsRefusedSayingSo()
+    {
+        using var index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot);
+        IndexFiles.Execute(_fixture.InstanceRoot, "SET GLOBAL memory_limit = '1MB'");
+
+        var refused = index.Queries.SetFilter(MoreThanAMegabyte, "filter.sql");
+
+        Assert.Equal(IndexRefusal.OutOfMemory, refused?.Refusal);
+    }
 }

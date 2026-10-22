@@ -1,4 +1,3 @@
-using DuckDB.NET.Data;
 using MEditService.RecordIndex.Store;
 
 namespace MEditService.RecordIndex;
@@ -43,7 +42,7 @@ internal sealed class FilterMatches(Store.Store store)
         {
             if (!ReturnsFormKey(context, sql)) return "Filter SQL must return a form_key column";
         }
-        catch (DuckDBException ex) when (!Store.Store.IsInvalidation(ex))
+        catch (IndexFaultException ex) when (ex.Fault != IndexFault.Invalidated)
         {
             return ex.Message;
         }
@@ -51,7 +50,7 @@ internal sealed class FilterMatches(Store.Store store)
         {
             store.Materialize(Matches, sql);
         }
-        catch (DuckDBException ex) when (FailedOnARow(ex))
+        catch (IndexFaultException ex) when (ex.Fault == IndexFault.RowValue)
         {
             return ex.Message;
         }
@@ -69,12 +68,6 @@ internal sealed class FilterMatches(Store.Store store)
         Active = true;
         return null;
     }
-
-    // Past the probe, the SQL's own fault is a value a row holds. DuckDB names its kind only in the message's prefix.
-    private static readonly string[] RowFaultKinds = ["Conversion Error", "Out of Range Error", "Invalid Input Error"];
-
-    private static bool FailedOnARow(DuckDBException ex) =>
-        RowFaultKinds.Any(kind => ex.Message.StartsWith(kind, StringComparison.Ordinal));
 
     // Parses and binds the filter's SQL and reads no row, so what it throws is the SQL's own unless the database has been invalidated.
     private static bool ReturnsFormKey(ReadContext context, string sql) =>
