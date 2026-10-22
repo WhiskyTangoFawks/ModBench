@@ -93,7 +93,7 @@ As a user, I want:
 7. A mod folder with no manifest left as it is and named in the report, because it can be a mod I have not recorded yet. Uninstall removes it. Cites: Never silently wrong
 8. Restore to find each mod's files from its manifest alone, never from the mod's metadata, so a clone restores under a mod manager whose metadata git does not hold. Restore finds the installation file the manifest names by its name in the downloads folder. Cites: Orthogonality; ADR-0022
 9. Restore to write each mod's metadata from its manifest, and to keep what the metadata holds that the manifest does not. Notes, colour and category stay on the machine that set them: they are Metadata chrome. Cites: Never break the instance for its owner; commands.md, Metadata chrome
-10. An installation file the downloads folder lacks, whose page on Nexus the manifest names, downloaded from Nexus while I am logged in, checked against the manifest's size and hash, and its metadata written as MO2 writes it. A clone then restores with no file fetched by hand. Cites: Wabbajack's installer; Minimal by default
+10. An installation file the downloads folder lacks, whose page on Nexus the manifest names, downloaded from Nexus while I am logged in, refused when it is not the file the manifest names, and its metadata written as MO2 writes it. A clone then restores with no file fetched by hand. Cites: Minimal by default
 
 ## Menus and keys
 

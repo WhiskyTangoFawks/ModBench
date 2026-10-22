@@ -16,7 +16,7 @@ What MO2 does: [the surface audit](../research/mo2-surface-audit.md).
 | Metadata chrome | The feature annotates or organizes a mod list inside MO2's UI. Separators already organize the list, and nothing in Modbench consumes the rest. | 15 | Endorse, un-endorse or decline to endorse; Start or stop tracking on Nexus; Change categories |
 | Backups belong to git | Git tracks the history of a mod, the mod list and the plugin list. A backup is a git action. | 5 | Back up or restore the mod list; Back up or restore the plugin lists; Create a backup of a mod |
 | Dead in MO2 | MO2 has it by accident, or it has no working effect there. | 1 | Enable or disable a separator with Space (effect inferred) |
-| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 6 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) |
+| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 10 | Lock or unlock a plugin's load-order slot (sorting rules will be relative) |
 
 ## Divergences
 
@@ -25,7 +25,7 @@ Gestures Modbench does differently.
 | # | Where | Modbench | MO2 | Why |
 |---|---|---|---|---|
 | 1 | The top bar | The Toolbox, the container's first view: a small readout of the instance value, Game and Profile, with the workspace actions in its title bar ([toolbox.md](../architecture/surfaces/toolbox.md)) | MO2's top bar | Limitation: VS Code has no container-title contribution point. |
-| 2 | Downloads | Starts collapsed. The status-bar item for the ambient glance waits for the `nxm://` handler ([downloads.md](../architecture/surfaces/downloads.md)). | A tab, always visible | Ruling: Downloads is occasional, unlike Mods and Plugins. |
+| 2 | Downloads | Starts collapsed. | A tab, always visible | Ruling: Downloads is occasional, unlike Mods and Plugins. |
 | 3 | Archives | No Archives view. | An Archives tab | Ruling. |
 | 5 | Downloads rows | Excluded rows, when shown, are dimmed | Hidden rows look like the rest | Ruling: show excluded mixes them into the list, and the dim is the only way to tell them apart. |
 | 6 | Downloads order | Newest file first | By status, newest first within each | Ruling: the file just downloaded is the one wanted next. |
@@ -36,6 +36,9 @@ Gestures Modbench does differently.
 | 11 | Restore hidden files | Select the excluded files in the Mods tree, then include | Restore hidden files, on the mod | Ruling: select all, then include, as for every all variant (commands.md, Principles). |
 | 12 | Conflicts and Flags columns | A badge at the mod row's right edge and a colour on its name, each switched in settings, most off by default. A mod that wins and loses carries two badges. Contains excluded files stands for Contains hidden files, and Update available for the Version column in bold ([mods.md](../architecture/surfaces/mods.md), Indicators) | Icons in the Conflicts and Flags columns, all shown, with Mixed as one icon of its own; a newer version on Nexus as the Version column in bold | Limitation: a tree view has no columns. Ruling: winning is the ordinary case. In Modbench, hide acts on the view alone (commands.md), so a renamed file is excluded. |
 | 13 | Information dialog | No dialog. A mod's files are in the Mods tree, its conflicts in the conflict table, and its Nexus page opens from view on Nexus. A text, INI or image file opens in a VS Code tab. Exclude file keeps a plugin from the game. | One dialog with tabs: Text Files, INI Files, Images, Optional Plugins, Conflicts, Categories, Nexus Info, Notes, Filetree | Ruling: each tab's job has a home of its own. Categories and Notes are Metadata chrome. |
+| 14 | FOMOD installer | A page in an editor tab ([mods-fomod.md](../architecture/surfaces/mods-fomod.md)). The mod's name comes from install's own prompt. | A modal dialog, with the mod's name in it | Limitation: VS Code has no dialog that shows an option's image beside its groups. |
+| 15 | Scripted FOMOD | Installs as a plain copy, on Windows and Linux | A C# script installer runs on Windows, through a second installer plugin | Ruling: Windows and Linux alike. |
+| 16 | FOMOD Manual | Installs a plain copy; I arrange the files in the Explorer | Opens the manual installer, a dialog for arranging the files | Manual file management: VS Code's Explorer does it. |
 
 ## Omissions by object
 
@@ -48,6 +51,7 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Visit the game's Nexus page | Toolbar: Visit Nexus (Ctrl+N) | VS Code provides it |
 | Open folders: game, MyGames, INIs, instance, mods, profile, downloads | Pane: Open Folders menu | VS Code provides it |
 | Switch an instance | Toolbar: Manage Instances | VS Code provides it |
+| Connect to Nexus in the browser (a personal API key is the one log in) | Settings: Nexus tab | Maintainer ruling |
 | Tools menu | Toolbar: Tools | VS Code provides it |
 | Endorse MO2, notifications, update, help | Toolbar | VS Code provides it |
 | Create a desktop or start-menu shortcut for an executable | Run box: Shortcut | VS Code provides it |
@@ -99,6 +103,7 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Select or reset mod color | Mod list: Select Color..., Reset Color | Metadata chrome |
 | Change versioning scheme | Mod list | Metadata chrome |
 | Ignore or un-ignore an update (the badge shows every newer version) | Mod list: Ignore update | Maintainer ruling |
+| Filter to the mods with an update (the badge marks each one) | Mod list: filter | Maintainer ruling |
 | Ignore missing data | Mod list | Metadata chrome |
 | Mark as converted or working | Mod list | Metadata chrome |
 | Visit the uploader's profile | Mod list | Metadata chrome |
@@ -139,3 +144,5 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Visit the uploader's profile | Downloads | Metadata chrome |
 | Install by double click or Enter (the row menu is the one entry) | Downloads: double click, Enter | Maintainer ruling |
 | Drag a downloaded file onto the mod list to install (the row menu is the one entry) | Downloads: drag out | Maintainer ruling |
+| Download from an `nxm://` link (a Premium account downloads through the API) | Downloads, the `nxm://` handler | Maintainer ruling |
+| Pause, resume or cancel a download (restore's Cancel stops it) | Downloads | Maintainer ruling |

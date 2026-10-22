@@ -22,6 +22,10 @@ source: @../target-architecture.medit_data.source
 source.label: Mod source
 sourceadapter: @../target-architecture.medit_repositories.sourceadapter
 sourceadapter.label: Source adapter
+nexus: @../target-architecture.modbench_repositories.nexus
+nexus.label: Nexus
+nexushost: @../target-architecture.modbench_data.nexus
+nexushost.label: "Nexus\nthe mods and files it hosts"
 instanceloader: @../target-architecture.modbench_readmodel.instanceloader
 instanceloader.label: Instance loader
 views: "every view" {class: driving}
@@ -43,6 +47,16 @@ driving -> sourcecommands: "confirmed" {class: compile}
 sourcecommands -> instanceadapter: "find: each package by name, and each submodule's pin" {class: compile}
 instance -> instanceadapter: "downloaded files · submodules" {class: compile}
 instanceadapter -> sourcecommands: "each package, hashed · each submodule's pin" {class: compile}
+
+download: "an installation file the downloads folder lacks, whose page on Nexus the manifest names" {
+  sourcecommands -> nexus: "the file's page" {class: compile}
+  nexushost -> nexus: "the file · what Nexus knows of it" {class: compile}
+  nexus -> sourcecommands: "the file · what Nexus knows of it" {class: compile}
+  sourcecommands -> instanceadapter: "the downloaded file · its metadata" {class: compile}
+  instanceadapter -> instance: "the downloaded file · its metadata" {class: compile}
+  instanceadapter -> sourcecommands: "the package, hashed" {class: compile}
+}
+
 sourcecommands -> client: "restore: each mod's folder, package and pin" {class: compile}
 client -> http: envelope {class: compile}
 http -> engine: envelope {class: compile}

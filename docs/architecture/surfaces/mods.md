@@ -82,7 +82,7 @@ A mod row carries an indicator for each status that holds. A disabled mod carrie
 | Overwritten loose files | a file of the mod loses to another copy, and the mod is not Redundant | on | off |
 | Redundant | the mod has a file the game could get, and every such file loses to another copy | on | off |
 | Contains excluded files | the mod has an excluded file | off | off |
-| Update available | the newest version check for updates wrote in the mod's metadata differs from the mod's version | on | off |
+| Update available | the mod's version is older than the newest version check for updates found | on | off |
 
 The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Cites: mo2.md, divergence 12
 
@@ -211,10 +211,10 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 
 1. Install never to merge into an existing folder, or to replace one I did not confirm.
 2. A new mod to appear at the winning end of the mod order, disabled, as any folder new in `mods/` does.
-3. An upgrade to replace the mod's files in place, and to keep its folder name. Its repository is beside `mods/`, and an upgrade never touches it. Cites: ADR-0007; ADR-0022
+3. An upgrade to replace the mod's files in place, and to keep its folder name and its manifest. Its repository is beside `mods/`, and an upgrade never touches it. Cites: ADR-0007; ADR-0022
 4. An upgrade to keep every value in the mod's metadata that the new file does not know, so an unknown version never blanks a known one. Cites: ADR-0017
 5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery, and a source mod's plugin source stays in git. This is an exception to A failed gesture writes nothing.
-6. Install and upgrade to write the mod's manifest as update manifest does, while the instance has a repository, so Source Control shows the change I made. Cites: modlist-repository.md, Update manifest
+6. A file or folder that holds a FOMOD to install through the FOMOD installer ([mods-fomod.md](mods-fomod.md)). Cites: MO2
 
 ### Uninstall
 
@@ -224,7 +224,7 @@ As a user, I want one confirmation for the whole selection, naming the mod when 
 
 As a user, I want:
 
-1. No prompt. Each mod with a Nexus mod ID asked about once, and its installation file followed along its update chain to the newest file, as MO2 does. Cites: MO2
+1. No prompt. Each mod with a Nexus mod ID asked about, as MO2 does. Cites: MO2
 2. The newest version written in the mod's metadata, where MO2 reads it, so MO2 shows the same update. Cites: Never break the instance for its owner
 3. A mod with no Nexus mod ID, or one Nexus does not hold, left as it was and named in the Output. Cites: Never silently wrong
 
@@ -236,7 +236,7 @@ As a user, I want a pick of the mods the file wins over, in mod order, when ther
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. A FOMOD installed as a plain copy to raise a notification that its files need arranging by hand, because the installer's own steps did not run. Cites: ADR-0019
+1. A FOMOD installed as a plain copy, by Manual or because its installer cannot run, to raise a notification that its files need arranging by hand, because the installer's own steps did not run, and why. Cites: ADR-0019
 2. When `mods/` cannot be listed, the mod order untouched, and the reason in the view's message line and the Output.
 3. An uninstall or a separator delete that trashed the folder, and then failed on its line, reported as done, with a line in the Output: `mod sync` drops the line. This is an exception to A failed gesture writes nothing.
 4. An uninstall that landed, and then failed to mark its downloaded file uninstalled, not reported as failed. The failed metadata write is a line in the Output.
