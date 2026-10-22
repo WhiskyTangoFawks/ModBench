@@ -9,6 +9,7 @@ export const GESTURES_MARKDOWN = COMMANDS_MARKDOWN.slice(0, SYSTEM_COMMANDS);
 export const SYSTEM_COMMANDS_MARKDOWN = COMMANDS_MARKDOWN.slice(SYSTEM_COMMANDS);
 
 export const SPECIFIED_AHEAD_OF_CODE = [
+  'modbench.plugin.decompileAndRepair',
   'modbench.mod.checkForUpdates',
   'modbench.downloadedFile.queryInfo',
 ];
