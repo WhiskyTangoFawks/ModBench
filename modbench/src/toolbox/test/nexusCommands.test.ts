@@ -84,7 +84,7 @@ beforeEach(() => {
 });
 
 describe('Log in', () => {
-  it('prompts for the key as a password', async () => {
+  it('prompts for the key as a password', () => {
     registered();
 
     const { box } = openPrompt();
