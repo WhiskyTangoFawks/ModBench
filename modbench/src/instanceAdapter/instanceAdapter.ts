@@ -49,6 +49,8 @@ export type GameFolder =
 export interface ModMeta {
   gameName?: string;
   version?: string;
+  /** The newest version the mod manager recorded for the mod. */
+  newestVersion?: string;
   nexusId?: string;
   installationFileName?: string;
   /** The keys, as a downloaded file's `installedKey` spells them, of the files it was installed from; undefined when none are recorded. */

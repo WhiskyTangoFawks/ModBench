@@ -68,6 +68,7 @@ export function parseMetaIni(text: string): MetaIni {
   return {
     gameName: present('gameName'),
     version: present('version'),
+    newestVersion: present('newestVersion'),
     nexusId: modid && modid !== '0' && modid !== '-1' ? modid : undefined,
     installationFileName: present('installationFile'),
     installedFiles: parseInstalledFiles(text),

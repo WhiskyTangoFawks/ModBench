@@ -16,6 +16,11 @@ describe('parseMetaIni', () => {
     });
   });
 
+  it('reads newestVersion, blank as absent', () => {
+    expect(parseMetaIni('[General]\r\nversion=1.0\r\nnewestVersion=1.2\r\n').newestVersion).toBe('1.2');
+    expect(parseMetaIni('[General]\r\nnewestVersion=\r\n').newestVersion).toBeUndefined();
+  });
+
   it('treats modid=-1, MO2\'s default, as no Nexus id', () => {
     expect(parseMetaIni('[General]\r\nmodid=-1\r\n').nexusId).toBeUndefined();
   });
