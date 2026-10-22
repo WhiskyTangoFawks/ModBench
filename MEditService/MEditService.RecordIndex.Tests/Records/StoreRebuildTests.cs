@@ -319,7 +319,7 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.Contains(indexPath, _index.Status.Message);
     }
 
-    private static bool ReadMetARefusal(Exception ex) => ex is InvalidOperationException && ex.Message.Contains(nameof(IndexRefusal.IndexNotReady), StringComparison.Ordinal);
+    private static bool ReadMetARefusal(Exception ex) => ex is InvalidOperationException && ex.Message.StartsWith("Expected the Index to answer here", StringComparison.Ordinal);
 
     [Fact]
     public async Task ARebuildWithReadsInFlight_Completes_AndReadsThePluginAgain()
