@@ -1,0 +1,55 @@
+import * as vscode from 'vscode';
+import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
+import { runWritingGesture } from '../drivingLib/writingGesture';
+import type { Instance } from '../instanceLoader/instance';
+import { modLabelsOf } from '../instanceLoader/modName';
+import type { CheckForUpdates, UpdateChecked } from '../modCommands/checkForUpdates';
+import type { Reporter } from '../ports/reporter';
+import type { ItemRefusal } from '../ports/selectionOutcome';
+import { MODS_KEY_ARGS } from './gestureEntry';
+import { everyModHere, modsOfAgent, modsToRun, type ModsToRun, type ModsToRunDeps } from './modsToRun';
+
+export interface CheckForUpdatesDeps extends ModsToRunDeps {
+  commands: { checkForUpdates: CheckForUpdates };
+  instance: Pick<Instance, 'value' | 'refresh'>;
+  reporter: Reporter;
+}
+
+const isAgentCall = (value: unknown): value is AgentCall => value instanceof AgentCall;
+
+export function registerCheckForUpdatesGestures(deps: CheckForUpdatesDeps): vscode.Disposable[] {
+  return [
+    vscode.commands.registerCommand('modbench.mod.checkForUpdates', (clicked?: unknown, selected?: readonly unknown[]) =>
+      (isAgentCall(clicked) ? checkForAgent(deps, clicked) : checkForView(deps, modsToRun(deps, clicked, selected)))),
+    vscode.commands.registerCommand('modbench.modList.checkForUpdatesHere', () => checkForView(deps, everyModHere(deps))),
+  ];
+}
+
+async function checkForView(
+  { commands, instance, reporter }: CheckForUpdatesDeps, { mods, refused, view }: ModsToRun,
+): Promise<void> {
+  const label = modLabelsOf(instance.value.modFolders);
+  await runWritingGesture(view, instance, async () => {
+    const result = await commands.checkForUpdates(mods);
+    if (!result.applied) { reporter.report('error', result.refusal); return; }
+    const notAsked: ItemRefusal<string>[] = [
+      ...result.outcome.refused.map(({ item, reason }) => ({ item: label(item.name), reason })),
+      ...refused,
+    ];
+    const updates = result.outcome.landed.filter(({ updateAvailable }) => updateAvailable === true).length;
+    const line = `Check for updates: ${updates} ${updates === 1 ? 'mod has' : 'mods have'} an update, ${notAsked.length} could not be asked about.`;
+    if (notAsked.length === 0) reporter.landed(line);
+    else reporter.report('warning', line, notAsked.map(({ item, reason }) => `"${item}" (${reason})`).join('\n'));
+  });
+}
+
+async function checkForAgent(
+  { commands, instance }: CheckForUpdatesDeps, { argument }: AgentCall,
+): Promise<GestureResult<UpdateChecked>> {
+  const label = modLabelsOf(instance.value.modFolders);
+  const named = (checked: UpdateChecked): UpdateChecked => ({ ...checked, name: label(checked.name) });
+  const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.checkForUpdates(modsOfAgent(argument, instance.value)));
+  if (!result.applied) return { applied: false, refusal: result.refusal };
+  const { landed, refused } = result.outcome;
+  return { applied: true, outcome: { landed: landed.map(named), refused: refused.map(({ item, reason }) => ({ item: named(item), reason })) } };
+}

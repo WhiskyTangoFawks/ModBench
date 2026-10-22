@@ -726,6 +726,16 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.mod.checkForUpdates",
+        "title": "Check Mod for Updates",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.modList.checkForUpdatesHere",
+        "title": "Check for Updates",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.modList.updateManifestHere",
         "title": "Update Mod Manifest",
         "category": "Modbench"
@@ -916,6 +926,14 @@
         {
           "command": "modbench.mod.restoreFromManifest",
           "when": "modbench.folder == instance && modbench.modlist.hasRepository"
+        },
+        {
+          "command": "modbench.mod.checkForUpdates",
+          "when": "modbench.folder == instance && modbench.nexus.loggedIn"
+        },
+        {
+          "command": "modbench.modList.checkForUpdatesHere",
+          "when": "false"
         },
         {
           "command": "modbench.modList.updateManifestHere",
@@ -1173,6 +1191,11 @@
           "group": "3_create@2"
         },
         {
+          "command": "modbench.modList.checkForUpdatesHere",
+          "when": "view == modbench.modList && modbench.folder == instance && modbench.nexus.loggedIn",
+          "group": "3_update@1"
+        },
+        {
           "command": "modbench.modList.updateManifestHere",
           "when": "view == modbench.modList && modbench.folder == instance && modbench.modlist.hasRepository",
           "group": "4_sourceControl@1"
@@ -1295,6 +1318,11 @@
           "group": "1_open@4"
         },
         {
+          "command": "modbench.mod.checkForUpdates",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bhasNexus\\b/ && modbench.nexus.loggedIn",
+          "group": "2_change@4"
+        },
+        {
           "command": "modbench.mod.enable",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bdisabled\\b/",
           "group": "2_change@1"
@@ -1368,6 +1396,11 @@
           "command": "modbench.separator.rename",
           "when": "view == modbench.modList && viewItem == separator",
           "group": "3_create@2"
+        },
+        {
+          "command": "modbench.mod.checkForUpdates",
+          "when": "view == modbench.modList && viewItem == separator && modbench.nexus.loggedIn",
+          "group": "3_create@3"
         },
         {
           "command": "modbench.mod.updateManifest",

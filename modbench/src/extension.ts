@@ -35,6 +35,7 @@ import { createToolboxView, type ToolboxView } from './toolbox/toolboxView';
 import { hostGit } from './hostGit';
 import { registerModlistCommands } from './toolbox/modlistGestures';
 import { publishRepository } from './toolbox/repositoryContext';
+import { checkForUpdatesOver } from './modCommands/checkForUpdates';
 import { createHttpNexus } from './nexus/httpNexus';
 import type { Nexus } from './nexus/nexus';
 import { registerNexusCommands } from './toolbox/nexusCommands';
@@ -167,6 +168,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
       commands: sourceCommands({ client, adapter, saveUnsaved: saveUnsavedPluginSource }), rows: sourceGestureRows, pluginsView: PLUGINS_KEY_ARGS.view, say: plugins.say,
       registerRepositories: deps.registerRepositories,
     },
+    checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
     manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: toolbox.say, focusedView: deps.focusedView },
     modStatus: { push: client, readStatus },
   }));

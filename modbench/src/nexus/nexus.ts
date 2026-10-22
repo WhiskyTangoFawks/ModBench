@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { errorMessage } from '../ports/errorMessage';
+import { FILE_LIST, newestVersionOf, type InstalledFile } from './updateChain';
 
 const API = 'https://api.nexusmods.com';
 const KEY_NAME = 'modbench.nexus.apiKey';
@@ -14,12 +16,22 @@ export interface SecretStore {
 
 type KeyCheck = { valid: true } | { valid: false; reason: string };
 
+/** A mod on Nexus, by its game's Nexus domain, and the file of it that is installed. */
+export interface NexusFile extends InstalledFile {
+  readonly game: string;
+  readonly modId: string;
+}
+
+export type NewestVersion = { found: true; version: string } | { found: false; reason: string };
+
 export interface Nexus {
   /** Asks Nexus whether `key` works. Keeps nothing. */
   check: (key: string) => Promise<KeyCheck>;
   keep: (key: string) => Promise<void>;
   forget: () => Promise<void>;
   loggedIn: () => Promise<boolean>;
+  /** The version of the newest file that replaces the installed one, or of the mod page when the installed file cannot be told. */
+  newestVersion: (file: NexusFile) => Promise<NewestVersion>;
   /** Fires when a key is kept or forgotten, from any window. */
   onDidChangeLogin: (listener: () => void) => Disposable;
 }
@@ -33,6 +45,16 @@ interface NexusDeps {
 export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): Nexus {
   const get = (key: string, path: string): Promise<Response> =>
     fetch(`${API}${path}`, { headers: { apikey: key, 'Application-Name': 'Modbench', 'Application-Version': applicationVersion } });
+  const read = async <Shape extends z.ZodType>(key: string, path: string, shape: Shape): Promise<z.output<Shape> | string> => {
+    try {
+      const response = await get(key, path);
+      if (response.status === 404) return 'Nexus does not hold this mod.';
+      if (!response.ok) return `Nexus answered ${response.status}.`;
+      return shape.parse(await response.json());
+    } catch (error) {
+      return `Could not reach Nexus: ${errorMessage(error)}`;
+    }
+  };
   return {
     check: async (key) => {
       try {
@@ -46,6 +68,17 @@ export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): 
     keep: async (key) => { await secrets.store(KEY_NAME, key); },
     forget: async () => { await secrets.delete(KEY_NAME); },
     loggedIn: async () => (await secrets.get(KEY_NAME)) !== undefined,
+    newestVersion: async ({ game, modId, ...installed }) => {
+      const key = await secrets.get(KEY_NAME);
+      if (key === undefined) return { found: false, reason: 'You are not logged in to Nexus.' };
+      const mod = `/v1/games/${game}/mods/${modId}`;
+      const list = await read(key, `${mod}/files.json`, FILE_LIST);
+      if (typeof list === 'string') return { found: false, reason: list };
+      const chained = newestVersionOf(list, installed);
+      if (chained !== undefined) return { found: true, version: chained };
+      const page = await read(key, `${mod}.json`, z.object({ version: z.string() }));
+      return typeof page === 'string' ? { found: false, reason: page } : { found: true, version: page.version };
+    },
     onDidChangeLogin: (listener) => secrets.onDidChange(({ key }) => { if (key === KEY_NAME) listener(); }),
   };
 }

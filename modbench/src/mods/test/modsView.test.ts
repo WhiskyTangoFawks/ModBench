@@ -87,6 +87,7 @@ const otherDeps = () => ({
     pluginsView: 'modbench.pluginListTree', say: () => undefined,
     registerRepositories: () => Promise.resolve(),
   },
+  checkForUpdates: vi.fn(),
   manifestGestures: {
     toolboxView: 'modbench.toolbox', commands: { updateManifest: vi.fn(), restoreFromManifest: vi.fn(), whatRestoreDestroys: vi.fn() }, say: () => undefined,
     focusedView: { id: () => undefined, selection: () => [] },

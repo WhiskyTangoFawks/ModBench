@@ -3,11 +3,11 @@
 import { entryNamed } from './codecs/modlistText';
 import { basename, dirname, isAbsolute } from 'node:path';
 import { gameReleaseForNexusDomain, nexusDomainForMetaGame } from '../../tables/gamePaths';
-import { changeOwnedKeysInText, type InstalledFileId, type MetaIni, metaIniOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni } from './codecs/metaIni';
+import { changeOwnedKeysInText, type InstalledFileId, type MetaIni, metaIniOf, modMetaOf, MOD_META_FILE_NAME, type OwnedMetaKeys, parseMetaIni } from './codecs/metaIni';
 import { readGameName } from './codecs/modOrganizerIni';
 import { ensureDir, exists, get, readOrReason, withLock, write } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
-import type { FileRead, InstallationFile, InstanceAdapter, ModMetadata } from '../instanceAdapter';
+import type { FileRead, InstallationFile, InstanceAdapter, ModMetadata, NexusModFile } from '../instanceAdapter';
 import { downloadedFilePath, modMetaFileIn, settingsFile } from './layout';
 import { currentDownloadsDir, folderHolding, newModFolder, type Mo2Context } from './mo2Context';
 import { readMetaIni } from './mo2Reads';
@@ -88,11 +88,29 @@ async function metadataOf(meta: MetaIni, context: Mo2Context): Promise<ModMetada
   return { version: meta.version, installationFile: installationFileName === undefined ? undefined : { name: basename(installationFileName), page } };
 }
 
+async function nexusFileOf(meta: MetaIni, context: Mo2Context): Promise<NexusModFile | undefined> {
+  const { page, unpagedGame } = await nexusPageOf(meta, context);
+  if (unpagedGame !== undefined) throw new Error(`Nexus has no game for '${unpagedGame}'`);
+  const nexus = page === undefined ? undefined : parseNexusPage(page);
+  return nexus === undefined ? undefined : { game: nexus.game, modId: nexus.modId, fileId: nexus.fileId, fileName: meta.installationFileName === undefined ? undefined : basename(meta.installationFileName) };
+}
+
 export function mo2Installation(
   context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>,
-): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'modMetadata' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
+): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
   return {
     modMetadata: (mod) => readOrReason(async () => metadataOf(await readMetaIni(context, mod, 'list'), context)),
+
+    nexusFile: (mod) => readOrReason(async () => nexusFileOf(await readMetaIni(context, mod, 'list'), context)),
+
+    writeNewestVersion: (mod, version) => withLock(context.instanceRoot, async () => {
+      const folder = (await folderHolding(context, { kind: 'mod', name: mod }))?.path ?? newModFolder(context, mod);
+      const file = modMetaFileIn(folder);
+      const held = await get(file, '');
+      const carried = parseMetaIni(held);
+      if (carried.newestVersion !== version) await write(file, changeOwnedKeysInText(held, { newestVersion: version }));
+      return { updateAvailable: modMetaOf({ ...carried, newestVersion: version }).updateAvailable === true };
+    }),
 
     metadataOf: (meta) => metadataOf(metaIniOf(meta), context),
 

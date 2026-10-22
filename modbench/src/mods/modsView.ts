@@ -27,6 +27,8 @@ import { registerBuildCommand } from './buildCommand';
 import { BuildProblems } from './buildProblems';
 import { registerDecompileAndCommitCommand } from './decompileAndCommitCommand';
 import { registerManifestGestures, type ManifestGestureDeps } from './manifestGestures';
+import { registerCheckForUpdatesGestures } from './checkForUpdatesGestures';
+import type { CheckForUpdates } from '../modCommands/checkForUpdates';
 import { registerConflictTable } from './conflictTableEditor';
 import { sameCopies, type CopyReads } from './sameCopies';
 import {
@@ -65,6 +67,7 @@ interface ModsViewDeps {
   modSync: SyncMessage;
   sourceGestures: SourceGestureDeps;
   manifestGestures: ManifestDeps;
+  checkForUpdates: CheckForUpdates;
   /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
   modStatus: { push: Pick<MEditClient, 'onNotification'>; readStatus: ReadModStatus };
 }
@@ -128,6 +131,10 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     }),
     ...registerSourceGestures(deps, provider),
     ...registerManifestGestures({ ...deps.manifestGestures, instance, reporter: reporterFor('modlist'), ask }),
+    ...registerCheckForUpdatesGestures({
+      commands: { checkForUpdates: deps.checkForUpdates }, instance, reporter: reporterFor('mod.checkForUpdates'),
+      toolboxView: deps.manifestGestures.toolboxView, focusedView: deps.manifestGestures.focusedView,
+    }),
     ...registerModEnableCommands(commands, instance, () => view.selection, reporterFor('mod.enableDisable')),
     ...registerFileExclusionCommands(commands, instance, () => view.selection, reporterFor('mod.excludeFile')),
     registerModMoveCommand(

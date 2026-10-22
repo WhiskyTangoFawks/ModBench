@@ -32,6 +32,7 @@ const OWNED_GENERAL_KEYS = [
   ['gameName', 'gameName'],
   ['nexusId', 'modid'],
   ['version', 'version'],
+  ['newestVersion', 'newestVersion'],
   ['installationFileName', 'installationFile'],
 ] as const;
 
