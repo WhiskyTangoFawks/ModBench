@@ -21,7 +21,8 @@ type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 const TOKEN = /\d+|[^\d.]+/g;
 
 function isOlderVersion(version: string, newest: string): boolean {
-  const [own, other] = [version, newest].map((text) => text.match(TOKEN) ?? []);
+  const own = version.match(TOKEN) ?? [];
+  const other = newest.match(TOKEN) ?? [];
   for (let at = 0; at < Math.max(own.length, other.length); at++) {
     const [a = '0', b = '0'] = [own[at], other[at]];
     const numeric = /^\d/.test(a) && /^\d/.test(b);
