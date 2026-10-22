@@ -215,6 +215,7 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 4. An upgrade to keep every value in the mod's metadata that the new file does not know, so an unknown version never blanks a known one. Cites: ADR-0017
 5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll back. Installing again is the recovery, and a source mod's plugin source stays in git. This is an exception to A failed gesture writes nothing.
 6. Install and upgrade to write the mod's manifest as update manifest does, while the instance has a repository, so Source Control shows the change I made. Cites: modlist-repository.md, Update manifest
+7. A file or folder that holds a FOMOD to install through the FOMOD installer ([mods-fomod.md](mods-fomod.md)). Cites: MO2
 
 ### Uninstall
 
@@ -236,7 +237,7 @@ As a user, I want a pick of the mods the file wins over, in mod order, when ther
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. A FOMOD installed as a plain copy to raise a notification that its files need arranging by hand, because the installer's own steps did not run. Cites: ADR-0019
+1. A FOMOD installed as a plain copy, by Manual or because its installer cannot run, to raise a notification that its files need arranging by hand, because the installer's own steps did not run, and why. Cites: ADR-0019
 2. When `mods/` cannot be listed, the mod order untouched, and the reason in the view's message line and the Output.
 3. An uninstall or a separator delete that trashed the folder, and then failed on its line, reported as done, with a line in the Output: `mod sync` drops the line. This is an exception to A failed gesture writes nothing.
 4. An uninstall that landed, and then failed to mark its downloaded file uninstalled, not reported as failed. The failed metadata write is a line in the Output.
