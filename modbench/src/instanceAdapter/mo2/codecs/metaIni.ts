@@ -92,7 +92,7 @@ function installedFileOfKey(key: string): InstalledFileId {
 }
 
 /** What meta.ini says of a mod, in the words every mod manager shares. */
-export const modMetaOf = ({ installedFiles, newestVersion, nexusFileStatus, ...rest }: MetaIni): ModMeta =>
+export const modMetaOf = ({ installedFiles, newestVersion, nexusFileStatus: _status, ...rest }: MetaIni): ModMeta =>
   ({ ...rest, installedFileKeys: installedFiles?.map(installedFileKey), updateAvailable: isUpdateAvailable(rest.version, newestVersion) });
 
 /** The meta.ini a mod's meta says. */

@@ -128,7 +128,7 @@ describe('asking for a mod\'s newest version', () => {
     ['an optional file', 3],
     ['a miscellaneous file', 5],
   ])('refuses the mod page\'s version for %s, which Nexus versions apart from the mod', async (_name, fileStatus) => {
-    const answers = { [FILES]: json({ files: [], file_updates: [] }), [PAGE]: json({ version: '3.0' }) };
+    const answers: Record<string, Response> = { [FILES]: json({ files: [], file_updates: [] }), [PAGE]: json({ version: '3.0' }) };
     const { nexus, sent } = nexusAnswering((_key, url) => answers[url] ?? new Response('', { status: 404 }));
     await nexus.keep(GOOD_KEY);
 
