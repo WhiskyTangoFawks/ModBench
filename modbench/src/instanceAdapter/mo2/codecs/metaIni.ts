@@ -2,6 +2,7 @@
 // order is not guaranteed, so it's read scoped to the section and keyed by index.
 
 import type { ModMeta } from '../../instanceAdapter';
+import { isUpdateAvailable } from './versionInfo';
 import { GENERAL_SECTION, readIniSection, replaceIniSection, setIniValue } from './qSettingsIni';
 
 /** A mod folder's metadata file. */
@@ -14,7 +15,8 @@ export interface InstalledFileId {
 }
 
 /** What meta.ini says, `[installedFiles]` as its pairs. */
-export interface MetaIni extends Omit<ModMeta, 'installedFileKeys'> {
+export interface MetaIni extends Omit<ModMeta, 'installedFileKeys' | 'updateAvailable'> {
+  newestVersion?: string;
   installedFiles?: readonly InstalledFileId[];
 }
 
@@ -84,11 +86,11 @@ function installedFileOfKey(key: string): InstalledFileId {
 }
 
 /** What meta.ini says of a mod, in the words every mod manager shares. */
-export const modMetaOf = ({ installedFiles, ...rest }: MetaIni): ModMeta =>
-  ({ ...rest, installedFileKeys: installedFiles?.map(installedFileKey) });
+export const modMetaOf = ({ installedFiles, newestVersion, ...rest }: MetaIni): ModMeta =>
+  ({ ...rest, installedFileKeys: installedFiles?.map(installedFileKey), updateAvailable: isUpdateAvailable(rest.version, newestVersion) });
 
 /** The meta.ini a mod's meta says. */
-export const metaIniOf = ({ installedFileKeys, ...rest }: ModMeta): MetaIni =>
+export const metaIniOf = ({ installedFileKeys, updateAvailable, ...rest }: ModMeta): MetaIni =>
   ({ ...rest, installedFiles: installedFileKeys?.map(installedFileOfKey) });
 
 function installedFilesBody(pairs: readonly InstalledFileId[] | undefined): string[] {

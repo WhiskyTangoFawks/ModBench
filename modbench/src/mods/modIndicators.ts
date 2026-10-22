@@ -18,23 +18,9 @@ export const MOD_INDICATORS = [
 
 type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
-const TOKEN = /\d+|[^\d.]+/g;
-
-function isOlderVersion(version: string, newest: string): boolean {
-  const own = version.match(TOKEN) ?? [];
-  const other = newest.match(TOKEN) ?? [];
-  for (let at = 0; at < Math.max(own.length, other.length); at++) {
-    const [a = '0', b = '0'] = [own[at], other[at]];
-    const numeric = /^\d/.test(a) && /^\d/.test(b);
-    const order = numeric ? Number(a) - Number(b) : a.localeCompare(b);
-    if (order !== 0) return order < 0;
-  }
-  return false;
-}
-
 type IndicatorsValue = Pick<InstanceValue, 'mods' | 'modGroups' | 'files' | 'filesByMod'>;
 
-function indicatorsOf(value: IndicatorsValue, { name, version, newestVersion }: Mod, files: readonly OriginFile[]): ModIndicator[] {
+function indicatorsOf(value: IndicatorsValue, { name, updateAvailable }: Mod, files: readonly OriginFile[]): ModIndicator[] {
   const own = modOrigin(name);
   const entries = files.filter((file) => !file.excluded).map((file) => value.files.get(file.relativePath));
   const gets = entries.some((entry) => winsPath(entry, own));
@@ -45,7 +31,7 @@ function indicatorsOf(value: IndicatorsValue, { name, version, newestVersion }: 
     overwrittenLooseFiles: loses && !redundant,
     redundant,
     containsExcludedFiles: files.some((file) => file.excluded),
-    updateAvailable: version !== undefined && newestVersion !== undefined && isOlderVersion(version, newestVersion),
+    updateAvailable: updateAvailable === true,
   };
   return MOD_INDICATORS.flatMap(({ id }) => (holds[id] ? [id] : []));
 }

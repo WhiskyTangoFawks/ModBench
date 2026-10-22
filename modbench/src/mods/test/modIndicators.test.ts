@@ -37,24 +37,10 @@ describe('the indicators each mod carries (mods.md, Indicators)', () => {
     expect(carriedBy(value, 'Loser')).toEqual(['overwrittenLooseFiles']);
   });
 
-  it.each([
-    ['older than', '1.0', '1.1', ['updateAvailable']],
-    ['the same as', '1.1', '1.1', []],
-    ['newer than', '1.2', '1.1', []],
-    ['numerically older than, as 1.9 is to 1.10', '1.9', '1.10', ['updateAvailable']],
-    ['older by a trailing segment', '1.1', '1.1.1', ['updateAvailable']],
-    ['older by a letter', '1.1a', '1.1b', ['updateAvailable']],
-    ['unrecorded against', '1.0', undefined, []],
-  ])('a mod whose version is %s the newest version MO2 recorded carries Update available only when older', async (_, version, newestVersion, carried) => {
-    const value = await indexedValueOf([{ ...mod('Patch'), version, newestVersion }], {});
+  it('a mod the Instance adapter says has an update carries Update available', async () => {
+    const value = await indexedValueOf([{ ...mod('Patch'), updateAvailable: true }, { ...mod('Current'), updateAvailable: false }, mod('Unchecked')], {});
 
-    expect(carriedBy(value, 'Patch')).toEqual(carried);
-  });
-
-  it('a mod with no version of its own carries no Update available', async () => {
-    const value = await indexedValueOf([{ ...mod('Patch'), newestVersion: '1.1' }], {});
-
-    expect(carriedBy(value, 'Patch')).toEqual([]);
+    expect([carriedBy(value, 'Patch'), carriedBy(value, 'Current'), carriedBy(value, 'Unchecked')]).toEqual([['updateAvailable'], [], []]);
   });
 
   it('a mod every file of which loses is redundant, and not overwritten', async () => {
