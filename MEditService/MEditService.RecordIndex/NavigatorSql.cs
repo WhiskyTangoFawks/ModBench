@@ -13,7 +13,7 @@ internal static class NavigatorSql
     internal static string HeldIn(string schema) => $"SELECT plugin, origin, parent, child, slot FROM {schema}holdings";
 
     /// <summary>The <c>held</c> CTE the holdings reads below read: the holdings <paramref name="where"/>
-    /// keeps. the planner pushes no join key into it, so a read about one plugin names the plugin here.</summary>
+    /// keeps. The planner pushes no join key into it, so a read about one plugin names the plugin here.</summary>
     internal static string HeldFor(RecordScope scope, string where) =>
         $"held AS (SELECT plugin, origin, parent, child, slot FROM ({scope.Held}) h {where})";
 

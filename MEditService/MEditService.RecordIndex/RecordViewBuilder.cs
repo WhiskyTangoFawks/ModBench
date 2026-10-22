@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.RecordIndex.Store;
 
@@ -10,17 +9,6 @@ namespace MEditService.RecordIndex;
 /// The Store reads the SQL type and default from the wire type.</summary>
 internal static class RecordViewBuilder
 {
-    internal static void CreateViews(DuckDBConnection connection, IReadOnlyDictionary<string, RecordTableSchema> schemas)
-    {
-        // The header's columns sit a level deeper in the document ($.ModHeader.Author); that nesting
-        // is in the column's own PropertyName, so Projection needs nothing special.
-        foreach (var (tableName, schema) in schemas)
-        {
-            DuckDbSql.Execute(connection, BuildViewSql(tableName, schema, TableDdlBuilder.ActiveSchema));
-            DuckDbSql.Execute(connection, BuildViewSql(tableName, schema, TableDdlBuilder.IndexedSchema));
-        }
-    }
-
     internal static string BuildViewSql(string tableName, RecordTableSchema schema, string viewSchema)
     {
         var sb = new StringBuilder();

@@ -14,11 +14,6 @@ public sealed class StoreNamespaceScanTests
         Root + "Queries/IndexAnswer.cs",
         Root + "FilterMatches.cs",
         Root + "RelationReads.cs",
-        Root + "LinkResolution.cs",
-        Root + "RecordViewBuilder.cs",
-        Root + "RequiredMasters.cs",
-        Root + "SqlDoor.cs",
-        Root + "WorkingTreeOverlay.cs",
     };
 
     [Fact]

@@ -2,11 +2,10 @@ using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.RecordIndex.Store;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
-namespace MEditService.RecordIndex;
+namespace MEditService.RecordIndex.Store;
 
 /// <summary>The working-tree overlay collaborator of <see cref="Store"/>, which owns
 /// every transaction and the winner sweep. Uses <c>PluginIngest</c>'s collectors so an edit's

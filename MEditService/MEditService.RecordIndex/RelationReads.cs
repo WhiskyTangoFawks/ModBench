@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
@@ -26,18 +27,18 @@ internal sealed class RelationReads(
     /// plugin. Null if the FormKey isn't indexed.</summary>
     public RecordDocument? GetDocument(string formKey)
     {
-        using var connection = store.OpenReadConnection();
-        var tableName = FindRecordType(connection, formKey);
-        return tableName == null ? null : ReadDocument(connection, tableName, formKey, plugin: null, origin: null, winnerOnly: true);
+        using var context = store.OpenRead();
+        var tableName = FindRecordType(context, formKey);
+        return tableName == null ? null : ReadDocument(context, tableName, formKey, plugin: null, origin: null, winnerOnly: true);
     }
 
     /// <summary>One specific plugin's copy of <paramref name="formKey"/>, winner or not. Null if
     /// that plugin never indexed this FormKey.</summary>
     public RecordDocument? GetDocument(string formKey, PluginAddress plugin)
     {
-        using var connection = store.OpenReadConnection();
-        var tableName = FindRecordType(connection, formKey);
-        return tableName == null ? null : ReadDocument(connection, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
+        using var context = store.OpenRead();
+        var tableName = FindRecordType(context, formKey);
+        return tableName == null ? null : ReadDocument(context, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
     }
 
     /// <summary>The copy <paramref name="plugin"/> would hold were its document <paramref name="text"/>,
@@ -45,23 +46,21 @@ internal sealed class RelationReads(
     /// a copy with a <c>ParseDiagnosis</c>.</summary>
     public RecordDocument? DocumentFromText(string formKey, PluginAddress plugin, int loadOrderIndex, string text)
     {
-        using var connection = store.OpenReadConnection();
-        var tableName = FindRecordTypeInAnyPlugin(connection, formKey);
+        using var context = store.OpenRead();
+        var tableName = FindRecordTypeInAnyPlugin(context, formKey);
         if (tableName == null) return null;
         var (body, editorId, parseDiagnosis) = CallerText.Read(text);
         return DocumentFromBody(
-            connection, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, body,
-            store.Schemas[tableName], LinkResolution.ForLinksOf(connection, formKey, Resolve), parseDiagnosis);
+            context, formKey, plugin.Name, plugin.Origin, loadOrderIndex, isWinner: false, editorId, body,
+            store.Schemas[tableName], LinkResolution.ForLinksOf(context, formKey, Resolve), parseDiagnosis);
     }
 
     /// <summary>What <paramref name="plugin"/> holds <paramref name="formKey"/> as, and its document as
     /// the record index stores it, active or not. Null if that plugin never indexed it.</summary>
     public (RecordIdentity Identity, string Body)? GetCopyText(string formKey, PluginAddress plugin)
     {
-        using var connection = store.OpenReadConnection();
-        return DuckDbSql.Rows(
-            connection,
-            $"SELECT record_type, editor_id, body FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 AND plugin = $2 AND origin = $3 LIMIT 1",
+        using var context = store.OpenRead();
+        return context.Rows($"SELECT record_type, editor_id, body FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1 AND plugin = $2 AND origin = $3 LIMIT 1",
             reader => (new RecordIdentity(formKey, reader.GetString(0), reader.GetStringOrNull(1)), reader.GetString(2)),
             formKey, plugin.Name, plugin.Origin) is [var copy] ? copy : null;
     }
@@ -69,20 +68,17 @@ internal sealed class RelationReads(
     /// <summary>Whether any registered plugin, active or not, holds <paramref name="formKey"/>.</summary>
     public bool IsHeldByAnyPlugin(string formKey)
     {
-        using var connection = store.OpenReadConnection();
-        return DuckDbSql.Scalar<bool>(
-            connection, $"SELECT EXISTS (SELECT 1 FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1)", formKey);
+        using var context = store.OpenRead();
+        return context.Scalar<bool>($"SELECT EXISTS (SELECT 1 FROM {TableDdlBuilder.PluginRecordsView} WHERE form_key = $1)", formKey);
     }
 
     /// <summary>The records a name can mean: the one whose FormKey it is, and every one whose winning copy's
     /// EditorID it is, whatever the case. A record no active plugin holds is read from its first copy.</summary>
     public IReadOnlyList<(string FormKey, string? EditorId)> RecordsNamed(string name)
     {
-        using var connection = store.OpenReadConnection();
+        using var context = store.OpenRead();
         var formKey = CanonicalFormKey.Of(name);
-        return DuckDbSql.Rows(
-            connection,
-            $"""
+        return context.Rows($"""
             SELECT form_key, editor_id FROM (
                 SELECT form_key, editor_id FROM {TableDdlBuilder.PluginRecordsView}
                 QUALIFY row_number() OVER (PARTITION BY form_key ORDER BY is_winner DESC, plugin, origin) = 1)
@@ -97,19 +93,19 @@ internal sealed class RelationReads(
     /// FormKey isn't indexed anywhere.</summary>
     public OverrideStack? GetOverrideStack(string formKey)
     {
-        using var connection = store.OpenReadConnection();
-        var tableName = FindRecordType(connection, formKey);
+        using var context = store.OpenRead();
+        var tableName = FindRecordType(context, formKey);
         if (tableName == null) return null;
         var schema = store.Schemas[tableName];
-        var resolve = LinkResolution.ForLinksOf(connection, formKey);
-        var entries = DuckDbSql.Rows(connection, """
+        var resolve = LinkResolution.ForLinksOf(context, formKey);
+        var entries = context.Rows("""
             SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, working_tree_state
             FROM records
             WHERE form_key = $1 AND record_type = $2
             ORDER BY load_order_idx
             """, reader =>
         {
-            var doc = ReadDocumentFromBody(connection, reader, schema, resolve);
+            var doc = ReadDocumentFromBody(context, reader, schema, resolve);
             var isDirty = WorkingTreeStates.FromStored(reader.GetString(8)) != WorkingTreeState.None;
             return new OverrideStackEntry(doc.Plugin, doc.LoadOrderIndex, doc.IsWinner, doc, isDirty);
         }, formKey, NormalizeRecordType(tableName));
@@ -119,7 +115,7 @@ internal sealed class RelationReads(
 
     public PagedResult<RecordSummary> Search(RecordQuery query)
     {
-        using var connection = store.OpenReadConnection();
+        using var context = store.OpenRead();
         var filter = query.Scope == RecordQueryScope.Navigator ? store.Filter : null;
         var scope = query is { Scope: RecordQueryScope.Search, Plugin: not null } ? RecordScope.EveryRegisteredPlugin : RecordScope.Active;
         var (where, paramValues) = BuildWhere(
@@ -142,13 +138,12 @@ internal sealed class RelationReads(
             {FullNameOf("r")} AS full_name
             """;
 
-        var total = DuckDbSql.Scalar<long>(
-            connection, $"WITH {NavigatorSql.HeldFor(scope, holdings)} SELECT COUNT(*) FROM {scope.Records} r{unheld}{where}", [.. dataParams]);
+        var total = context.Scalar<long>($"WITH {NavigatorSql.HeldFor(scope, holdings)} SELECT COUNT(*) FROM {scope.Records} r{unheld}{where}", [.. dataParams]);
 
         // xEdit's navigator lists a group in FormID order, and its record picker lists by EditorID.
         // (plugin, origin) makes either order total, so LIMIT/OFFSET pages stably.
         var order = query.GroupOnly ? NavigatorSql.FormIdOrder("r.form_key_plugin", "r.form_key") : "editor_id, form_key";
-        var items = DuckDbSql.Rows(connection, $"""
+        var items = context.Rows($"""
             WITH RECURSIVE {NavigatorSql.AboveAFailure(scope, holdings)}
             SELECT {cols} FROM {scope.Records} r{unheld}{where}
             ORDER BY {order}, plugin, origin
@@ -181,13 +176,13 @@ internal sealed class RelationReads(
     public Answer<JsonElement[], string> Select(string statement)
     {
         var sql = statement.TrimEnd().TrimEnd(';');
-        using var connection = store.OpenReadConnection();
-        if (SqlDoor.RefusalOf(connection, sql, TableDdlBuilder.IndexedSchema) is { } refusal) return refusal;
+        using var context = store.OpenRead();
+        if (SqlDoor.RefusalOf(context, sql, TableDdlBuilder.IndexedSchema) is { } refusal) return refusal;
         try
         {
-            DuckDbSql.Execute(connection, $"SET search_path = '{TableDdlBuilder.IndexedSchema}'");
+            context.Execute($"SET search_path = '{TableDdlBuilder.IndexedSchema}'");
             // The newline keeps a trailing line comment in the SQL from swallowing the wrapper.
-            return DuckDbSql.Rows(connection, $"SELECT to_json(__row) FROM ({sql}\n) __row",
+            return context.Rows($"SELECT to_json(__row) FROM ({sql}\n) __row",
                 reader => JsonDocument.Parse(reader.GetString(0)).RootElement.Clone()).ToArray();
         }
         catch (DuckDBException ex) when (!Store.Store.IsInvalidation(ex))
@@ -200,11 +195,11 @@ internal sealed class RelationReads(
     /// (SetFilter never affects a point read).</summary>
     public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin)
     {
-        using var connection = store.OpenReadConnection();
+        using var context = store.OpenRead();
         var (where, paramValues) = BuildWhere(
             plugin.Name, null, store.Filter.Listing, plugin.Origin);
         var holdings = HoldingsOf(plugin.Name, plugin.Origin, paramValues);
-        var counts = DuckDbSql.Rows(connection, $"""
+        var counts = context.Rows($"""
             WITH {NavigatorSql.HeldFor(RecordScope.Active, holdings)}
             SELECT record_type, COUNT(*), BOOL_OR(parse_diagnosis IS NOT NULL)
             FROM records r{NavigatorSql.Unheld("r")}{where}
@@ -213,8 +208,8 @@ internal sealed class RelationReads(
 
         // Merged in C# rather than joined: a type whose enumeration failed can have no rows
         // at all, so it is absent from the GROUP BY above and would vanish from the tree.
-        var failedTypes = FailedRecordTypes(connection, plugin);
-        var holdingAFailure = TypesHoldingAFailure(connection, plugin);
+        var failedTypes = FailedRecordTypes(context, plugin);
+        var holdingAFailure = TypesHoldingAFailure(context, plugin);
         for (var i = 0; i < counts.Count; i++)
         {
             if (failedTypes.Contains(counts[i].Type) || holdingAFailure.Contains(counts[i].Type))
@@ -228,9 +223,9 @@ internal sealed class RelationReads(
 
     // The types of the listed records with an unreadable record anywhere beneath them, walked up
     // the holdings from each unreadable record.
-    private static HashSet<string> TypesHoldingAFailure(DuckDBConnection connection, PluginAddress plugin)
+    private static HashSet<string> TypesHoldingAFailure(ReadContext context, PluginAddress plugin)
     {
-        var types = DuckDbSql.Rows(connection, $"""
+        var types = context.Rows($"""
             WITH RECURSIVE {NavigatorSql.AboveAFailure(RecordScope.Active, "WHERE h.plugin = $1 AND h.origin = $2")}
             SELECT DISTINCT r.record_type FROM records r
             JOIN above_failure a ON a.form_key = r.form_key AND a.plugin = r.plugin AND a.origin = r.origin{NavigatorSql.Unheld("r")}
@@ -240,10 +235,9 @@ internal sealed class RelationReads(
     }
 
     // Unfiltered: a record filter narrows what is listed, never whether a type could be read.
-    private static HashSet<string> FailedRecordTypes(DuckDBConnection connection, PluginAddress plugin)
+    private static HashSet<string> FailedRecordTypes(ReadContext context, PluginAddress plugin)
     {
-        var types = DuckDbSql.Rows(
-            connection, "SELECT DISTINCT record_type FROM record_type_failure WHERE plugin = $1 AND origin = $2",
+        var types = context.Rows("SELECT DISTINCT record_type FROM record_type_failure WHERE plugin = $1 AND origin = $2",
             reader => reader.GetString(0), plugin.Name, plugin.Origin);
         return new HashSet<string>(types, StringComparer.OrdinalIgnoreCase);
     }
@@ -253,8 +247,8 @@ internal sealed class RelationReads(
     public WorkingTreeStatesBeneath GetWorkingTreeStatesBeneath(PluginAddress plugin)
     {
         var scope = RecordScope.Active;
-        using var connection = store.OpenReadConnection();
-        var states = DuckDbSql.Rows(connection, $"""
+        using var context = store.OpenRead();
+        var states = context.Rows($"""
             WITH RECURSIVE {NavigatorSql.AboveAChange(scope, "WHERE h.plugin = $1 AND h.origin = $2", store.Filter.AlsoKeeps("f"))}
             SELECT FALSE AS is_group, form_key AS row_key, fact AS state FROM above_change
             UNION
@@ -264,7 +258,7 @@ internal sealed class RelationReads(
             UNION
             SELECT TRUE, r.record_type, a.fact FROM above_change a
             JOIN {scope.Records} r ON r.form_key = a.form_key AND r.plugin = a.plugin AND r.origin = a.origin{NavigatorSql.Unheld("r")}
-            -- above_change holds only the plugin's rows, but DuckDB pushes none of it into records.
+            -- above_change holds only the plugin's rows, but the engine pushes none of it into records.
             WHERE r.plugin = $1 AND r.origin = $2
             """, reader => (IsGroup: reader.GetBoolean(0), Key: reader.GetString(1), State: WorkingTreeStates.FromStored(reader.GetString(2))),
             plugin.Name, plugin.Origin);
@@ -282,8 +276,8 @@ internal sealed class RelationReads(
 
     private RecordLookupEntry? Resolve(string formKey)
     {
-        using var connection = store.OpenReadConnection();
-        return LinkResolution.Resolve(connection, formKey);
+        using var context = store.OpenRead();
+        return LinkResolution.Resolve(context, formKey);
     }
 
     /// <summary>One response's FormKey → (record type, EditorID) lookup against the winning override,
@@ -291,15 +285,15 @@ internal sealed class RelationReads(
     /// links its copies carry in one query up front.</summary>
     public Func<string, RecordLookupEntry?> LinkResolver(string formKey)
     {
-        using var connection = store.OpenReadConnection();
-        return LinkResolution.ForLinksOf(connection, formKey, Resolve);
+        using var context = store.OpenRead();
+        return LinkResolution.ForLinksOf(context, formKey, Resolve);
     }
 
     private List<MissingReference> GetReferencesToMissingRecords()
     {
-        using var connection = store.OpenReadConnection();
+        using var context = store.OpenRead();
         var release = store.Release;
-        return DuckDbSql.Rows(connection, $"""
+        return context.Rows($"""
             SELECT fr.source_plugin, fr.source_origin, fr.source_form_key, fr.record_type, fr.editor_id,
                    fr.target_form_key, fr.field_path
             FROM {TableDdlBuilder.MirrorSchema}.form_references fr
@@ -343,8 +337,8 @@ internal sealed class RelationReads(
 
     public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)
     {
-        using var connection = store.OpenReadConnection();
-        return GetReferences(connection, "form_references fr", "", targetFormKey);
+        using var context = store.OpenRead();
+        return GetReferences(context, "form_references fr", "", targetFormKey);
     }
 
     private static readonly string ActiveOrCompiledPluginReferrers = $"""
@@ -357,8 +351,8 @@ internal sealed class RelationReads(
     /// <summary>The same read over the active plugins and the inactive compiled ones (ADR-0012).</summary>
     public IReadOnlyList<ReferenceRow> GetReferencedByInActiveOrCompiledPlugins(string targetFormKey)
     {
-        using var connection = store.OpenReadConnection();
-        return GetReferences(connection, ActiveOrCompiledPluginReferrers, $"AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')", targetFormKey);
+        using var context = store.OpenRead();
+        return GetReferences(context, ActiveOrCompiledPluginReferrers, $"AND (p.load_order_idx IS NOT NULL OR d.derived_from <> '{DerivedFrom.Binary}')", targetFormKey);
     }
 
     /// <summary>Every plugin at least one filtered record matches, restricted to
@@ -370,14 +364,13 @@ internal sealed class RelationReads(
         if (types.Count == 0 || !store.Filter.Active)
             return new HashSet<PluginAddress>(PluginAddress.Comparer);
 
-        using var connection = store.OpenReadConnection();
+        using var context = store.OpenRead();
 
         var (where, paramValues) = BuildWhere(
             null, null, FilterMatches.Matching, origin: null, recordTypes: types);
 
         return new HashSet<PluginAddress>(
-            DuckDbSql.Rows(
-                connection, $"SELECT DISTINCT plugin, origin FROM records{where}",
+            context.Rows($"SELECT DISTINCT plugin, origin FROM records{where}",
                 DuckDbSql.ReadPluginAddress, [.. paramValues]),
             PluginAddress.Comparer);
     }
@@ -386,8 +379,8 @@ internal sealed class RelationReads(
     /// binary was hashed and gone with its rows: the malformed-plugin read.</summary>
     public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses()
     {
-        using var connection = store.OpenReadConnection();
-        return DuckDbSql.Rows(connection, $"""
+        using var context = store.OpenRead();
+        return context.Rows($"""
             SELECT plugin, origin, anchor, defect_class, tail, message
             FROM {TableDdlBuilder.PluginDiagnosisTable}
             ORDER BY plugin, origin, ordinal
@@ -400,9 +393,8 @@ internal sealed class RelationReads(
     /// <summary>What each plugin's rows took their strings from: a localized plugin read from its binary.</summary>
     public IReadOnlyDictionary<PluginAddress, string> GetStringsReads()
     {
-        using var connection = store.OpenReadConnection();
-        var rows = DuckDbSql.Rows(
-            connection, $"SELECT plugin, origin, strings_read FROM {Store.Store.FilesRelation} WHERE strings_read IS NOT NULL",
+        using var context = store.OpenRead();
+        var rows = context.Rows($"SELECT plugin, origin, strings_read FROM {Store.Store.FilesRelation} WHERE strings_read IS NOT NULL",
             reader => KeyValuePair.Create(DuckDbSql.ReadPluginAddress(reader), reader.GetString(2)));
         return new Dictionary<PluginAddress, string>(rows, PluginAddress.Comparer);
     }
@@ -410,9 +402,8 @@ internal sealed class RelationReads(
     /// <summary>What each registered plugin's rows were derived from. A plugin with no rows is absent.</summary>
     public IReadOnlyDictionary<PluginAddress, DerivedFrom> GetDerivations()
     {
-        using var connection = store.OpenReadConnection();
-        var rows = DuckDbSql.Rows(
-            connection, $"SELECT plugin, origin, derived_from FROM {TableDdlBuilder.PluginDerivationTable}",
+        using var context = store.OpenRead();
+        var rows = context.Rows($"SELECT plugin, origin, derived_from FROM {TableDdlBuilder.PluginDerivationTable}",
             reader => KeyValuePair.Create(
                 DuckDbSql.ReadPluginAddress(reader), Enum.Parse<DerivedFrom>(reader.GetString(2))));
         return new Dictionary<PluginAddress, DerivedFrom>(rows, PluginAddress.Comparer);
@@ -422,9 +413,9 @@ internal sealed class RelationReads(
     /// enumeration did: the tree's "has a failure below it" for a plugin row.</summary>
     public IReadOnlySet<PluginAddress> GetPluginsWithParseFailures()
     {
-        using var connection = store.OpenReadConnection();
+        using var context = store.OpenRead();
         return new HashSet<PluginAddress>(
-            DuckDbSql.Rows(connection, $"""
+            context.Rows($"""
                 SELECT DISTINCT r.plugin, r.origin FROM {TableDdlBuilder.MirrorSchema}.records r
                 {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
                 WHERE r.parse_diagnosis IS NOT NULL
@@ -450,8 +441,8 @@ internal sealed class RelationReads(
     private List<CellLocationSummary> CellLocations(
         PluginAddress plugin, string where, string blockOrder, IEnumerable<string> parameters)
     {
-        using var connection = store.OpenReadConnection();
-        return DuckDbSql.Rows(connection, $"""
+        using var context = store.OpenRead();
+        return context.Rows($"""
             WITH RECURSIVE {NavigatorSql.AboveAFailure(RecordScope.Active, "WHERE h.plugin = $1 AND h.origin = $2")}
             SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y,
                    {FullNameOf("c")}, c.parse_diagnosis,
@@ -485,8 +476,8 @@ internal sealed class RelationReads(
 
     public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin)
     {
-        using var connection = store.OpenReadConnection();
-        var parents = DuckDbSql.Rows(connection, $"""
+        using var context = store.OpenRead();
+        var parents = context.Rows($"""
             SELECT DISTINCT h.parent FROM holdings h
             JOIN cell_location cl ON cl.cell_form_key = h.child AND cl.plugin = h.plugin AND cl.origin = h.origin
             WHERE h.plugin = $1 AND h.origin = $2{store.Filter.AlsoKeeps("cl", "cell_form_key")}
@@ -496,12 +487,12 @@ internal sealed class RelationReads(
 
     public CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey)
     {
-        using var connection = store.OpenReadConnection();
+        using var context = store.OpenRead();
 
         // ADR-0005: the placed ref's base form comes out of the document rather than a
         // `base` column; json_extract_string unquotes the stored FormLink text, and a placed ref
         // with no base reads NULL.
-        var children = DuckDbSql.Rows(connection, $"""
+        var children = context.Rows($"""
             WITH {NavigatorSql.HeldFor(RecordScope.Active, "WHERE h.plugin = $2 AND h.origin = $3")},
             children AS (
                 SELECT p.placement_group, r.record_type, p.form_key, r.editor_id, json_extract_string(r.body, '$.Base') AS base,
@@ -511,7 +502,7 @@ internal sealed class RelationReads(
                 WHERE p.parent_cell = $1 AND r.plugin = $2 AND r.origin = $3{store.Filter.AlsoKeeps("p")}
             ),
             -- The base record's EditorID (plugins.md, Record). Its copy in the reference's own plugin, else the winning copy.
-            -- Beside the records view, not through it: DuckDB pushes no join key past the view's winners join.
+            -- Beside the records view, not through it: the engine pushes no join key past the view's winners join.
             base_names AS (
                 SELECT b.form_key, b.editor_id FROM (SELECT DISTINCT base FROM children) cb
                 JOIN {TableDdlBuilder.MirrorSchema}.records b ON b.form_key = cb.base
@@ -547,38 +538,38 @@ internal sealed class RelationReads(
     /// indexed. Ref-invariant: no gesture moves a cell.</summary>
     public CellStructure? GetCellLocation(PluginAddress plugin, string cellFormKey)
     {
-        using var connection = store.OpenReadConnection();
-        return GetCellLocation(connection, cellFormKey, plugin.Name, plugin.Origin);
+        using var context = store.OpenRead();
+        return GetCellLocation(context, cellFormKey, plugin.Name, plugin.Origin);
     }
 
     /// <summary>Everything <paramref name="parentFormKey"/> holds, placed references and cells
     /// included, in FormID order; empty when it holds nothing. Ref-invariant by construction.</summary>
     public IReadOnlyList<HoldingRow> GetHoldings(PluginAddress plugin, string parentFormKey)
     {
-        using var connection = store.OpenReadConnection();
+        using var context = store.OpenRead();
         return GetHoldings(
-            connection, plugin.Name, plugin.Origin, parentFormKey, store.Filter.AlsoKeeps("cc", "child"), NavigatorSql.FormIdOrder("r.form_key_plugin", "cc.child"));
+            context, plugin.Name, plugin.Origin, parentFormKey, store.Filter.AlsoKeeps("cc", "child"), NavigatorSql.FormIdOrder("r.form_key_plugin", "cc.child"));
     }
 
     /// <summary>Every child <paramref name="parentFormKey"/> holds, whatever filter is in force, by slot and
     /// place in it.</summary>
     public IReadOnlyList<HoldingRow> GetEveryHolding(PluginAddress plugin, string parentFormKey)
     {
-        using var connection = store.OpenReadConnection();
-        return GetHoldings(connection, plugin.Name, plugin.Origin, parentFormKey, inFilter: "", "cc.slot, cc.slot_index");
+        using var context = store.OpenRead();
+        return GetHoldings(context, plugin.Name, plugin.Origin, parentFormKey, inFilter: "", "cc.slot, cc.slot_index");
     }
 
     // Column 6 is the row's working_tree_state, 7 the correlated holdings EXISTS Search's
     // SELECT adds, 8 this record's own diagnosis, 9 the same fact widened to its children and 10
     // its FULL, read positionally.
-    private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
+    private static RecordSummary ReadSummary(DbDataReader reader) =>
         new(reader.GetString(0), reader.GetString(1), NullableInt(reader, 2) ?? int.MaxValue,
             reader.GetBoolean(3), reader.GetStringOrNull(4), reader.GetString(5),
             WorkingTreeStates.FromStored(reader.GetString(6)), reader.GetBoolean(7),
             reader.GetStringOrNull(8), reader.GetBoolean(9),
             FullName: reader.GetStringOrNull(10));
 
-    private static int? NullableInt(DuckDBDataReader reader, int ordinal) =>
+    private static int? NullableInt(DbDataReader reader, int ordinal) =>
         reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
 
     private static string FullNameOf(string alias) =>
@@ -639,20 +630,19 @@ internal sealed class RelationReads(
     }
 
     // Inactive plugins are indexed too (ADR-0012): any plugin's row gives the type.
-    private static string? FindRecordTypeInAnyPlugin(DuckDBConnection connection, string formKey) =>
-        DuckDbSql.ScalarString(
-            connection, $"SELECT record_type FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key = $1 LIMIT 1", formKey);
+    private static string? FindRecordTypeInAnyPlugin(ReadContext context, string formKey) =>
+        context.ScalarString($"SELECT record_type FROM {TableDdlBuilder.MirrorSchema}.records WHERE form_key = $1 LIMIT 1", formKey);
 
     // Private: table-name dispatch is rejected from the seam; GetDocument and GetOverrideStack
     // resolve a FormKey's type themselves rather than being told it.
-    private static string? FindRecordType(DuckDBConnection connection, string formKey) =>
-        DuckDbSql.ScalarString(connection, "SELECT record_type FROM records WHERE form_key = $1 LIMIT 1", formKey);
+    private static string? FindRecordType(ReadContext context, string formKey) =>
+        context.ScalarString("SELECT record_type FROM records WHERE form_key = $1 LIMIT 1", formKey);
 
-    private static List<ReferenceRow> GetReferences(DuckDBConnection connection, string referrers, string restriction, string targetFormKey)
+    private static List<ReferenceRow> GetReferences(ReadContext context, string referrers, string restriction, string targetFormKey)
     {
         // WorkingTreeOverlay keeps form_references rewritten as the working tree changes, so this
         // already sees every edit without applying anything itself.
-        return DuckDbSql.Rows(connection, $"""
+        return context.Rows($"""
             SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
             FROM {referrers}
             WHERE fr.target_form_key = $1 {restriction}
@@ -662,9 +652,9 @@ internal sealed class RelationReads(
             targetFormKey);
     }
 
-    private static CellStructure? GetCellLocation(DuckDBConnection connection, string cellFormKey, string plugin, string origin)
+    private static CellStructure? GetCellLocation(ReadContext context, string cellFormKey, string plugin, string origin)
     {
-        return DuckDbSql.Rows(connection, """
+        return context.Rows("""
             SELECT (SELECT h.parent FROM holdings h
                     WHERE h.child = cl.cell_form_key AND h.plugin = cl.plugin AND h.origin = cl.origin
                     LIMIT 1),
@@ -681,9 +671,9 @@ internal sealed class RelationReads(
     }
 
     private static List<HoldingRow> GetHoldings(
-        DuckDBConnection connection, string plugin, string origin, string parentFormKey, string inFilter, string order)
+        ReadContext context, string plugin, string origin, string parentFormKey, string inFilter, string order)
     {
-        return DuckDbSql.Rows(connection, $"""
+        return context.Rows($"""
             SELECT cc.child, cc.slot, cc.slot_index
             FROM holdings cc
             LEFT JOIN records r ON r.form_key = cc.child AND r.plugin = cc.plugin AND r.origin = cc.origin
@@ -693,7 +683,7 @@ internal sealed class RelationReads(
             parentFormKey, plugin, origin);
     }
 
-    private RecordDocument? ReadDocument(DuckDBConnection connection, string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
+    private RecordDocument? ReadDocument(ReadContext context, string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
     {
         var schema = store.Schemas[tableName];
         var conditions = new List<string> { "form_key = $1" };
@@ -706,26 +696,26 @@ internal sealed class RelationReads(
         conditions.Add($"record_type = ${values.Count + 1}");
         values.Add(NormalizeRecordType(tableName));
 
-        var resolve = LinkResolution.ForLinksOf(connection, formKey);
-        return DuckDbSql.Rows(connection, $"""
+        var resolve = LinkResolution.ForLinksOf(context, formKey);
+        return context.Rows($"""
             SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis
             FROM records WHERE {string.Join(" AND ", conditions)}
             LIMIT 1
-            """, reader => ReadDocumentFromBody(connection, reader, schema, resolve), [.. values]) is [var document] ? document : null;
+            """, reader => ReadDocumentFromBody(context, reader, schema, resolve), [.. values]) is [var document] ? document : null;
     }
 
     private RecordDocument ReadDocumentFromBody(
-        DuckDBConnection connection, DuckDBDataReader reader, RecordTableSchema schema,
+        ReadContext context, DbDataReader reader, RecordTableSchema schema,
         Func<string, RecordLookupEntry?> resolveFormKey) =>
         DocumentFromBody(
-            connection, reader.GetString(0), reader.GetString(1), reader.GetString(2), NullableInt(reader, 3) ?? int.MaxValue,
+            context, reader.GetString(0), reader.GetString(1), reader.GetString(2), NullableInt(reader, 3) ?? int.MaxValue,
             reader.GetBoolean(4), reader.GetStringOrNull(5),
             reader.GetString(6), schema, resolveFormKey, reader.GetStringOrNull(7));
 
     // The construction half of ReadDocumentFromBody. The fields are the document's own nodes (ADR-0005), except a
     // header's masters, which no document holds (ADR-0008).
     private RecordDocument DocumentFromBody(
-        DuckDBConnection connection, string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
+        ReadContext context, string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
         string? editorId, string body, RecordTableSchema schema,
         Func<string, RecordLookupEntry?> resolveFormKey, string? parseDiagnosis)
     {
@@ -738,7 +728,7 @@ internal sealed class RelationReads(
 
         return new RecordDocument(
             formKey, address, loadOrderIndex, isWinner, editorId, schema.TableName,
-            body, schema.IsHeader ? RequiredMasters.InHeader(fields, connection, address) : fields,
+            body, schema.IsHeader ? RequiredMasters.InHeader(fields, context, address) : fields,
             IsPartialForm: schema.IsPartialForm(root),
             ParseDiagnosis: parseDiagnosis,
             MissingStringsFile: missingStrings);
