@@ -102,7 +102,7 @@ A plugin whose purpose is to override records in another mod's plugin, to fix a 
 Avoid: override (that is a placement), fix plugin, child plugin
 
 ## Malformed plugin
-A plugin whose bytes a catalogued malformation diagnoses, and which Mutagen's structure refuses. Repair makes it conform to Mutagen's structure, with every record the reference tool reads left unchanged.
+A plugin whose bytes depart from what the Creation Kit writes, in a way the game tolerates and Mutagen does not: Mutagen fails to read it, or reads it with loss. It is not a correct plugin that Mutagen mishandles.
 
 Avoid: broken plugin, corrupt plugin
 
