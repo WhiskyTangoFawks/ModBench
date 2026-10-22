@@ -46,6 +46,7 @@ interface UntrustedWorkspaces { supported: unknown; description?: string; }
 
 interface PackageManifest {
   activationEvents: string[];
+  extensionDependencies: unknown;
   capabilities: { untrustedWorkspaces: UntrustedWorkspaces };
   contributes: {
     viewsWelcome: ViewsWelcomeEntry[];
@@ -147,6 +148,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   const { properties } = configuration;
   return {
     activationEvents: raw.activationEvents,
+    extensionDependencies: raw.extensionDependencies,
     capabilities: capabilitiesOf(raw.capabilities),
     contributes: {
       viewsWelcome, views, menus, commands, keybindings,
@@ -234,17 +236,44 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
   it('shows each step a markdown file the extension ships', () => {
     expect(steps.filter(({ media }) => !existsSync(path.join(__dirname, '..', '..', media.markdown))).map(({ id }) => id)).toEqual([]);
   });
+});
 
-  it('says, in a folder not trusted, that Modbench needs it trusted (story 4)', () => {
-    expect(pkg.capabilities.untrustedWorkspaces).toEqual({
-      supported: false, description: "Modbench writes to your mod manager's instance and runs its own service, so it needs the folder trusted.",
+const VIEWS_OF_THE_INSTANCE = ['modbench.toolbox', 'modbench.modList', 'modbench.pluginListTree', 'modbench.downloads'];
+
+describe('package.json in an untrusted folder (user-docs.md, The walkthrough, story 4)', () => {
+  const OFF_UNTIL_TRUSTED = 'Modbench is off until you trust this folder. It changes your mod files and runs git here.';
+
+  it('stays in Restricted Mode and says why it is off', () => {
+    expect(pkg.capabilities.untrustedWorkspaces).toEqual({ supported: 'limited', description: OFF_UNTIL_TRUSTED });
+  });
+
+  const beforeTrust: Context = { [FOLDER_KEY]: 'untrustedInstance', isWorkspaceTrusted: false };
+
+  it('offers no command in the palette before trust, since Modbench registers none until it starts', () => {
+    const palette = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']");
+    const offered = pkg.contributes.commands.map(({ command }) => command).filter((command) => {
+      const entries = palette.filter((e) => e.command === command);
+      return entries.length === 0 || entries.some((e) => holds(e.when, beforeTrust));
     });
+    expect(offered).toEqual([]);
+  });
+
+  it('binds no key before trust, since Modbench registers no command until it starts', () => {
+    expect(keysFiring(beforeTrust)).toEqual([]);
+  });
+
+  it('depends on no extension, which Restricted Mode could turn off and Modbench with it', () => {
+    expect(pkg.extensionDependencies).toBeUndefined();
+  });
+
+  it.each(VIEWS_OF_THE_INSTANCE)('%s says, in an untrusted instance, that Modbench is off until it is trusted, with a link to trust it', (view) => {
+    expect(pkg.contributes.viewsWelcome.filter((w) => w.view === view && w.when === `${FOLDER_KEY} == untrustedInstance`).map((w) => w.contents))
+      .toEqual([`${OFF_UNTIL_TRUSTED}\n[Trust This Folder](command:workbench.trust.manage)`]);
   });
 });
 
 describe('package.json outside an instance', () => {
   const isNotAnInstance = `${FOLDER_KEY} == notAnInstance`;
-  const VIEWS_OF_THE_INSTANCE = ['modbench.toolbox', 'modbench.modList', 'modbench.pluginListTree', 'modbench.downloads'];
 
   it.each(VIEWS_OF_THE_INSTANCE)('%s says, once the check answers not an instance, that no instance is open and how to open one', (view) => {
     const notAnInstance = pkg.contributes.viewsWelcome.filter((w) => w.view === view && w.when === isNotAnInstance);
