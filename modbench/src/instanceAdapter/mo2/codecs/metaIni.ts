@@ -90,7 +90,7 @@ export const modMetaOf = ({ installedFiles, newestVersion, ...rest }: MetaIni): 
   ({ ...rest, installedFileKeys: installedFiles?.map(installedFileKey), updateAvailable: isUpdateAvailable(rest.version, newestVersion) });
 
 /** The meta.ini a mod's meta says. */
-export const metaIniOf = ({ installedFileKeys, updateAvailable, ...rest }: ModMeta): MetaIni =>
+export const metaIniOf = ({ installedFileKeys, ...rest }: Omit<ModMeta, 'updateAvailable'>): MetaIni =>
   ({ ...rest, installedFiles: installedFileKeys?.map(installedFileOfKey) });
 
 function installedFilesBody(pairs: readonly InstalledFileId[] | undefined): string[] {
