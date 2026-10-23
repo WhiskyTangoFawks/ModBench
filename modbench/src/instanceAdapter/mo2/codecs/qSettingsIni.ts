@@ -107,10 +107,10 @@ const quoteIfNeeded = (text: string, escaped: string): string => (/[,;=]|^ | $/.
 // The raw value Qt writes for `value`; `decodeIniValue` reads it back.
 const encodeIniValue = (value: string): string => quoteIfNeeded(value, escapeUnits(value.startsWith('@') ? `@${value}` : value, false));
 
-// The raw value Qt writes for a QByteArray holding `value` as UTF-8.
-function encodeByteArray(value: string): string {
-  const bytes = `@ByteArray(${Buffer.from(value, 'utf8').toString('latin1')})`;
-  return quoteIfNeeded(bytes, escapeUnits(bytes, true));
+// The raw value Qt writes for a value it stores as `@Tag(` its stream bytes as latin-1 `)`.
+function encodeTagged(tag: string, bytes: Buffer): string {
+  const tagged = `@${tag}(${bytes.toString('latin1')})`;
+  return quoteIfNeeded(tagged, escapeUnits(tagged, true));
 }
 
 /** Sets, adds (right after its header) or, for an undefined value, deletes one key. An
@@ -120,7 +120,11 @@ export const setIniValue = (text: string, section: string, key: string, value: s
 
 /** Sets one key to a QByteArray of `value`'s UTF-8 bytes. */
 export const setIniByteArray = (text: string, section: string, key: string, value: string): string =>
-  setRawIniValue(text, section, key, encodeByteArray(value));
+  setRawIniValue(text, section, key, encodeTagged('ByteArray', Buffer.from(value, 'utf8')));
+
+/** Sets one key to a QDateTime, given as the bytes QDataStream writes for it. */
+export const setIniDateTime = (text: string, section: string, key: string, stream: Buffer): string =>
+  setRawIniValue(text, section, key, encodeTagged('DateTime', stream));
 
 function setRawIniValue(text: string, section: string, key: string, raw: string | undefined): string {
   return editLines(text, (lines) => {

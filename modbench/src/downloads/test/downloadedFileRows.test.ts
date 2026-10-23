@@ -78,6 +78,10 @@ describe('downloadedFileContextValue, the space-separated flag string the view/i
     expect(downloadedFileContextValue(row)).toBe('downloadedFile hasModID hasMeta excluded');
   });
 
+  it('appends hasFileID, after hasModID, when the metadata holds a file ID', () => {
+    expect(downloadedFileContextValue({ ...plain, modID: '12345', fileID: '78' })).toBe('downloadedFile hasModID hasFileID');
+  });
+
   it('appends only hasModID when just modID is present', () => {
     expect(downloadedFileContextValue({ ...plain, modID: '12345' })).toBe('downloadedFile hasModID');
   });

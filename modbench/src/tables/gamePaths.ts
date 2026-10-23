@@ -8,6 +8,8 @@ export interface GamePathInfo {
   readonly gameName: string;
   /** The Nexus slug — the {game} segment of nexusmods.com/{game}/mods/{id}. */
   readonly nexusSlug: string;
+  /** The other releases whose files the mod manager also accepts as this game's, by the short names it knows them by, in the order it asks Nexus about them. */
+  readonly validShortNames?: readonly string[];
   /** Steam's numeric app id, when the release ships on Steam. Needed to find which Steam
    *  library holds the install (`libraryfolders.vdf`) and its Proton prefix. Absent for a
    *  release the table only knows the Nexus slug for. */
@@ -93,19 +95,19 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   Fallout4VR: {
-    gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
+    gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   SkyrimSE: {
-    gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
+    gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
     masters: SKYRIM_MASTERS,
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES,
   },
   SkyrimVR: {
-    gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
+    gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS,
     archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim VR', defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
@@ -154,6 +156,25 @@ export function gameReleaseForNexusDomain(domain: string): string | undefined {
 export function nexusDomainForMetaGame(gameName: string): string | undefined {
   const release = gameReleaseForMetaGame(gameName);
   return release === undefined ? undefined : GAME_PATHS[release]?.nexusSlug;
+}
+
+// The games a valid short name can name though Modbench supports none of their releases: short name to Nexus domain.
+const NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES: Readonly<Record<string, string>> = { Skyrim: 'skyrim' };
+
+const nexusDomainOfShortName = (shortName: string): string | undefined =>
+  nexusDomainForMetaGame(shortName) ?? NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES[shortName];
+
+/** The Nexus domains the mod manager asks about a file of the game `gameName` names, in its order: the game's own, then each valid short name's. */
+export function nexusDomainsForGame(gameName: string): string[] {
+  const release = gameReleaseForGame(gameName);
+  if (release === undefined) return [];
+  const domains = [release, ...(GAME_PATHS[release]?.validShortNames ?? [])].flatMap((name) => nexusDomainOfShortName(name) ?? []);
+  return domains.filter((domain, i) => domains.indexOf(domain) === i);
+}
+
+/** The short name a downloaded file's metadata gives a game on Nexus's `domain`; `undefined` when the tables hold none. */
+export function shortNameForNexusDomain(domain: string): string | undefined {
+  return gameReleaseForNexusDomain(domain) ?? Object.keys(NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES).find((name) => NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES[name] === domain);
 }
 
 /** The install-location facts for a release, or `undefined` when the table holds none for it —

@@ -742,8 +742,8 @@ describe('package.json Downloads row menu order', () => {
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
       .filter((e) => requires(e.when, 'view == modbench.downloads') && requires(e.when, DOWNLOADED_FILE_ROW));
 
-  const [INSTALL, VIEW_ON_NEXUS, OPEN, OPEN_META, EXCLUDE, INCLUDE, COPY_VALUE, DELETE] = [
-    'modbench.mod.install', 'modbench.mod.viewOnNexus', 'modbench.downloadedFile.open', 'modbench.downloadedFile.openMeta',
+  const [INSTALL, QUERY_INFO, VIEW_ON_NEXUS, OPEN, OPEN_META, EXCLUDE, INCLUDE, COPY_VALUE, DELETE] = [
+    'modbench.mod.install', 'modbench.downloadedFile.queryInfo', 'modbench.mod.viewOnNexus', 'modbench.downloadedFile.open', 'modbench.downloadedFile.openMeta',
     'modbench.downloadedFile.exclude', 'modbench.downloadedFile.include', 'modbench.copyValue', 'modbench.downloadedFile.delete',
   ];
 
@@ -757,7 +757,16 @@ describe('package.json Downloads row menu order', () => {
     expect(offeredIn(downloadedFileRowMenu(), { view: 'modbench.downloads', viewItem })).toEqual(commands);
   });
 
-  it('orders the row in strictly increasing slots: install, view on Nexus, open, open metadata, exclude/include sharing one, copy value, delete', () => {
+  it.each([
+    ['downloadedFile', [INSTALL, QUERY_INFO, OPEN, EXCLUDE, COPY_VALUE, DELETE]],
+    ['downloadedFile hasModID', [INSTALL, QUERY_INFO, VIEW_ON_NEXUS, OPEN, EXCLUDE, COPY_VALUE, DELETE]],
+    ['downloadedFile hasFileID', [INSTALL, QUERY_INFO, OPEN, EXCLUDE, COPY_VALUE, DELETE]],
+    ['downloadedFile hasModID hasFileID', [INSTALL, VIEW_ON_NEXUS, OPEN, EXCLUDE, COPY_VALUE, DELETE]],
+  ])('the menu on a %s row while logged in to Nexus offers query info only for a file whose metadata lacks an ID', (viewItem, commands) => {
+    expect(offeredIn(downloadedFileRowMenu(), { view: 'modbench.downloads', viewItem, 'modbench.nexus.loggedIn': true })).toEqual(commands);
+  });
+
+  it('orders the row in strictly increasing slots: install, query info, view on Nexus, open, open metadata, exclude/include sharing one, copy value, delete', () => {
     const entries = downloadedFileRowMenu();
     const slotOf = (command: string): number => {
       const group = present(entries.find((e) => e.command === command), `a ${command} row-menu entry`).group ?? '';
@@ -768,7 +777,7 @@ describe('package.json Downloads row menu order', () => {
     expect(include).toBe(exclude);
 
     const slots = [
-      'modbench.mod.install', 'modbench.mod.viewOnNexus', 'modbench.downloadedFile.open',
+      'modbench.mod.install', 'modbench.downloadedFile.queryInfo', 'modbench.mod.viewOnNexus', 'modbench.downloadedFile.open',
       'modbench.downloadedFile.openMeta', 'modbench.downloadedFile.exclude', 'modbench.copyValue',
       'modbench.downloadedFile.delete',
     ].map(slotOf);

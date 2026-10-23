@@ -7,9 +7,12 @@ import { changeOwnedKeysInText, type InstalledFileId, type MetaIni, metaIniOf, m
 import { readGameName } from './codecs/modOrganizerIni';
 import { ensureDir, exists, get, readOrReason, withLock, write } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
+import { md5Of } from '../downloadedFileContents/contentDigest';
 import type { FileRead, InstallationFile, InstanceAdapter, ModMetadata, NexusModFile } from '../instanceAdapter';
-import { downloadedFilePath, modMetaFileIn, settingsFile } from './layout';
-import { currentDownloadsDir, folderHolding, newModFolder, type Mo2Context } from './mo2Context';
+import { downloadedFileMetadataPath, downloadedFilePath, modMetaFileIn, settingsFile } from './layout';
+import { parseDownloadedFileMeta } from './codecs/downloads';
+import { effectiveModId } from './codecs/nexusFileName';
+import { currentDownloadsDir, folderHolding, newModFolder, nexusDomainsOfInstance, type Mo2Context } from './mo2Context';
 import { readMetaIni } from './mo2Reads';
 import { formatNexusPage, parseNexusPage } from '../nexusPage';
 
@@ -100,7 +103,7 @@ async function nexusFileOf(meta: MetaIni, context: Mo2Context): Promise<NexusMod
 
 export function mo2Installation(
   context: Mo2Context, { downloadedFileHash }: Pick<HashIndex, 'downloadedFileHash'>,
-): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
+): Pick<InstanceAdapter, 'installationFile' | 'downloadedFile' | 'downloadedFileQuery' | 'modMetadata' | 'nexusFile' | 'writeNewestVersion' | 'metadataOf' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder'> {
   return {
     modMetadata: (mod) => readOrReason(async () => metadataOf(await readMetaIni(context, mod, 'list'), context)),
 
@@ -152,6 +155,15 @@ export function mo2Installation(
       const hashed = await downloadedFileHash(path);
       return hashed.kind === 'read' ? { kind: 'read', answer: { path, ...hashed.answer } } : hashed;
     },
+
+    downloadedFileQuery: (name) => readOrReason(async () => {
+      if (basename(name) !== name || name === '..') return undefined;
+      const downloadsDir = await currentDownloadsDir(context);
+      const path = downloadedFilePath(downloadsDir, name);
+      if (!(await exists(path))) return undefined;
+      const { meta } = parseDownloadedFileMeta(await get(downloadedFileMetadataPath(downloadsDir, name), ''));
+      return { games: await nexusDomainsOfInstance(context), md5: await md5Of(path), modID: effectiveModId(meta.modID, name), fileID: meta.fileID };
+    }),
 
     metadataFilesInModFolder: [MOD_META_FILE_NAME],
   };

@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceView } from '../instanceLoader/instance';
 import type { DownloadedFileCommands } from '../downloadedFileCommands/downloads';
+import type { QueryInfo } from '../downloadedFileCommands/queryInfo';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
 import { registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
 import {
-  registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands,
+  registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsQueryInfoCommand,
   registerDownloadsSingleRowCommands, registerDownloadsSortCommand,
 } from './DownloadsPanel';
 import { DownloadsProvider, type DownloadsTreeNode } from './DownloadsProvider';
@@ -17,6 +18,7 @@ import { DOWNLOADS_KEY_ARGS, downloadsKeyContext } from './keyContext';
 
 interface DownloadsViewDeps {
   commands: DownloadedFileCommands;
+  queryInfo: QueryInfo;
   instance: InstanceView & Pick<Instance, 'refresh'>;
   reporter: Reporter;
   ask: AskQuestion;
@@ -33,7 +35,7 @@ interface DownloadsView extends vscode.Disposable {
 
 /** Rows come from the Instance value alone (ADR-0015). */
 export function createDownloadsView(
-  { commands, instance, reporter, ask, trash, log, logUnresolved }: DownloadsViewDeps,
+  { commands, queryInfo, instance, reporter, ask, trash, log, logUnresolved }: DownloadsViewDeps,
 ): DownloadsView {
   const provider = new DownloadsProvider({ instance }); // disposes its Instance subscriptions
   const view = vscode.window.createTreeView(DOWNLOADS_KEY_ARGS.view, {
@@ -74,6 +76,7 @@ export function createDownloadsView(
     registerDownloadsSortCommand(provider),
     ...registerDownloadsExcludedToggleCommands(provider),
     ...registerDownloadsSingleRowCommands(reporter, () => view.selection),
+    registerDownloadsQueryInfoCommand(queryInfo, instance, reporter, () => view.selection),
     ...registerDownloadsMultiRowCommands(commands, instance, reporter, ask, trash, log, () => view.selection),
     nameFilter,
     view,
