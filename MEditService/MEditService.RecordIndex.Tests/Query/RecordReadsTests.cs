@@ -93,15 +93,17 @@ public class RecordReadsTests(TestPluginFixture fixture)
             })
             .Build();
 
-    [Fact]
-    public void AListing_IsInFormIdOrder()
+    [Theory]
+    [InlineData(null, new[] { "Zebra", "Apple" })]
+    [InlineData("e", new[] { "Apple", "Zebra" })]
+    public void AListing_IsInFormIdOrder_AndASearchTermsMatches_AreInEditorIdOrder(string? search, string[] expected)
     {
         using var fixture = ZebraBeforeApple();
         using var index = Indexes.Reconciled(fixture);
 
-        var result = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value();
+        var result = index.Queries.GetRecords(["npc_"], plugin: null, search: search, limit: 10, offset: 0).Value();
 
-        Assert.Equal(["Zebra", "Apple"], result.Items.Select(r => r.EditorId));
+        Assert.Equal(expected, result.Items.Select(r => r.EditorId));
     }
 
     [Fact]
@@ -142,17 +144,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         index.Edit(later, overridden, later.SourceTextOf(overridden).Replace("000800:Master.esm", "000800_Master.esm", StringComparison.Ordinal));
 
         Assert.Equal(["Mastered", "Own"], index.ListedIn(later.KeyOf()).Select(r => r.EditorId));
-    }
-
-    [Fact]
-    public void ASearchTermsMatches_AreInEditorIdOrder()
-    {
-        using var fixture = ZebraBeforeApple();
-        using var index = Indexes.Reconciled(fixture);
-
-        var result = index.Queries.GetRecords(["npc_"], plugin: null, search: "e", limit: 10, offset: 0).Value();
-
-        Assert.Equal(["Apple", "Zebra"], result.Items.Select(r => r.EditorId));
     }
 
     [Fact]
@@ -248,14 +239,14 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal([nameof(Race.Flag.Playable), nameof(Race.Flag.LowPriorityPushable)], names);
     }
 
-    [Fact]
-    public void AFormKeyInNoPlugin_ReadsNoDocument()
+    [Theory]
+    [InlineData("FFFFFF:Unknown.esp")]
+    [InlineData("' OR '1'='1")]
+    public void AFormKeyInNoPlugin_ReadsNoDocument(string formKey)
     {
         using var index = LoadedIndex();
 
-        var record = index.Queries.GetRecord("FFFFFF:Unknown.esp").Value();
-
-        Assert.Null(record);
+        Assert.Null(index.Queries.GetRecord(formKey).Value());
     }
 
     private static PluginFixtureData TwoProviders(string prefix, out FormKey sharedNpc)
@@ -367,14 +358,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void AFormKeyOfSqlText_ReadsNoDocument()
-    {
-        using var index = LoadedIndex();
-        var result = index.Queries.GetRecord("' OR '1'='1").Value();
-        Assert.Null(result);
-    }
-
-    [Fact]
     public void AnUnsetFormLinkField_ReadsNull()
     {
         using var index = LoadedIndex();
@@ -385,47 +368,27 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.NotNull(linkField);
     }
 
-    [Fact]
-    public void ADanglingKeywordReference_FlagsCheckErrorOnTheKeywordsField()
+    [Theory]
+    [InlineData("000800:Checked.esm", null)]
+    [InlineData("FFFFFF:Checked.esm", "[0]: [FFFFFF:Checked.esm] <Error: Could not be resolved>")]
+    public void AKeywordReference_FlagsCheckErrorOnTheKeywordsFieldOnlyWhereItDoesNotResolve(string linked, string? checkError)
     {
         FormKey npcFormKey = default;
-        using var fixture = new PluginFixtureBuilder("medit-checkerror-dangling")
-            .WithPlugin("Dangling.esm", mod =>
+        using var fixture = new PluginFixtureBuilder("medit-checkerror")
+            .WithPlugin("Checked.esm", mod =>
             {
-                var npc = mod.Npcs.AddNew("DanglingRefNPC");
+                mod.Keywords.AddNew("TestKeyword");
+                var npc = mod.Npcs.AddNew("RefNPC");
                 npcFormKey = npc.FormKey;
-                npc.Keywords = [new FormLink<IKeywordGetter>(FormKey.Factory("FFFFFF:Dangling.esm"))];
+                npc.Keywords = [new FormLink<IKeywordGetter>(FormKey.Factory(linked))];
             })
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
         var record = index.Queries.GetRecord(npcFormKey.ToString()).Value();
-        Assert.NotNull(record);
-        var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "Keywords");
-        Assert.NotNull(keywordsField);
-        Assert.Equal("[0]: [FFFFFF:Dangling.esm] <Error: Could not be resolved>", keywordsField.CheckError);
-    }
 
-    [Fact]
-    public void AKeywordReferenceResolvingInTheLoadOrder_HasNoCheckError()
-    {
-        FormKey npcFormKey = default;
-        using var fixture = new PluginFixtureBuilder("medit-checkerror-clean")
-            .WithPlugin("Clean.esm", mod =>
-            {
-                var keyword = mod.Keywords.AddNew("TestKeyword");
-                var npc = mod.Npcs.AddNew("CleanRefNPC");
-                npcFormKey = npc.FormKey;
-                npc.Keywords = [new FormLink<IKeywordGetter>(keyword.FormKey)];
-            })
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
-
-        var record = index.Queries.GetRecord(npcFormKey.ToString()).Value();
         Assert.NotNull(record);
-        var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "Keywords");
-        Assert.NotNull(keywordsField);
-        Assert.Null(keywordsField.CheckError);
+        Assert.Equal(checkError, Assert.Single(record.Fields, f => f.Metadata.Name == "Keywords").CheckError);
     }
 
     [Fact]
