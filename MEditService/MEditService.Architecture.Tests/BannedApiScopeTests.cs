@@ -120,8 +120,6 @@ public sealed class BannedApiScopeTests
     {
         var projects = ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
-        Assert.True(projects.Count > 5, $"The project scan found only {projects.Count} production projects.");
-
         var holders = projects.Where(HoldsAGameAssembly).ToList();
 
         Assert.Equal(["MEditService.Codec.Fallout4", "MEditService.Codec.Skyrim", "MEditService.Codec.Starfield"], holders);

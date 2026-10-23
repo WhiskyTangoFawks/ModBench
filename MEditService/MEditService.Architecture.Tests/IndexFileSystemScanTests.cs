@@ -49,13 +49,11 @@ public sealed class IndexFileSystemScanTests
     public void TheFileSystemScan_CountsPerFileAndSymbol_AndSkipsBuildOutputAndAMemberOfTheSameName()
     {
         using var root = new ScratchDirectory("medit-index-scan-");
-        Directory.CreateDirectory(Path.Combine(root, "Q", "obj"));
-        File.WriteAllText(
-            Path.Combine(root, "Q", "Reads.cs"),
+        ScratchFiles.Plant(root, "Q/Reads.cs",
             "if (!File.Exists(p)) return;\nvar b = File.ReadAllBytes(p);\nvar d = Directory.GetFiles(p);\n");
-        File.WriteAllText(Path.Combine(root, "Q", "Member.cs"), "var p = plugin.Path.Length;");
-        File.WriteAllText(Path.Combine(root, "Q", "obj", "Generated.cs"), "File.Delete(p);");
-        File.WriteAllText(Path.Combine(root, "Q", "Clean.cs"), "return index.Reads.At(key);");
+        ScratchFiles.Plant(root, "Q/Member.cs", "var p = plugin.Path.Length;");
+        ScratchFiles.Plant(root, "Q/obj/Generated.cs", "File.Delete(p);");
+        ScratchFiles.Plant(root, "Q/Clean.cs", "return index.Reads.At(key);");
 
         Assert.Equal(
             ["Q/Reads.cs: Directory.: 1", "Q/Reads.cs: File.: 2"],

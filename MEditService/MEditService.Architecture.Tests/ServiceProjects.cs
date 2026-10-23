@@ -24,6 +24,9 @@ internal static class ServiceProjects
     internal static IReadOnlyList<string> Production(string solutionDirectory) =>
         [.. All(solutionDirectory).Where(project => !IsTestSide(project))];
 
+    internal static List<string> ProductionFiles(string solutionDirectory) =>
+        [.. Production(solutionDirectory).SelectMany(project => SourceTree.CSharpFiles(Folder(solutionDirectory, project)))];
+
     internal static IReadOnlyList<string> TestSide(string solutionDirectory) =>
         [.. All(solutionDirectory).Where(IsTestSide)];
 

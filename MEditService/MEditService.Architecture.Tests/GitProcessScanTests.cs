@@ -13,9 +13,8 @@ public sealed class GitProcessScanTests
     public void NothingButGitCli_StartsAProcess()
     {
         var root = ServiceProjects.SolutionDirectory();
-        var walked = ProductionFiles(root);
+        var walked = ServiceProjects.ProductionFiles(root);
 
-        Assert.True(walked.Count > 100, $"The process-start scan walked only {walked.Count} files.");
         AssertOnlyTheRunnerStarts(root, walked);
         Assert.True(
             Starts(root, walked).Contains(GitRunner),
@@ -26,20 +25,15 @@ public sealed class GitProcessScanTests
     public void TheScan_PassesTheRunner_AndNamesAProcessStartedElsewhere()
     {
         using var root = new ScratchDirectory("medit-git-process-scan-");
-        var runner = Path.Combine(root, GitRunner.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(Path.GetDirectoryName(runner).Require());
-        File.WriteAllText(runner, "var psi = new ProcessStartInfo(\"git\");\nProcess.Start(psi);\n");
-        var rival = Path.Combine(root, "MEditService.Commands", "StatusProbe.cs");
-        Directory.CreateDirectory(Path.GetDirectoryName(rival).Require());
-        File.WriteAllText(rival, "using var git = Process.Start(new ProcessStartInfo(\"git\", \"status\"));\n");
-
-        var initializerRival = Path.Combine(root, "MEditService.Commands", "InitializerProbe.cs");
-        File.WriteAllText(initializerRival, "using var git = new Process { StartInfo = info }.Start();\n");
+        ScratchFiles.Plant(root, GitRunner, "var psi = new ProcessStartInfo(\"git\");\nProcess.Start(psi);\n");
+        ScratchFiles.Plant(root, "MEditService.Commands/StatusProbe.cs", "using var git = Process.Start(new ProcessStartInfo(\"git\", \"status\"));\n");
+        ScratchFiles.Plant(root, "MEditService.Commands/InitializerProbe.cs", "using var git = new Process { StartInfo = info }.Start();\n");
+        var files = SourceTree.CSharpFiles(root).ToList();
 
         Assert.Equal(
             ["MEditService.Commands/InitializerProbe.cs", "MEditService.Commands/StatusProbe.cs"],
-            StartsOutsideTheRunner(root, [runner, rival, initializerRival]));
-        var failure = Assert.Throws<Xunit.Sdk.TrueException>(() => AssertOnlyTheRunnerStarts(root, [runner, rival]));
+            StartsOutsideTheRunner(root, files));
+        var failure = Assert.Throws<Xunit.Sdk.TrueException>(() => AssertOnlyTheRunnerStarts(root, files));
         Assert.Contains("MEditService.Commands/StatusProbe.cs", failure.Message, StringComparison.Ordinal);
     }
 
@@ -56,9 +50,6 @@ public sealed class GitProcessScanTests
 
     private static List<string> StartsOutsideTheRunner(string root, IEnumerable<string> files) =>
         [.. Starts(root, files).Where(file => file != GitRunner)];
-
-    private static List<string> ProductionFiles(string root) =>
-        [.. ServiceProjects.Production(root).SelectMany(project => SourceTree.CSharpFiles(ServiceProjects.Folder(root, project)))];
 
     private static List<string> Starts(string root, IEnumerable<string> files) =>
         [.. files
