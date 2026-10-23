@@ -9,15 +9,12 @@ public sealed class WriteSideIndexScanTests
     public void TheScan_CountsPerFileAndSymbol_AndSkipsBuildOutputAndAnExcludedSubtree()
     {
         using var root = new ScratchDirectory("medit-write-side-index-scan-");
-        Directory.CreateDirectory(Path.Combine(root, "Edits", "obj"));
-        File.WriteAllText(
-            Path.Combine(root, "Edits", "EditService.cs"),
+        SourceTree.Plant(root, "Edits/EditService.cs",
             "RelationReads reads = index.Reads!;\nvar rows = reads.Search(query);\n");
-        File.WriteAllText(Path.Combine(root, "Edits", "Factory.cs"), "new DuckDbRecordIndexFactory();");
-        File.WriteAllText(Path.Combine(root, "Edits", "obj", "Generated.cs"), "DuckDbRecordIndex index;");
-        File.WriteAllText(Path.Combine(root, "Edits", "Clean.cs"), "repository.Put(plugin, document);");
-        Directory.CreateDirectory(Path.Combine(root, "Records"));
-        File.WriteAllText(Path.Combine(root, "Records", "Store.cs"), "DuckDbRecordIndex index;");
+        SourceTree.Plant(root, "Edits/Factory.cs", "new DuckDbRecordIndexFactory();");
+        SourceTree.Plant(root, "Edits/obj/Generated.cs", "DuckDbRecordIndex index;");
+        SourceTree.Plant(root, "Edits/Clean.cs", "repository.Put(plugin, document);");
+        SourceTree.Plant(root, "Records/Store.cs", "DuckDbRecordIndex index;");
 
         var counts = Counts(root, [""], ["Records"], ["RelationReads", "DuckDbRecordIndex", "DuckDbRecordIndexFactory"]);
 

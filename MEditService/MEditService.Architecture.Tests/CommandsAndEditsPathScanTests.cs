@@ -38,9 +38,7 @@ public sealed class CommandsAndEditsPathScanTests
     public void TheScan_CountsAPlantedOperationPerFile_AndPassesTheCallsThatAreNotOne()
     {
         using var root = new ScratchDirectory("medit-commands-edits-path-scan-");
-        Directory.CreateDirectory(Path.Combine(root, "MEditService.Commands", "Edits", "obj"));
-        File.WriteAllText(
-            Path.Combine(root, "MEditService.Commands", "Edits", "PluginCompileService.cs"),
+        SourceTree.Plant(root, "MEditService.Commands/Edits/PluginCompileService.cs",
             "var tree = Path.Combine(modFolder, root);\n"
             + "var held = System.IO.File.ReadAllBytes(unit.FullPath);\n"
             + "var entry = new FileInfo(tree);\n"
@@ -48,12 +46,9 @@ public sealed class CommandsAndEditsPathScanTests
             + "var anchored = file.RelativePath.Equals(other.RelativePath);\n"
             + "if (edit.Path.Count == 0) return;\n"
             + "var again = Path.Combine(tree, \"x\");\n");
-        File.WriteAllText(
-            Path.Combine(root, "MEditService.Commands", "Edits", "obj", "Generated.cs"),
+        SourceTree.Plant(root, "MEditService.Commands/Edits/obj/Generated.cs",
             "var tree = Path.Combine(modFolder, root);\n");
-        Directory.CreateDirectory(Path.Combine(root, "MEditService.Commands"));
-        File.WriteAllText(
-            Path.Combine(root, "MEditService.Commands", "DecompileAndCommitModHandler.cs"),
+        SourceTree.Plant(root, "MEditService.Commands/DecompileAndCommitModHandler.cs",
             "var bytes = File.ReadAllBytes(plugin.Path);\n");
 
         var counts = Counts(root, ScannedRoots);

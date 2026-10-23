@@ -27,21 +27,14 @@ public sealed class ScratchFolderScanTests
     public void TheScan_NamesAFolderMadeByHand_AndPassesScratchDirectoryItself()
     {
         using var root = new ScratchDirectory("medit-scratch-folder-scan-");
-        WriteFile(root, "MEditService.A.Tests/Rival.cs", "var dir = Directory.CreateTempSubdirectory(\"x-\");\n");
-        WriteFile(root, "MEditService.A.Tests/Hand.cs", "var dir = Path.Combine(Path.GetTempPath(), $\"x-{Guid.NewGuid():N}\");\n");
-        WriteFile(root, "MEditService.A.Tests/Clean.cs", "using var dir = new ScratchDirectory(\"x-\");\n");
-        WriteFile(root, ScratchHome, "public string Path { get; } = Directory.CreateTempSubdirectory(prefix).FullName;\n");
+        SourceTree.Plant(root, "MEditService.A.Tests/Rival.cs", "var dir = Directory.CreateTempSubdirectory(\"x-\");\n");
+        SourceTree.Plant(root, "MEditService.A.Tests/Hand.cs", "var dir = Path.Combine(Path.GetTempPath(), $\"x-{Guid.NewGuid():N}\");\n");
+        SourceTree.Plant(root, "MEditService.A.Tests/Clean.cs", "using var dir = new ScratchDirectory(\"x-\");\n");
+        SourceTree.Plant(root, ScratchHome, "public string Path { get; } = Directory.CreateTempSubdirectory(prefix).FullName;\n");
 
         Assert.Equal(
             ["MEditService.A.Tests/Hand.cs", "MEditService.A.Tests/Rival.cs"],
             RawScratchFolderFiles(root, ["MEditService.A.Tests", "MEditService.TestSupport"]));
-    }
-
-    private static void WriteFile(string root, string relativePath, string text)
-    {
-        var path = Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(Path.GetDirectoryName(path).Require());
-        File.WriteAllText(path, text);
     }
 
     private static List<string> RawScratchFolderFiles(string root, IReadOnlyList<string> projects) =>

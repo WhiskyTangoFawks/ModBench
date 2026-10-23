@@ -41,15 +41,13 @@ public sealed class SharedConcernScanTests
     public void TheScan_CountsPerFileAndNeedle_AndPassesTheModuleAndBuildOutput()
     {
         using var root = new ScratchDirectory("medit-shared-concern-scan-");
-        Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
-        File.WriteAllText(
-            Path.Combine(root, "Layer", "Second.cs"),
+        SourceTree.Plant(root, "Layer/Second.cs",
             "target = new WriteTargets.EditTarget(release, document.Identity, repository);\n"
             + "var floor = GameConstants.Get(release).DefaultHighRangeFormID;\n");
-        File.WriteAllText(Path.Combine(root, "Layer", "WriteTargets.cs"), "target = new EditTarget(release, record, repository);");
-        File.WriteAllText(Path.Combine(root, "Layer", "FormKeyAllocator.cs"), "var floor = GameConstants.Get(release).DefaultHighRangeFormID;");
-        File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "target = new WriteTargets.EditTarget(release, document.Identity, repository);");
-        File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "repository.Put(plugin, document);");
+        SourceTree.Plant(root, "Layer/WriteTargets.cs", "target = new EditTarget(release, record, repository);");
+        SourceTree.Plant(root, "Layer/FormKeyAllocator.cs", "var floor = GameConstants.Get(release).DefaultHighRangeFormID;");
+        SourceTree.Plant(root, "Layer/obj/Generated.cs", "target = new WriteTargets.EditTarget(release, document.Identity, repository);");
+        SourceTree.Plant(root, "Layer/Clean.cs", "repository.Put(plugin, document);");
 
         var counts = Counts(root, ["Layer"]);
 

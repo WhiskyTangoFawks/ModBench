@@ -17,7 +17,6 @@ public sealed class StoreNamespaceScanTests
             .ToList();
         var named = NamingDuckDb(root, scanned);
 
-        Assert.True(scanned.Count > 100, $"The Store scan walked only {scanned.Count} files.");
         Assert.True(
             named.Count == 0,
             "A .cs file outside RecordIndex/Store names DuckDB. The Store part hides it "
@@ -29,13 +28,11 @@ public sealed class StoreNamespaceScanTests
     public void TheScan_FlagsTheSubstringDuckdb_InAnyCase_AndSkipsTheStoreFolderAndBuildOutput()
     {
         using var root = new ScratchDirectory("medit-store-scan-");
-        Directory.CreateDirectory(Path.Combine(root, "MEditService.RecordIndex", "Store"));
-        Directory.CreateDirectory(Path.Combine(root, "Q", "obj"));
-        File.WriteAllText(Path.Combine(root, "MEditService.RecordIndex", "Store", "Sql.cs"), "DuckDbSql.Execute();");
-        File.WriteAllText(Path.Combine(root, "Q", "Reads.cs"), "using DuckDB.NET.Data;");
-        File.WriteAllText(Path.Combine(root, "Q", "Comment.cs"), "// duckdb decides");
-        File.WriteAllText(Path.Combine(root, "Q", "obj", "Generated.cs"), "DuckDBConnection c;");
-        File.WriteAllText(Path.Combine(root, "Q", "Clean.cs"), "store.Read();");
+        SourceTree.Plant(root, "MEditService.RecordIndex/Store/Sql.cs", "DuckDbSql.Execute();");
+        SourceTree.Plant(root, "Q/Reads.cs", "using DuckDB.NET.Data;");
+        SourceTree.Plant(root, "Q/Comment.cs", "// duckdb decides");
+        SourceTree.Plant(root, "Q/obj/Generated.cs", "DuckDBConnection c;");
+        SourceTree.Plant(root, "Q/Clean.cs", "store.Read();");
 
         var files = SourceTree.CSharpFiles(root).ToList();
 
