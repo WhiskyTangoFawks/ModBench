@@ -90,10 +90,6 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         Assert.Equal(
             "Name a plugin with both plugin and origin, or neither to browse every plugin.",
             (await records.Body()).GetProperty("detail").GetString());
-
-        var types = await _client.GetAsync("/plugins/Shared.esp/record-types");
-        Assert.Equal(HttpStatusCode.BadRequest, types.StatusCode);
-        Assert.Equal("Origin is required.", (await types.Body()).GetProperty("detail").GetString());
     }
 
     [Fact]

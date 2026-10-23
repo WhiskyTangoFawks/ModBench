@@ -59,6 +59,16 @@ internal static class EndpointMapping
         return Results.Problem(detail: message, statusCode: status(refusal), extensions: extensions);
     }
 
+    /// <summary>A whole selection is refused for no load order or for a machine without git, and for nothing else (ADR-0019).
+    /// Every other refusal is a plugin's or a mod's, in the answer.</summary>
+    private static IResult WholeSelection<TRefusal>(SelectionRefusal<TRefusal> refusal, TRefusal noLoadOrder, TRefusal gitUnavailable)
+        where TRefusal : struct, Enum =>
+        Problem(
+            refusal.Refusal, noLoadOrder, refusal.Message,
+            r => EqualityComparer<TRefusal>.Default.Equals(r, gitUnavailable)
+                ? 500
+                : throw new InvalidEnumArgumentException(nameof(refusal), Convert.ToInt32(r), typeof(TRefusal)));
+
     /// <summary>The status code says what kind of problem; the refusal and path extensions say
     /// exactly which (ADR-0019).</summary>
     internal static IResult Refusal(RecordEditResult result) => RecordEditProblem(result.Refusal, result.Message, result.Path);
@@ -68,57 +78,20 @@ internal static class EndpointMapping
     internal static IResult Refusal(SelectionRefusal<RecordEditRefusal> refusal) =>
         RecordEditProblem(refusal.Refusal, refusal.Message, path: null);
 
-    /// <summary>Decompile and commit's refusal of a whole selection, mapped as Build's is (ADR-0019); every other refusal is a mod's,
-    /// in the answer.</summary>
-    internal static IResult Refusal(SelectionRefusal<DecompileAndCommitRefusal> refusal) => Problem(
-        refusal.Refusal, DecompileAndCommitRefusal.NoLoadOrder, refusal.Message,
-        r => r switch
-        {
-            // The request is sound; the machine lacks git.
-            DecompileAndCommitRefusal.GitUnavailable => 500,
-            _ => 422,
-        });
+    internal static IResult Refusal(SelectionRefusal<DecompileAndCommitRefusal> refusal) =>
+        WholeSelection(refusal, DecompileAndCommitRefusal.NoLoadOrder, DecompileAndCommitRefusal.GitUnavailable);
 
-    /// <summary>Build's refusal of a whole selection, mapped as Compile's is (ADR-0019).</summary>
-    internal static IResult Refusal(SelectionRefusal<BuildRefusal> refusal) => Problem(
-        refusal.Refusal, BuildRefusal.NoLoadOrder, refusal.Message,
-        r => r switch
-        {
-            // The request is sound; the machine lacks git.
-            BuildRefusal.GitUnavailable => 500,
-            _ => 422,
-        });
+    internal static IResult Refusal(SelectionRefusal<BuildRefusal> refusal) =>
+        WholeSelection(refusal, BuildRefusal.NoLoadOrder, BuildRefusal.GitUnavailable);
 
-    /// <summary>Decompile's refusal of a whole selection: the refusal extension says which cause no
-    /// plugin escaped (ADR-0019).</summary>
-    internal static IResult Refusal(SelectionRefusal<DecompileRefusal> refusal) => Problem(
-        refusal.Refusal, DecompileRefusal.NoLoadOrder, refusal.Message,
-        r => r switch
-        {
-            // The request is sound; the machine lacks git.
-            DecompileRefusal.GitUnavailable => 500,
-            _ => 422,
-        });
+    internal static IResult Refusal(SelectionRefusal<DecompileRefusal> refusal) =>
+        WholeSelection(refusal, DecompileRefusal.NoLoadOrder, DecompileRefusal.GitUnavailable);
 
-    /// <summary>Decompile and repair's refusal of a whole selection, and its preview's, mapped as Decompile's is (ADR-0019).</summary>
-    internal static IResult Refusal(SelectionRefusal<DecompileAndRepairRefusal> refusal) => Problem(
-        refusal.Refusal, DecompileAndRepairRefusal.NoLoadOrder, refusal.Message,
-        r => r switch
-        {
-            // The request is sound; the machine lacks git.
-            DecompileAndRepairRefusal.GitUnavailable => 500,
-            _ => 422,
-        });
+    internal static IResult Refusal(SelectionRefusal<DecompileAndRepairRefusal> refusal) =>
+        WholeSelection(refusal, DecompileAndRepairRefusal.NoLoadOrder, DecompileAndRepairRefusal.GitUnavailable);
 
-    /// <summary>Compile's refusal of a whole selection, mapped as Decompile's is (ADR-0019).</summary>
-    internal static IResult Refusal(SelectionRefusal<CompileRefusal> refusal) => Problem(
-        refusal.Refusal, CompileRefusal.NoLoadOrder, refusal.Message,
-        r => r switch
-        {
-            // The request is sound; the machine lacks git.
-            CompileRefusal.GitUnavailable => 500,
-            _ => 422,
-        });
+    internal static IResult Refusal(SelectionRefusal<CompileRefusal> refusal) =>
+        WholeSelection(refusal, CompileRefusal.NoLoadOrder, CompileRefusal.GitUnavailable);
 
     /// <summary>Create plugin's own refusal, each leaving the folder as it was: the status says what kind
     /// of problem, the refusal extension says exactly which (ADR-0019).</summary>
@@ -129,9 +102,7 @@ internal static class EndpointMapping
             PluginCreateRefusal.FolderGone or PluginCreateRefusal.OriginNotAMod => 404,
             PluginCreateRefusal.FileExists => 409,
             PluginCreateRefusal.NotAPluginFile => 400,
-            // The request is sound; the file system refused the write.
-            PluginCreateRefusal.WriteFailed => 422,
-            // Well-formed, and still not a plugin this game can load.
+            // Well-formed, and still not a plugin this game can load or a write the file system will take.
             _ => 422,
         });
 

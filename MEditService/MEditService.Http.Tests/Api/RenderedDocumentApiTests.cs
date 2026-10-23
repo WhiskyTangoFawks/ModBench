@@ -32,10 +32,9 @@ public sealed class RenderedDocumentApiTests : HostedTests
         return fx;
     }
 
-    private Task<HttpResponseMessage> Rendered(string formKey, string plugin = Plugin, string? origin = Origin) =>
+    private Task<HttpResponseMessage> Rendered(string formKey) =>
         Client.GetAsync(new Uri(
-            $"/plugins/{plugin}/records/{Uri.EscapeDataString(formKey)}/rendered-document" +
-            (origin is null ? string.Empty : $"?origin={origin}"),
+            $"/plugins/{Plugin}/records/{Uri.EscapeDataString(formKey)}/rendered-document?origin={Origin}",
             UriKind.Relative));
 
     private static string ModFolderOf(ScatteredFixtureData fx) => Path.GetDirectoryName(fx.Plugins.Single().Path).Require();

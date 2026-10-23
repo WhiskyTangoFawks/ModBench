@@ -16,7 +16,7 @@ public sealed class CreateRecordApiTests : HostedTests
 
     private string _worldspace = string.Empty;
 
-    private async Task<ScatteredFixtureData> Loaded(bool compiledPlugin)
+    private async Task<ScatteredFixtureData> Loaded()
     {
         var fx = Owned(new PluginFixtureBuilder("api-create-record")
             .WithPlugin(Plugin, mod =>
@@ -26,23 +26,21 @@ public sealed class CreateRecordApiTests : HostedTests
             }, origin: Origin)
             .BuildScattered());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        if (!compiledPlugin) return fx;
-
         (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
         await Client.PluginReportsCompiledPlugin(Plugin);
         return fx;
     }
 
-    private Task<HttpResponseMessage> Create(string origin, string recordType, string? container = null, object? position = null) =>
-        Client.CreateRecord(Plugin, origin, recordType, container, position);
+    private Task<HttpResponseMessage> Create(string recordType, string? container = null, object? position = null) =>
+        Client.CreateRecord(Plugin, Origin, recordType, container, position);
 
     [Fact]
     public async Task CreatingARecord_InACompiledPlugin_AnswersTheNewFormKey()
     {
-        var fx = await Loaded(compiledPlugin: true);
+        var fx = await Loaded();
 
-        var response = await Create(Origin, "npc_");
+        var response = await Create("npc_");
 
         response.EnsureSuccessStatusCode();
         var formKey = (await response.Body()).GetProperty("formKey").GetString().Require();
@@ -57,7 +55,7 @@ public sealed class CreateRecordApiTests : HostedTests
     [Fact]
     public async Task CreatingARecord_GivenTheUnsavedTextOfTheHeader_TakesTheNextObjectIdItHolds()
     {
-        var fx = await Loaded(compiledPlugin: true);
+        var fx = await Loaded();
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
         var headerFile = Path.Combine(modFolder, "plugin-source", Plugin, $"000000_{Plugin}.json");
         var unsavedHeader = Encoding.UTF8.GetString(HeaderDocument.WithNextObjectId(await File.ReadAllBytesAsync(headerFile), GameRelease.Fallout4, 0xA00));
@@ -73,17 +71,17 @@ public sealed class CreateRecordApiTests : HostedTests
     [Fact]
     public async Task CreatingARecord_WithNoRecordType_Is400()
     {
-        await Loaded(compiledPlugin: true);
+        await Loaded();
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await Create(Origin, string.Empty)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Create(string.Empty)).StatusCode);
     }
 
     [Fact]
     public async Task CreatingACell_InAWorldspace_AnswersTheNewFormKey()
     {
-        await Loaded(compiledPlugin: true);
+        await Loaded();
 
-        var response = await Create(Origin, "cell", _worldspace, new { x = 1, y = -2 });
+        var response = await Create("cell", _worldspace, new { x = 1, y = -2 });
 
         response.EnsureSuccessStatusCode();
         Assert.EndsWith(":" + Plugin, (await response.Body()).GetProperty("formKey").GetString().Require(), StringComparison.Ordinal);

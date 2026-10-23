@@ -35,9 +35,9 @@ public sealed class RecordDocumentApiTests : HostedTests
             $"/plugins/{Plugin}/records/{Uri.EscapeDataString(formKey)}/document" + (origin is null ? string.Empty : $"?origin={origin}"),
             UriKind.Relative));
 
-    private Task<HttpResponseMessage> RecordOf(string? path) =>
+    private Task<HttpResponseMessage> RecordOf(string path) =>
         Client.GetAsync(new Uri(
-            "/plugin-source/record" + (path is null ? string.Empty : $"?path={Uri.EscapeDataString(path)}"), UriKind.Relative));
+            $"/plugin-source/record?path={Uri.EscapeDataString(path)}", UriKind.Relative));
 
     private static string NpcFile(ScatteredFixtureData fx) =>
         Directory.EnumerateFiles(Path.GetDirectoryName(fx.Plugins.Single().Path).Require(), "FiledNpc - *.json", SearchOption.AllDirectories)

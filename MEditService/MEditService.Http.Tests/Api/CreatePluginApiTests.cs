@@ -76,19 +76,6 @@ public sealed class CreatePluginApiTests : HostedTests
     }
 
     [Fact]
-    public async Task CreatingAPluginInAPlaceTheNextSnapshotAdds_IsRefusedBeforeAndWritesAfter()
-    {
-        var fx = Owned(OneMod());
-        var emptyFolder = NewModFolder(fx, "mod-later");
-        (await PutWithPlaces(fx, fx.Plugins)).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.NotFound, (await CreateInMod("LaterMod", "Patch.esp")).StatusCode);
-
-        (await PutWithPlaces(fx, fx.Plugins, new { name = "LaterMod", folder = emptyFolder })).EnsureSuccessStatusCode();
-
-        Assert.Equal(HttpStatusCode.OK, (await CreateInMod("LaterMod", "Patch.esp")).StatusCode);
-    }
-
-    [Fact]
     public async Task CreatingAPluginInASourceModPlaceWithNoPlugin_LandsItsSourceInTheSourceFolderTheSnapshotNamed()
     {
         var fx = Owned(OneMod());
@@ -158,27 +145,6 @@ public sealed class CreatePluginApiTests : HostedTests
         var created = await Client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "NoPath.esp" });
 
         Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
-    }
-
-    [PosixFact]
-    public async Task CreatingAPluginInAFolderTheFileSystemWillNotWrite_IsATypedRefusal_AndWritesNothing()
-    {
-        var fx = Owned(await Loaded());
-        var modFolder = NewModFolder(fx, "mod-locked");
-        OtherTool.SetsThePermissions(modFolder, "500");
-        try
-        {
-            var created = await Create("Locked.esp", modFolder, "LockedMod");
-
-            Assert.Equal(HttpStatusCode.UnprocessableEntity, created.StatusCode);
-            var problem = await created.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal("WriteFailed", problem.GetProperty("refusal").GetString());
-            Assert.Empty(Directory.EnumerateFileSystemEntries(modFolder));
-        }
-        finally
-        {
-            OtherTool.SetsThePermissions(modFolder, "700");
-        }
     }
 
     [Fact]

@@ -23,16 +23,13 @@ public sealed class EditRecordTraceTests : HostedTests
             .WithPlugin(OtherPlugin, mod => mod.Npcs.AddNew("DestinationNpc"), origin: OtherOrigin)
             .BuildScattered();
 
-    private async Task<ScatteredFixtureData> Loaded(params string[] compiledPlugin)
+    private async Task<ScatteredFixtureData> Loaded(string compiledOrigin)
     {
         var fx = TwoMods();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        foreach (var origin in compiledPlugin)
-            (await Client.DecompileAndCommit(origin)).EnsureSuccessStatusCode();
-        if (compiledPlugin.Length == 0) return fx;
-
+        (await Client.DecompileAndCommit(compiledOrigin)).EnsureSuccessStatusCode();
         await Client.NextSnapshot(fx);
-        foreach (var plugin in fx.Plugins.Where(p => compiledPlugin.Contains(p.Origin))) await Client.PluginReportsCompiledPlugin(plugin.Name);
+        foreach (var plugin in fx.Plugins.Where(p => p.Origin == compiledOrigin)) await Client.PluginReportsCompiledPlugin(plugin.Name);
         return fx;
     }
 
