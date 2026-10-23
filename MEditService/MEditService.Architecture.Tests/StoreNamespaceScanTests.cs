@@ -12,9 +12,7 @@ public sealed class StoreNamespaceScanTests
     {
         var root = ServiceProjects.SolutionDirectory();
 
-        var scanned = ServiceProjects.Production(root)
-            .SelectMany(project => SourceTree.CSharpFiles(ServiceProjects.Folder(root, project)))
-            .ToList();
+        var scanned = ServiceProjects.ProductionFiles(root);
         var named = NamingDuckDb(root, scanned);
 
         Assert.True(
@@ -28,11 +26,11 @@ public sealed class StoreNamespaceScanTests
     public void TheScan_FlagsTheSubstringDuckdb_InAnyCase_AndSkipsTheStoreFolderAndBuildOutput()
     {
         using var root = new ScratchDirectory("medit-store-scan-");
-        SourceTree.Plant(root, "MEditService.RecordIndex/Store/Sql.cs", "DuckDbSql.Execute();");
-        SourceTree.Plant(root, "Q/Reads.cs", "using DuckDB.NET.Data;");
-        SourceTree.Plant(root, "Q/Comment.cs", "// duckdb decides");
-        SourceTree.Plant(root, "Q/obj/Generated.cs", "DuckDBConnection c;");
-        SourceTree.Plant(root, "Q/Clean.cs", "store.Read();");
+        ScratchFiles.Plant(root, "MEditService.RecordIndex/Store/Sql.cs", "DuckDbSql.Execute();");
+        ScratchFiles.Plant(root, "Q/Reads.cs", "using DuckDB.NET.Data;");
+        ScratchFiles.Plant(root, "Q/Comment.cs", "// duckdb decides");
+        ScratchFiles.Plant(root, "Q/obj/Generated.cs", "DuckDBConnection c;");
+        ScratchFiles.Plant(root, "Q/Clean.cs", "store.Read();");
 
         var files = SourceTree.CSharpFiles(root).ToList();
 

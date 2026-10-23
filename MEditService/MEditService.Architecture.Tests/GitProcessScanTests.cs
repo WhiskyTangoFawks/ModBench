@@ -13,7 +13,7 @@ public sealed class GitProcessScanTests
     public void NothingButGitCli_StartsAProcess()
     {
         var root = ServiceProjects.SolutionDirectory();
-        var walked = ProductionFiles(root);
+        var walked = ServiceProjects.ProductionFiles(root);
 
         AssertOnlyTheRunnerStarts(root, walked);
         Assert.True(
@@ -25,9 +25,9 @@ public sealed class GitProcessScanTests
     public void TheScan_PassesTheRunner_AndNamesAProcessStartedElsewhere()
     {
         using var root = new ScratchDirectory("medit-git-process-scan-");
-        SourceTree.Plant(root, GitRunner, "var psi = new ProcessStartInfo(\"git\");\nProcess.Start(psi);\n");
-        SourceTree.Plant(root, "MEditService.Commands/StatusProbe.cs", "using var git = Process.Start(new ProcessStartInfo(\"git\", \"status\"));\n");
-        SourceTree.Plant(root, "MEditService.Commands/InitializerProbe.cs", "using var git = new Process { StartInfo = info }.Start();\n");
+        ScratchFiles.Plant(root, GitRunner, "var psi = new ProcessStartInfo(\"git\");\nProcess.Start(psi);\n");
+        ScratchFiles.Plant(root, "MEditService.Commands/StatusProbe.cs", "using var git = Process.Start(new ProcessStartInfo(\"git\", \"status\"));\n");
+        ScratchFiles.Plant(root, "MEditService.Commands/InitializerProbe.cs", "using var git = new Process { StartInfo = info }.Start();\n");
         var files = SourceTree.CSharpFiles(root).ToList();
 
         Assert.Equal(
@@ -50,9 +50,6 @@ public sealed class GitProcessScanTests
 
     private static List<string> StartsOutsideTheRunner(string root, IEnumerable<string> files) =>
         [.. Starts(root, files).Where(file => file != GitRunner)];
-
-    private static List<string> ProductionFiles(string root) =>
-        [.. ServiceProjects.Production(root).SelectMany(project => SourceTree.CSharpFiles(ServiceProjects.Folder(root, project)))];
 
     private static List<string> Starts(string root, IEnumerable<string> files) =>
         [.. files

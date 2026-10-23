@@ -1,5 +1,3 @@
-using MEditService.TestSupport;
-
 namespace MEditService.Architecture.Tests;
 
 /// <summary>The repository's own C# source, for the guards that scan text rather than metadata:
@@ -14,11 +12,4 @@ public static class SourceTree
 
     public static IReadOnlyList<string> ReadAllowlist(string path) =>
         [.. File.ReadAllLines(path).Select(line => line.Trim()).Where(line => line.Length > 0 && !line.StartsWith('#'))];
-
-    internal static void Plant(string root, string relativePath, string text)
-    {
-        var path = Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(Path.GetDirectoryName(path).Require());
-        File.WriteAllText(path, text);
-    }
 }

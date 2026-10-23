@@ -27,10 +27,10 @@ public sealed class ScratchFolderScanTests
     public void TheScan_NamesAFolderMadeByHand_AndPassesScratchDirectoryItself()
     {
         using var root = new ScratchDirectory("medit-scratch-folder-scan-");
-        SourceTree.Plant(root, "MEditService.A.Tests/Rival.cs", "var dir = Directory.CreateTempSubdirectory(\"x-\");\n");
-        SourceTree.Plant(root, "MEditService.A.Tests/Hand.cs", "var dir = Path.Combine(Path.GetTempPath(), $\"x-{Guid.NewGuid():N}\");\n");
-        SourceTree.Plant(root, "MEditService.A.Tests/Clean.cs", "using var dir = new ScratchDirectory(\"x-\");\n");
-        SourceTree.Plant(root, ScratchHome, "public string Path { get; } = Directory.CreateTempSubdirectory(prefix).FullName;\n");
+        ScratchFiles.Plant(root, "MEditService.A.Tests/Rival.cs", "var dir = Directory.CreateTempSubdirectory(\"x-\");\n");
+        ScratchFiles.Plant(root, "MEditService.A.Tests/Hand.cs", "var dir = Path.Combine(Path.GetTempPath(), $\"x-{Guid.NewGuid():N}\");\n");
+        ScratchFiles.Plant(root, "MEditService.A.Tests/Clean.cs", "using var dir = new ScratchDirectory(\"x-\");\n");
+        ScratchFiles.Plant(root, ScratchHome, "public string Path { get; } = Directory.CreateTempSubdirectory(prefix).FullName;\n");
 
         Assert.Equal(
             ["MEditService.A.Tests/Hand.cs", "MEditService.A.Tests/Rival.cs"],

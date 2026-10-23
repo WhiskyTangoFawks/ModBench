@@ -5,7 +5,7 @@ namespace MEditService.Architecture.Tests;
 
 public sealed class CrossSideNameTests
 {
-    public sealed record Name(
+    public sealed record BackendFrontendPair(
         string BackendFile, string BackendPattern, string FrontendFile, string FrontendPattern,
         string PlantedBackend, string PlantedFrontend)
     {
@@ -14,7 +14,7 @@ public sealed class CrossSideNameTests
 
     private const string Sources = "MEditService.SourceAdapter";
 
-    public static TheoryData<Name> EveryName =>
+    public static TheoryData<BackendFrontendPair> EveryName =>
     [
         new(Path.Combine("MEditService.RepositoriesLib", "TempName.cs"),
             @"private const string Prefix = ""([^""]+)"";",
@@ -44,27 +44,27 @@ public sealed class CrossSideNameTests
 
     [Theory]
     [MemberData(nameof(EveryName))]
-    public void TheBackendAndFrontendNames_Agree(Name name)
+    public void TheBackendAndFrontendNames_Agree(BackendFrontendPair pair)
     {
         var root = ServiceProjects.SolutionDirectory();
-        var frontend = Path.Combine(root, "..", "modbench", "src", name.FrontendFile);
+        var frontend = Path.Combine(root, "..", "modbench", "src", pair.FrontendFile);
 
         Assert.Equal(
-            ValueIn(Path.Combine(root, name.BackendFile), name.BackendPattern),
-            ValueIn(frontend, name.FrontendPattern));
+            ValueIn(Path.Combine(root, pair.BackendFile), pair.BackendPattern),
+            ValueIn(frontend, pair.FrontendPattern));
     }
 
     [Theory]
     [MemberData(nameof(EveryName))]
-    public void TheScan_CatchesAPlantedMismatch(Name name)
+    public void TheScan_CatchesAPlantedMismatch(BackendFrontendPair pair)
     {
         using var dir = new ScratchDirectory("medit-cross-side-");
         var backend = Path.Combine(dir, "backend");
         var frontend = Path.Combine(dir, "frontend");
-        File.WriteAllText(backend, name.PlantedBackend);
-        File.WriteAllText(frontend, name.PlantedFrontend);
+        File.WriteAllText(backend, pair.PlantedBackend);
+        File.WriteAllText(frontend, pair.PlantedFrontend);
 
-        Assert.NotEqual(ValueIn(backend, name.BackendPattern), ValueIn(frontend, name.FrontendPattern));
+        Assert.NotEqual(ValueIn(backend, pair.BackendPattern), ValueIn(frontend, pair.FrontendPattern));
     }
 
     private static string ValueIn(string file, string pattern)

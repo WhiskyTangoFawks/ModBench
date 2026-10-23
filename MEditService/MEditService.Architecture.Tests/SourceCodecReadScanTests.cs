@@ -48,15 +48,15 @@ public sealed class SourceCodecReadScanTests
     public void TheScan_PermitsTypeDispatchBlankDocumentAndTheVerdict_AndNamesAPlantedCodecReadOrWrite()
     {
         using var root = new ScratchDirectory("medit-source-codec-read-scan-");
-        SourceTree.Plant(root, "MEditService.SourceAdapter/Permitted.cs",
+        ScratchFiles.Plant(root, "MEditService.SourceAdapter/Permitted.cs",
             "var group = RecordTypes.For(release).GroupOf(recordType);\n"
             + "var minted = RecordTextCodec.BlankDocument(level, release, identity);\n"
             + "var why = RecordTextCodec.WhyNotARecord(text, release, recordType);\n");
-        SourceTree.Plant(root, "MEditService.SourceAdapter/Planted.cs",
+        ScratchFiles.Plant(root, "MEditService.SourceAdapter/Planted.cs",
             "internal static class Reader\n{\n"
             + "    internal static string Read(string text, GameRelease release) =>\n"
             + "        RecordTextCodec.RoundTrip(text, release, null);\n}\n");
-        SourceTree.Plant(root, "MEditService.SourceAdapter/obj/Generated.cs",
+        ScratchFiles.Plant(root, "MEditService.SourceAdapter/obj/Generated.cs",
             "var text = RecordTextCodec.RoundTrip(text, release, null);\n");
 
         var counts = Counts(root, ["MEditService.SourceAdapter"]);
