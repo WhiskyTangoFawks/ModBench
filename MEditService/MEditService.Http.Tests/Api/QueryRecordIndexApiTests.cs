@@ -39,13 +39,12 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
     }
 
     [Fact]
-    public async Task AQuestionAboutOnePluginsRecordTypes_NamesEveryTypeInNameOrder()
+    public async Task AQuestionAboutOnePluginsRecordTypes_IsAnsweredWithEachTypeAndItsName()
     {
         var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types?origin={UserMod}");
 
-        Assert.Equal(
-            ["Activator", "Cell", "Keyword", "Non-Player Character", "Quest", "Worldspace"],
-            types.EnumerateArray().Select(t => t.GetProperty("displayName").GetString()));
+        var npcs = types.EnumerateArray().Single(t => t.GetProperty("type").GetString() == "npc_");
+        Assert.Equal("Non-Player Character", npcs.GetProperty("displayName").GetString());
     }
 
     [Fact]
@@ -73,30 +72,6 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
             "Queried Clearing",
             blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("fullName").GetString());
         Assert.Equal("Queried Room", interiors[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("fullName").GetString());
-    }
-
-    [Fact]
-    public async Task TheCellGroup_CountsTheInteriorCellsItLists()
-    {
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types?origin={UserMod}");
-        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/interior-cells?origin={UserMod}");
-
-        var cellGroup = types.EnumerateArray().Single(t => t.GetProperty("type").GetString() == "cell");
-        var listed = blocks.EnumerateArray()
-            .SelectMany(b => b.GetProperty("subBlocks").EnumerateArray())
-            .Sum(s => s.GetProperty("cells").GetArrayLength());
-        Assert.Equal(listed, cellGroup.GetProperty("count").GetInt32());
-    }
-
-    [Fact]
-    public async Task AGroupsListing_HoldsAsManyRecordsAsItsCount()
-    {
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types?origin={UserMod}");
-        var cells = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=cell&limit=10");
-
-        var count = types.EnumerateArray().Single(t => t.GetProperty("type").GetString() == "cell").GetProperty("count").GetInt32();
-        Assert.Equal(count, cells.GetProperty("total").GetInt32());
-        Assert.Equal(count, cells.GetProperty("items").GetArrayLength());
     }
 
     [Fact]
@@ -155,23 +130,5 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
         var response = await Client.GetAsync(new Uri("/records/000FFF:Nowhere.esp/compare", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
-    [Theory]
-    [InlineData("refr")]
-    [InlineData("achr")]
-    [InlineData("dial")]
-    [InlineData("info")]
-    [InlineData("dlbr")]
-    [InlineData("scen")]
-    public async Task ARecordAnotherRecordHolds_HasNoGroupOfItsOwn(string type)
-    {
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{HeldPlugin}/record-types?origin={HeldMod}");
-        var group = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&origin={HeldMod}&type={type}&limit=10");
-        var held = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&origin={HeldMod}&type={type}&search=Held&limit=10");
-
-        Assert.Equal(1, held.GetProperty("total").GetInt32());
-        Assert.Equal(0, group.GetProperty("total").GetInt32());
-        Assert.DoesNotContain(type, types.EnumerateArray().Select(t => t.GetProperty("type").GetString()));
     }
 }

@@ -77,18 +77,15 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     private static string Root => PluginSourceRoot.For(PluginName);
 
     private string InteriorCellPath =>
-        PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", Leaf(_interiorCell)));
+        PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", PluginSourceRoot.Leaf(_interiorCell)));
 
     private string WorldspacePath =>
-        PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Worldspaces", Leaf(_worldspace)));
+        PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Worldspaces", PluginSourceRoot.Leaf(_worldspace)));
 
     private string ExteriorCellPath =>
-        PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Worldspaces", Leaf(_worldspace), "0, 0", "0, 0", Leaf(_exteriorCell)));
+        PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Worldspaces", PluginSourceRoot.Leaf(_worldspace), "0, 0", "0, 0", PluginSourceRoot.Leaf(_exteriorCell)));
 
-    private string QuestPath => Path.Combine(Root, "Quests", Leaf(_quest) + ".json");
-
-    private static string Leaf(IMajorRecordGetter record) =>
-        $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
+    private string QuestPath => Path.Combine(Root, "Quests", PluginSourceRoot.Leaf(_quest) + ".json");
 
     private static byte[] Serialize(IMajorRecordGetter record) =>
         Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
@@ -684,6 +681,20 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
+    public void ChangesToPutChild_IntoAnEmbeddedContainerWhoseOwnersDocumentAnotherToolRenamed_AppendsToTheRenamedDocument()
+    {
+        var renamed = Path.Combine(Root, "Quests", "Renamed by hand.json");
+        File.Move(FullPath(QuestPath), FullPath(renamed));
+        var added = new DialogResponses(_mod) { EditorID = "Response3" };
+
+        var changes = Repository.ChangesToPutChild(Plugin, Identity(_topic, "dial"), "Responses", ANewChild(added, "info")).Value();
+
+        var owner = Assert.Single(changes.Documents);
+        Assert.Equal(renamed, owner.Path);
+        Assert.Contains("\"Response3\"", owner.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ChangesToPutChild_IntoAContainerWithADocumentOfItsOwn_AppendsToThatDocument()
     {
         var added = new PlacedObject(_mod) { EditorID = "AddedRef", Position = new P3Float(1f, 1f, 1f), Scale = 1f };
@@ -823,7 +834,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         var cell = new Cell(_mod) { EditorID = "AddedCell" };
         cell.Temporary.Add(added);
-        var path = FullPath(PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", Leaf(cell))));
+        var path = FullPath(PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", PluginSourceRoot.Leaf(cell))));
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? throw new InvalidOperationException($"Expected '{path}' to have a parent directory."));
         File.WriteAllBytes(path, Serialize(cell));
 
@@ -869,7 +880,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     {
         Assert.NotNull(Repository.RelativePathOf(Plugin, Identity(_persistentRef, "refr")).Value());
 
-        var moved = Path.Combine(Root, "Cells", "1", "1", Leaf(_interiorCell));
+        var moved = Path.Combine(Root, "Cells", "1", "1", PluginSourceRoot.Leaf(_interiorCell));
         Directory.CreateDirectory(Path.GetDirectoryName(FullPath(moved)) ?? throw new InvalidOperationException($"Expected '{moved}' to have a parent directory."));
         Directory.Move(Path.GetDirectoryName(FullPath(InteriorCellPath)) ?? throw new InvalidOperationException("Expected the interior cell's document to sit in its own directory."), FullPath(moved));
 

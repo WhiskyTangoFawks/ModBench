@@ -55,24 +55,21 @@ public sealed class SourceTreeDocumentsTests : IDisposable
         _quest = new Quest(_mod) { EditorID = "Quest" };
         _quest.DialogTopics.Add(_topic);
 
-        _interiorCellPath = PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", Leaf(_interiorCell)));
-        _worldspacePath = PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Worldspaces", Leaf(_worldspace)));
+        _interiorCellPath = PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", PluginSourceRoot.Leaf(_interiorCell)));
+        _worldspacePath = PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Worldspaces", PluginSourceRoot.Leaf(_worldspace)));
 
         PluginBaselines.Init(
             _modFolder,
             [
                 new TreeFile(_interiorCellPath, Serialize(_interiorCell)),
                 new TreeFile(_worldspacePath, Serialize(_worldspace)),
-                new TreeFile(Path.Combine(Root, "Quests", Leaf(_quest) + ".json"), Serialize(_quest)),
+                new TreeFile(Path.Combine(Root, "Quests", PluginSourceRoot.Leaf(_quest) + ".json"), Serialize(_quest)),
             ]);
     }
 
     public void Dispose() => _modFolder.Dispose();
 
     private static string Root => PluginSourceRoot.For(PluginName);
-
-    private static string Leaf(IMajorRecordGetter record) =>
-        $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
 
     private static byte[] Serialize(IMajorRecordGetter record) =>
         Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));
@@ -124,7 +121,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
     public void AnInteriorCell_SitsInTheBlockAndSubBlockItsDirectoriesAreNumbered()
     {
         var room = new Cell(_mod) { EditorID = "NumberedRoom" };
-        var directory = Path.Combine(_modFolder, Root, "Cells", "3", "7", Leaf(room));
+        var directory = Path.Combine(_modFolder, Root, "Cells", "3", "7", PluginSourceRoot.Leaf(room));
         Directory.CreateDirectory(directory);
         File.WriteAllBytes(PluginSourceRoot.ContainerDocument(directory), Serialize(room));
 

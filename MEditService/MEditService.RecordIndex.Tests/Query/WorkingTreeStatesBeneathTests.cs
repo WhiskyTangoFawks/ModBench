@@ -72,6 +72,23 @@ public sealed class WorkingTreeStatesBeneathTests : IDisposable
     }
 
     [Fact]
+    public void AnEditedInteriorRef_IsBeneathItsCell_ItsGroup_AndItsPlugin()
+    {
+        Index.Edit(_fixture.Entry, Index.DocumentOf(_fixture.TemporaryRef, _fixture.Plugin),
+            Index.BodyOf(_fixture.TemporaryRef, _fixture.Plugin).Replace(ContainerModPlugin.TemporaryRefEditorId, "RenamedRef", StringComparison.Ordinal));
+
+        var beneath = Beneath();
+
+        Assert.Equal([WorkingTreeState.Modified], beneath.Plugin);
+        var group = Assert.Single(beneath.RecordTypes);
+        Assert.Equal("cell", group.Key);
+        Assert.Equal([WorkingTreeState.Modified], group.Value);
+        var cell = Assert.Single(beneath.Records);
+        Assert.Equal(_fixture.EmbedCell, cell.Key);
+        Assert.Equal([WorkingTreeState.Modified], cell.Value);
+    }
+
+    [Fact]
     public void AnEditedTopic_IsBeneathItsQuest()
     {
         const string questPlugin = "Quests.esp";

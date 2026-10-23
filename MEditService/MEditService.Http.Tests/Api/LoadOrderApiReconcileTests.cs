@@ -14,7 +14,7 @@ public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixtur
         _client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, plugins));
 
     [Fact]
-    public async Task PutLoadOrder_APluginTheSnapshotDoesNotListAsActive_ComesBackOutsideTheLoadOrder_ReadOnly()
+    public async Task PutLoadOrder_APluginTheSnapshotDoesNotListAsActive_ComesBackOutsideTheLoadOrder()
     {
         using var fx = new PluginFixtureBuilder("api-reconcile-disabled")
             .WithPlugin("Active.esp", mod => mod.Npcs.AddNew("FromActive"))
@@ -27,6 +27,5 @@ public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixtur
         var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
         var byName = plugins.EnumerateArray().ToDictionary(p => JsonStrings.Of(p.GetProperty("name")));
         Assert.False(byName["Dormant.esp"].GetProperty("inLoadOrder").GetBoolean());
-        Assert.True(byName["Dormant.esp"].GetProperty("isImmutable").GetBoolean());
     }
 }

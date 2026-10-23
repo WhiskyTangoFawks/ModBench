@@ -70,7 +70,7 @@ public sealed class PluginProblemsApiTests : HostedTests
     {
         var fx = await CompiledPluginLoad();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var stray = OtherTool.Beside(OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc), "Stray.json");
+        var stray = AnotherTool.Beside(OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc), "Stray.json");
 
         OtherTool.WritesTheFile(stray, "{");
         await Client.NextSnapshot(fx);
