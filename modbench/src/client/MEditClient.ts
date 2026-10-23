@@ -157,6 +157,13 @@ export interface DecompileAndCommitOutcome {
   refused: readonly ItemRefusal<string>[];
 }
 
+/** A malformed plugin's diagnoses, each with the change that repairs it, and the hash of the bytes they came from. */
+export type PluginRepairPreview = components['schemas']['PluginRepairPreview'];
+
+/** A plugin to repair, by the hash its preview answered, and the source folder its mod's repository is made in when it
+ *  has none. */
+export type PluginToRepair = components['schemas']['PluginToRepairRequest'];
+
 /** A mod to decompile and commit, with its installation files and the mod manager's own files in its folder (ADR-0013). */
 export type DecompileAndCommitMod = components['schemas']['DecompileAndCommitModRequest'];
 
@@ -316,6 +323,13 @@ export interface MEditClient {
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
   decompile(plugins: readonly PluginAddress[], force: boolean): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
+  // Each plugin's repair preview, or why it has none. Nothing is written.
+  repairPreviews(plugins: readonly PluginAddress[]): Promise<{ landed: readonly PluginRepairPreview[]; refused: readonly ItemRefusal<PluginAddress>[] } | WriteRefused>;
+  // Each plugin's source is written as two commits, or it is refused, on its own. `metadataFiles` are the mod manager's
+  // own files, which a repository made for a mod with none leaves out.
+  decompileAndRepair(
+    plugins: readonly PluginToRepair[], metadataFiles: readonly string[], force: boolean,
+  ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   // Rename's and exclude's half in mEdit: the build configuration in `sourceFolder`, written in its working tree.
   changeBuildConfiguration(sourceFolder: string, change: BuildConfigurationChange): Promise<{ changed: true } | WriteRefused>;
   // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the

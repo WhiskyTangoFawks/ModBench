@@ -6,12 +6,14 @@ import { columnHeaderOf } from '../wire/columnHeader';
 import type { PluginsTreeNode } from './pluginRows';
 import { PLUGINS_KEY_ARGS, pluginOf } from './gestureEntry';
 import { registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
-import type { SelectionResult } from '../pluginCommands/plugins';
+import type { PluginCommands, SelectionResult } from '../pluginCommands/plugins';
 import { selectionArgument } from '../drivingLib/gestureEntry';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { pluginRowName } from '../wire/pluginAddress';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
+import { previewLines } from '../pluginCommands/decompileAndRepair';
+import { isPluginAddress } from '../wire/messages';
 
 /** The Plugins tree's one progress surface (plugins.md, States, story 2): a spinner over the
  *  view while the work runs, and the view's own message line. */
@@ -53,11 +55,41 @@ export function registerDecompileCommand(
       return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, outcome };
     }),
     report: (result, { plugins }) => {
-      if (result.applied) reportDecompiled(deps.reporter, result.outcome, plugins.length);
+      if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile', pastTense: 'Decompiled' });
       else deps.reporter.report('error', result.refusal);
     },
   };
   return registerAgentGesture('modbench.plugin.decompile', viewSelection, gesture);
+}
+
+/** What decompile and repair needs: the command, the Instance loader's refresh, the Output line each preview's changes
+ *  are named on, and how the user is told. */
+export interface DecompileAndRepairDeps {
+  commands: Pick<PluginCommands, 'decompileAndRepair'>;
+  instance: Pick<Instance, 'refresh'>;
+  reporter: Reporter;
+  log: (line: string) => void;
+}
+
+/** commands.md, `decompile and repair`: the plugins of Plugins rows, the selection included, of the palette's Plugins
+ *  selection, or of a Malformed entry's link in the Problems panel. No prompt: a repair that drops data is refused. */
+export function registerDecompileAndRepairCommand(
+  deps: DecompileAndRepairDeps, viewSelection: () => readonly PluginsTreeNode[],
+): vscode.Disposable {
+  const gesture: AgentGesture<PluginsTreeNode, DecompileGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
+    fromView: (entry, _option, clicked) => {
+      const plugins = isPluginAddress(clicked) ? [clicked] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
+      return plugins.length > 0 ? { plugins, force: false } : undefined;
+    },
+    fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true }),
+    run: ({ plugins, force }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, () =>
+      deps.commands.decompileAndRepair(plugins, force, (preview) => { previewLines(preview).forEach(deps.log); })),
+    report: (result, { plugins }) => {
+      if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile and repair', pastTense: 'Decompiled and repaired' });
+      else deps.reporter.report('error', result.refusal);
+    },
+  };
+  return registerAgentGesture('modbench.plugin.decompileAndRepair', viewSelection, gesture);
 }
 
 // plugins.md, Decompile: one confirmation for the selection, naming the plugins; it replaces
@@ -72,14 +104,16 @@ async function confirmDecompile(ask: AskQuestion, plugins: readonly PluginAddres
   return answer === 'Decompile';
 }
 
-function reportDecompiled(reporter: Reporter, outcome: SelectionOutcome<PluginAddress>, total: number): void {
+function reportSelection(
+  reporter: Reporter, outcome: SelectionOutcome<PluginAddress>, total: number, { verb, pastTense }: { verb: string; pastTense: string },
+): void {
   const [refused] = outcome.refused;
   if (refused !== undefined) {
     const what = total === 1 ? `"${refused.item.name}"` : `${outcome.refused.length} of ${total} plugins`;
-    reporter.selectionOutcome(`Could not decompile ${what}.`, outcome, pluginRowName);
+    reporter.selectionOutcome(`Could not ${verb} ${what}.`, outcome, pluginRowName);
     return;
   }
   const [only, ...more] = outcome.landed;
   if (only === undefined) return;
-  reporter.landed(more.length === 0 ? `Decompiled "${only.name}".` : `Decompiled ${outcome.landed.length} plugins.`);
+  reporter.landed(more.length === 0 ? `${pastTense} "${only.name}".` : `${pastTense} ${outcome.landed.length} plugins.`);
 }

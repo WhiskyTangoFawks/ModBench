@@ -17,6 +17,8 @@ public sealed class WriteRouteSeamTests
         ("POST /plugins/create", "CreatePlugin"),
         ("POST /plugins/create-in-mod", "CreatePluginInMod"),
         ("POST /plugins/decompile", "Decompile"),
+        ("POST /plugins/repair-previews", "RepairPreviews"),
+        ("POST /plugins/decompile-and-repair", "DecompileAndRepair"),
         ("POST /plugins/compile", "Compile"),
         ("POST /plugins/rename-source-changes", "RenameSourceChanges"),
         ("POST /plugins/move-last-written", "MoveLastWritten"),

@@ -189,23 +189,12 @@ internal sealed class SourceRepositoryWrites(
         if (!SourceRepositoryGit.HoldsRepository(_sourceFolder))
             throw SourceStopException.Inaccessible($"'{_sourceFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
 
-        var root = SourceRepositoryLayout.RootIn(_sourceFolder, pluginFileName);
         var journal = new WriteJournal(_sourceFolder);
         try
         {
             journal.PutBackOnFailure(() =>
             {
-                var incoming = files.ToDictionary(file => Path.GetFullPath(Path.Combine(_sourceFolder, file.RelativePath)));
-                var held = Directory.Exists(root)
-                    ? Directory.GetFiles(root, "*", SearchOption.AllDirectories)
-                        .ToDictionary(Path.GetFullPath, File.ReadAllBytes)
-                    : [];
-                foreach (var (path, bytes) in held.Where(file => !incoming.ContainsKey(file.Key))) journal.DeleteIfHolds(path, bytes);
-                journal.DeleteEmptyDirectories(root);
-                journal.WriteAll(
-                    incoming.Where(file => !held.TryGetValue(file.Key, out var bytes) || !bytes.AsSpan().SequenceEqual(file.Value.Content))
-                        .Select(file => file.Value),
-                    _sourceFolder);
+                ReplaceTree(journal, _sourceFolder, pluginFileName, files);
                 git.ParkDecompiled(pluginFileName, binarySha256);
             });
         }
@@ -213,6 +202,57 @@ internal sealed class SourceRepositoryWrites(
         {
             locator.Forget();
         }
+    }
+
+    /// <summary>Decompile and repair's two commits of the plugin's source, both or neither, each of the plugin's source
+    /// alone: what else is staged stays staged.</summary>
+    internal void CommitRepair(string pluginFileName, TreeCommit flagged, TreeCommit repaired, string binarySha256)
+    {
+        if (!SourceRepositoryGit.HoldsRepository(_sourceFolder))
+            throw SourceStopException.Inaccessible($"'{_sourceFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
+
+        var journal = new WriteJournal(_sourceFolder);
+        var source = SourceRepositoryGit.LiteralPathspec(SourceRepositoryLayout.RootFor(pluginFileName));
+        var head = git.HeadCommit();
+        try
+        {
+            journal.PutBackOnFailure(() =>
+            {
+                journal.RecordUndo(() =>
+                {
+                    git.Run("reset", "-q", "--soft", head);
+                    git.Run("reset", "-q", head, "--", source);
+                }, description: $"the commits of {pluginFileName}'s repair");
+                foreach (var commit in new[] { flagged, repaired })
+                {
+                    ReplaceTree(journal, _sourceFolder, pluginFileName, SourceRepositoryLayout.PristineFilesOf(pluginFileName, commit.Tree));
+                    git.Run("add", "-A", "--", source);
+                    git.Run("commit", "-q", "-m", commit.Message, "--", source);
+                }
+                git.ParkDecompiled(pluginFileName, binarySha256);
+            });
+        }
+        finally
+        {
+            locator.Forget();
+        }
+    }
+
+    /// <summary>The plugin's source in <paramref name="sourceFolder"/> becomes <paramref name="files"/>, placed: only what
+    /// differs is written, and a file another program changed is not removed.</summary>
+    internal static void ReplaceTree(WriteJournal journal, string sourceFolder, string pluginFileName, IReadOnlyList<TreeFile> files)
+    {
+        var root = SourceRepositoryLayout.RootIn(sourceFolder, pluginFileName);
+        var incoming = files.ToDictionary(file => Path.GetFullPath(Path.Combine(sourceFolder, file.RelativePath)));
+        var held = Directory.Exists(root)
+            ? Directory.GetFiles(root, "*", SearchOption.AllDirectories).ToDictionary(Path.GetFullPath, File.ReadAllBytes)
+            : [];
+        foreach (var (path, bytes) in held.Where(file => !incoming.ContainsKey(file.Key))) journal.DeleteIfHolds(path, bytes);
+        journal.DeleteEmptyDirectories(root);
+        journal.WriteAll(
+            incoming.Where(file => !held.TryGetValue(file.Key, out var bytes) || !bytes.AsSpan().SequenceEqual(file.Value.Content))
+                .Select(file => file.Value),
+            sourceFolder);
     }
 
     /// <summary>What renaming a plugin's source changes: the root and each leaf named for a record of the plugin

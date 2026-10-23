@@ -14,6 +14,8 @@ export function pluginCommandsWith(adapter: InstanceAdapter, client: Partial<Plu
       moveLastWritten: client.moveLastWritten?.bind(client) ?? unanswered,
       getCreatablePluginExtensions: client.getCreatablePluginExtensions?.bind(client) ?? unanswered,
       getPluginDependants: client.getPluginDependants?.bind(client) ?? unanswered,
+      repairPreviews: client.repairPreviews?.bind(client) ?? unanswered,
+      decompileAndRepair: client.decompileAndRepair?.bind(client) ?? unanswered,
     },
   });
 }
