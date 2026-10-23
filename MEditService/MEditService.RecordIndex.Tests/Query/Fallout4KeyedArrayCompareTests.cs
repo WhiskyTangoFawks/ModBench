@@ -63,31 +63,31 @@ public sealed class Fallout4KeyedArrayCompareTests(Fallout4KeyedArrayCopies copi
     private static readonly FormKey B = new(Base, 0x901);
     private static readonly FormKey Cell = new(Base, 0x902);
 
-    private static readonly (FormKey Key, string[] Fields, Func<bool, Fallout4MajorRecord> Build)[] Records =
+    private static readonly (FormKey Key, ConflictThis TopCopy, ConflictAll TopCopyAll, string[] Fields, Func<bool, Fallout4MajorRecord> Build)[] Records =
     [
-        (NpcKey, ["Factions", "Perks", "Items", "Attacks", "Sounds", "FaceMorphs", "FaceTintingLayers", "Properties", "ObjectTemplates"], Npc),
-        (FactionKey, ["Relations", "Ranks"], Faction),
-        (LeveledItemKey, ["Entries", "FilterKeywordChances"], LeveledItem),
-        (LeveledNpcKey, ["Entries"], LeveledNpc),
-        (ObjectModKey, ["Properties"], WeaponModification),
-        (ContainerKey, ["Items"], Container),
-        (FurnitureKey, ["Items"], Furniture),
-        (LensFlareKey, ["Sprites"], LensFlare),
-        (MaterialSwapKey, ["Substitutions"], MaterialSwap),
-        (RegionKey, ["Sounds"], Region),
-        (MiscItemKey, ["Components"], MiscItem),
-        (PerkKey, ["Effects"], Perk),
-        (QuestKey, ["Stages", "Aliases"], Quest),
-        (LocationKey, [
+        (NpcKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Factions", "Perks", "Items", "Attacks", "Sounds", "FaceMorphs", "FaceTintingLayers", "Properties", "ObjectTemplates"], Npc),
+        (FactionKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Relations", "Ranks"], Faction),
+        (LeveledItemKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Entries", "FilterKeywordChances"], LeveledItem),
+        (LeveledNpcKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Entries"], LeveledNpc),
+        (ObjectModKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Properties"], WeaponModification),
+        (ContainerKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Items"], Container),
+        (FurnitureKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Items"], Furniture),
+        (LensFlareKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Sprites"], LensFlare),
+        (MaterialSwapKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Substitutions"], MaterialSwap),
+        (RegionKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Sounds"], Region),
+        (MiscItemKey, ConflictThis.Override, ConflictAll.Override, ["Components"], MiscItem),
+        (PerkKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Effects"], Perk),
+        (QuestKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Stages", "Aliases"], Quest),
+        (LocationKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, [
             "PersistentActorReferencesAdded", "PersistentActorReferencesStatic", "UniqueActorReferencesAdded",
             "UniqueActorReferencesStatic", "LocationRefTypeReferencesAdded", "LocationRefTypeReferencesStatic", "WorldspaceCellsAdded", "WorldspaceCellsStatic", "WorldspaceCellsRemoved"], Location),
-        (TerminalKey, ["VirtualMachineAdapter", "Properties"], Terminal),
-        (MagicEffectKey, ["Sounds"], MagicEffect),
-        (PlacedNpcKey, ["LinkedReferences", "ActivateParents"], PlacedNpc),
-        (PlacedObjectKey, ["LinkedReferences"], PlacedObject),
-        (NavmeshKey, ["NavmeshGeometry", "PreCutMapEntries"], Navmesh),
-        (InfoMapKey, ["MapInfos", "PreferredPathing"], InfoMap),
-        (LandscapeKey, ["Layers"], Landscape),
+        (TerminalKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["VirtualMachineAdapter", "Properties"], Terminal),
+        (MagicEffectKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Sounds"], MagicEffect),
+        (PlacedNpcKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["LinkedReferences", "ActivateParents"], PlacedNpc),
+        (PlacedObjectKey, ConflictThis.Override, ConflictAll.Override, ["LinkedReferences"], PlacedObject),
+        (NavmeshKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["NavmeshGeometry", "PreCutMapEntries"], Navmesh),
+        (InfoMapKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["MapInfos", "PreferredPathing"], InfoMap),
+        (LandscapeKey, ConflictThis.IdenticalToMaster, ConflictAll.NoConflict, ["Layers"], Landscape),
     ];
 
     internal static void Hold(Fallout4Mod mod, bool reversed)
@@ -384,16 +384,11 @@ public sealed class Fallout4KeyedArrayCompareTests(Fallout4KeyedArrayCopies copi
     private static LayerHeader Layer(Quadrant quadrant, ushort number) =>
         new() { Texture = new FormLink<ILandscapeTextureGetter>(A), Quadrant = quadrant, LayerNumber = number };
 
-    private void AssertTopCopyIsIdenticalToMaster(FormKey record)
-    {
-        var diffs = AssertTopCopyIs(ConflictThis.IdenticalToMaster, record);
+    public static IEnumerable<object[]> KeyedArrayRecords => Records.Select(r => new object[] { r.Key, r.TopCopy, r.TopCopyAll });
 
-        Assert.All(diffs.SelectMany(RowsUnder), row => Assert.Equal(ConflictAll.NoConflict, row.ConflictAll));
-    }
-
-    private static IEnumerable<FieldDiff> RowsUnder(FieldDiff row) => (row.Children ?? []).SelectMany(child => RowsUnder(child).Prepend(child));
-
-    private IReadOnlyList<FieldDiff> AssertTopCopyIs(ConflictThis expected, FormKey record)
+    [Theory]
+    [MemberData(nameof(KeyedArrayRecords))]
+    public void ACopyHoldingItsKeyedArraysInAnotherOrder_ReadsAsXEditsAlignmentDoes(FormKey record, ConflictThis topCopy, ConflictAll topCopyAll)
     {
         var compare = copies.Index.Queries.GetCompare(record.ToString()).Value()
             ?? throw new InvalidOperationException($"Expected {record} to resolve to a compare result.");
@@ -401,91 +396,7 @@ public sealed class Fallout4KeyedArrayCompareTests(Fallout4KeyedArrayCopies copi
         var keyedArrays = Records.Single(r => r.Key == record).Fields;
         var diffs = compare.Diffs.Where(d => keyedArrays.Contains(d.FieldName)).ToList();
         Assert.Equal(keyedArrays.Order(), diffs.Select(d => d.FieldName).Order());
-        Assert.All(diffs, d => Assert.Equal(expected, d.CellStates[TopPlugin]));
-        return diffs;
+        Assert.All(diffs, d => Assert.Equal(topCopy, d.CellStates[TopPlugin]));
+        Assert.All(diffs, d => Assert.Equal(topCopyAll, d.ConflictAll));
     }
-
-    [Fact]
-    public void AnNpcCopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(NpcKey);
-
-    [Fact]
-    public void AFactionCopyHoldingItsRelationsAndRanksInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(FactionKey);
-
-    [Fact]
-    public void ALeveledItemCopyHoldingDifferentEntriesAtOneKeyAndItsFilterKeywordChancesInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(LeveledItemKey);
-
-    [Fact]
-    public void ALeveledNpcCopyHoldingDifferentEntriesAtOneKeyInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(LeveledNpcKey);
-
-    [Fact]
-    public void AnObjectModCopyHoldingAPropertyTwiceInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(ObjectModKey);
-
-    [Fact]
-    public void AContainerCopyHoldingDifferentEntriesOfOneItemInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(ContainerKey);
-
-    [Fact]
-    public void AFurnitureCopyHoldingDifferentEntriesOfOneItemInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(FurnitureKey);
-
-    [Fact]
-    public void ALensFlareCopyHoldingASpriteTwiceInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(LensFlareKey);
-
-    [Fact]
-    public void AMaterialSwapCopyHoldingASubstitutionTwiceInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(MaterialSwapKey);
-
-    [Fact]
-    public void ARegionCopyHoldingASoundTwiceInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(RegionKey);
-
-    [Fact]
-    public void AMiscItemCopyHoldingItsComponentsInAnotherOrder_OverridesTheMaster_AsTheirDisplayIndicesPairByPosition() =>
-        AssertTopCopyIs(ConflictThis.Override, MiscItemKey);
-
-    [Fact]
-    public void APerkCopyHoldingAnEffectsConditionsInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(PerkKey);
-
-    [Fact]
-    public void AQuestCopyHoldingItsStagesAndAnAliasHoldingDifferentEntriesOfOneItemInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(QuestKey);
-
-    [Fact]
-    public void ALocationCopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(LocationKey);
-
-    [Fact]
-    public void ATerminalCopyHoldingItsFragmentsAndPropertiesInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(TerminalKey);
-
-    [Fact]
-    public void AMagicEffectCopyHoldingItsSoundsInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(MagicEffectKey);
-
-    [Fact]
-    public void APlacedNpcCopyHoldingItsLinkedReferencesAndActivateParentsInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(PlacedNpcKey);
-
-    [Fact]
-    public void APlacedObjectCopyHoldingItsLinkedReferencesInAnotherOrder_OverridesTheMaster_AsXEditsUnsortedArrayDoes() =>
-        AssertTopCopyIs(ConflictThis.Override, PlacedObjectKey);
-
-    [Fact]
-    public void ANavmeshCopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(NavmeshKey);
-
-    [Fact]
-    public void AnInfoMapCopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(InfoMapKey);
-
-    [Fact]
-    public void ALandscapeCopyHoldingItsLayersInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(LandscapeKey);
 }

@@ -21,26 +21,18 @@ public class FilterTests(TestPluginFixture fixture)
     private static IEnumerable<PluginAddress> PluginsWithMatches(OpenedIndex index) =>
         index.Queries.GetPlugins().Value().Where(row => row.HasMatchingRecords).Select(row => row.KeyOf());
 
-    [Fact]
-    public void SetFilter_ValidSqlWithExtraColumns_FiltersByFormKey()
+    [Theory]
+    [InlineData("SELECT editor_id FROM \"NPC_\"", "Filter SQL must return a form_key")]
+    [InlineData("NOT VALID SQL!!!", "syntax error")]
+    [InlineData("SELECT form_key FROM \"NPC_\" WHERE CAST(editor_id AS INTEGER) = 1", "Conversion Error")]
+    public void AFilterThatCannotRun_IsRefusedWithDuckDbsReason(string sql, string reasonStart)
     {
         using var index = LoadedIndex();
-        var firstFormKey = NpcListing(index).Items[0].FormKey;
 
-        index.SetFilter($"SELECT '{firstFormKey}' AS form_key, 'x' AS plugin", "filter.sql");
+        var refused = index.Queries.SetFilter(sql, "filter.sql");
 
-        var filtered = NpcListing(index);
-        Assert.Equal(1, filtered.Total);
-        Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
-    }
-
-    [Fact]
-    public void SetFilter_SqlWithoutFormKeyColumn_IsRefused()
-    {
-        using var index = LoadedIndex();
-        var refused = index.Queries.SetFilter("SELECT editor_id FROM \"NPC_\"", "filter.sql");
         Assert.Equal(IndexRefusal.FilterRejected, refused?.Refusal);
-        Assert.Contains("form_key", refused?.Message);
+        Assert.StartsWith(reasonStart, refused?.Message);
     }
 
     [Fact]
@@ -56,32 +48,14 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void SetFilter_BadSyntax_IsRefused()
-    {
-        using var index = LoadedIndex();
-        Assert.Equal(IndexRefusal.FilterRejected, index.Queries.SetFilter("NOT VALID SQL!!!", "filter.sql")?.Refusal);
-    }
-
-    [Fact]
-    public void AFilterThatFailsOnARowAsItRuns_IsRefusedWithDuckDbsReason()
-    {
-        using var index = LoadedIndex();
-
-        var refused = index.Queries.SetFilter("SELECT form_key FROM \"NPC_\" WHERE CAST(editor_id AS INTEGER) = 1", "filter.sql");
-
-        Assert.Equal(IndexRefusal.FilterRejected, refused?.Refusal);
-        Assert.StartsWith("Conversion Error", refused?.Message);
-    }
-
-    [Fact]
-    public void AnActiveFilter_NarrowsTheListingToItsMatches()
+    public void AnActiveFilter_NarrowsTheListingToItsMatches_WhateverExtraColumnsItSelects()
     {
         using var index = LoadedIndex();
         var all = NpcListing(index);
         Assert.Equal(TestPluginFixture.RecordCount, all.Total);
 
         var firstFormKey = all.Items[0].FormKey;
-        index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
+        index.SetFilter($"SELECT '{firstFormKey}' AS form_key, 'x' AS plugin", "filter.sql");
 
         var filtered = NpcListing(index);
         Assert.Equal(1, filtered.Total);
@@ -98,6 +72,7 @@ public class FilterTests(TestPluginFixture fixture)
         index.ClearFilter();
 
         Assert.Equal(TestPluginFixture.RecordCount, NpcListing(index).Total);
+        Assert.Contains(Plugin, PluginsWithMatches(index));
     }
 
     [Fact]
@@ -152,11 +127,12 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void NoMatchingRecords_ListsNoPlugin()
+    public void NoMatchingRecords_FlagsNoPluginAsMatching_ButKeepsEveryPluginListed_ForTheTreeIsAlsoTheLoadOrder()
     {
         using var index = LoadedIndex();
         index.SetFilter("SELECT 'NonExistentFormKey:000000' AS form_key", "filter.sql");
 
         Assert.Empty(PluginsWithMatches(index));
+        Assert.Contains(index.Queries.GetPlugins().Value(), row => row.KeyOf() == Plugin);
     }
 }
