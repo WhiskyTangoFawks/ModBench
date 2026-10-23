@@ -18,3 +18,4 @@ Wabbajack's publisher tags are Always Enabled, Include, No Match Include and Ign
 2. Add publisher tag and remove publisher tag on the selected mods, folders and files, with a pick of the tag. Remove offers only the tags the selection holds. Cites: ADR-0024
 3. A mod's tags to follow it through rename, and uninstall to remove them, so no tag names a mod that is gone. Cites: Never silently wrong
 4. A tag that names no path in the instance shown in the Problems panel, on its line in the publisher's configuration. Cites: Never silently wrong; VS Code's Problems panel
+5. Tags read and written in the publisher's configuration alone. A deprecated tag in a mod's metadata notes is neither shown nor written.
