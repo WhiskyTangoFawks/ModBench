@@ -4,6 +4,12 @@ Modbench keeps the instance publishable and shows what each publisher will ship 
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
+## Publishers
+
+As a user, I want:
+
+1. Wabbajack as a publisher, while the instance holds its compiler settings, so I maintain the Wabbajack modlist I publish in Modbench. Cites: ADR-0024
+
 ## What ships
 
 As a user, I want:
