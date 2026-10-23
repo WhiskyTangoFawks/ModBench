@@ -99,7 +99,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task DecompileAndCommit_WhenMutagenFailsAtNoRecordAndAnotherRecordIsMalformed_DoesNotCallThePluginCorrect()
+    public async Task DecompileAndCommit_WhenMutagenFailsAtNoRecordAndAnotherRecordIsMalformed_DoesNotCallThePluginCorrectOrNameTheGesture()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.PluginWithAShortRegion);
 
@@ -108,8 +108,27 @@ public sealed class PluginDiagnosisRoundTripGateTests
         Assert.Contains("Mutagen mishandles", result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("correct plugin", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("HarborRegion", result.Message, StringComparison.Ordinal);
-        Assert.Contains("Decompile and repair", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Decompile and repair", result.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task DecompileAndCommit_WhenNothingClassifiesTheFailureAndAnotherRecordIsMalformed_NamesThatRecordAndNoGesture()
+    {
+        var plugin = new GeneratedPlugin("Unclassified.esp", RawPlugin.Plugin(RawPlugin.Tes4(0x802, 4),
+            RawPlugin.Group("MISC", RawPlugin.Record("MISC", 0x00000800, RawPlugin.EditorId("HarborMisc"), RawPlugin.Subrecord("FULL", "x"u8.ToArray()), OverlongSubrecord)),
+            RawPlugin.Group("REGN", RawPlugin.Record("REGN", 0x00000801, RawPlugin.EditorId("HarborRegion"), RawPlugin.Subrecord("RDAT", new byte[6])))));
+        using var scratch = new RealFixtureScratch(plugin);
+
+        var result = await scratch.DecompileAndCommitAsync();
+
+        Assert.Contains("HarborRegion", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Decompile and repair", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("could not be parsed", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Mutagen mishandles", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("correct plugin", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static readonly byte[] OverlongSubrecord = [.. "DATA"u8.ToArray(), 100, 0, 1, 2];
 
     private sealed class RealFixtureScratch : IDisposable
     {

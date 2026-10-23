@@ -65,7 +65,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
 
         var elsewhere = scan.Elsewhere.Count == 0
             ? ""
-            : $" It also holds malformed records: {string.Join("; ", scan.Elsewhere.Select(malformation => malformation.Diagnosis.Describe()))}.{RepairClause(scan.Elsewhere, namesRepair)}";
+            : $" It also holds malformed records: {string.Join("; ", scan.Elsewhere.Select(malformation => malformation.Diagnosis.Describe()))}.";
         if (unparsed.Diagnosis.Tail is null)
             return NotParsed(plugin, unparsed) + elsewhere;
         return scan.Elsewhere.Count == 0
