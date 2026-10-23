@@ -22,17 +22,17 @@ public class FilterTests(TestPluginFixture fixture)
         index.Queries.GetPlugins().Value().Where(row => row.HasMatchingRecords).Select(row => row.KeyOf());
 
     [Theory]
-    [InlineData("SELECT editor_id FROM \"NPC_\"", "form_key")]
+    [InlineData("SELECT editor_id FROM \"NPC_\"", "Filter SQL must return a form_key")]
     [InlineData("NOT VALID SQL!!!", "syntax error")]
     [InlineData("SELECT form_key FROM \"NPC_\" WHERE CAST(editor_id AS INTEGER) = 1", "Conversion Error")]
-    public void AFilterThatCannotRun_IsRefusedWithDuckDbsReason(string sql, string reasonContains)
+    public void AFilterThatCannotRun_IsRefusedWithDuckDbsReason(string sql, string reasonStart)
     {
         using var index = LoadedIndex();
 
         var refused = index.Queries.SetFilter(sql, "filter.sql");
 
         Assert.Equal(IndexRefusal.FilterRejected, refused?.Refusal);
-        Assert.Contains(reasonContains, refused?.Message);
+        Assert.StartsWith(reasonStart, refused?.Message);
     }
 
     [Fact]

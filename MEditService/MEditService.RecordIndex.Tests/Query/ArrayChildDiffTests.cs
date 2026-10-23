@@ -51,14 +51,18 @@ public class ArrayChildDiffTests
         Assert.Equal(rows, RowsAsEachColumnsElementOrDashWhereAbsent(result, "Items", [.. columns.Select((_, place) => ComparedCopies.PluginAt(place))]));
     }
 
-    [Theory]
-    [InlineData(500, 500)]
-    [InlineData(501, 0)]
-    public void LinkArray_HasChildRowsUpToTheMaximumArrayChildCount_AndNoneBeyond(int count, int children)
+    public static TheoryData<string, Func<CompareResult>, int?> ArraysAtTheMaximumArrayChildCount => new()
     {
-        var row = Row(ComparedCopies.Of(ListOf(count), ListOf(count)), "Items");
+        { "Items", () => ComparedCopies.Of(ListOf(500), ListOf(500)), 500 },
+        { "Items", () => ComparedCopies.Of(ListOf(501), ListOf(501)), null },
+        { "ComponentDisplayIndices", () => ComparedCopies.Of(DisplayIndices([.. Enumerable.Range(0, 500).Select(i => (byte)i)])), 500 },
+    };
 
-        Assert.Equal(children, row.Children?.Count ?? 0);
+    [Theory]
+    [MemberData(nameof(ArraysAtTheMaximumArrayChildCount))]
+    public void AnArray_HasChildRowsUpToTheMaximumArrayChildCount_AndNoneBeyond(string field, Func<CompareResult> compare, int? children)
+    {
+        Assert.Equal(children, Row(compare(), field).Children?.Count);
     }
 
     [Fact]
@@ -115,6 +119,22 @@ public class ArrayChildDiffTests
         Assert.Equal(ConflictThis.IdenticalToMaster, adapter.CellStates["B.esp"]);
         Assert.Equal(ConflictThis.IdenticalToMaster, RequireChildren(adapter).Single(c => c.FieldName == "Scripts").CellStates["B.esp"]);
         Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
+    }
+
+    [Fact]
+    public void KeyedArray_AnElementsMemberTheOverridesDisagreeOn_IsAConflictAtThatMember_NotJustAtTheArrayRow()
+    {
+        var result = ComparedCopies.Of(
+            Scripts(Script("A", ("x", 1))),
+            Scripts(Script("A", ("x", 5))),
+            Scripts(Script("A", ("x", 10))));
+
+        var scripts = RequireChildren(Row(result, "VirtualMachineAdapter")).Single(c => c.FieldName == "Scripts");
+        var script = RequireChildren(scripts).Single(c => c.FieldName == "A");
+        var properties = RequireChildren(script).Single(c => c.FieldName == "Properties");
+        var data = RequireChildren(RequireChildren(properties).Single(c => c.FieldName == "x")).Single(c => c.FieldName == "Data");
+        Assert.Equal(ConflictThis.ConflictLoses, data.CellStates["B.esp"]);
+        Assert.Equal(ConflictThis.ConflictWins, data.CellStates["C.esp"]);
     }
 
     [Fact]
@@ -218,13 +238,5 @@ public class ArrayChildDiffTests
         var result = ComparedCopies.Spelled("B.esp", document => document["Items"] = new JsonArray(), List(""), List(""));
 
         Assert.Null(Row(result, "Items").Children);
-    }
-
-    [Fact]
-    public void UnsortedArray_AtExactlyMaxArrayChildCount_ReturnsChildren()
-    {
-        var result = ComparedCopies.Of(DisplayIndices([.. Enumerable.Range(0, 500).Select(i => (byte)i)]));
-
-        Assert.Equal(500, RequireChildren(Row(result, "ComponentDisplayIndices")).Count);
     }
 }

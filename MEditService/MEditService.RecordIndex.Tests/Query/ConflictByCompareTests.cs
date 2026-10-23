@@ -133,6 +133,7 @@ public class ConflictByCompareTests
     [InlineData(new[] { "Alice", "Bob", null }, ConflictAll.Override, "Master,Override,IdenticalToMaster", "-,Override,-")]
     [InlineData(new[] { "Alice", "Bob", "Bob" }, ConflictAll.Override, "Master,Override,Override", "-,Override,Override")]
     [InlineData(new[] { "Alice", null, "Charlie" }, ConflictAll.Override, "Master,IdenticalToMaster,Override", "-,-,Override")]
+    [InlineData(new string?[] { null, "Bob", "Charlie" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins", "-,ConflictLoses,ConflictWins")]
     public void TheNotesOfEachCopy_ClassifyTheRecordEachColumnAndTheNotesRow(
         string?[] notes, ConflictAll conflictAll, string pluginStates, string notesCellStates)
     {
@@ -153,6 +154,8 @@ public class ConflictByCompareTests
     [InlineData(new[] { "Alice", null, "Charlie" }, new[] { "1", "5", "5" }, ConflictAll.Override, "Master,Override,Override")]
     [InlineData(new[] { "Alice", null }, new[] { "1", "5" }, ConflictAll.Override, "Master,Override")]
     [InlineData(new[] { "Alice", "Bob" }, new[] { "5", "5" }, ConflictAll.Override, "Master,Override")]
+    [InlineData(new[] { "Alice", "Bob" }, new[] { "1", "5" }, ConflictAll.Override, "Master,Override")]
+    [InlineData(new string?[] { null, "Bob", "Charlie" }, new[] { "1", "5", "5" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins")]
     public void TheNotesAndDisplayNameOfEachCopy_ClassifyEachColumnOnTheFieldsItContests(
         string?[] notes, string?[] displayNames, ConflictAll conflictAll, string pluginStates)
     {
@@ -177,10 +180,11 @@ public class ConflictByCompareTests
     }
 
     [Theory]
-    [InlineData(new[] { 10f, 15f }, ConflictAll.Override, "Override")]
-    [InlineData(new[] { 10f, 10f }, ConflictAll.NoConflict, "IdenticalToMaster")]
-    [InlineData(new[] { 1f, 5f, 10f }, ConflictAll.Conflict, "ConflictLoses,ConflictWins")]
-    public void AStructsSubFieldsAreClassifiedEachOnItsOwn_TheStructAggregatingItsChildren(float[] thins, ConflictAll weightAll, string thinCellStates)
+    [InlineData(new[] { 10f, 15f }, ConflictAll.Override, "Override", "IdenticalToMaster")]
+    [InlineData(new[] { 10f, 10f }, ConflictAll.NoConflict, "IdenticalToMaster", "IdenticalToMaster")]
+    [InlineData(new[] { 1f, 5f, 10f }, ConflictAll.Conflict, "ConflictLoses,ConflictWins", "IdenticalToMaster,IdenticalToMaster")]
+    public void AStructsSubFieldsAreClassifiedEachOnItsOwn_TheStructAggregatingItsChildren(
+        float[] thins, ConflictAll weightAll, string thinCellStates, string muscularCellStates)
     {
         var weight = Row(ComparedCopies.Of(thins.Select(thin => Weight(thin, 20)).ToArray()), "Weight");
 
@@ -189,8 +193,8 @@ public class ConflictByCompareTests
         Assert.Equal(weightAll, weight.ConflictAll);
         Assert.Equal(weightAll, thin.ConflictAll);
         Assert.Equal(ConflictAll.NoConflict, muscular.ConflictAll);
-        Assert.Equal(thinCellStates, string.Join(",", Enumerable.Range(1, thins.Length - 1).Select(place => thin.CellStates[ComparedCopies.PluginAt(place)])));
-        Assert.All(Enumerable.Range(1, thins.Length - 1), place => Assert.Equal(ConflictThis.IdenticalToMaster, muscular.CellStates[ComparedCopies.PluginAt(place)]));
+        Assert.Equal("-," + thinCellStates, CellStates(thin, thins.Length));
+        Assert.Equal("-," + muscularCellStates, CellStates(muscular, thins.Length));
     }
 
     [Fact]
@@ -261,12 +265,20 @@ public class ConflictByCompareTests
         Assert.Contains(RequireChildren(weight), c => c.FieldName == "Thin");
     }
 
-    [Fact]
-    public void StructField_SubFieldAbsentInOnePlugin_ThatPluginOmittedFromChildCellStates()
+    public static TheoryData<Func<CompareResult>> ASubFieldAbsentFromTheOverride => new()
     {
-        var weight = Row(ComparedCopies.Of(Weight(10, 20), Weight(15, 0)), "Weight");
+        () => ComparedCopies.Of(Weight(10, 20), Weight(15, 0)),
+        () => ComparedCopies.Spelled(
+            "B.esp", document => document["Weight"] = JsonNode.Parse("""{"Thin":15,"Muscular":null}"""), Weight(10, 20), Weight(10, 20)),
+    };
 
-        Assert.False(RequireChildren(weight).Single(c => c.FieldName == "Muscular").CellStates.ContainsKey("B.esp"));
+    [Theory]
+    [MemberData(nameof(ASubFieldAbsentFromTheOverride))]
+    public void StructField_ASubFieldAbsentFromAColumn_LeavesThatColumnOutOfTheChildCellStates(Func<CompareResult> compare)
+    {
+        var muscular = RequireChildren(Row(compare(), "Weight")).Single(c => c.FieldName == "Muscular");
+
+        Assert.Equal("-,-", CellStates(muscular, 2));
     }
 
     [Fact]
@@ -292,15 +304,6 @@ public class ConflictByCompareTests
 
         Assert.Equal("B.esp", thin.WinnerColumn);
         Assert.Equal(5f, Assert.IsType<JsonElement>(thin.Values[thin.WinnerColumn]).GetSingle());
-    }
-
-    [Fact]
-    public void StructField_JsonNullSubField_TreatedAsAbsent()
-    {
-        var result = ComparedCopies.Spelled(
-            "B.esp", document => document["Weight"] = JsonNode.Parse("""{"Thin":15,"Muscular":null}"""), Weight(10, 20), Weight(10, 20));
-
-        Assert.False(RequireChildren(Row(result, "Weight")).Single(c => c.FieldName == "Muscular").CellStates.ContainsKey("B.esp"));
     }
 
     [Fact]
