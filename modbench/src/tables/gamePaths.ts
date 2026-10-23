@@ -158,13 +158,23 @@ export function nexusDomainForMetaGame(gameName: string): string | undefined {
   return release === undefined ? undefined : GAME_PATHS[release]?.nexusSlug;
 }
 
+// The games a valid short name can name though Modbench supports none of their releases: short name to Nexus domain.
+const NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES: Readonly<Record<string, string>> = { Skyrim: 'skyrim' };
+
+const nexusDomainOfShortName = (shortName: string): string | undefined =>
+  nexusDomainForMetaGame(shortName) ?? NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES[shortName];
+
 /** The Nexus domains the mod manager asks about a file of the game `gameName` names, in its order: the game's own, then each valid short name's. */
 export function nexusDomainsForGame(gameName: string): string[] {
   const release = gameReleaseForGame(gameName);
   if (release === undefined) return [];
-  const names = [release, ...(GAME_PATHS[release]?.validShortNames ?? [])];
-  const domains = names.flatMap((name) => nexusDomainForMetaGame(name) ?? []);
+  const domains = [release, ...(GAME_PATHS[release]?.validShortNames ?? [])].flatMap((name) => nexusDomainOfShortName(name) ?? []);
   return domains.filter((domain, i) => domains.indexOf(domain) === i);
+}
+
+/** The short name a downloaded file's metadata gives a game on Nexus's `domain`; `undefined` when the tables hold none. */
+export function shortNameForNexusDomain(domain: string): string | undefined {
+  return gameReleaseForNexusDomain(domain) ?? Object.keys(NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES).find((name) => NEXUS_DOMAINS_OF_UNSUPPORTED_SHORT_NAMES[name] === domain);
 }
 
 /** The install-location facts for a release, or `undefined` when the table holds none for it —

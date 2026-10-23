@@ -121,4 +121,11 @@ describe('setNexusFileInfoInText', () => {
       'version=2.1.5.0', 'fileCategory=1', 'category=12', 'author=Team', 'uploader=Uploader', 'uploaderUrl=https://nexus/users/1', '',
     ].join('\r\n'));
   });
+
+  it.each([
+    ['the newest version the metadata records', '[General]\r\nnewestVersion=2.0\r\n', 'version=2.0.0.0'],
+    ['zero when the metadata records none', '', 'version=0.0.0.0'],
+  ])('writes %s for a file with no version of its own when the list stands for it', (_name, text, expected) => {
+    expect(setNexusFileInfoInText(text, { game: 'fallout4', modID: '1', versionFromNewest: true, modVersion: '9.9' }, 'Fallout4')).toContain(expected);
+  });
 });

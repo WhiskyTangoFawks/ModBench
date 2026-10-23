@@ -245,7 +245,7 @@ describe('asking which file has an MD5', () => {
     ])('has it from the mod\'s file list by %s', async (_name, fileName, listed) => {
       const { result } = await asking({ [SEARCH]: json([hit(listed, ACTIVE, 7, null)]), [LIST]: json({ files: [{ ...entry, file_name: listed }], file_updates: [] }) }, fileName);
 
-      expect(result).toMatchObject({ found: true, info: { name: 'Listed', version: '2.0', description: 'From the list', author: 'File author', uploader: 'File uploader', modName: 'Sleep or Save' } });
+      expect(result).toMatchObject({ found: true, info: { name: 'Listed', version: '2.0', description: 'From the list', author: 'File author', uploader: 'File uploader', modName: 'Sleep or Save', versionFromNewest: true } });
     });
 
     it('keeps what the search gave, and says the request failed, when the file list cannot be had', async () => {
@@ -319,7 +319,7 @@ describe('asking which file of a mod bears a name', () => {
     expect(result).toEqual({
       found: true,
       info: {
-        game: 'fallout4', modID: '7', fileID: '78', name: 'Main', version: '1.2', fileCategory: 1, description: '[b]Main[/b]', fileTime: 1_455_072_761, modName: 'Sleep & Save', category: 12,
+        game: 'fallout4', modID: '7', fileID: '78', name: 'Main', version: '1.2', fileCategory: 1, description: '[b]Main[/b]', fileTime: 1_455_072_761, versionFromNewest: true, modName: 'Sleep & Save', category: 12,
         author: 'Someone', uploader: 'File uploader', uploaderUrl: 'https://nexus/users/1',
       },
     });

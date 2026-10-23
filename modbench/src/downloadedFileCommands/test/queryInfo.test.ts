@@ -68,7 +68,7 @@ describe('query info', () => {
 
       expect(result).toEqual({ applied: true, outcome: { landed: [{ name: 'a.7z' }], refused: [] } });
       expect(fake.calls).toEqual([{
-        verb: 'writeNexusFileInfo', name: 'a.7z', info: { game: 'fallout4', modID: '7', fileID: '78', name: 'Main', version: '1.2', modName: 'Sleep or Save', category: 12 },
+        verb: 'writeNexusFileInfo', name: 'a.7z', info: { game: 'fallout4', modID: '7', fileID: '78', name: 'Main', version: '1.2', modName: 'Sleep or Save', category: 12, versionFromNewest: true },
       }]);
     });
 

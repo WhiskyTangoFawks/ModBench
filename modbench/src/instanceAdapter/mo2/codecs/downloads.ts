@@ -70,7 +70,8 @@ export function setHiddenInText(text: string, hidden: boolean): string {
 /** What Nexus names of the file, under createMetaFile's keys in its order: the description as HTML, the version canonical.
  *  Keys land after the header, so they go in reversed; a key `info` omits stays as found. */
 export function setNexusFileInfoInText(text: string, info: NexusFileInfo, gameName: string): string {
-  const version = [info.version, info.modVersion].map((v) => canonicalVersion(v ?? '')).find((v) => v !== '');
+  const newest = readIniSection(text, GENERAL_SECTION).get('newestVersion') ?? '0';
+  const version = [info.version, info.versionFromNewest ? newest : info.modVersion].map((v) => canonicalVersion(v ?? '')).find((v) => v !== '');
   const fileTime = info.fileTime === undefined ? undefined : localDateTimeStream(info.fileTime, -new Date(info.fileTime).getTimezoneOffset());
   const written: readonly (readonly [string, string | number | Buffer | undefined])[] = [
     ['gameName', gameName], ['modID', info.modID], ['fileID', info.fileID], ['name', info.name],

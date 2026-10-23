@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  archiveListsOf, ba2VersionsOf, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, nexusDomainForMetaGame, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, ba2VersionsOf, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
@@ -201,10 +201,17 @@ describe('nexusDomainsForGame', () => {
   it.each([
     ['Fallout 4', ['fallout4']],
     ['Fallout 4 VR', ['fallout4']],
-    ['Skyrim VR', ['skyrimspecialedition']],
+    ['Skyrim Special Edition', ['skyrimspecialedition', 'skyrim']],
+    ['Skyrim VR', ['skyrimspecialedition', 'skyrim']],
     ['Starfield', ['starfield']],
     ['Morrowind', []],
   ])('answers the domains MO2 asks Nexus about a file of %s, each once', (game, domains) => {
     expect(nexusDomainsForGame(game)).toEqual(domains);
+  });
+});
+
+describe('shortNameForNexusDomain', () => {
+  it.each([['fallout4', 'Fallout4'], ['skyrim', 'Skyrim'], ['oblivion', undefined]])('names the game on %s as %s', (domain, name) => {
+    expect(shortNameForNexusDomain(domain)).toBe(name);
   });
 });

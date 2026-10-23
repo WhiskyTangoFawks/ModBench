@@ -123,7 +123,7 @@ function digestModuleOffences(sourceText: string, fileName: string): string[] {
 
 const THE_DIGEST = join(SRC, 'instanceAdapter', 'downloadedFileContents', 'contentDigest.ts');
 
-describe('the extension interprets no plugin binary (ADR-0004): its one byte-level read feeds a hash', () => {
+describe('the extension interprets no plugin binary (ADR-0004): its byte-level reads, in the digest module, feed a hash and nothing else', () => {
   it('covers the whole extension source tree', () => {
     expect(tsFiles(SRC, { exclude: ['generated'] }).length).toBeGreaterThan(100);
   });
@@ -142,7 +142,7 @@ describe('the extension interprets no plugin binary (ADR-0004): its one byte-lev
     expect(digestModuleOffences(readFileSync(THE_DIGEST, 'utf8'), THE_DIGEST)).toEqual([]);
   });
 
-  it('flags a digest module that imports anything but createReadStream and the xxHash package, which could carry the bytes elsewhere', () => {
+  it('flags a digest module that imports anything but createReadStream, createHash and the xxHash package, which could carry the bytes elsewhere', () => {
     const other = "import xxhash from 'xxhash-wasm';\nimport { createReadStream } from 'node:fs';\nimport { keep } from './layout';\nexport async function digestOf(p): Promise<string> { keep(p); }\n";
     expect(digestModuleOffences(other, 'contentDigest.ts')).toEqual(['imports ./layout']);
     const sibling = "import { createReadStream, writeFileSync } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n";

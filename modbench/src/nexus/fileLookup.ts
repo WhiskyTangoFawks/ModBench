@@ -1,5 +1,3 @@
-// How the mod manager learns what Nexus knows of a downloaded file (downloadmanager.cpp): by its MD5 over the game's names, and by the mod's page and file list when the MD5 does not settle it.
-
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 
 const REMOVED = 6;
@@ -8,8 +6,9 @@ const NOT_READ = 'Nexus answered in a form Modbench does not read.';
 const NOT_KNOWN = 'Nexus does not know this file.';
 
 export type Read = (path: string, notFound?: string) => Promise<{ json: unknown } | { reason: string }>;
-/** `notice` is what the mod manager says when it writes what it has although a request failed. */
+/** `notice` says a request for more failed or matched nothing, although the info is written. */
 export type FileFound = { found: true; info: NexusFileInfo; notice?: string } | { found: false; reason: string };
+type Found = Extract<FileFound, { found: true }>;
 const failedRequest = (reason: string): string => `Failed to request file info from Nexus: ${reason}`;
 const NO_MATCH = 'No matching file found on Nexus! Maybe this file was removed or renamed?';
 
@@ -50,14 +49,12 @@ const overlay = <T extends object>(base: T, top: Partial<T>): T =>
 const only = <T>(items: readonly T[]): T | undefined => (items.length === 1 ? items[0] : undefined);
 const isActive = ({ file_details }: Hit): boolean => file_details.category_id !== REMOVED && file_details.category_id !== ARCHIVED;
 
-// nxmFileInfoFromMd5Available: the lone hit, else the lone hit that bears the file's name, else the lone active one.
 function chosenHit(hits: readonly Hit[], fileName: string): Hit | undefined {
   if (hits.length <= 1) return hits[0];
   const named = hits.filter(({ file_details }) => typeof file_details.file_name === 'string' && file_details.file_name.toLowerCase() === fileName.toLowerCase());
   return only(named) ?? only(hits.filter(isActive));
 }
 
-// nxmFilesAvailable: a listed file bears the name when it, or its spaces as underscores, is a name the downloaded file goes by.
 function listedFile(json: unknown, names: readonly string[]): Fields | undefined {
   const files = isRecord(json) && Array.isArray(json.files) ? json.files : [];
   return files.find((file): file is Fields => {
@@ -72,17 +69,20 @@ const namesOf = (fileName: string, ...remote: (string | undefined)[]): string[] 
 const fileOwnerOf = (file: Fields): Partial<NexusFileInfo> => ({ author: text(file.author), uploader: text(file.uploaded_by), uploaderUrl: text(file.uploaded_users_profile_url) });
 
 function fromListedFile(info: NexusFileInfo, file: Fields): NexusFileInfo {
-  return overlay(info, { ...fileFieldsOf(file), ...fileOwnerOf(file), fileTime: number(file.uploaded_timestamp), ...(typeof file.file_id === 'number' ? { fileID: String(file.file_id) } : {}) });
+  return overlay(info, { ...fileFieldsOf(file), ...fileOwnerOf(file), fileTime: number(file.uploaded_timestamp), versionFromNewest: true, ...(typeof file.file_id === 'number' ? { fileID: String(file.file_id) } : {}) });
 }
 
-// A hit that lacks the file's description has it from the mod's file list.
-async function withDescription(read: Read, fileName: string, game: string, hit: Hit, info: NexusFileInfo): Promise<FileFound & { found: true }> {
-  if ('description' in hit.file_details) return { found: true, info };
-  const listed = await read(`/v1/games/${game}/mods/${hit.mod.mod_id}/files.json`);
+async function fromFileList(read: Read, listPath: string, names: readonly string[], info: NexusFileInfo): Promise<Found> {
+  const listed = await read(listPath);
   if ('reason' in listed) return { found: true, info, notice: failedRequest(listed.reason) };
-  const file = listedFile(listed.json, namesOf(fileName, text(hit.file_details.file_name)));
+  const file = listedFile(listed.json, names);
   return file === undefined ? { found: true, info, notice: NO_MATCH } : { found: true, info: fromListedFile(info, file) };
 }
+
+const withDescription = (read: Read, fileName: string, game: string, hit: Hit, info: NexusFileInfo): Promise<Found> | Found =>
+  'description' in hit.file_details
+    ? { found: true, info }
+    : fromFileList(read, `/v1/games/${game}/mods/${hit.mod.mod_id}/files.json`, namesOf(fileName, text(hit.file_details.file_name)), info);
 
 /** The file by its MD5, asking each game in turn; the first that holds it settles it. */
 export async function lookupByMd5(read: Read, { games, md5, fileName }: { games: readonly string[]; md5: string; fileName: string }): Promise<FileFound> {
@@ -112,8 +112,5 @@ export async function lookupByName(read: Read, { game, modID, fileID, fileName }
   const modFields = { ...modFieldsOf(page.json), modName: name === undefined ? undefined : plainTextOf(name) };
   const info = overlay<NexusFileInfo>({ game, modID, fileID }, modFields);
   if (fileID !== undefined) return { found: true, info };
-  const listed = await read(`${mod}/files.json`);
-  if ('reason' in listed) return { found: true, info, notice: failedRequest(listed.reason) };
-  const file = listedFile(listed.json, namesOf(fileName));
-  return file === undefined ? { found: true, info, notice: NO_MATCH } : { found: true, info: fromListedFile(info, file) };
+  return fromFileList(read, `${mod}/files.json`, namesOf(fileName), info);
 }

@@ -2770,10 +2770,22 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(join(downloadsFolder(), 'gone.zip.meta'))).toBe(false);
       });
 
+      it('asks the domains of the game and of its valid short names, in order', async () => {
+        await writeFile(join(root, INI), '[General]\r\ngameName=Skyrim Special Edition\r\nselected_profile=@ByteArray(Default)\r\n');
+
+        expect(await adapter.downloadedFileQuery('manual.zip')).toMatchObject({ kind: 'read', answer: { games: ['skyrimspecialedition', 'skyrim'] } });
+      });
+
       it('refuses to query an instance whose game Nexus has no domain for', async () => {
         await writeFile(join(root, INI), '[General]\r\ngameName=Morrowind\r\nselected_profile=@ByteArray(Default)\r\n');
 
         expect(await adapter.downloadedFileQuery('manual.zip')).toEqual({ kind: 'unreadable', reason: "Nexus has no game for 'Morrowind'" });
+      });
+
+      it('names a game Modbench only knows by its short name as that name', async () => {
+        await adapter.writeNexusFileInfo('manual.zip', { game: 'skyrim', modID: '1', fileID: '2' });
+
+        expect(await metaOf('manual.zip')).toMatch(/^gameName=Skyrim\r$/m);
       });
 
       it('writes nothing for a Nexus game Modbench has no game for', async () => {
