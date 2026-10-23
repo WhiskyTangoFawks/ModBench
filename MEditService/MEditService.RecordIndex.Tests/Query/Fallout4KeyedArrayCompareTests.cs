@@ -63,31 +63,31 @@ public sealed class Fallout4KeyedArrayCompareTests(Fallout4KeyedArrayCopies copi
     private static readonly FormKey B = new(Base, 0x901);
     private static readonly FormKey Cell = new(Base, 0x902);
 
-    private static readonly (FormKey Key, string[] Fields, Func<bool, Fallout4MajorRecord> Build)[] Records =
+    private static readonly (string Name, FormKey Key, string[] Fields, Func<bool, Fallout4MajorRecord> Build)[] Records =
     [
-        (NpcKey, ["Factions", "Perks", "Items", "Attacks", "Sounds", "FaceMorphs", "FaceTintingLayers", "Properties", "ObjectTemplates"], Npc),
-        (FactionKey, ["Relations", "Ranks"], Faction),
-        (LeveledItemKey, ["Entries", "FilterKeywordChances"], LeveledItem),
-        (LeveledNpcKey, ["Entries"], LeveledNpc),
-        (ObjectModKey, ["Properties"], WeaponModification),
-        (ContainerKey, ["Items"], Container),
-        (FurnitureKey, ["Items"], Furniture),
-        (LensFlareKey, ["Sprites"], LensFlare),
-        (MaterialSwapKey, ["Substitutions"], MaterialSwap),
-        (RegionKey, ["Sounds"], Region),
-        (MiscItemKey, ["Components"], MiscItem),
-        (PerkKey, ["Effects"], Perk),
-        (QuestKey, ["Stages", "Aliases"], Quest),
-        (LocationKey, [
+        ("Npc", NpcKey, ["Factions", "Perks", "Items", "Attacks", "Sounds", "FaceMorphs", "FaceTintingLayers", "Properties", "ObjectTemplates"], Npc),
+        ("Faction", FactionKey, ["Relations", "Ranks"], Faction),
+        ("LeveledItem", LeveledItemKey, ["Entries", "FilterKeywordChances"], LeveledItem),
+        ("LeveledNpc", LeveledNpcKey, ["Entries"], LeveledNpc),
+        ("WeaponModification", ObjectModKey, ["Properties"], WeaponModification),
+        ("Container", ContainerKey, ["Items"], Container),
+        ("Furniture", FurnitureKey, ["Items"], Furniture),
+        ("LensFlare", LensFlareKey, ["Sprites"], LensFlare),
+        ("MaterialSwap", MaterialSwapKey, ["Substitutions"], MaterialSwap),
+        ("Region", RegionKey, ["Sounds"], Region),
+        ("MiscItem", MiscItemKey, ["Components"], MiscItem),
+        ("Perk", PerkKey, ["Effects"], Perk),
+        ("Quest", QuestKey, ["Stages", "Aliases"], Quest),
+        ("Location", LocationKey, [
             "PersistentActorReferencesAdded", "PersistentActorReferencesStatic", "UniqueActorReferencesAdded",
             "UniqueActorReferencesStatic", "LocationRefTypeReferencesAdded", "LocationRefTypeReferencesStatic", "WorldspaceCellsAdded", "WorldspaceCellsStatic", "WorldspaceCellsRemoved"], Location),
-        (TerminalKey, ["VirtualMachineAdapter", "Properties"], Terminal),
-        (MagicEffectKey, ["Sounds"], MagicEffect),
-        (PlacedNpcKey, ["LinkedReferences", "ActivateParents"], PlacedNpc),
-        (PlacedObjectKey, ["LinkedReferences"], PlacedObject),
-        (NavmeshKey, ["NavmeshGeometry", "PreCutMapEntries"], Navmesh),
-        (InfoMapKey, ["MapInfos", "PreferredPathing"], InfoMap),
-        (LandscapeKey, ["Layers"], Landscape),
+        ("Terminal", TerminalKey, ["VirtualMachineAdapter", "Properties"], Terminal),
+        ("MagicEffect", MagicEffectKey, ["Sounds"], MagicEffect),
+        ("PlacedNpc", PlacedNpcKey, ["LinkedReferences", "ActivateParents"], PlacedNpc),
+        ("PlacedObject", PlacedObjectKey, ["LinkedReferences"], PlacedObject),
+        ("Navmesh", NavmeshKey, ["NavmeshGeometry", "PreCutMapEntries"], Navmesh),
+        ("InfoMap", InfoMapKey, ["MapInfos", "PreferredPathing"], InfoMap),
+        ("Landscape", LandscapeKey, ["Layers"], Landscape),
     ];
 
     internal static void Hold(Fallout4Mod mod, bool reversed)
@@ -405,87 +405,34 @@ public sealed class Fallout4KeyedArrayCompareTests(Fallout4KeyedArrayCopies copi
         return diffs;
     }
 
-    [Fact]
-    public void AnNpcCopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(NpcKey);
-
-    [Fact]
-    public void AFactionCopyHoldingItsRelationsAndRanksInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(FactionKey);
-
-    [Fact]
-    public void ALeveledItemCopyHoldingDifferentEntriesAtOneKeyAndItsFilterKeywordChancesInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(LeveledItemKey);
-
-    [Fact]
-    public void ALeveledNpcCopyHoldingDifferentEntriesAtOneKeyInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(LeveledNpcKey);
-
-    [Fact]
-    public void AnObjectModCopyHoldingAPropertyTwiceInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(ObjectModKey);
-
-    [Fact]
-    public void AContainerCopyHoldingDifferentEntriesOfOneItemInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(ContainerKey);
-
-    [Fact]
-    public void AFurnitureCopyHoldingDifferentEntriesOfOneItemInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(FurnitureKey);
-
-    [Fact]
-    public void ALensFlareCopyHoldingASpriteTwiceInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(LensFlareKey);
-
-    [Fact]
-    public void AMaterialSwapCopyHoldingASubstitutionTwiceInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(MaterialSwapKey);
-
-    [Fact]
-    public void ARegionCopyHoldingASoundTwiceInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(RegionKey);
+    [Theory]
+    [InlineData("Npc")]
+    [InlineData("Faction")]
+    [InlineData("LeveledItem")]
+    [InlineData("LeveledNpc")]
+    [InlineData("WeaponModification")]
+    [InlineData("Container")]
+    [InlineData("Furniture")]
+    [InlineData("LensFlare")]
+    [InlineData("MaterialSwap")]
+    [InlineData("Region")]
+    [InlineData("Perk")]
+    [InlineData("Quest")]
+    [InlineData("Location")]
+    [InlineData("Terminal")]
+    [InlineData("MagicEffect")]
+    [InlineData("PlacedNpc")]
+    [InlineData("Navmesh")]
+    [InlineData("InfoMap")]
+    [InlineData("Landscape")]
+    public void ACopyHoldingItsKeyedArraysInAnotherOrder_IsIdenticalToMaster(string record) =>
+        AssertTopCopyIsIdenticalToMaster(Records.Single(r => r.Name == record).Key);
 
     [Fact]
     public void AMiscItemCopyHoldingItsComponentsInAnotherOrder_OverridesTheMaster_AsTheirDisplayIndicesPairByPosition() =>
         AssertTopCopyIs(ConflictThis.Override, MiscItemKey);
 
     [Fact]
-    public void APerkCopyHoldingAnEffectsConditionsInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(PerkKey);
-
-    [Fact]
-    public void AQuestCopyHoldingItsStagesAndAnAliasHoldingDifferentEntriesOfOneItemInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(QuestKey);
-
-    [Fact]
-    public void ALocationCopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(LocationKey);
-
-    [Fact]
-    public void ATerminalCopyHoldingItsFragmentsAndPropertiesInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(TerminalKey);
-
-    [Fact]
-    public void AMagicEffectCopyHoldingItsSoundsInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(MagicEffectKey);
-
-    [Fact]
-    public void APlacedNpcCopyHoldingItsLinkedReferencesAndActivateParentsInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(PlacedNpcKey);
-
-    [Fact]
     public void APlacedObjectCopyHoldingItsLinkedReferencesInAnotherOrder_OverridesTheMaster_AsXEditsUnsortedArrayDoes() =>
         AssertTopCopyIs(ConflictThis.Override, PlacedObjectKey);
-
-    [Fact]
-    public void ANavmeshCopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(NavmeshKey);
-
-    [Fact]
-    public void AnInfoMapCopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(InfoMapKey);
-
-    [Fact]
-    public void ALandscapeCopyHoldingItsLayersInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(LandscapeKey);
 }

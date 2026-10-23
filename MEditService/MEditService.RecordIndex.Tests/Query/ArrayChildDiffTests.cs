@@ -38,12 +38,27 @@ public class ArrayChildDiffTests
         [.. RequireChildren(Row(result, field)).Select(row => string.Join(" ",
             columns.Select(c => row.Values[c] is JsonElement e ? NameOf(e) : "-")))];
 
-    [Fact]
-    public void Array_AnElementTheOverrideLacks_ReadsAsAnAbsenceWhereItIsMissing()
+    [Theory]
+    [InlineData(new[] { "xyz", "xz" }, new[] { "x x", "y -", "z z" })]
+    [InlineData(new[] { "abc", "axc" }, new[] { "a a", "b -", "- x", "c c" })]
+    [InlineData(new[] { "ab", "acb", "abd" }, new[] { "a a a", "- c -", "b b b", "- - d" })]
+    [InlineData(new[] { "", "ab" }, new[] { "- a", "- b" })]
+    [InlineData(new[] { "aa", "a" }, new[] { "a a", "a -" })]
+    public void Array_EachElementIsARowAlignedAgainstEveryColumnBeforeIt_AnAbsenceReadingAsADash(string[] columns, string[] rows)
     {
-        var result = ComparedCopies.Of(List("xyz"), List("xz"));
+        var result = ComparedCopies.Of(columns.Select(List).ToArray());
 
-        Assert.Equal(["x x", "y -", "z z"], RowsAsEachColumnsElementOrDashWhereAbsent(result, "Items", "A.esp", "B.esp"));
+        Assert.Equal(rows, RowsAsEachColumnsElementOrDashWhereAbsent(result, "Items", [.. columns.Select((_, place) => ComparedCopies.PluginAt(place))]));
+    }
+
+    [Theory]
+    [InlineData(500, 500)]
+    [InlineData(501, 0)]
+    public void LinkArray_HasChildRowsUpToTheMaximumArrayChildCount_AndNoneBeyond(int count, int children)
+    {
+        var row = Row(ComparedCopies.Of(ListOf(count), ListOf(count)), "Items");
+
+        Assert.Equal(children, row.Children?.Count ?? 0);
     }
 
     [Fact]
@@ -56,38 +71,6 @@ public class ArrayChildDiffTests
         Assert.Equal(ConflictThis.Override, rows[0].CellStates["B.esp"]);
         Assert.Equal(ConflictThis.IdenticalToMaster, rows[1].CellStates["B.esp"]);
         Assert.Equal(ConflictThis.IdenticalToMaster, rows[2].CellStates["B.esp"]);
-    }
-
-    [Fact]
-    public void Array_AChangedElement_IsTheMastersElementAndThenTheOverrides_AsXEditsDiffMakesNoModificationOfAPair()
-    {
-        var result = ComparedCopies.Of(List("abc"), List("axc"));
-
-        Assert.Equal(["a a", "b -", "- x", "c c"], RowsAsEachColumnsElementOrDashWhereAbsent(result, "Items", "A.esp", "B.esp"));
-    }
-
-    [Fact]
-    public void Array_EachColumnAlignsAgainstEveryColumnBeforeIt()
-    {
-        var result = ComparedCopies.Of(List("ab"), List("acb"), List("abd"));
-
-        Assert.Equal(["a a a", "- c -", "b b b", "- - d"], RowsAsEachColumnsElementOrDashWhereAbsent(result, "Items", "A.esp", "B.esp", "C.esp"));
-    }
-
-    [Fact]
-    public void Array_AColumnWithoutTheArray_AlignsNothing()
-    {
-        var result = ComparedCopies.Of(List(""), List("ab"));
-
-        Assert.Equal(["- a", "- b"], RowsAsEachColumnsElementOrDashWhereAbsent(result, "Items", "A.esp", "B.esp"));
-    }
-
-    [Fact]
-    public void LinkArray_ARepeatedElement_IsARowForEachPlaceItHolds()
-    {
-        var result = ComparedCopies.Of(List("aa"), List("a"));
-
-        Assert.Equal(["a a", "a -"], RowsAsEachColumnsElementOrDashWhereAbsent(result, "Items", "A.esp", "B.esp"));
     }
 
     [Fact]
@@ -196,12 +179,6 @@ public class ArrayChildDiffTests
     }
 
     [Fact]
-    public void Array_ExceedingMaxArrayChildCount_ReturnsNullChildren()
-    {
-        Assert.Null(Row(ComparedCopies.Of(ListOf(501), ListOf(501)), "Items").Children);
-    }
-
-    [Fact]
     public void StructTypedArrayElement_WithAChangedMember_IsTheMastersElementThenTheOverrides()
     {
         static Action<MiscItem> Components(params uint[] counts) =>
@@ -241,18 +218,6 @@ public class ArrayChildDiffTests
         var result = ComparedCopies.Spelled("B.esp", document => document["Items"] = new JsonArray(), List(""), List(""));
 
         Assert.Null(Row(result, "Items").Children);
-    }
-
-    [Fact]
-    public void LinkArray_ExceedingMaxArrayChildCount_ReturnsNullChildren()
-    {
-        Assert.Null(Row(ComparedCopies.Of(ListOf(501)), "Items").Children);
-    }
-
-    [Fact]
-    public void LinkArray_AtExactlyMaxArrayChildCount_ReturnsChildren()
-    {
-        Assert.Equal(500, RequireChildren(Row(ComparedCopies.Of(ListOf(500)), "Items")).Count);
     }
 
     [Fact]

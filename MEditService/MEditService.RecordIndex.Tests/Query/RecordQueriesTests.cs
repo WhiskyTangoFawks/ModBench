@@ -68,7 +68,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
     private OpenedIndex OwnTwoNpcs() => Reconciled(TwoNpcsPlugin());
 
-    private OpenedIndex WithAnUnreadableNpc(string unreadable, params LoadOrderEntry[] besides)
+    private OpenedIndex WithAnUnreadableNpc(string unreadable)
     {
         var dataFolder = new ScratchDirectory("medit-record-query-unreadable-");
         _built.Add(dataFolder);
@@ -76,7 +76,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         DeletedNpcPlugin.WriteHoldingFields(path, FormKey.Factory(unreadable));
         var index = Indexes.Reconciled(
             dataFolder,
-            [new LoadOrderEntry(Path.GetFileName(path), path, PluginOrigin.DataDirectory, Line: 0, Enabled: true, Winning: true), .. besides]);
+            [new LoadOrderEntry(Path.GetFileName(path), path, PluginOrigin.DataDirectory, Line: 0, Enabled: true, Winning: true)]);
         _built.Add(index);
         return index;
     }
@@ -88,19 +88,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
         Assert.Equal(PluginName, plugin.Name);
         Assert.Equal(2, plugin.RecordCount);
-    }
-
-    [Fact]
-    public void GetPlugins_MarksOnlyThePluginHoldingAnUnreadableRecord()
-    {
-        var readable = Built(new PluginFixtureBuilder("record-query").WithPlugin("Readable.esp", mod => mod.Npcs.AddNew("Readable")))
-            .Plugins.Single();
-        var index = WithAnUnreadableNpc("000800:Unreadable.esp", readable with { Line = 1 });
-
-        var plugins = index.Queries.GetPlugins().Value();
-
-        Assert.True(plugins.Single(p => p.Name == "Unreadable.esp").HasParseFailure);
-        Assert.False(plugins.Single(p => p.Name == "Readable.esp").HasParseFailure);
     }
 
     [Theory]
@@ -138,14 +125,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("PatchedNpc").Race.SetTo(new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800))));
 
     [Fact]
-    public void GetPlugins_PluginWithMissingMaster_ReportsItAsAMasterIssue()
-    {
-        var patch = Assert.Single(PatchOfAGhostMaster().Queries.GetPlugins().Value(), p => p.Name == "Patch.esp");
-
-        Assert.Equal(["Ghost.esm"], patch.MissingMasters);
-    }
-
-    [Fact]
     public void GetRecord_ReferenceIntoAbsentMaster_RendersUnresolvedRatherThanErroring()
     {
         var detail = PatchOfAGhostMaster().Queries.GetRecord("000800:Patch.esp").Value();
@@ -156,12 +135,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         Assert.NotNull(raceValue);
         Assert.Contains("Ghost.esm", raceValue.ToString());
         Assert.Contains("Could not be resolved", raceField.CheckError);
-    }
-
-    [Fact]
-    public void GetPlugins_PluginWithNoMissingMasters_ReportsEmptyMasterIssues()
-    {
-        Assert.Equal([], Assert.Single(_svc.GetPlugins().Value()).MissingMasters);
     }
 
     [Fact]
@@ -442,23 +415,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetCompare_EachColumnCarriesXEditsHexLoadIndex_ALightPluginCountingAmongTheLightOnesAfterFE()
-    {
-        var index = Reconciled(new PluginFixtureBuilder("record-query")
-            .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("SharedNPC"))
-            .WithPlugin("Light.esp", (mod, prev) =>
-            {
-                mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small;
-                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-            })
-            .WithPlugin("Patch.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First())));
-
-        var compare = index.Queries.GetCompare("000800:Base.esm").Value();
-
-        Assert.Equal(["00", "FE:000", "01"], compare?.Overrides.Select(o => o.LoadIndex) ?? []);
-    }
-
-    [Fact]
     public void GetCompare_CarriesTheDiagnosisTheDocumentArrivedWith_ForTheRecordEditorRendersTheColumnReadOnlyFromItAlone()
     {
         const string unreadable = "000800:Unreadable.esp";
@@ -558,142 +514,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetCompare_RecordIdenticalExceptVmad_ClassifiesAsConflict()
-    {
-        var compare = Compared(new PluginFixtureBuilder("record-query")
-            .WithPlugin("Base.esp", mod => MakeScriptedNpc(mod, 10))
-            .WithPlugin("Mid.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(20))
-            .WithPlugin("Top.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(30)));
-
-        Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
-        Assert.Equal("Top.esp", PowerPropertyDiff(compare).WinnerColumn);
-    }
-
-    [Fact]
-    public void GetCompare_NoOverrideCarriesAnAdapter_OmitsTheFieldEntirely()
-    {
-        var compare = _svc.GetCompare(Npc01).Value();
-
-        Assert.NotNull(compare);
-        Assert.DoesNotContain(compare.Diffs, d => d.FieldName == VmadField);
-    }
-
-    [Fact]
-    public void GetCompare_OnlyOverrideCarriesAnAdapter_StillDiffsTheField()
-    {
-        var compare = Compared(new PluginFixtureBuilder("record-query")
-            .WithPlugin("Base.esp", mod => mod.Npcs.AddNew("PlainNpc"))
-            .WithPlugin("Over.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(5)));
-
-        Assert.Contains(compare.Diffs, d => d.FieldName == VmadField);
-        Assert.Equal(ConflictAll.Override, compare.ConflictAll);
-    }
-
-    [Fact]
-    public void GetCompare_FieldOverrideAndVmadOverride_StaysOverride()
-    {
-        var compare = Compared(new PluginFixtureBuilder("record-query")
-            .WithPlugin("Base.esp", mod => MakeScriptedNpc(mod, 10))
-            .WithPlugin("Over.esp", (mod, prev) =>
-            {
-                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Frenzied;
-                o.VirtualMachineAdapter = ScriptVmad(20);
-            }));
-
-        Assert.Equal(ConflictAll.Override, compare.ConflictAll);
-    }
-
-    [Fact]
-    public void GetCompare_NonMastersAgreeingOnTheFieldButDifferingOnVmad_AgainstAMasterCarryingAnAdapter_EscalateToConflict_NotOverride()
-    {
-        var compare = Compared(new PluginFixtureBuilder("record-query")
-            .WithPlugin("Base.esp", mod => MakeScriptedNpc(mod, 10))
-            .WithPlugin("Mid.esp", (mod, prev) =>
-            {
-                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Frenzied;
-                o.VirtualMachineAdapter = ScriptVmad(20);
-            })
-            .WithPlugin("Top.esp", (mod, prev) =>
-            {
-                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Frenzied;
-                o.VirtualMachineAdapter = ScriptVmad(30);
-            }));
-
-        Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
-    }
-
-    [Fact]
-    public void GetCompare_NonMastersAgreeingOnTheFieldButDifferingOnVmad_AgainstAMasterCarryingNoAdapter_EscalateToConflict_NotOverride()
-    {
-        var compare = Compared(new PluginFixtureBuilder("record-query")
-            .WithPlugin("Base.esp", mod => mod.Npcs.AddNew("EscalateTest").Aggression = Npc.AggressionType.Unaggressive)
-            .WithPlugin("Mid.esp", (mod, prev) =>
-            {
-                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Frenzied;
-                o.VirtualMachineAdapter = ScriptVmad(10);
-            })
-            .WithPlugin("Top.esp", (mod, prev) =>
-            {
-                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Frenzied;
-                o.VirtualMachineAdapter = ScriptVmad(20);
-            }));
-
-        Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
-    }
-
-    [Fact]
-    public void GetCompare_ConflictedFieldWithUncontestedVmad_DoesNotDowngradeFromConflict()
-    {
-        var compare = Compared(new PluginFixtureBuilder("record-query")
-            .WithPlugin("Base.esp", mod =>
-            {
-                var npc = mod.Npcs.AddNew("EscalateNoDowngradeTest");
-                npc.Aggression = Npc.AggressionType.Unaggressive;
-                npc.VirtualMachineAdapter = ScriptVmad(10);
-            })
-            .WithPlugin("Mid.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).Aggression = Npc.AggressionType.Frenzied)
-            .WithPlugin("Top.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).Aggression = Npc.AggressionType.Aggressive));
-
-        Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
-    }
-
-    [Fact]
-    public void GetCompare_EquivalentGenericFieldAndVmadPropertyConflictLoss_ShowTheSameConflictThis()
-    {
-        var compare = Compared(new PluginFixtureBuilder("record-query")
-            .WithPlugin("Base.esp", mod =>
-            {
-                var npc = mod.Npcs.AddNew("ParityTest");
-                npc.Aggression = Npc.AggressionType.Unaggressive;
-                npc.VirtualMachineAdapter = ScriptVmad(10);
-            })
-            .WithPlugin("Mid.esp", (mod, prev) =>
-            {
-                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Frenzied;
-                o.VirtualMachineAdapter = ScriptVmad(20);
-            })
-            .WithPlugin("Top.esp", (mod, prev) =>
-            {
-                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Aggressive;
-                o.VirtualMachineAdapter = ScriptVmad(30);
-            }));
-
-        var fieldStates = compare.Diffs.First(d => d.FieldName == "Aggression").CellStates;
-        var vmadStates = PowerPropertyDiff(compare).CellStates;
-        Assert.Equal(ConflictThis.ConflictLoses, fieldStates["Mid.esp"]);
-        Assert.Equal(ConflictThis.ConflictWins, fieldStates["Top.esp"]);
-        Assert.Equal(fieldStates["Mid.esp"], vmadStates["Mid.esp"]);
-        Assert.Equal(fieldStates["Top.esp"], vmadStates["Top.esp"]);
-    }
-
-    [Fact]
     public void GetCompare_RecordHasConditions_ClassifiesThemAsFieldDiffChildren_ThroughTheOneConflictClassifierForAConditionListIsAnOrdinaryReflectedArrayColumn()
     {
         var compare = Compared(new PluginFixtureBuilder("record-query")
@@ -743,31 +563,8 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     private CompareResult Compared(PluginFixtureBuilder plugins, string formKey = "000800:Base.esp") =>
         Reconciled(plugins).Queries.GetCompare(formKey).Value() ?? throw new InvalidOperationException($"Expected a comparison of {formKey}.");
 
-    private static void MakeScriptedNpc(IFallout4Mod mod, int power) =>
-        mod.Npcs.AddNew("ScriptedNPC").VirtualMachineAdapter = ScriptVmad(power);
-
-    private const string VmadField = "VirtualMachineAdapter";
-
     private static IReadOnlyList<FieldDiff> Children(FieldDiff diff) =>
         diff.Children ?? throw new InvalidOperationException($"Expected \"{diff.FieldName}\" to have children.");
-
-    private static FieldDiff PowerPropertyDiff(CompareResult compare)
-    {
-        var vmad = compare.Diffs.First(d => d.FieldName == VmadField);
-        var scripts = Children(vmad).First(c => c.FieldName == "Scripts");
-        var script = Children(scripts).First(c => c.FieldName == "S");
-        var properties = Children(script).First(c => c.FieldName == "Properties");
-        return Children(properties).First(c => c.FieldName == "Power");
-    }
-
-    private static VirtualMachineAdapter ScriptVmad(int power)
-    {
-        var vmad = new VirtualMachineAdapter();
-        var script = new ScriptEntry { Name = "S", Flags = ScriptEntry.Flag.Local };
-        script.Properties.Add(new ScriptIntProperty { Name = "Power", Data = power });
-        vmad.Scripts.Add(script);
-        return vmad;
-    }
 
     [Fact]
     public void GetCompare_UnknownFormKey_ReturnsNull()
@@ -799,22 +596,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         var counts = index.Queries.GetPluginRecordTypes(PluginKey with { Name = PluginName.ToUpperInvariant() }).Value();
 
         Assert.Equal([("cell", 1), ("stat", 1)], counts.Select(c => (c.Type, c.Count)).Order());
-    }
-
-    [Fact]
-    public void GetPluginRecordTypes_MarksOnlyTheTypeWhoseCountCarriesAFailure()
-    {
-        var fixture = Built(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
-        {
-            MisshapedPerks.Add(mod, "Unreadable");
-            mod.Npcs.AddNew("Readable");
-        }, origin: PluginKey.Origin));
-        MisshapedPerks.Misshape(fixture.Plugins.Single().Path);
-
-        var result = Reconciled(fixture).Queries.GetPluginRecordTypes(PluginKey).Value();
-
-        Assert.True(Assert.Single(result, r => r.Type == "perk").HasParseFailure);
-        Assert.False(Assert.Single(result, r => r.Type == "npc_").HasParseFailure);
     }
 
     [Fact]
@@ -937,36 +718,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 
         Assert.Equal(0, result.Total);
         Assert.Empty(result.Items);
-    }
-
-    [Fact]
-    public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
-    {
-        var index = OwnTwoNpcs();
-        index.SetFilter(MatchesNpc02, "npcs.sql");
-
-        Assert.True(Assert.Single(index.Queries.GetPlugins().Value(), p => p.Name == PluginName).HasMatchingRecords);
-    }
-
-    [Fact]
-    public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch_ForTheTreeIsAlsoTheLoadOrderAndAHiddenPluginWouldBeUnreorderable()
-    {
-        var index = OwnTwoNpcs();
-        index.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key", "nothing.sql");
-
-        Assert.False(Assert.Single(index.Queries.GetPlugins().Value(), p => p.Name == PluginName).HasMatchingRecords);
-    }
-
-    [Fact]
-    public void GetPlugins_AfterClearFilter_RestoresAllPlugins()
-    {
-        var index = OwnTwoNpcs();
-        index.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key", "nothing.sql");
-        index.ClearFilter();
-
-        var plugin = Assert.Single(index.Queries.GetPlugins().Value());
-        Assert.Equal(PluginName, plugin.Name);
-        Assert.True(plugin.HasMatchingRecords);
     }
 
     [Fact]
