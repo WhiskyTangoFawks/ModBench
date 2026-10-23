@@ -403,8 +403,14 @@ describe('the Plugins view\'s Problems', () => {
     await settle();
 
     expect([...present(h.diagnostics.get('modbench-diagnosis'), 'the malformed collection')]
-      .map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => (d.code as { value?: string } | undefined)?.value)]))
-      .toEqual([[inAMod, ['decompile and repair']], [inTheGameFolder, [undefined]]]);
+      .map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => d.code)]))
+      .toEqual([
+        [inAMod, [{
+          value: 'decompile and repair',
+          target: uriParse(`command:modbench.plugin.decompileAndRepair?${encodeURIComponent(JSON.stringify([{ name: 'Test.esp', origin: 'ModA' }]))}`),
+        }]],
+        [inTheGameFolder, [undefined]],
+      ]);
   });
 });
 
