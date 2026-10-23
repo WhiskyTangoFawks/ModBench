@@ -113,8 +113,8 @@ describe('the MO2 adapter\'s repository', () => {
     };
 
     it.each([
-      ['no repository', async () => undefined, false],
-      ['a repository with neither the push check nor the path tokens', async () => { runGit('init', '--quiet'); }, false],
+      ['no repository', () => Promise.resolve(), false],
+      ['a repository with neither the push check nor the path tokens', () => { runGit('init', '--quiet'); return Promise.resolve(); }, false],
       ['a repository with the push check and the path tokens', async (adapter: Adapter) => {
         runGit('init', '--quiet');
         await adapter.refuseUnpublishedPins();
