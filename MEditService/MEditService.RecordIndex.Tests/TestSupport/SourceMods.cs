@@ -77,6 +77,17 @@ internal static class SourceMods
         File.WriteAllText(path, File.ReadAllText(path).Replace(from, to, StringComparison.Ordinal));
     }
 
+    /// <summary>A path relative to <paramref name="document"/>'s folder, <c>{0}</c> standing for its file name, with the
+    /// folders it needs made.</summary>
+    internal static string Beside(this string document, string relativeTarget)
+    {
+        var target = Path.Combine(
+            Path.GetDirectoryName(document).Require(),
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, relativeTarget, Path.GetFileName(document)));
+        Directory.CreateDirectory(Path.GetDirectoryName(target).Require());
+        return target;
+    }
+
     /// <summary>A hand rename of a document's EditorID that also renames its file, as the layout names it,
     /// so the file stays where it belongs.</summary>
     internal static void RenameByHand(this LoadOrderEntry entry, RecordDetail document, string editorId)

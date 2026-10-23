@@ -261,27 +261,30 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
     private static readonly string CellBody = $"{{\n  \"FormKey\": \"{CellKey}\",\n  \"EditorID\": \"Cell\"\n}}";
 
-    private (ISourceRepository Repository, string Directory, string BlockFolder) ACellPutInItsOwnDirectory()
+    private (ISourceRepository Repository, string Directory, string BlockFolder) AContainerPutInItsOwnDirectory(
+        string recordType = "cell", string groupFolder = "Cells")
     {
         PluginBaselines.InitWithNoRecords(_modFolder);
         var repository = RequireOpened();
-        repository.Put(Plugin, new SourceDocument(CellKey, "cell", "Cell", CellBody)).Wrote();
-        var directory = Directory.GetDirectories(Path.Combine(_modFolder, "plugin-source", PluginName, "Cells"), "Cell*", SearchOption.AllDirectories).Single();
+        repository.Put(Plugin, new SourceDocument(CellKey, recordType, "Cell", CellBody)).Wrote();
+        var directory = Directory.GetDirectories(Path.Combine(_modFolder, "plugin-source", PluginName, groupFolder), "Cell*", SearchOption.AllDirectories).Single();
         return (repository, directory, Path.GetDirectoryName(directory) ?? throw new InvalidOperationException(directory));
     }
 
-    private static SourceFailure? PutTheCell(ISourceRepository repository) =>
-        repository.Put(Plugin, new SourceDocument(CellKey, "cell", "Cell", CellBody));
+    private static SourceFailure? PutTheContainer(ISourceRepository repository, string recordType = "cell") =>
+        repository.Put(Plugin, new SourceDocument(CellKey, recordType, "Cell", CellBody));
 
-    [Fact]
-    public void Put_OfACellDirectorySomethingElseRenamed_MovesItToTheNameTheLayoutComputes()
+    [Theory]
+    [InlineData("cell", "Cells")]
+    [InlineData("wrld", "Worldspaces")]
+    public void Put_OfAContainerDirectorySomethingElseRenamed_MovesItToTheNameTheLayoutComputes(string recordType, string groupFolder)
     {
-        var (repository, held, blockFolder) = ACellPutInItsOwnDirectory();
-        Directory.Move(held, Path.Combine(blockFolder, $"RenamedOutside - 000A00_{PluginName}"));
+        var (repository, held, parent) = AContainerPutInItsOwnDirectory(recordType, groupFolder);
+        Directory.Move(held, Path.Combine(parent, $"RenamedOutside - 000A00_{PluginName}"));
 
-        PutTheCell(repository).Wrote();
+        PutTheContainer(repository, recordType).Wrote();
 
-        Assert.Equal([Path.Combine(blockFolder, $"Cell - 000A00_{PluginName}")], Directory.GetDirectories(blockFolder));
+        Assert.Equal([Path.Combine(parent, $"Cell - 000A00_{PluginName}")], Directory.GetDirectories(parent));
     }
 
     [Theory]
@@ -290,10 +293,10 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     [InlineData("RecordData.json")]
     public void Put_OfACellWhoseDocumentIsNamedOtherwiseInItsOwnDirectory_MovesTheDocumentToTheLeafName(string heldAs)
     {
-        var (repository, directory, _) = ACellPutInItsOwnDirectory();
+        var (repository, directory, _) = AContainerPutInItsOwnDirectory();
         File.Move(PluginSourceRoot.ContainerDocument(directory), Path.Combine(directory, heldAs));
 
-        PutTheCell(repository).Wrote();
+        PutTheContainer(repository).Wrote();
 
         Assert.Equal([PluginSourceRoot.ContainerDocument(directory)], Directory.GetFiles(directory));
     }
@@ -301,11 +304,11 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     [Fact]
     public void Put_OfACellWhoseDirectoryHoldsTwoDocumentsAndNoneNamedForIt_RefusesAsAmbiguous()
     {
-        var (repository, directory, _) = ACellPutInItsOwnDirectory();
+        var (repository, directory, _) = AContainerPutInItsOwnDirectory();
         File.Move(PluginSourceRoot.ContainerDocument(directory), Path.Combine(directory, "One.json"));
         File.WriteAllText(Path.Combine(directory, "Two.json"), CellBody);
 
-        Assert.IsType<SourceFailure.Ambiguous>(PutTheCell(repository).Failed());
+        Assert.IsType<SourceFailure.Ambiguous>(PutTheContainer(repository).Failed());
     }
 
     [Fact]

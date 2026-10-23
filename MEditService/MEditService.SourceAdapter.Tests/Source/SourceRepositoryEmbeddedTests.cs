@@ -684,6 +684,20 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
+    public void ChangesToPutChild_IntoAnEmbeddedContainerWhoseOwnersDocumentAnotherToolRenamed_AppendsToTheRenamedDocument()
+    {
+        var renamed = Path.Combine(Root, "Quests", "Renamed by hand.json");
+        File.Move(FullPath(QuestPath), FullPath(renamed));
+        var added = new DialogResponses(_mod) { EditorID = "Response3" };
+
+        var changes = Repository.ChangesToPutChild(Plugin, Identity(_topic, "dial"), "Responses", ANewChild(added, "info")).Value();
+
+        var owner = Assert.Single(changes.Documents);
+        Assert.Equal(renamed, owner.Path);
+        Assert.Contains("\"Response3\"", owner.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ChangesToPutChild_IntoAContainerWithADocumentOfItsOwn_AppendsToThatDocument()
     {
         var added = new PlacedObject(_mod) { EditorID = "AddedRef", Position = new P3Float(1f, 1f, 1f), Scale = 1f };

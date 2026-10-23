@@ -183,10 +183,7 @@ public sealed class LoadOrderLocalizedTests
             Assert.Single(index.CopyIn(doorFormKey.ToString(), DataCopy).Require().Fields, f => f.Metadata.Name == "Name").CheckError;
         string? NameCheckErrorIn(Language language)
         {
-            var before = index.Sequence;
-            index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: [], language: language));
-            Waits.Reached(() => index.Sequence > before, "the sequence moving");
-            Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the reconcile");
+            ReceiveInLanguage(index, holder, data, language);
             return NameCheckError();
         }
 
@@ -195,6 +192,42 @@ public sealed class LoadOrderLocalizedTests
         Assert.Equal(
             (null, "Fixture_de.STRINGS, Fixture_de.ILSTRINGS, Fixture_de.DLSTRINGS", null),
             (first, second, third));
+    }
+
+    private static void ReceiveInLanguage(OpenedIndex index, LoadOrderHolder holder, PluginFixtureData data, Language language)
+    {
+        var before = index.Sequence;
+        index.Receive(holder, SnapshotOf(data, data.Plugins, gameReads: [], language: language));
+        Waits.Reached(() => index.Sequence > before, "the sequence moving");
+        Waits.Reached(() => index.Status.State != LoadOrderState.Reconciling, "the reconcile");
+    }
+
+    [Fact]
+    public void ALocalizedRecordsListedName_FollowsTheStringsLanguageTheLoadOrderNames()
+    {
+        using var data = new PluginFixtureBuilder("load-order-localized-listing")
+            .WithPlugin("Fixture.esp", mod =>
+            {
+                mod.UsingLocalization = true;
+                mod.Activators.AddNew("MainLever").Name = new TranslatedString(
+                    Language.English,
+                    new KeyValuePair<Language, string>(Language.French, "Levier"),
+                    new KeyValuePair<Language, string>(Language.English, "Lever"));
+            })
+            .Build();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        string? ListedName() =>
+            index.Queries.GetRecords(["acti"], DataCopy, search: null, limit: 10, offset: 0).Value().Items.Single().FullName;
+        string? ListedNameIn(Language language)
+        {
+            ReceiveInLanguage(index, holder, data, language);
+            return ListedName();
+        }
+
+        var (french, english) = (ListedNameIn(Language.French), ListedNameIn(Language.English));
+
+        Assert.Equal(("Levier", "Lever"), (french, english));
     }
 
     [Fact]

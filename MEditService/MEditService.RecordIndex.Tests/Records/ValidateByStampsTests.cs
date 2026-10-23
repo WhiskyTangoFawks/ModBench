@@ -208,6 +208,41 @@ public sealed class ValidateByStampsTests : IDisposable
             strict: true);
     }
 
+    [Theory]
+    [InlineData("RenamedByHand.json")]
+    [InlineData("SortedByHand/{0}")]
+    public void ADocumentMovedByHand_KeepsItsRecord_AndAnnouncesNoChangeToIt(string movedTo)
+    {
+        var document = NpcFile;
+        File.Move(document, document.Beside(movedTo));
+
+        var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
+
+        Assert.Equal("FixtureNpc", Npc.EditorId);
+        Assert.DoesNotContain(announced, Announcements.RowsChanged(_npc));
+    }
+
+    [Theory]
+    [InlineData("RenamedByHand.json", true)]
+    [InlineData("Misnamed - 000900_Fixture.esp.json", true)]
+    [InlineData("SortedByHand/{0}", true)]
+    [InlineData("SortedByHand/RenamedByHand.json", true)]
+    [InlineData("Backup/{0}", false)]
+    [InlineData("Backup/copy.json", false)]
+    public void ACopyOfADocument_IsDiagnosedUntilOneOfTheTwoIsDeleted_AndTheRecordSurvives(string copiedTo, bool deletesTheOriginal)
+    {
+        var document = NpcFile;
+        var copy = document.Beside(copiedTo);
+        File.Copy(document, copy);
+        ValidateUntilSourceUnreadable();
+
+        File.Delete(deletesTheOriginal ? document : copy);
+        _index.NextSnapshotUntil(() => !SourceUnreadable, "the plugin read from its source again");
+
+        Assert.False(SourceUnreadable);
+        Assert.Equal("FixtureNpc", Npc.EditorId);
+    }
+
     [Fact]
     public void ValidatingEveryPlugin_WhenOnePluginsTreeCannotBeRead_StillValidatesTheOthers()
     {
