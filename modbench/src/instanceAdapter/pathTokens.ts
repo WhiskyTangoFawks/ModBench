@@ -7,7 +7,7 @@ export interface TokenFolders {
   readonly game: string | undefined;
 }
 
-/** How a file spells a path: the separator after its root, then between its names. */
+// How a file spells a path: the separator after its root, then between its names.
 interface Separator {
   readonly first: string;
   readonly rest: string;
