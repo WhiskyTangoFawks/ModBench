@@ -214,7 +214,7 @@ public sealed class ValidateByStampsTests : IDisposable
     public void ADocumentMovedByHand_KeepsItsRecord_AndAnnouncesNoChangeToIt(string movedTo)
     {
         var document = NpcFile;
-        File.Move(document, document.Beside(movedTo));
+        File.Move(document, AnotherTool.Beside(document, movedTo));
 
         var announced = _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
 
@@ -232,7 +232,7 @@ public sealed class ValidateByStampsTests : IDisposable
     public void ACopyOfADocument_IsDiagnosedUntilOneOfTheTwoIsDeleted_AndTheRecordSurvives(string copiedTo, bool deletesTheOriginal)
     {
         var document = NpcFile;
-        var copy = document.Beside(copiedTo);
+        var copy = AnotherTool.Beside(document, copiedTo);
         File.Copy(document, copy);
         ValidateUntilSourceUnreadable();
 

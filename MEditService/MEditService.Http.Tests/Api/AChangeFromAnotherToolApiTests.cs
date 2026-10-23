@@ -75,7 +75,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal("AmbiguousSourceUnit", problem.GetProperty("refusal").GetString());
         var detail = problem.GetProperty("detail").GetString().Require();
         Assert.Contains(Path.GetRelativePath(modFolder, original), detail, StringComparison.Ordinal);
-        Assert.Contains(Path.GetRelativePath(modFolder, OtherTool.Beside(original, "Backup/{0}")), detail, StringComparison.Ordinal);
+        Assert.Contains(Path.GetRelativePath(modFolder, AnotherTool.Beside(original, "Backup/{0}")), detail, StringComparison.Ordinal);
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
         await Client.NextSnapshot(fx);
         await ItsPluginSourceReadsAs(unreadable: true);
@@ -84,7 +84,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     private static string ACellCopiedUnderAKeyOfItsOwn(string modFolder, string cell)
     {
         var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"")).Require();
-        var copy = OtherTool.Beside(original, "CopiedCell - 000950_Shared.esp");
+        var copy = AnotherTool.Beside(original, "CopiedCell - 000950_Shared.esp");
         OtherTool.CopiesASourceDirectory(original, Path.GetFileName(copy));
         var document = Directory.GetFiles(copy).Single();
         var text = File.ReadAllText(document);
@@ -141,7 +141,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var quest = await Client.FirstFormKey(Plugin, Origin, "qust");
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
         using var stream = await Client.NotificationStream();
-        Directory.CreateDirectory(OtherTool.Beside(original, "Backup"));
+        Directory.CreateDirectory(AnotherTool.Beside(original, "Backup"));
         OtherTool.EditsASourceDocument(modFolder, Plugin, "OriginalFilter", "SettledFilter");
         await Client.NextSnapshot(fx);
         await stream.EventsUntil("rows-changed", e => Names(e, quest));
@@ -152,7 +152,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var diagnosed = await TheFilesItsReadStoppedAt();
         Assert.Contains(Path.GetRelativePath(modFolder, original), diagnosed);
         Assert.Contains(
-            Path.GetRelativePath(modFolder, OtherTool.Beside(original, $"Backup/{copiedTo}")), diagnosed);
+            Path.GetRelativePath(modFolder, AnotherTool.Beside(original, $"Backup/{copiedTo}")), diagnosed);
     }
 
     private Task ItsPluginSourceReadsAs(bool unreadable) =>
@@ -205,7 +205,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         await Client.NextSnapshot(fx);
         await TheFrameAfterWhichItReadsGone(stream, npc);
 
-        OtherTool.WritesTheFile(OtherTool.Beside(original, writtenTo), text);
+        OtherTool.WritesTheFile(AnotherTool.Beside(original, writtenTo), text);
         await Client.NextSnapshot(fx);
 
         await Wire.Eventually(
@@ -252,7 +252,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         await stream.EventsUntil("rows-changed", e => Names(e, container));
 
         OtherTool.WritesTheFile(
-            Path.Combine(OtherTool.Beside(original, "RenamedByHand"), Path.GetFileName(document)), text);
+            Path.Combine(AnotherTool.Beside(original, "RenamedByHand"), Path.GetFileName(document)), text);
         await Client.NextSnapshot(fx);
 
         await stream.EventsUntil("rows-changed", e => Names(e, container));

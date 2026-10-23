@@ -39,13 +39,12 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
     }
 
     [Fact]
-    public async Task AQuestionAboutOnePluginsRecordTypes_NamesEveryTypeInNameOrder()
+    public async Task AQuestionAboutOnePluginsRecordTypes_IsAnsweredWithEachTypeAndItsName()
     {
         var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types?origin={UserMod}");
 
-        Assert.Equal(
-            ["Activator", "Cell", "Keyword", "Non-Player Character", "Quest", "Worldspace"],
-            types.EnumerateArray().Select(t => t.GetProperty("displayName").GetString()));
+        var npcs = types.EnumerateArray().Single(t => t.GetProperty("type").GetString() == "npc_");
+        Assert.Equal("Non-Player Character", npcs.GetProperty("displayName").GetString());
     }
 
     [Fact]

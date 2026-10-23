@@ -77,17 +77,6 @@ internal static class SourceMods
         File.WriteAllText(path, File.ReadAllText(path).Replace(from, to, StringComparison.Ordinal));
     }
 
-    /// <summary>A path relative to <paramref name="document"/>'s folder, <c>{0}</c> standing for its file name, with the
-    /// folders it needs made.</summary>
-    internal static string Beside(this string document, string relativeTarget)
-    {
-        var target = Path.Combine(
-            Path.GetDirectoryName(document).Require(),
-            string.Format(System.Globalization.CultureInfo.InvariantCulture, relativeTarget, Path.GetFileName(document)));
-        Directory.CreateDirectory(Path.GetDirectoryName(target).Require());
-        return target;
-    }
-
     /// <summary>A hand rename of a document's EditorID that also renames its file, as the layout names it,
     /// so the file stays where it belongs.</summary>
     internal static void RenameByHand(this LoadOrderEntry entry, RecordDetail document, string editorId)
@@ -117,6 +106,13 @@ internal static class SourceMods
             entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, newEditorId, body)).Wrote();
         index.NextSnapshot();
     }
+
+    /// <summary>The working tree's copy of <paramref name="document"/> put under <paramref name="newEditorId"/>, written from
+    /// <see cref="SourceTextOf"/> so a container keeps the children it embeds.</summary>
+    internal static void RenameEditorId(this OpenedIndex index, LoadOrderEntry entry, RecordDetail document, string newEditorId) =>
+        index.Rename(
+            entry, document, newEditorId,
+            entry.SourceTextOf(document).Replace($"\"{document.EditorId}\"", $"\"{newEditorId}\"", StringComparison.Ordinal));
 
     /// <summary>A document the working tree gains, then the next snapshot.</summary>
     internal static void Create(this OpenedIndex index, LoadOrderEntry entry, string formKey, string recordType, string? editorId, string body)

@@ -9,4 +9,15 @@ public static class AnotherTool
             File.SetAttributes(file, FileAttributes.Normal);
         Directory.Delete(folder, recursive: true);
     }
+
+    /// <summary>A path relative to <paramref name="document"/>'s folder, <c>{0}</c> standing for its file name, with the
+    /// folders it needs made.</summary>
+    public static string Beside(string document, string relativeTarget)
+    {
+        var target = Path.Combine(
+            Path.GetDirectoryName(document).Require(),
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, relativeTarget, Path.GetFileName(document)));
+        Directory.CreateDirectory(Path.GetDirectoryName(target).Require());
+        return target;
+    }
 }

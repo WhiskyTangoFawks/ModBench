@@ -94,10 +94,7 @@ public sealed class SpatialWorkingTreeStateTests : IDisposable
     [InlineData("interiorRef", new[] { "interiorRef", "interiorCell" })]
     public void AnEditedSpatialRecord_IsListedAsModified_WithTheDocumentHoldingIt(string edited, string[] modified)
     {
-        var identity = _index.DocumentOf(_formKeys[edited], _entry.KeyOf());
-        _index.Rename(
-            _entry, identity, "Renamed",
-            _entry.SourceTextOf(identity).Replace($"\"{EditorIdOf[edited]}\"", "\"Renamed\"", StringComparison.Ordinal));
+        _index.RenameEditorId(_entry, _index.DocumentOf(_formKeys[edited], _entry.KeyOf()), "Renamed");
 
         var expected = Kinds.ToDictionary(kind => kind, kind => modified.Contains(kind) ? WorkingTreeState.Modified : WorkingTreeState.None);
         Assert.Equal(expected, States());

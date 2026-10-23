@@ -1,3 +1,4 @@
+using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 
@@ -29,5 +30,7 @@ public sealed class ValidateContainerByStampsTests : IDisposable
 
         ValidateUntilPlacedRefIsNamed(ContainerModPlugin.TemporaryRefEditorId);
         Assert.Equal(ContainerModPlugin.TemporaryRefEditorId, PlacedRefEditorId);
+        Assert.Equal(WorkingTreeState.None, _fixture.Index.RowOf(_fixture.TemporaryRef, _fixture.Plugin)?.WorkingTreeState);
+        Assert.Equal(WorkingTreeState.None, _fixture.Index.RowOf(_fixture.EmbedCell, _fixture.Plugin)?.WorkingTreeState);
     }
 }
