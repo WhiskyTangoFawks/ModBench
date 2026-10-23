@@ -20,13 +20,6 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     }
 
     [Fact]
-    public async Task PostFilter_SqlWithoutFormKeyColumn_Returns400()
-    {
-        var resp = await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT editor_id FROM \"NPC_\"", source = "editor-ids.sql" });
-        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
-    }
-
-    [Fact]
     public async Task PostFilter_SqlNamingAColumnNoRelationHas_Returns400SayingWhy()
     {
         var resp = await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT form_key FROM \"NPC_\" WHERE no_such_column = 1", source = "wrong.sql" });

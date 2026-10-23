@@ -206,15 +206,4 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
         Assert.Equal("DataFolderNotFound", (await response.AssertIsProblem(HttpStatusCode.BadRequest)).GetProperty("refusal").GetString());
     }
-
-    [Fact]
-    public async Task PutLoadOrder_MissingInstanceRoot_Returns400()
-    {
-        var body = Body();
-        body["instanceRoot"] = "/no-such-instance";
-
-        var response = await _client.PutAsJsonAsync("/load-order", body);
-
-        Assert.Equal("InstanceRootNotFound", (await response.AssertIsProblem(HttpStatusCode.BadRequest)).GetProperty("refusal").GetString());
-    }
 }

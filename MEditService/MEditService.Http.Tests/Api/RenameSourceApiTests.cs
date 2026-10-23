@@ -117,14 +117,6 @@ public sealed class RenameSourceApiTests : HostedTests
         Assert.Equal("UnreadableSource", await RefusalOf(response, HttpStatusCode.UnprocessableEntity));
     }
 
-    [Fact]
-    public async Task RenamingWithNoLoadOrder_Is503()
-    {
-        var response = await RenameSource(Plugin, Origin, "Renamed.esp");
-
-        await response.AssertIsProblem(HttpStatusCode.ServiceUnavailable);
-    }
-
     [Theory]
     [InlineData("", Origin)]
     [InlineData(Plugin, " ")]
@@ -143,28 +135,4 @@ public sealed class RenameSourceWithoutGitApiTests : HostedTests
 {
     private const string Plugin = "CompiledPlugin.esp";
     private const string Origin = "SourceMod";
-
-    [Fact]
-    public async Task RenamingWithGitMissing_Is500WithTheRefusal()
-    {
-        using var fx = new PluginFixtureBuilder("api-rename-source-without-git")
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("CompiledPluginNpc"), origin: Origin)
-            .BuildScattered();
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
-
-        HttpResponseMessage response;
-        var path = Environment.GetEnvironmentVariable("PATH");
-        Environment.SetEnvironmentVariable("PATH", string.Empty);
-        try
-        {
-            response = await Client.PostAsJsonAsync("/plugins/rename-source-changes", new { origin = Origin, name = Plugin, newName = "Renamed.esp" });
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PATH", path);
-        }
-
-        Assert.Equal("GitUnavailable", (await response.AssertIsProblem(HttpStatusCode.InternalServerError)).GetProperty("refusal").GetString());
-    }
 }

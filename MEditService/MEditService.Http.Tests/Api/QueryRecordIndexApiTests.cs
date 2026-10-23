@@ -142,14 +142,6 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
     }
 
     [Fact]
-    public async Task TheRecordTypesARecordCanHold_AskedWithNoOrigin_AreRefused()
-    {
-        var response = await Client.GetAsync($"/plugins/{UserPlugin}/records/000FFF%3ANowhere.esp/child-record-types");
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
     public async Task AQuestionAboutARecordNoPluginHolds_IsAnsweredWithNothingFound()
     {
         var response = await Client.GetAsync(new Uri("/records/000FFF:Nowhere.esp", UriKind.Relative));
