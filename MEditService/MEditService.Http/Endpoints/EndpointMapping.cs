@@ -59,8 +59,7 @@ internal static class EndpointMapping
         return Results.Problem(detail: message, statusCode: status(refusal), extensions: extensions);
     }
 
-    /// <summary>A whole selection is refused for no load order or for a machine without git, and for nothing else (ADR-0019).
-    /// Every other refusal is a plugin's or a mod's, in the answer.</summary>
+    // A whole selection is refused for no load order or a machine without git, and for nothing else (ADR-0019).
     private static IResult WholeSelection<TRefusal>(SelectionRefusal<TRefusal> refusal, TRefusal noLoadOrder, TRefusal gitUnavailable)
         where TRefusal : struct, Enum =>
         Problem(
