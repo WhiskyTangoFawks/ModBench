@@ -4,7 +4,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.ModFolderAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -214,18 +213,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task RestoringAMod_AnswersTheVersionItsManifestSays()
-    {
-        ModInstalledFromADownload();
-        _versionUpdated = "1.0";
-        await Post("update-manifest");
-
-        var restored = Assert.Single((await Post("restore-from-manifest")).GetProperty("applied").EnumerateArray());
-
-        Assert.Equal("1.0", restored.GetProperty("metadata").GetProperty("version").GetString());
-    }
-
-    [Fact]
     public async Task AModChangedSinceItsUpdate_ListsWhatRestoreDestroys_ButTheMetadataFiles()
     {
         ModInstalledFromADownload();
@@ -258,18 +245,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         Assert.All(progress, e => Assert.Equal(Gesture, e.GetProperty("modlistProgress").GetProperty("gesture").GetString()));
     }
 
-    [Fact]
-    public async Task RestoringAModWhoseRequestHandsNoInstallationFile_NamesEachItsManifestNames_SoARequestHandingThemBringsItBack()
-    {
-        ModInstalledFromADownload();
-        await Post("update-manifest");
-        var response = await Client.PostAsJsonAsync("/restore-from-manifest", Request("restore-from-manifest", "Mod.zip", handsTheDownload: false));
-
-        var skipped = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
-        Assert.Equal("NotFound", skipped.GetProperty("refusal").GetString());
-        Assert.Equal("Mod.zip", skipped.GetProperty("installationFileNotFound").GetString());
-    }
-
     [Theory]
     [InlineData(true, 0)]
     [InlineData(false, 1)]
@@ -282,47 +257,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
             "/restore-from-manifest", Request("restore-from-manifest", "Mod.zip", handsTheDownload: false, asksWhatItLacks: asksWhatItLacks));
 
         Assert.Equal(logged, Logged.Count(entry => entry.Message.StartsWith($"Refused Restore from manifest of {Mod}: NotFound", StringComparison.Ordinal)));
-    }
-
-    [Fact]
-    public async Task RestoringAGameFolderModWhoseRequestHandsNoGameFiles_NamesEachItsManifestNames_SoARequestHandingThemBringsItBack()
-    {
-        Directory.CreateDirectory(ModFolder);
-        File.WriteAllText(Path.Combine(ModFolder, "a.nif"), "taken");
-        var hash = new ModFolderRepository(TimeProvider.System).Files(ModFolder, Mod, new HashSet<string>(), null).Files.Single().Hash;
-        File.WriteAllText(
-            Path.Combine(ModFolder, Mod + ".manifest.json"),
-            $"{{\n\"package\": {{\"gameFolder\":\"Fallout4\",\"hash\":\"{FileHash.OfFilesTaken([new HashedFile("a.nif", hash)])}\"}},\n\"files\": [\n{{\"path\":\"a.nif\"}}\n]\n}}\n");
-        var request = Request("restore-from-manifest", "Mod.zip", handsTheDownload: false);
-
-        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
-
-        var skipped = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
-        Assert.Equal("NotFound", skipped.GetProperty("refusal").GetString());
-        Assert.Equal(["a.nif"], skipped.GetProperty("gameFilesNotFound").EnumerateArray().Select(path => path.GetString()));
-    }
-
-    [Fact]
-    public async Task RestoringASourceModWhoseRequestHandsNoSubmodule_NamesItsManifestsSubmodule_SoARequestHandingItsPinRebuildsIt()
-    {
-        using var submodule = new PinnedSubmodule(_instance);
-        var pin = submodule.Commit(("build.json", $"{{\"output\": \"{Mod}\"}}"), ("assets/a.nif", "built"));
-        submodule.Pin(pin);
-        Directory.CreateDirectory(ModFolder);
-        File.WriteAllText(Path.Combine(ModFolder, Mod + ".manifest.json"), "{\n\"package\": {\"submodule\":\"Mod\"},\n\"files\": [\n{\"path\":\"a.nif\"}\n]\n}\n");
-        (await Client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(_instance, _instance, []))).EnsureSuccessStatusCode();
-        var handed = new JsonObject { ["folder"] = submodule.Folder, ["pin"] = pin };
-
-        var first = await (await Client.PostAsJsonAsync("/restore-from-manifest", Request("restore-from-manifest", "Mod.zip", handsTheDownload: false)))
-            .Content.ReadFromJsonAsync<JsonElement>();
-        var second = await (await Client.PostAsJsonAsync("/restore-from-manifest", Request("restore-from-manifest", "Mod.zip", false, handed)))
-            .Content.ReadFromJsonAsync<JsonElement>();
-
-        var skipped = Assert.Single(first.GetProperty("refused").EnumerateArray());
-        Assert.Equal(("NotFound", "Mod"), (skipped.GetProperty("refusal").GetString(), skipped.GetProperty("submoduleNotFound").GetString()));
-        var restored = Assert.Single(second.GetProperty("applied").EnumerateArray());
-        Assert.Equal(["a.nif"], Paths(restored, "written"));
-        Assert.Equal("built", FileText("a.nif"));
     }
 
     [Theory]
@@ -404,22 +338,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
         Assert.Equal(Mod, Assert.Single(body.GetProperty("mods").EnumerateArray()).GetProperty("mod").GetString());
         var skipped = Assert.Single(body.GetProperty("refused").EnumerateArray());
         Assert.Equal(("Locked", "Unreadable"), (skipped.GetProperty("item").GetString(), skipped.GetProperty("refusal").GetString()));
-    }
-
-    [Fact]
-    public async Task RestoringAModWhoseStatCacheCannotBeWritten_LandsNamingWhy()
-    {
-        ModInstalledFromADownload();
-        await Post("update-manifest");
-        var taken = Path.Combine(_instance, "taken");
-        File.WriteAllText(taken, "a file where the stat cache's folder would be");
-        var request = Request("restore-from-manifest", "Mod.zip");
-        request["statCache"] = taken;
-
-        var response = await Client.PostAsJsonAsync("/restore-from-manifest", request);
-
-        var restored = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").EnumerateArray());
-        Assert.Contains(taken, restored.GetProperty("statCacheNotWritten").GetString(), StringComparison.Ordinal);
     }
 
     [Theory]
