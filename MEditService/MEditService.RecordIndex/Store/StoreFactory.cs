@@ -93,7 +93,12 @@ internal sealed class StoreFactory(
         var store = new Store(
             _logger, instanceRoot is null ? null : IndexFile.For(instanceRoot), instanceRoot, schemaReflector, ddlBuilder, plugins,
             timeProvider, openedPlugins, indexed, gate, filter, notifications);
-        refusal = store.Open();
+        try { refusal = store.Open(); }
+        catch
+        {
+            store.Dispose();
+            throw;
+        }
         if (refusal is not null)
         {
             store.Dispose();

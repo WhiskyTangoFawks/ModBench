@@ -71,6 +71,22 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
+    public void Rebuild_OfAnInstanceRootThatIsNotThere_FailsNamingIt_CreatesNothing_AndReopensOnceItReturns()
+    {
+        Reconcile(_fixture.InstanceRoot);
+        var gone = Path.Combine(_fixture.InstanceRoot, "no-such-instance");
+
+        Assert.Null(_index.Queries.RebuildStore(GameRelease.Fallout4, gone));
+
+        Assert.Equal(LoadOrderState.Failed, _index.Status.State);
+        Assert.Contains(gone, _index.Status.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(gone));
+
+        Directory.CreateDirectory(gone);
+        _index.NextSnapshotUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+    }
+
+    [Fact]
     public void Rebuild_ReadsThePluginAgain_AgainstTheLoadOrderHeld()
     {
         Reconcile(_fixture.InstanceRoot);
