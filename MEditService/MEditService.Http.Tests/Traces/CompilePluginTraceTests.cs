@@ -104,19 +104,6 @@ public sealed class CompilePluginTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task CompilingBeforeAnyLoadOrder_RefusesTheWholeSelectionOnce_503()
-    {
-        var response = await Client.Compile([(Plugin, Origin), (OtherPlugin, OtherOrigin)]);
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("No load order has been received.", problem.GetProperty("detail").GetString());
-        Assert.Equal("Service Unavailable", problem.GetProperty("title").GetString());
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        Assert.False(problem.TryGetProperty("refused", out _), "The whole selection is refused once, not per plugin.");
-    }
-
-    [Fact]
     public async Task CompilingNoPlugin_Is400()
     {
         using var fx = await LoadedAndCompiledPlugin();

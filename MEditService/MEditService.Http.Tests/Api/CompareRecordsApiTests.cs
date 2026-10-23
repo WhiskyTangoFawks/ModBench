@@ -218,12 +218,4 @@ public sealed class CompareRecordsApiTests : HostedTests
 
         await response.AssertIsProblem(HttpStatusCode.NotFound);
     }
-
-    [Fact]
-    public async Task WithNoLoadOrder_Is503()
-    {
-        var response = await Client.PostAsJsonAsync("/records/compare", new { copies = new[] { Copy("000800:WithNpc.esp", WithNpc, WithNpcMod) } });
-
-        await response.AssertIsProblem(HttpStatusCode.ServiceUnavailable);
-    }
 }

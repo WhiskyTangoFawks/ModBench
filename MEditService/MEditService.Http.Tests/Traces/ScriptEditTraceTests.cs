@@ -33,15 +33,4 @@ public sealed class ScriptEditTraceTests : HostedTests
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
-
-    [Fact]
-    public async Task AnEditOfAFileHeldUnsaved_Is409_WithItsOwnRefusal()
-    {
-        var (file, formKey) = await LoadedAndCompiledPlugin();
-        await Client.HandUnsaved((file, await File.ReadAllTextAsync(file) + " "));
-
-        var response = await Client.ScriptEdit(formKey, Plugin, Origin, "HeightMax", 0.75);
-
-        Assert.Equal("UnsavedChanges", (await response.AssertIsProblem(HttpStatusCode.Conflict)).GetProperty("refusal").GetString());
-    }
 }

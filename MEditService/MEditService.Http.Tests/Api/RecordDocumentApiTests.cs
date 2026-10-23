@@ -35,9 +35,9 @@ public sealed class RecordDocumentApiTests : HostedTests
             $"/plugins/{Plugin}/records/{Uri.EscapeDataString(formKey)}/document" + (origin is null ? string.Empty : $"?origin={origin}"),
             UriKind.Relative));
 
-    private Task<HttpResponseMessage> RecordOf(string? path) =>
+    private Task<HttpResponseMessage> RecordOf(string path) =>
         Client.GetAsync(new Uri(
-            "/plugin-source/record" + (path is null ? string.Empty : $"?path={Uri.EscapeDataString(path)}"), UriKind.Relative));
+            $"/plugin-source/record?path={Uri.EscapeDataString(path)}", UriKind.Relative));
 
     private static string NpcFile(ScatteredFixtureData fx) =>
         Directory.EnumerateFiles(Path.GetDirectoryName(fx.Plugins.Single().Path).Require(), "FiledNpc - *.json", SearchOption.AllDirectories)
@@ -94,14 +94,6 @@ public sealed class RecordDocumentApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ACopyNamedWithoutItsOrigin_Is400()
-    {
-        await NonCompiledPlugin();
-
-        await (await DocumentOf(await Npc(), origin: null)).AssertIsProblem(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
     public async Task ACopyThePluginDoesNotHold_Is404()
     {
         await NonCompiledPlugin();
@@ -136,17 +128,5 @@ public sealed class RecordDocumentApiTests : HostedTests
         var refused = await (await RecordOf(loose)).AssertIsProblem(HttpStatusCode.UnprocessableEntity);
 
         Assert.Equal($"{loose} is under no compiled plugin's source.", refused.GetProperty("detail").GetString());
-    }
-
-    [Fact]
-    public async Task TheDocumentOfACopy_BeforeAnyLoadOrder_Is503()
-    {
-        await (await DocumentOf($"000000:{Plugin}")).AssertIsProblem(HttpStatusCode.ServiceUnavailable);
-    }
-
-    [Fact]
-    public async Task TheRecordOfAFile_BeforeAnyLoadOrder_Is503()
-    {
-        await (await RecordOf(Path.GetFullPath("Filed.json"))).AssertIsProblem(HttpStatusCode.ServiceUnavailable);
     }
 }

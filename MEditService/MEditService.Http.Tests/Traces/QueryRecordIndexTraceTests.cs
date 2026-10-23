@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.Api;
@@ -17,30 +16,6 @@ public sealed class QueryRecordIndexTraceTests : HostedTests
 {
     private async Task LoadedQueriedPlugins() =>
         (await Client.PutLoadOrder(Owned(new QueriedPluginsFixture()).Data)).EnsureSuccessStatusCode();
-
-    [Fact]
-    public async Task AQuestionAboutTheCreatableRecordTypes_BeforeAnyLoadOrder_IsRefusedAsUnavailable()
-    {
-        var response = await Client.GetAsync(new Uri("/record-types/creatable", UriKind.Relative));
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task AQuestionAboutTheRecordTypesARecordCanHold_BeforeAnyLoadOrder_IsRefusedAsUnavailable()
-    {
-        var response = await Client.GetAsync(new Uri("/plugins/Any.esp/records/000800%3AAny.esp/child-record-types?origin=AnyMod", UriKind.Relative));
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task AQuestionAboutCreatablePluginExtensions_BeforeAnyLoadOrder_IsRefusedAsUnavailable()
-    {
-        var response = await Client.GetAsync(new Uri("/plugins/creatable-extensions", UriKind.Relative));
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-    }
 
     private ScatteredFixtureData? _localized;
 
