@@ -9,48 +9,51 @@ namespace MEditService.RecordIndex.Tests.Query;
 
 public sealed class WholeSetRefusalTests
 {
-    private static readonly PluginAddress Anywhere = new("First.esp", "SomeMod");
+    private static readonly PluginAddress FirstPlugin = new("First.esp", PluginOrigin.DataDirectory);
 
-    private static readonly Dictionary<string, Func<IQueries, IndexRefused>> WholeSetQueries = new()
+    private static readonly Dictionary<string, Func<IQueries, IndexRefused>> BehindTheWholeSetGuard = new()
     {
         [nameof(IQueries.GetRecord)] = q => q.GetRecord("000800:First.esp").Refused(),
-        [nameof(IQueries.GetCompareRecords)] = q => q.GetCompareRecords([new RecordCopy("000800:First.esp", Anywhere)]).Refused(),
+        [nameof(IQueries.GetCompareRecords)] = q => q.GetCompareRecords([new RecordCopy("000800:First.esp", FirstPlugin)]).Refused(),
         [nameof(IQueries.GetLoadOrderDiagnoses)] = q => q.GetLoadOrderDiagnoses().Refused(),
-        [nameof(IQueries.GetDependants)] = q => q.GetDependants(Anywhere).Refused(),
+        [nameof(IQueries.GetDependants)] = q => q.GetDependants(FirstPlugin).Refused(),
         [nameof(IQueries.GetProblems)] = q => q.GetProblems().Refused(),
         [nameof(IQueries.SelectRows)] = q => q.SelectRows("SELECT form_key FROM npc_").Refused(),
         [nameof(IQueries.ResolveNames)] = q => q.ResolveNames([new NameQuery("Anything")]).Refused(),
     };
 
-    private static readonly Dictionary<string, Func<IQueries, IndexRefused>> ReadsQueries = new()
+    private static readonly Dictionary<string, Func<IQueries, IndexRefused>> BehindTheReadsGuard = new()
     {
         [nameof(IQueries.GetPlugins)] = q => q.GetPlugins().Refused(),
         [nameof(IQueries.GetFilter)] = q => q.GetFilter().Refused(),
         [nameof(IQueries.SetFilter)] = q => q.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql")
             ?? throw new InvalidOperationException("Expected the Index to refuse here."),
-        [nameof(IQueries.GetInteriorCells)] = q => q.GetInteriorCells(Anywhere).Refused(),
-        [nameof(IQueries.GetContainerChildren)] = q => q.GetContainerChildren(Anywhere, "000800:First.esp").Refused(),
+        [nameof(IQueries.GetInteriorCells)] = q => q.GetInteriorCells(FirstPlugin).Refused(),
+        [nameof(IQueries.GetContainerChildren)] = q => q.GetContainerChildren(FirstPlugin, "000800:First.esp").Refused(),
         [nameof(IQueries.GetCreatablePluginExtensions)] = q => q.GetCreatablePluginExtensions().Refused(),
     };
 
-    public static TheoryData<string> Queries => [.. WholeSetQueries.Keys];
+    private static readonly Dictionary<string, Func<IQueries, IndexRefused>> BehindAGuard =
+        BehindTheWholeSetGuard.Concat(BehindTheReadsGuard).ToDictionary();
 
-    public static TheoryData<string> EveryQuery => [.. WholeSetQueries.Keys, .. ReadsQueries.Keys];
+    public static TheoryData<string> WholeSetGuard => [.. BehindTheWholeSetGuard.Keys];
+
+    public static TheoryData<string> EveryGuard => [.. BehindAGuard.Keys];
 
     [Theory]
-    [MemberData(nameof(EveryQuery))]
-    public void WithNoLoadOrder_IsRefusedAsSuch(string query)
+    [MemberData(nameof(EveryGuard))]
+    public void WithNoLoadOrder_IsRefused_ForThereIsNothingToRead(string query)
     {
         using var index = Indexes.Open(new LoadOrderHolder());
 
-        var refused = (WholeSetQueries.GetValueOrDefault(query) ?? ReadsQueries[query])(index.Queries);
+        var refused = BehindAGuard[query](index.Queries);
 
         Assert.Equal(IndexRefusal.NoLoadOrder, refused.Refusal);
         Assert.Contains("No load order", refused.Message);
     }
 
     [Theory]
-    [MemberData(nameof(Queries))]
+    [MemberData(nameof(WholeSetGuard))]
     public async Task WhileReconciling_IsNotReady_ForAPluginNotYetReachedHasNoRowsAndWouldReadAsAbsent(string query)
     {
         using var fixture = Fixture();
@@ -62,7 +65,7 @@ public sealed class WholeSetRefusalTests
 
         try
         {
-            Assert.Equal(IndexRefusal.IndexNotReady, WholeSetQueries[query](index.Queries).Refusal);
+            Assert.Equal(IndexRefusal.IndexNotReady, BehindTheWholeSetGuard[query](index.Queries).Refusal);
         }
         finally
         {
@@ -72,7 +75,7 @@ public sealed class WholeSetRefusalTests
     }
 
     [Theory]
-    [MemberData(nameof(Queries))]
+    [MemberData(nameof(WholeSetGuard))]
     public void WhenTheIndexFailed_IsNotReady_ForTheSetWasNeverRead(string query)
     {
         using var fixture = Fixture();
@@ -81,7 +84,7 @@ public sealed class WholeSetRefusalTests
         index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Oblivion);
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
 
-        Assert.Equal(IndexRefusal.IndexNotReady, WholeSetQueries[query](index.Queries).Refusal);
+        Assert.Equal(IndexRefusal.IndexNotReady, BehindTheWholeSetGuard[query](index.Queries).Refusal);
     }
 
     private static ScatteredFixtureData Fixture() =>

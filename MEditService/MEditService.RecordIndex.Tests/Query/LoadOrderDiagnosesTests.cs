@@ -30,7 +30,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
         return new LoadOrderEntry(name, path, origin, line, enabled, winning);
     }
 
-    private LoadOrderEntry Clean(string name, int line = 0) => Plugin(name, line: line, malformed: false);
+    private LoadOrderEntry Clean(string name) => Plugin(name, malformed: false);
 
     private PluginDiagnosisReport[] Diagnose(params LoadOrderEntry[] plugins)
     {

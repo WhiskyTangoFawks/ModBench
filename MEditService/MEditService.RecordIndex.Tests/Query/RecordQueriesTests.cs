@@ -907,13 +907,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         Assert.Equal(names.Order(StringComparer.OrdinalIgnoreCase), names);
     }
 
-    private OpenedIndex Unloaded()
-    {
-        var index = Indexes.Open(new LoadOrderHolder());
-        _built.Add(index);
-        return index;
-    }
-
     private OpenedIndex OneOfEachType() => Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
     {
         mod.Npcs.AddNew("NpcX");
