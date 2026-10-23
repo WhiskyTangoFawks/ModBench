@@ -63,7 +63,8 @@ function spellingsOf(name: string, folder: string | undefined, platform: NodeJS.
   const caseless = platform === 'win32' ? () => true : (index: number) => index === 0;
   const posix = native && platform !== 'win32';
   const rooted = posix ? [{ root: ({ first }: Separator) => first, segments: segmentsOf(folder) }] : rootings(folder, platform);
-  return rooted.flatMap(({ root, segments }) => (segments.length === 0 ? [] : (posix ? [POSIX] : separators).map((separator) => ({
+  const spelt = posix ? [POSIX] : separators;
+  return rooted.flatMap(({ root, segments }) => (segments.length === 0 ? [] : spelt.map((separator) => ({
     token: native ? `{${name}}` : `{${name}:${separator.first}}`, text: root(separator) + segments.join(separator.rest), caseless,
   }))));
 }
