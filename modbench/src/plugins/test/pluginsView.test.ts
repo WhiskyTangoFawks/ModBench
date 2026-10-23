@@ -105,6 +105,7 @@ import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
+import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 import { recordingReporter, scriptedDialog, type RecordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { settled } from '../../test/settled';
@@ -158,7 +159,7 @@ function pluginsView(
   const reporters = new Map<string, RecordingReporter>();
   const plugins = createPluginsView({
     instance, commands: pluginCommandsWith(fakeInstanceAdapter().adapter), recordBrowser, client,
-    pluginSync,
+    pluginSync, modStatuses: NO_MOD_STATUSES,
     channel: silentChannel,
     log: () => undefined,
     reporterFor: (tag) => { const reporter = recordingReporter(); reporters.set(tag, reporter); return reporter; },

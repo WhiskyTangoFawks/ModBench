@@ -10,7 +10,7 @@ vi.mock('vscode', () => ({
 
 import type { ModStatus } from '../../client';
 import type { InstanceValue } from '../../instanceLoader/instance';
-import { status } from './modStatusFixture';
+import { status } from '../../test/modStatusFixture';
 import { ModListProvider, type ModlistNode } from '../ModListProvider';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';

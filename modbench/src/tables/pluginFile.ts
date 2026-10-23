@@ -13,3 +13,6 @@ export const isRootLevel = (relativePath: string): boolean => !relativePath.incl
 
 /** Whether a filename carries a plugin extension (case-insensitive). */
 export const isPluginFile = (name: string): boolean => PLUGIN_EXTENSIONS.has(fileExtension(name));
+
+/** Whether a path is a plugin where the game loads one from: at its origin's root. */
+export const isPluginAtRoot = (relativePath: string): boolean => isRootLevel(relativePath) && isPluginFile(relativePath);

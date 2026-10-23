@@ -8,7 +8,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ReadFailed } from '../../wire/readFailed';
 import { ModStatuses } from '../modStatuses';
 import type { ReadModStatus } from '../../client';
-import { status } from './modStatusFixture';
+import { status } from '../../test/modStatusFixture';
 
 const settled = () => new Promise((resolve) => { setTimeout(resolve, 0); });
 

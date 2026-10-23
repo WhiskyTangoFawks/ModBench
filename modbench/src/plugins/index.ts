@@ -28,7 +28,7 @@ export interface PluginsDeps {
 }
 
 type PluginsInstanceDeps = Pick<PluginsViewDeps,
-  'instance' | 'commands' | 'pluginSync'
+  'instance' | 'commands' | 'pluginSync' | 'modStatuses'
 >;
 
 interface PluginsOnInstance extends vscode.Disposable {

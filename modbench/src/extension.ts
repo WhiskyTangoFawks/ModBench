@@ -28,6 +28,7 @@ import { attachPort, gameFolderSetting, onStringsLanguageChange, stringsLanguage
 import { createPlugins, PLUGINS_KEY_ARGS, type Plugins } from './plugins';
 import { MODS_KEY_ARGS } from './mods/gestureEntry';
 import { createModsView } from './mods/modsView';
+import { ModStatuses } from './mods/modStatuses';
 import type { DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText } from './downloads/keyContext';
 import { createDownloadsView } from './downloads/downloadsView';
@@ -139,14 +140,18 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(markFirstReadLanded(instance));
   own(reportSubscriberThrows(instance, toastOncePerFailure(reporterFor('instance'))));
   const commands = instanceCommands({ adapter, client, instanceRoot });
+  const modlist = modlistRepositoryCommands({ client, adapter, instanceRoot, hostGit, trash });
+  const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
+  const modStatuses = own(new ModStatuses(client, readStatus, (line) => outputChannel.warn(`[modList] ${line}`)));
   const { modSync, pluginSync } = own(instanceSyncs({
-    instance, syncMods: modSyncOver(adapter), syncPlugins: pluginSyncOver(adapter), channel: outputChannel,
+    instance, syncMods: modSyncOver(adapter), channel: outputChannel, modStatuses,
+    syncPlugins: pluginSyncOver(adapter, readStatus, modStatuses),
   }));
   ownAll(own, registerSyncCommands((command, handler) => vscode.commands.registerCommand(command, handler), { modSync, pluginSync }));
   const sourceGestureRows = selectionInFocusedView(
     own, deps.focusedView, [MODS_KEY_ARGS.view, PLUGINS_KEY_ARGS.view], 'modbench.mod.sourceGestureRowsIn');
   const plugins = own(pluginsBox.onInstance({
-    instance, commands: pluginCommands({ adapter, client }), pluginSync,
+    instance, commands: pluginCommands({ adapter, client }), pluginSync, modStatuses,
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({
@@ -155,8 +160,6 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));
   const toolbox = own(createToolboxView({ instance, channel: outputChannel }));
-  const modlist = modlistRepositoryCommands({ client, adapter, instanceRoot, hostGit, trash });
-  const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
   const mods = own(createModsView({
     instance, commands: modCommands(adapter, client, readStatus), copyReads: adapter, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
     extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
@@ -171,7 +174,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
     },
     checkForUpdates: checkForUpdatesOver(adapter, deps.nexus),
     manifestGestures: { commands: modlist, toolboxView: TOOLBOX_VIEW, say: toolbox.say, focusedView: deps.focusedView },
-    modStatus: { push: client, readStatus },
+    statuses: modStatuses,
   }));
   const editing = own(editingFlow({
     client, instanceRoot, ...plugins.editingInPluginsView, log: (line) => outputChannel.error(line),
