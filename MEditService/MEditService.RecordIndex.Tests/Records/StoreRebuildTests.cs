@@ -54,6 +54,23 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
+    public void AnInstanceRootThatIsNotThere_FailsNamingIt_CreatesNothing_AndReopensOnceItReturns()
+    {
+        var gone = Path.Combine(_fixture.InstanceRoot, "no-such-instance");
+
+        Reconcile(gone);
+
+        Assert.Equal(LoadOrderState.Failed, _index.Status.State);
+        Assert.Contains(gone, _index.Status.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(gone));
+
+        Directory.CreateDirectory(gone);
+        _index.NextSnapshotUntil(() => _index.Status.State == LoadOrderState.Ready, "the retried reconcile's ready status");
+
+        Assert.NotEmpty(_index.ListedIn(Key));
+    }
+
+    [Fact]
     public void Rebuild_ReadsThePluginAgain_AgainstTheLoadOrderHeld()
     {
         Reconcile(_fixture.InstanceRoot);

@@ -139,13 +139,12 @@ internal static class EndpointMapping
         statusCode: 400,
         extensions: new Dictionary<string, object?> { ["refusal"] = refused.Refusal.ToString() });
 
-    /// <summary>The store rebuild's refusal: a missing instance root is a bad request, a held index is 423
+    /// <summary>The store rebuild's refusal: a held index is 423
     /// Locked (ADR-0010), and a read that never ended is the service's own failure.</summary>
     internal static IResult Refusal(StoreRebuildRefused refused) => Results.Problem(
         detail: refused.Message,
         statusCode: refused.Refusal switch
         {
-            StoreRebuildRefusal.InstanceRootNotFound => 400,
             StoreRebuildRefusal.HeldByAnotherWindow => 423,
             StoreRebuildRefusal.StillServingReads => 500,
             _ => throw new InvalidEnumArgumentException(nameof(refused), (int)refused.Refusal, typeof(StoreRebuildRefusal)),

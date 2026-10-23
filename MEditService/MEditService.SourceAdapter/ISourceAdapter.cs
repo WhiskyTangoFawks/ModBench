@@ -54,7 +54,6 @@ public interface ISourceAdapter
     SourceFailure? WhyGitCannotRun();
 
     /// <summary>The refusal naming the instance root when it is not there; null when it is.</summary>
-    string? InstanceRootNotFound(string? instanceRoot);
 
     /// <summary>The stamp of one document's text, as the UTF-8 the record index stores: every side hashes through here, so a
     /// file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>

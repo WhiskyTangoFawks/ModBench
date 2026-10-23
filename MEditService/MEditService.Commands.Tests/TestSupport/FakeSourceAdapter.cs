@@ -78,7 +78,6 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public bool HoldsAnotherRepository(string modFolder) => _foreignRepositories.Contains(modFolder);
 
-    public string? InstanceRootNotFound(string? instanceRoot) => throw Unreached();
 
     public string ContentStamp(string text) => throw Unreached();
 
