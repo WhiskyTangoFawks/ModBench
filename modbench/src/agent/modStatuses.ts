@@ -1,7 +1,9 @@
 import type { InstanceValue } from '../instanceLoader/instance';
 import { Refusal } from '../drivingLib/refusal';
 import type { ReadModStatus } from '../client';
-import { failureReason, isReadFailed } from '../wire/readFailed';
+import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
+
+export const statusUnreadable = (failure: ReadFailed): string => `The mods' status could not be read: ${failureReason(failure)}`;
 
 export const LIST_MOD_STATUSES = {
   name: 'list_mod_statuses',
@@ -11,7 +13,7 @@ export const LIST_MOD_STATUSES = {
     if (!value.holdsRepository) throw new Refusal('The instance is not a repository, so no mod has a manifest to compare. Request git init first.');
     const folders = value.modFolders ?? [];
     const answer = await readStatus(folders.map(({ modName }) => modName));
-    if (isReadFailed(answer)) throw new Refusal(`The mods' status could not be read: ${failureReason(answer)}`);
+    if (isReadFailed(answer)) throw new Refusal(statusUnreadable(answer));
     const entryOf = new Map(folders.map(({ modName, kind, name }) => [modName, { kind, name }]));
     return answer.map(({ mod, ...status }) => ({ ...(entryOf.get(mod) ?? { kind: 'mod', name: mod }), ...status }));
   },

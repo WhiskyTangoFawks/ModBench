@@ -22,3 +22,12 @@ export function pluginsNotRestored(
   }
   return named;
 }
+
+/** The origin of each line with no file that a mod's manifest names, by the line's key (ADR-0012). The Plugins view and the agent both read it here. */
+export function originsOfLinesNotRestored(
+  enabledModsWinningFirst: readonly string[], linesWithoutFile: readonly string[], goneFrom: (mod: string) => readonly string[],
+): ReadonlyMap<string, string> {
+  const noFile = new Set(linesWithoutFile.map(pluginKey));
+  const named = pluginsNotRestored(enabledModsWinningFirst, goneFrom);
+  return new Map([...named].flatMap(([key, { mod }]) => (noFile.has(key) ? [[key, mod] as const] : [])));
+}

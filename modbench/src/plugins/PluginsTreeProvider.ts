@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { PluginDiagnosisReport, PluginAddress } from '../client';
-import { pluginsNotRestored } from '../pluginCommands/pluginsNotRestored';
+import { originsOfLinesNotRestored } from '../pluginCommands/pluginsNotRestored';
+import { linesWithoutFile, modsWithManifests } from '../instanceLoader/linesNotRestored';
 import { instanceLastGoodReadFailure, managerRunningMessage, type Instance, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 import { messageLine } from '../drivingLib/messageLine';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
@@ -357,11 +358,9 @@ export class PluginsTreeProvider
 
   // plugins.md, A row, Plugin statuses: Not restored.
   private reckonNotRestored(rows: readonly PluginListNode[]): void {
-    const { holdsRepository, mods } = this.instanceValue;
-    const enabledMods = holdsRepository ? mods.flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? [entry.name] : [])) : [];
-    const notRestored = pluginsNotRestored(enabledMods, (mod) => this.modStatuses.of(mod)?.gone ?? []);
+    const origins = originsOfLinesNotRestored(modsWithManifests(this.instanceValue), linesWithoutFile(this.instanceValue), (mod) => this.modStatuses.of(mod)?.gone ?? []);
     this.facts.notRestored(rows.flatMap((row) => {
-      const mod = row.kind === 'plugin' && this.namesNoFile(row) ? notRestored.get(pluginNameKey(row.plugin.name))?.mod : undefined;
+      const mod = row.kind === 'plugin' && this.namesNoFile(row) ? origins.get(pluginNameKey(row.plugin.name)) : undefined;
       return mod === undefined ? [] : [{ plugin: addressOfRow(row), mod }];
     }));
   }

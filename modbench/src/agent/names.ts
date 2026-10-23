@@ -4,6 +4,7 @@ import { sameEntry, type OriginFile } from '../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../instanceLoader/instance';
 import { pluginNameKey, samePluginAddress, type PluginAddress } from '../wire/pluginAddress';
 import { Refusal } from '../drivingLib/refusal';
+import { originShown, type AgentValue } from './notRestored';
 
 export interface ModName {
   name: string;
@@ -25,7 +26,7 @@ type Entry = InstanceValue['mods'][number];
 const asNamed = ({ kind, name }: Entry): string => `${kind} ${name}`;
 
 type EntryKeys = Pick<InstanceValue, 'mods' | 'entryKey'>;
-type PluginKeys = EntryKeys & Pick<InstanceValue, 'plugins'>;
+type PluginKeys = EntryKeys & Pick<AgentValue, 'plugins' | 'notRestored'>;
 
 function matchesOf(value: EntryKeys, { name, kind }: ModName): readonly Entry[] {
   return value.mods.filter((entry) => sameEntry(value, entry, { kind: kind ?? entry.kind, name }));
@@ -78,21 +79,23 @@ export function filesNamed(value: InstanceValue, given: readonly FileName[]): { 
 
 const asPlugin = ({ name, origin }: PluginAddress): string => `${name} in ${origin}`;
 
-function pluginRefusal({ name, origin }: PluginName, matches: readonly PluginAddress[]): string | undefined {
+function pluginRefusal({ name, origin }: PluginName, matches: readonly PluginAddress[], notRead: string | undefined): string | undefined {
   if (matches.length === 1) return undefined;
-  if (matches.length === 0) return `No plugin is named "${name}"${origin === undefined ? '' : ` in ${origin}`}.`;
+  if (matches.length === 0) return `No plugin is named "${name}"${origin === undefined ? '' : ` in ${origin}`}.${notRead === undefined ? '' : ` ${notRead}`}`;
   return `"${name}" means more than one plugin: ${matches.map(asPlugin).join('; ')}. Name it with its origin.`;
 }
 
-/** Each plugin as the load order holds it. */
+/** Each plugin as the load order holds it, named by the origin list_plugins shows. */
 export function pluginsNamed(value: PluginKeys, given: readonly PluginName[]): PluginAddress[] {
   const originOf = (origin: string): string => modOfOrigin(value, origin)?.name ?? origin;
   const resolved = given.map((one) => ({
     one,
-    matches: value.plugins.filter(({ name, origin }) => pluginNameKey(name) === pluginNameKey(one.name)
-      && (one.origin === undefined || origin === originOf(one.origin))).map(({ name, origin }) => ({ name, origin })),
+    matches: value.plugins.filter((plugin) => pluginNameKey(plugin.name) === pluginNameKey(one.name)
+      && (one.origin === undefined || originShown(value, plugin) === originOf(one.origin))).map(({ name, origin }) => ({ name, origin })),
   }));
-  const refusals = resolved.flatMap(({ one, matches }) => pluginRefusal(one, matches) ?? []);
+  const undecided = new Set(value.notRestored?.undecided.map(pluginNameKey));
+  const notRead = (one: PluginName) => (one.origin !== undefined && undecided.has(pluginNameKey(one.name)) ? value.notRestored?.unread : undefined);
+  const refusals = resolved.flatMap(({ one, matches }) => pluginRefusal(one, matches, notRead(one)) ?? []);
   if (refusals.length > 0) throw new Refusal(refusals.join(' '));
   return resolved.flatMap(({ matches }) => matches);
 }
