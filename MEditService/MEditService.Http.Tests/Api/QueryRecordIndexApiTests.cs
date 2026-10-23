@@ -100,6 +100,39 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
     }
 
     [Fact]
+    public async Task AnExteriorCell_HoldsALandscape_AndAnInteriorOneDoesNot()
+    {
+        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces?origin={UserMod}");
+        var worldFk = Uri.EscapeDataString(worldspaces[0].GetProperty("formKey").GetString().Require());
+        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces/{worldFk}/blocks?origin={UserMod}");
+        var interiors = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/interior-cells?origin={UserMod}");
+        var exterior = blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require();
+        var interior = interiors[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require();
+
+        Assert.Equal(["Landscape", "Navmesh", .. PlacedRecordTables.DisplayNames], await ChildRecordTypeNames(exterior));
+        Assert.Equal(["Navmesh", .. PlacedRecordTables.DisplayNames], await ChildRecordTypeNames(interior));
+    }
+
+    private async Task<IEnumerable<string?>> ChildRecordTypeNames(string formKey)
+    {
+        var types = await Client.GetFromJsonAsync<JsonElement>(
+            $"/plugins/{UserPlugin}/records/{Uri.EscapeDataString(formKey)}/child-record-types?origin={UserMod}");
+        return types.EnumerateArray().Select(t => t.GetProperty("displayName").GetString());
+    }
+
+    [Theory]
+    [InlineData("type=acti&type=kywd", new[] { "QueriedKeyword", "QueriedLever" })]
+    [InlineData("", new[] { "QueriedKeyword", "QueriedLever", "QueriedNpc" })]
+    public async Task ARecordSearch_NamingSeveralTypesOrNone_ListsTheRecordsOfEachOfThem(string types, string[] expectedAmong)
+    {
+        var page = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&limit=50&{types}");
+
+        var listed = EditorIds(page.GetProperty("items")).Order().ToList();
+        Assert.All(expectedAmong, id => Assert.Contains(id, listed));
+        Assert.Equal(types.Length == 0, listed.Contains("QueriedNpc"));
+    }
+
+    [Fact]
     public async Task TheRecordTypesOfARecordThePluginDoesNotHold_AreAnsweredWithNothingFound()
     {
         var response = await Client.GetAsync($"/plugins/{UserPlugin}/records/000FFF%3ANowhere.esp/child-record-types?origin={UserMod}");

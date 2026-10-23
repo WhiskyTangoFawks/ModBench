@@ -119,11 +119,13 @@ public sealed class UpdateManifestTraceTests : HostedTests
         Assert.All(progress, e => Assert.Equal(Gesture, e.GetProperty("modlistProgress").GetProperty("gesture").GetString()));
     }
 
-    private JsonObject GameFolderRequest(out JsonObject gameFolder, out JsonObject file)
+    private JsonObject GameFolderRequest(out string hash) => GameFolderRequest(out hash, out _, out _);
+
+    private JsonObject GameFolderRequest(out string hash, out JsonObject gameFolder, out JsonObject file)
     {
         Directory.CreateDirectory(ModFolder);
         File.WriteAllText(Path.Combine(ModFolder, "a.nif"), "taken");
-        var hash = new ModFolderRepository(TimeProvider.System).Files(ModFolder, Mod, new HashSet<string>(), null).Files.Single().Hash;
+        hash = new ModFolderRepository(TimeProvider.System).Files(ModFolder, Mod, new HashSet<string>(), null).Files.Single().Hash;
         file = new JsonObject { ["path"] = "A.nif", ["hash"] = hash };
         gameFolder = new JsonObject { ["name"] = "Fallout4", ["dataFolder"] = Path.Combine(_instance, "game", "Data"), ["files"] = new JsonArray(file) };
         return new JsonObject
@@ -141,7 +143,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
     [InlineData("hash", "\"WHOLE\"")]
     public async Task UpdatingAManifestWithAGameFolderMissingAFieldOrMalformed_Is400(string field, string? json)
     {
-        var request = GameFolderRequest(out var gameFolder, out var file);
+        var request = GameFolderRequest(out _, out var gameFolder, out var file);
         var held = field == "hash" ? file : gameFolder;
         if (json is null) held.Remove(field);
         else held[field] = JsonNode.Parse(json);
@@ -149,6 +151,20 @@ public sealed class UpdateManifestTraceTests : HostedTests
         var response = await Client.PostAsJsonAsync("/update-manifest", request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdatingTheManifestOfAModWhoseFilesTheGameFolderHolds_NamesTheGameFolderAsItsPackage()
+    {
+        var request = GameFolderRequest(out var hash);
+
+        var response = await Client.PostAsJsonAsync("/update-manifest", request);
+
+        response.EnsureSuccessStatusCode();
+        var pin = FileHash.OfFilesTaken([new HashedFile("a.nif", hash)]);
+        Assert.Equal(
+            $"{{\n\"package\": {{\"gameFolder\":\"Fallout4\",\"hash\":\"{pin}\"}},\n\"files\": [\n{{\"path\":\"a.nif\"}}\n]\n}}\n",
+            File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json")));
     }
 
     [Fact]
