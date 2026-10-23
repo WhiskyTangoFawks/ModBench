@@ -89,6 +89,8 @@ public sealed class FailedReadStateTests : IDisposable
         var failure = Assert.Single(index.SourceProblems());
         Assert.Equal((Relative(StrayDocument), (string?)null), (failure.SourceRelativePath, failure.FormKey));
         Assert.Contains("declares no FormKey", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
+        Assert.False(Failed(index));
     }
 
     [Fact]
@@ -122,6 +124,7 @@ public sealed class FailedReadStateTests : IDisposable
         Assert.Equivalent(new[] { Relative(original), Relative(copy) }, index.SourceProblems().Select(f => f.SourceRelativePath), strict: true);
         Assert.Equal(NpcEditorId, TheNpc(index).EditorId);
         Assert.True(SourceUnreadable(index));
+        Assert.False(Failed(index));
     }
 
     [Fact]
