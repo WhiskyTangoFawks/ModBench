@@ -240,51 +240,43 @@ public sealed class SourceRepositoryChangedSinceLastCommitTests : IDisposable
         Assert.DoesNotContain(sibling.FormKey.ToString(), changes.Keys);
     }
 
-    private static string Leaf(IMajorRecordGetter record) =>
-        $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
-
     private static TreeFile ContainerFile(string relativeDirectory, IMajorRecordGetter record) =>
-        new(PluginSourceRoot.ContainerDocument(Path.Combine(PluginSourceRoot.For(PluginName), relativeDirectory, Leaf(record))),
+        new(PluginSourceRoot.ContainerDocument(Path.Combine(PluginSourceRoot.For(PluginName), relativeDirectory, PluginSourceRoot.Leaf(record))),
             Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release)));
 
+    public static TheoryData<string, string, string[]> EditedHeldInAndChanged => new()
+    {
+        { SpatialPlugin.WorldspaceEditorId, "worldspace", [SpatialPlugin.WorldspaceEditorId] },
+        { SpatialPlugin.ExteriorCellEditorId, "exterior", [SpatialPlugin.ExteriorCellEditorId] },
+        { SpatialPlugin.InteriorCellEditorId, "interior", [SpatialPlugin.InteriorCellEditorId] },
+        { SpatialPlugin.ExteriorRefEditorId, "exterior", [SpatialPlugin.ExteriorRefEditorId, SpatialPlugin.ExteriorCellEditorId] },
+        { SpatialPlugin.InteriorRefEditorId, "interior", [SpatialPlugin.InteriorRefEditorId, SpatialPlugin.InteriorCellEditorId] },
+    };
+
     [Theory]
-    [InlineData("SpatialWorld", new[] { "SpatialWorld" })]
-    [InlineData("SpatialExterior", new[] { "SpatialExterior" })]
-    [InlineData("SpatialInterior", new[] { "SpatialInterior" })]
-    [InlineData("SpatialExteriorRef", new[] { "SpatialExteriorRef", "SpatialExterior" })]
-    [InlineData("SpatialInteriorRef", new[] { "SpatialInteriorRef", "SpatialInterior" })]
+    [MemberData(nameof(EditedHeldInAndChanged))]
     public void AnEditToASpatialRecord_NamesThatRecordAndTheCellHoldingIt_NeverTheWorldspaceAroundAnExteriorCell(
-        string edited, string[] expected)
+        string edited, string heldIn, string[] changed)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-        var worldspace = new Worldspace(mod) { EditorID = "SpatialWorld" };
-        var exterior = new Cell(mod) { EditorID = "SpatialExterior", Grid = new CellGrid { Point = new P2Int(0, 0) } };
-        exterior.Persistent.Add(new PlacedObject(mod) { EditorID = "SpatialExteriorRef" });
-        var interior = new Cell(mod) { EditorID = "SpatialInterior" };
-        interior.Persistent.Add(new PlacedObject(mod) { EditorID = "SpatialInteriorRef" });
-        var worldspaceFile = ContainerFile("Worldspaces", worldspace);
-        var exteriorFile = ContainerFile(Path.Combine("Worldspaces", Leaf(worldspace), "0, 0", "0, 0"), exterior);
-        var interiorFile = ContainerFile(Path.Combine("Cells", "0", "0"), interior);
-        var repository = SourceMod(worldspaceFile, exteriorFile, interiorFile);
-        var formKeyOf = new Dictionary<string, string>
+        var records = SpatialPlugin.AddTo(mod);
+        records.Worldspace.SubCells.Clear();
+        var worldspaceFile = ContainerFile("Worldspaces", records.Worldspace);
+        var documents = new Dictionary<string, TreeFile>
         {
-            ["SpatialWorld"] = worldspace.FormKey.ToString(),
-            ["SpatialExterior"] = exterior.FormKey.ToString(),
-            ["SpatialInterior"] = interior.FormKey.ToString(),
-            ["SpatialExteriorRef"] = exterior.Persistent[0].FormKey.ToString(),
-            ["SpatialInteriorRef"] = interior.Persistent[0].FormKey.ToString(),
+            ["worldspace"] = worldspaceFile,
+            ["exterior"] = ContainerFile(Path.Combine("Worldspaces", PluginSourceRoot.Leaf(records.Worldspace), "0, 0", "0, 0"), records.ExteriorCell),
+            ["interior"] = ContainerFile(Path.Combine("Cells", "0", "0"), records.InteriorCell),
         };
-        var holdingTheEdited = Path.Combine(_modFolder, edited switch
-        {
-            "SpatialWorld" => worldspaceFile.RelativePath,
-            "SpatialExterior" or "SpatialExteriorRef" => exteriorFile.RelativePath,
-            _ => interiorFile.RelativePath,
-        });
+        var repository = SourceMod([.. documents.Values]);
+        var formKeyOf = new IMajorRecordGetter[] { records.Worldspace, records.ExteriorCell, records.InteriorCell, records.ExteriorRef, records.InteriorRef }
+            .ToDictionary(record => record.EditorID ?? "", record => record.FormKey.ToString());
+        var holdingTheEdited = Path.Combine(_modFolder, documents[heldIn].RelativePath);
 
         File.WriteAllText(holdingTheEdited, File.ReadAllText(holdingTheEdited).Replace($"\"{edited}\"", "\"Renamed\"", StringComparison.Ordinal));
 
         Assert.Equal(
-            expected.ToDictionary(name => formKeyOf[name], _ => RecordChange.Modified),
+            changed.ToDictionary(name => formKeyOf[name], _ => RecordChange.Modified),
             ChangesIn(repository).ToDictionary(change => change.Key, change => change.Value));
     }
 }

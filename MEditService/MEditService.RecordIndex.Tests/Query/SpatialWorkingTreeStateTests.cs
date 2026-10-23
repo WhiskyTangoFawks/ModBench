@@ -1,58 +1,28 @@
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Noggog;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
 public sealed class SpatialWorkingTreeStateTests : IDisposable
 {
-    private static readonly string[] Kinds = ["worldspace", "exteriorCell", "interiorCell", "exteriorRef", "interiorRef"];
+    private const WorkingTreeState None = WorkingTreeState.None;
+    private const WorkingTreeState Modified = WorkingTreeState.Modified;
 
-    private static readonly Dictionary<string, string> EditorIdOf = new()
-    {
-        ["worldspace"] = "SpatialWorld",
-        ["exteriorCell"] = "SpatialExterior",
-        ["interiorCell"] = "SpatialInterior",
-        ["exteriorRef"] = "SpatialExteriorRef",
-        ["interiorRef"] = "SpatialInteriorRef",
-    };
-
-    private readonly Dictionary<string, string> _formKeys = new(StringComparer.Ordinal);
     private readonly ScatteredFixtureData _fixture;
     private readonly LoadOrderEntry _entry;
     private readonly OpenedIndex _index;
+    private readonly SpatialPlugin.Records _records;
 
     public SpatialWorkingTreeStateTests()
     {
+        SpatialPlugin.Records records = default;
         _fixture = new PluginFixtureBuilder("spatial-working-tree-state")
-            .WithPlugin("Spatial.esp", mod =>
-            {
-                var world = mod.Worldspaces.AddNew(EditorIdOf["worldspace"]);
-                var exterior = new Cell(mod) { EditorID = EditorIdOf["exteriorCell"], Grid = new CellGrid { Point = new P2Int(0, 0) } };
-                var exteriorRef = new PlacedObject(mod) { EditorID = EditorIdOf["exteriorRef"] };
-                exterior.Persistent.Add(exteriorRef);
-                var subBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
-                subBlock.Items.Add(exterior);
-                var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
-                block.Items.Add(subBlock);
-                world.SubCells.Add(block);
-
-                var interior = new Cell(mod) { EditorID = EditorIdOf["interiorCell"] };
-                var interiorRef = new PlacedObject(mod) { EditorID = EditorIdOf["interiorRef"] };
-                interior.Persistent.Add(interiorRef);
-                mod.AddInteriorCells(interior);
-
-                _formKeys["worldspace"] = world.FormKey.ToString();
-                _formKeys["exteriorCell"] = exterior.FormKey.ToString();
-                _formKeys["interiorCell"] = interior.FormKey.ToString();
-                _formKeys["exteriorRef"] = exteriorRef.FormKey.ToString();
-                _formKeys["interiorRef"] = interiorRef.FormKey.ToString();
-            }, origin: "SpatialMod")
+            .WithPlugin("Spatial.esp", mod => records = SpatialPlugin.AddTo(mod), origin: "SpatialMod")
             .BuildScattered()
             .CompiledPlugin();
+        _records = records;
         _entry = _fixture.Plugins.Single();
         _index = Indexes.Reconciled(_fixture);
     }
@@ -63,40 +33,49 @@ public sealed class SpatialWorkingTreeStateTests : IDisposable
         _fixture.Dispose();
     }
 
-    private Dictionary<string, WorkingTreeState> States()
+    private static string FormKeyOf(IMajorRecordGetter record) => record.FormKey.ToString();
+
+    private WorkingTreeState[] WorldspaceExteriorInteriorExteriorRefInteriorRefStates()
     {
         var plugin = _entry.KeyOf();
         var queries = _index.Queries;
         static WorkingTreeState StateOf(IEnumerable<(string FormKey, WorkingTreeState State)> rows, string formKey) =>
             rows.Single(r => r.FormKey == formKey).State;
         var worldspaces = queries.GetWorldspaces(plugin).Value().Select(w => (w.FormKey, w.WorkingTreeState));
-        var exteriorCells = queries.GetWorldspaceBlocks(plugin, _formKeys["worldspace"]).Value()
+        var exteriorCells = queries.GetWorldspaceBlocks(plugin, FormKeyOf(_records.Worldspace)).Value()
             .Blocks.SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells).Select(c => (c.FormKey, c.WorkingTreeState));
         var interiorCells = queries.GetInteriorCells(plugin).Value()
             .SelectMany(b => b.SubBlocks).SelectMany(s => s.Cells).Select(c => (c.FormKey, c.WorkingTreeState));
-        var exteriorRefs = queries.GetCellChildRecords(plugin, _formKeys["exteriorCell"]).Value().Persistent.Select(r => (r.FormKey, r.WorkingTreeState));
-        var interiorRefs = queries.GetCellChildRecords(plugin, _formKeys["interiorCell"]).Value().Persistent.Select(r => (r.FormKey, r.WorkingTreeState));
-        return new Dictionary<string, WorkingTreeState>
-        {
-            ["worldspace"] = StateOf(worldspaces, _formKeys["worldspace"]),
-            ["exteriorCell"] = StateOf(exteriorCells, _formKeys["exteriorCell"]),
-            ["interiorCell"] = StateOf(interiorCells, _formKeys["interiorCell"]),
-            ["exteriorRef"] = StateOf(exteriorRefs, _formKeys["exteriorRef"]),
-            ["interiorRef"] = StateOf(interiorRefs, _formKeys["interiorRef"]),
-        };
+        var exteriorRefs = queries.GetCellChildRecords(plugin, FormKeyOf(_records.ExteriorCell)).Value().Persistent.Select(r => (r.FormKey, r.WorkingTreeState));
+        var interiorRefs = queries.GetCellChildRecords(plugin, FormKeyOf(_records.InteriorCell)).Value().Persistent.Select(r => (r.FormKey, r.WorkingTreeState));
+        return
+        [
+            StateOf(worldspaces, FormKeyOf(_records.Worldspace)),
+            StateOf(exteriorCells, FormKeyOf(_records.ExteriorCell)),
+            StateOf(interiorCells, FormKeyOf(_records.InteriorCell)),
+            StateOf(exteriorRefs, FormKeyOf(_records.ExteriorRef)),
+            StateOf(interiorRefs, FormKeyOf(_records.InteriorRef)),
+        ];
     }
 
-    [Theory]
-    [InlineData("worldspace", new[] { "worldspace" })]
-    [InlineData("exteriorCell", new[] { "exteriorCell" })]
-    [InlineData("interiorCell", new[] { "interiorCell" })]
-    [InlineData("exteriorRef", new[] { "exteriorRef", "exteriorCell" })]
-    [InlineData("interiorRef", new[] { "interiorRef", "interiorCell" })]
-    public void AnEditedSpatialRecord_IsListedAsModified_WithTheDocumentHoldingIt(string edited, string[] modified)
+    public static TheoryData<string, WorkingTreeState[]> EditedAndModified => new()
     {
-        _index.RenameEditorId(_entry, _index.DocumentOf(_formKeys[edited], _entry.KeyOf()), "Renamed");
+        { SpatialPlugin.WorldspaceEditorId, [Modified, None, None, None, None] },
+        { SpatialPlugin.ExteriorCellEditorId, [None, Modified, None, None, None] },
+        { SpatialPlugin.InteriorCellEditorId, [None, None, Modified, None, None] },
+        { SpatialPlugin.ExteriorRefEditorId, [None, Modified, None, Modified, None] },
+        { SpatialPlugin.InteriorRefEditorId, [None, None, Modified, None, Modified] },
+    };
 
-        var expected = Kinds.ToDictionary(kind => kind, kind => modified.Contains(kind) ? WorkingTreeState.Modified : WorkingTreeState.None);
-        Assert.Equal(expected, States());
+    [Theory]
+    [MemberData(nameof(EditedAndModified))]
+    public void AnEditedSpatialRecord_IsListedAsModified_WithTheDocumentHoldingIt(string editedEditorId, WorkingTreeState[] expected)
+    {
+        var edited = new IMajorRecordGetter[] { _records.Worldspace, _records.ExteriorCell, _records.InteriorCell, _records.ExteriorRef, _records.InteriorRef }
+            .Single(record => record.EditorID == editedEditorId);
+
+        _index.RenameEditorId(_entry, _index.DocumentOf(FormKeyOf(edited), _entry.KeyOf()), "Renamed");
+
+        Assert.Equal(expected, WorldspaceExteriorInteriorExteriorRefInteriorRefStates());
     }
 }

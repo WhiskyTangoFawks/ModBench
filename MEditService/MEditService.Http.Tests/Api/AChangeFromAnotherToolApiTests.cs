@@ -85,28 +85,12 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     {
         var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"")).Require();
         var copy = AnotherTool.Beside(original, "CopiedCell - 000950_Shared.esp");
-        OtherTool.CopiesASourceDirectory(original, Path.GetFileName(copy));
+        AnotherTool.CopyDirectory(original, Path.GetFileName(copy));
         var document = Directory.GetFiles(copy).Single();
         var text = File.ReadAllText(document);
         var at = text.IndexOf(cell, StringComparison.Ordinal);
         File.WriteAllText(document, text[..at] + "000950:Shared.esp" + text[(at + cell.Length)..]);
         return document;
-    }
-
-    [Fact]
-    public async Task APlacedReferenceTwoCellsCarry_IsDiagnosed_NamingBothDocuments()
-    {
-        using var fx = await ASourceMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var cell = await Client.FirstFormKey(Plugin, Origin, "cell");
-        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"");
-
-        var copy = ACellCopiedUnderAKeyOfItsOwn(modFolder, cell);
-        await Client.NextSnapshot(fx);
-
-        var diagnosed = await TheFilesItsReadStoppedAt();
-        Assert.Contains(Path.GetRelativePath(modFolder, original), diagnosed);
-        Assert.Contains(Path.GetRelativePath(modFolder, copy), diagnosed);
     }
 
     [Fact]
@@ -131,134 +115,8 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         await ItsPluginSourceReadsAs(unreadable: true);
     }
 
-    [Theory]
-    [InlineData("{0}")]
-    [InlineData("copy.json")]
-    public async Task ABackupCopyIntoAFolderThatAlreadyStood_IsDiagnosed_NamingBothDocuments(string copiedTo)
-    {
-        using var fx = await ASourceMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var quest = await Client.FirstFormKey(Plugin, Origin, "qust");
-        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
-        using var stream = await Client.NotificationStream();
-        Directory.CreateDirectory(AnotherTool.Beside(original, "Backup"));
-        OtherTool.EditsASourceDocument(modFolder, Plugin, "OriginalFilter", "SettledFilter");
-        await Client.NextSnapshot(fx);
-        await stream.EventsUntil("rows-changed", e => Names(e, quest));
-
-        OtherTool.CopiesASourceDocument(original, $"Backup/{copiedTo}");
-        await Client.NextSnapshot(fx);
-
-        var diagnosed = await TheFilesItsReadStoppedAt();
-        Assert.Contains(Path.GetRelativePath(modFolder, original), diagnosed);
-        Assert.Contains(
-            Path.GetRelativePath(modFolder, AnotherTool.Beside(original, $"Backup/{copiedTo}")), diagnosed);
-    }
-
     private Task ItsPluginSourceReadsAs(bool unreadable) =>
         Wire.Eventually(
             async () => (await Client.Plugin(Plugin)).GetProperty("pluginSourceUnreadable").ValueKind != JsonValueKind.Null == unreadable,
             $"{Plugin} reported with its plugin source {(unreadable ? "unreadable" : "read")}");
-
-    private async Task<IReadOnlyList<string>> TheFilesItsReadStoppedAt()
-    {
-        await ItsPluginSourceReadsAs(unreadable: true);
-        IReadOnlyList<string> files = [];
-        await Wire.Eventually(async () =>
-        {
-            var answer = await Client.GetFromJsonAsync<JsonElement>("/plugins/problems");
-            files =
-            [
-                .. answer.EnumerateArray()
-                    .Where(p => p.GetProperty("plugin").GetProperty("name").GetString() == Plugin)
-                    .SelectMany(p => p.GetProperty("problems").EnumerateArray())
-                    .Select(problem => problem.GetProperty("sourceRelativePath").GetString().Require()),
-            ];
-            return files.Count > 0;
-        }, $"the files {Plugin}'s read stopped at");
-        return files;
-    }
-
-    private async Task TheFrameAfterWhichItReadsGone(StreamReader stream, string formKey)
-    {
-        while (true)
-        {
-            var frame = (await stream.EventsUntil("rows-changed", e => Names(e, formKey)))[^1];
-            await Client.SequenceReaches(frame.GetProperty("sequence").GetInt64());
-            var read = await Client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(formKey)}", UriKind.Relative));
-            if (read.StatusCode == HttpStatusCode.NotFound) return;
-        }
-    }
-
-    [Theory]
-    [InlineData("RenamedByHand.json")]
-    [InlineData("SortedByHand/{0}")]
-    public async Task ACommittedDocumentDeletedThenWrittenElsewhereByHand_BringsItsRecordBack(string writtenTo)
-    {
-        using var fx = await ASourceMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var npc = await Client.FirstFormKey(Plugin, Origin);
-        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
-        var text = File.ReadAllText(original);
-        using var stream = await Client.NotificationStream();
-        OtherTool.DeletesTheFile(original);
-        await Client.NextSnapshot(fx);
-        await TheFrameAfterWhichItReadsGone(stream, npc);
-
-        OtherTool.WritesTheFile(AnotherTool.Beside(original, writtenTo), text);
-        await Client.NextSnapshot(fx);
-
-        await Wire.Eventually(
-            async () => (await Client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(npc)}", UriKind.Relative))).IsSuccessStatusCode,
-            "the record came back");
-        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
-    }
-
-    [Fact]
-    public async Task ACommittedContainerCopiedThenDeletedByHandUnderANameWithoutItsFormKey_KeepsItsRecords()
-    {
-        using var fx = await ASourceMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var cell = await Client.FirstFormKey(Plugin, Origin, "cell");
-        var placedRef = await Client.FormKeyNamed(Plugin, Origin, "refr", PlacedRef);
-        var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, Cell)).Require();
-        OtherTool.CopiesASourceDirectory(original, "RenamedByHand");
-        await Client.NextSnapshot(fx);
-        await ItsPluginSourceReadsAs(unreadable: true);
-
-        OtherTool.DeletesTheDirectory(original);
-        await Client.NextSnapshot(fx);
-
-        await ItsPluginSourceReadsAs(unreadable: false);
-        Assert.Equal(Cell, (await Client.Record(cell)).GetProperty("editorId").GetString());
-        Assert.Equal(PlacedRef, (await Client.Record(placedRef)).GetProperty("editorId").GetString());
-    }
-
-    [Theory]
-    [InlineData(Cell, "cell")]
-    [InlineData(World, "wrld")]
-    public async Task ACommittedContainerDeletedThenWrittenByHandUnderANameWithoutItsFormKey_BringsItsRecordBack(
-        string editorId, string recordType)
-    {
-        using var fx = await ASourceMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var container = await Client.FirstFormKey(Plugin, Origin, recordType);
-        var document = OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{editorId}\"");
-        var original = Path.GetDirectoryName(document).Require();
-        var text = File.ReadAllText(document);
-        using var stream = await Client.NotificationStream();
-        OtherTool.DeletesTheDirectory(original);
-        await Client.NextSnapshot(fx);
-        await stream.EventsUntil("rows-changed", e => Names(e, container));
-
-        OtherTool.WritesTheFile(
-            Path.Combine(AnotherTool.Beside(original, "RenamedByHand"), Path.GetFileName(document)), text);
-        await Client.NextSnapshot(fx);
-
-        await stream.EventsUntil("rows-changed", e => Names(e, container));
-        Assert.Equal(editorId, (await Client.Record(container)).GetProperty("editorId").GetString());
-    }
-
-    private static bool Names(JsonElement rowsChanged, string formKey) =>
-        rowsChanged.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey);
 }

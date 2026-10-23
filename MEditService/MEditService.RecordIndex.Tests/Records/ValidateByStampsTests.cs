@@ -118,13 +118,17 @@ public sealed class ValidateByStampsTests : IDisposable
         Assert.Equal("FixtureNpc", Npc.EditorId);
     }
 
-    [Fact]
-    public void ADeletedDocumentThatIsRestored_ComesBack()
+    [Theory]
+    [InlineData("{0}")]
+    [InlineData("RenamedByHand.json")]
+    [InlineData("SortedByHand/{0}")]
+    public void ADeletedDocumentWrittenBackByHand_ComesBack(string writtenTo)
     {
         var file = NpcFile;
+        var text = File.ReadAllText(file);
         File.Delete(file);
         _index.NextSnapshotUntil(() => _index.CopyIn(_npc, _mod.KeyOf()) is null, "the record gone");
-        _mod.Git("checkout", "--", ModRelativePath(file));
+        File.WriteAllText(AnotherTool.Beside(file, writtenTo), text);
 
         ValidateUntilEditorId("FixtureNpc");
 
@@ -223,23 +227,32 @@ public sealed class ValidateByStampsTests : IDisposable
     }
 
     [Theory]
-    [InlineData("RenamedByHand.json", true)]
-    [InlineData("Misnamed - 000900_Fixture.esp.json", true)]
-    [InlineData("SortedByHand/{0}", true)]
-    [InlineData("SortedByHand/RenamedByHand.json", true)]
-    [InlineData("Backup/{0}", false)]
-    [InlineData("Backup/copy.json", false)]
-    public void ACopyOfADocument_IsDiagnosedUntilOneOfTheTwoIsDeleted_AndTheRecordSurvives(string copiedTo, bool deletesTheOriginal)
+    [InlineData("RenamedByHand.json", "{0}")]
+    [InlineData("Misnamed - 000900_Fixture.esp.json", "{0}")]
+    [InlineData("SortedByHand/{0}", "{0}")]
+    [InlineData("SortedByHand/RenamedByHand.json", "{0}")]
+    [InlineData("Backup/{0}", "Backup/{0}")]
+    [InlineData("Backup/copy.json", "Backup/copy.json")]
+    public void ACopyOfADocument_IsDiagnosedNamingBothUntilOneOfTheTwoIsDeleted_AndTheRecordSurvives(string copiedTo, string deleted)
     {
         var document = NpcFile;
+        Directory.CreateDirectory(AnotherTool.Beside(document, "Backup"));
+        var partnerRenamed = _partner.RenamedByHand(_index);
+        _index.NextSnapshotUntil(() => _notifications.Notifications.Any(n => partnerRenamed(n)), "the partner's change");
         var copy = AnotherTool.Beside(document, copiedTo);
         File.Copy(document, copy);
+
         ValidateUntilSourceUnreadable();
 
-        File.Delete(deletesTheOriginal ? document : copy);
+        var problems = _index.Queries.GetProblems().Value().Single(p => PluginAddress.Comparer.Equals(p.Plugin, _mod.KeyOf()));
+        Assert.Equivalent(
+            new[] { Path.GetRelativePath(_mod.ModFolderOf(), document), Path.GetRelativePath(_mod.ModFolderOf(), copy) },
+            problems.Problems.Select(p => p.SourceRelativePath),
+            strict: true);
+
+        File.Delete(AnotherTool.Beside(document, deleted));
         _index.NextSnapshotUntil(() => !SourceUnreadable, "the plugin read from its source again");
 
-        Assert.False(SourceUnreadable);
         Assert.Equal("FixtureNpc", Npc.EditorId);
     }
 

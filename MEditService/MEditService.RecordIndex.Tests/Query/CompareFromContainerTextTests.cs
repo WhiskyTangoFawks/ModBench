@@ -57,9 +57,6 @@ public sealed class CompareFromContainerTextTests : IDisposable
         _fixture.Dispose();
     }
 
-    private static string Leaf(IMajorRecordGetter record) =>
-        $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
-
     private static string TextOf(IMajorRecordGetter record) => RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
 
     private string RoomDocument =>
@@ -75,7 +72,7 @@ public sealed class CompareFromContainerTextTests : IDisposable
         var otherRoom = new Cell(new FormKey(_room.FormKey.ModKey, 0xA00), Fallout4Release.Fallout4) { EditorID = "OtherRoom" };
         otherRoom.Temporary.Add(_placed);
         var block = Path.GetDirectoryName(Path.GetDirectoryName(RoomDocument)).Require();
-        var otherDocument = PluginSourceRoot.ContainerDocument(Path.Combine(block, Leaf(otherRoom)));
+        var otherDocument = PluginSourceRoot.ContainerDocument(Path.Combine(block, PluginSourceRoot.Leaf(otherRoom)));
         Directory.CreateDirectory(Path.GetDirectoryName(otherDocument).Require());
         File.WriteAllText(otherDocument, TextOf(otherRoom));
     }

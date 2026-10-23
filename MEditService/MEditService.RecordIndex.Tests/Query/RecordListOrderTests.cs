@@ -33,19 +33,19 @@ public sealed class RecordListOrderTests
     }
 
     [Theory]
-    [InlineData("FullTwin", "LightTwin", new[] { "ZTwinLever", "ALateLever" })]
-    [InlineData("LightTwin", "FullTwin", new[] { "ALateLever", "ZTwinLever" })]
+    [InlineData(false, true, new[] { "ZTwinLever", "ALateLever" })]
+    [InlineData(true, false, new[] { "ALateLever", "ZTwinLever" })]
     public void AFilenamesFormIds_SortAsThePluginTheGameLoadsUnderIt_NotAnOverriddenCopy(
-        string winnerOrigin, string loserOrigin, string[] expected)
+        bool winnerIsLight, bool loserIsLight, string[] expected)
     {
-        static Action<Fallout4Mod> Twin(string origin) => mod =>
+        static Action<Fallout4Mod> Twin(bool isLight) => mod =>
         {
-            mod.IsSmallMaster = origin == "LightTwin";
+            mod.IsSmallMaster = isLight;
             mod.Activators.AddNew("ZTwinLever");
         };
         using var fixture = new PluginFixtureBuilder("record-list-twin-order")
-            .WithPlugin("Twin.esp", Twin(loserOrigin), origin: loserOrigin)
-            .WithPlugin("Twin.esp", Twin(winnerOrigin), origin: winnerOrigin)
+            .WithPlugin("Twin.esp", Twin(loserIsLight), origin: "LoserTwin")
+            .WithPlugin("Twin.esp", Twin(winnerIsLight), origin: "WinnerTwin")
             .WithPlugin("Late.esm", mod => mod.Activators.AddNew("ALateLever"), origin: "LateMod")
             .WithPlugin("Patch.esp", (mod, masters) =>
             {

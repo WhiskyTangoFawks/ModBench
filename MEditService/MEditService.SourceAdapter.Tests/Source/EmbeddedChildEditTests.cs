@@ -62,12 +62,9 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
     private static string Root => PluginSourceRoot.For(PluginName);
 
-    private string CellPath => PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", Leaf(_cell)));
+    private string CellPath => PluginSourceRoot.ContainerDocument(Path.Combine(Root, "Cells", "0", "0", PluginSourceRoot.Leaf(_cell)));
 
-    private string QuestPath => Path.Combine(Root, "Quests", Leaf(_quest) + ".json");
-
-    private static string Leaf(IMajorRecordGetter record) =>
-        $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
+    private string QuestPath => Path.Combine(Root, "Quests", PluginSourceRoot.Leaf(_quest) + ".json");
 
     private static byte[] Serialize(IMajorRecordGetter record) =>
         Encoding.UTF8.GetBytes(RecordTextCodec.SerializeToText(record, Release));

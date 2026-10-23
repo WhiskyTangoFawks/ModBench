@@ -36,7 +36,7 @@ public sealed class FilterHierarchyTests
             .SelectMany(subBlock => subBlock.Cells)
             .Select(cell => cell.EditorId)];
 
-    private static ScatteredFixtureData TwoPluginsHoldingTheRoomBase(Action<Fallout4Mod, Fallout4Mod> second, string secondName, string secondOrigin) =>
+    private static ScatteredFixtureData TwoPluginsHoldingTheRoomBase(Action<Fallout4Mod, Fallout4Mod> second, PluginAddress secondPlugin) =>
         new PluginFixtureBuilder("filter-hierarchy-holders")
             .WithPlugin("Base.esm", mod =>
             {
@@ -44,7 +44,7 @@ public sealed class FilterHierarchyTests
                 room.Temporary.Add(new PlacedObject(mod) { EditorID = "BaseRef" });
                 mod.AddInteriorCells(room);
             }, origin: "BaseMod")
-            .WithPlugin(secondName, (mod, masters) => second(mod, masters[0]), origin: secondOrigin)
+            .WithPlugin(secondPlugin.Name, (mod, masters) => second(mod, masters[0]), origin: secondPlugin.Origin)
             .BuildScattered();
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class FilterHierarchyTests
             room.Temporary.Clear();
             room.Temporary.Add(new PlacedObject(mod) { EditorID = "DressingRef" });
             mod.AddInteriorCells(room);
-        }, "Dressing.esp", "DressingMod");
+        }, new PluginAddress("Dressing.esp", "DressingMod"));
         using var index = Indexes.Reconciled(fixture);
 
         Filter(index, "DressingRef");
@@ -102,7 +102,7 @@ public sealed class FilterHierarchyTests
             room.Temporary.Clear();
             room.WaterHeight = 10f;
             mod.AddInteriorCells(room);
-        }, "Lighting.esp", "LightingMod");
+        }, new PluginAddress("Lighting.esp", "LightingMod"));
         using var index = Indexes.Reconciled(fixture);
 
         Filter(index, "BaseRef");

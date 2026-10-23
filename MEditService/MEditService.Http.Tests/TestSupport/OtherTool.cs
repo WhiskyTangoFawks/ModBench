@@ -64,19 +64,6 @@ internal static class OtherTool
     internal static void CopiesASourceDocument(string document, string copiedTo) =>
         File.Copy(document, AnotherTool.Beside(document, copiedTo));
 
-    /// <summary><see cref="CopiesASourceDocument"/> for a container, whose document is a directory:
-    /// every file under <paramref name="directory"/>, at the same depth under the copy.</summary>
-    internal static void CopiesASourceDirectory(string directory, string copiedTo)
-    {
-        var target = AnotherTool.Beside(directory, copiedTo);
-        foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
-        {
-            var copy = Path.Combine(target, Path.GetRelativePath(directory, file));
-            Directory.CreateDirectory(Path.GetDirectoryName(copy).Require());
-            File.Copy(file, copy);
-        }
-    }
-
     /// <summary>The user reverting one document to what the repository last saw: a write under the
     /// source tree that git makes rather than Modbench.</summary>
     internal static void RevertsASourceDocument(string modFolder, string plugin, string textItCarries)
