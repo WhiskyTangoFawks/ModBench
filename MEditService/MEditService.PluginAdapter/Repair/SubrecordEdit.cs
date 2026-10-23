@@ -103,8 +103,6 @@ internal sealed class RecordRewrite(IReadOnlyList<Subrecord> original)
 
     internal List<Subrecord> Result() => [.. Placing().Select(placed => placed.Subrecord)];
 
-    internal bool DropsAny => _dropped.Any(dropped => dropped);
-
     internal List<Placed> Placing()
     {
         var result = new List<Placed>();

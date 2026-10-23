@@ -124,13 +124,20 @@ public sealed class PluginRepairTests
         Assert.Equal(reason, VerifyEverything(original, previews, repaired).Failure().Reason);
     }
 
-    public static TheoryData<MalformationFixture> FixturesWhoseRepairedFieldsTheWriterNames() =>
-        [.. MalformationFixtures.Lossless.Where(f => f.Malformation != "WrongFixedCountList")];
+    public static TheoryData<MalformationFixture, string, string[]> RepairsAndTheFieldEachHoldsRaw() => new()
+    {
+        { FixtureOf("ShortFixedSizeSubrecord", "REGN"), "Map", ["RDAT", "RDMP"] },
+        { FixtureOf("ShortFixedSizeSubrecord", "PERK"), "Effects", ["PRKE", "DATA", "EPFT", "EPF2", "EPF3", "PRKF"] },
+        { FixtureOf("CounterDisagreeingWithEntries", "REFR"), "PowerGridConnections", ["XWPG", "XWPN", "XWPN"] },
+        { FixtureOf("TemplateCombinationOutOfOrder", "WEAP"), "ObjectTemplates", ["OBTE", "OBTS", "OBTF", "FULL", "STOP"] },
+        { FixtureOf("EntryPointMissingEpf3", "PERK"), "Effects", ["PRKE", "DATA", "EPFT", "EPF2", "PRKF"] },
+        { FixtureOf("EntryPointParametersOnAParameterlessFunction", "PERK"), "Effects", ["PRKE", "DATA", "EPFT", "EPFB", "EPFD", "PRKF"] },
+    };
 
     [Theory]
-    [MemberData(nameof(FixturesWhoseRepairedFieldsTheWriterNames))]
-    public async Task FlaggedSourceOf_TheRepairedSource_HoldsEveryOtherRecordAndFieldAsItIs_AndEachFieldTheRepairFeedsAsItsOriginalSubrecords(
-        MalformationFixture fixture)
+    [MemberData(nameof(RepairsAndTheFieldEachHoldsRaw))]
+    public async Task FlaggedSourceOf_TheRepairedSource_HoldsEveryOtherRecordAndFieldAsItIs_AndTheFieldARepairedOrDroppedSubrecordSitsInAsItsOriginalSubrecords(
+        MalformationFixture fixture, string field, string[] originalSignatures)
     {
         var (malformed, repaired, flagged) = await FlaggedAsync(fixture);
 
@@ -138,26 +145,35 @@ public sealed class PluginRepairTests
         var changed = Assert.Single(flagged.Files.Zip(repaired.Files), pair => !pair.First.Content.AsSpan().SequenceEqual(pair.Second.Content));
         Assert.Equal(FormKeysIn(repaired.Files), FormKeysIn(flagged.Files));
         var record = TheOneObjectHoldingDiagnosesIn(changed.First.Content);
-        var asRepaired = ObjectWithFormKey(changed.Second.Content, record.GetProperty("FormKey").GetString());
+        var formKey = record.GetProperty("FormKey").GetString() ?? "";
+        var asRepaired = ObjectWithFormKey(changed.Second.Content, formKey);
         Assert.Equal([.. asRepaired.EnumerateObject().Select(m => m.Name), "Diagnoses"], record.EnumerateObject().Select(m => m.Name));
         Assert.Equal([fixture.Diagnosis], record.GetProperty("Diagnoses").EnumerateArray().Select(d => d.GetString()));
-        var held = asRepaired.EnumerateObject().Where(m => !JsonElement.DeepEquals(m.Value, record.GetProperty(m.Name))).Select(m => m.Name).ToList();
-        Assert.NotEmpty(held);
-        Assert.Empty(held.Intersect(GameCodecs.For(Release).Annotations.RecordHeaderMembers.Select(member => member.MemberName)));
-        Assert.All(held, name =>
-        {
-            Assert.Equal(["Subrecords"], record.GetProperty(name).EnumerateObject().Select(m => m.Name));
-            Assert.All(EncodedSubrecordsOf(record.GetProperty(name)), bytes => Assert.True(malformed.AsSpan().IndexOf(bytes) >= 0, "a held subrecord is not the plugin's own"));
-        });
+        Assert.Equal(field, Assert.Single(asRepaired.EnumerateObject(), m => !JsonElement.DeepEquals(m.Value, record.GetProperty(m.Name))).Name);
+        Assert.Equal(["Subrecords"], record.GetProperty(field).EnumerateObject().Select(m => m.Name));
+        var own = OwnSubrecordsOf(malformed, uint.Parse(formKey.Split(':')[0], System.Globalization.NumberStyles.HexNumber));
+        var start = Assert.Single(Enumerable.Range(0, own.Count - originalSignatures.Length + 1),
+            at => own.Skip(at).Take(originalSignatures.Length).Select(s => s.Signature).SequenceEqual(originalSignatures));
+        Assert.Equal(
+            own.Skip(start).Take(originalSignatures.Length).Select(s => Subrecord(s.Signature, s.Payload)),
+            EncodedSubrecordsOf(record.GetProperty(field)));
         Assert.Equal(Convert.ToHexString(SHA256.HashData(fixture.Malformed.Bytes)), flagged.BinarySha256);
     }
 
-    [Theory]
-    [InlineData("EntryPointParametersOnAParameterlessFunction")]
-    [InlineData("WrongFixedCountList")]
-    public async Task FlaggedSourceOf_ARepairThatDropsASubrecord_OrOneOfAListMutagenWritesWhateverItsFieldHolds_HoldsTheWholeRecordRaw(string malformation)
+    private static MalformationFixture FixtureOf(string malformation, string recordType) =>
+        MalformationFixtures.All.Single(f => f.Malformation == malformation && f.Diagnosis.StartsWith($"{recordType} ", StringComparison.Ordinal));
+
+    private static List<(string Signature, byte[] Payload)> OwnSubrecordsOf(byte[] plugin, uint formId)
     {
-        var fixture = MalformationFixtures.All.Single(f => f.Malformation == malformation);
+        List<(string Signature, byte[] Payload)> own = [];
+        EditRecord(plugin, formId, subrecords => own = subrecords);
+        return own;
+    }
+
+    [Fact]
+    public async Task FlaggedSourceOf_ARepairOfAListMutagenWritesWhateverItsFieldHolds_HoldsTheWholeRecordRaw()
+    {
+        var fixture = MalformationFixtures.All.Single(f => f.Malformation == "WrongFixedCountList");
         var (malformed, repaired, flagged) = await FlaggedAsync(fixture);
 
         var changed = Assert.Single(flagged.Files.Zip(repaired.Files), pair => !pair.First.Content.AsSpan().SequenceEqual(pair.Second.Content));

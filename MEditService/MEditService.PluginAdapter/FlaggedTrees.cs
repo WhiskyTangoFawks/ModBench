@@ -8,8 +8,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Decompile and repair's first commit: each repaired record typed, but for the members a repaired subrecord
-/// feeds, which hold the original's subrecords. A member feeds what Mutagen stops writing when it goes.</summary>
+/// <summary>Decompile and repair's first commit: repaired records typed, but for members feeding a repaired subrecord
+/// or both neighbours of a dropped one, which hold the original's subrecords. A member feeds what Mutagen stops writing
+/// without it.</summary>
 internal static class FlaggedTrees
 {
     /// <summary>A record the first commit flags, by its FormKey: its diagnoses, its subrecords as the plugin holds them,
@@ -38,11 +39,11 @@ internal static class FlaggedTrees
         return tree;
     }
 
-    // Null holds the whole record raw: a repair that drops a subrecord, or a repaired subrecord no member feeds.
+    // Null holds the whole record raw: a repaired subrecord no member feeds, or a dropped one whose nearest kept
+    // subrecords on both sides no single member feeds.
     private static async Task<Dictionary<string, IReadOnlyList<(string Signature, ReadOnlyMemory<byte> Payload)>>?> RawMembersAsync(
         string recordText, FlaggedRecord record, RecordWriter writer, GameRelease release)
     {
-        if (record.Repair.DropsAny) return null;
         var placed = record.Repair.Placing();
         if (await writer.SubrecordsOfAsync(recordText) is not { } written
             || !written.SequenceEqual(placed.Select(p => p.Subrecord), SameSubrecord.Instance))
@@ -57,10 +58,28 @@ internal static class FlaggedTrees
         }
         if (changed.Any(at => !fedBy.Values.Any(fed => fed.Contains(at)))) return null;
 
-        return fedBy.Where(member => member.Value.Overlaps(changed)).ToDictionary(
+        List<int> OriginalsOf(HashSet<int> fed) => [.. fed.Select(at => placed[at].Original).OfType<int>()];
+        var held = fedBy.Where(member => member.Value.Overlaps(changed))
+            .ToDictionary(member => member.Key, member => OriginalsOf(member.Value), StringComparer.Ordinal);
+        var placedAt = new Dictionary<int, int>();
+        for (var at = 0; at < placed.Count; at++)
+        {
+            if (placed[at].Original is { } original) placedAt[original] = at;
+        }
+        var dropped = Enumerable.Range(0, record.Original.Count).Where(at => !placedAt.ContainsKey(at));
+        foreach (var gone in dropped)
+        {
+            if (placedAt.Keys.Where(kept => kept < gone).Cast<int?>().Max() is not { } before
+                || placedAt.Keys.Where(kept => kept > gone).Cast<int?>().Min() is not { } after)
+                return null;
+            var feedingBoth = fedBy.Where(member => member.Value.Contains(placedAt[before]) && member.Value.Contains(placedAt[after])).ToList();
+            if (feedingBoth is not [var (member, fed)]) return null;
+            held[member] = [.. held.GetValueOrDefault(member) ?? OriginalsOf(fed), gone];
+        }
+
+        return held.ToDictionary(
             member => member.Key,
-            member => (IReadOnlyList<(string, ReadOnlyMemory<byte>)>)Payloads(
-                [.. member.Value.Select(at => placed[at].Original).OfType<int>().Order().Select(at => record.Original[at])]),
+            member => (IReadOnlyList<(string, ReadOnlyMemory<byte>)>)Payloads(member.Value.Order().Select(at => record.Original[at])),
             StringComparer.Ordinal);
     }
 
