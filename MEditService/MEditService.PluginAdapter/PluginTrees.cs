@@ -1,5 +1,3 @@
-using System.Text;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
@@ -79,39 +77,6 @@ internal static class PluginTrees
         {
             Directory.Delete(scratchDir, recursive: true);
         }
-    }
-
-    /// <summary>A record decompile and repair's first commit flags, by its FormKey.</summary>
-    internal sealed record FlaggedRecord(string FormKey, IReadOnlyList<string> Diagnoses, IReadOnlyList<(string Signature, ReadOnlyMemory<byte> Payload)> Subrecords);
-
-    /// <summary><paramref name="files"/> with the document of each of <paramref name="flagged"/>, its own or embedded in its
-    /// container's, flagged, and every other byte as it was.</summary>
-    internal static IReadOnlyList<TreeFile> Flagged(IReadOnlyList<TreeFile> files, IReadOnlyList<FlaggedRecord> flagged, GameRelease release)
-    {
-        var tree = files.ToList();
-        foreach (var record in flagged)
-        {
-            var at = tree.FindIndex(file => Carries(file, record.FormKey, release));
-            if (at < 0) throw new InvalidOperationException($"Expected the repaired plugin's tree to carry {record.FormKey}, which its repair flags.");
-            var content = tree[at].Content;
-            var text = DocumentTokens.FormKeysIn(content, release).FirstOrDefault(key => key.Position == FormKeyPosition.Root) is { } root
-                && FormKeyComparer.Instance.Equals(root.FormKey, record.FormKey)
-                ? FlaggedDocument.For(Encoding.UTF8.GetString(content), record.Diagnoses, record.Subrecords)
-                : FlaggedChild(content, record, release);
-            tree[at] = tree[at] with { Content = Encoding.UTF8.GetBytes(text) };
-        }
-        return tree;
-    }
-
-    private static bool Carries(TreeFile file, string formKey, GameRelease release) =>
-        DocumentTokens.FormKeysIn(file.Content, release)
-            .Any(key => key.Position != FormKeyPosition.Other && FormKeyComparer.Instance.Equals(key.FormKey, formKey));
-
-    private static string FlaggedChild(byte[] owner, FlaggedRecord record, GameRelease release)
-    {
-        var span = ContainerDocumentEdits.EmbeddedChildSpansOf(owner, ownerRecordType: null, release)[record.FormKey];
-        return ContainerDocumentEdits.WithChildReplaced(
-            owner, span, FlaggedDocument.For(ContainerDocumentEdits.ChildTextAt(owner, span, release), record.Diagnoses, record.Subrecords));
     }
 
     /// <summary>The tree in <paramref name="files"/> compiled to bytes at

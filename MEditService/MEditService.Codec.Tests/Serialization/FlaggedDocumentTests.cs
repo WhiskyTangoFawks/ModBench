@@ -46,6 +46,40 @@ public sealed class FlaggedDocumentTests
     }
 
     [Fact]
+    public void AFlaggedRecordsHeldMembers_HoldTheirSubrecordsInPlaceOfTheirValues_AndItsDiagnosesFollowItsLastMember_EveryOtherByteAsItWas()
+    {
+        var text = "{\n  \"FormKey\": \"000800:Test.esp\",\n  \"Name\": \"Hafen über\",\n  \"Map\": {\n    \"Name\": \"Harbor\"\n  },\n  \"Color\": 3\n}";
+
+        var flagged = FlaggedDocument.WithMembersHeldRaw(text, ["a diagnosis"], new Dictionary<string, IReadOnlyList<(string, ReadOnlyMemory<byte>)>>
+        {
+            ["Map"] = [("RDAT", new byte[] { 1, 2 }), ("RDMP", "Harbor\0"u8.ToArray())],
+        });
+
+        Assert.Equal(
+            """
+            {
+              "FormKey": "000800:Test.esp",
+              "Name": "Hafen über",
+              "Map": {
+                "Subrecords": [
+                  {
+                    "RDAT": "0x0102"
+                  },
+                  {
+                    "RDMP": "0x486172626F7200"
+                  }
+                ]
+              },
+              "Color": 3,
+              "Diagnoses": [
+                "a diagnosis"
+              ]
+            }
+            """.ReplaceLineEndings("\n"),
+            flagged);
+    }
+
+    [Fact]
     public void AFlaggedRecordOfATypeItsDocumentNames_KeepsThatName()
     {
         var text = """{ "MutagenObjectType": "Npc", "FormKey": "000801:Test.esp", "Race": "000802:Test.esp" }""";

@@ -79,12 +79,15 @@ internal static class PluginRepair
 
         return repairing
             .GroupBy(found => found.Record.Location)
-            .ToDictionary(record => record.Key, record =>
-            {
-                var rewrite = new RecordRewrite(record.First().Subrecords);
-                foreach (var edit in record.SelectMany(found => found.Repair ?? [])) edit.ApplyTo(rewrite);
-                return new PlannedRecord(record.First().Record, rewrite.Result());
-            });
+            .ToDictionary(record => record.Key, record => new PlannedRecord(record.First().Record, RewriteOf([.. record]).Result()));
+    }
+
+    /// <summary>The record <paramref name="record"/>'s diagnoses name, with each of their repairs made.</summary>
+    internal static RecordRewrite RewriteOf(IReadOnlyList<Malformations.Found> record)
+    {
+        var rewrite = new RecordRewrite(record[0].Subrecords);
+        foreach (var edit in record.SelectMany(found => found.Repair ?? [])) edit.ApplyTo(rewrite);
+        return rewrite;
     }
 
     private static byte[] RecordBytes(byte[] plugin, PlannedRecord planned)

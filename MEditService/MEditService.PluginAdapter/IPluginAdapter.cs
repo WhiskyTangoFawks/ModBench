@@ -59,9 +59,11 @@ public interface IPluginAdapter
         string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string repairedPath, GameRelease gameRelease);
 
     /// <summary><paramref name="repaired"/> with each record a repair of <paramref name="chosen"/> changes flagged: its
-    /// diagnoses and its subrecords' bytes. It names the plugin's own binary. Refused when the bytes changed since the preview.</summary>
-    Answer<PluginSource, PluginFailure> FlaggedSourceOf(
-        RegisteredPlugin plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, PluginSource repaired, LoadOrderSnapshot loadOrder);
+    /// diagnoses, and the plugin's own subrecords for each field the repair feeds. Refused when the bytes changed since the
+    /// preview.</summary>
+    Task<Answer<PluginSource, PluginFailure>> FlaggedSourceOfAsync(
+        RegisteredPlugin plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, PluginSource repaired, LoadOrderSnapshot loadOrder,
+        CancellationToken cancel = default);
 
     /// <summary>The loose strings files and archives a read of the localized plugin under <paramref name="loadOrder"/>
     /// takes its strings from.</summary>

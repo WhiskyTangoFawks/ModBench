@@ -87,7 +87,7 @@ public sealed class DecompileAndRepairPluginHandler
                 ? DecompileAndRepairRefusal.MissingLocalizationStrings
                 : DecompileAndRepairRefusal.RoundTripFailed, decompiled.Message);
         }
-        if (!_adapter.FlaggedSourceOf(plugin, item.Hash, chosen, repaired, loadOrder).Holds(out var flagged, out failure))
+        if (!(await _adapter.FlaggedSourceOfAsync(plugin, item.Hash, chosen, repaired, loadOrder, cancel)).Holds(out var flagged, out failure))
             return RefusedAs(plugin, failure);
 
         var repairedCommit = new TreeCommit(repaired.Files, RepairMessage(plugin, previews));

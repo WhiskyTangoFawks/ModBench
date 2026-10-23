@@ -124,10 +124,50 @@ public sealed class PluginRepairTests
         Assert.Equal(reason, VerifyEverything(original, previews, repaired).Failure().Reason);
     }
 
+    public static TheoryData<MalformationFixture> FixturesWhoseRepairedFieldsTheWriterNames() =>
+        [.. MalformationFixtures.All.Where(f => f.Repaired != null && f.Change?.Contains("drops", StringComparison.Ordinal) == false
+            && f.Malformation != "WrongFixedCountList")];
+
     [Theory]
-    [MemberData(nameof(RepairedFixtures))]
-    public async Task FlaggedSourceOf_TheRepairedSource_HoldsEachOtherRecordAsItIs_AndTheMalformedOneAsItsDiagnosisAndItsSubrecordsBytes(
+    [MemberData(nameof(FixturesWhoseRepairedFieldsTheWriterNames))]
+    public async Task FlaggedSourceOf_TheRepairedSource_HoldsEveryOtherRecordAndFieldAsItIs_AndEachFieldTheRepairFeedsAsItsOriginalSubrecords(
         MalformationFixture fixture)
+    {
+        var (malformed, repaired, flagged) = await FlaggedAsync(fixture);
+
+        Assert.Equal(repaired.Files.Select(f => f.RelativePath), flagged.Files.Select(f => f.RelativePath));
+        var changed = Assert.Single(flagged.Files.Zip(repaired.Files), pair => !pair.First.Content.AsSpan().SequenceEqual(pair.Second.Content));
+        Assert.Equal(FormKeysIn(repaired.Files), FormKeysIn(flagged.Files));
+        var record = TheOneObjectHoldingDiagnosesIn(changed.First.Content);
+        var asRepaired = ObjectWithFormKey(changed.Second.Content, record.GetProperty("FormKey").GetString());
+        Assert.Equal([.. asRepaired.EnumerateObject().Select(m => m.Name), "Diagnoses"], record.EnumerateObject().Select(m => m.Name));
+        Assert.Equal([fixture.Diagnosis], record.GetProperty("Diagnoses").EnumerateArray().Select(d => d.GetString()));
+        var held = asRepaired.EnumerateObject().Where(m => !JsonElement.DeepEquals(m.Value, record.GetProperty(m.Name))).Select(m => m.Name).ToList();
+        Assert.NotEmpty(held);
+        Assert.All(held, name =>
+        {
+            Assert.Equal(["Subrecords"], record.GetProperty(name).EnumerateObject().Select(m => m.Name));
+            Assert.All(EncodedSubrecordsOf(record.GetProperty(name)), bytes => Assert.True(malformed.AsSpan().IndexOf(bytes) >= 0, "a held subrecord is not the plugin's own"));
+        });
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(fixture.Malformed.Bytes)), flagged.BinarySha256);
+    }
+
+    [Theory]
+    [InlineData("EntryPointParametersOnAParameterlessFunction")]
+    [InlineData("WrongFixedCountList")]
+    public async Task FlaggedSourceOf_ARepairThatDropsASubrecord_OrOneOfAListMutagenWritesWhateverItsFieldHolds_HoldsTheWholeRecordRaw(string malformation)
+    {
+        var fixture = MalformationFixtures.All.Single(f => f.Malformation == malformation);
+        var (malformed, repaired, flagged) = await FlaggedAsync(fixture);
+
+        var changed = Assert.Single(flagged.Files.Zip(repaired.Files), pair => !pair.First.Content.AsSpan().SequenceEqual(pair.Second.Content));
+        var record = TheOneObjectHoldingDiagnosesIn(changed.First.Content);
+
+        Assert.Equal(["FormKey", "EditorID", "Diagnoses", "Subrecords"], record.EnumerateObject().Select(m => m.Name));
+        Assert.True(malformed.AsSpan().IndexOf([.. EncodedSubrecordsOf(record).SelectMany(bytes => bytes)]) >= 0, "the held subrecords are not the record's own");
+    }
+
+    private static async Task<(byte[] Malformed, PluginSource Repaired, PluginSource Flagged)> FlaggedAsync(MalformationFixture fixture)
     {
         using var folder = new ScratchDirectory("repair-flagged");
         using var repairedFolder = new ScratchDirectory("repair-flagged-repaired");
@@ -138,27 +178,19 @@ public sealed class PluginRepairTests
         var repairedPath = adapter.WriteRepaired(malformed, previews.Hash, chosen, Path.Combine(repairedFolder.Path, fixture.Malformed.FileName), Release).Answered();
         var loadOrder = EmptyLoadOrder.Of(Release);
         var repaired = (await adapter.ReadSourceOfAsync(Registered(repairedPath), loadOrder)).Answered();
-
-        var flagged = adapter.FlaggedSourceOf(Registered(malformed), previews.Hash, chosen, repaired, loadOrder).Answered();
-
-        Assert.Equal(repaired.Files.Select(f => f.RelativePath), flagged.Files.Select(f => f.RelativePath));
-        var changed = Assert.Single(flagged.Files.Zip(repaired.Files), pair => !pair.First.Content.AsSpan().SequenceEqual(pair.Second.Content));
-        Assert.Equal(FormKeysIn(repaired.Files), FormKeysIn(flagged.Files));
-        var record = TheOneObjectHoldingDiagnosesIn(changed.First.Content);
-        Assert.Equal([fixture.Diagnosis], record.GetProperty("Diagnoses").EnumerateArray().Select(d => d.GetString()));
-        Assert.True(fixture.Malformed.Bytes.AsSpan().IndexOf(SubrecordBytesOf(record)) >= 0, "the flagged subrecords are not the malformed record's own");
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(fixture.Malformed.Bytes)), flagged.BinarySha256);
+        var flagged = (await adapter.FlaggedSourceOfAsync(Registered(malformed), previews.Hash, chosen, repaired, loadOrder)).Answered();
+        return (fixture.Malformed.Bytes, repaired, flagged);
     }
 
     [Fact]
-    public void FlaggedSourceOf_APluginWhoseBytesChangedSinceThePreview_IsRefused()
+    public async Task FlaggedSourceOf_APluginWhoseBytesChangedSinceThePreview_IsRefused()
     {
         using var folder = new ScratchDirectory("repair-flagged-stale");
         var (malformed, previews) = Previewed(folder, ShortRegion);
         File.WriteAllBytes(malformed, TwoRegions(PaddedRegion).Bytes);
 
-        var refused = TestAdapters.Mutagen().FlaggedSourceOf(
-            Registered(malformed), previews.Hash, [.. previews.Diagnoses.Select(d => d.Diagnosis)], new PluginSource([], [], ""), EmptyLoadOrder.Of(Release)).Failure();
+        var refused = (await TestAdapters.Mutagen().FlaggedSourceOfAsync(
+            Registered(malformed), previews.Hash, [.. previews.Diagnoses.Select(d => d.Diagnosis)], new PluginSource([], [], ""), EmptyLoadOrder.Of(Release))).Failure();
 
         Assert.Equal("its bytes changed since the repair preview", refused.Reason);
     }
@@ -175,21 +207,22 @@ public sealed class PluginRepairTests
             .Select(key => key.FormKey)
             .Order(StringComparer.Ordinal)];
 
-    private static JsonElement TheOneObjectHoldingDiagnosesIn(byte[] document)
+    private static JsonElement TheOneObjectHoldingDiagnosesIn(byte[] document) =>
+        Assert.Single(Objects(JsonDocument.Parse(document).RootElement.Clone()), o => o.TryGetProperty("Diagnoses", out _));
+
+    private static JsonElement ObjectWithFormKey(byte[] document, string? formKey) =>
+        Assert.Single(Objects(JsonDocument.Parse(document).RootElement.Clone()), o => o.TryGetProperty("FormKey", out var key) && key.GetString() == formKey);
+
+    private static IEnumerable<JsonElement> Objects(JsonElement element) => element.ValueKind switch
     {
-        static IEnumerable<JsonElement> Objects(JsonElement element) => element.ValueKind switch
-        {
-            JsonValueKind.Object => [element, .. element.EnumerateObject().SelectMany(member => Objects(member.Value))],
-            JsonValueKind.Array => element.EnumerateArray().SelectMany(Objects),
-            _ => [],
-        };
+        JsonValueKind.Object => [element, .. element.EnumerateObject().SelectMany(member => Objects(member.Value))],
+        JsonValueKind.Array => element.EnumerateArray().SelectMany(Objects),
+        _ => [],
+    };
 
-        return Assert.Single(Objects(JsonDocument.Parse(document).RootElement.Clone()), o => o.TryGetProperty("Diagnoses", out _));
-    }
-
-    private static byte[] SubrecordBytesOf(JsonElement record) =>
+    private static List<byte[]> EncodedSubrecordsOf(JsonElement held) =>
     [
-        .. record.GetProperty("Subrecords").EnumerateArray().Select(s => s.EnumerateObject().Single()).SelectMany(s =>
+        .. held.GetProperty("Subrecords").EnumerateArray().Select(s => s.EnumerateObject().Single()).Select(s =>
             Subrecord(s.Name, s.Value.GetString() is ['0', 'x', .. var hex] ? Convert.FromHexString(hex) : [])),
     ];
 
