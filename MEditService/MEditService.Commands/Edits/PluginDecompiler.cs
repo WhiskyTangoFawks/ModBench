@@ -1,5 +1,6 @@
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.PluginAdapter.Repair;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
@@ -17,7 +18,7 @@ internal sealed record Decompiled(PluginSource? Source, DecompileRefusal Refusal
 internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, ISourceAdapter sourceAdapter)
 {
     internal async Task<Decompiled> DecompileAsync(
-        LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, string modFolder, Action onParsed, CancellationToken cancel)
+        LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, string modFolder, Action onParsed, CancellationToken cancel, bool namesRepair = true)
     {
         // A fresh deep parse, not the load order's own overlay, whose lifetime this gate does not control.
         if (!(await adapter.ReadSourceOfAsync(plugin, loadOrder, cancel)).Holds(out var source, out var failure))
@@ -32,17 +33,48 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
                     $"{plugin.Name} cannot become source: {failure.Reason}."),
                 PluginFailure.Inaccessible => Decompiled.Refused(DecompileRefusal.RoundTripFailed,
                     $"{plugin.Name} cannot be read from its own binary ({failure.Reason}). Close whatever holds the file, then try again."),
-                _ => Decompiled.Refused(DecompileRefusal.RoundTripFailed,
-                    $"{plugin.Name} could not be parsed from its own binary: {failure.Reason}"),
+                PluginFailure.Unparsed unparsed => Decompiled.Refused(DecompileRefusal.RoundTripFailed, UnparsedRefusal(plugin, unparsed, namesRepair)),
+                _ => Decompiled.Refused(DecompileRefusal.RoundTripFailed, NotParsed(plugin, failure)),
             };
         }
 
         onParsed();
-        if (await VerifyRoundTrip(plugin.Name, plugin.Path, source, loadOrder, plugin.Strings, cancel) is { } refusal)
+        if (await VerifyRoundTrip(plugin.Name, plugin.Path, source, loadOrder, plugin.Strings, namesRepair, cancel) is { } refusal)
             return Decompiled.Refused(DecompileRefusal.RoundTripFailed, refusal);
 
         return new Decompiled(source, DecompileRefusal.None, "");
     }
+
+    private static string NotParsed(RegisteredPlugin plugin, PluginFailure failure) =>
+        $"{plugin.Name} could not be parsed from its own binary: {failure.Reason}";
+
+    private string UnparsedRefusal(RegisteredPlugin plugin, PluginFailure.Unparsed unparsed, bool namesRepair)
+    {
+        if (unparsed.Malformations is null)
+            return NotParsed(plugin, unparsed);
+        if (!unparsed.Malformations.Holds(out var scan, out var scanFailure))
+        {
+            logger.LogWarning(scanFailure.Error, "Could not check {Plugin} for malformations: {Reason}", plugin.Name, scanFailure.Reason);
+            return $"{NotParsed(plugin, unparsed)} (it could not be checked for malformations: {scanFailure.Reason})";
+        }
+        if (scan.AtFailure.Count > 0)
+        {
+            return $"{plugin.Name} is a malformed plugin and cannot become source: " +
+                   $"{string.Join("; ", scan.AtFailure.Select(malformation => malformation.Diagnosis.Describe()))}.{RepairClause(scan.AtFailure, namesRepair)}";
+        }
+
+        var elsewhere = scan.Elsewhere.Count == 0
+            ? ""
+            : $" It also holds malformed records: {string.Join("; ", scan.Elsewhere.Select(malformation => malformation.Diagnosis.Describe()))}.";
+        if (unparsed.Diagnosis.Tail is null)
+            return NotParsed(plugin, unparsed) + elsewhere;
+        return scan.Elsewhere.Count == 0
+            ? $"{plugin.Name} is a correct plugin that Mutagen mishandles: {unparsed.Reason}"
+            : $"Mutagen mishandles {plugin.Name}: {unparsed.Reason}.{elsewhere}";
+    }
+
+    private static string RepairClause(IReadOnlyList<RepairPreview> malformations, bool namesRepair) =>
+        namesRepair && malformations.All(malformation => malformation.Change is not null) ? " Decompile and repair it." : "";
 
     // ADR-0006's gate. Reparse, not the pre-write object: only written bytes show what
     // the writer does.
@@ -52,6 +84,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         PluginSource source,
         LoadOrderSnapshot loadOrder,
         PluginStrings strings,
+        bool namesRepair,
         CancellationToken cancel)
     {
         var gameRelease = loadOrder.GameRelease;
@@ -77,9 +110,9 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         if (comparison.Loss is { } loss)
         {
             // A Kind B diagnosis on the record names the cause ahead of the drop it produced.
-            return $"{pluginName} does not round-trip through its own source: " + (comparison.LossCause is { } cause
-                ? $"{cause.Describe()} — parsing the malformed subrecord dropped " +
-                  $"{string.Join(", ", loss.Signatures)} before its source was written."
+            return $"{pluginName} does not round-trip through its own source: " + (comparison.LossCauses is { } causes
+                ? $"it is a malformed plugin, and {string.Join("; ", causes.Select(cause => cause.Diagnosis.Describe()))} — " +
+                  $"parsing the malformed subrecord dropped {string.Join(", ", loss.Signatures)} before its source was written.{RepairClause(causes, namesRepair)}"
                 : $"{loss.RecordType} {loss.FormKey} is missing {string.Join(", ", loss.Signatures)} " +
                   "present in the original — dropped during parsing, before its source was written.");
         }
