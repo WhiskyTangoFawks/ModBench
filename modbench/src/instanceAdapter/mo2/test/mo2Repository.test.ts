@@ -55,11 +55,45 @@ describe('the MO2 adapter\'s repository', () => {
     const withSourceMod = withSourceModLines(WHITELIST_IGNORE_LIST, ['Mod A']) ?? '';
     const ignoreList = (): Promise<string> => readFile(join(root, '.gitignore'), 'utf8');
 
+    const withoutGitmodules = WHITELIST_IGNORE_LIST.replace('!/.gitmodules\n', '');
+    const [first, second, ...rest] = WHITELIST_IGNORE_LIST.split('\n');
+    const swapped = [second, first, ...rest].join('\n');
+
+    it.each([
+      ['the lines of the user after the whitelist', `${WHITELIST_IGNORE_LIST}!/README.md\n!/docs/\n`],
+      ['the lines of the user before the whitelist', `mine/\n${WHITELIST_IGNORE_LIST}`],
+      ['the lines of the user on both sides of the whitelist', `mine/\n${WHITELIST_IGNORE_LIST}!/docs/\n`],
+      ['the lines of the user after the whitelist and its source mods', `${withSourceMod}!/docs/\n`],
+      ['the lines of the user after the whitelist, in CRLF', crlf(`${WHITELIST_IGNORE_LIST}!/docs/\n`)],
+    ])('leaves an ignore list with %s as it is', async (_name, before) => {
+      const adapter = await instance();
+      await put('.gitignore', before);
+
+      const takeBack = await adapter.writeIgnoreList();
+      const written = await ignoreList();
+      await takeBack();
+
+      expect([written, await ignoreList()]).toEqual([before, before]);
+    });
+
+    it('leaves a file the user whitelisted after the whitelist not ignored by git', async () => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+      await put('.gitignore', `${WHITELIST_IGNORE_LIST}!/README.md\n!/docs/\n`);
+      await put('docs/x');
+
+      await adapter.writeIgnoreList();
+
+      const check = spawnSync('git', ['check-ignore', '-v', 'docs/x'], { cwd: root, encoding: 'utf8' });
+      expect([check.status, check.stdout]).toEqual([1, '']);
+    });
+
     it.each([
       ['the lines of an ignore list already there', 'mine\n', `mine\n${WHITELIST_IGNORE_LIST}`],
       ['an ignore list with no final newline', 'mine', `mine\n${WHITELIST_IGNORE_LIST}`],
       ['an ignore list of CRLF lines', 'mine\r\n', `mine\r\n${crlf(WHITELIST_IGNORE_LIST)}`],
-      ['an ignore list whose later lines undo the whitelist', `${WHITELIST_IGNORE_LIST}!/mods/**\n`, `${WHITELIST_IGNORE_LIST}!/mods/**\n${WHITELIST_IGNORE_LIST}`],
+      ['an ignore list whose whitelist lacks a line', withoutGitmodules, `${withoutGitmodules}${WHITELIST_IGNORE_LIST}`],
+      ['an ignore list whose whitelist lines are out of order', swapped, `${swapped}${WHITELIST_IGNORE_LIST}`],
       ['an ignore list that ends with its whitelist', WHITELIST_IGNORE_LIST, WHITELIST_IGNORE_LIST],
       ['an ignore list that ends with its whitelist and its source mods', withSourceMod, withSourceMod],
     ])('adds its whitelist after %s, and takes back to what the file was', async (_name, before, after) => {
