@@ -42,12 +42,11 @@ function caseBlindFinder(dataFolder: string) {
 
 const WHITELIST_LINES = WHITELIST_IGNORE_LIST.trimEnd().split('\n');
 
-// The whitelist is there wherever its lines stand in order and together, bar the source mods block; lines around it
-// are the user's. An ignore list without it gets it last, in the file's own line ending.
+// The lines around the whitelist are the user's to manage (docs/wiki/workflows.md), so only a missing whitelist is appended.
 function whitelistAfter(ignoreList: string): string {
-  const lines = ignoreList.replaceAll('\r\n', '\n');
-  const withoutSourceMods = (withSourceModLines(lines, []) ?? lines).trimEnd().split('\n');
-  const holdsWhitelist = withoutSourceMods.some((_, at) => WHITELIST_LINES.every((line, i) => withoutSourceMods[at + i] === line));
+  const text = ignoreList.replaceAll('\r\n', '\n');
+  const gitLines = (withSourceModLines(text, []) ?? text).trimEnd().split('\n').map((line) => line.replace(/(?<!\\) +$/, ''));
+  const holdsWhitelist = gitLines.some((_, at) => WHITELIST_LINES.every((line, i) => gitLines[at + i] === line));
   if (holdsWhitelist) return '';
   const lineEnding = ignoreList.includes('\r\n') ? '\r\n' : '\n';
   const separator = ignoreList === '' || ignoreList.endsWith('\n') ? '' : lineEnding;
