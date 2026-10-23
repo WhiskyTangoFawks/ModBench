@@ -7,10 +7,11 @@ import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { MEditClient, PluginRepairPreview } from '../../client';
-import { previewLines } from '../decompileAndRepair';
+import { previewLines, droppingData } from '../decompileAndRepair';
 
 const MALFORMED = { name: 'Malformed.esp', origin: 'Harbor' };
 const CLEAN = { name: 'Clean.esp', origin: 'Harbor' };
+const DROPS = { description: 'drops 25 bytes of parameters', droppedBytes: 25 };
 const NOT_MALFORMED = { item: CLEAN, reason: 'Clean.esp is not malformed.' };
 const PREVIEW: PluginRepairPreview = {
   plugin: MALFORMED, hash: 'abc',
@@ -20,12 +21,13 @@ const PREVIEW: PluginRepairPreview = {
 describe('decompileAndRepair — the preview, then the repair of each plugin it previewed', () => {
   let client: InMemoryMEditClient;
   let previews: { landed: PluginRepairPreview[]; refused: typeof NOT_MALFORMED[] };
-  const repair = (force = false) => {
+  const repair = (force = false, agrees?: (dropping: readonly PluginRepairPreview[]) => Promise<boolean>) => {
     const previewed: PluginRepairPreview[] = [];
     const result = pluginCommandsWith(fakeInstanceAdapter(readingFixture()).adapter, client)
-      .decompileAndRepair([MALFORMED, CLEAN], force, (preview) => previewed.push(preview));
+      .decompileAndRepair([MALFORMED, CLEAN], force, (preview) => previewed.push(preview), agrees);
     return { previewed, result };
   };
+  const repairedWith = () => client.calls.filter((call) => call.method === 'decompileAndRepair').map((call) => call.args[2]);
   const landingOnlyAForcedPreviewedHashInItsModsSourceFolder: MEditClient['decompileAndRepair'] = (plugins, metadataFiles, force) => Promise.resolve({
     landed: plugins.filter(({ plugin, hash, sourceFolder }) =>
       previews.landed.some((p) => p.plugin === plugin && p.hash === hash) && sourceFolder === `/source/${plugin.origin}` && force
@@ -52,6 +54,44 @@ describe('decompileAndRepair — the preview, then the repair of each plugin it 
 
     expect(await repair().result).toEqual({ applied: true, outcome: { landed: [], refused: [NOT_MALFORMED] } });
     expect(client.calls.map((call) => call.method)).toEqual(['repairPreviews']);
+  });
+
+  describe('a preview that drops data', () => {
+    const dropping: PluginRepairPreview = { ...PREVIEW, diagnoses: [{ ...PREVIEW.diagnoses[0]!, change: DROPS }] };
+    beforeEach(() => { previews = { landed: [dropping], refused: [] }; });
+
+    it('is repaired, forced, once the user agrees to exactly the changes that drop data', async () => {
+      const heard: (readonly PluginRepairPreview[])[] = [];
+
+      const { result } = repair(false, (changes) => { heard.push(changes); return Promise.resolve(true); });
+
+      expect(await result).toEqual({ applied: true, outcome: { landed: [MALFORMED], refused: [] } });
+      expect(heard).toEqual([[dropping]]);
+    });
+
+    it('writes nothing when the user does not agree', async () => {
+      const { result } = repair(false, () => Promise.resolve(false));
+
+      expect(await result).toEqual({ applied: true, outcome: { landed: [], refused: [] } });
+      expect(client.calls.map((call) => call.method)).toEqual(['repairPreviews']);
+    });
+
+    it('asks nothing of a forced repair, and without a way to ask, leaves the refusal to mEdit', async () => {
+      const agrees = vi.fn(() => Promise.resolve(true));
+
+      await repair(true, agrees).result;
+      await repair(false).result;
+
+      expect(agrees).not.toHaveBeenCalled();
+      expect(repairedWith()).toEqual([true, false]);
+    });
+  });
+
+  it('cuts each preview down to the changes that drop data, and leaves out one that drops none', () => {
+    const other = { diagnosis: { defectClass: 'long', message: 'EPFT 2' }, change: DROPS };
+
+    expect(droppingData([{ ...PREVIEW, diagnoses: [...PREVIEW.diagnoses, other] }, { ...PREVIEW, plugin: CLEAN }]))
+      .toEqual([{ ...PREVIEW, diagnoses: [other] }]);
   });
 
   it('names each change with its record, and a diagnosis no change answers', () => {

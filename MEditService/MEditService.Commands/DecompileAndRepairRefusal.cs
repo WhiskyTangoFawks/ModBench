@@ -32,7 +32,7 @@ public enum DecompileAndRepairRefusal
     /// <summary>A diagnosis of the plugin that no repair answers.</summary>
     NoRepair,
 
-    /// <summary>A repair that drops data; the gesture refuses it, writing nothing.</summary>
+    /// <summary>A repair that drops data, and the request did not force. Nothing was written.</summary>
     DropsData,
 
     /// <summary>The repaired plugin is not the original with its repairs, or cannot become source without losing meaning.</summary>

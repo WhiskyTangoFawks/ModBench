@@ -224,54 +224,86 @@ describe('modbench.plugin.decompileAndRepair', () => {
     diagnoses: [{ diagnosis: { anchor: 'REGN 00000800', defectClass: 'short', message: 'RDAT is 6 bytes' }, change: { description: 'pads RDAT', droppedBytes: 0 } }],
   };
 
-  function registered(viewSelection: readonly PluginNode[] = []) {
+  const DROPPING = { ...PREVIEW, diagnoses: [{ ...PREVIEW.diagnoses[0]!, change: { description: 'drops 25 bytes', droppedBytes: 25 } }] };
+
+  function registered(viewSelection: readonly PluginNode[] = [], answers: readonly (string | undefined)[] = []) {
     const reporter = recordingReporter();
+    const ask = scriptedDialog(...answers);
     const logged: string[] = [];
     const repaired: { plugins: readonly { name: string; origin: string }[]; force: boolean }[] = [];
     registerDecompileAndRepairCommand({
       commands: {
-        decompileAndRepair: (plugins, force, previewed) => {
+        decompileAndRepair: async (plugins, force, previewed, agrees) => {
           progressSteps.push('decompile and repair');
           repaired.push({ plugins, force });
-          previewed({ ...PREVIEW, plugin: present(plugins[0], 'a plugin to repair') });
-          return Promise.resolve({ applied: true, outcome: { landed: [...plugins], refused: [] } });
+          const preview = { ...DROPPING, plugin: present(plugins[0], 'a plugin to repair') };
+          previewed(preview);
+          if (!force && agrees && !await agrees([preview])) return { applied: true, outcome: { landed: [], refused: [] } };
+          return { applied: true, outcome: { landed: [...plugins], refused: [] } };
         },
       },
-      instance: instanceThatReads, reporter, log: (line) => logged.push(line),
+      instance: instanceThatReads, reporter, ask, log: (line) => logged.push(line),
     }, () => viewSelection);
-    return { handler: present(handlers.get('modbench.plugin.decompileAndRepair'), 'the decompile and repair command'), reporter, logged, repaired };
+    return { handler: present(handlers.get('modbench.plugin.decompileAndRepair'), 'the decompile and repair command'), reporter, logged, repaired, ask };
   }
 
   const row = (plugin: { name: string; origin: string }) => new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
 
-  it('on a plugin row, asks nothing, names each previewed change in the Output, repairs it unforced under the view\'s progress, and lands once', async () => {
-    const { handler, reporter, logged, repaired } = registered();
+  it('on a plugin row, names each previewed change in the Output, repairs it under the view\'s progress once the user agrees to what it drops, and lands once', async () => {
+    const { handler, reporter, logged, repaired, ask } = registered([], ['Repair']);
 
     await handler(row(MALFORMED));
 
     expect(repaired).toEqual([{ plugins: [MALFORMED], force: false }]);
-    expect(logged).toEqual(['Malformed.esp: REGN 00000800: pads RDAT']);
+    expect(logged).toEqual(['Malformed.esp: REGN 00000800: drops 25 bytes']);
+    expect(ask.asked).toEqual([{
+      message: 'Repair drops data? Nothing is written until you agree.',
+      detail: 'Malformed.esp: REGN 00000800: drops 25 bytes', buttons: ['Repair'],
+    }]);
     expect(progressSteps).toEqual([
       'progress opens on modbench.pluginListTree', 'decompile and repair', 'Instance loader: read every file again', 'progress closes',
     ]);
     expect(reporter.landings).toEqual(['Decompiled and repaired "Malformed.esp".']);
   });
 
+  it('tells the user a plugin whose bytes changed since the preview was refused', async () => {
+    const reporter = recordingReporter();
+    const reason = 'Malformed.esp\'s bytes changed since the repair preview, so nothing was written.';
+    registerDecompileAndRepairCommand({
+      commands: { decompileAndRepair: () => Promise.resolve({ applied: true, outcome: { landed: [], refused: [{ item: MALFORMED, reason }] } }) },
+      instance: instanceThatReads, reporter, ask: scriptedDialog(), log: () => undefined,
+    }, () => []);
+
+    await present(handlers.get('modbench.plugin.decompileAndRepair'), 'the decompile and repair command')(row(MALFORMED));
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not decompile and repair "Malformed.esp".', detail: `"Malformed.esp (ModA)" (${reason})` }]);
+  });
+
+  it('writes and says nothing when the user dismisses the question', async () => {
+    const { handler, reporter } = registered([], [undefined]);
+
+    await handler(row(MALFORMED));
+
+    expect(reporter.landings).toEqual([]);
+    expect(reporter.reports).toEqual([]);
+  });
+
   it('from a Malformed entry\'s link in the Problems panel, repairs the plugin it names, not the selection', async () => {
-    const { handler, repaired } = registered([row(SELECTED)]);
+    const { handler, repaired } = registered([row(SELECTED)], ['Repair']);
 
     await handler(MALFORMED);
 
     expect(repaired).toEqual([{ plugins: [MALFORMED], force: false }]);
   });
 
-  it('for the agent, repairs the plugins given, forced when its options say force, reporting nothing, and answers the outcome', async () => {
-    const { handler, reporter, repaired } = registered([row(SELECTED)]);
+  it('for the agent, repairs the plugins given, forced when its options say force, asking nothing and reporting nothing, and answers the outcome', async () => {
+    const { handler, reporter, repaired, ask } = registered([row(SELECTED)]);
 
     const answered = await handler(new AgentCall([{ kind: 'plugin', plugin: MALFORMED }], { force: true }));
 
     expect(repaired).toEqual([{ plugins: [MALFORMED], force: true }]);
     expect(answered).toEqual({ applied: true, outcome: { landed: [MALFORMED], refused: [] } });
+    expect(ask.asked).toEqual([]);
     expect(reporter.landings).toEqual([]);
   });
 });

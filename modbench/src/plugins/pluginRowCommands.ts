@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import { isRefused, type MEditClient, type PluginAddress } from '../client';
+import { isRefused, type MEditClient, type PluginAddress, type PluginRepairPreview } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import { columnHeaderOf } from '../wire/columnHeader';
@@ -38,6 +38,10 @@ interface DecompileGiven {
   readonly force: boolean;
 }
 
+interface DecompileAndRepairGiven extends DecompileGiven {
+  readonly agrees?: (dropping: readonly PluginRepairPreview[]) => Promise<boolean>;
+}
+
 /** commands.md, `decompile`: the plugins of Plugins rows, the selection included, of a record tab's
  *  column header, or of the palette's Plugins selection, asked once. */
 export function registerDecompileCommand(
@@ -69,27 +73,37 @@ export interface DecompileAndRepairDeps {
   instance: Pick<Instance, 'refresh'>;
   reporter: Reporter;
   log: (line: string) => void;
+  ask: AskQuestion;
 }
 
 /** commands.md, `decompile and repair`: the plugins of Plugins rows, the selection included, of the palette's Plugins
- *  selection, or of a Malformed entry's link in the Problems panel. No prompt: a repair that drops data is refused. */
+ *  selection, or of a Malformed entry's link in the Problems panel. A repair that drops data asks first; the agent's
+ *  force stands for the answer. */
 export function registerDecompileAndRepairCommand(
   deps: DecompileAndRepairDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
-  const gesture: AgentGesture<PluginsTreeNode, DecompileGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
+  const gesture: AgentGesture<PluginsTreeNode, DecompileAndRepairGiven, SelectionResult<PluginAddress>, { force?: boolean }> = {
     fromView: (entry, _option, clicked) => {
       const plugins = isPluginAddress(clicked) ? [clicked] : selectionArgument(entry, 'plugin').map((node) => node.argument.plugin);
-      return plugins.length > 0 ? { plugins, force: false } : undefined;
+      return plugins.length > 0 ? { plugins, force: false, agrees: (dropping) => confirmDrops(deps.ask, dropping) } : undefined;
     },
     fromAgent: ({ argument, options }) => ({ plugins: argument.map(pluginOf), force: options.force === true }),
-    run: ({ plugins, force }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, () =>
-      deps.commands.decompileAndRepair(plugins, force, (preview) => { previewLines(preview).forEach(deps.log); })),
+    run: ({ plugins, force, agrees }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, () =>
+      deps.commands.decompileAndRepair(plugins, force, (preview) => { previewLines(preview).forEach(deps.log); }, agrees)),
     report: (result, { plugins }) => {
       if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile and repair', pastTense: 'Decompiled and repaired' });
       else deps.reporter.report('error', result.refusal);
     },
   };
   return registerAgentGesture('modbench.plugin.decompileAndRepair', viewSelection, gesture);
+}
+
+// plugin-source.md, Decompile and repair, story 3: one agreement for the selection, naming each change that drops
+// data. Agreed, the write is forced, so it also replaces what the plugin source holds in its working tree.
+async function confirmDrops(ask: AskQuestion, dropping: readonly PluginRepairPreview[]): Promise<boolean> {
+  const answer = await ask('Repair drops data? Nothing is written until you agree.',
+    { modal: true, detail: dropping.flatMap(previewLines).join('\n') }, 'Repair');
+  return answer === 'Repair';
 }
 
 // plugins.md, Decompile: one confirmation for the selection, naming the plugins; it replaces

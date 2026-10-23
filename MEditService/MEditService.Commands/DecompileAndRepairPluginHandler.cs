@@ -12,7 +12,7 @@ namespace MEditService.Commands;
 
 /// <summary>The decompile and repair gesture's handler (plugin-source.md, Decompile and repair): a malformed plugin into
 /// its mod's plugin source as two commits, the malformed records flagged, then repaired. A repair that drops data is
-/// refused.</summary>
+/// refused unless forced.</summary>
 public sealed class DecompileAndRepairPluginHandler
 {
     private readonly LoadOrderHolder _loadOrder;
@@ -34,8 +34,8 @@ public sealed class DecompileAndRepairPluginHandler
     }
 
     /// <summary>A mod with no repository gets one, made as decompile and commit makes it, leaving out
-    /// <paramref name="metadataFiles"/>. A plugin whose source has working-tree changes is refused unless
-    /// <paramref name="force"/>.</summary>
+    /// <paramref name="metadataFiles"/>. A plugin whose source has working-tree changes, or whose
+    /// repair drops data, is refused unless <paramref name="force"/>.</summary>
     public async Task<Answer<DecompileAndRepairResult, SelectionRefusal<DecompileAndRepairRefusal>>> DecompileAndRepairAsync(
         IReadOnlyList<PluginToRepair> plugins, IReadOnlyList<string> metadataFiles, bool force, CancellationToken cancel = default)
     {
@@ -68,10 +68,10 @@ public sealed class DecompileAndRepairPluginHandler
         var target = RepairTarget.Of(_repairer, loadOrder, item.Plugin);
         if (target is RepairTarget.Refused(var targetRefusal, var targetMessage)) return Refused(targetRefusal, targetMessage);
         var (plugin, mod, previews) = (RepairTarget.Previewed)target;
-        if (previews.Diagnoses.Where(preview => preview.Change is { DroppedBytes: > 0 }).ToList() is [_, ..] dropping)
+        if (!force && previews.Diagnoses.Where(preview => preview.Change is { DroppedBytes: > 0 }).ToList() is [_, ..] dropping)
         {
             return Refused(DecompileAndRepairRefusal.DropsData,
-                $"Repairing {plugin.Name} drops data, so nothing was written: " + string.Join("; ", dropping.Select(Named)) + ".");
+                $"Repairing {plugin.Name} drops data, so nothing was written: " + string.Join("; ", dropping.Select(Named)) + ". Request it again with force to repair it anyway.");
         }
 
         var sourceFolder = mod.SourceFolder ?? item.SourceFolder;

@@ -120,7 +120,19 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
         Assert.Equal(DecompileAndRepairRefusal.DropsData, refused.Refusal);
         Assert.Contains(fixture.Change ?? "", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("force", refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, Head(_sourceMod));
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_ARepairThatDropsData_WritesWhenForced()
+    {
+        var plugin = AddToSourceMod(MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction").Malformed);
+
+        var forced = await Repair([await Previewed(plugin)], force: true);
+
+        Assert.Equal([plugin], forced.Applied);
+        Assert.Equal($"Repair {Malformed}", Subjects(_sourceMod, 1).Single());
     }
 
     [Fact]
@@ -150,6 +162,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var refused = Assert.Single((await Repair(preview)).Refused);
 
         Assert.Equal(DecompileAndRepairRefusal.ChangedSincePreview, refused.Refusal);
+        Assert.Contains($"{Malformed}'s bytes changed since the repair preview", refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, Head(_sourceMod));
     }
 
