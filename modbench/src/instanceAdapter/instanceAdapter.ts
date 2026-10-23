@@ -429,8 +429,6 @@ export interface PublisherTag {
   readonly badge: string;
   /** Whether it marks paths, or only mods. */
   readonly marksPaths: boolean;
-  /** Whether its publisher ships a disabled mod the publisher tag marks. */
-  readonly shipsDisabledMod: boolean;
 }
 
 /** The publisher's configuration: none while the instance holds no publisher's, or why it could not be read. */
@@ -438,8 +436,9 @@ export type PublisherConfiguration =
   | { readonly kind: 'none' }
   | {
     readonly kind: 'read';
-    /** Each publisher tag that covers the file or folder at `path`, as its publisher applies it. */
-    covering(path: string): readonly PublisherTag[];
+    /** Each publisher tag that covers the file or folder at `path`, as its publisher applies it: to a disabled mod's
+     *  folder or a path in it when `inDisabledMod`. */
+    covering(path: string, inDisabledMod: boolean): readonly PublisherTag[];
   }
   | { readonly kind: 'unreadable'; readonly reason: string };
 

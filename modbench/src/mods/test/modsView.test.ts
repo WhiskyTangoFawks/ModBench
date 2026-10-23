@@ -391,7 +391,7 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
 
 describe('the Mods view tells the indicator and publisher tag decorations when a separator opens or closes', () => {
   it('asks VS Code to decorate again, for each indicator and each publisher tag the publisher declares, on the separator\'s expand and on its collapse', async () => {
-    const publisherTags = [{ name: 'Include', badge: 'IN', marksPaths: true, shipsDisabledMod: false }] as const;
+    const publisherTags = [{ name: 'Include', badge: 'IN', marksPaths: true }] as const;
     createModsView({
       ...otherDeps(), instance: new FakeInstance(instanceValueFixture({ mods: [mod('A'), separator('Section')], publisherTags })), log: () => undefined, ...noSync(),
     });

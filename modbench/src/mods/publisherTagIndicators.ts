@@ -33,13 +33,13 @@ class CarriersRead implements Carriers {
   readonly rows = new Map<string, Carried>();
   readonly openable = new Set<string>();
 
-  constructor(private readonly covering: (path: string) => readonly PublisherTag[]) {}
+  constructor(private readonly covering: (path: string, inDisabledMod: boolean) => readonly PublisherTag[]) {}
 
   /** Each file and folder in `entries`, and answers every publisher tag they carry. */
-  origin(origin: FileOrigin, entries: readonly OriginFolder[], folders: readonly OriginFolder[]): Set<PublisherTag> {
+  origin(origin: FileOrigin, inDisabledMod: boolean, entries: readonly OriginFolder[], folders: readonly OriginFolder[]): Set<PublisherTag> {
     const inOrigin = new Set<PublisherTag>();
     const beneath = new Map<string, Set<PublisherTag>>(folders.map(({ relativePath }) => [relativePath, new Set()]));
-    const own = new Map(entries.map((entry) => [entry, this.covering(entry.path).filter(({ marksPaths }) => marksPaths)]));
+    const own = new Map(entries.map((entry) => [entry, this.covering(entry.path, inDisabledMod).filter(({ marksPaths }) => marksPaths)]));
     for (const [entry, tags] of own) {
       this.carry(vscode.Uri.file(entry.path).toString(), tags);
       for (const tag of tags) inOrigin.add(tag);
@@ -55,11 +55,9 @@ class CarriersRead implements Carriers {
 
   /** The mod's row, and answers every publisher tag it carries while collapsed. */
   mod(mod: Mod, folder: string | undefined, filesBeneath: ReadonlySet<PublisherTag>): Set<PublisherTag> {
-    // mods.md, Indicators: a disabled mod carries none but a publisher tag its publisher ships a disabled mod for.
-    const own = (folder === undefined ? [] : this.covering(folder)).filter(({ shipsDisabledMod }) => mod.enabled || shipsDisabledMod);
-    const beneath = mod.enabled ? [...filesBeneath] : [];
-    this.openableRow(modRowUri(mod.name).toString(), own, beneath);
-    return new Set([...own, ...beneath]);
+    const own = folder === undefined ? [] : this.covering(folder, !mod.enabled);
+    this.openableRow(modRowUri(mod.name).toString(), own, filesBeneath);
+    return new Set([...own, ...filesBeneath]);
   }
 
   openableRow(key: string, own: Iterable<PublisherTag>, beneath: Iterable<PublisherTag>): void {
@@ -75,15 +73,15 @@ class CarriersRead implements Carriers {
 
 function carriersOf(value: TagsValue): Carriers {
   const configuration = value.publisherConfiguration;
-  const carriers = new CarriersRead(configuration.kind === 'read' ? (path) => configuration.covering(path) : () => []);
+  const carriers = new CarriersRead(configuration.kind === 'read' ? (path, inDisabledMod) => configuration.covering(path, inDisabledMod) : () => []);
   const carriedByMod = new Map<string, Set<PublisherTag>>();
   for (const entry of value.mods) {
     if (entry.kind !== 'mod') continue;
     const folders = value.foldersByMod.get(entry.name) ?? [];
-    const filesBeneath = carriers.origin(modOrigin(entry.name), [...(value.filesByMod.get(entry.name) ?? []), ...folders], folders);
+    const filesBeneath = carriers.origin(modOrigin(entry.name), !entry.enabled, [...(value.filesByMod.get(entry.name) ?? []), ...folders], folders);
     carriedByMod.set(entry.name, carriers.mod(entry, value.paths.modDirs.get(entry.name), filesBeneath));
   }
-  carriers.origin(RUNTIME_OUTPUT, [...value.overwriteFiles, ...value.overwriteFolders], value.overwriteFolders);
+  carriers.origin(RUNTIME_OUTPUT, false, [...value.overwriteFiles, ...value.overwriteFolders], value.overwriteFolders);
   for (const { separator, mods } of value.modGroups.groups) {
     carriers.openableRow(separatorRowUri(separator.name).toString(), [], mods.flatMap(({ name }) => [...(carriedByMod.get(name) ?? [])]));
   }

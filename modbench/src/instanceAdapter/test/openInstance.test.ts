@@ -28,7 +28,7 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     expect({
       declared: adapter.publisherTags.map(({ badge }) => badge),
       profile,
-      covering: publisherConfiguration.kind === 'read' && publisherConfiguration.covering(join(root, 'mods', 'Harder VATS')).map(({ badge }) => badge),
+      covering: publisherConfiguration.kind === 'read' && publisherConfiguration.covering(join(root, 'mods', 'Harder VATS'), false).map(({ badge }) => badge),
     }).toEqual({ declared: ['NM', 'IN', 'IG', 'AE'], profile: 'Default', covering: ['IN'] });
   });
 

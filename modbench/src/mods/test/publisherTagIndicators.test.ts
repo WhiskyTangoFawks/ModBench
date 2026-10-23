@@ -21,25 +21,29 @@ import { indicatorSetting, modRowUri, separatorRowUri } from '../modIndicators';
 import { PublisherTagDecorations } from '../publisherTagIndicators';
 import { file, folder, indexedValueOf, mod } from './indexedValue';
 
-const tag = (badge: string, marksPaths = true, shipsDisabledMod = false): PublisherTag =>
-  ({ name: `${badge} tag`, badge, marksPaths, shipsDisabledMod });
+const tag = (badge: string, marksPaths = true): PublisherTag => ({ name: `${badge} tag`, badge, marksPaths });
 const NM = tag('NM');
 const IN = tag('IN');
 const IG = tag('IG');
-const AE = tag('AE', false, true);
+const AE = tag('AE', false);
 const DECLARED = [NM, IN, IG, AE];
 
-const COVERED_AS_THE_PUBLISHER_APPLIES_THEM: Record<string, readonly PublisherTag[]> = {
+const COVERED_AS_THE_PUBLISHER_APPLIES_THEM_OUTSIDE_A_DISABLED_MOD: Record<string, readonly PublisherTag[]> = {
   '/instance/A': [IN, AE],
   '/instance/A/x.esp': [IN, AE],
   '/instance/A/textures': [IN, AE],
   '/instance/A/textures/a.dds': [IN, IG, AE],
-  '/instance/B': [IN, AE],
-  '/instance/B/y.esp': [IN, AE],
-  '/instance/C': [IN],
   '/instance/overwrite/o.log': [IG],
 };
-const READ: PublisherConfiguration = { kind: 'read', covering: (path) => COVERED_AS_THE_PUBLISHER_APPLIES_THEM[path] ?? [] };
+const COVERED_AS_THE_PUBLISHER_APPLIES_THEM_IN_A_DISABLED_MOD: Record<string, readonly PublisherTag[]> = {
+  '/instance/B': [IN, AE],
+  '/instance/B/y.esp': [IG, AE],
+};
+const READ: PublisherConfiguration = {
+  kind: 'read',
+  covering: (path, inDisabledMod) => (inDisabledMod
+    ? COVERED_AS_THE_PUBLISHER_APPLIES_THEM_IN_A_DISABLED_MOD : COVERED_AS_THE_PUBLISHER_APPLIES_THEM_OUTSIDE_A_DISABLED_MOD)[path] ?? [],
+};
 
 const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });
 
@@ -78,10 +82,10 @@ describe('the publisher tags a row carries (mods.md, Indicators; publishing.md, 
     expect(badgesOn(decorations, modRowUri('A'))).toEqual(['IN', 'AE']);
   });
 
-  it('a disabled mod carries none but a publisher tag its publisher ships a disabled mod for', async () => {
-    const decorations = decorationsOver(new FakeInstance(await valueOf()));
+  it('a disabled mod carries each publisher tag its publisher applies to a disabled mod, and no other', async () => {
+    const decorations = expanded(decorationsOver(new FakeInstance(await valueOf())), modRowUri('B'), modRowUri('C'));
 
-    expect([badgesOn(decorations, modRowUri('B')), badgesOn(decorations, modRowUri('C'))]).toEqual([['AE'], []]);
+    expect([badgesOn(decorations, modRowUri('B')), badgesOn(decorations, modRowUri('C'))]).toEqual([['IN', 'AE'], []]);
   });
 
   it('a file or folder carries each publisher tag that covers it and marks paths, in the Mods view and in the Explorer', async () => {
@@ -93,7 +97,7 @@ describe('the publisher tags a row carries (mods.md, Indicators; publishing.md, 
       folder: badgesOn(decorations, A_TEXTURES),
       inDisabledMod: badgesOn(decorations, fileRowUri(modOrigin('B'), 'y.esp')),
       inOverwrite: badgesOn(decorations, fileRowUri(RUNTIME_OUTPUT, 'o.log')),
-    }).toEqual({ file: ['IN'], inExplorer: ['IN', 'IG'], folder: ['IN'], inDisabledMod: ['IN'], inOverwrite: ['IG'] });
+    }).toEqual({ file: ['IN'], inExplorer: ['IN', 'IG'], folder: ['IN'], inDisabledMod: ['IG'], inOverwrite: ['IG'] });
   });
 
   it.each([
@@ -130,10 +134,10 @@ describe('a collapsed row\'s publisher tags (common.md, A view, story 11)', () =
     ]);
   });
 
-  it('a collapsed disabled mod carries none of its files\' publisher tags', async () => {
+  it('a collapsed disabled mod carries its files\' publisher tags, as any collapsed row does', async () => {
     const decorations = decorationsOver(new FakeInstance(await valueOf()));
 
-    expect(badgesOn(decorations, modRowUri('B'))).toEqual(['AE']);
+    expect(badgesOn(decorations, modRowUri('B'))).toEqual(['IN', 'IG', 'AE']);
   });
 
   it('a row collapsed again carries the rows beneath it again', async () => {

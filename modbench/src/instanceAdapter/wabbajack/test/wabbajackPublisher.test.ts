@@ -23,19 +23,22 @@ const SETTINGS_FILE = 'compiler_settings.json';
 const writeSettings = (settings: unknown): Promise<void> =>
   writeFile(join(root, SETTINGS_FILE), typeof settings === 'string' ? settings : JSON.stringify(settings));
 
-async function covering(...segments: string[]): Promise<string[]> {
+async function coveringIn(inDisabledMod: boolean, segments: string[]): Promise<string[]> {
   const configuration = await wabbajackPublisher(root).configuration();
   if (configuration.kind !== 'read') throw new Error(`expected read, got ${JSON.stringify(configuration)}`);
-  return configuration.covering(join(root, ...segments)).map(({ name }) => name);
+  return configuration.covering(join(root, ...segments), inDisabledMod).map(({ name }) => name);
 }
 
+const covering = (...segments: string[]): Promise<string[]> => coveringIn(false, segments);
+const coveringInDisabledMod = (...segments: string[]): Promise<string[]> => coveringIn(true, segments);
+
 describe('Wabbajack as a publisher (publishing.md, Publishers, story 1)', () => {
-  it('declares its four publisher tags, Always Enabled marking only mods and shipping a disabled one', () => {
+  it('declares its four publisher tags, Always Enabled marking only mods', () => {
     expect(wabbajackPublisher(root).tags).toEqual([
-      { name: 'No Match Include', badge: 'NM', marksPaths: true, shipsDisabledMod: false },
-      { name: 'Include', badge: 'IN', marksPaths: true, shipsDisabledMod: false },
-      { name: 'Ignore', badge: 'IG', marksPaths: true, shipsDisabledMod: false },
-      { name: 'Always Enabled', badge: 'AE', marksPaths: false, shipsDisabledMod: true },
+      { name: 'No Match Include', badge: 'NM', marksPaths: true },
+      { name: 'Include', badge: 'IN', marksPaths: true },
+      { name: 'Ignore', badge: 'IG', marksPaths: true },
+      { name: 'Always Enabled', badge: 'AE', marksPaths: false },
     ]);
   });
 
@@ -80,8 +83,29 @@ describe('the rows a Wabbajack publisher tag covers (publishing.md, Publisher ta
     await writeSettings({ Include: [''] });
 
     const configuration = await wabbajackPublisher(root).configuration();
-    expect(configuration.kind === 'read' && [configuration.covering(join(root, 'a.dds')), configuration.covering(join(root, '..', 'a.dds'))].map((tags) => tags.length))
+    expect(configuration.kind === 'read' && [configuration.covering(join(root, 'a.dds'), false), configuration.covering(join(root, '..', 'a.dds'), false)].map((tags) => tags.length))
       .toEqual([1, 0]);
+  });
+});
+
+describe('a disabled mod\'s rows, as Wabbajack\'s compiler applies its publisher tags to them', () => {
+  it('a disabled mod and a file in it carry no Include nor No Match Include: the compiler drops a disabled mod\'s files first', async () => {
+    await writeSettings({ Include: ['mods\\A'], NoMatchInclude: ['mods\\A\\textures'] });
+
+    expect([await coveringInDisabledMod('mods', 'A'), await coveringInDisabledMod('mods', 'A', 'textures', 'a.dds')]).toEqual([[], []]);
+  });
+
+  it('a disabled Always Enabled mod and a file in it carry each publisher tag, as an enabled mod\'s do', async () => {
+    await writeSettings({ Include: ['mods\\A'], AlwaysEnabled: ['mods\\A'] });
+
+    expect([await coveringInDisabledMod('mods', 'A'), await coveringInDisabledMod('mods', 'A', 'x.esp')])
+      .toEqual([['Include', 'Always Enabled'], ['Include', 'Always Enabled']]);
+  });
+
+  it('a file in a disabled mod carries Ignore, which the compiler applies before it drops a disabled mod\'s files', async () => {
+    await writeSettings({ Ignore: ['mods\\A\\x.esp'] });
+
+    expect(await coveringInDisabledMod('mods', 'A', 'x.esp')).toEqual(['Ignore']);
   });
 });
 
