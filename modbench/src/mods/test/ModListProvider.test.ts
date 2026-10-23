@@ -747,12 +747,12 @@ describe('ModListProvider', () => {
       expect(row.tooltip).toBe('The files tools wrote while Another Manager ran them, which win over every mod.');
     });
 
-    it('is not a mod: no check box, no click, no resourceUri (which would hand the label to every file decoration provider, git\'s included), and its own menu', async () => {
+    it('is not a mod: no check box, no click, a resourceUri no file shares, so only the Mods view\'s own decorations reach its label, and its own menu', async () => {
       const row = await overwriteRow(2);
 
       expect(row.checkboxState).toBeUndefined();
       expect(row.command).toBeUndefined();
-      expect(row.resourceUri).toBeUndefined();
+      expect([row.resourceUri?.scheme, row.resourceUri?.path]).toEqual(['modbench-overwrite', '/']);
       expect(row.contextValue).toBe('runtimeOutput');
     });
 

@@ -12,7 +12,7 @@ import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileRe
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { mo2InstanceAdapter } from '../mo2Instance';
-import type { InstanceAdapter as Adapter } from '../../instanceAdapter';
+import type { ManagerAdapter as Adapter } from '../../publisher';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
 import { WHITELIST_IGNORE_LIST, withSourceModLines } from '../layout';
 

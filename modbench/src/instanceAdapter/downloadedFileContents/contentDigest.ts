@@ -11,7 +11,7 @@ async function feed(path: string, update: (chunk: Buffer) => void): Promise<void
   for await (const chunk of bytes) update(chunk);
 }
 
-/** xxHash64 as Wabbajack writes it, its eight little-endian bytes in base64: the hash mEdit's manifest
+/** xxHash64, its eight little-endian bytes in base64: the hash mEdit's manifest
  *  carries (ADR-0022). Streamed: a texture or an archive runs to gigabytes. */
 export async function digestOf(path: string): Promise<string> {
   const hash = (await hasher).create64();

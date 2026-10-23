@@ -5,7 +5,7 @@ import type { DownloadsDirectoryResolver } from '../../instanceAdapter/mo2/downl
 import type { Mo2Context } from '../../instanceAdapter/mo2/mo2Context';
 import { downloadsDirectoryResolver } from '../../instanceAdapter/mo2/downloadsDirectory';
 import { gameFolderResolver, type GameDetectors } from '../../instanceAdapter/gameFolder/gameFolderResolver';
-import { mo2InstanceAdapter } from '../../instanceAdapter/mo2/mo2Instance';
+import { adapterForInstance } from '../../instanceAdapter/openInstance';
 import { mo2Watch } from '../../instanceAdapter/mo2/mo2Watch';
 import { myGamesResolver } from '../../instanceAdapter/gameFolder/myGames';
 import type { ReadingSource } from '../../instanceAdapter/instanceReading';
@@ -51,8 +51,9 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
 /** The parts of one reading, each asked on its own. */
 export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(contextOver(root, answers));
 
+/** The adapter the build composes over `root`, MO2's context fixed as `answers` say. */
 export const adapterOver = (root: string, answers: AdapterAnswers = {}): InstanceAdapter =>
-  mo2InstanceAdapter({ instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), context: contextOver(root, answers) });
+  adapterForInstance({ instanceRoot: root, installationFileReader: answers.installationFileReader ?? fakeInstallationFileReader([]), context: contextOver(root, answers) });
 
 /** What a test reads back after a command wrote, through the adapter's own reads, so a test never
  *  re-derives a file format of its own. */

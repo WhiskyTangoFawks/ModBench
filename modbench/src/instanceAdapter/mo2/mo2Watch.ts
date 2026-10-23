@@ -1,8 +1,8 @@
 // MO2's watch: every file of the instance, the downloads folder, the game folder's files Mod Management
 // reads, armed through VS Code's file watcher while anyone listens, and a change to the game-folder setting.
 
-import * as vscode from 'vscode';
 import { heldFolderWatchFor, type HeldFolderWatch } from '../heldFolders';
+import { watchFiles } from '../watchFiles';
 import type { Subscription } from '../instanceAdapter';
 import {
   MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, REPOSITORY_SET_UP_WATCH_GLOB, REPOSITORY_WATCH_GLOB, SETTINGS_WATCH_GLOB, SOURCE_GLOB,
@@ -18,30 +18,6 @@ function isRepositoryChange(path: string): boolean {
   const [first, ...rest] = segments.slice(gitIndex + 1);
   if (first === undefined || first === 'refs') return true;
   return rest.length === 0 && (first === 'HEAD' || first === 'packed-refs');
-}
-
-// Each change beneath `base` that matches `glob`, created, changed or deleted alike.
-function watchFiles(base: string, glob: string, onChange: (path: string) => void, held?: HeldFolderWatch): Subscription {
-  const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(base), glob));
-  void held?.open();
-  const heard = (uri: vscode.Uri): void => onChange(uri.fsPath);
-  const madeAnew = (uri: vscode.Uri): void => {
-    heard(uri);
-    void held?.created(uri.fsPath);
-  };
-  watcher.onDidCreate(madeAnew);
-  // VS Code reports a folder deleted and made again in one burst as changed.
-  watcher.onDidChange(madeAnew);
-  watcher.onDidDelete((uri) => {
-    heard(uri);
-    held?.removed(uri.fsPath);
-  });
-  return {
-    dispose: () => {
-      watcher.dispose();
-      held?.close();
-    },
-  };
 }
 
 interface Followed {

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type {
   DataFolderArchives, DataFolderPlugins, DownloadedFile, DownloadedFiles, GameFolder, InstanceAdapter, InstanceReading, Mod,
-  OriginFiles, Separator,
+  OriginFiles, Separator, PublisherTag,
 } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
@@ -784,6 +784,27 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
 
     expect(instance.value.dataFolderPlugins).toEqual({ kind: 'unreadable', reason: 'EACCES' });
     expect(warnings).toEqual(['[instance] the game\'s Data folder could not be listed: EACCES']);
+  });
+
+  it('carries the publisher tags the adapter declares before any read, and the publisher\'s configuration once read', async () => {
+    const tag: PublisherTag = { name: 'Include', badge: 'IN', marksPaths: true };
+    const covering = (): readonly PublisherTag[] => [tag];
+    const { instance } = loader({ publisherConfiguration: { kind: 'read', covering } }, (adapter) => ({ ...adapter, publisherTags: [tag] }));
+    const before = { tags: instance.value.publisherTags, configuration: instance.value.publisherConfiguration };
+
+    await instance.refresh();
+
+    expect([before, { tags: instance.value.publisherTags, configuration: instance.value.publisherConfiguration }])
+      .toEqual([{ tags: [tag], configuration: { kind: 'none' } }, { tags: [tag], configuration: { kind: 'read', covering } }]);
+  });
+
+  it('tells once while it stands that the publisher\'s configuration could not be read', async () => {
+    const { instance, warnings } = loader({ publisherConfiguration: { kind: 'unreadable', reason: 'compiler_settings.json is not JSON' } });
+
+    await instance.refresh();
+    await instance.refresh();
+
+    expect(warnings).toEqual(['[instance] no publisher tag shows: compiler_settings.json is not JSON']);
   });
 
   it('carries the plugins the game loads with no line: its masters from the per-release table, then its Creation Club plugins, each only where the game can load it from', async () => {

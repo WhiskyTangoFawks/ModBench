@@ -1,6 +1,6 @@
 // The Instance adapter's interface: a repository over one instance, answering parsed reads and
-// taking changes in domain words. Each mod manager is one implementation of it, beside it in this
-// box, and names itself through `names`.
+// taking changes in domain words. A mod manager or a publisher implements it in this box; a mod
+// manager names itself through `names`.
 
 import { join } from 'node:path';
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
@@ -423,6 +423,24 @@ interface InstanceGame {
 /** Whether the mod manager that made the instance is running, or why Modbench cannot tell. */
 export type ManagerRunning = { readonly kind: 'running' | 'notRunning' } | { readonly kind: 'unknown'; readonly reason: string };
 
+/** A publisher tag as its publisher declares it (publishing.md, Publisher tags). */
+export interface PublisherTag {
+  readonly name: string;
+  readonly badge: string;
+  /** Whether it marks paths, or only mods. */
+  readonly marksPaths: boolean;
+}
+
+/** Each publisher tag that covers the file or folder at `path`, as its publisher applies it; `mod` is the mod whose folder
+ *  `path` is or is in, undefined outside every mod. */
+export type Covering = (path: string, mod: string | undefined) => readonly PublisherTag[];
+
+/** The publisher's configuration: none while the instance holds no publisher's, or why it could not be read. */
+export type PublisherConfiguration =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'read'; readonly covering: Covering }
+  | { readonly kind: 'unreadable'; readonly reason: string };
+
 /** The instance as parsed facts, every one from the same read of its settings, and what the watch cannot hear. */
 export interface InstanceReading extends InstanceGame {
   /** The profile the mod manager's configuration selects. */
@@ -463,6 +481,7 @@ export interface InstanceReading extends InstanceGame {
   /** Why a folder's watch failed, once per reason: no change inside that folder is heard. */
   readonly watchNotes: readonly string[];
   readonly managerRunning: ManagerRunning;
+  readonly publisherConfiguration: PublisherConfiguration;
 }
 
 /** The names an entry may not take: the entries mod order lists and the folders mods are in. `modFolders` is undefined
@@ -493,6 +512,8 @@ export interface InstanceAdapter {
   /** Every source mod now. */
   sourceMods(): Promise<SourceMods>;
   readonly names: ManagerNames;
+  /** Each publisher tag the instance's publisher declares. */
+  readonly publisherTags: readonly PublisherTag[];
 
   // Answers about a mod or a file.
   /** The folder a build of `mod` writes: the one that holds it, else the one its name gives it; undefined when its

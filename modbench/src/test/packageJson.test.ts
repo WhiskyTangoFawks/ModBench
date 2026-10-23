@@ -30,7 +30,7 @@ import { CELL_VALUE_SETTING } from '../mods/conflictTableEditor';
 import { CONFLICT_CELL_VALUES } from '../wire/conflictTable';
 import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
 import { GREY_INACTIVE_FILES_SETTING } from '../mods/inactiveFiles';
-import { indicatorSetting, MOD_INDICATORS } from '../mods/modIndicators';
+import { indicatorSetting, MOD_INDICATORS, PUBLISHER_TAG_INDICATOR } from '../mods/modIndicators';
 
 interface ViewsWelcomeEntry { view: string; contents: string; when?: string; }
 interface ViewEntry { id: string; name: string; when?: string; }
@@ -558,7 +558,7 @@ describe('package.json contributes the Mods view\'s indicators and grey as setti
   });
 
   it('a switch for each indicator\'s badge and colour, under the keys they read, defaulting as the table says', () => {
-    const switches = Object.fromEntries(MOD_INDICATORS.flatMap(({ id }) => (['badge', 'colour'] as const)
+    const switches = Object.fromEntries([...MOD_INDICATORS, PUBLISHER_TAG_INDICATOR].flatMap(({ id }) => (['badge', 'colour'] as const)
       .map((part) => [`${id} ${part}`, properties[indicatorSetting(id, part)]?.type === 'boolean' && properties[indicatorSetting(id, part)]?.default]))) as unknown;
 
     expect(switches).toEqual({
@@ -567,12 +567,13 @@ describe('package.json contributes the Mods view\'s indicators and grey as setti
       'redundant badge': true, 'redundant colour': false,
       'containsExcludedFiles badge': false, 'containsExcludedFiles colour': false,
       'updateAvailable badge': true, 'updateAvailable colour': false,
+      'publisherTag badge': true, 'publisherTag colour': false,
     });
   });
 
   it('a theme colour for each indicator', () => {
     const contributed = pkg.contributes.colors.map((colour) => colour.id);
-    expect(MOD_INDICATORS.filter(({ colour }) => !contributed.includes(colour)).map(({ id }) => id)).toEqual([]);
+    expect([...MOD_INDICATORS, PUBLISHER_TAG_INDICATOR].filter(({ colour }) => !contributed.includes(colour)).map(({ id }) => id)).toEqual([]);
   });
 });
 

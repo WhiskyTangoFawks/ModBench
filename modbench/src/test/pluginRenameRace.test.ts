@@ -5,6 +5,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from './mo2/fakeVscodeWatcher';
+import { NO_PUBLISHER } from './fakeInstanceAdapter';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom } from './vscodeMock';
 import { adapterOver, readPluginLines, sourceOver } from './mo2/adapterOver';
 import { pluginCommandsWith } from './pluginCommandsWith';
@@ -75,7 +76,7 @@ describe('a rename while a recompute is reading', () => {
     };
     instance = new Instance({
       gameFolderSettingId: GAME_FOLDER_SETTING_ID, window: STEADY_WINDOW, log: { info: () => {}, warn: () => {}, error: () => {} },
-      adapter: { ...writer, reading: () => readInstance(holdingSource) },
+      adapter: { ...writer, reading: async () => ({ ...await readInstance(holdingSource), publisherConfiguration: NO_PUBLISHER }) },
     });
     const { pluginSync } = instanceSyncs({ modStatuses: NO_MOD_STATUSES,
       instance, syncMods: modSyncOver(writer), syncPlugins: pluginSyncOver(writer, unreadStatus, NO_MOD_STATUSES), channel: { error: () => {}, info: () => {} },
