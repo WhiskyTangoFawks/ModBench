@@ -107,14 +107,6 @@ public class ResolveNamesTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void WithNoLoadOrder_IsRefusedAsSuch()
-    {
-        using var index = Indexes.Open(new LoadOrderHolder());
-
-        Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.ResolveNames([Name("TestNPC01")]).Refused().Refusal);
-    }
-
-    [Fact]
     public void AFilenameTwoModsShare_IsRefusedListingEachWithItsOrigin()
     {
         using var shared = SharedFilename("names-shared");

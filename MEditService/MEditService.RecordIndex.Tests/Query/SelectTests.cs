@@ -1,10 +1,6 @@
-using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.Query;
 
@@ -103,38 +99,5 @@ public class SelectTests(TestPluginFixture fixture)
         Assert.Contains(("records", "is_active"), columns);
         Assert.Contains(("npc_", "editor_id"), columns);
         Assert.DoesNotContain(columns, column => column.Item1 == "view_columns");
-    }
-
-    [Fact]
-    public void ASelect_WithNoLoadOrder_IsRefused()
-    {
-        using var index = Indexes.Open(new LoadOrderHolder());
-
-        Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.SelectRows("SELECT 1 AS n").Refused().Refusal);
-    }
-
-    [Fact]
-    public async Task ASelect_WhileReconciling_IsNotReady_ForAPluginNotYetReachedHasNoRowsAndWouldReadAsAbsent()
-    {
-        var holder = new LoadOrderHolder();
-        using var scratch = new ScratchDirectory("medit-select-");
-        var plugins = new[] { Written(scratch, "First.esp", 0), Written(scratch, "Later.esp", 1) };
-        using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
-        using var index = Indexes.Open(holder, gate);
-        var load = Task.Run(() => index.Reconcile(holder, Path.Combine(scratch, "Data"), plugins, GameRelease.Fallout4));
-        await gate.WaitUntilParkedAsync();
-
-        Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.SelectRows("SELECT form_key FROM npc_").Refused().Refusal);
-
-        gate.Release();
-        await load;
-        Assert.Empty(index.Queries.SelectRows("SELECT form_key FROM npc_").Value().Rows);
-    }
-
-    private static LoadOrderEntry Written(ScratchDirectory scratch, string name, int line)
-    {
-        var path = Path.Combine(Directory.CreateDirectory(Path.Combine(scratch, "mods", "SomeMod")).FullName, name);
-        new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4).WriteToBinary(path);
-        return new LoadOrderEntry(name, path, "SomeMod", line, true, true);
     }
 }

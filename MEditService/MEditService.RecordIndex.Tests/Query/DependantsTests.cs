@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.Ports;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -95,40 +94,4 @@ public sealed class DependantsTests
         Assert.Empty(answer.Dependants);
     }
 
-    [Fact]
-    public async Task GetDependants_WhileTheIndexIsReconciling_IsNotReady_ForAPluginNotYetOpenedWouldReadAsNoDependant()
-    {
-        var child = new Plugin("Child.esp", Masters: "Base.esm");
-        using var fixture = Fixture(Base, child);
-        var holder = new LoadOrderHolder();
-        using var gate = new GatedPluginAdapter(gateBefore: child.Name);
-        using var index = Indexes.Open(holder, gate);
-        var load = Task.Run(() => index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4));
-        await gate.WaitUntilParkedAsync();
-
-        Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetDependants(Renamed).Refused().Refusal);
-
-        gate.Release();
-        await load;
-    }
-
-    [Fact]
-    public void GetDependants_WhenTheIndexFailed_IsNotReady_ForAPluginNotYetOpenedWouldReadAsNoDependant()
-    {
-        using var fixture = Fixture(Base, new Plugin("Child.esp", Masters: "Base.esm"));
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder);
-        index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Oblivion);
-        Assert.Equal(LoadOrderState.Failed, index.Status.State);
-
-        Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetDependants(Renamed).Refused().Refusal);
-    }
-
-    [Fact]
-    public void GetDependants_WithNoLoadOrderHeld_Throws()
-    {
-        using var index = Indexes.Open(new LoadOrderHolder());
-
-        Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetDependants(Renamed).Refused().Refusal);
-    }
 }

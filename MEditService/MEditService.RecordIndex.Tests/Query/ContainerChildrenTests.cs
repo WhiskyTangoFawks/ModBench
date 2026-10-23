@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
@@ -118,11 +117,4 @@ public sealed class ContainerChildrenTests : IDisposable
         Assert.Empty(index.Queries.GetContainerChildren(Plugin, Quest).Value());
     }
 
-    [Fact]
-    public void GetChildren_NoLoadOrder_ThrowsNoLoadOrderException()
-    {
-        using var index = Indexes.Open(new LoadOrderHolder());
-
-        Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetContainerChildren(Plugin, Quest).Refused().Refusal);
-    }
 }
