@@ -296,7 +296,7 @@ describe('the MO2 adapter\'s path tokens', () => {
       `1\\binary=${onWineDrive(root, '/')}/tools/xEdit.exe`, `2\\binary=${onWineDrive(game, '/')}/Fallout4.exe`,
       '3\\binary=C:/Modding/Tools/CLASSIC.exe', '3\\workingDirectory=C:\\\\Modding\\\\Tools',
       '4\\arguments=-o:\\"C:\\\\Modding\\\\Out\\" -D:\\"C:\\\\Modding\\\\Out\\"', 'url=https://www.nexusmods.com/fallout4',
-      '5\\binary=\\\\\\\\nas\\\\share\\\\x.exe', '6\\binary=//nas/share/y.exe',
+      '5\\binary=\\\\\\\\nas\\\\share\\\\x.exe', '6\\binary=//nas/share/y.exe', '7\\arguments=-o:\\\\\\\\nas\\\\share\\\\Inst\\\\out',
     ]));
     await put(root, 'profiles/Default/Fallout4Custom.ini', 'sScreenShotBaseName=/home/me/Pictures/shot\r\n');
     await put(root, 'mods/Mod A/Mod A.manifest.json', `{"path": "C:/Modding/x", "folder": "${onWineDrive(root, '/')}/mods"}`);
@@ -309,6 +309,7 @@ describe('the MO2 adapter\'s path tokens', () => {
       { file: 'ModOrganizer.ini', path: 'C:\\\\Modding\\\\Out' },
       { file: 'ModOrganizer.ini', path: '\\\\\\\\nas\\\\share\\\\x.exe' },
       { file: 'ModOrganizer.ini', path: '//nas/share/y.exe' },
+      { file: 'ModOrganizer.ini', path: 'o:\\\\\\\\nas\\\\share\\\\Inst\\\\out' },
       { file: 'mods/Mod A/Mod A.manifest.json', path: 'C:/Modding/x' },
       { file: 'mods/Mod A/Mod A.manifest.json', path: `${onWineDrive(root, '/')}/mods` },
       { file: 'profiles/Default/Fallout4Custom.ini', path: '/home/me/Pictures/shot' },
