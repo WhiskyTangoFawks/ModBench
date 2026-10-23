@@ -67,6 +67,17 @@ describe('Git init', () => {
     }]);
   });
 
+  it('warns, naming why, when an adopted repository keeps another pre-push hook', async () => {
+    gitInit.mockResolvedValueOnce({ applied: true, pushRefusalNotWritten: '.git/hooks/pre-push already exists' });
+    const { reporter, run } = register();
+
+    await run();
+
+    expect(reporter.reports).toEqual([{
+      severity: 'warning', message: 'Git init:', detail: "a push of a pin its source mod's remote lacks is not refused: .git/hooks/pre-push already exists",
+    }]);
+  });
+
   it('answers an agent call with why a path token stays in the working tree', async () => {
     gitInit.mockResolvedValueOnce({ applied: true, pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' });
     const { run } = register();

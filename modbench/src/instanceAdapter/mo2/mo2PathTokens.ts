@@ -145,6 +145,10 @@ const pathsIn = (text: string): string[] => [...text.matchAll(PATH)].map(({ 0: m
   return text[index - 1] === '(' ? quoted.replace(/\)$/, '') : quoted;
 });
 
+/** Whether the repository's local config holds the path filter. */
+export const pathTokensWritten = (instanceRoot: string): Promise<boolean> =>
+  git(instanceRoot, 'config', '--get', `filter.${FOLDERS_DRIVER}.clean`).then((value) => value.trim() !== '', () => false);
+
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
 export function mo2PathTokens({ instanceRoot }: Mo2Context, gameFolder: () => Promise<GameFolder>): Mo2PathTokens {

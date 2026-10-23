@@ -57,6 +57,7 @@ export interface ReadingSource extends ArchiveReads {
   originRootFiles(origin: FileOrigin, folders: ModFolders | undefined | 'list'): Promise<OriginFiles>;
   sourceMods(): Promise<SourceMods>;
   holdsRepository(): Promise<boolean>;
+  repositorySetUp(): Promise<boolean>;
   watchNotes(): string[];
   managerRunning(): Promise<ManagerRunning>;
 }
@@ -109,7 +110,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
   const modsKept = modsRead.then(({ kept }) => kept);
   const sourceModsRead = source.sourceMods();
   const downloadedFilesRead = settings.downloadedFiles(skipLink);
-  const [mods, pluginsListed, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceMods, modFiles, folderMeta, holdsRepository, managerRunning] = await Promise.all([
+  const [mods, pluginsListed, downloadedFiles, game, profiles, modFolders, runtimeOutput, sourceMods, modFiles, folderMeta, holdsRepository, repositorySetUp, managerRunning] = await Promise.all([
     modsRead,
     source.pluginOrder(profile),
     downloadedFilesRead,
@@ -129,6 +130,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     Promise.all([modsKept, modFoldersRead, downloadedFilesRead]).then(([entries, folders, downloadedFiles]) =>
       folderMetaOf(source, entries, folders, downloadedFiles.kind === 'listed' && downloadedFiles.files !== undefined)),
     source.holdsRepository(),
+    source.repositorySetUp(),
     source.managerRunning(),
   ]);
   const { archiveList, dataFolderArchives, ...gameFacts } = game;
@@ -137,7 +139,7 @@ export async function readInstance(source: ReadingSource): Promise<InstanceReadi
     profile, gameName, gameRelease, mods: mods.kept, modGroups: groupModOrder(mods.kept), pluginOrder: pluginOrder.kept, orderNotes: [...mods.notes, ...pluginOrder.notes], downloadedFiles, ...gameFacts,
     archiveList: archiveList.archives, archiveListNotes: archiveList.notes, dataFolderArchives,
     profiles, modFolders, runtimeOutput, modFiles, folderMeta,
-    sourceMods, holdsRepository, watchNotes: source.watchNotes(), managerRunning,
+    sourceMods, holdsRepository, repositorySetUp, watchNotes: source.watchNotes(), managerRunning,
     linkNotes: [...skippedLinks].map(([linkPath, reason]) => `${linkPath} is a link Modbench cannot follow, so it is not read: ${reason}`),
   };
 }

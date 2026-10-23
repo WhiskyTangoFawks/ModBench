@@ -67,12 +67,35 @@ describe('modlistRepositoryCommands git init', () => {
     ]);
   });
 
-  it('refuses an instance folder that holds a repository on disk, naming it, and changes nothing', async () => {
-    const { commands, adapter, repositories } = commandsOver({ repositoryOnDisk: true });
+  describe('on an instance folder that holds a repository', () => {
+    it('adds the ignore list, the push check and the path tokens, and makes no repository', async () => {
+      const { commands, adapter, repositories } = commandsOver({ repositoryOnDisk: true });
 
-    const result = await commands.gitInit();
+      const result = await commands.gitInit();
 
-    expect([result, repositories, adapter.calls]).toEqual([{ applied: false, refusal: '/instance already holds a repository.' }, [], []]);
+      expect([result, repositories, adapter.calls]).toEqual([
+        { applied: true }, [], [{ verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }, { verb: 'writePathTokens' }],
+      ]);
+    });
+
+    it('keeps another pre-push hook, names why the push check is not written, and still writes the path tokens', async () => {
+      const { commands, adapter } = commandsOver({
+        repositoryOnDisk: true, refusals: refusing('refuseUnpublishedPins', '/instance/.git/hooks/pre-push already exists'),
+      });
+
+      expect([await commands.gitInit(), adapter.calls.map(({ verb }) => verb)]).toEqual([
+        { applied: true, pushRefusalNotWritten: '/instance/.git/hooks/pre-push already exists' },
+        ['writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens'],
+      ]);
+    });
+
+    it('takes back the ignore list it added, and not the repository, when the path tokens could not be written', async () => {
+      const { commands, adapter, repositories } = commandsOver({ repositoryOnDisk: true, refusals: refusing('writePathTokens', 'could not lock config file') });
+
+      expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
+        { applied: false, refusal: 'could not lock config file' }, [], ['writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'removeIgnoreList'],
+      ]);
+    });
   });
 
   it('makes no repository when the ignore list could not be written, and says why', async () => {

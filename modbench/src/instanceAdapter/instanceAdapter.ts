@@ -455,6 +455,8 @@ export interface InstanceReading extends InstanceGame {
   readonly sourceMods: SourceMods;
   /** Whether the instance folder holds a repository. */
   readonly holdsRepository: boolean;
+  /** Whether git init has set the repository up: the instance repository holds Modbench's push check and its path tokens. */
+  readonly repositorySetUp: boolean;
   /** Why a folder's watch failed, once per reason: no change inside that folder is heard. */
   readonly watchNotes: readonly string[];
   readonly managerRunning: ManagerRunning;
@@ -525,11 +527,9 @@ export interface InstanceAdapter {
   /** The game files in `dataFolder` at the paths of the files in `mod`'s folder, as `gameFiles` names them, listed in any
    *  profile or none. */
   gameFilesTakenBy(dataFolder: string, mod: string): Promise<FileRead<GameFilesTaken>>;
-  /** Writes the instance repository's ignore list: a whitelist of what the repository holds. Rejects, writing nothing,
-   *  when an ignore list is already there. */
-  writeIgnoreList(): Promise<void>;
-  /** Takes back the ignore list `writeIgnoreList` wrote. */
-  removeIgnoreList(): Promise<void>;
+  /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
+   *  list already there. Answers the call that takes back what it wrote. */
+  writeIgnoreList(): Promise<() => Promise<void>>;
   /** Makes each source mod with a remote a submodule: its entry in `.gitmodules` and its line in the ignore list. A source mod
    *  it cannot read keeps the entry and line it has. */
   writeSubmodules(): Promise<SubmoduleReport>;

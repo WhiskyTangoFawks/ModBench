@@ -22,10 +22,10 @@ export function registerModlistCommands(deps: ModlistGestureDeps): vscode.Dispos
 const gitInitInToolbox = ({ commands, instance }: ModlistGestureDeps) =>
   runWritingGesture(TOOLBOX_VIEW, instance, () => commands.gitInit());
 
-const partialOf = (result: Extract<GitInitResult, { applied: true }>): PartialFailure[] =>
-  (result.pathTokensNotWritten === undefined ? [] : [{
-    message: 'Git init:', detail: `this machine's paths are not in place of every path token: ${result.pathTokensNotWritten}`, severity: 'warning',
-  }]);
+const partialOf = ({ pushRefusalNotWritten, pathTokensNotWritten }: Extract<GitInitResult, { applied: true }>): PartialFailure[] => [
+  ...(pushRefusalNotWritten === undefined ? [] : [`a push of a pin its source mod's remote lacks is not refused: ${pushRefusalNotWritten}`]),
+  ...(pathTokensNotWritten === undefined ? [] : [`this machine's paths are not in place of every path token: ${pathTokensNotWritten}`]),
+].map((detail) => ({ message: 'Git init:', detail, severity: 'warning' as const }));
 
 async function gitInit(deps: ModlistGestureDeps): Promise<void> {
   const result = await gitInitInToolbox(deps);

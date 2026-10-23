@@ -3,14 +3,14 @@
 import { join } from 'node:path';
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { exists, ignoreSkippedLink, listEntries, remove, type ResolvedEntry, write } from '../files';
+import { exists, get, ignoreSkippedLink, listEntries, remove, type ResolvedEntry, write } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
 import type { FileRead, GameFile, InstanceAdapter } from '../instanceAdapter';
 import { ignoreListFile, WHITELIST_IGNORE_LIST } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 
-type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'removeIgnoreList'>;
+type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList'>;
 
 const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
@@ -63,11 +63,17 @@ export function mo2Repository(
   return {
     async writeIgnoreList() {
       const file = ignoreListFile(instanceRoot);
-      if (await exists(file)) throw new Error(`${file} already exists; git init does not write over it.`);
-      await write(file, WHITELIST_IGNORE_LIST);
+      const before = await exists(file) ? await get(file) : undefined;
+      if (before === undefined) {
+        await write(file, WHITELIST_IGNORE_LIST);
+        return () => remove(file);
+      }
+      const held = new Set(before.split(/\r?\n/));
+      if (!WHITELIST_IGNORE_LIST.split('\n').every((line) => line === '' || held.has(line))) {
+        await write(file, `${before}${before === '' || before.endsWith('\n') ? '' : '\n'}${WHITELIST_IGNORE_LIST}`);
+      }
+      return () => write(file, before);
     },
-
-    removeIgnoreList: () => remove(ignoreListFile(instanceRoot)),
 
     gameFiles,
 

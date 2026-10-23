@@ -13,6 +13,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { mo2InstanceAdapter } from '../mo2Instance';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
+import { WHITELIST_IGNORE_LIST } from '../layout';
 
 let root: string;
 
@@ -48,22 +49,76 @@ describe('the MO2 adapter\'s repository', () => {
     expect([before, (await adapter.reading()).holdsRepository]).toEqual([false, true]);
   });
 
-  it('refuses to write over an ignore list already in the instance folder, naming it, and leaves it as it is', async () => {
+  it('adds its whitelist after the lines of an ignore list already there, and takes back to what the file was', async () => {
     const adapter = await instance();
     await put('.gitignore', 'mine\n');
 
-    await expect(adapter.writeIgnoreList()).rejects.toThrow(join(root, '.gitignore'));
+    const takeBack = await adapter.writeIgnoreList();
+    const written = await readFile(join(root, '.gitignore'), 'utf8');
+    await takeBack();
 
-    expect(await readFile(join(root, '.gitignore'), 'utf8')).toBe('mine\n');
+    expect([written, await readFile(join(root, '.gitignore'), 'utf8')]).toEqual([`mine\n${WHITELIST_IGNORE_LIST}`, 'mine\n']);
+  });
+
+  it('leaves an ignore list that holds its whitelist as it is', async () => {
+    const adapter = await instance();
+    await adapter.writeIgnoreList();
+    const before = await readFile(join(root, '.gitignore'), 'utf8');
+
+    await adapter.writeIgnoreList();
+
+    expect(await readFile(join(root, '.gitignore'), 'utf8')).toBe(before);
   });
 
   it('takes back the ignore list it wrote', async () => {
     const adapter = await instance();
-    await adapter.writeIgnoreList();
+    const takeBack = await adapter.writeIgnoreList();
 
-    await adapter.removeIgnoreList();
+    await takeBack();
 
     expect(existsSync(join(root, '.gitignore'))).toBe(false);
+  });
+
+  describe('whether git init has set the repository up', () => {
+    async function instanceOf() {
+      const adapter = await instance();
+      await put('ModOrganizer.ini', '[General]\r\ngameName=Fallout 4\r\nselected_profile=Default\r\n');
+      await put('profiles/Default/modlist.txt', '');
+      await put('profiles/Default/plugins.txt', '');
+      await mkdir(join(root, 'mods'));
+      return { adapter, setUp: async (): Promise<boolean> => (await adapter.reading()).repositorySetUp };
+    }
+
+    it('reads that a repository with neither the push check nor the path tokens is not set up, and that it is once both are written', async () => {
+      const { adapter, setUp } = await instanceOf();
+      runGit('init', '--quiet');
+      const bare = await setUp();
+      await adapter.refuseUnpublishedPins();
+      await adapter.writePathTokens();
+
+      expect([bare, await setUp()]).toEqual([false, true]);
+    });
+
+    it('reads that a repository with the path tokens and another pre-push hook is not set up', async () => {
+      const { adapter, setUp } = await instanceOf();
+      runGit('init', '--quiet');
+      await put('.git/hooks/pre-push', 'mine\n');
+      await adapter.writePathTokens();
+
+      expect(await setUp()).toBe(false);
+    });
+
+    it('reads that a repository with the push check and no path tokens is not set up', async () => {
+      const { adapter, setUp } = await instanceOf();
+      runGit('init', '--quiet');
+      await adapter.refuseUnpublishedPins();
+
+      expect(await setUp()).toBe(false);
+    });
+
+    it('reads that no repository is not set up', async () => {
+      expect(await (await instanceOf()).setUp()).toBe(false);
+    });
   });
 
   it('keeps the stat cache in a folder at the instance root, beside the mod folders', async () => {

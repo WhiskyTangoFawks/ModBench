@@ -130,6 +130,10 @@ async function submoduleIn(instanceRoot: string, name: string): Promise<Submodul
 
 const isOwnHook = (hook: string): Promise<boolean> => readFile(hook, 'utf8').then((text) => text === PRE_PUSH_HOOK, () => false);
 
+/** Whether the repository holds Modbench's pre-push hook, in the place `refuseUnpublishedPins` writes it. */
+export const pushRefusalWritten = (instanceRoot: string): Promise<boolean> =>
+  hooksFolder(instanceRoot).then((hooks) => isOwnHook(join(hooks, PRE_PUSH_HOOK_NAME)), () => false);
+
 export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
   return {
     async writeSubmodules() {

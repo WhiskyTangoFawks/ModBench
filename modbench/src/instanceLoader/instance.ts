@@ -67,6 +67,8 @@ export interface InstanceValue {
   readonly sourceMods: ReadonlySet<string>;
   /** Whether the instance folder holds a repository. */
   readonly holdsRepository: boolean;
+  /** Whether git init has set the repository up. */
+  readonly repositorySetUp: boolean;
   /** Every profile, the switch's choices. */
   readonly profiles: readonly string[];
   /** The winning enabled provider of every relative path, and its contenders. */
@@ -200,6 +202,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>, gameFo
   listedSourceMods: new Set(),
   sourceMods: new Set(),
   holdsRepository: false,
+  repositorySetUp: false,
   profiles: [],
   files: new FileConflictLookup(),
   filesByMod: new Map(),
@@ -467,6 +470,7 @@ export class Instance implements Subscription {
       listedSourceMods: new Set(entries.flatMap((entry) => (entry.kind === 'mod' && paths.sourceDirs.has(entry.name) ? [entry.name] : []))),
       sourceMods: new Set(paths.sourceDirs.keys()),
       holdsRepository: reading.holdsRepository,
+      repositorySetUp: reading.repositorySetUp,
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,
