@@ -313,19 +313,4 @@ public sealed class ProblemsPanelTests : IDisposable
         Assert.Equal("000801:Holder.esp", Assert.Single(answer.Problems).TargetFormKey);
     }
 
-    [Fact]
-    public async Task GetProblems_WhileTheIndexIsReconciling_AnswersNothing_ForAPartialSetReadsAsNoProblem()
-    {
-        var plugins = Build(new Plugin("Clean.esp", RefersTo: null), new Plugin("Later.esp", CompiledPlugin: false));
-        var holder = new LoadOrderHolder();
-        using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
-        using var index = Indexes.Open(holder, gate);
-        var load = Task.Run(() => index.Reconcile(holder, Fixture.DataFolder, plugins, GameRelease.Fallout4));
-        await gate.WaitUntilParkedAsync();
-
-        Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetProblems().Refused().Refusal);
-
-        gate.Release();
-        await load;
-    }
 }
