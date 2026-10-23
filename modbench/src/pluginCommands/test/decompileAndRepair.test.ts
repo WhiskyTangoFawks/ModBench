@@ -57,7 +57,7 @@ describe('decompileAndRepair — the preview, then the repair of each plugin it 
   });
 
   describe('a preview that drops data', () => {
-    const dropping: PluginRepairPreview = { ...PREVIEW, diagnoses: [{ ...PREVIEW.diagnoses[0]!, change: DROPS }] };
+    const dropping: PluginRepairPreview = { ...PREVIEW, diagnoses: [{ diagnosis: { anchor: 'REGN 00000800 (Harbor)', defectClass: 'short', message: 'RDAT is 6 bytes' }, change: DROPS }] };
     beforeEach(() => { previews = { landed: [dropping], refused: [] }; });
 
     it('is repaired, forced, once the user agrees to exactly the changes that drop data', async () => {

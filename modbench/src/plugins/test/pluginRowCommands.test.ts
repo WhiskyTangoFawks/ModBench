@@ -224,7 +224,7 @@ describe('modbench.plugin.decompileAndRepair', () => {
     diagnoses: [{ diagnosis: { anchor: 'REGN 00000800', defectClass: 'short', message: 'RDAT is 6 bytes' }, change: { description: 'pads RDAT', droppedBytes: 0 } }],
   };
 
-  const DROPPING = { ...PREVIEW, diagnoses: [{ ...PREVIEW.diagnoses[0]!, change: { description: 'drops 25 bytes', droppedBytes: 25 } }] };
+  const DROPPING = { ...PREVIEW, diagnoses: [{ diagnosis: { anchor: 'REGN 00000800', defectClass: 'short', message: 'RDAT is 6 bytes' }, change: { description: 'drops 25 bytes', droppedBytes: 25 } }] };
 
   function registered(viewSelection: readonly PluginNode[] = [], answers: readonly (string | undefined)[] = []) {
     const reporter = recordingReporter();
