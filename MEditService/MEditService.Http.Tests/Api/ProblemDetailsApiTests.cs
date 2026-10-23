@@ -79,10 +79,13 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [Fact]
     public async Task CreatePlugin_AFolderHoldingADirectoryOfThePluginsName_Is422_WriteFailed()
     {
+        await using var app = new MEditHost();
+        var client = app.CreateClient();
+        (await client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(_fixture.DataFolder, _fixture.InstanceRoot, []))).EnsureSuccessStatusCode();
         using var scratch = new ScratchDirectory("problem-details-create-");
         Directory.CreateDirectory(Path.Combine(scratch, "New.esp"));
 
-        var response = await loaded.Client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "New.esp", folder = scratch.ToString() });
+        var response = await client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name = "New.esp", folder = scratch.ToString() });
 
         var problem = await response.AssertIsProblem(HttpStatusCode.UnprocessableEntity);
         Assert.Equal("WriteFailed", problem.GetProperty("refusal").GetString());
