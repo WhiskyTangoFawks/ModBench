@@ -32,10 +32,8 @@ public sealed class DecompileAndRepairPluginHandler
         _init = new ModInit(logger, adapter, source, modFolders, decompiler);
     }
 
-    /// <summary>A mod with no repository gets one, made as decompile and commit makes it, leaving out
-    /// <paramref name="metadataFiles"/>. A plugin whose repair drops data, or whose source has
-    /// working-tree changes, is refused once, listing every loss, unless <paramref name="force"/> waives both;
-    /// <paramref name="agreedDrops"/> waives the dropped data alone.</summary>
+    /// <summary>A repair that drops data, or a source with working-tree changes, is refused once, listing every loss,
+    /// unless <paramref name="force"/> waives both; <paramref name="agreedDrops"/> waives the dropped data alone.</summary>
     public async Task<Answer<DecompileAndRepairResult, SelectionRefusal<DecompileAndRepairRefusal>>> DecompileAndRepairAsync(
         IReadOnlyList<PluginToRepair> plugins, IReadOnlyList<string> metadataFiles, bool force, bool agreedDrops = false,
         CancellationToken cancel = default)
