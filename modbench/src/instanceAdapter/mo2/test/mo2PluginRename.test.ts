@@ -25,8 +25,9 @@ const actualListEntries: typeof listEntries = (path, skippedLink) => present(rea
 const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
 
 import { listEntries } from '../../files';
-import type { FileOrigin, InstanceAdapter } from '../../instanceAdapter';
+import type { FileOrigin } from '../../instanceAdapter';
 import { mo2InstanceAdapter } from '../mo2Instance';
+import type { ManagerAdapter } from '../../publisher';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 import { readPluginLines } from '../../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../../test/mo2/corpusFixture';
@@ -58,7 +59,7 @@ const NOT_NAMED_FOR_IT = [
 
 describe('the MO2 Instance adapter renaming a plugin', () => {
   let root: string;
-  let adapter: InstanceAdapter;
+  let adapter: ManagerAdapter;
   const at = (relative: string): string => join(root, relative);
   const text = (relative: string): Promise<string> => readFile(at(relative), 'utf8');
   const rename = (to = 'Renamed Patch.esp'): Promise<void> =>

@@ -259,7 +259,7 @@ export default defineConfig(
         },
     },
     {
-        files: ['src/instanceAdapter/mo2/mo2Watch.ts'],
+        files: ['src/instanceAdapter/watchFiles.ts'],
         rules: {
             'no-restricted-imports': restrictedImports({ vscode: false, packages: true, path: false, inAdapter: true }),
         },
@@ -311,7 +311,7 @@ export default defineConfig(
         rules: { 'no-restricted-syntax': restrictedSyntax(['message']) },
     },
     {
-        files: ['src/instanceAdapter/mo2/mo2Watch.ts'],
+        files: ['src/instanceAdapter/watchFiles.ts'],
         rules: { 'no-restricted-syntax': restrictedSyntax(everywhereBut('watcher')) },
     },
     {

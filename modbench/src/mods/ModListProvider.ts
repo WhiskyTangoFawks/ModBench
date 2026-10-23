@@ -12,7 +12,7 @@ import {
   type ChildrenShown,
 } from './modFiles';
 import type { ModArgument } from '../drivingLib/argument';
-import { modRowUri, separatorRowUri } from './modIndicators';
+import { modRowUri, overwriteRowUri, separatorRowUri } from './modIndicators';
 import { countsInBadge, differingFiles, lackedLine, separatorDescription, statusDescription, type ModStatuses } from './modStatuses';
 import type { ModStatus } from '../client';
 import { blankIcon } from '../drivingLib/blankIcon';
@@ -112,7 +112,7 @@ export class ModNode extends vscode.TreeItem {
 }
 
 /** Pinned row over the instance's `overwrite/` folder. Not an entry of mod order, so it has no
- *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
+ *  check box and no drag. */
 export class OverwriteNode extends vscode.TreeItem {
   readonly kind = 'runtimeOutput';
   readonly listed: { readonly files: readonly OriginFile[]; readonly folders: readonly OriginFolder[] };
@@ -128,6 +128,7 @@ export class OverwriteNode extends vscode.TreeItem {
     this.shown = shown;
     this.id = this.kind;
     this.contextValue = this.kind;
+    this.resourceUri = overwriteRowUri();
     const fileCount = files.length;
     if (fileCount > 0) this.description = fileCount.toLocaleString();
     this.iconPath = fileCount > 0

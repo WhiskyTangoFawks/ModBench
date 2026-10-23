@@ -389,10 +389,11 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
   });
 });
 
-describe('the Mods view tells the indicator decorations when a separator opens or closes', () => {
-  it('asks VS Code to decorate again on the separator\'s expand and on its collapse', async () => {
+describe('the Mods view tells the indicator and publisher tag decorations when a separator opens or closes', () => {
+  it('asks VS Code to decorate again, for each indicator and each publisher tag the publisher declares, on the separator\'s expand and on its collapse', async () => {
+    const publisherTags = [{ name: 'Include', badge: 'IN', marksPaths: true }] as const;
     createModsView({
-      ...otherDeps(), instance: new FakeInstance(listing([mod('A'), separator('Section')])), log: () => undefined, ...noSync(),
+      ...otherDeps(), instance: new FakeInstance(instanceValueFixture({ mods: [mod('A'), separator('Section')], publisherTags })), log: () => undefined, ...noSync(),
     });
     const fired = vi.fn();
     for (const provider of h.decorationProviders.slice(1)) provider.onDidChangeFileDecorations?.(fired);
@@ -402,7 +403,7 @@ describe('the Mods view tells the indicator decorations when a separator opens o
     const afterExpand = fired.mock.calls.length;
     treeViews.view().collapse(row);
 
-    expect([afterExpand, fired.mock.calls.length]).toEqual([5, 10]);
+    expect([afterExpand, fired.mock.calls.length]).toEqual([6, 12]);
   });
 });
 

@@ -33,12 +33,13 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, matchesGlob, sep } from 'node:path';
 import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
+import type { ManagerAdapter } from '../../publisher';
 import type { Mo2Context } from '../mo2Context';
 import type { ReadingSource } from '../../instanceReading';
 import { readingSource } from '../mo2Reads';
 import { OVERWRITE_ORIGIN } from '../../../wire/pluginAddress';
 import type {
-  InstallationFileReader, GameFolder, InstallTarget, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided, Subscription,
+  InstallationFileReader, GameFolder, InstallTarget, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided, Subscription,
 } from '../../instanceAdapter';
 import { setIniValue } from '../codecs/qSettingsIni';
 import { ownTempPrefix } from '../../files';
@@ -55,11 +56,11 @@ const DOWNLOADED_FILE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 const adapterAt = (
   instanceRoot: string, gameFolderSettingValue?: string, gameFolderSettingChanged?: (listener: () => void) => Subscription,
   installationFileReader: InstallationFileReader = fakeInstallationFileReader([]),
-): InstanceAdapter => mo2InstanceAdapter({
+): ManagerAdapter => mo2InstanceAdapter({
   instanceRoot, gameFolderSetting: fixedGameFolderSetting(gameFolderSettingValue, gameFolderSettingChanged), detectors: NO_DETECTORS, installationFileReader,
 });
 
-const watchedOver = (context: Mo2Context): ReadingSource & Pick<InstanceAdapter, 'subscribe'> =>
+const watchedOver = (context: Mo2Context): ReadingSource & Pick<ManagerAdapter, 'subscribe'> =>
   ({ ...readingSource(context), subscribe: (listener) => context.watch.subscribe(listener) });
 
 const sourceAt = (instanceRoot: string, gameFolderSettingValue?: string): ReadingSource => readingSource(contextOver(instanceRoot, { gameFolderSettingValue }));
@@ -103,7 +104,7 @@ async function isThere(path: string): Promise<boolean> {
 
 describe('the MO2 Instance adapter', () => {
   let root: string;
-  let adapter: InstanceAdapter;
+  let adapter: ManagerAdapter;
   let source: ReadingSource;
 
   beforeEach(() => {
@@ -172,7 +173,7 @@ describe('the MO2 Instance adapter', () => {
 
       describe('the downloaded file a path names', () => {
         const listed = join('downloads', DOWNLOADED_FILE);
-        const nameAt = async (path: string, over: InstanceAdapter = adapter): Promise<string | undefined> => {
+        const nameAt = async (path: string, over: ManagerAdapter = adapter): Promise<string | undefined> => {
           const at = await over.downloadedFileAt(path);
           if (at.kind !== 'read') throw new Error(at.reason);
           return at.answer?.name;
@@ -224,7 +225,7 @@ describe('the MO2 Instance adapter', () => {
 
     describe('the plugins provided, as a change to the plugin order over them reads them', () => {
       let game: string;
-      let withGame: InstanceAdapter;
+      let withGame: ManagerAdapter;
       beforeEach(async () => {
         game = await mkdtemp(join(tmpdir(), 'mo2-instance-provided-'));
         await mkdir(join(game, 'Data'));
@@ -232,7 +233,7 @@ describe('the MO2 Instance adapter', () => {
       });
       afterEach(() => rm(game, { recursive: true, force: true }));
 
-      const providedOver = async (over: InstanceAdapter, profile = 'Default'): Promise<PluginsProvided> => {
+      const providedOver = async (over: ManagerAdapter, profile = 'Default'): Promise<PluginsProvided> => {
         let answer: PluginsProvided | undefined;
         await over.changePluginOrderOverProvided(profile, (_order, provided) => {
           answer = provided;
@@ -240,7 +241,7 @@ describe('the MO2 Instance adapter', () => {
         });
         return present(answer, 'the plugins provided');
       };
-      const pluginsOver = async (over: InstanceAdapter, profile?: string): Promise<ReadonlyMap<string, string>> => {
+      const pluginsOver = async (over: ManagerAdapter, profile?: string): Promise<ReadonlyMap<string, string>> => {
         const provided = await providedOver(over, profile);
         if (provided.kind !== 'listed') throw new Error(`expected listed, got ${provided.kind}`);
         return provided.plugins;

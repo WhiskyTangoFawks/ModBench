@@ -8,11 +8,15 @@ export const WALKTHROUGH = join(SRC, '..', 'walkthrough', 'getting-started.md');
 export const WEBVIEW_SRC = join(SRC, '..', 'webview', 'src');
 export const SOURCE_ROOTS = [SRC, WEBVIEW_SRC];
 
-export const MO2_NAMES = {
-  anywhere: [/mo2/i, /modorganizer/i, /\bMod Organizer\b/i],
-} as const;
+/** Each implementation of the Instance adapter: its folder in the adapter, the module the construction imports, and the
+ *  names no file outside it holds (target-architecture.md). */
+export const IMPLEMENTATIONS = [
+  { folder: 'mo2', module: join('mo2', 'mo2Instance'), names: [/mo2/i, /modorganizer/i, /\bMod Organizer\b/i] },
+  { folder: 'wabbajack', module: join('wabbajack', 'wabbajackPublisher'), names: [/wabbajack/i] },
+] as const;
 
-export const MO2_CONSTRUCTION = { file: join('instanceAdapter', 'openInstance.ts'), module: join('mo2', 'mo2Instance') };
+/** The one file that builds the Instance adapter from its implementations. */
+export const CONSTRUCTION = join('instanceAdapter', 'openInstance.ts');
 
 /** `relativePath` is relative to a source root, so a test directory above the root counts for nothing. */
 export const isTestSupport = (relativePath: string): boolean =>

@@ -21,6 +21,9 @@ export const sourceModsOf = (folders: Record<string, string>, notes: string[] = 
   notes,
 });
 
+/** An instance that holds no publisher's configuration. */
+export const NO_PUBLISHER = { kind: 'none' } as const;
+
 export function readingFixture(overrides: Partial<InstanceReading> = {}): InstanceReading {
   return {
     profile: 'Default',
@@ -48,6 +51,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     repositorySetUp: false,
     watchNotes: [],
     managerRunning: { kind: 'notRunning' },
+    publisherConfiguration: NO_PUBLISHER,
     ...overrides,
   };
 }
@@ -273,6 +277,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     },
     sourceMods: () => unreadable('sourceMods', current.sourceMods),
     names: { manager: 'Fake manager', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
+    publisherTags: [],
     modFolderPath: (mod) => Promise.resolve(namesNoFolder(mod) ? undefined : foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod)),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),

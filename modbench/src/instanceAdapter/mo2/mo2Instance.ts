@@ -5,7 +5,8 @@ import { existsSync } from 'node:fs';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { gameFolderResolver, STEAM, type GameDetectors } from '../gameFolder/gameFolderResolver';
 import { myGamesResolver } from '../gameFolder/myGames';
-import type { GameFolder, InstallationFileReader, GameFolderSetting, InstanceAdapter } from '../instanceAdapter';
+import type { GameFolder, InstallationFileReader, GameFolderSetting } from '../instanceAdapter';
+import type { ManagerAdapter } from '../publisher';
 import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
@@ -21,7 +22,15 @@ import { mo2Reads, readingSource } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { programRunning } from '../processes';
 import { hashIndex } from '../downloadedFileContents/hashIndex';
-import { hashIndexDir, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
+import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
+import { parseModlist } from './codecs/modlistText';
+import { get } from '../files';
+
+export { overwriteDir } from './layout';
+
+/** The mods `profile`'s mod order enables, by name, read now. */
+export const enabledModsIn = (instanceRoot: string) => async (profile: string): Promise<string[]> =>
+  parseModlist(await get(modlistFile(instanceRoot, profile))).flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? [entry.name] : []));
 
 const MO2_PROGRAM = 'ModOrganizer.exe';
 
@@ -31,7 +40,7 @@ interface Mo2Machine {
   detectors?: GameDetectors;
 }
 
-type Mo2InstanceOptions = {
+export type Mo2InstanceOptions = {
   instanceRoot: string;
   installationFileReader: InstallationFileReader;
 } & (Mo2Machine | { context: Mo2Context });
@@ -43,7 +52,7 @@ export function isMo2Instance(root: string): boolean {
   return existsSync(settingsFile(root)) && existsSync(modsDir(root)) && existsSync(profilesDir(root));
 }
 
-export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter {
+export function mo2InstanceAdapter(options: Mo2InstanceOptions): ManagerAdapter {
   const { instanceRoot, installationFileReader } = options;
   const context: Mo2Context = 'context' in options ? options.context : {
     instanceRoot,
