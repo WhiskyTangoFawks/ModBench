@@ -4,48 +4,52 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
-import { isTestSupport, MO2_CONSTRUCTION as MO2_CONSTRUCTION_SITE, MANIFEST, MO2_NAMES, SOURCE_ROOTS, SRC, WALKTHROUGH, WEBVIEW_SRC } from './scanSource';
+import { CONSTRUCTION, IMPLEMENTATIONS, isTestSupport, MANIFEST, SOURCE_ROOTS, SRC, WALKTHROUGH, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 const ADAPTER = 'instanceAdapter';
 const ADAPTER_INTERFACE = join(ADAPTER, 'instanceAdapter.ts');
-const MO2_CONSTRUCTION = MO2_CONSTRUCTION_SITE.file;
-const MO2_ENTRY = `./${MO2_CONSTRUCTION_SITE.module.split(sep).join('/')}`;
 
-const isMo2Implementation = (relPath: string): boolean =>
-  relPath.startsWith(join(ADAPTER, 'mo2') + sep);
+type Implementation = (typeof IMPLEMENTATIONS)[number];
 
-function constructionImport(sourceText: string, fileName: string): { text: string; bindings: string[] } | undefined {
+const entryOf = ({ module }: Implementation): string => `./${module.split(sep).join('/')}`;
+
+const isImplementation = ({ folder }: Implementation, relPath: string): boolean => relPath.startsWith(join(ADAPTER, folder) + sep);
+
+function constructionImport(sourceText: string, fileName: string, implementation: Implementation): { text: string; bindings: string[] } | undefined {
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
   const declaration = source.statements.find((statement): statement is ts.ImportDeclaration =>
-    ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier) && statement.moduleSpecifier.text === MO2_ENTRY);
+    ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier) && statement.moduleSpecifier.text === entryOf(implementation));
   const bindings = declaration?.importClause?.namedBindings;
   if (!declaration || !bindings || !ts.isNamedImports(bindings)) return undefined;
   return { text: declaration.getText(source), bindings: bindings.elements.map((element) => element.name.text) };
 }
 
 function withoutConstruction(sourceText: string, fileName: string): string {
-  const construction = constructionImport(sourceText, fileName);
-  if (!construction) return sourceText;
-  return construction.bindings.reduce(
-    (text, binding) => text.replace(new RegExp(`\\b${binding}\\b`, 'g'), ''),
-    sourceText.replace(construction.text, ''),
-  );
+  return IMPLEMENTATIONS.reduce((text, implementation) => {
+    const construction = constructionImport(text, fileName, implementation);
+    if (!construction) return text;
+    return construction.bindings.reduce(
+      (rest, binding) => rest.replace(new RegExp(`\\b${binding}\\b`, 'g'), ''),
+      text.replace(construction.text, ''),
+    );
+  }, sourceText);
 }
 
-const managerMentions = (sourceText: string): string[] =>
-  MO2_NAMES.anywhere.filter((name) => name.test(sourceText)).map((name) => name.source);
+const mentions = (sourceText: string, implementations: readonly Implementation[] = IMPLEMENTATIONS): string[] =>
+  implementations.flatMap(({ names }) => names.filter((name) => name.test(sourceText)).map((name) => name.source));
 
 function findOffenders(roots: readonly string[]): Record<string, string[]> {
   const offenders: Record<string, string[]> = {};
   for (const root of roots) {
     for (const path of tsFiles(root, { exclude: ['generated'] })) {
       const relPath = relative(root, path);
-      if (isMo2Implementation(relPath) || isTestSupport(relPath)) continue;
-      const inPath = MO2_NAMES.anywhere.some((name) => name.test(relPath)) ? ['file name'] : [];
+      if (isTestSupport(relPath)) continue;
+      const others = IMPLEMENTATIONS.filter((implementation) => !isImplementation(implementation, relPath));
+      const inPath = mentions(relPath, others).length > 0 ? ['file name'] : [];
       const text = readFileSync(path, 'utf8');
-      const scanned = relPath === MO2_CONSTRUCTION ? withoutConstruction(text, path) : text;
-      const found = [...inPath, ...managerMentions(scanned)];
+      const scanned = relPath === CONSTRUCTION ? withoutConstruction(text, path) : text;
+      const found = [...inPath, ...mentions(scanned, others)];
       if (found.length > 0) offenders[relPath] = found;
     }
   }
@@ -61,62 +65,72 @@ async function plantedTree(files: Record<string, string>): Promise<string> {
   return dir;
 }
 
-describe('no extension file names MO2 outside its implementation of the Instance adapter', () => {
+const [MO2, WABBAJACK] = IMPLEMENTATIONS;
+
+describe('no extension file names a mod manager or a publisher outside its implementation of the Instance adapter', () => {
   it('covers the whole extension source tree and the webview', () => {
     const files = SOURCE_ROOTS.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
     expect(files.length).toBeGreaterThan(100);
     expect(files).toContain(join(WEBVIEW_SRC, 'presentation.ts'));
   });
 
-  it('scans clean outside the implementation', () => {
+  it('scans clean outside each implementation', () => {
     expect(findOffenders(SOURCE_ROOTS)).toEqual({});
   });
 
   it('scans package.json and the walkthrough clean', () => {
-    expect([MANIFEST, WALKTHROUGH].map((path) => managerMentions(readFileSync(path, 'utf8')))).toEqual([[], []]);
+    expect([MANIFEST, WALKTHROUGH].map((path) => mentions(readFileSync(path, 'utf8')))).toEqual([[], []]);
   });
 
-  it('scans the implementation\'s files and not its interface\'s, the construction\'s or a neutral file\'s as the implementation', () => {
-    expect(isMo2Implementation(join(ADAPTER, 'mo2', 'mo2Instance.ts'))).toBe(true);
-    expect(isMo2Implementation(join(ADAPTER, 'mo2', 'codecs', 'modlistText.ts'))).toBe(true);
-    expect(isMo2Implementation(ADAPTER_INTERFACE)).toBe(false);
-    expect(isMo2Implementation(MO2_CONSTRUCTION)).toBe(false);
-    expect(isMo2Implementation(join(ADAPTER, 'files.ts'))).toBe(false);
+  it('scans an implementation\'s files as that implementation\'s alone, and not its interface\'s, the construction\'s or a neutral file\'s', () => {
+    expect([
+      isImplementation(MO2, join(ADAPTER, 'mo2', 'mo2Instance.ts')),
+      isImplementation(MO2, join(ADAPTER, 'mo2', 'codecs', 'modlistText.ts')),
+      isImplementation(WABBAJACK, join(ADAPTER, 'wabbajack', 'wabbajackPublisher.ts')),
+      isImplementation(MO2, join(ADAPTER, 'wabbajack', 'wabbajackPublisher.ts')),
+      isImplementation(MO2, ADAPTER_INTERFACE),
+      isImplementation(MO2, CONSTRUCTION),
+      isImplementation(MO2, join(ADAPTER, 'files.ts')),
+    ]).toEqual([true, true, true, false, false, false, false]);
   });
 
-  it('the construction\'s exemption is load-bearing: the file imports MO2\'s implementation', () => {
-    const path = join(SRC, MO2_CONSTRUCTION);
-    expect(constructionImport(readFileSync(path, 'utf8'), path)?.bindings).toEqual(['isMo2Instance', 'mo2InstanceAdapter']);
+  it('the construction\'s exemption is load-bearing: the file imports each implementation', () => {
+    const path = join(SRC, CONSTRUCTION);
+    expect(IMPLEMENTATIONS.map((implementation) => constructionImport(readFileSync(path, 'utf8'), path, implementation)?.bindings))
+      .toEqual([['isMo2Instance', 'mo2InstanceAdapter', 'Mo2InstanceOptions'], ['wabbajackPublisher']]);
   });
 
-  it('holds the construction file to the rule beyond its import and the names it binds', async () => {
+  it('holds the construction file to the rule beyond its imports and the names they bind', async () => {
     const dir = await plantedTree({
-      [MO2_CONSTRUCTION]: [
-        `import { isMo2Instance, mo2InstanceAdapter } from '${MO2_ENTRY}';`,
-        'export const adapter = mo2InstanceAdapter; export const check = isMo2Instance;',
-        '// MO2 is the manager built here.',
-        'export const mo2Side = 1;',
+      [CONSTRUCTION]: [
+        `import { isMo2Instance, mo2InstanceAdapter } from '${entryOf(MO2)}';`,
+        `import { wabbajackPublisher } from '${entryOf(WABBAJACK)}';`,
+        'export const adapter = mo2InstanceAdapter; export const check = isMo2Instance; export const publisher = wabbajackPublisher;',
+        '// MO2 is the manager built here, and Wabbajack the publisher.',
         '',
       ].join('\n'),
     });
     try {
-      expect(findOffenders([dir])).toEqual({ [MO2_CONSTRUCTION]: ['mo2'] });
-      await writeFile(join(dir, MO2_CONSTRUCTION), `import { isMo2Instance } from '${MO2_ENTRY}';\nexport const check = isMo2Instance;\n`);
+      expect(findOffenders([dir])).toEqual({ [CONSTRUCTION]: ['mo2', 'wabbajack'] });
+      await writeFile(join(dir, CONSTRUCTION), `import { isMo2Instance } from '${entryOf(MO2)}';\nexport const check = isMo2Instance;\n`);
       expect(findOffenders([dir])).toEqual({});
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
   });
 
-  it('catches the name in a comment, a literal or an identifier', async () => {
+  it('catches the name in a comment, a literal or an identifier, and one implementation\'s name in another', async () => {
     const dir = await plantedTree({
       [join('mods', 'comment.ts')]: '// MO2 sorts these by date.\nexport const x = 1;\n',
       [join('mods', 'tooltip.ts')]: "export const tooltip = 'The files tools wrote while Mod Organizer ran them.';\n",
       [join('plugins', 'command.ts')]: 'export const run = (mo2: { instance: unknown }) => mo2.instance;\n',
       [join('views', 'mo2Trees.ts')]: 'export const trees = [];\n',
       [join('mods', 'identifier.ts')]: 'export const modorganizerRoot = 1;\n',
+      [join('mods', 'publisher.ts')]: "export const file = 'Wabbajack compiler_settings.json';\n",
       [join('mods', 'test', 'fixture.ts')]: "export const ini = 'ModOrganizer.ini';\n",
       [join(ADAPTER, 'mo2', 'mo2Instance.ts')]: "export const manager = 'MO2';\n",
+      [join(ADAPTER, 'mo2', 'mo2Ignore.ts')]: "export const ignored = 'Wabbajack';\n",
+      [join(ADAPTER, 'wabbajack', 'wabbajackPublisher.ts')]: "export const publisher = 'Wabbajack'; export const root = 'ModOrganizer.ini';\n",
       [ADAPTER_INTERFACE]: '// MO2 is one implementation.\n',
       [join(ADAPTER, 'files.ts')]: "import { x } from './mo2/layout';\nexport const y = x;\n",
     });
@@ -125,8 +139,11 @@ describe('no extension file names MO2 outside its implementation of the Instance
         [join('mods', 'comment.ts')]: ['mo2'],
         [join('mods', 'identifier.ts')]: ['modorganizer'],
         [join('mods', 'tooltip.ts')]: ['\\bMod Organizer\\b'],
+        [join('mods', 'publisher.ts')]: ['wabbajack'],
         [join('plugins', 'command.ts')]: ['mo2'],
         [join('views', 'mo2Trees.ts')]: ['file name'],
+        [join(ADAPTER, 'mo2', 'mo2Ignore.ts')]: ['wabbajack'],
+        [join(ADAPTER, 'wabbajack', 'wabbajackPublisher.ts')]: ['modorganizer'],
         [ADAPTER_INTERFACE]: ['mo2'],
         [join(ADAPTER, 'files.ts')]: ['mo2'],
       });

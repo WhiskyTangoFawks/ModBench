@@ -35,6 +35,8 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     overwriteFiles: [],
     overwriteFolders: [],
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map(), sourceDirs: new Map() },
+    publisherTags: [],
+    publisherConfiguration: { kind: 'none' },
   };
   const value = { ...base, ...overrides };
   const modGroups = groupModOrder(value.mods);

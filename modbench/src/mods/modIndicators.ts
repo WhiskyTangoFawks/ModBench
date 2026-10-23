@@ -18,6 +18,13 @@ export const MOD_INDICATORS = [
 
 type ModIndicator = (typeof MOD_INDICATORS)[number]['id'];
 
+/** The table's Publisher tag row: each publisher tag is an indicator of its own, with the badge its publisher declares,
+ *  under one pair of settings and one colour.
+ *  @public Read by packageJson.test, which holds package.json to it. */
+export const PUBLISHER_TAG_INDICATOR = { id: 'publisherTag', colour: 'modbench.modPublisherTag' } as const;
+
+type IndicatorId = ModIndicator | typeof PUBLISHER_TAG_INDICATOR.id;
+
 type IndicatorsValue = Pick<InstanceValue, 'mods' | 'modGroups' | 'files' | 'filesByMod'>;
 
 function indicatorsOf(value: IndicatorsValue, { name, updateAvailable }: Mod, files: readonly OriginFile[]): ModIndicator[] {
@@ -71,21 +78,30 @@ export const modRowUri = (name: string): vscode.Uri => vscode.Uri.from({ scheme:
 export const separatorRowUri = (name: string): vscode.Uri => vscode.Uri.from({ scheme: SEPARATOR_ROW_SCHEME, path: `/${name}` });
 
 /** @public Read by packageJson.test, which holds package.json to it. */
-export const indicatorSetting = (id: ModIndicator, part: 'badge' | 'colour'): string => `modbench.mods.indicators.${id}.${part}`;
+export const indicatorSetting = (id: IndicatorId, part: 'badge' | 'colour'): string => `modbench.mods.indicators.${id}.${part}`;
 
-type Indicator = (typeof MOD_INDICATORS)[number];
+export const isModRow = (uri: vscode.Uri): boolean => uri.scheme === MOD_ROW_SCHEME;
+
+interface Indicator {
+  readonly id: IndicatorId;
+  readonly name: string;
+  readonly badge: string;
+  readonly colour: string;
+}
 
 const PARTS = ['badge', 'colour'] as const;
 
-class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
+/** One indicator's decoration on each row that carries it, its colour on the rows `coloured` takes. */
+export class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
   private readonly changed = new vscode.EventEmitter<undefined>();
   readonly onDidChangeFileDecorations = this.changed.event;
   private readonly subscription: vscode.Disposable;
 
   constructor(
     private readonly indicator: Indicator,
-    private readonly carried: (uri: vscode.Uri) => readonly ModIndicator[] | undefined,
+    private readonly carried: (uri: vscode.Uri) => boolean,
     private readonly settings: WorkspaceSettings,
+    private readonly coloured: (uri: vscode.Uri) => boolean = () => true,
   ) {
     this.subscription = onSettingChange(settings.onDidChangeConfiguration, PARTS.map((part) => indicatorSetting(indicator.id, part)), () => { this.refresh(); });
   }
@@ -96,9 +112,10 @@ class IndicatorDecorationProvider implements vscode.FileDecorationProvider, vsco
 
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
     const { id, name, badge, colour } = this.indicator;
-    if (!this.carried(uri)?.includes(id)) return undefined;
+    if (!this.carried(uri)) return undefined;
     const configuration = this.settings.getConfiguration();
-    const [badgeOn, colourOn] = PARTS.map((part) => configuration.get(indicatorSetting(id, part)) === true);
+    const badgeOn = configuration.get(indicatorSetting(id, 'badge')) === true;
+    const colourOn = configuration.get(indicatorSetting(id, 'colour')) === true && this.coloured(uri);
     if (!badgeOn && !colourOn) return undefined;
     return { badge: badgeOn ? badge : undefined, color: colourOn ? new vscode.ThemeColor(colour) : undefined, tooltip: name };
   }
@@ -123,7 +140,7 @@ export class ModIndicatorDecorations implements vscode.Disposable {
       const key = uri.toString();
       return this.carriers.mods.get(key) ?? (this.expanded.has(key) ? undefined : this.carriers.separators.get(key));
     };
-    this.providers = MOD_INDICATORS.map((indicator) => new IndicatorDecorationProvider(indicator, carried, settings));
+    this.providers = MOD_INDICATORS.map((indicator) => new IndicatorDecorationProvider(indicator, (uri) => carried(uri)?.includes(indicator.id) === true, settings));
     this.subscription = instance.subscribe((value) => {
       this.carriers = carriersOf(value);
       for (const key of this.expanded) if (!this.carriers.separators.has(key)) this.expanded.delete(key);

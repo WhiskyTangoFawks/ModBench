@@ -15,7 +15,8 @@ import { buildDownloadedFileRows, modsByInstallationFileName, type LocatedDownlo
 import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
   type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type SourceMods, type Subscription,
+  type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
+  type PublisherTag, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
 import { errorMessage } from '../ports/errorMessage';
@@ -25,13 +26,13 @@ import { errorMessage } from '../ports/errorMessage';
 export { sameEntry } from '../instanceAdapter/instanceAdapter';
 export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, UpgradeTier } from './downloadedFileRows';
-export type { DownloadedFileStatus } from '../instanceAdapter/instanceAdapter';
+export type { DownloadedFileStatus, PublisherTag } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
 const SETTLE_MS = 200;
 
-type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning';
+type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration';
 
 type DownloadedFilesResult =
   | { readonly kind: 'listed'; readonly rows: readonly LocatedDownloadedFileRow[] }
@@ -115,6 +116,9 @@ export interface InstanceValue {
   readonly overwriteFolders: readonly OriginFolder[];
   /** The paths this generation's rows name. */
   readonly paths: InstancePaths;
+  /** Each publisher tag the instance's publisher declares: the adapter's answer, before any read too. */
+  readonly publisherTags: readonly PublisherTag[];
+  readonly publisherConfiguration: PublisherConfiguration;
 }
 
 export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void;
@@ -194,7 +198,7 @@ function pathsOf(
   };
 }
 
-const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>, gameFolderSettingId: string): InstanceValue => ({
+const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publisherTags'>, gameFolderSettingId: string): InstanceValue => ({
   mods: [],
   modGroups: { ungrouped: [], groups: [] },
   modFolders: [],
@@ -223,6 +227,8 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey'>, gameFo
   overwriteFiles: [],
   overwriteFolders: [],
   paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map(), sourceDirs: new Map() },
+  publisherTags: adapter.publisherTags,
+  publisherConfiguration: { kind: 'none' },
 });
 
 export class Instance implements Subscription {
@@ -357,6 +363,7 @@ export class Instance implements Subscription {
 
   private tellReading({
     linkNotes, archiveListNotes, orderNotes, sourceMods, modFiles, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes, managerRunning,
+    publisherConfiguration,
   }: InstanceReading): void {
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
     this.tellOnce('notes', notes.map((note) => `[instance] ${note}`), 'info');
@@ -372,6 +379,7 @@ export class Instance implements Subscription {
     const { manager } = this.options.adapter.names;
     this.tellOnce('managerRunning', managerRunning.kind === 'unknown' ? [`[instance] ${cannotTellRunning(manager, managerRunning.reason)}`] : [], 'warn');
     this.tellOnce('gameArchives', dataFolderArchives.kind === 'unreadable' ? [`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`] : [], 'warn');
+    this.tellOnce('publisherConfiguration', publisherConfiguration.kind === 'unreadable' ? [`[instance] No publisher tag shows: ${publisherConfiguration.reason}`] : [], 'warn');
   }
 
   private tellOnce(kind: NoteKind, lines: readonly string[], level: 'info' | 'warn'): void {
@@ -497,6 +505,8 @@ export class Instance implements Subscription {
       overwriteFiles: runtimeOutput.files,
       overwriteFolders: runtimeOutput.folders,
       paths,
+      publisherTags: adapter.publisherTags,
+      publisherConfiguration: reading.publisherConfiguration,
     };
   }
 }

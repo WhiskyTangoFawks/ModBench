@@ -5,10 +5,11 @@ import { firstLines } from '../loadOrderFileCodec/firstLines';
 import { pluginKey, PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
 import { ignoreSkippedLink, type SkippedLink } from './files';
 import {
-  filesWinningFirst, type DataFolderArchives, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder, type InstanceReading,
+  filesWinningFirst, type DataFolderArchives, type DataFolderPlugins, type DownloadedFiles, type EntryRef, type FileOrigin, type GameFolder,
   type ManagerNames, type ManagerRunning, type ModFolders, type ModMeta, type ModlistEntry, type OriginFiles, type PluginEntry, type PluginsProvided, type SourceMods,
 } from './instanceAdapter';
 import { groupModOrder } from './modGroups';
+import type { ManagerReading } from './publisher';
 import { pluginsProvidedOf } from './pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
 
@@ -99,7 +100,7 @@ async function folderMetaOf(
 
 /** The instance whole, every fact against the one read of the settings, so a profile switch
  *  mid-read cannot mix one profile's mod order with another's plugin order. */
-export async function readInstance(source: ReadingSource): Promise<InstanceReading> {
+export async function readInstance(source: ReadingSource): Promise<ManagerReading> {
   const settings = await source.settings();
   const { profile, gameName, gameRelease } = settings;
   const skippedLinks = new Map<string, string>();
