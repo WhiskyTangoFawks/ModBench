@@ -8,7 +8,7 @@ export interface TokenFolders {
 }
 
 /** How a file spells a path: the separator after its root, then between its names. */
-export interface Separator {
+interface Separator {
   readonly first: string;
   readonly rest: string;
 }
