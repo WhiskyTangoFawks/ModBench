@@ -66,12 +66,20 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void TheRecordTypeCounts_MarkOnlyTheSubtreeHoldingTheUnreadableRecord()
     {
-        using var scratch = Scratch.Misshaped();
+        const string pluginName = "PerkBesideNpc.esp";
+        using var sources = new ScratchDirectory("medit-parsefail-source-");
+        var path = Path.Combine(sources.Path, pluginName);
+        var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4);
+        MisshapedPerks.Add(mod, "Unreadable");
+        mod.Npcs.AddNew("Readable");
+        mod.WriteToBinary(path);
+        MisshapedPerks.Misshape(path);
+        using var scratch = new Scratch(path, pluginName);
 
         var counts = scratch.Index.Queries.GetPluginRecordTypes(scratch.Plugin).Value();
 
         Assert.True(counts.Single(t => t.Type == "perk").HasParseFailure);
-        Assert.All(counts.Where(t => t.Type != "perk"), t => Assert.False(t.HasParseFailure));
+        Assert.False(counts.Single(t => t.Type == "npc_").HasParseFailure);
     }
 
     [Fact]
