@@ -92,19 +92,10 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void DiskDerivedState_TheScanWalksMoreThanOneHundredFiles()
-    {
-        var root = ServiceProjects.SolutionDirectory();
-        var walked = Projects.SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p))).Count();
-        Assert.True(walked > 100, $"The mtime scan walked only {walked} files under {string.Join(", ", Projects)}.");
-    }
-
-    [Fact]
     public void DiskDerivedState_TheScanCatchesAPlantedLastWriteTimeRead()
     {
         using var root = new ScratchDirectory("medit-mtime-scan-");
-        Directory.CreateDirectory(Path.Combine(root, "P"));
-        File.WriteAllText(Path.Combine(root, "P", "Planted.cs"), "var t = info.LastWriteTime;");
+        ScratchFiles.Plant(root, "P/Planted.cs", "var t = info.LastWriteTime;");
 
         var offenders = Offenders(root, ["P"], "LastWriteTime", allowedFiles: []);
 
@@ -282,23 +273,21 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void ExistingPluginBinary_TheScanWalksMoreThanOneHundredFiles()
+    public void TheScans_WalkMoreThanOneHundredFiles()
     {
-        var root = ServiceProjects.SolutionDirectory();
-        var walked = Projects.SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p))).Count();
-        Assert.True(walked > 100, $"The plugin-binary-write scan walked only {walked} files under {string.Join(", ", Projects)}.");
+        var walked = ServiceProjects.ProductionFiles(ServiceProjects.SolutionDirectory()).Count;
+        Assert.True(walked > 100, $"The scans walked only {walked} production files.");
     }
 
     [Fact]
     public void ExistingPluginBinary_TheScanCatchesAPlantedBinaryOpenOrWriteOutsideAnAllowedFile()
     {
         using var root = new ScratchDirectory("medit-plugin-binary-scan-");
-        Directory.CreateDirectory(Path.Combine(root, "P"));
-        File.WriteAllText(Path.Combine(root, "P", "WriteToBinary.cs"), "plugin.WriteToBinary(path);");
-        File.WriteAllText(Path.Combine(root, "P", "BeginWrite.cs"), "recompiled.BeginWrite.ToPath(path);");
-        File.WriteAllText(Path.Combine(root, "P", "Import.cs"), "var mod = ModFactory.ImportSetter(path, release);");
-        File.WriteAllText(Path.Combine(root, "P", "Reload.cs"), "var mod = Fallout4Mod.CreateFromBinary(path, release);");
-        File.WriteAllText(Path.Combine(root, "P", "MutagenPluginAdapter.cs"), "plugin.WriteToBinary(ModFactory.X);");
+        ScratchFiles.Plant(root, "P/WriteToBinary.cs", "plugin.WriteToBinary(path);");
+        ScratchFiles.Plant(root, "P/BeginWrite.cs", "recompiled.BeginWrite.ToPath(path);");
+        ScratchFiles.Plant(root, "P/Import.cs", "var mod = ModFactory.ImportSetter(path, release);");
+        ScratchFiles.Plant(root, "P/Reload.cs", "var mod = Fallout4Mod.CreateFromBinary(path, release);");
+        ScratchFiles.Plant(root, "P/MutagenPluginAdapter.cs", "plugin.WriteToBinary(ModFactory.X);");
 
         var offenders = Offenders(root, ["P"], "WriteToBinary(", PluginBinaryWriters)
             .Concat(Offenders(root, ["P"], "BeginWrite", PluginBinaryWriters))
@@ -368,11 +357,10 @@ public sealed class ArchitectureTests
     public void Offenders_NamesTheFileCarryingTheNeedle_AndSkipsAllowedFilesAndBuildOutput()
     {
         using var root = new ScratchDirectory("medit-arch-");
-        Directory.CreateDirectory(Path.Combine(root, "P", "obj"));
-        File.WriteAllText(Path.Combine(root, "P", "Bad.cs"), "var t = info.LastWriteTime;");
-        File.WriteAllText(Path.Combine(root, "P", "Allowed.cs"), "var t = info.LastWriteTime;");
-        File.WriteAllText(Path.Combine(root, "P", "obj", "Generated.cs"), "var t = info.LastWriteTime;");
-        File.WriteAllText(Path.Combine(root, "P", "Clean.cs"), "var t = 1;");
+        ScratchFiles.Plant(root, "P/Bad.cs", "var t = info.LastWriteTime;");
+        ScratchFiles.Plant(root, "P/Allowed.cs", "var t = info.LastWriteTime;");
+        ScratchFiles.Plant(root, "P/obj/Generated.cs", "var t = info.LastWriteTime;");
+        ScratchFiles.Plant(root, "P/Clean.cs", "var t = 1;");
 
         var offenders = Offenders(root, ["P"], "LastWriteTime", allowedFiles: ["Allowed.cs"]);
 
@@ -383,10 +371,9 @@ public sealed class ArchitectureTests
     public void Offenders_NamesOnlyTheFileCarryingEveryNeedle()
     {
         using var root = new ScratchDirectory("medit-arch-");
-        Directory.CreateDirectory(Path.Combine(root, "P"));
-        File.WriteAllText(Path.Combine(root, "P", "Both.cs"), "var h = new Holder(); renamed.Apply(x);");
-        File.WriteAllText(Path.Combine(root, "P", "OnlyType.cs"), "var h = new Holder();");
-        File.WriteAllText(Path.Combine(root, "P", "OnlyCall.cs"), "renamed.Apply(x);");
+        ScratchFiles.Plant(root, "P/Both.cs", "var h = new Holder(); renamed.Apply(x);");
+        ScratchFiles.Plant(root, "P/OnlyType.cs", "var h = new Holder();");
+        ScratchFiles.Plant(root, "P/OnlyCall.cs", "renamed.Apply(x);");
 
         var offenders = Offenders(root, ["P"], ["Holder", ".Apply("], allowedFiles: []);
 

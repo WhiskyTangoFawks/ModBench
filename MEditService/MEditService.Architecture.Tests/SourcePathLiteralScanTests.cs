@@ -32,19 +32,14 @@ public sealed class SourcePathLiteralScanTests
     public void TheScan_PassesTheRepositorysOwnFiles_AndNamesALiteralPlantedElsewhere()
     {
         using var root = new ScratchDirectory("medit-source-path-scan-");
-        Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceAdapter", "obj"));
-        File.WriteAllText(
-            Path.Combine(root, "MEditService.SourceAdapter", "SourceRepositoryLayout.cs"),
+        ScratchFiles.Plant(root, "MEditService.SourceAdapter/SourceRepositoryLayout.cs",
             "internal const string RootFolderName = \"plugin-source\";\n"
             + "internal const string RecordDataFileName = \"RecordData.json\";\n");
-        Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
-        File.WriteAllText(
-            Path.Combine(root, "Layer", "EditService.cs"),
+        ScratchFiles.Plant(root, "Layer/EditService.cs",
             "var tree = Path.Combine(modFolder, \"plugin-source\", plugin);\n"
             + "var glob = Directory.EnumerateFiles(tree, \"*.json\");\n");
-        File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "var root = \"plugin-source\";");
-        File.WriteAllText(
-            Path.Combine(root, "Layer", "SourceRepositoryRival.cs"), "internal const string Root = \"plugin-source\";");
+        ScratchFiles.Plant(root, "Layer/obj/Generated.cs", "var root = \"plugin-source\";");
+        ScratchFiles.Plant(root, "Layer/SourceRepositoryRival.cs", "internal const string Root = \"plugin-source\";");
 
         var counts = Counts(root, ["MEditService.SourceAdapter", "Layer"]);
 
