@@ -63,7 +63,7 @@ describe('modlistRepositoryCommands git init', () => {
 
     expect([await commands.gitInit(), adapter.calls.map(({ verb }) => verb)]).toEqual([
       { applied: false, refusal: 'could not lock config file .git/config' },
-      ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'removeRepository', 'removeIgnoreList'],
+      ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'takeBackPushRefusal', 'removeRepository', 'takeBackIgnoreList'],
     ]);
   });
 
@@ -89,11 +89,11 @@ describe('modlistRepositoryCommands git init', () => {
       ]);
     });
 
-    it('takes back the ignore list it added, and not the repository, when the path tokens could not be written', async () => {
+    it('takes back the push check and the ignore list it added, and not the repository, when the path tokens could not be written', async () => {
       const { commands, adapter, repositories } = commandsOver({ repositoryOnDisk: true, refusals: refusing('writePathTokens', 'could not lock config file') });
 
       expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
-        { applied: false, refusal: 'could not lock config file' }, [], ['writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'removeIgnoreList'],
+        { applied: false, refusal: 'could not lock config file' }, [], ['writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'takeBackPushRefusal', 'takeBackIgnoreList'],
       ]);
     });
   });
@@ -117,7 +117,7 @@ describe('modlistRepositoryCommands git init', () => {
 
     expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
       { applied: false, refusal: '/instance/.git/hooks/pre-push already exists' },
-      ['made'], ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'removeRepository', 'removeIgnoreList'],
+      ['made'], ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'removeRepository', 'takeBackIgnoreList'],
     ]);
   });
 
@@ -141,12 +141,12 @@ describe('modlistRepositoryCommands git init', () => {
     const result = await commands.gitInit();
 
     expect([result, adapter.calls]).toEqual([
-      { applied: false, refusal: 'git is not available' }, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'removeIgnoreList' }],
+      { applied: false, refusal: 'git is not available' }, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'takeBackIgnoreList' }],
     ]);
   });
 
   it('names the ignore list that remains when it could not be taken back', async () => {
-    const adapter = fakeInstanceAdapter(readingFixture(), { refusals: refusing('removeIgnoreList', 'read-only folder') });
+    const adapter = fakeInstanceAdapter(readingFixture(), { refusals: refusing('takeBackIgnoreList', 'read-only folder') });
     const commands = modlistRepositoryCommands({
       client: new InMemoryMEditClient(), adapter: adapter.adapter, instanceRoot: '/instance',
       hostGit: hostGitFailing('git is not available'), trash: () => Promise.resolve(),

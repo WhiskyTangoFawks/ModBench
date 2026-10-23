@@ -156,6 +156,9 @@ export const buildConfigurationFile = (sourceFolder: string): string => join(sou
 /** A repository appearing at, or vanishing from, the instance root. */
 export const REPOSITORY_WATCH_GLOB = GIT_DIR;
 
+/** The repository's config and pre-push hook, where git init's path filter and push check are written. */
+export const REPOSITORY_SET_UP_WATCH_GLOB = `${GIT_DIR}/{config,hooks/pre-push}`;
+
 // Watch patterns, POSIX-separated and relative to the instance root: a `RelativePattern` takes a
 // glob, never a platform path, so these are built as text rather than with `join`.
 export const MODS_GLOB = `${MODS}/**`;

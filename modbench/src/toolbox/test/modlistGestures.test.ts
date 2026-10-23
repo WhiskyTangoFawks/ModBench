@@ -56,36 +56,22 @@ describe('Git init', () => {
     expect([reporter.reports, reporter.landings]).toEqual([[], []]);
   });
 
-  it('warns, naming why, when a path token stays in the working tree', async () => {
-    gitInit.mockResolvedValueOnce({ applied: true, pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' });
+  it.each([
+    ['a path token stays in the working tree', { pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' },
+      "this machine's paths are not in place of every path token: ModOrganizer.ini still holds a path token"],
+    ['an adopted repository keeps another pre-push hook', { pushRefusalNotWritten: '.git/hooks/pre-push already exists' },
+      "a push of a pin its source mod's remote lacks is not refused: .git/hooks/pre-push already exists"],
+  ])('warns the user, and answers an agent call, naming why %s', async (_case, result, detail) => {
+    gitInit.mockResolvedValue({ applied: true, ...result });
     const { reporter, run } = register();
 
     await run();
+    const answer = await run(new AgentCall([], {}));
 
-    expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Git init:', detail: "this machine's paths are not in place of every path token: ModOrganizer.ini still holds a path token",
-    }]);
-  });
-
-  it('warns, naming why, when an adopted repository keeps another pre-push hook', async () => {
-    gitInit.mockResolvedValueOnce({ applied: true, pushRefusalNotWritten: '.git/hooks/pre-push already exists' });
-    const { reporter, run } = register();
-
-    await run();
-
-    expect(reporter.reports).toEqual([{
-      severity: 'warning', message: 'Git init:', detail: "a push of a pin its source mod's remote lacks is not refused: .git/hooks/pre-push already exists",
-    }]);
-  });
-
-  it('answers an agent call with why a path token stays in the working tree', async () => {
-    gitInit.mockResolvedValueOnce({ applied: true, pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' });
-    const { run } = register();
-
-    expect(await run(new AgentCall([], {}))).toEqual({
-      applied: true, outcome: { landed: [], refused: [] },
-      partial: [{ message: 'Git init:', detail: "this machine's paths are not in place of every path token: ModOrganizer.ini still holds a path token", severity: 'warning' }],
-    });
+    expect([reporter.reports, answer]).toEqual([
+      [{ severity: 'warning', message: 'Git init:', detail }],
+      { applied: true, outcome: { landed: [], refused: [] }, partial: [{ message: 'Git init:', detail, severity: 'warning' }] },
+    ]);
   });
 
   it('reports a refusal at error, naming why', async () => {

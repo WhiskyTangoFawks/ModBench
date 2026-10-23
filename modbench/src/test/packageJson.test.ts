@@ -1003,10 +1003,8 @@ describe('package.json build\'s palette entry', () => {
 });
 
 describe('package.json git init, update manifest and restore from manifest follow modlist-repository.md, Menus and keys', () => {
-  const HAS_REPOSITORY = 'modbench.modlist.hasRepository';
-  const SET_UP = 'modbench.modlist.repositorySetUp';
-  const hasRepository = { ...inInstance, [HAS_REPOSITORY]: true, [SET_UP]: true };
-  const unsetUpRepository = { ...inInstance, [HAS_REPOSITORY]: true, [SET_UP]: false };
+  const hasRepository = { ...inInstance, [HAS_REPOSITORY_KEY]: true, [REPOSITORY_SET_UP_KEY]: true };
+  const unsetUpRepository = { ...inInstance, [HAS_REPOSITORY_KEY]: true, [REPOSITORY_SET_UP_KEY]: false };
   const onRow = (view: string, viewItem: string, facts: Context): [string, string][] =>
     placed(present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
       .filter((e) => holds(e.when, { view, viewItem, ...facts }) && [UPDATE_MANIFEST, RESTORE_FROM_MANIFEST, GIT_INIT].includes(e.command)));
@@ -1055,7 +1053,7 @@ describe('package.json git init, update manifest and restore from manifest follo
   it('offers git init in the palette until git init has set the repository up, and update manifest and restore from manifest once the instance holds one', () => {
     expect([
       paletteOffers(GIT_INIT, inInstance), paletteOffers(GIT_INIT, hasRepository), paletteOffers(GIT_INIT, unsetUpRepository),
-      paletteOffers(UPDATE_MANIFEST, inInstance), paletteOffers(UPDATE_MANIFEST, hasRepository), paletteOffers(UPDATE_MANIFEST, { [HAS_REPOSITORY]: true }),
+      paletteOffers(UPDATE_MANIFEST, inInstance), paletteOffers(UPDATE_MANIFEST, hasRepository), paletteOffers(UPDATE_MANIFEST, { [HAS_REPOSITORY_KEY]: true }),
       paletteOffers(RESTORE_FROM_MANIFEST, inInstance), paletteOffers(RESTORE_FROM_MANIFEST, hasRepository),
     ]).toEqual([true, false, true, false, true, false, false, true]);
   });

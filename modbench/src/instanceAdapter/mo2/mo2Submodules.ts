@@ -216,10 +216,15 @@ export function mo2Submodules({ instanceRoot }: Mo2Context): Mo2Submodules {
       const hooks = await hooksFolder(instanceRoot);
       await mkdir(hooks, { recursive: true });
       const hook = join(hooks, PRE_PUSH_HOOK_NAME);
+      let written = true;
       await writeFile(hook, PRE_PUSH_HOOK, { mode: 0o755, flag: 'wx' }).catch(async (err: unknown) => {
         if (errnoCode(err) !== 'EEXIST') throw err;
         if (!(await isOwnHook(hook))) throw hookExists(hook);
+        written = false;
       });
+      return async () => {
+        if (written && await isOwnHook(hook)) await remove(hook);
+      };
     },
   };
 }

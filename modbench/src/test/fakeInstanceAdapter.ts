@@ -72,7 +72,8 @@ export type AdapterCall =
   | { readonly verb: 'writeNewestVersion'; readonly mod: string; readonly version: string }
   | { readonly verb: 'writeModMetadata'; readonly mod: string; readonly metadata: ModMetadata }
   | { readonly verb: 'writeIgnoreList' }
-  | { readonly verb: 'removeIgnoreList' }
+  | { readonly verb: 'takeBackIgnoreList' }
+  | { readonly verb: 'takeBackPushRefusal' }
   | { readonly verb: 'removeRepository' }
   | { readonly verb: 'checkPushRefusalFree' }
   | { readonly verb: 'writeSubmodules' }
@@ -301,14 +302,14 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     writeModMetadata: (mod, metadata) => record({ verb: 'writeModMetadata', mod, metadata }, undefined),
     metadataFilesInModFolder: ['meta.ini'],
     statCacheFolder: '/instance/stat-cache',
-    writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, () => record({ verb: 'removeIgnoreList' }, undefined)),
+    writeIgnoreList: () => record({ verb: 'writeIgnoreList' }, () => record({ verb: 'takeBackIgnoreList' }, undefined)),
     repositoryOnDisk: () => Promise.resolve(answers.repositoryOnDisk ?? false),
     sourceHost: (folder) => Promise.resolve(answers.hosts?.get(folder) ?? { kind: 'read', answer: { kind: 'noRemote' } }),
     submodule: (name) => Promise.resolve(answers.pins?.get(name) ?? { lacks: `no answer fixed for ${name}` }),
     removeRepository: () => record({ verb: 'removeRepository' }, undefined),
     checkPushRefusalFree: () => record({ verb: 'checkPushRefusalFree' }, undefined),
     writeSubmodules: () => record({ verb: 'writeSubmodules' }, answers.submodules ?? { notes: [], other: [] }),
-    refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, undefined),
+    refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, () => record({ verb: 'takeBackPushRefusal' }, undefined)),
     writePathTokens: () => record({ verb: 'writePathTokens' }, answers.pathTokenLeft),
     pathsOutsideFolders: () => unreadable('pathsOutsideFolders', answers.pathsOutsideFolders ?? []),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),

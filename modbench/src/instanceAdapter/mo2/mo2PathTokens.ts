@@ -5,7 +5,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { errnoCode } from '../errno';
-import { exists, get, isRepository, makeTempDir, putIfChanged, remove } from '../files';
+import { exists, get, isRepository, makeTempDir, putIfChanged, remove, undoAll, type Undo } from '../files';
 import { git, gitFed, gitWritingInto } from '../git';
 import type { GameFolder, InstanceAdapter } from '../instanceAdapter';
 import {
@@ -51,14 +51,19 @@ const ATTRIBUTES = [[SETTINGS_FILE_PATTERN, SETTINGS_DRIVER], [PROFILE_INIS_PATT
   .map(([pattern, driver]) => `${pattern} filter=${driver} diff=${driver}`);
 
 // The attributes live in the git directory, as the filter's config does, so the repository holds no file of Modbench's.
-async function attributesWritten(instanceRoot: string): Promise<void> {
+// Answers the call that takes back the lines it added.
+async function attributesWritten(instanceRoot: string): Promise<Undo> {
   const file = resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'info/attributes')).trim());
   await mkdir(dirname(file), { recursive: true });
+  let added: string[] = [];
   await putIfChanged(file, (before) => {
     const held = new Set(before.split(/\r?\n/));
-    const missing = ATTRIBUTES.filter((line) => !held.has(line));
-    return missing.length === 0 ? before : `${before}${before === '' || before.endsWith('\n') ? '' : '\n'}${missing.join('\n')}\n`;
+    added = ATTRIBUTES.filter((line) => !held.has(line));
+    return added.length === 0 ? before : `${before}${before === '' || before.endsWith('\n') ? '' : '\n'}${added.join('\n')}\n`;
   }, { ifMissing: '' });
+  return async () => {
+    await putIfChanged(file, (text) => text.split('\n').filter((line) => !added.includes(line.replace(/\r$/, ''))).join('\n'));
+  };
 }
 
 interface HeldFile { readonly file: string; readonly covered: boolean }
@@ -152,26 +157,49 @@ export const pathTokensWritten = (instanceRoot: string): Promise<boolean> =>
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
 export function mo2PathTokens({ instanceRoot }: Mo2Context, gameFolder: () => Promise<GameFolder>): Mo2PathTokens {
-  const configWritten = async (game: string | undefined, accounts: TokenProgram): Promise<void> => {
+  const configOf = (game: string | undefined, accounts: TokenProgram): Readonly<Record<string, string>> => {
     const folders = folderTokens({ instance: instanceRoot, game }, process.platform, SEPARATORS, VALUE_ENDS);
-    const config = { ...tokenFilterConfig(FOLDERS_DRIVER, folders), ...tokenFilterConfig(SETTINGS_DRIVER, folders, accounts) };
-    for (const [key, value] of Object.entries(config)) await git(instanceRoot, 'config', key, value);
+    return { ...tokenFilterConfig(FOLDERS_DRIVER, folders), ...tokenFilterConfig(SETTINGS_DRIVER, folders, accounts) };
   };
+  const configWritten = async (game: string | undefined, accounts: TokenProgram): Promise<void> => {
+    for (const [key, value] of Object.entries(configOf(game, accounts))) await git(instanceRoot, 'config', key, value);
+  };
+  // An unset key is exit code 5.
+  const configTakenBack: Undo = async () => {
+    for (const key of Object.keys(configOf(undefined, accountTokens('')))) {
+      await git(instanceRoot, 'config', '--unset-all', key).catch((err: unknown) => {
+        if (typeof err !== 'object' || err === null || !('code' in err) || err.code !== 5) throw err;
+      });
+    }
+  };
+
+  const written = async (takeBack: Undo[]): Promise<string | undefined> => {
+    takeBack.push(await attributesWritten(instanceRoot));
+    const covered = (await filesGitHolds(instanceRoot)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
+    const accounts = accountTokens(await get(settingsFile(instanceRoot), ''));
+    takeBack.push(configTakenBack);
+    await configWritten(undefined, accounts);
+    await withScratch((scratch) => smudged(scratch, instanceRoot, covered));
+    const game = await gameFolder();
+    await configWritten(foundRoot(game), accounts);
+    const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, covered));
+    await statsForgotten(instanceRoot, covered);
+    if (holding.length === 0) return undefined;
+    const why = game.kind === 'found' ? `${instanceRoot} or ${game.root} is on no drive or network share` : 'the game folder was not found';
+    return `${holding.join(', ')} still hold${holding.length === 1 ? 's' : ''} a path token in place of this machine's path, because ${why}`;
+  };
+
   return {
+    // A repository that held the filter before keeps it: only a first write is taken back when it fails.
     async writePathTokens() {
       if (!(await isRepository(instanceRoot))) return undefined;
-      await attributesWritten(instanceRoot);
-      const covered = (await filesGitHolds(instanceRoot)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
-      const accounts = accountTokens(await get(settingsFile(instanceRoot), ''));
-      await configWritten(undefined, accounts);
-      await withScratch((scratch) => smudged(scratch, instanceRoot, covered));
-      const game = await gameFolder();
-      await configWritten(foundRoot(game), accounts);
-      const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, covered));
-      await statsForgotten(instanceRoot, covered);
-      if (holding.length === 0) return undefined;
-      const why = game.kind === 'found' ? `${instanceRoot} or ${game.root} is on no drive or network share` : 'the game folder was not found';
-      return `${holding.join(', ')} still hold${holding.length === 1 ? 's' : ''} a path token in place of this machine's path, because ${why}`;
+      const held = await pathTokensWritten(instanceRoot);
+      const takeBack: Undo[] = [];
+      try {
+        return await written(takeBack);
+      } catch (err) {
+        throw held ? err : await undoAll(takeBack.reverse(), err);
+      }
     },
 
     async pathsOutsideFolders() {

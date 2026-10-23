@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { heldFolderWatchFor, type HeldFolderWatch } from '../heldFolders';
 import type { Subscription } from '../instanceAdapter';
 import {
-  MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, REPOSITORY_WATCH_GLOB, SETTINGS_WATCH_GLOB, SOURCE_GLOB,
+  MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, REPOSITORY_SET_UP_WATCH_GLOB, REPOSITORY_WATCH_GLOB, SETTINGS_WATCH_GLOB, SOURCE_GLOB,
 } from './layout';
 
 type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList' | 'defaultIni' | 'myGamesInis' | 'gameFolderArchives';
@@ -82,7 +82,7 @@ export function mo2Watch(instanceRoot: string, gameFolderChanged: (listener: () 
   const armed = (): boolean => listeners.size > 0;
 
   const arm = (): void => {
-    fixed = [MODS_GLOB, OVERWRITE_GLOB, SOURCE_GLOB, MODLIST_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB, REPOSITORY_WATCH_GLOB]
+    fixed = [MODS_GLOB, OVERWRITE_GLOB, SOURCE_GLOB, MODLIST_GLOB, PLUGINS_GLOB, PROFILE_INIS_GLOB, SETTINGS_WATCH_GLOB, REPOSITORY_WATCH_GLOB, REPOSITORY_SET_UP_WATCH_GLOB]
       .map((glob) => watch(instanceRoot, glob));
     fixed.push(gameFolderChanged(changed));
     for (const folder of followed.values()) folder.watch = watch(folder.base, folder.glob);

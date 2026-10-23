@@ -356,7 +356,9 @@ async function restoreFolders(
 }
 
 // A failed init leaves nothing behind: what it wrote goes, and what stays is named.
-async function refusalTakenBack(failure: unknown, undone: readonly { what: string; undo: () => Promise<void> }[]): Promise<string> {
+interface TakenBack { readonly what: string; readonly undo: () => Promise<void> }
+
+async function refusalTakenBack(failure: unknown, undone: readonly TakenBack[]): Promise<string> {
   let refusal = errorMessage(failure);
   for (const { what, undo } of undone) {
     try {
@@ -397,8 +399,6 @@ async function pathsReported(adapter: Adapter): Promise<readonly string[]> {
  *  own pre-push hook was left in place. */
 export type GitInitResult = CommandResult<{ pathTokensNotWritten?: string; pushRefusalNotWritten?: string }>;
 
-type TakenBack = Parameters<typeof refusalTakenBack>[1][number];
-
 async function gitInit({ adapter, instanceRoot, hostGit }: ModlistRepositoryCommandsDeps): Promise<GitInitResult> {
   const adopting = await adapter.repositoryOnDisk();
   let takenBack: TakenBack[] = [];
@@ -417,10 +417,14 @@ async function gitInit({ adapter, instanceRoot, hostGit }: ModlistRepositoryComm
     takenBack = [{ what: 'the repository it made', undo: () => adapter.removeRepository() }, ...takenBack];
   }
   let pushRefusalNotWritten: string | undefined;
+  try {
+    takenBack = [{ what: 'the push check it wrote', undo: await adapter.refuseUnpublishedPins() }, ...takenBack];
+  } catch (err) {
+    if (!adopting) return { applied: false, refusal: await refusalTakenBack(err, takenBack) };
+    pushRefusalNotWritten = errorMessage(err);
+  }
   let pathTokensNotWritten: string | undefined;
   try {
-    if (adopting) pushRefusalNotWritten = await pushRefusalWrittenOrWhy(adapter);
-    else await adapter.refuseUnpublishedPins();
     pathTokensNotWritten = await adapter.writePathTokens();
   } catch (err) {
     return { applied: false, refusal: await refusalTakenBack(err, takenBack) };

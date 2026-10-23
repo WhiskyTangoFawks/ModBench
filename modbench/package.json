@@ -935,7 +935,7 @@
         },
         {
           "command": "modbench.modlist.gitInit",
-          "when": "modbench.folder == instance && (!modbench.modlist.hasRepository || !modbench.modlist.repositorySetUp)"
+          "when": "modbench.folder == instance && !modbench.modlist.repositorySetUp"
         },
         {
           "command": "modbench.mod.updateManifest",
@@ -1257,7 +1257,7 @@
         },
         {
           "command": "modbench.modlist.gitInit",
-          "when": "view == modbench.toolbox && viewItem == modlist && (!modbench.modlist.hasRepository || !modbench.modlist.repositorySetUp)",
+          "when": "view == modbench.toolbox && viewItem == modlist && !modbench.modlist.repositorySetUp",
           "group": "modbench@1"
         },
         {

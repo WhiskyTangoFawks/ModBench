@@ -544,11 +544,11 @@ export interface InstanceAdapter {
   /** Rejects, naming it, when `core.hooksPath` points outside the git directory, or a pre-push hook is where
    *  `refuseUnpublishedPins` would write one. */
   checkPushRefusalFree(): Promise<void>;
-  /** Makes the instance repository refuse a pushed pin with no checkout, or whose URL in the pushed `.gitmodules` is
-   *  missing, unreachable or lacks it. Rejects, writing nothing, when another pre-push hook is there. */
-  refuseUnpublishedPins(): Promise<void>;
+  /** Makes the repository refuse a pushed pin its source mod's remote lacks. Rejects when another pre-push hook is
+   *  there. Answers the call that removes the hook, if this call wrote it. */
+  refuseUnpublishedPins(): Promise<() => Promise<void>>;
   /** Makes git hold each folder's path by a path token, and the working tree this machine's paths. Answers why a path
-   *  token stays in the working tree. Writes nothing without a repository. */
+   *  token stays in the working tree. Writes nothing without a repository. A failed first write is undone. */
   writePathTokens(): Promise<string | undefined>;
   /** Each path no path token names in a file the instance repository holds or would commit. */
   pathsOutsideFolders(): Promise<readonly PathInFile[]>;
