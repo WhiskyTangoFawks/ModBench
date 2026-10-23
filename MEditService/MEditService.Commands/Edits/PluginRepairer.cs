@@ -25,6 +25,6 @@ internal sealed class PluginRepairer(IPluginAdapter adapter, PluginDecompiler de
         if (!adapter.WriteRepaired(plugin.Path, previewedHash, chosen, scratch.PluginPath, release).Holds(out var repaired, out var refused)
             || !adapter.VerifyRepaired(plugin.Path, previewedHash, chosen, repaired, release).Holds(out _, out refused))
             return refused;
-        return await decompiler.DecompileAsync(loadOrder, plugin with { Path = repaired }, modFolder, onParsed: () => { }, cancel);
+        return await decompiler.DecompileAsync(loadOrder, plugin with { Path = repaired }, modFolder, onParsed: () => { }, cancel, namesRepair: false);
     }
 }

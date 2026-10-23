@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter.Repair;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -44,8 +45,24 @@ internal static class PluginTrees
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             PluginFailure.ThrowIfNotTheFilesAnswer(ex, new PluginRecordBytes(modPath, loadOrder));
-            return PluginFailure.Of(ex);
+            var failure = PluginFailure.Of(ex);
+            return failure is PluginFailure.Unparsed unparsed
+                ? (PluginFailure)unparsed.ScannedFor(failing => MalformationsAt(failing, modPath, loadOrder))
+                : failure;
         }
+    }
+
+    // The failing record's diagnoses, matched as the loss branch of CompareBytesAsync matches its own.
+    private static IReadOnlyList<RepairPreview> MalformationsAt(PluginDiagnosis failing, ModPath modPath, LoadOrderSnapshot loadOrder)
+    {
+        var masters = PluginBinaryWalk.MastersOf(modPath, loadOrder);
+        bool Names(Malformations.Found found)
+        {
+            var formKey = masters.GetFormKey(found.Record.FormID, reference: false).ToString();
+            return failing.Anchor is { } anchor && (anchor.EndsWith($" {formKey}", StringComparison.Ordinal) || anchor.Contains($" {formKey} ", StringComparison.Ordinal));
+        }
+
+        return [.. Malformations.In(File.ReadAllBytes(modPath.Path), loadOrder.GameRelease).Where(Names).Select(found => found.Preview)];
     }
 
     /// <summary>One plugin's complete tree, ready to commit — the one implementation of the door's

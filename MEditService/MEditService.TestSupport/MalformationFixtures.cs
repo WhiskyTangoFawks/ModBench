@@ -38,11 +38,34 @@ public static class MalformationFixtures
             var region = mod.Regions.AddNew("HarborRegion");
             region.Map = new RegionMap { Name = "Harbor" };
             return Malformed(nameof(ShortFixedSizeSubrecord), mod, "REGN", region,
-                subrecords => subrecords.Select(s => s.Signature == "RDAT" ? (s.Signature, s.Payload[..6]) : s),
+                ShortenRdat,
                 "fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8",
                 "pads RDAT from 6 to 8 bytes with zeros");
         }
     }
+
+    /// <summary>A plugin Mutagen fails to read at its RACE and reads with loss at its REGN, each malformed
+    /// and repairable.</summary>
+    public static GeneratedPlugin ShortRegionBesideAWrongCountRace
+    {
+        get
+        {
+            var mod = NewMod();
+            var region = mod.Regions.AddNew("HarborRegion");
+            region.Map = new RegionMap { Name = "Harbor" };
+            var race = mod.Races.AddNew("HarborRace");
+            using var stream = new MemoryStream();
+            mod.WriteToBinary(stream);
+            var shortened = RawPlugin.EditRecord(stream.ToArray(), region.FormKey.ID, ShortenRdat);
+            return new GeneratedPlugin(FileName, RawPlugin.EditRecord(shortened, race.FormKey.ID, DropLastName));
+        }
+    }
+
+    private static IEnumerable<(string Signature, byte[] Payload)> ShortenRdat(List<(string Signature, byte[] Payload)> subrecords) =>
+        subrecords.Select(s => s.Signature == "RDAT" ? (s.Signature, s.Payload[..6]) : s);
+
+    private static IEnumerable<(string Signature, byte[] Payload)> DropLastName(List<(string Signature, byte[] Payload)> subrecords) =>
+        subrecords.Where((s, i) => i != subrecords.FindLastIndex(n => n.Signature == "NAME"));
 
     private static MalformationFixture ShortFixedSizeSubrecordOfAPerk
     {
@@ -65,7 +88,7 @@ public static class MalformationFixtures
             var mod = NewMod();
             var race = mod.Races.AddNew("HarborRace");
             return Malformed(nameof(WrongFixedCountList), mod, "RACE", race,
-                subrecords => subrecords.Where((s, i) => i != subrecords.FindLastIndex(n => n.Signature == "NAME")),
+                DropLastName,
                 "fixed-count-list-wrong-count, repairable (lossless): NAME appears 31 times; the Creation Kit always writes 32",
                 "inserts 1 zeroed NAME of 1 byte before RBPC");
         }

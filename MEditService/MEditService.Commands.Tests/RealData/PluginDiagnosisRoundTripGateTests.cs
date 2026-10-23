@@ -9,7 +9,7 @@ namespace MEditService.Commands.Tests.RealData;
 public sealed class PluginDiagnosisRoundTripGateTests
 {
     [Fact]
-    public async Task DecompileAndCommit_OfAMisshapedPerkPlugin_NamesThePerkRecordAsMalformedAndTheGestureThatClearsIt()
+    public async Task DecompileAndCommit_OfAMisshapedPerkPlugin_NamesThePerkRecordAsMalformedAndNoGesture()
     {
         using var scratch = new RealFixtureScratch(MisshapedPerkPlugin.Plugin);
 
@@ -20,7 +20,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
         Assert.Contains(MisshapedPerkPlugin.Anchor, result.Message);
         Assert.Contains("malformed", result.Message);
-        Assert.Contains("Decompile and repair", result.Message);
+        Assert.DoesNotContain("Decompile and repair", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.False(TestAdapters.Source().IsSourceMod(scratch.ModFolder));
     }
 
@@ -40,7 +40,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task DecompileAndCommit_OfAMismatchedFnamPlugin_NamesTheUpstreamMutagenIssueInstead()
+    public async Task DecompileAndCommit_OfAMismatchedFnamPlugin_SaysMutagenMishandlesItAndNamesNoGesture()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
 
@@ -51,9 +51,48 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
         Assert.Contains("blocked upstream: Mutagen #687", result.Message);
         Assert.Contains("Mutagen mishandles", result.Message);
-        Assert.DoesNotContain("ecompile and repair", result.Message);
-        Assert.DoesNotContain("malformed", result.Message);
+        Assert.DoesNotContain("Decompile and repair", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("malformed", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain($"— {PluginDiagnosis.UnknownClass}:", result.Message);
+    }
+
+    public static TheoryData<MalformationFixture> Malformations => [.. MalformationFixtures.All];
+
+    [Theory]
+    [MemberData(nameof(Malformations))]
+    public async Task DecompileAndCommit_OfAMalformedPlugin_NamesTheGestureOnlyWhenARepairAnswersIt(MalformationFixture fixture)
+    {
+        using var scratch = new RealFixtureScratch(fixture.Malformed);
+
+        var result = await scratch.DecompileAndCommitAsync();
+
+        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
+        Assert.Contains("malformed plugin", result.Message, StringComparison.Ordinal);
+        Assert.Contains(fixture.Diagnosis, result.Message, StringComparison.Ordinal);
+        Assert.Equal(fixture.Change is not null, result.Message.Contains("Decompile and repair", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DecompileAndCommit_WhenMutagenFailsAtOneRecord_NamesThatRecordNotAnotherMalformedOne()
+    {
+        using var scratch = new RealFixtureScratch(MalformationFixtures.ShortRegionBesideAWrongCountRace);
+
+        var result = await scratch.DecompileAndCommitAsync();
+
+        Assert.Contains("HarborRace", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("HarborRegion", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DecompileAndCommit_OfAPluginWithTrailingJunkTheMalformationScanCannotWalk_SaysSoAndDoesNotCallThePluginCorrect()
+    {
+        using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
+        File.AppendAllText(Path.Combine(scratch.ModFolder, MismatchedFnamPlugin.Plugin.FileName), "junk");
+
+        var result = await scratch.DecompileAndCommitAsync();
+
+        Assert.Contains("could not be checked for malformations", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("correct plugin", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class RealFixtureScratch : IDisposable

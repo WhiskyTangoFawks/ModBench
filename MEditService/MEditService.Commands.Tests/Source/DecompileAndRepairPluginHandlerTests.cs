@@ -2,6 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.PluginAdapter.Repair;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -312,6 +313,28 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     private static string[] Subjects(string mod, int count) => Git(mod, "log", $"-{count}", "--format=%s").Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
     private static string Git(string mod, params string[] args) => GitProbe.Run(Path.Combine(mod, ".git"), mod, args);
+
+    [Fact]
+    public async Task DecompileAndRepair_WhoseRepairedPluginStillFailsAtAnUnchosenRecord_RefusesWithoutNamingItself()
+    {
+        var plugin = AddToSourceMod(MalformationFixtures.ShortRegionBesideAWrongCountRace);
+        var previewed = await Previewed(plugin);
+
+        var refused = Assert.Single((await Repair([previewed], adapter: new PreviewingOnlyTheRegion(TestAdapters.Mutagen()))).Refused);
+
+        Assert.Equal(DecompileAndRepairRefusal.RoundTripFailed, refused.Refusal);
+        Assert.Contains("HarborRace", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Decompile and repair", refused.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class PreviewingOnlyTheRegion(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
+    {
+        public override Answer<RepairPreviews, PluginFailure> RepairsOf(string pluginPath, GameRelease gameRelease)
+        {
+            var previews = base.RepairsOf(pluginPath, gameRelease).Answered();
+            return previews with { Diagnoses = [.. previews.Diagnoses.Where(preview => preview.Diagnosis.Anchor?.StartsWith("REGN", StringComparison.Ordinal) == true)] };
+        }
+    }
 
     private sealed class RepairWrittenWithAnUnplannedRecord(IPluginAdapter inner) : DelegatingPluginAdapter(inner)
     {
