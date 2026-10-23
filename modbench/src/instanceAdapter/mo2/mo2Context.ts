@@ -1,6 +1,8 @@
 // What every part of MO2's implementation shares: the instance root, the two resolvers over one
 // read of ModOrganizer.ini, the watch, and the reads and name rules more than one part uses.
 
+import { gameReleaseForGame, nexusDomainForMetaGame, nexusDomainsForGame, shortNameForNexusDomain } from '../../tables/gamePaths';
+import { readGameName } from './codecs/modOrganizerIni';
 import { errorMessage } from '../../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
@@ -29,6 +31,24 @@ export const entryKey = (entry: EntryRef): string =>
 /** The entry of `entry`'s kind `order` lists, matched as MO2 matches names. */
 export const listedAs = (order: readonly ModlistEntry[], entry: EntryRef): ModlistEntry | undefined =>
   order.find((e) => e.kind === entry.kind && entryKey(e) === entryKey(entry));
+
+const instanceGameName = async ({ instanceRoot }: Mo2Context): Promise<string> => readGameName(await get(settingsFile(instanceRoot)));
+
+/** The Nexus domains to ask about a file of the instance's game, in MO2's order; rejects when Nexus has none for it. */
+export async function nexusDomainsOfInstance(context: Mo2Context): Promise<string[]> {
+  const gameName = await instanceGameName(context);
+  const domains = nexusDomainsForGame(gameName);
+  if (domains.length === 0) throw new Error(`Nexus has no game for '${gameName}'`);
+  return domains;
+}
+
+/** The game a downloaded file's metadata names for Nexus's `domain`: the instance's game when it is on that domain; rejects when no game is. */
+export async function metaGameOfDomain(context: Mo2Context, domain: string): Promise<string> {
+  const release = gameReleaseForGame(await instanceGameName(context));
+  const game = release !== undefined && nexusDomainForMetaGame(release) === domain ? release : shortNameForNexusDomain(domain);
+  if (game === undefined) throw new Error(`Modbench has no game for the Nexus game '${domain}'`);
+  return game;
+}
 
 /** The mod folders as entries; the reserved overwrite name holds none. */
 export async function listModFolders(

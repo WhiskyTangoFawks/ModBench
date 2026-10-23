@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isUpdateAvailable } from '../../codecs/versionInfo';
+import { canonicalVersion, isUpdateAvailable } from '../../codecs/versionInfo';
 
 describe('isUpdateAvailable: MO2 VersionInfo\'s order (uibase versioninfo.cpp)', () => {
   it.each([
@@ -39,5 +39,26 @@ describe('isUpdateAvailable: MO2 VersionInfo\'s order (uibase versioninfo.cpp)',
     ['neither', undefined, undefined, false],
   ])('%s: %s to %s is %s', (_, version, newest, expected) => {
     expect(isUpdateAvailable(version, newest)).toBe(expected);
+  });
+});
+
+describe('canonicalVersion: VersionInfo::canonicalString (uibase versioninfo.cpp)', () => {
+  it.each([
+    ['1.2', '1.2.0.0'],
+    ['v1.2.3', '1.2.3.0'],
+    ['1.2.3.4', '1.2.3.4'],
+    ['1.0b', '1.0.0.0b'],
+    ['1.0 beta', '1.0.0.0b'],
+    ['1.0 rc', '1.0.0.0rc'],
+    ['1.0 prealpha', '1.0.0.0apre'],
+    ['f1.05', 'f1.05'],
+    ['1.05', 'f1.05'],
+    ['n1.2', 'n1.2.0.0'],
+    ['d2020.1.2', 'd2020.1.2.0'],
+    ['1.2 extra', '1.2.0.0extra'],
+    ['final', '1.0.0.0'],
+    ['', ''],
+  ])('writes %j as %j', (version, canonical) => {
+    expect(canonicalVersion(version)).toBe(canonical);
   });
 });

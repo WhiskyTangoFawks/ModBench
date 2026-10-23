@@ -15,6 +15,8 @@ export interface DownloadedFileRow {
   excluded: boolean;
   /** Nexus mod id; absent when the metadata names none. */
   modID?: string;
+  /** Nexus file id; absent when the metadata names none. */
+  fileID?: string;
   version?: string;
   /** The mod's own name, distinct from the file's `displayName`. */
   modName?: string;
@@ -105,6 +107,7 @@ export function buildDownloadedFileRows(
       hasMeta: meta !== undefined,
       excluded: file.excluded,
       modID: meta?.modID,
+      fileID: meta?.fileID,
       version: meta?.version,
       modName: meta?.modName,
       gameName: meta?.gameName,

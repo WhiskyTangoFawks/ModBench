@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseDownloadedFileMeta,
+  setNexusFileInfoInText,
   setHiddenInText,
   setInstalledInText,
   setUninstalledInText,
@@ -36,6 +37,11 @@ describe('parseDownloadedFileMeta', () => {
   it('keys the installed file by its mod and file ids, and by nothing when either is absent', () => {
     expect(metaOf('[General]\r\nmodID=9\r\nfileID=78\r\n').installedKey).toBe('9:78');
     expect(metaOf('[General]\r\nmodID=9\r\n').installedKey).toBeUndefined();
+  });
+
+  it('reads the file ID, and reads 0 as none', () => {
+    expect(metaOf('[General]\r\nfileID=78\r\n').fileID).toBe('78');
+    expect(metaOf('[General]\r\nfileID=0\r\n').fileID).toBeUndefined();
   });
 
   it('treats fileID=0 as no id, same as an absent fileID', () => {
@@ -100,5 +106,26 @@ describe('setUninstalledInText', () => {
     expect(setUninstalledInText(text)).toBe(
       '[General]\r\nuninstalled=true\r\ninstalled=true\r\nmodid=12345\r\n',
     );
+  });
+});
+
+describe('setNexusFileInfoInText', () => {
+  const info = {
+    game: 'fallout4', modID: '4598', fileID: '78', name: 'Main', version: '2.1.5', fileCategory: 1, modName: 'Patch', category: 12,
+    author: 'Team', uploader: 'Uploader', uploaderUrl: 'https://nexus/users/1', description: '[b]Fixes[/b]',
+  };
+
+  it('writes the keys in the order MO2 writes them, the description as HTML and the version canonical', () => {
+    expect(setNexusFileInfoInText('', info, 'Fallout4')).toBe([
+      '[General]', 'gameName=Fallout4', 'modID=4598', 'fileID=78', 'name=Main', 'description=<b>Fixes</b>', 'modName=Patch',
+      'version=2.1.5.0', 'fileCategory=1', 'category=12', 'author=Team', 'uploader=Uploader', 'uploaderUrl=https://nexus/users/1', '',
+    ].join('\r\n'));
+  });
+
+  it.each([
+    ['the newest version the metadata records', '[General]\r\nnewestVersion=2.0\r\n', 'version=2.0.0.0'],
+    ['zero when the metadata records none', '', 'version=0.0.0.0'],
+  ])('writes %s for a file with no version of its own when the list stands for it', (_name, text, expected) => {
+    expect(setNexusFileInfoInText(text, { game: 'fallout4', modID: '1', versionFromNewest: true, modVersion: '9.9' }, 'Fallout4')).toContain(expected);
   });
 });

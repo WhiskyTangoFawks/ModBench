@@ -5,6 +5,7 @@
 import { join } from 'node:path';
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
+import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
@@ -128,6 +129,7 @@ export type DownloadedFileStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 export interface DownloadedFileMeta {
   status: DownloadedFileStatus;
   modID?: string;
+  fileID?: string;
   /** The Nexus file category the metadata records; absent when it records none. */
   fileCategory?: number;
   name?: string;
@@ -152,6 +154,14 @@ export interface DownloadedFile {
   readonly meta: DownloadedFileMeta | undefined;
   /** The Nexus mod ID install gives the mod: the metadata's, else the file name's. `meta.modID` stays the metadata's own claim. */
   readonly modID?: string;
+}
+
+/** What Nexus is asked about a downloaded file: its MD5, the Nexus games to ask in order, and the IDs its metadata or its name gives. */
+export interface DownloadedFileQuery {
+  readonly games: readonly string[];
+  readonly md5: string;
+  readonly modID?: string;
+  readonly fileID?: string;
 }
 
 /** The downloaded files, or why their folder could not be resolved. `files` is undefined when the
@@ -486,6 +496,8 @@ export interface InstanceAdapter {
   installationFile(mod: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
+  /** What Nexus is asked about the downloaded file of `name`; undefined when the downloads folder holds none of that name. */
+  downloadedFileQuery(name: string): Promise<FileRead<DownloadedFileQuery | undefined>>;
   /** What the mod manager's metadata says of `mod`'s version and installation file; none when it says none. */
   modMetadata(mod: string): Promise<FileRead<ModMetadata>>;
   /** Where `mod` is on Nexus; none when its metadata holds no Nexus mod ID, unreadable when the metadata cannot say. */
@@ -553,6 +565,8 @@ export interface InstanceAdapter {
   /** A downloaded file that is gone gets no mark. Rejects when the downloads folder cannot be
    *  resolved. */
   markDownloadedFile(name: string, mark: DownloadedFileMark): Promise<Marked>;
+  /** Writes what Nexus names of a downloaded file into its metadata, made when it has none. Keeps every value `info` does not name. Rejects, writing nothing, when the instance's game has no name in Nexus's terms. */
+  writeNexusFileInfo(name: string, info: NexusFileInfo): Promise<Marked>;
   selectProfile(profile: string): Promise<Written>;
 
   // Put and rename in mods/.
