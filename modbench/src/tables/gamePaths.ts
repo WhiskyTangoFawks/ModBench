@@ -8,6 +8,8 @@ export interface GamePathInfo {
   readonly gameName: string;
   /** The Nexus slug — the {game} segment of nexusmods.com/{game}/mods/{id}. */
   readonly nexusSlug: string;
+  /** The other releases whose files the mod manager also accepts as this game's, by the short names it knows them by, in the order it asks Nexus about them. */
+  readonly validShortNames?: readonly string[];
   /** Steam's numeric app id, when the release ships on Steam. Needed to find which Steam
    *  library holds the install (`libraryfolders.vdf`) and its Proton prefix. Absent for a
    *  release the table only knows the Nexus slug for. */
@@ -93,7 +95,7 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   Fallout4VR: {
-    gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
+    gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
     scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, ba2Versions: FALLOUT4_BA2_VERSIONS,
@@ -105,7 +107,7 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES,
   },
   SkyrimVR: {
-    gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
+    gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', validShortNames: ['SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS,
     archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim VR', defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
@@ -154,6 +156,15 @@ export function gameReleaseForNexusDomain(domain: string): string | undefined {
 export function nexusDomainForMetaGame(gameName: string): string | undefined {
   const release = gameReleaseForMetaGame(gameName);
   return release === undefined ? undefined : GAME_PATHS[release]?.nexusSlug;
+}
+
+/** The Nexus domains MO2 asks about a file of the game `gameName` names, in its order: the game's own, then each valid short name's. */
+export function nexusDomainsForGame(gameName: string): string[] {
+  const release = gameReleaseForGame(gameName);
+  if (release === undefined) return [];
+  const names = [release, ...(GAME_PATHS[release]?.validShortNames ?? [])];
+  const domains = names.flatMap((name) => nexusDomainForMetaGame(name) ?? []);
+  return domains.filter((domain, i) => domains.indexOf(domain) === i);
 }
 
 /** The install-location facts for a release, or `undefined` when the table holds none for it —

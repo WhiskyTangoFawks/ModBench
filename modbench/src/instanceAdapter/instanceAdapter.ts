@@ -156,6 +156,14 @@ export interface DownloadedFile {
   readonly modID?: string;
 }
 
+/** What Nexus is asked about a downloaded file: its MD5, the Nexus games to ask in order, and the IDs its metadata or its name gives. */
+export interface DownloadedFileQuery {
+  readonly games: readonly string[];
+  readonly md5: string;
+  readonly modID?: string;
+  readonly fileID?: string;
+}
+
 /** The downloaded files, or why their folder could not be resolved. `files` is undefined when the
  *  resolved folder is not there. */
 export type DownloadedFiles =
@@ -488,8 +496,8 @@ export interface InstanceAdapter {
   installationFile(mod: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
-  /** The MD5 of the downloaded file of `name`, with the Nexus domain of the instance's game; undefined when the downloads folder holds none of that name. */
-  downloadedFileMd5(name: string): Promise<FileRead<{ readonly game: string; readonly md5: string } | undefined>>;
+  /** What Nexus is asked about the downloaded file of `name`; undefined when the downloads folder holds none of that name. */
+  downloadedFileQuery(name: string): Promise<FileRead<DownloadedFileQuery | undefined>>;
   /** What the mod manager's metadata says of `mod`'s version and installation file; none when it says none. */
   modMetadata(mod: string): Promise<FileRead<ModMetadata>>;
   /** Where `mod` is on Nexus; none when its metadata holds no Nexus mod ID, unreadable when the metadata cannot say. */

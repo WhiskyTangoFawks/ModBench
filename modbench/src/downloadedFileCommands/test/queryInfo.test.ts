@@ -34,7 +34,7 @@ describe('query info', () => {
   });
 
   it('refuses a file whose MD5 cannot be read, asking Nexus nothing of it', async () => {
-    const { fake, sent, result } = await querying(['a.7z'], known('a.7z'), { unreadableMd5s: new Map([['a.7z', 'EACCES: permission denied']]) });
+    const { fake, sent, result } = await querying(['a.7z'], known('a.7z'), { unreadableQueries: new Map([['a.7z', 'EACCES: permission denied']]) });
 
     expect(result).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: 'a.7z', reason: 'EACCES: permission denied' }] } });
     expect([fake.calls, sent]).toEqual([[], []]);
@@ -51,6 +51,49 @@ describe('query info', () => {
     const { result } = await querying(['a.7z'], known('a.7z'), { refusals: refusing('writeNexusFileInfo', 'EACCES: permission denied') });
 
     expect(result).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: 'a.7z', reason: 'EACCES: permission denied' }] } });
+  });
+
+  describe('when the MD5 settles nothing', () => {
+    const PAGE = 'https://api.nexusmods.com/v1/games/fallout4/mods/7.json';
+    const LIST = 'https://api.nexusmods.com/v1/games/fallout4/mods/7/files.json';
+    const page = new Response(JSON.stringify({ name: 'Sleep or Save', category_id: 12 }), { status: 200 });
+    const list = new Response(JSON.stringify({ files: [{ file_id: 78, name: 'Main', version: '1.2', file_name: 'a.7z' }], file_updates: [] }), { status: 200 });
+    const byName = (url: string): Response => {
+      if (url === PAGE) return page.clone();
+      return url === LIST ? list.clone() : new Response('', { status: 404 });
+    };
+
+    it('asks by the mod ID the metadata or the name gives, and writes what the page and list say', async () => {
+      const { fake, result } = await querying(['a.7z'], byName, { queries: new Map([['a.7z', { modID: '7' }]]) });
+
+      expect(result).toEqual({ applied: true, outcome: { landed: ['a.7z'], refused: [] } });
+      expect(fake.calls).toEqual([{
+        verb: 'writeNexusFileInfo', name: 'a.7z', info: { game: 'fallout4', modID: '7', fileID: '78', name: 'Main', version: '1.2', modName: 'Sleep or Save', category: 12 },
+      }]);
+    });
+
+    it('asks the page alone when the metadata holds the file ID', async () => {
+      const { fake, sent } = await querying(['a.7z'], byName, { queries: new Map([['a.7z', { modID: '7', fileID: '78' }]]) });
+
+      expect(sent.map(({ url }) => url)).not.toContain(LIST);
+      expect(fake.calls).toMatchObject([{ info: { fileID: '78', modName: 'Sleep or Save' } }]);
+    });
+
+    it('refuses a file with no mod ID to ask by, saying what the MD5 said', async () => {
+      const { fake, result } = await querying(['a.7z'], byName);
+
+      expect(result).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: 'a.7z', reason: 'Nexus does not know this file.' }] } });
+      expect(fake.calls).toEqual([]);
+    });
+
+    it('refuses a file the mod does not list, saying what both said', async () => {
+      const { result } = await querying(['a.7z'], (url) => (url === PAGE ? page.clone() : new Response('', { status: 404 })), { queries: new Map([['a.7z', { modID: '7' }]]) });
+
+      expect(result).toEqual({
+        applied: true,
+        outcome: { landed: [], refused: [{ item: 'a.7z', reason: 'Nexus does not know this file. By its mod ID 7: Nexus does not hold this mod.' }] },
+      });
+    });
   });
 
   it('asks Nexus nothing and refuses the whole selection while logged out', async () => {

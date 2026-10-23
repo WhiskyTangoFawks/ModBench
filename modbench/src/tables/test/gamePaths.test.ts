@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
-  archiveListsOf, ba2VersionsOf, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainForMetaGame, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
+  archiveListsOf, ba2VersionsOf, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, nexusDomainForMetaGame, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
@@ -194,5 +194,17 @@ describe('archiveListsOf', () => {
   it('answers none for no release, or a release the table holds no row for', () => {
     expect(archiveListsOf(undefined)).toBeUndefined();
     expect(archiveListsOf('SomeRelease')).toBeUndefined();
+  });
+});
+
+describe('nexusDomainsForGame', () => {
+  it.each([
+    ['Fallout 4', ['fallout4']],
+    ['Fallout 4 VR', ['fallout4']],
+    ['Skyrim VR', ['skyrimspecialedition']],
+    ['Starfield', ['starfield']],
+    ['Morrowind', []],
+  ])('answers the domains MO2 asks Nexus about a file of %s, each once', (game, domains) => {
+    expect(nexusDomainsForGame(game)).toEqual(domains);
   });
 });

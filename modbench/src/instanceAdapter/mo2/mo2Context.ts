@@ -1,7 +1,7 @@
 // What every part of MO2's implementation shares: the instance root, the two resolvers over one
 // read of ModOrganizer.ini, the watch, and the reads and name rules more than one part uses.
 
-import { gameReleaseForGame, nexusDomainForMetaGame } from '../../tables/gamePaths';
+import { gameReleaseForGame, gameReleaseForNexusDomain, nexusDomainForMetaGame, nexusDomainsForGame } from '../../tables/gamePaths';
 import { readGameName } from './codecs/modOrganizerIni';
 import { errorMessage } from '../../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
@@ -32,13 +32,22 @@ export const entryKey = (entry: EntryRef): string =>
 export const listedAs = (order: readonly ModlistEntry[], entry: EntryRef): ModlistEntry | undefined =>
   order.find((e) => e.kind === entry.kind && entryKey(e) === entryKey(entry));
 
-/** The instance's game as a downloaded file's metadata spells it, with its Nexus domain; rejects when Nexus has no game for it. */
-export async function nexusGameOfInstance({ instanceRoot }: Mo2Context): Promise<{ release: string; domain: string }> {
-  const gameName = readGameName(await get(settingsFile(instanceRoot)));
-  const release = gameReleaseForGame(gameName);
-  const domain = release === undefined ? undefined : nexusDomainForMetaGame(release);
-  if (release === undefined || domain === undefined) throw new Error(`Nexus has no game for '${gameName}'`);
-  return { release, domain };
+const instanceGameName = async ({ instanceRoot }: Mo2Context): Promise<string> => readGameName(await get(settingsFile(instanceRoot)));
+
+/** The Nexus domains to ask about a file of the instance's game, in MO2's order; rejects when Nexus has none for it. */
+export async function nexusDomainsOfInstance(context: Mo2Context): Promise<string[]> {
+  const gameName = await instanceGameName(context);
+  const domains = nexusDomainsForGame(gameName);
+  if (domains.length === 0) throw new Error(`Nexus has no game for '${gameName}'`);
+  return domains;
+}
+
+/** The game a downloaded file's metadata names for Nexus's `domain`: the instance's game when it is on that domain; rejects when no game is. */
+export async function metaGameOfDomain(context: Mo2Context, domain: string): Promise<string> {
+  const release = gameReleaseForGame(await instanceGameName(context));
+  const game = release !== undefined && nexusDomainForMetaGame(release) === domain ? release : gameReleaseForNexusDomain(domain);
+  if (game === undefined) throw new Error(`Modbench has no game for the Nexus game '${domain}'`);
+  return game;
 }
 
 /** The mod folders as entries; the reserved overwrite name holds none. */

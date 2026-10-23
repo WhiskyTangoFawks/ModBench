@@ -1,7 +1,7 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
-  entryNotFound, filesWinningFirst, type DecideModOrder, type DownloadedFile, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type SourceMods, type OriginFile, type InstallKeys, type PluginOrderChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+  entryNotFound, filesWinningFirst, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type SourceMods, type OriginFile, type InstallKeys, type PluginOrderChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
@@ -93,8 +93,10 @@ export interface InstanceAnswers {
   installations?: ReadonlyMap<string, FileRead<InstallationFile | undefined>>;
   /** What each downloaded file answers, by name; a name not there is not in the downloads folder. */
   downloadedFiles?: ReadonlyMap<string, FileRead<InstallationFile>>;
-  /** Why each downloaded file's MD5 cannot be read, by name. */
-  unreadableMd5s?: ReadonlyMap<string, string>;
+  /** Why each downloaded file cannot be queried, by name. */
+  unreadableQueries?: ReadonlyMap<string, string>;
+  /** What each downloaded file's query holds beyond its MD5 and the game, by name. */
+  queries?: ReadonlyMap<string, Partial<DownloadedFileQuery>>;
   /** What the game files a mod's files take answer, by mod name; a mod not there takes none. */
   gameFilesTaken?: ReadonlyMap<string, Awaited<ReturnType<InstanceAdapter['gameFilesTakenBy']>>>;
   /** The game files the game folder holds, by their lower-cased path; a path not there has none. */
@@ -268,10 +270,10 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? { kind: 'read', answer: undefined }),
-    downloadedFileMd5: (name) => {
-      const reason = answers.unreadableMd5s?.get(name);
+    downloadedFileQuery: (name) => {
+      const reason = answers.unreadableQueries?.get(name);
       if (reason !== undefined) return Promise.resolve({ kind: 'unreadable', reason });
-      return Promise.resolve({ kind: 'read', answer: downloadedFileNamed(name) === undefined ? undefined : { game: 'fallout4', md5: md5Of(name) } });
+      return Promise.resolve({ kind: 'read', answer: downloadedFileNamed(name) === undefined ? undefined : { games: ['fallout4'], md5: md5Of(name), ...answers.queries?.get(name) } });
     },
     gameFiles: (_dataFolder, paths) => Promise.resolve({
       files: paths.flatMap((path) => answers.gameFiles?.get(path.toLowerCase()) ?? []),

@@ -4,7 +4,9 @@
 
 import type { DownloadedFileMeta, DownloadedFileStatus } from '../../instanceAdapter';
 import type { NexusFileInfo } from '../../../ports/nexusFileInfo';
+import { convertToHtml } from './bbcode';
 import { qtToInt } from './qtInt';
+import { canonicalVersion } from './versionInfo';
 import { installedFileKey } from './metaIni';
 import { GENERAL_SECTION, readIniSection, setIniValue } from './qSettingsIni';
 
@@ -64,12 +66,14 @@ export function setHiddenInText(text: string, hidden: boolean): string {
   return setMetaFlag(text, 'removed', hidden);
 }
 
-/** What Nexus names of the file, under the keys and in the order MO2's createMetaFile writes them. A key lands
- *  right after the header, so they go in reversed; a key `info` does not name stays as found. */
+/** What Nexus names of the file, under the keys and in the order MO2's createMetaFile writes them, the description as the HTML MO2 keeps
+ *  and the version as its canonical string. A key lands right after the header, so they go in reversed; a key `info` does not name stays as found. */
 export function setNexusFileInfoInText(text: string, info: NexusFileInfo, gameName: string): string {
+  const version = [info.version, info.modVersion].map((v) => canonicalVersion(v ?? '')).find((v) => v !== '');
   const written: readonly (readonly [string, string | number | undefined])[] = [
-    ['gameName', gameName], ['modID', info.modID], ['fileID', info.fileID], ['name', info.name], ['modName', info.modName],
-    ['version', info.version], ['fileCategory', info.fileCategory], ['category', info.category], ['author', info.author],
+    ['gameName', gameName], ['modID', info.modID], ['fileID', info.fileID], ['name', info.name],
+    ['description', info.description === undefined ? undefined : convertToHtml(info.description)], ['modName', info.modName],
+    ['version', version], ['fileCategory', info.fileCategory], ['category', info.category], ['author', info.author],
     ['uploader', info.uploader], ['uploaderUrl', info.uploaderUrl],
   ];
   return written.reduceRight((edited, [key, value]) => (value === undefined ? edited : setMetaValue(edited, key, String(value))), text);

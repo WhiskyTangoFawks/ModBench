@@ -1,6 +1,5 @@
 import { errorMessage } from '../ports/errorMessage';
-import type { NexusFileInfo } from '../ports/nexusFileInfo';
-import { chosenHit, hitsOf, infoOf } from './md5Search';
+import { lookupByMd5, lookupByName, type FileFound, type Read } from './fileLookup';
 import { fileListOf, newestVersionOf, type InstalledFile } from './updateChain';
 
 const API = 'https://api.nexusmods.com';
@@ -29,9 +28,7 @@ const OPTIONAL_FILE = 3;
 const MISCELLANEOUS_FILE = 5;
 
 type NewestVersion = { found: true; version: string } | { found: false; reason: string };
-type FileFound = { found: true; info: NexusFileInfo } | { found: false; reason: string };
 
-const NOT_READ = 'Nexus answered in a form Modbench does not read.';
 
 export interface Nexus {
   /** Asks Nexus whether `key` works. Keeps nothing. */
@@ -41,8 +38,10 @@ export interface Nexus {
   loggedIn: () => Promise<boolean>;
   /** The version of the newest file that replaces the installed one, or of the mod page when the installed file cannot be told. */
   newestVersion: (file: NexusFile) => Promise<NewestVersion>;
-  /** What Nexus knows of the file `fileName` whose MD5 is `md5`, among `game`'s files. */
-  fileByMd5: (file: { game: string; md5: string; fileName: string }) => Promise<FileFound>;
+  /** What Nexus knows of the file `fileName` whose MD5 is `md5`, asking each of `games` in turn. */
+  fileByMd5: (file: { games: readonly string[]; md5: string; fileName: string }) => Promise<FileFound>;
+  /** What Nexus knows of the file `fileName` of mod `modID`, from the mod's page and file list; from its page alone when `fileID` is known. */
+  fileByName: (file: { game: string; modID: string; fileID?: string; fileName: string }) => Promise<FileFound>;
   /** Fires when a key is kept or forgotten, from any window. */
   onDidChangeLogin: (listener: () => void) => Disposable;
 }
@@ -65,6 +64,10 @@ export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): 
     } catch (error) {
       return { reason: `Could not reach Nexus: ${errorMessage(error)}` };
     }
+  };
+  const withKey = async (lookup: (ask: Read) => Promise<FileFound>): Promise<FileFound> => {
+    const key = await secrets.get(KEY_NAME);
+    return key === undefined ? { found: false, reason: NOT_LOGGED_IN } : lookup((path, notFound) => read(key, path, notFound));
   };
   return {
     check: async (key) => {
@@ -97,19 +100,8 @@ export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): 
       const version = typeof page.json === 'object' && page.json !== null && 'version' in page.json ? page.json.version : undefined;
       return typeof version === 'string' ? { found: true, version } : { found: false, reason: 'Nexus named no version.' };
     },
-    fileByMd5: async ({ game, md5, fileName }) => {
-      const key = await secrets.get(KEY_NAME);
-      if (key === undefined) return { found: false, reason: NOT_LOGGED_IN };
-      const searched = await read(key, `/v1/games/${game}/mods/md5_search/${md5}.json`, 'Nexus does not know this file.');
-      if ('reason' in searched) return { found: false, ...searched };
-      const hits = hitsOf(searched.json);
-      if (hits === undefined) return { found: false, reason: NOT_READ };
-      if (hits.length === 0) return { found: false, reason: 'Nexus does not know this file.' };
-      const hit = chosenHit(hits, fileName);
-      return hit === undefined
-        ? { found: false, reason: 'Nexus holds several files with this MD5, and none is the one named so.' }
-        : { found: true, info: infoOf(game, hit) };
-    },
+    fileByMd5: (file) => withKey((ask) => lookupByMd5(ask, file)),
+    fileByName: (file) => withKey((ask) => lookupByName(ask, file)),
     onDidChangeLogin: (listener) => secrets.onDidChange(({ key }) => { if (key === KEY_NAME) listener(); }),
   };
 }

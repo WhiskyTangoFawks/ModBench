@@ -15,7 +15,7 @@ import { ensureDir, exists, putIfChanged, withLock, write } from '../files';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
 import { downloadedFilePath, pluginOrderFiles, settingsFile } from './layout';
 import { sourceModsIn } from './sourceMods';
-import { currentDownloadsDir, entryKey, folderHolding, newModFolder, nexusGameOfInstance, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
+import { currentDownloadsDir, entryKey, folderHolding, newModFolder, metaGameOfDomain, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
 
 type Mo2Changes = Pick<InstanceAdapter,
@@ -129,8 +129,8 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
     async writeNexusFileInfo(name, info) {
       const held = await heldDownloadedFile(context, name);
       if (held === undefined) return { gone: true };
-      const { release } = await nexusGameOfInstance(context);
-      const { wrote } = await spliceDownloadedFileMeta(held.downloadsDir, name, (text) => setNexusFileInfoInText(text, info, release));
+      const gameName = await metaGameOfDomain(context, info.game);
+      const { wrote } = await spliceDownloadedFileMeta(held.downloadsDir, name, (text) => setNexusFileInfoInText(text, info, gameName));
       return { gone: false, wrote };
     },
 
