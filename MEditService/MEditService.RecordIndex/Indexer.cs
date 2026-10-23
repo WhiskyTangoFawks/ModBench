@@ -519,14 +519,16 @@ internal sealed class Indexer : IDisposable
         if (cause is not IndexFaultException { Fault: IndexFault.Invalidated }) return cause.Message;
         try
         {
-            return ReopenStore() is { } reason ? $"{cause.Message} mEdit's record index was not reopened: {reason}" : cause.Message;
+            return ReopenStore() is { } notReopened ? $"{cause.Message} {notReopened}" : cause.Message;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "Reopening the record index failed");
-            return $"{cause.Message} mEdit's record index was not reopened: {ex.Message}";
+            return $"{cause.Message} {NotReopened}: {ex.Message}";
         }
     }
+
+    private const string NotReopened = "mEdit's record index was not reopened";
 
     private OpenScope ScopeOn(HeldPlugins held, Store.Store store, LoadOrderSnapshot snapshot) =>
         new(held, store, new Projector(store, held.Find, _source, _logger), new FailedReads(store, _source, _logger), snapshot);
@@ -541,7 +543,7 @@ internal sealed class Indexer : IDisposable
         }
         if (current is null) return null;
         if (!_storeFactory.Close(current.Store))
-            return IndexWriteGate.NotDrained("It was not reopened", "It is retried with the next load order.");
+            return IndexWriteGate.NotDrained(NotReopened, "It is retried with the next load order.");
 
         var snapshot = current.LoadOrder;
         var held = current.Held;
@@ -551,7 +553,7 @@ internal sealed class Indexer : IDisposable
             var fresh = _storeFactory.Create(
                 snapshot.GameRelease, snapshot.InstanceRoot, () => held.OpenedPlugins,
                 () => Status.State == LoadOrderState.Ready, out var heldElsewhere);
-            if (fresh is null) return heldElsewhere ?? "another process holds it";
+            if (fresh is null) return $"{NotReopened}: {heldElsewhere ?? "another process holds it"}";
             lock (_lock) _scope = ScopeOn(held, fresh, snapshot);
         }
         PublishStatus();
@@ -601,7 +603,7 @@ internal sealed class Indexer : IDisposable
         }
         if (!_storeFactory.Close(leaving?.Store, snapshot.InstanceRoot))
         {
-            failure = IndexWriteGate.NotDrained("mEdit's record index was not reopened", "It is retried with the next load order.");
+            failure = IndexWriteGate.NotDrained(NotReopened, "It is retried with the next load order.");
             return null;
         }
 
@@ -1229,7 +1231,6 @@ internal sealed class Indexer : IDisposable
 
     private void OnArrived(LoadOrderSnapshot snapshot, long version) => AskReconcile();
 
-    // False when a read outlived the drain: the store stays open, and no store opens beside it.
     private bool Close()
     {
         // Cancels an in-flight reconcile and waits for it to stop *before* disposing anything,

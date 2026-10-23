@@ -10,8 +10,8 @@ using Mutagen.Bethesda;
 namespace MEditService.RecordIndex.Store;
 
 /// <summary>A <see cref="Store"/> per game, opened over the calling instance's file when it names one, and
-/// closed. Another window holding the file answers a refusal and no store (ADR-0010). Its callers take turns.
-/// </summary>
+/// closed. Another window holding the file answers a refusal (ADR-0010). Callers take turns under the
+/// Indexer's exclusive right.</summary>
 internal sealed class StoreFactory(
     SchemaReflector schemaReflector,
     TableDdlBuilder ddlBuilder,
