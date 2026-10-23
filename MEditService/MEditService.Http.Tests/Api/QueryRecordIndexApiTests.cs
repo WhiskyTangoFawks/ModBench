@@ -121,15 +121,16 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
     }
 
     [Theory]
-    [InlineData("type=acti&type=kywd", new[] { "QueriedKeyword", "QueriedLever" })]
-    [InlineData("", new[] { "QueriedKeyword", "QueriedLever", "QueriedNpc" })]
-    public async Task ARecordSearch_NamingSeveralTypesOrNone_ListsTheRecordsOfEachOfThem(string types, string[] expectedAmong)
+    [InlineData("type=acti&type=kywd", new[] { "QueriedKeyword", "QueriedLever" }, false)]
+    [InlineData("", new[] { "QueriedKeyword", "QueriedLever", "QueriedNpc" }, true)]
+    public async Task ARecordSearch_NamingSeveralTypesOrNone_ListsTheRecordsOfEachOfThem(
+        string types, string[] expectedAmong, bool listsTheNpc)
     {
         var page = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&limit=50&{types}");
 
         var listed = EditorIds(page.GetProperty("items")).Order().ToList();
         Assert.All(expectedAmong, id => Assert.Contains(id, listed));
-        Assert.Equal(types.Length == 0, listed.Contains("QueriedNpc"));
+        Assert.Equal(listsTheNpc, listed.Contains("QueriedNpc"));
     }
 
     [Fact]
