@@ -45,6 +45,21 @@ internal static class IndexFiles
         throw new InvalidOperationException("Expected the aborted checkpoint to invalidate the database.");
     }
 
+    /// <summary>Has the open Index's DuckDB log each query as it starts.</summary>
+    internal static void LogQueries(string instanceRoot) => Execute(instanceRoot, "CALL enable_logging('QueryLog')");
+
+    /// <summary>Whether a query holding <paramref name="fragment"/> has started on the open Index's DuckDB since
+    /// <see cref="LogQueries"/>.</summary>
+    internal static bool Started(string instanceRoot, string fragment)
+    {
+        using var connection = new DuckDBConnection($"DataSource={In(instanceRoot)}");
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT count(*) FROM duckdb_logs WHERE type = 'QueryLog' AND contains(message, $1)";
+        cmd.Parameters.Add(new DuckDBParameter(fragment));
+        return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
+    }
+
     /// <summary>Every row <paramref name="sql"/> yields over the public relations, sorted, as text.
     /// DuckDB.NET shares one database per path in a process, so this joins the open Index's own and
     /// leaves its filter alone.</summary>
