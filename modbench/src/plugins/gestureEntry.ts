@@ -53,6 +53,7 @@ export interface PluginsKeyContext {
   readonly holdsDisabledPlugin: boolean;
   readonly allInNonSourceMod: boolean;
   readonly allInSourceMod: boolean;
+  readonly allMalformedInAMod: boolean;
   readonly singleCreatable: boolean;
   readonly singleCompiledPlugin: boolean;
   readonly allDeletableRecords: boolean;
@@ -74,6 +75,8 @@ export function pluginsKeyContext(
     holdsDisabledPlugin: plugins.some((row) => !isEnabled(row)),
     allInNonSourceMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'inNonSourceMod')),
     allInSourceMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'inSourceMod')),
+    allMalformedInAMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'malformed')
+      && (hasFlags(row, 'inSourceMod') || hasFlags(row, 'inNonSourceMod'))),
     // A plugin row carries no creatable fact and needs none: its own pick lists only creatable
     // types (plugins.md, Create record, story 1; "No dead entries").
     singleCreatable: creatableCandidate !== undefined

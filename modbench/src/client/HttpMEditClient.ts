@@ -22,7 +22,7 @@ import {
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
   type RebuildIndexOutcome, type CopyChangesOutcome, type CopyMode,
   type GridPosition, type RecordAt, type CreateChangesOutcome, type RecordEditChangesOutcome, type RecordPage, type DeleteChangesOutcome, type UnsavedDocument, type RenameSourceChangesOutcome,
-  type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress,
+  type RecordFilter, type ReferenceResult, type NameQuery, type NamedObject, type PluginAddress, type PluginRepairPreview, type PluginToRepair, type DecompileAndCommitMod, type DecompileAndCommitOutcome, type DecompileAndCommitProgress,
   type WorkingTreeStatesBeneath, type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -475,6 +475,28 @@ class HttpMEditClient implements MEditClient {
       verb: 'decompile', noun: 'plugin', items: plugins,
       op: (counted) => `decompile(${counted})`,
       post: () => this.apiClient.POST('/plugins/decompile', { body: { plugins: [...plugins], force } }),
+      outcome: selectionOutcome,
+    });
+  }
+
+  async repairPreviews(
+    plugins: readonly PluginAddress[],
+  ): Promise<{ landed: readonly PluginRepairPreview[]; refused: readonly ItemRefusal<PluginAddress>[] } | WriteRefused> {
+    return this.mutateEach({
+      verb: 'preview the repair of', noun: 'plugin', items: plugins,
+      op: (counted) => `repairPreviews(${counted})`,
+      post: () => this.apiClient.POST('/plugins/repair-previews', { body: { plugins: [...plugins] } }),
+      outcome: selectionOutcome,
+    });
+  }
+
+  async decompileAndRepair(
+    plugins: readonly PluginToRepair[], metadataFiles: readonly string[], force: boolean,
+  ): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
+    return this.mutateEach({
+      verb: 'decompile and repair', noun: 'plugin', items: plugins,
+      op: (counted) => `decompileAndRepair(${counted})`,
+      post: () => this.apiClient.POST('/plugins/decompile-and-repair', { body: { plugins: [...plugins], metadataFiles: [...metadataFiles], force } }),
       outcome: selectionOutcome,
     });
   }

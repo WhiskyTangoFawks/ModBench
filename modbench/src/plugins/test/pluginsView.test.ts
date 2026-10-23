@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
-  DiagnosticSeverity, FakeDiagnosticCollection, uriFile, uriFrom,
+  DiagnosticSeverity, FakeDiagnosticCollection, uriFile, uriFrom, uriParse,
 } from '../../test/vscodeMock';
 import {
   filterBoxCommandsMock, filterBoxWindowMock, currentBoxOf, waitForMessage, FakeTreeViews, type FakeInputBox,
@@ -35,7 +35,7 @@ vi.mock('vscode', () => {
   h.commands = state.commands;
   return {
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
-    DiagnosticSeverity, Uri: { file: uriFile, from: uriFrom },
+    DiagnosticSeverity, Uri: { file: uriFile, from: uriFrom, parse: uriParse },
     StatusBarAlignment: { Left: 1 },
     Position: class { constructor(public line: number, public character: number) {} },
     CodeLens: class { constructor(public range: unknown, public command: unknown) {} },
@@ -381,6 +381,36 @@ describe('the Plugins view\'s Problems', () => {
       .map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => [d.message, d.severity])]);
     expect(published('modbench-failed-to-read')).toEqual([[onDisk, [['duplicate FormKey', DiagnosticSeverity.Error]]]]);
     expect(published('modbench-diagnosis')).toEqual([[onDisk, [['short', DiagnosticSeverity.Warning]]]]);
+  });
+
+  it('links a malformed plugin\'s entry to decompile and repair in a mod, and not in the game folder', async () => {
+    const inAMod = '/instance/mods/ModA/Test.esp';
+    const inTheGameFolder = '/game/Data/Vanilla.esm';
+    const { client } = pluginsView(instanceValueFixture({
+      mods: [{ kind: 'mod', name: 'ModA', enabled: true }],
+      plugins: [
+        { name: 'Test.esp', path: inAMod, origin: 'ModA', line: 0, enabled: true, winning: true },
+        { name: 'Vanilla.esm', path: inTheGameFolder, origin: 'Data/', line: 1, enabled: true, winning: true },
+      ],
+    }));
+    client.setQueryAnswer('getPlugins', []);
+    client.setQueryAnswer('getDiagnoses', [
+      { plugin: 'Test.esp', origin: 'ModA', defectClass: 'fixed-size-subrecord-short', message: 'short', text: 'short' },
+      { plugin: 'Vanilla.esm', origin: 'Data/', defectClass: 'fixed-size-subrecord-short', message: 'short', text: 'short' },
+    ]);
+
+    client.emit(tick({ state: 'Ready', conflictsComputed: true }));
+    await settle();
+
+    expect([...present(h.diagnostics.get('modbench-diagnosis'), 'the malformed collection')]
+      .map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => d.code)]))
+      .toEqual([
+        [inAMod, [{
+          value: 'decompile and repair',
+          target: uriParse(`command:modbench.plugin.decompileAndRepair?${encodeURIComponent(JSON.stringify([{ name: 'Test.esp', origin: 'ModA' }]))}`),
+        }]],
+        [inTheGameFolder, [undefined]],
+      ]);
   });
 });
 

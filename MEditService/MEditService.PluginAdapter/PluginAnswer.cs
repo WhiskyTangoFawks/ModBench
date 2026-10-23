@@ -142,7 +142,7 @@ public abstract record PluginFailure
     }
 
     /// <summary>The plugin's bytes are not the ones its repair preview read (ADR-0003).</summary>
-    internal sealed record ChangedSincePreview : PluginFailure
+    public sealed record ChangedSincePreview : PluginFailure
     {
         internal ChangedSincePreview() : base(error: null)
         {
@@ -154,7 +154,7 @@ public abstract record PluginFailure
     }
 
     /// <summary>A diagnosis chosen for repair that no repair answers.</summary>
-    internal sealed record NoRepair : PluginFailure
+    public sealed record NoRepair : PluginFailure
     {
         private readonly string _reason;
 
@@ -164,7 +164,7 @@ public abstract record PluginFailure
     }
 
     /// <summary>A repaired plugin whose records are not its original's with the repairs its preview planned.</summary>
-    internal sealed record RepairUnverified : PluginFailure
+    public sealed record RepairUnverified : PluginFailure
     {
         private readonly string _reason;
 

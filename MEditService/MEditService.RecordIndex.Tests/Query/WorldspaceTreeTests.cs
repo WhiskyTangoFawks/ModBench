@@ -149,14 +149,6 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetInteriorCells_NoLoadOrder_ThrowsNoLoadOrderException_ForOriginTravelsInFromTheCallerSoTheReadsAreTheOneGuard()
-    {
-        using var index = Indexes.Open(new LoadOrderHolder());
-
-        Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetInteriorCells(Plugin).Refused().Refusal);
-    }
-
-    [Fact]
     public void GetWorldspaces_MapsRecordsToSummaries()
     {
         var result = _index.Queries.GetWorldspaces(Plugin).Value();

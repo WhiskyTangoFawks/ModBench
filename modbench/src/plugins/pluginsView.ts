@@ -14,7 +14,7 @@ import { PluginsTreeProvider, type PluginsInstance } from './PluginsTreeProvider
 import { type PluginsTreeNode } from './pluginRows';
 import type { PluginFactsClient } from './pluginFactsFeed';
 import type { RecordBrowser } from './RecordBrowser';
-import { publishPluginProblems } from './loadDiagnostics';
+import { decompileAndRepairLink, publishPluginProblems } from './loadDiagnostics';
 import { PLUGINS_KEY_ARGS, pluginsKeyContext } from './gestureEntry';
 import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
@@ -25,7 +25,7 @@ import {
 import { registerRenamePluginCommand, type RenamePluginDeps } from './pluginRenameCommand';
 import { registerRecordCreateCommand } from './createRecordCommand';
 import { createdRecordSelection } from './createdRecordSelection';
-import { registerDecompileCommand, type DecompileDeps } from './pluginRowCommands';
+import { registerDecompileAndRepairCommand, registerDecompileCommand, type DecompileDeps } from './pluginRowCommands';
 import { registerPluginMoveCommand } from './pluginMoveCommand';
 import { registerPluginEnableCommands } from './pluginParticipationCommands';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
@@ -87,7 +87,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     records: recordBrowser,
     client,
     // A malformed plugin and one changed outside Modbench still load and play; one that failed to read does not.
-    publishDiagnoses: (reports) => publishPluginProblems(loadDiagnostics, pluginFile, reports, vscode.DiagnosticSeverity.Warning),
+    publishDiagnoses: (reports) => publishPluginProblems(loadDiagnostics, pluginFile, reports, vscode.DiagnosticSeverity.Warning,
+      (plugin) => decompileAndRepairLink(plugin, tree.placeOf(plugin))),
     publishChangedOutside: (warnings) => publishPluginProblems(changedOutsideDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning),
     publishFailedToRead: (errors) => publishPluginProblems(failedToReadDiagnostics, pluginFile, errors, vscode.DiagnosticSeverity.Error),
   });
@@ -159,13 +160,15 @@ function publishKeyContext(selection: readonly PluginsTreeNode[], tree: PluginsT
 }
 
 function registerPluginGestures(
-  { instance, commands, client, ask, reporterFor, recordWrite, sourceEditing }: PluginsViewDeps,
+  { instance, commands, client, ask, reporterFor, recordWrite, sourceEditing, log }: PluginsViewDeps,
   { tree, view, selection }: {
     tree: PluginsTreeProvider; view: vscode.TreeView<PluginsTreeNode>; selection: () => readonly PluginsTreeNode[];
   },
 ): vscode.Disposable[] {
   return [
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
+    registerDecompileAndRepairCommand(
+      { commands, instance, reporter: reporterFor('plugin.decompileAndRepair'), log: (line) => { log('info', `[decompileAndRepair] ${line}`); } }, selection),
     registerRecordCreateCommand({
       client, reporter: reporterFor('record.create'), write: recordWrite, source: sourceEditing,
       createdRecords: createdRecordSelection({ client, rowOf: (place, formKey) => tree.recordRow(place, formKey), view }),

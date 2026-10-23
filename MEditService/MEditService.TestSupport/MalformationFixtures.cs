@@ -27,6 +27,12 @@ public static class MalformationFixtures
             .OfType<MalformationFixture>(),
     ];
 
+    /// <summary>Each fixture whose repair drops nothing.</summary>
+    public static IReadOnlyList<MalformationFixture> Lossless => [.. All.Where(f => f.Diagnosis.Contains("repairable (lossless)", StringComparison.Ordinal))];
+
+    /// <summary>A REGN whose RDAT is short.</summary>
+    public static MalformationFixture ShortRegion => ShortFixedSizeSubrecord;
+
     private static MalformationFixture ShortFixedSizeSubrecord
     {
         get
@@ -38,6 +44,20 @@ public static class MalformationFixtures
                 subrecords => subrecords.Select(s => s.Signature == "RDAT" ? (s.Signature, s.Payload[..6]) : s),
                 "fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8",
                 "pads RDAT from 6 to 8 bytes with zeros");
+        }
+    }
+
+    private static MalformationFixture ShortFixedSizeSubrecordOfAPerk
+    {
+        get
+        {
+            var mod = NewMod();
+            var perk = mod.Perks.AddNew("FTS_CallMarkerPerk");
+            perk.Effects.Add(new PerkEntryPointAddActivateChoice { ButtonLabel = "Call", Flags = 0 });
+            return Malformed(nameof(ShortFixedSizeSubrecord), mod, "PERK", perk,
+                subrecords => subrecords.Select(s => s.Signature == "EPF3" ? (s.Signature, s.Payload[..1]) : s),
+                "fixed-size-subrecord-short, repairable (lossless): EPF3 is 1 bytes; a PERK EPF3 is always 2",
+                "pads EPF3 from 1 to 2 bytes with zeros");
         }
     }
 

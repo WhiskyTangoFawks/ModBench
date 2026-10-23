@@ -98,6 +98,10 @@ public interface ISourceRepository : ISourceRepositoryReads
     /// were.</summary>
     SourceFailure? ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256);
 
+    /// <summary>Two commits of the plugin's source alone on the checked-out branch, both or neither: <paramref name="flagged"/>,
+    /// then <paramref name="repaired"/>. The last-compile ref then names <paramref name="binarySha256"/>.</summary>
+    SourceFailure? CommitRepair(PluginAddress plugin, TreeCommit flagged, TreeCommit repaired, string binarySha256);
+
     /// <summary>What Modbench last wrote for the plugin, filed under <paramref name="treeName"/>, becomes
     /// <paramref name="newName"/>'s. A failure leaves it where it was.</summary>
     SourceFailure? MoveLastWrittenTo(string treeName, string newName);
@@ -111,3 +115,6 @@ public interface ISourceRepository : ISourceRepositoryReads
     /// was interrupted. Empty when none is recorded.</summary>
     Answer<IReadOnlyList<string>, SourceFailure> LastWrittenBinarySha256s(PluginAddress plugin);
 }
+
+/// <summary>A commit of one plugin's source: the whole-mod door's tree, and the commit's message.</summary>
+public sealed record TreeCommit(IReadOnlyList<TreeFile> Tree, string Message);

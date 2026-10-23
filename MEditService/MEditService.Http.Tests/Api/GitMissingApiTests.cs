@@ -52,6 +52,40 @@ public sealed class GitMissingApiTests : HostedTests
     }
 
     [Fact]
+    public async Task DecompilingAndRepairing_WithGitMissing_Is500WithTheRefusal_AndChangesNoFile()
+    {
+        var fixture = MalformationFixtures.ShortRegion;
+        using var fx = new PluginFixtureBuilder("api-repair-without-git").WithPlugin(fixture.Malformed.FileName, origin: Origin).BuildScattered();
+        var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
+        fixture.Malformed.WriteInto(modFolder);
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        var plugin = new { name = fixture.Malformed.FileName, origin = Origin };
+        var hash = Assert.Single((await (await Client.PostAsJsonAsync("/plugins/repair-previews", new { plugins = new[] { plugin } }))
+            .EnsureSuccessStatusCode().Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").EnumerateArray()).GetProperty("hash").GetString();
+        var before = FilesOutsideGit(modFolder);
+
+        HttpResponseMessage response;
+        var path = Environment.GetEnvironmentVariable("PATH");
+        Environment.SetEnvironmentVariable("PATH", string.Empty);
+        try
+        {
+            response = await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
+            {
+                plugins = new[] { new { plugin, hash, sourceFolder = Client.SourceFolderSentFor(Origin) } },
+                force = false,
+            });
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", path);
+        }
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("GitUnavailable", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
+        Assert.Equal(before, FilesOutsideGit(modFolder));
+    }
+
+    [Fact]
     public async Task CopyingASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndChangesNoFile()
     {
         using var fx = new PluginFixtureBuilder("trace-copy-without-git")

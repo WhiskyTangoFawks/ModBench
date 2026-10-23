@@ -61,18 +61,10 @@ public sealed class DecompilePluginHandler
         }
 
         var repository = _source.OverFolder(mod, loadOrder.GameRelease);
-        if (!force)
+        if (!force && WorkingTreeCheck.Of(repository, plugin.Key, "decompile") is { } loss)
         {
-            if (!repository.WorkingTreeChangesOf(key).Holds(out var changes, out var unread))
-            {
-                return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.WorkingTreeStatusUnreadable, $"Could not read what changed in {plugin.Name}'s source: {unread.Reason}");
-            }
-
-            if (changes.Count > 0)
-            {
-                return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(DecompileRefusal.WorkingTreeChanges,
-                    $"{plugin.Name}'s source has working-tree changes that decompile would replace: {string.Join(", ", changes)}. Request it again with force to replace them.");
-            }
+            return ItemAnswer<DecompileRefusal, NoOutcome>.Refused(
+                loss.Unreadable ? DecompileRefusal.WorkingTreeStatusUnreadable : DecompileRefusal.WorkingTreeChanges, loss.Message);
         }
 
         var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, mod.Folder, onParsed: () => { }, cancel);

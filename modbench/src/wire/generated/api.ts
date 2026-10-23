@@ -521,6 +521,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/repair-previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Each malformed plugin's diagnoses and the change that repairs each, writing nothing. */
+        post: operations["RepairPreviews"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plugins/decompile-and-repair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Writes each malformed plugin's source as two commits: its malformed records flagged, then repaired. A plugin is named with the hash its preview answered, and refused when its bytes changed since. */
+        post: operations["DecompileAndRepairPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/move-last-written": {
         parameters: {
             query?: never;
@@ -1205,6 +1239,22 @@ export interface components {
             refused: components["schemas"]["DecompileAndCommitRefused"][];
         };
         /** @enum {string} */
+        DecompileAndRepairRefusal: "None" | "NoLoadOrder" | "GitUnavailable" | "PluginNotLoaded" | "NotFromAMod" | "Unreadable" | "NotMalformed" | "ChangedSincePreview" | "NoRepair" | "DropsData" | "RoundTripFailed" | "MissingLocalizationStrings" | "WorkingTreeChanges" | "WorkingTreeStatusUnreadable" | "AmbiguousSource" | "NoSourceFolder" | "AnotherRepository" | "OtherPluginRefused" | "ModFilesUnreadable" | "WriteFailed" | "RepairFailed";
+        DecompileAndRepairRefused: {
+            item: components["schemas"]["PluginAddress"];
+            refusal: components["schemas"]["DecompileAndRepairRefusal"];
+            message: string;
+        };
+        DecompileAndRepairRequest: {
+            plugins: components["schemas"]["PluginToRepairRequest"][];
+            metadataFiles?: string[] | null;
+            force: boolean;
+        };
+        DecompileAndRepairResult: {
+            applied: components["schemas"]["PluginAddress"][];
+            refused: components["schemas"]["DecompileAndRepairRefused"][];
+        };
+        /** @enum {string} */
         DecompileRefusal: "None" | "PluginNotLoaded" | "NotInSourceMod" | "NotFromAMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "AmbiguousSource" | "WriteFailed" | "WorkingTreeStatusUnreadable" | "GitUnavailable" | "WorkingTreeChanges" | "NoLoadOrder";
         DecompileRefused: {
             item: components["schemas"]["PluginAddress"];
@@ -1517,6 +1567,12 @@ export interface components {
             dependants: components["schemas"]["PluginAddress"][];
             unreadable: components["schemas"]["PluginAddress"][];
         };
+        PluginDiagnosis: {
+            anchor?: string | null;
+            defectClass: string;
+            tail?: string | null;
+            message: string;
+        };
         PluginDiagnosisReport: {
             plugin: string;
             origin: string;
@@ -1560,6 +1616,11 @@ export interface components {
             isCreatable: boolean;
             isContainer: boolean;
         };
+        PluginRepairPreview: {
+            plugin: components["schemas"]["PluginAddress"];
+            hash: string;
+            diagnoses: components["schemas"]["RepairPreview"][];
+        };
         PluginResponse: {
             name: string;
             path: string;
@@ -1581,6 +1642,11 @@ export interface components {
             hasParseFailure: boolean;
             pluginSourceUnreadable?: components["schemas"]["UnreadableSource"] | null;
             laterReadFailure?: components["schemas"]["SourceProblem"][] | null;
+        };
+        PluginToRepairRequest: {
+            plugin: components["schemas"]["PluginAddress"];
+            hash: string;
+            sourceFolder?: string | null;
         };
         PluginWithUnreadableSource: {
             name: string;
@@ -1724,6 +1790,22 @@ export interface components {
         RenderedDocument: {
             fileName: string;
             text: string;
+        };
+        RepairChange: {
+            description: string;
+            /** Format: int32 */
+            droppedBytes: number;
+        };
+        RepairPreview: {
+            diagnosis: components["schemas"]["PluginDiagnosis"];
+            change?: components["schemas"]["RepairChange"] | null;
+        };
+        RepairPreviewsRequest: {
+            plugins: components["schemas"]["PluginAddress"][];
+        };
+        RepairPreviewsResult: {
+            applied: components["schemas"]["PluginRepairPreview"][];
+            refused: components["schemas"]["DecompileAndRepairRefused"][];
         };
         ResolveNamesRequest: {
             names: components["schemas"]["NameQuery"][];
@@ -3192,6 +3274,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DecompileResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RepairPreviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepairPreviewsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepairPreviewsResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    DecompileAndRepairPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecompileAndRepairRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecompileAndRepairResult"];
                 };
             };
             /** @description Bad Request */
