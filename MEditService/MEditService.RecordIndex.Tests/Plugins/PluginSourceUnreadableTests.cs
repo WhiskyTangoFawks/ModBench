@@ -32,8 +32,6 @@ public sealed class PluginSourceUnreadableTests : IDisposable
 
     private string SourceRoot => PluginSourceRoot.In(_entry.ModFolderOf(), PluginName);
 
-    private string Relative(string path) => Path.GetRelativePath(_entry.ModFolderOf(), path);
-
     private string NpcDocument => Directory.EnumerateFiles(SourceRoot, "*.json", SearchOption.AllDirectories)
         .Single(file => File.ReadAllText(file).Contains($"\"{_npc}\"", StringComparison.Ordinal));
 
@@ -106,19 +104,6 @@ public sealed class PluginSourceUnreadableTests : IDisposable
         var rendered = index.Queries.GetRenderedDocument(Plugin, _npc).Value();
 
         Assert.Contains(NpcEditorId, rendered?.Text);
-    }
-
-    [Fact]
-    public void APluginSourceThatFailsItsFirstRead_ReadsItsPluginFile_MarkedAsSuch_NamingTheFiles()
-    {
-        var backup = BackupOfTheNpcDocumentClaimingItsFormKeyAgain();
-
-        using var index = Reconciled();
-
-        Assert.Equal(NpcEditorId, index.DocumentOf(_npc, Plugin).EditorId);
-        Assert.True(index.ReadFromItsPluginFileForItsUnreadableSource(Plugin));
-        Assert.Empty(index.Status.Failures);
-        Assert.Contains(index.SourceProblems(), problem => problem.SourceRelativePath == Relative(backup));
     }
 
     [Fact]

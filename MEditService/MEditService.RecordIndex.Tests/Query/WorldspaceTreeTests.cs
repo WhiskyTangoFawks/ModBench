@@ -38,6 +38,13 @@ public sealed class WorldspaceTreeTests : IDisposable
                 withTopCell.TopCell = Cell(mod, "TopCell", name: "Sanctuary Hills");
                 Place(withTopCell, (0, 0), (0, 0), Cell(mod, "BlockCell", name: "Concord"));
 
+                var bareCell = new Cell(mod);
+                var bareRef = new PlacedObject(mod);
+                bareCell.Persistent.Add(bareRef);
+                Place(World(mod, "Bare"), (0, 0), (0, 0), bareCell);
+                _formKeys["BareCell"] = bareCell.FormKey.ToString();
+                _formKeys["BareRef"] = bareRef.FormKey.ToString();
+
                 _formKeys["Unnamed"] = World(mod, editorId: null).FormKey.ToString();
 
                 var interior = Cell(mod, "IntCell");
@@ -149,6 +156,25 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
+    public void GetCellChildRecords_ARefWithNoEditorIdOrBase_CarriesNulls()
+    {
+        var result = _index.Queries.GetCellChildRecords(Plugin, FormKeyOf("BareCell")).Value();
+
+        Assert.Equal(
+            new ChildRecordSummary(FormKeyOf("BareRef"), null, null, "refr", WorkingTreeState.None),
+            Assert.Single(result.Persistent));
+    }
+
+    [Fact]
+    public void GetWorldspaceBlocks_ACellWithNoEditorIdOrGrid_CarriesNulls()
+    {
+        var result = _index.Queries.GetWorldspaceBlocks(Plugin, FormKeyOf("Bare")).Value();
+
+        var cell = Assert.Single(Assert.Single(Assert.Single(result.Blocks).SubBlocks).Cells);
+        Assert.Equal<(string, string?, int?, int?)>((FormKeyOf("BareCell"), null, null, null), (cell.FormKey, cell.EditorId, cell.CellX, cell.CellY));
+    }
+
+    [Fact]
     public void GetWorldspaces_MapsRecordsToSummaries()
     {
         var result = _index.Queries.GetWorldspaces(Plugin).Value();
@@ -173,6 +199,8 @@ public sealed class WorldspaceTreeTests : IDisposable
         var topCell = Assert.Single(result.TopCells);
         Assert.Equal("TopCell", topCell.EditorId);
         Assert.True(topCell.IsPersistentWorldspaceCell);
+        Assert.Null(topCell.CellX);
+        Assert.Null(topCell.CellY);
         Assert.Single(result.Blocks);
     }
 

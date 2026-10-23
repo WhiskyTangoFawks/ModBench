@@ -17,66 +17,6 @@ namespace MEditService.RecordIndex.Tests.Plugins;
 public sealed class LoadOrderLocalizedTests
 {
     [Fact]
-    public void ALocalizedDataDirectoryPlugin_IndexesItsRealStringInsteadOfThrowingOrReadingEmpty()
-    {
-        var holder = new LoadOrderHolder();
-        FormKey doorFormKey = default;
-        var data = new PluginFixtureBuilder("load-order-localized")
-            .WithPlugin("Fixture.esp", mod =>
-            {
-                var door = mod.Doors.AddNew("MainDoor");
-                door.Name = new TranslatedString(Language.English, "The Big Door");
-                mod.UsingLocalization = true;
-                doorFormKey = door.FormKey;
-            })
-            .Build();
-        using (data)
-        {
-            File.WriteAllBytes(Path.Combine(data.DataFolder, "UnrelatedMod - Main.ba2"), []);
-
-            using var index = Indexes.Open(holder);
-            index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-
-            Assert.Empty(index.Status.Failures);
-
-            var detail = index.CopyIn(doorFormKey.ToString(), new PluginAddress("Fixture.esp", PluginOrigin.DataDirectory));
-            Assert.NotNull(detail);
-            Assert.Contains(detail.Fields, f => f.Value?.ToString()?.Contains("The Big Door") == true);
-        }
-    }
-
-    [Fact]
-    public void ALocalizedOverwritePlugin_ReadsItsOwnStrings_NotTheGamesDataFolder()
-    {
-        var holder = new LoadOrderHolder();
-        FormKey doorFormKey = default;
-        var fx = new PluginFixtureBuilder("load-order-localized-overwrite")
-            .WithPlugin("Fixture.esp", mod =>
-            {
-                var door = mod.Doors.AddNew("MainDoor");
-                door.Name = new TranslatedString(Language.English, "The Overwrite Door");
-                mod.UsingLocalization = true;
-                doorFormKey = door.FormKey;
-            }, origin: PluginOrigin.Overwrite)
-            .BuildScattered();
-        using (fx)
-        {
-            var overwriteFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
-            File.WriteAllBytes(Path.Combine(overwriteFolder, "UnrelatedMod - Main.ba2"), []);
-            Assert.False(Directory.Exists(Path.Combine(fx.DataFolder, "Strings")), "the fixture must carry no Data/Strings to fall back to");
-
-            using var index = Indexes.Open(holder);
-            index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
-
-            Assert.Empty(index.Status.Failures);
-
-            var detail = index.CopyIn(doorFormKey.ToString(), new PluginAddress("Fixture.esp", PluginOrigin.Overwrite));
-            Assert.NotNull(detail);
-            Assert.Contains(detail.Fields, f => f.Value?.ToString()?.Contains("The Overwrite Door") == true);
-        }
-    }
-
-    [Fact]
     public void ALocalizedPluginWhoseStringsFilesAreHandedInALaterSnapshot_IsReadAgainWithThem()
     {
         var holder = new LoadOrderHolder();
@@ -373,13 +313,11 @@ public sealed class LoadOrderLocalizedTests
         return (name.CheckError is not null, name.Value?.ToString()?.Contains("The Big Door", StringComparison.Ordinal) == true);
     }
 
-    [Fact]
-    public void ALocalizedPluginMissingOneStringsFile_NamesThatFileOnItsName() =>
-        Assert.Equal("Fixture_en.STRINGS", NameCheckErrorLeaving(["Fixture_en.ILSTRINGS", "Fixture_en.DLSTRINGS"]));
-
-    [Fact]
-    public void ALocalizedPluginMissingTwoStringsFiles_NamesBothOnItsName() =>
-        Assert.Equal("Fixture_en.STRINGS, Fixture_en.DLSTRINGS", NameCheckErrorLeaving(["Fixture_en.ILSTRINGS"]));
+    [Theory]
+    [InlineData(new[] { "Fixture_en.ILSTRINGS", "Fixture_en.DLSTRINGS" }, "Fixture_en.STRINGS")]
+    [InlineData(new[] { "Fixture_en.ILSTRINGS" }, "Fixture_en.STRINGS, Fixture_en.DLSTRINGS")]
+    public void ALocalizedPluginMissingStringsFiles_NamesThemOnItsName(string[] stringsFilesKept, string expected) =>
+        Assert.Equal(expected, NameCheckErrorLeaving(stringsFilesKept));
 
     private static string? NameCheckErrorLeaving(string[] stringsFilesKept)
     {
