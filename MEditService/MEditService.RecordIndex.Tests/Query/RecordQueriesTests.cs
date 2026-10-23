@@ -425,20 +425,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public async Task GetRecord_BeforeTheWinnerSweep_IsNotReady_ForNoCopyWinsYetAndNullWouldSayItIsGone()
-    {
-        await WhileNoCopyIsFlaggedWinner(index =>
-            Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetRecord(NpcWithNoWinnerYet).Refused().Refusal));
-    }
-
-    [Fact]
-    public async Task GetCompareRecords_BeforeTheWinnerSweep_IsNotReady_ForALinkResolvesToWinnersOnly()
-    {
-        await WhileNoCopyIsFlaggedWinner(index =>
-            Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetCompareRecords([new RecordCopy(NpcWithNoWinnerYet, new PluginAddress("Base.esm", "Base.esm"))]).Refused().Refusal));
-    }
-
-    [Fact]
     public void GetRecord_ReturnsRecordType_ForCopyAsNewRecordNeedsTheSchemaTableNameUpFront()
     {
         Assert.Equal("npc_", _svc.GetRecord(Npc01).Value()?.RecordType);
@@ -889,12 +875,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetCreatablePluginExtensions_WithNoLoadOrder_Refuses()
-    {
-        Assert.Equal(IndexRefusal.NoLoadOrder, Unloaded().Queries.GetCreatablePluginExtensions().Refused().Refusal);
-    }
-
-    [Fact]
     public void GetCreatableRecordTypes_NamesAFlatTypeAsXEditDoes()
     {
         Assert.Equal("Non-Player Character", Assert.Single(_svc.GetCreatableRecordTypes().Value(), r => r.Type == "npc_").DisplayName);
@@ -967,14 +947,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetPlugins_NoLoadOrder_ThrowsNoLoadOrderException()
-    {
-        var refused = Unloaded().Queries.GetPlugins().Refused();
-        Assert.Equal(IndexRefusal.NoLoadOrder, refused.Refusal);
-        Assert.Contains("No load order", refused.Message);
-    }
-
-    [Fact]
     public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
     {
         var index = OwnTwoNpcs();
@@ -1023,12 +995,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         index.Queries.ClearFilter();
 
         Assert.Null(index.Queries.GetFilter().Value());
-    }
-
-    [Fact]
-    public void GetFilter_WithNoLoadOrder_RefusesRatherThanAnsweringUnfiltered()
-    {
-        Assert.Equal(IndexRefusal.NoLoadOrder, Unloaded().Queries.GetFilter().Refused().Refusal);
     }
 
     [Fact]

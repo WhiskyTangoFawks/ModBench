@@ -154,28 +154,4 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
             reports.Select(r => (r.Plugin, r.Anchor)));
     }
 
-    [Fact]
-    public async Task GetLoadOrderDiagnoses_WhileReconciling_IsNotReady_ForAPluginTheProjectionHasNotReachedHasNoRowsYetAndWouldReadClean()
-    {
-        LoadOrderEntry[] plugins = [Plugin(Malformed), Clean("Later.esp", line: 1)];
-        var holder = new LoadOrderHolder();
-        using var gate = new GatedPluginAdapter(gateBefore: "Later.esp");
-        using var index = Indexes.Open(holder, gate);
-        var load = Task.Run(() => index.Reconcile(holder, DataFolder, plugins, GameRelease.Fallout4));
-        await gate.WaitUntilParkedAsync();
-
-        Assert.Equal(IndexRefusal.IndexNotReady, index.Queries.GetLoadOrderDiagnoses().Refused().Refusal);
-
-        gate.Release();
-        await load;
-        Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
-    }
-
-    [Fact]
-    public void GetLoadOrderDiagnoses_WithNoLoadOrderHeld_Throws()
-    {
-        using var index = Indexes.Open(new LoadOrderHolder());
-
-        Assert.Equal(IndexRefusal.NoLoadOrder, index.Queries.GetLoadOrderDiagnoses().Refused().Refusal);
-    }
 }

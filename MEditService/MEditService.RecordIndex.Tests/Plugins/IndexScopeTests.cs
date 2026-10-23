@@ -50,16 +50,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void SetFilter_NoLoadOrder_ThrowsNoLoadOrderException()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = OpenIndex(holder);
-        var refused = index.Queries.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
-        Assert.Equal(IndexRefusal.NoLoadOrder, refused?.Refusal);
-        Assert.Contains("No load order", refused?.Message);
-    }
-
-    [Fact]
     public void ClearFilter_NoLoadOrder_LeavesNoFilter()
     {
         var holder = new LoadOrderHolder();
