@@ -27,21 +27,16 @@ export function chosenHit(hits: readonly Hit[], fileName: string): Hit | undefin
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined);
 const number = (value: unknown): number | undefined => (typeof value === 'number' ? value : undefined);
-const named = <T extends object>(fields: { [K in keyof T]: T[K] | undefined }): Partial<T> =>
-  Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as Partial<T>;
-
 export function infoOf(game: string, { mod, file_details: file }: Hit): NexusFileInfo {
   return {
     game, modID: String(mod.mod_id), fileID: String(file.file_id),
-    ...named<Omit<NexusFileInfo, 'game' | 'modID' | 'fileID'>>({
-      name: text(file.name),
-      version: text(file.version) ?? text(file.mod_version),
-      fileCategory: number(file.category_id),
-      modName: text(mod.name),
-      category: number(mod.category_id),
-      author: text(mod.author),
-      uploader: text(mod.uploaded_by),
-      uploaderUrl: text(mod.uploaded_users_profile_url),
-    }),
+    name: text(file.name),
+    version: text(file.version) ?? text(file.mod_version),
+    fileCategory: number(file.category_id),
+    modName: text(mod.name),
+    category: number(mod.category_id),
+    author: text(mod.author),
+    uploader: text(mod.uploaded_by),
+    uploaderUrl: text(mod.uploaded_users_profile_url),
   };
 }
