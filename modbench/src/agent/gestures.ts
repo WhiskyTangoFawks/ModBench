@@ -168,6 +168,12 @@ const DECOMPILE = gestureInput(
   (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), { force: options?.force }),
 );
 
+const DECOMPILE_AND_REPAIR = gestureInput(
+  `argument: the plugins, ${PLUGIN_TAKES}; options: { force?: true to repair a plugin whose repair drops data or whose plugin source has working-tree changes, which is otherwise refused, listing what it would lose }`,
+  z.object({ argument: z.array(PLUGIN_NAME), options: z.object({ force: z.boolean().optional() }).optional() }),
+  (value, { argument, options }) => new AgentCall(pluginsCall(value, argument), { force: options?.force }),
+);
+
 const DROP = z.union([
   z.object({ kind: z.enum(['winningEnd', 'losingEnd']) }),
   z.object({ kind: z.enum(['before', 'after']), name: z.string() }),
@@ -232,7 +238,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.plugin.enable', LINES],
   ['modbench.plugin.disable', LINES],
   ['modbench.plugin.decompile', DECOMPILE],
-  ['modbench.plugin.decompileAndRepair', DECOMPILE],
+  ['modbench.plugin.decompileAndRepair', DECOMPILE_AND_REPAIR],
   ['modbench.plugin.move', MOVE_PLUGINS],
   ['modbench.plugin.create', CREATE_PLUGIN],
   ['modbench.plugin.rename', RENAME_PLUGIN],

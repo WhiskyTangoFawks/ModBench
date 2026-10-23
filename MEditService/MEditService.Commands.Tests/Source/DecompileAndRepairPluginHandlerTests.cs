@@ -120,7 +120,50 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
         Assert.Equal(DecompileAndRepairRefusal.DropsData, refused.Refusal);
         Assert.Contains(fixture.Change ?? "", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("force", refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, Head(_sourceMod));
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_ARepairThatDropsData_WritesWhenForced()
+    {
+        var plugin = AddToSourceMod(MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction").Malformed);
+
+        var forced = await Repair([await Previewed(plugin)], force: true);
+
+        Assert.Equal([plugin], forced.Applied);
+        Assert.Equal($"Repair {Malformed}", Subjects(_sourceMod, 1).Single());
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_ARepairThatDropsDataOverWorkingTreeChanges_IsRefusedOnceListingBoth_AndForceWaivesBoth()
+    {
+        var fixture = MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction");
+        var plugin = AddToSourceMod(fixture.Malformed);
+        var stray = StrayFile();
+
+        var refused = Assert.Single((await Repair([await Previewed(plugin)])).Refused);
+        var forced = await Repair([await Previewed(plugin)], force: true);
+
+        Assert.Equal(DecompileAndRepairRefusal.DropsData, refused.Refusal);
+        Assert.Contains(fixture.Change ?? "", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("Stray.json", refused.Message, StringComparison.Ordinal);
+        Assert.Equal([plugin], forced.Applied);
+        Assert.False(File.Exists(stray));
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_AgreedDrops_WaiveTheDroppedDataAlone()
+    {
+        var plugin = AddToSourceMod(MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction").Malformed);
+        StrayFile();
+
+        var dirty = Assert.Single((await Repair([await Previewed(plugin)], agreedDrops: true)).Refused);
+        File.Delete(StrayFile());
+        var clean = await Repair([await Previewed(plugin)], agreedDrops: true);
+
+        Assert.Equal(DecompileAndRepairRefusal.WorkingTreeChanges, dirty.Refusal);
+        Assert.Equal([plugin], clean.Applied);
     }
 
     [Fact]
@@ -150,6 +193,8 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var refused = Assert.Single((await Repair(preview)).Refused);
 
         Assert.Equal(DecompileAndRepairRefusal.ChangedSincePreview, refused.Refusal);
+        Assert.Contains($"{Malformed}'s bytes changed since the repair preview", refused.Message, StringComparison.Ordinal);
+        Assert.Contains(Lossless.Change ?? "", refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, Head(_sourceMod));
     }
 
@@ -157,8 +202,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     public async Task DecompileAndRepair_OfAPluginWhoseSourceHasWorkingTreeChanges_IsRefusedUnlessForced()
     {
         var plugin = AddToSourceMod(Lossless.Malformed);
-        var stray = Path.Combine(Directory.CreateDirectory(Path.Combine(_sourceMod, "plugin-source", Malformed)).FullName, "Stray.json");
-        File.WriteAllText(stray, "{}");
+        var stray = StrayFile();
 
         var refused = Assert.Single((await Repair(await Previewed(plugin))).Refused);
         var forced = await Repair([await Previewed(plugin)], force: true);
@@ -240,11 +284,18 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         return new PluginToRepair(preview.Plugin, preview.Hash, SourceFolder: null);
     }
 
+    private string StrayFile()
+    {
+        var stray = Path.Combine(Directory.CreateDirectory(Path.Combine(_sourceMod, "plugin-source", Malformed)).FullName, "Stray.json");
+        File.WriteAllText(stray, "{}");
+        return stray;
+    }
+
     private Task<DecompileAndRepairResult> Repair(PluginToRepair plugin) => Repair([plugin]);
 
-    private async Task<DecompileAndRepairResult> Repair(IReadOnlyList<PluginToRepair> plugins, bool force = false, IPluginAdapter? adapter = null) =>
+    private async Task<DecompileAndRepairResult> Repair(IReadOnlyList<PluginToRepair> plugins, bool force = false, IPluginAdapter? adapter = null, bool agreedDrops = false) =>
         (await TestEditService.Over(_holder, adapter: adapter).GetRequiredService<DecompileAndRepairPluginHandler>()
-            .DecompileAndRepairAsync(plugins, metadataFiles: [], force)).Value();
+            .DecompileAndRepairAsync(plugins, metadataFiles: [], force, agreedDrops)).Value();
 
     private static void WriteCleanPlugin(string modFolder, string name)
     {

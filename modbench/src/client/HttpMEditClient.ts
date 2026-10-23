@@ -491,12 +491,12 @@ class HttpMEditClient implements MEditClient {
   }
 
   async decompileAndRepair(
-    plugins: readonly PluginToRepair[], metadataFiles: readonly string[], force: boolean,
+    plugins: readonly PluginToRepair[], metadataFiles: readonly string[], force: boolean, agreedDrops: boolean,
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
     return this.mutateEach({
       verb: 'decompile and repair', noun: 'plugin', items: plugins,
       op: (counted) => `decompileAndRepair(${counted})`,
-      post: () => this.apiClient.POST('/plugins/decompile-and-repair', { body: { plugins: [...plugins], metadataFiles: [...metadataFiles], force } }),
+      post: () => this.apiClient.POST('/plugins/decompile-and-repair', { body: { plugins: [...plugins], metadataFiles: [...metadataFiles], force, agreedDrops } }),
       outcome: selectionOutcome,
     });
   }

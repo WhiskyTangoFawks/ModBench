@@ -24,7 +24,7 @@ internal static class Malformations
     {
         internal RepairPreview Preview => new(Diagnosis, Repair is null
             ? null
-            : new RepairChange(string.Join("; ", Repair.Select(edit => edit.Describe(Subrecords))), DroppedBytes(Repair, Subrecords)));
+            : new RepairChange(string.Join("; ", Repair.Select(edit => edit.Describe(Subrecords))), DroppedBytes(Repair, Subrecords) > 0));
     }
 
     /// <summary>Every malformation the plugin's own bytes prove, in record order.</summary>

@@ -168,7 +168,7 @@ function registerPluginGestures(
   return [
     registerDecompileCommand({ client, instance, reporter: reporterFor('plugin.decompile'), ask }, selection),
     registerDecompileAndRepairCommand(
-      { commands, instance, reporter: reporterFor('plugin.decompileAndRepair'), log: (line) => { log('info', `[decompileAndRepair] ${line}`); } }, selection),
+      { commands, instance, ask, reporter: reporterFor('plugin.decompileAndRepair'), log: (line) => { log('info', `[decompileAndRepair] ${line}`); } }, selection),
     registerRecordCreateCommand({
       client, reporter: reporterFor('record.create'), write: recordWrite, source: sourceEditing,
       createdRecords: createdRecordSelection({ client, rowOf: (place, formKey) => tree.recordRow(place, formKey), view }),
