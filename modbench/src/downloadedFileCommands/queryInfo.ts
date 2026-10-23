@@ -15,7 +15,13 @@ async function foundOnNexus(nexus: NexusAsked, { games, md5, modID, fileID }: Do
   return byName.found ? byName : { found: false, reason: `${byMd5.reason} By its mod ID ${modID}: ${byName.reason}` };
 }
 
-async function queryFile(adapter: InstanceAdapter, nexus: NexusAsked, name: string): Promise<CommandResult<{ wrote: boolean }>> {
+/** A file looked up: `notice` is what MO2 says when it wrote the file's metadata although a request for more failed. */
+export interface QueriedFile {
+  name: string;
+  notice?: string;
+}
+
+async function queryFile(adapter: InstanceAdapter, nexus: NexusAsked, name: string): Promise<CommandResult<{ notice?: string }>> {
   try {
     const queried = await adapter.downloadedFileQuery(name);
     if (queried.kind === 'unreadable') return { applied: false, refusal: queried.reason };
@@ -23,7 +29,8 @@ async function queryFile(adapter: InstanceAdapter, nexus: NexusAsked, name: stri
     const found = await foundOnNexus(nexus, queried.answer, name);
     if (!found.found) return { applied: false, refusal: found.reason };
     const written = await adapter.writeNexusFileInfo(name, found.info);
-    return written.gone ? { applied: false, refusal: goneFromDisk(name) } : { applied: true, wrote: written.wrote };
+    if (written.gone) return { applied: false, refusal: goneFromDisk(name) };
+    return found.notice === undefined ? { applied: true } : { applied: true, notice: found.notice };
   } catch (err) {
     return refuse(err);
   }
@@ -31,9 +38,10 @@ async function queryFile(adapter: InstanceAdapter, nexus: NexusAsked, name: stri
 
 /** `modbench.downloadedFile.queryInfo` over the downloaded files: each lands on its own (commands.md, A selection is one gesture). */
 export const queryInfoOver = (adapter: InstanceAdapter, nexus: NexusAsked) =>
-  async (names: readonly string[]): Promise<SelectionResult<string>> => {
+  async (names: readonly string[]): Promise<SelectionResult<QueriedFile>> => {
     if (!(await nexus.loggedIn())) return { applied: false, refusal: NOT_LOGGED_IN };
-    return { applied: true, outcome: await selectionOutcomeOf(names, (name) => queryFile(adapter, nexus, name), (name) => name) };
+    const toItem = (name: string, landed?: { notice?: string }): QueriedFile => (landed?.notice === undefined ? { name } : { name, notice: landed.notice });
+    return { applied: true, outcome: await selectionOutcomeOf(names, (name) => queryFile(adapter, nexus, name), toItem) };
   };
 
 export type QueryInfo = ReturnType<typeof queryInfoOver>;

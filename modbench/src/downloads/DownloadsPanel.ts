@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { DownloadedFileSortColumn } from './downloadedFileRows';
 import type { DeletedDownloadedFile, DownloadedFileCommands } from '../downloadedFileCommands/downloads';
-import type { QueryInfo } from '../downloadedFileCommands/queryInfo';
+import type { QueriedFile, QueryInfo } from '../downloadedFileCommands/queryInfo';
 import type { DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS } from './keyContext';
 import { pluralArgument, registerGesture, singularArgument } from '../drivingLib/gestureEntry';
@@ -125,9 +125,13 @@ export function registerDownloadsMultiRowCommands(
   ];
 }
 
+// MO2 writes what it has although a request for more failed, and says so (downloadmanager.cpp, nxmRequestFailed).
+const noticesOf = ({ landed }: SelectionOutcome<QueriedFile>): PartialFailure[] =>
+  landed.flatMap(({ name, notice }) => (notice === undefined ? [] : [{ message: `Query info for "${name}" wrote less than Nexus knows`, detail: notice, severity: 'warning' as const }]));
+
 function queryInfoGesture(
   queryInfo: QueryInfo, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
-): DownloadsGesture<readonly string[], string> {
+): DownloadsGesture<readonly string[], QueriedFile> {
   return {
     fromView: (entry) => {
       const names = pluralArgument(entry, 'downloadedFile').map((node) => node.argument.row.name);
@@ -136,14 +140,15 @@ function queryInfoGesture(
     fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
     run: (names) => runDownloadsWriting(instance, async () => {
       const result = await queryInfo(names);
-      return result.applied ? { ...result, partial: [] } : result;
+      return result.applied ? { ...result, partial: noticesOf(result.outcome) } : result;
     }),
     report: (result, names) => {
       if (!result.applied) { reporter.report('error', result.refusal, result.detail); return; }
       const { landed, refused } = result.outcome;
       const line = `Query info: ${landed.length} of ${names.length} files filled.`;
       if (refused.length === 0) reporter.landed(line);
-      else reporter.report('warning', line, refused.map(({ item, reason }) => `"${item}" (${reason})`).join('\n'));
+      else reporter.report('warning', line, refused.map(({ item, reason }) => `"${item.name}" (${reason})`).join('\n'));
+      reportPartial(reporter, result.partial);
     },
   };
 }

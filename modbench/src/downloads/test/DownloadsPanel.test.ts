@@ -467,7 +467,7 @@ describe('registerDownloadsQueryInfoCommand', () => {
   };
 
   it('asks about the selected files, then reads the instance again, in one bar', async () => {
-    queryInfo.mockResolvedValue({ applied: true, outcome: { landed: ['a.7z', 'b.7z'], refused: [] } });
+    queryInfo.mockResolvedValue({ applied: true, outcome: { landed: [{ name: 'a.7z' }, { name: 'b.7z' }], refused: [] } });
     register();
 
     await invoke(QUERY, node(ROOT, 'a.7z'), [node(ROOT, 'a.7z'), node(ROOT, 'b.7z')]);
@@ -477,7 +477,7 @@ describe('registerDownloadsQueryInfoCommand', () => {
   });
 
   it('says in one line how many files it filled', async () => {
-    queryInfo.mockResolvedValue({ applied: true, outcome: { landed: ['a.7z', 'b.7z'], refused: [] } });
+    queryInfo.mockResolvedValue({ applied: true, outcome: { landed: [{ name: 'a.7z' }, { name: 'b.7z' }], refused: [] } });
     const reporter = register();
 
     await invoke(QUERY, node(ROOT, 'a.7z'), [node(ROOT, 'a.7z'), node(ROOT, 'b.7z')]);
@@ -489,7 +489,7 @@ describe('registerDownloadsQueryInfoCommand', () => {
   it('warns once, naming each file Nexus does not know in the Output', async () => {
     queryInfo.mockResolvedValue({
       applied: true,
-      outcome: { landed: ['b.7z'], refused: [{ item: 'a.7z', reason: 'Nexus does not know this file.' }, { item: 'c.7z', reason: 'EACCES' }] },
+      outcome: { landed: [{ name: 'b.7z' }], refused: [{ item: { name: 'a.7z' }, reason: 'Nexus does not know this file.' }, { item: { name: 'c.7z' }, reason: 'EACCES' }] },
     });
     const reporter = register();
 
@@ -499,6 +499,18 @@ describe('registerDownloadsQueryInfoCommand', () => {
       severity: 'warning', message: 'Query info: 1 of 3 files filled.', detail: '"a.7z" (Nexus does not know this file.)\n"c.7z" (EACCES)',
     }]);
     expect(reporter.landings).toEqual([]);
+  });
+
+  it('warns of each file that was written although a request for more failed', async () => {
+    queryInfo.mockResolvedValue({ applied: true, outcome: { landed: [{ name: 'a.7z', notice: 'Failed to request file info from Nexus: Nexus answered 503.' }], refused: [] } });
+    const reporter = register();
+
+    await invoke(QUERY, node(ROOT, 'a.7z'));
+
+    expect(reporter.landings).toEqual(['Query info: 1 of 1 files filled.']);
+    expect(reporter.reports).toEqual([{
+      severity: 'warning', message: 'Query info for "a.7z" wrote less than Nexus knows', detail: 'Failed to request file info from Nexus: Nexus answered 503.',
+    }]);
   });
 
   it('reports a refused selection as an error', async () => {
@@ -511,7 +523,7 @@ describe('registerDownloadsQueryInfoCommand', () => {
   });
 
   it('asks about the files an agent names, never the selection, and answers the outcome without reporting it', async () => {
-    const outcome = { landed: ['a.7z'], refused: [] };
+    const outcome = { landed: [{ name: 'a.7z' }], refused: [] };
     queryInfo.mockResolvedValue({ applied: true, outcome });
     const reporter = register();
 

@@ -8,7 +8,8 @@ import { convertToHtml } from './bbcode';
 import { qtToInt } from './qtInt';
 import { canonicalVersion } from './versionInfo';
 import { installedFileKey } from './metaIni';
-import { GENERAL_SECTION, readIniSection, setIniValue } from './qSettingsIni';
+import { localDateTimeStream } from './qtDateTime';
+import { GENERAL_SECTION, readIniSection, setIniDateTime, setIniValue } from './qSettingsIni';
 
 /** Appended to a downloaded file's name to name its metadata file. */
 export const METADATA_FILE_SUFFIX = '.meta';
@@ -70,11 +71,15 @@ export function setHiddenInText(text: string, hidden: boolean): string {
  *  and the version as its canonical string. A key lands right after the header, so they go in reversed; a key `info` does not name stays as found. */
 export function setNexusFileInfoInText(text: string, info: NexusFileInfo, gameName: string): string {
   const version = [info.version, info.modVersion].map((v) => canonicalVersion(v ?? '')).find((v) => v !== '');
-  const written: readonly (readonly [string, string | number | undefined])[] = [
+  const fileTime = info.fileTime === undefined ? undefined : localDateTimeStream(info.fileTime, -new Date(info.fileTime).getTimezoneOffset());
+  const written: readonly (readonly [string, string | number | Buffer | undefined])[] = [
     ['gameName', gameName], ['modID', info.modID], ['fileID', info.fileID], ['name', info.name],
     ['description', info.description === undefined ? undefined : convertToHtml(info.description)], ['modName', info.modName],
-    ['version', version], ['fileCategory', info.fileCategory], ['category', info.category], ['author', info.author],
+    ['version', version], ['fileTime', fileTime], ['fileCategory', info.fileCategory], ['category', info.category], ['author', info.author],
     ['uploader', info.uploader], ['uploaderUrl', info.uploaderUrl],
   ];
-  return written.reduceRight((edited, [key, value]) => (value === undefined ? edited : setMetaValue(edited, key, String(value))), text);
+  return written.reduceRight((edited, [key, value]) => {
+    if (value === undefined) return edited;
+    return Buffer.isBuffer(value) ? setIniDateTime(edited, GENERAL_SECTION, key, value) : setMetaValue(edited, key, String(value));
+  }, text);
 }

@@ -2739,6 +2739,12 @@ describe('the MO2 Instance adapter', () => {
         expect(await metaOf('manual.zip')).toMatch(/^version=3\.1\.0\.0\r$/m);
       });
 
+      it('writes when the file was uploaded as a stored date and time, between the version and the file category', async () => {
+        await adapter.writeNexusFileInfo('manual.zip', { game: 'fallout4', modID: '1', fileID: '2', version: '1.0', fileTime: 1_455_072_761, fileCategory: 1 });
+
+        expect(await metaOf('manual.zip')).toMatch(/version=1\.0\.0\.0\r\nfileTime="@DateTime\(.*\)"\r\nfileCategory=1\r\n/);
+      });
+
       it('keeps a value Nexus does not name, and replaces one it does', async () => {
         await writeFile(join(downloadsFolder(), 'manual.zip.meta'), '[General]\r\nauthor=Hand Written\r\nversion=0.1\r\ninstalled=true\r\n');
 

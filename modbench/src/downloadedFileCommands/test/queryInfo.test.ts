@@ -4,7 +4,7 @@ import { downloadedFilesOf, fakeInstanceAdapter, md5Of, readingFixture, refusing
 import { GOOD_KEY, nexusAnswering } from '../../nexus/test/nexusDouble';
 
 const search = (md5: string): string => `https://api.nexusmods.com/v1/games/fallout4/mods/md5_search/${md5}.json`;
-const hit = (file_name: string) => ({ mod: { mod_id: 7, name: 'Sleep or Save' }, file_details: { file_id: 78, file_name, version: '1.2' } });
+const hit = (file_name: string) => ({ mod: { mod_id: 7, name: 'Sleep or Save' }, file_details: { file_id: 78, file_name, version: '1.2', description: 'Main' } });
 const known = (...names: string[]) => (url: string): Response => {
   const hits = names.filter((name) => url === search(md5Of(name))).map(hit);
   return new Response(JSON.stringify(hits), { status: hits.length > 0 ? 200 : 404 });
@@ -21,36 +21,36 @@ describe('query info', () => {
   it('writes what Nexus knows of each file, found by the MD5 of the file', async () => {
     const { fake, result } = await querying(['a.7z', 'b.7z'], known('a.7z', 'b.7z'));
 
-    const info = { game: 'fallout4', modID: '7', fileID: '78', version: '1.2', modName: 'Sleep or Save' };
-    expect(result).toEqual({ applied: true, outcome: { landed: ['a.7z', 'b.7z'], refused: [] } });
+    const info = { game: 'fallout4', modID: '7', fileID: '78', version: '1.2', description: 'Main', modName: 'Sleep or Save' };
+    expect(result).toEqual({ applied: true, outcome: { landed: [{ name: 'a.7z' }, { name: 'b.7z' }], refused: [] } });
     expect(fake.calls).toEqual([{ verb: 'writeNexusFileInfo', name: 'a.7z', info }, { verb: 'writeNexusFileInfo', name: 'b.7z', info }]);
   });
 
   it('leaves a file Nexus does not know as it was, refusing it by name, and goes on with the others', async () => {
     const { fake, result } = await querying(['a.7z', 'b.7z'], known('b.7z'));
 
-    expect(result).toEqual({ applied: true, outcome: { landed: ['b.7z'], refused: [{ item: 'a.7z', reason: 'Nexus does not know this file.' }] } });
+    expect(result).toEqual({ applied: true, outcome: { landed: [{ name: 'b.7z' }], refused: [{ item: { name: 'a.7z' }, reason: 'Nexus does not know this file.' }] } });
     expect(fake.calls.map((call) => call.verb)).toEqual(['writeNexusFileInfo']);
   });
 
   it('refuses a file whose MD5 cannot be read, asking Nexus nothing of it', async () => {
     const { fake, sent, result } = await querying(['a.7z'], known('a.7z'), { unreadableQueries: new Map([['a.7z', 'EACCES: permission denied']]) });
 
-    expect(result).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: 'a.7z', reason: 'EACCES: permission denied' }] } });
+    expect(result).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: { name: 'a.7z' }, reason: 'EACCES: permission denied' }] } });
     expect([fake.calls, sent]).toEqual([[], []]);
   });
 
   it('refuses a file that is gone from disk', async () => {
     const { fake, result } = await querying(['gone.7z'], known());
 
-    expect(result).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: 'gone.7z', reason: '"gone.7z" is gone from disk.' }] } });
+    expect(result).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: { name: 'gone.7z' }, reason: '"gone.7z" is gone from disk.' }] } });
     expect(fake.calls).toEqual([]);
   });
 
   it('refuses a file whose metadata cannot be written', async () => {
     const { result } = await querying(['a.7z'], known('a.7z'), { refusals: refusing('writeNexusFileInfo', 'EACCES: permission denied') });
 
-    expect(result).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: 'a.7z', reason: 'EACCES: permission denied' }] } });
+    expect(result).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: { name: 'a.7z' }, reason: 'EACCES: permission denied' }] } });
   });
 
   describe('when the MD5 settles nothing', () => {
@@ -66,7 +66,7 @@ describe('query info', () => {
     it('asks by the mod ID the metadata or the name gives, and writes what the page and list say', async () => {
       const { fake, result } = await querying(['a.7z'], byName, { queries: new Map([['a.7z', { modID: '7' }]]) });
 
-      expect(result).toEqual({ applied: true, outcome: { landed: ['a.7z'], refused: [] } });
+      expect(result).toEqual({ applied: true, outcome: { landed: [{ name: 'a.7z' }], refused: [] } });
       expect(fake.calls).toEqual([{
         verb: 'writeNexusFileInfo', name: 'a.7z', info: { game: 'fallout4', modID: '7', fileID: '78', name: 'Main', version: '1.2', modName: 'Sleep or Save', category: 12 },
       }]);
@@ -82,17 +82,26 @@ describe('query info', () => {
     it('refuses a file with no mod ID to ask by, saying what the MD5 said', async () => {
       const { fake, result } = await querying(['a.7z'], byName);
 
-      expect(result).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: 'a.7z', reason: 'Nexus does not know this file.' }] } });
+      expect(result).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: { name: 'a.7z' }, reason: 'Nexus does not know this file.' }] } });
       expect(fake.calls).toEqual([]);
     });
 
-    it('refuses a file the mod does not list, saying what both said', async () => {
-      const { result } = await querying(['a.7z'], (url) => (url === PAGE ? page.clone() : new Response('', { status: 404 })), { queries: new Map([['a.7z', { modID: '7' }]]) });
+    it('refuses a file whose mod is not on Nexus, saying what both said', async () => {
+      const { fake, result } = await querying(['a.7z'], () => new Response('', { status: 404 }), { queries: new Map([['a.7z', { modID: '7' }]]) });
 
       expect(result).toEqual({
         applied: true,
-        outcome: { landed: [], refused: [{ item: 'a.7z', reason: 'Nexus does not know this file. By its mod ID 7: Nexus does not hold this mod.' }] },
+        outcome: { landed: [], refused: [{ item: { name: 'a.7z' }, reason: 'Nexus does not know this file. By its mod ID 7: Nexus does not hold this mod.' }] },
       });
+      expect(fake.calls).toEqual([]);
+    });
+
+    it('writes what the page said and carries MO2\'s notice when the mod\'s file list cannot be had', async () => {
+      const { fake, result } = await querying(['a.7z'], (url) => (url === PAGE ? page.clone() : new Response('', { status: 503 })), { queries: new Map([['a.7z', { modID: '7' }]]) });
+
+      const notice = 'Failed to request file info from Nexus: Nexus answered 503.';
+      expect(result).toEqual({ applied: true, outcome: { landed: [{ name: 'a.7z', notice }], refused: [] } });
+      expect(fake.calls).toMatchObject([{ verb: 'writeNexusFileInfo', info: { modID: '7', modName: 'Sleep or Save' } }]);
     });
   });
 

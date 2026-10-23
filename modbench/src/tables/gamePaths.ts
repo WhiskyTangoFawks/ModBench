@@ -101,13 +101,13 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
     archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   SkyrimSE: {
-    gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
+    gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
     masters: SKYRIM_MASTERS,
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES,
   },
   SkyrimVR: {
-    gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', validShortNames: ['SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
+    gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
     scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS,
     archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim VR', defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
