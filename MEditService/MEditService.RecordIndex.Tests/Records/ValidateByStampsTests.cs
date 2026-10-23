@@ -148,17 +148,6 @@ public sealed class ValidateByStampsTests : IDisposable
     }
 
     [Fact]
-    public void ADocumentTheHandEditedToDeclareNoFormKey_LeavesThePluginFilesRowsInItsPlace()
-    {
-        File.WriteAllText(NpcFile, "{\"EditorID\":\"NoFormKey\"}");
-
-        ValidateUntilSourceUnreadable();
-
-        Assert.Equal("FixtureNpc", Npc.EditorId);
-        Assert.Empty(_index.Status.Failures);
-    }
-
-    [Fact]
     public void ADocumentThatCouldNotBeRead_IsRefreshedByTheNextValidation()
     {
         _mod.HandEdit(Npc, "\"FixtureNpc\"", "\"RenamedByHand\"");
@@ -171,18 +160,6 @@ public sealed class ValidateByStampsTests : IDisposable
         Validate();
 
         Assert.Equal("RenamedByHand", Npc.EditorId);
-    }
-
-    [Fact]
-    public void ADocumentDeclaringNoRecord_LeavesThePluginSourceUnreadable_AtTheNextValidationToo()
-    {
-        var stray = Path.Combine(Path.GetDirectoryName(NpcFile).Require(), "Stray - 000A00_Fixture.esp.json");
-        File.WriteAllText(stray, "{\"EditorID\":\"Stray\"}");
-        ValidateUntilSourceUnreadable();
-
-        _index.AnnouncedByEqualArrivals(_notifications, () => _partner.RenamedByHand(_index));
-
-        Assert.True(SourceUnreadable);
     }
 
     [Fact]

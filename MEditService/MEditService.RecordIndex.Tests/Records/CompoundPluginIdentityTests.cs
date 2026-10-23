@@ -17,6 +17,7 @@ public class CompoundPluginIdentityTests
 
     private static readonly PluginAddress ModA = new("Shared.esp", "ModA");
     private static readonly PluginAddress ModB = new("Shared.esp", "ModB");
+    private static readonly PluginAddress ModC = new("Shared.esp", "ModC");
 
     private static ScatteredFixtureData SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey(string prefix, out FormKey npcKey, bool modBEnabled = true, int modBLine = 1)
     {
@@ -149,6 +150,8 @@ public class CompoundPluginIdentityTests
             Assert.NotNull(index.PlacementGroupIn(winner, cell, placed));
             Assert.False(CellIsLocatedIn(other));
             Assert.Null(index.PlacementGroupIn(other, cell, placed));
+            Assert.False(CellIsLocatedIn(ModC));
+            Assert.Null(index.PlacementGroupIn(ModC, cell, placed));
             Assert.Single(index.Queries.GetReferences(raceKey.ToString()).Value(), r => r.FieldPath == "Race");
         }
 
