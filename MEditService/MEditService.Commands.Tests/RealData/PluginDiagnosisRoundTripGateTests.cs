@@ -9,7 +9,7 @@ namespace MEditService.Commands.Tests.RealData;
 public sealed class PluginDiagnosisRoundTripGateTests
 {
     [Fact]
-    public async Task DecompileAndCommit_OfAMisshapedPerkPlugin_NamesThePerkRecordClassUnknown()
+    public async Task DecompileAndCommit_OfAMisshapedPerkPlugin_NamesThePerkRecordAsMalformedAndTheGestureThatClearsIt()
     {
         using var scratch = new RealFixtureScratch(MisshapedPerkPlugin.Plugin);
 
@@ -18,10 +18,9 @@ public sealed class PluginDiagnosisRoundTripGateTests
         Assert.False(result.Applied);
         Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
-        Assert.Contains("Perk", result.Message);
-        Assert.Contains(MisshapedPerkPlugin.FormKey, result.Message);
-        Assert.Contains(MisshapedPerkPlugin.EditorId, result.Message);
-        Assert.Contains(PluginDiagnosis.UnknownClass, result.Message);
+        Assert.Contains(MisshapedPerkPlugin.Anchor, result.Message);
+        Assert.Contains("malformed", result.Message);
+        Assert.Contains("Decompile and repair", result.Message);
         Assert.False(TestAdapters.Source().IsSourceMod(scratch.ModFolder));
     }
 
@@ -51,6 +50,9 @@ public sealed class PluginDiagnosisRoundTripGateTests
         Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
 
         Assert.Contains("blocked upstream: Mutagen #687", result.Message);
+        Assert.Contains("Mutagen mishandles", result.Message);
+        Assert.DoesNotContain("ecompile and repair", result.Message);
+        Assert.DoesNotContain("malformed", result.Message);
         Assert.DoesNotContain($"— {PluginDiagnosis.UnknownClass}:", result.Message);
     }
 

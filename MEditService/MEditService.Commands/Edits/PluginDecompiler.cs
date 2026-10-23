@@ -32,6 +32,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
                     $"{plugin.Name} cannot become source: {failure.Reason}."),
                 PluginFailure.Inaccessible => Decompiled.Refused(DecompileRefusal.RoundTripFailed,
                     $"{plugin.Name} cannot be read from its own binary ({failure.Reason}). Close whatever holds the file, then try again."),
+                PluginFailure.Unparsed unparsed => Decompiled.Refused(DecompileRefusal.RoundTripFailed, UnparsedRefusal(plugin, loadOrder, unparsed)),
                 _ => Decompiled.Refused(DecompileRefusal.RoundTripFailed,
                     $"{plugin.Name} could not be parsed from its own binary: {failure.Reason}"),
             };
@@ -42,6 +43,19 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
             return Decompiled.Refused(DecompileRefusal.RoundTripFailed, refusal);
 
         return new Decompiled(source, DecompileRefusal.None, "");
+    }
+
+    private string UnparsedRefusal(RegisteredPlugin plugin, LoadOrderSnapshot loadOrder, PluginFailure.Unparsed unparsed)
+    {
+        if (adapter.RepairsOf(plugin.Path, loadOrder.GameRelease).Holds(out var previews, out _) && previews.Diagnoses.Count > 0)
+        {
+            return $"{plugin.Name} is a malformed plugin and cannot become source: " +
+                   $"{string.Join("; ", previews.Diagnoses.Select(preview => preview.Diagnosis.Describe()))}. Decompile and repair it.";
+        }
+
+        return unparsed.Diagnosis.Tail is null
+            ? $"{plugin.Name} could not be parsed from its own binary: {unparsed.Reason}"
+            : $"{plugin.Name} is a correct plugin that Mutagen mishandles: {unparsed.Reason}";
     }
 
     // ADR-0006's gate. Reparse, not the pre-write object: only written bytes show what
@@ -78,8 +92,8 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
         {
             // A Kind B diagnosis on the record names the cause ahead of the drop it produced.
             return $"{pluginName} does not round-trip through its own source: " + (comparison.LossCause is { } cause
-                ? $"{cause.Describe()} — parsing the malformed subrecord dropped " +
-                  $"{string.Join(", ", loss.Signatures)} before its source was written."
+                ? $"it is a malformed plugin, and {cause.Describe()} — parsing the malformed subrecord dropped " +
+                  $"{string.Join(", ", loss.Signatures)} before its source was written. Decompile and repair it."
                 : $"{loss.RecordType} {loss.FormKey} is missing {string.Join(", ", loss.Signatures)} " +
                   "present in the original — dropped during parsing, before its source was written.");
         }
