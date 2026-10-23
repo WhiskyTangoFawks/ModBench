@@ -325,8 +325,8 @@ export interface MEditClient {
   decompile(plugins: readonly PluginAddress[], force: boolean): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   // Each plugin's repair preview, or why it has none. Nothing is written.
   repairPreviews(plugins: readonly PluginAddress[]): Promise<{ landed: readonly PluginRepairPreview[]; refused: readonly ItemRefusal<PluginAddress>[] } | WriteRefused>;
-  // Each plugin's source is written as two commits, or refused on its own. `metadataFiles`: the mod manager's own files,
-  // left out of a repository made for a mod with none. `force` waives every loss, `agreedDrops` only the dropped data.
+  // Each plugin's source is written as two commits, or refused on its own. `metadataFiles`: the mod manager's files,
+  // a new repository leaves out. `force` waives every loss, `agreedDrops` only the dropped data.
   decompileAndRepair(
     plugins: readonly PluginToRepair[], metadataFiles: readonly string[], force: boolean, agreedDrops: boolean,
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
