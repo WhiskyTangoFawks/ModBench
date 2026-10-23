@@ -104,6 +104,20 @@ function isBefore(left: Version, right: Version): boolean {
   return left.rest < right.rest;
 }
 
+const SCHEME_PREFIXES: Partial<Record<Scheme, string>> = { regular: '', numbersAndLetters: 'n', date: 'd' };
+const RELEASE_SUFFIXES = [' pre-alpha', 'a', 'b', 'rc'];
+
+/** VersionInfo::canonicalString: the form MO2 writes a version in; empty for a version that is not one. */
+export function canonicalVersion(versionString: string): string {
+  const version = parse(versionString);
+  if (!version.valid) return '';
+  const { scheme, major, minor, subMinor, subSubMinor } = version;
+  let numbers = '';
+  if (scheme === 'decimal') numbers = `f${major}.${String(minor).padStart(version.decimalPositions, '0')}`;
+  else if (scheme !== 'literal') numbers = `${SCHEME_PREFIXES[scheme]}${major}.${minor}.${subMinor}.${subSubMinor}`;
+  return `${numbers}${RELEASE_SUFFIXES[version.release] ?? ''}${version.rest}`;
+}
+
 /** Whether MO2 shows an update for a mod at `version` whose newest is `newest`: the newest one is
  *  a version, and the mod's, valid or not, orders before it. */
 export function isUpdateAvailable(version: string | undefined, newest: string | undefined): boolean {
