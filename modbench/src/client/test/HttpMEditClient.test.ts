@@ -194,7 +194,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const second = { name: 'Second.esp', origin: 'ModB' };
   const repairPreview = {
     plugin: first, hash: 'abc',
-    diagnoses: [{ diagnosis: { anchor: 'REGN 00000800', defectClass: 'short', message: 'RDAT is 6 bytes' }, change: { description: 'pads RDAT', droppedBytes: 0 } }],
+    diagnoses: [{ diagnosis: { anchor: 'REGN 00000800', defectClass: 'short', message: 'RDAT is 6 bytes' }, change: { description: 'pads RDAT', dropsData: false } }],
   };
   const kept = { formKey: '000801:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } };
   const gone = { formKey: '000802:MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } };
@@ -320,10 +320,10 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { applied: [repairPreview], refused: [{ item: second, refusal: 'NotMalformed', message: 'Second.esp is not malformed.' }] },
       reads: { landed: [repairPreview], refused: [{ item: second, reason: 'Second.esp is not malformed.' }] },
       path: '/plugins/repair-previews', body: { plugins: [first, second] } },
-    { name: 'decompileAndRepair', verb: (c) => c.decompileAndRepair([{ plugin: first, hash: 'abc', sourceFolder: '/source/ModA' }], ['meta.ini'], false),
+    { name: 'decompileAndRepair', verb: (c) => c.decompileAndRepair([{ plugin: first, hash: 'abc', sourceFolder: '/source/ModA' }], ['meta.ini'], false, true),
       answer: { applied: [first], refused: [] },
       reads: { landed: [first], refused: [] },
-      path: '/plugins/decompile-and-repair', body: { plugins: [{ plugin: first, hash: 'abc', sourceFolder: '/source/ModA' }], metadataFiles: ['meta.ini'], force: false } },
+      path: '/plugins/decompile-and-repair', body: { plugins: [{ plugin: first, hash: 'abc', sourceFolder: '/source/ModA' }], metadataFiles: ['meta.ini'], force: false, agreedDrops: true } },
     { name: 'getEditChanges', verb: (c) => c.getEditChanges('000800:MyPatch.esp', myPatch, renamed),
       answer: { formKey: '000800:MyPatch.esp', path: 'EditorID', ...editChanges, newFormKey: null }, reads: { applied: true, ...editChanges },
       path: '/records/000800%3AMyPatch.esp/edit-changes', body: { edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...renamed } } },

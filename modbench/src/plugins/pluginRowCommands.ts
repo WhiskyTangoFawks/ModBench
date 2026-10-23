@@ -97,10 +97,8 @@ export function registerDecompileAndRepairCommand(
   return registerAgentGesture('modbench.plugin.decompileAndRepair', viewSelection, gesture);
 }
 
-// plugin-source.md, Decompile and repair, story 3: one agreement for the selection, naming each change that drops
-// data. Agreed, the write is forced, so it also replaces what the plugin source holds in its working tree.
 async function confirmDrops(ask: AskQuestion, dropping: readonly PluginRepairPreview[]): Promise<boolean> {
-  const answer = await ask('Repair drops data? Nothing is written until you agree, and the write replaces the source in the working tree.',
+  const answer = await ask('Repair drops data?',
     { modal: true, detail: dropping.flatMap(previewLines).join('\n') }, 'Repair');
   return answer === 'Repair';
 }

@@ -10,4 +10,4 @@ public sealed record RepairPreviews(string Hash, IReadOnlyList<RepairPreview> Di
 public sealed record RepairPreview(PluginDiagnosis Diagnosis, RepairChange? Change);
 
 /// <summary>What a repair changes in its record, naming any data it drops.</summary>
-public sealed record RepairChange(string Description, int DroppedBytes);
+public sealed record RepairChange(string Description, bool DropsData);

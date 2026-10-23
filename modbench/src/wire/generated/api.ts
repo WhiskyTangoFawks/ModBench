@@ -1249,6 +1249,7 @@ export interface components {
             plugins: components["schemas"]["PluginToRepairRequest"][];
             metadataFiles?: string[] | null;
             force: boolean;
+            agreedDrops: boolean;
         };
         DecompileAndRepairResult: {
             applied: components["schemas"]["PluginAddress"][];
@@ -1793,8 +1794,7 @@ export interface components {
         };
         RepairChange: {
             description: string;
-            /** Format: int32 */
-            droppedBytes: number;
+            dropsData: boolean;
         };
         RepairPreview: {
             diagnosis: components["schemas"]["PluginDiagnosis"];

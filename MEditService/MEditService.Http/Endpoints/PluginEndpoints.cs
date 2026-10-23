@@ -358,7 +358,7 @@ internal static class PluginEndpoints
         return OverPlugins([.. requested.Select(p => p.Plugin)], _ => EndpointMapping.Answered(
             "Decompile and repair", logger,
             repairHandler.DecompileAndRepairAsync(
-                [.. requested.Select(p => new PluginToRepair(p.Plugin, p.Hash, p.SourceFolder))], req.MetadataFiles ?? [], req.Force),
+                [.. requested.Select(p => new PluginToRepair(p.Plugin, p.Hash, p.SourceFolder))], req.MetadataFiles ?? [], req.Force, req.AgreedDrops),
             EndpointMapping.Refusal));
     }
 
@@ -429,7 +429,7 @@ internal sealed record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 internal sealed record RepairPreviewsRequest(IReadOnlyList<PluginAddress> Plugins);
 
 /// <summary>The mod manager's own files are what a repository made for a mod with none leaves out of its assets.</summary>
-internal sealed record DecompileAndRepairRequest(IReadOnlyList<PluginToRepairRequest> Plugins, IReadOnlyList<string>? MetadataFiles, bool Force);
+internal sealed record DecompileAndRepairRequest(IReadOnlyList<PluginToRepairRequest> Plugins, IReadOnlyList<string>? MetadataFiles, bool Force, bool AgreedDrops = false);
 
 /// <summary>A plugin, the hash its preview answered, and the source folder a repository for its mod is made in when it has none.</summary>
 internal sealed record PluginToRepairRequest(PluginAddress Plugin, string Hash, string? SourceFolder);
