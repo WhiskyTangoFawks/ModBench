@@ -3,14 +3,14 @@
 import { join } from 'node:path';
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { exists, ignoreSkippedLink, listEntries, remove, type ResolvedEntry, write } from '../files';
+import { exists, get, ignoreSkippedLink, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
 import type { FileRead, GameFile, InstanceAdapter } from '../instanceAdapter';
-import { ignoreListFile, WHITELIST_IGNORE_LIST } from './layout';
+import { ignoreListFile, WHITELIST_IGNORE_LIST, withSourceModLines } from './layout';
 import type { Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 
-type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList' | 'removeIgnoreList'>;
+type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList'>;
 
 const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
@@ -40,6 +40,17 @@ function caseBlindFinder(dataFolder: string) {
   };
 }
 
+// What git would read as the whitelist ends the file, bar the block of source mods. An ignore list that does not end
+// with it gets it after its last line, in the file's own line ending.
+function whitelistAfter(ignoreList: string): string {
+  const lines = ignoreList.replaceAll('\r\n', '\n');
+  const withoutSourceMods = withSourceModLines(lines, []) ?? lines;
+  if (`${withoutSourceMods.trimEnd()}\n`.endsWith(WHITELIST_IGNORE_LIST)) return '';
+  const lineEnding = ignoreList.includes('\r\n') ? '\r\n' : '\n';
+  const separator = ignoreList === '' || ignoreList.endsWith('\n') ? '' : lineEnding;
+  return separator + WHITELIST_IGNORE_LIST.replaceAll('\n', lineEnding);
+}
+
 export function mo2Repository(
   context: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>,
 ): Mo2Repository {
@@ -63,11 +74,20 @@ export function mo2Repository(
   return {
     async writeIgnoreList() {
       const file = ignoreListFile(instanceRoot);
-      if (await exists(file)) throw new Error(`${file} already exists; git init does not write over it.`);
-      await write(file, WHITELIST_IGNORE_LIST);
+      const existed = await exists(file);
+      let appended = '';
+      await putIfChanged(file, (before) => {
+        appended = whitelistAfter(before);
+        return before + appended;
+      }, { ifMissing: '' });
+      return async () => {
+        await putIfChanged(file, (text) => {
+          const at = text.lastIndexOf(appended);
+          return at === -1 ? text : text.slice(0, at) + text.slice(at + appended.length);
+        });
+        if (!existed && await get(file, '') === '') await remove(file);
+      };
     },
-
-    removeIgnoreList: () => remove(ignoreListFile(instanceRoot)),
 
     gameFiles,
 

@@ -5,7 +5,7 @@ import { present } from '../ports/present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
 } from './vscodeMock';
-import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, LOGGED_IN_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
+import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, LOGGED_IN_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, REPOSITORY_SET_UP_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN, SPECIFIED_AHEAD_OF_CODE, RETIRED_AHEAD_OF_CODE } from './commandsCatalog';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
@@ -205,7 +205,7 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
   const OWNERS: Record<string, (subject: string) => boolean> = {
     onCommand: isCommand,
     onView: (subject) => views.has(subject) || isVsCodes(subject),
-    onContext: (subject) => [FOLDER_KEY, INSTANCE_READ_KEY, ANY_SOURCE_MOD_KEY, HAS_REPOSITORY_KEY].some((key) => subject.startsWith(`${key} `)),
+    onContext: (subject) => [FOLDER_KEY, INSTANCE_READ_KEY, ANY_SOURCE_MOD_KEY, HAS_REPOSITORY_KEY, REPOSITORY_SET_UP_KEY].some((key) => subject.startsWith(`${key} `)),
     onLink: (subject) => subject.startsWith(`${REPOSITORY}/blob/main/docs/wiki/`),
   };
   const owned = (event: string): boolean => {
@@ -222,8 +222,8 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
     expect(steps.filter((step) => step.completionEvents.length === 0 || !step.completionEvents.every(owned)).map(({ id }) => id)).toEqual([]);
   });
 
-  it('ticks the git init step when the instance holds a repository (story 3)', () => {
-    expect(steps.find(({ id }) => id === 'gitInit')?.completionEvents).toEqual([`onContext:${HAS_REPOSITORY_KEY} == true`]);
+  it('ticks the git init step when git init has set the repository up (story 1)', () => {
+    expect(steps.find(({ id }) => id === 'gitInit')?.completionEvents).toEqual([`onContext:${REPOSITORY_SET_UP_KEY} == true`]);
   });
 
   it('ticks the agent step when I list my MCP servers, where VS Code Chat already has Modbench, or open the page that sets up another agent (story 3)', () => {
@@ -1003,8 +1003,8 @@ describe('package.json build\'s palette entry', () => {
 });
 
 describe('package.json git init, update manifest and restore from manifest follow modlist-repository.md, Menus and keys', () => {
-  const HAS_REPOSITORY = 'modbench.modlist.hasRepository';
-  const hasRepository = { ...inInstance, [HAS_REPOSITORY]: true };
+  const hasRepository = { ...inInstance, [HAS_REPOSITORY_KEY]: true, [REPOSITORY_SET_UP_KEY]: true };
+  const unsetUpRepository = { ...inInstance, [HAS_REPOSITORY_KEY]: true, [REPOSITORY_SET_UP_KEY]: false };
   const onRow = (view: string, viewItem: string, facts: Context): [string, string][] =>
     placed(present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
       .filter((e) => holds(e.when, { view, viewItem, ...facts }) && [UPDATE_MANIFEST, RESTORE_FROM_MANIFEST, GIT_INIT].includes(e.command)));
@@ -1035,9 +1035,11 @@ describe('package.json git init, update manifest and restore from manifest follo
       .toEqual([[[UPDATE_MANIFEST, group], [RESTORE_FROM_MANIFEST, group]], []]);
   });
 
-  it('offers git init on the Modlist row with no repository, and update manifest then restore from manifest with one', () => {
-    expect([onRow('modbench.toolbox', 'modlist', inInstance), onRow('modbench.toolbox', 'modlist', hasRepository)]).toEqual([
-      [[GIT_INIT, 'modbench']], [[UPDATE_MANIFEST, 'modbench'], [RESTORE_FROM_MANIFEST, 'modbench']],
+  it('offers git init on the Modlist row with no repository or one git init has not set up, and update manifest then restore from manifest with a repository', () => {
+    expect([onRow('modbench.toolbox', 'modlist', inInstance), onRow('modbench.toolbox', 'modlist', unsetUpRepository), onRow('modbench.toolbox', 'modlist', hasRepository)]).toEqual([
+      [[GIT_INIT, 'modbench']],
+      [[GIT_INIT, 'modbench'], [UPDATE_MANIFEST, 'modbench'], [RESTORE_FROM_MANIFEST, 'modbench']],
+      [[UPDATE_MANIFEST, 'modbench'], [RESTORE_FROM_MANIFEST, 'modbench']],
     ]);
   });
 
@@ -1048,12 +1050,12 @@ describe('package.json git init, update manifest and restore from manifest follo
     expect([offered(hasRepository), offered(inInstance)]).toEqual([EVERY_MOD_ENTRY_POINTS, []]);
   });
 
-  it('offers git init in the palette until the instance holds a repository, and update manifest and restore from manifest once it does', () => {
+  it('offers git init in the palette until git init has set the repository up, and update manifest and restore from manifest once the instance holds one', () => {
     expect([
-      paletteOffers(GIT_INIT, inInstance), paletteOffers(GIT_INIT, hasRepository),
-      paletteOffers(UPDATE_MANIFEST, inInstance), paletteOffers(UPDATE_MANIFEST, hasRepository), paletteOffers(UPDATE_MANIFEST, { [HAS_REPOSITORY]: true }),
+      paletteOffers(GIT_INIT, inInstance), paletteOffers(GIT_INIT, hasRepository), paletteOffers(GIT_INIT, unsetUpRepository),
+      paletteOffers(UPDATE_MANIFEST, inInstance), paletteOffers(UPDATE_MANIFEST, hasRepository), paletteOffers(UPDATE_MANIFEST, { [HAS_REPOSITORY_KEY]: true }),
       paletteOffers(RESTORE_FROM_MANIFEST, inInstance), paletteOffers(RESTORE_FROM_MANIFEST, hasRepository),
-    ]).toEqual([true, false, false, true, false, false, true]);
+    ]).toEqual([true, false, true, false, true, false, false, true]);
   });
 
   it('offers no item on a Source Control row', () => {

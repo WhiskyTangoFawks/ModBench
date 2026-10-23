@@ -12,6 +12,8 @@ import { readGamePath, readSelectedProfile, SETTINGS_FILE_NAME } from './codecs/
 import { gameOfSettings } from './mo2Game';
 import type { ManagerGamePath } from '../gameFolder/gameFolderResolver';
 import { creationClubFileOf, dataFolderOf, listDataFolderPlugins, readCreationClubList } from '../gameFolder/dataFolder';
+import { pathTokensWritten } from './mo2PathTokens';
+import { pushRefusalWritten } from './mo2Submodules';
 import { factsOf, get, ignoreSkippedLink, isRepository, listEntries, listFolders, readOrAbsent, readOrReason, identityOf, type SkippedLink, stampOf, isOwnTemp } from '../files';
 import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, ManagerRunning, ModFolders } from '../instanceAdapter';
 import { DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile } from './layout';
@@ -124,6 +126,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
     sourceMods: () => sourceModsIn(instanceRoot),
 
     holdsRepository: () => isRepository(instanceRoot),
+    repositorySetUp: async () => await isRepository(instanceRoot) && await pushRefusalWritten(instanceRoot) && await pathTokensWritten(instanceRoot),
     watchNotes: () => watch.watchNotes(),
     managerRunning: () => mo2Running().then(
       (running): ManagerRunning => ({ kind: running ? 'running' : 'notRunning' }),

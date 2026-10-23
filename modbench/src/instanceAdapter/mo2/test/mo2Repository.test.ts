@@ -12,7 +12,9 @@ import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileRe
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { mo2InstanceAdapter } from '../mo2Instance';
+import type { InstanceAdapter as Adapter } from '../../instanceAdapter';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
+import { WHITELIST_IGNORE_LIST, withSourceModLines } from '../layout';
 
 let root: string;
 
@@ -48,22 +50,117 @@ describe('the MO2 adapter\'s repository', () => {
     expect([before, (await adapter.reading()).holdsRepository]).toEqual([false, true]);
   });
 
-  it('refuses to write over an ignore list already in the instance folder, naming it, and leaves it as it is', async () => {
-    const adapter = await instance();
-    await put('.gitignore', 'mine\n');
+  describe('the ignore list', () => {
+    const crlf = (text: string): string => text.replaceAll('\n', '\r\n');
+    const withSourceMod = withSourceModLines(WHITELIST_IGNORE_LIST, ['Mod A']) ?? '';
+    const ignoreList = (): Promise<string> => readFile(join(root, '.gitignore'), 'utf8');
 
-    await expect(adapter.writeIgnoreList()).rejects.toThrow(join(root, '.gitignore'));
+    it.each([
+      ['the lines of an ignore list already there', 'mine\n', `mine\n${WHITELIST_IGNORE_LIST}`],
+      ['an ignore list with no final newline', 'mine', `mine\n${WHITELIST_IGNORE_LIST}`],
+      ['an ignore list of CRLF lines', 'mine\r\n', `mine\r\n${crlf(WHITELIST_IGNORE_LIST)}`],
+      ['an ignore list whose later lines undo the whitelist', `${WHITELIST_IGNORE_LIST}!/mods/**\n`, `${WHITELIST_IGNORE_LIST}!/mods/**\n${WHITELIST_IGNORE_LIST}`],
+      ['an ignore list that ends with its whitelist', WHITELIST_IGNORE_LIST, WHITELIST_IGNORE_LIST],
+      ['an ignore list that ends with its whitelist and its source mods', withSourceMod, withSourceMod],
+    ])('adds its whitelist after %s, and takes back to what the file was', async (_name, before, after) => {
+      const adapter = await instance();
+      await put('.gitignore', before);
 
-    expect(await readFile(join(root, '.gitignore'), 'utf8')).toBe('mine\n');
+      const takeBack = await adapter.writeIgnoreList();
+      const written = await ignoreList();
+      await takeBack();
+
+      expect([written, await ignoreList()]).toEqual([after, before]);
+    });
+
+    it('takes back only its own lines, keeping a line another program added after them', async () => {
+      const adapter = await instance();
+      await put('.gitignore', 'mine\n');
+      const takeBack = await adapter.writeIgnoreList();
+      await put('.gitignore', `${await ignoreList()}theirs\n`);
+
+      await takeBack();
+
+      expect(await ignoreList()).toBe('mine\ntheirs\n');
+    });
+
+    it('takes back nothing, and keeps what another program wrote, when it added nothing', async () => {
+      const adapter = await instance();
+      await put('.gitignore', WHITELIST_IGNORE_LIST);
+      const takeBack = await adapter.writeIgnoreList();
+      await put('.gitignore', 'theirs\n');
+
+      await takeBack();
+
+      expect(await ignoreList()).toBe('theirs\n');
+    });
+
+    it('takes back the ignore list it wrote', async () => {
+      const adapter = await instance();
+      const takeBack = await adapter.writeIgnoreList();
+
+      await takeBack();
+
+      expect(existsSync(join(root, '.gitignore'))).toBe(false);
+    });
   });
 
-  it('takes back the ignore list it wrote', async () => {
-    const adapter = await instance();
-    await adapter.writeIgnoreList();
+  describe('whether git init has set the repository up', () => {
+    const INSTANCE_FILES = {
+      'ModOrganizer.ini': '[General]\r\ngameName=Fallout 4\r\nselected_profile=Default\r\n',
+      'profiles/Default/modlist.txt': '',
+      'profiles/Default/plugins.txt': '',
+    };
 
-    await adapter.removeIgnoreList();
+    it.each([
+      ['no repository', () => Promise.resolve(), false],
+      ['a repository with neither the push check nor the path tokens', () => { runGit('init', '--quiet'); return Promise.resolve(); }, false],
+      ['a repository with the push check and the path tokens', async (adapter: Adapter) => {
+        runGit('init', '--quiet');
+        await adapter.refuseUnpublishedPins();
+        await adapter.writePathTokens();
+      }, true],
+      ['a repository with the path tokens and another pre-push hook', async (adapter: Adapter) => {
+        runGit('init', '--quiet');
+        await put('.git/hooks/pre-push', 'mine\n');
+        await adapter.writePathTokens();
+      }, false],
+      ['a repository with the push check and no path tokens', async (adapter: Adapter) => {
+        runGit('init', '--quiet');
+        await adapter.refuseUnpublishedPins();
+      }, false],
+    ])('reads %s', async (_name, arrange, expected) => {
+      const adapter = await instance();
+      await Promise.all(Object.entries(INSTANCE_FILES).map(([path, text]) => put(path, text)));
+      await mkdir(join(root, 'mods'));
+      await arrange(adapter);
 
-    expect(existsSync(join(root, '.gitignore'))).toBe(false);
+      expect((await adapter.reading()).repositorySetUp).toBe(expected);
+    });
+  });
+
+  describe('the push check', () => {
+    const hook = (): string => join(root, '.git', 'hooks', 'pre-push');
+
+    it.each([
+      ['removes the hook it wrote', async (adapter: Adapter) => (await adapter.refuseUnpublishedPins())(), false],
+      ['keeps a hook of its own that was there before', async (adapter: Adapter) => {
+        await adapter.refuseUnpublishedPins();
+        await (await adapter.refuseUnpublishedPins())();
+      }, true],
+      ['keeps a hook another program put in its place', async (adapter: Adapter) => {
+        const takeBack = await adapter.refuseUnpublishedPins();
+        await writeFile(hook(), 'theirs\n');
+        await takeBack();
+      }, true],
+    ])('%s when taken back', async (_name, arrange, kept) => {
+      const adapter = await instance();
+      runGit('init', '--quiet');
+
+      await arrange(adapter);
+
+      expect(existsSync(hook())).toBe(kept);
+    });
   });
 
   it('keeps the stat cache in a folder at the instance root, beside the mod folders', async () => {

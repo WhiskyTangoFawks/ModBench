@@ -14,18 +14,18 @@ import type { InstanceSubscriber } from '../../instanceLoader/instance';
 
 beforeEach(() => { vi.clearAllMocks(); });
 
-function instanceHolding(holdsRepository: boolean) {
+function instanceHolding(holdsRepository: boolean, repositorySetUp = false) {
   const subscribers: InstanceSubscriber[] = [];
   const disposed: true[] = [];
   return {
     instance: {
-      value: instanceValueFixture({ holdsRepository }),
+      value: instanceValueFixture({ holdsRepository, repositorySetUp }),
       subscribe: (subscriber: InstanceSubscriber) => {
         subscribers.push(subscriber);
         return { dispose: () => { disposed.push(true); } };
       },
     },
-    land: (held: boolean) => { for (const subscriber of subscribers) subscriber(instanceValueFixture({ holdsRepository: held }), 1); },
+    land: (held: boolean, setUp = false) => { for (const subscriber of subscribers) subscriber(instanceValueFixture({ holdsRepository: held, repositorySetUp: setUp }), 1); },
     disposed,
   };
 }
@@ -35,12 +35,14 @@ describe('publishRepository', () => {
     const { instance, land } = instanceHolding(false);
 
     publishRepository(instance, '/instance');
-    land(true);
+    land(true, true);
 
     expect(executeCommand.mock.calls).toEqual([
       ['setContext', 'modbench.modlist.instanceRoots', ['file:///instance']],
       ['setContext', 'modbench.modlist.hasRepository', false],
+      ['setContext', 'modbench.modlist.repositorySetUp', false],
       ['setContext', 'modbench.modlist.hasRepository', true],
+      ['setContext', 'modbench.modlist.repositorySetUp', true],
     ]);
   });
 

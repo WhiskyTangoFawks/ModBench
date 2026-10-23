@@ -15,7 +15,7 @@ import { initRepositoryIn } from './initRepositoryIn';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'gameFolder' | 'gameRelease' | 'modOrder' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'removeIgnoreList' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
+  'gameFolder' | 'gameRelease' | 'modOrder' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
   | 'writePathTokens' | 'pathsOutsideFolders'
   | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule'>;
 
@@ -356,7 +356,9 @@ async function restoreFolders(
 }
 
 // A failed init leaves nothing behind: what it wrote goes, and what stays is named.
-async function refusalTakenBack(failure: unknown, undone: readonly { what: string; undo: () => Promise<void> }[]): Promise<string> {
+interface TakenBack { readonly what: string; readonly undo: () => Promise<void> }
+
+async function refusalTakenBack(failure: unknown, undone: readonly TakenBack[]): Promise<string> {
   let refusal = errorMessage(failure);
   for (const { what, undo } of undone) {
     try {
@@ -393,32 +395,45 @@ async function pathsReported(adapter: Adapter): Promise<readonly string[]> {
   }
 }
 
-/** pathTokensNotWritten: why a path token stays in the working tree. */
-export type GitInitResult = CommandResult<{ pathTokensNotWritten?: string }>;
+/** pathTokensNotWritten: why a path token stays in the working tree. pushRefusalNotWritten: why an adopted repository's
+ *  own pre-push hook was left in place. */
+export type GitInitResult = CommandResult<{ pathTokensNotWritten?: string; pushRefusalNotWritten?: string }>;
 
 async function gitInit({ adapter, instanceRoot, hostGit }: ModlistRepositoryCommandsDeps): Promise<GitInitResult> {
-  const ignoreList = { what: 'the ignore list it wrote', undo: () => adapter.removeIgnoreList() };
-  const repository = { what: 'the repository it made', undo: () => adapter.removeRepository() };
-  if (await adapter.repositoryOnDisk()) return { applied: false, refusal: `${instanceRoot} already holds a repository.` };
+  const adopting = await adapter.repositoryOnDisk();
+  let takenBack: TakenBack[] = [];
   try {
-    await adapter.checkPushRefusalFree();
-    await adapter.writeIgnoreList();
+    if (!adopting) await adapter.checkPushRefusalFree();
+    takenBack = [{ what: 'the ignore list it wrote', undo: await adapter.writeIgnoreList() }];
   } catch (err) {
     return refuse(err);
   }
+  if (!adopting) {
+    try {
+      await initRepositoryIn(hostGit, instanceRoot);
+    } catch (err) {
+      return { applied: false, refusal: await refusalTakenBack(err, takenBack) };
+    }
+    takenBack = [{ what: 'the repository it made', undo: () => adapter.removeRepository() }, ...takenBack];
+  }
+  let pushRefusalNotWritten: string | undefined;
   try {
-    await initRepositoryIn(hostGit, instanceRoot);
+    takenBack = [{ what: 'the push check it wrote', undo: await adapter.refuseUnpublishedPins() }, ...takenBack];
   } catch (err) {
-    return { applied: false, refusal: await refusalTakenBack(err, [ignoreList]) };
+    if (!adopting) return { applied: false, refusal: await refusalTakenBack(err, takenBack) };
+    pushRefusalNotWritten = errorMessage(err);
   }
   let pathTokensNotWritten: string | undefined;
   try {
-    await adapter.refuseUnpublishedPins();
     pathTokensNotWritten = await adapter.writePathTokens();
   } catch (err) {
-    return { applied: false, refusal: await refusalTakenBack(err, [repository, ignoreList]) };
+    return { applied: false, refusal: await refusalTakenBack(err, takenBack) };
   }
-  return pathTokensNotWritten === undefined ? { applied: true } : { applied: true, pathTokensNotWritten };
+  return {
+    applied: true,
+    ...(pushRefusalNotWritten === undefined ? {} : { pushRefusalNotWritten }),
+    ...(pathTokensNotWritten === undefined ? {} : { pathTokensNotWritten }),
+  };
 }
 
 /** The modlist gestures, bound to the mEdit client and handing it the instance's facts. */
@@ -426,8 +441,8 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
   const { client, adapter } = deps;
 
   return {
-    /** Makes the repository with its ignore list, push refusal and path tokens, and writes no manifest. Refused when the
-     *  instance folder holds one already. */
+    /** Makes the repository, or adopts the one the instance folder holds, with its ignore list, push refusal and path
+     *  tokens, and writes no manifest. */
     gitInit: (): Promise<GitInitResult> => gitInit(deps),
 
     /** A mod whose folder or installation files the Instance adapter cannot answer is refused here, naming why, and mEdit

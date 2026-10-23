@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
@@ -262,5 +262,16 @@ describe('the MO2 adapter\'s path tokens', () => {
 
     expect([await adapter.writePathTokens(), await adapter.pathsOutsideFolders(), await readFile(join(root, 'ModOrganizer.ini'), 'utf8')])
       .toEqual([undefined, [], SETTINGS(['1\\binary=C:/Modding/x.exe'])]);
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) leaves the repository with no filter, no attributes and no config when a first write fails', async () => {
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'profiles/Default/Fallout4Prefs.ini', 'x=1\r\n');
+    await chmod(join(root, 'profiles/Default/Fallout4Prefs.ini'), 0o000);
+
+    await expect(adapter.writePathTokens()).rejects.toThrow();
+
+    const config = git(root, 'config', '--local', '--list').split('\n').filter((line) => line.includes('modbench-'));
+    expect([config, await readFile(join(root, '.git', 'info', 'attributes'), 'utf8').catch(() => '')]).toEqual([[], '']);
   });
 });

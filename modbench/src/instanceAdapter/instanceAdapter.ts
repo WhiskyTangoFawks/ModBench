@@ -455,6 +455,8 @@ export interface InstanceReading extends InstanceGame {
   readonly sourceMods: SourceMods;
   /** Whether the instance folder holds a repository. */
   readonly holdsRepository: boolean;
+  /** Whether git init has set the repository up: the instance repository holds Modbench's push check and its path tokens. */
+  readonly repositorySetUp: boolean;
   /** Why a folder's watch failed, once per reason: no change inside that folder is heard. */
   readonly watchNotes: readonly string[];
   readonly managerRunning: ManagerRunning;
@@ -525,11 +527,9 @@ export interface InstanceAdapter {
   /** The game files in `dataFolder` at the paths of the files in `mod`'s folder, as `gameFiles` names them, listed in any
    *  profile or none. */
   gameFilesTakenBy(dataFolder: string, mod: string): Promise<FileRead<GameFilesTaken>>;
-  /** Writes the instance repository's ignore list: a whitelist of what the repository holds. Rejects, writing nothing,
-   *  when an ignore list is already there. */
-  writeIgnoreList(): Promise<void>;
-  /** Takes back the ignore list `writeIgnoreList` wrote. */
-  removeIgnoreList(): Promise<void>;
+  /** Writes the instance repository's ignore list: a whitelist of what the repository holds, after the lines of an ignore
+   *  list already there. Answers the call that takes back what it wrote. */
+  writeIgnoreList(): Promise<() => Promise<void>>;
   /** Makes each source mod with a remote a submodule: its entry in `.gitmodules` and its line in the ignore list. A source mod
    *  it cannot read keeps the entry and line it has. */
   writeSubmodules(): Promise<SubmoduleReport>;
@@ -544,11 +544,11 @@ export interface InstanceAdapter {
   /** Rejects, naming it, when `core.hooksPath` points outside the git directory, or a pre-push hook is where
    *  `refuseUnpublishedPins` would write one. */
   checkPushRefusalFree(): Promise<void>;
-  /** Makes the instance repository refuse a pushed pin with no checkout, or whose URL in the pushed `.gitmodules` is
-   *  missing, unreachable or lacks it. Rejects, writing nothing, when another pre-push hook is there. */
-  refuseUnpublishedPins(): Promise<void>;
+  /** Makes the repository refuse a pushed pin its source mod's remote lacks. Rejects when another pre-push hook is
+   *  there. Answers the call that removes the hook, if this call wrote it. */
+  refuseUnpublishedPins(): Promise<() => Promise<void>>;
   /** Makes git hold each folder's path by a path token, and the working tree this machine's paths. Answers why a path
-   *  token stays in the working tree. Writes nothing without a repository. */
+   *  token stays in the working tree. Writes nothing without a repository. A failed first write is undone. */
   writePathTokens(): Promise<string | undefined>;
   /** Each path no path token names in a file the instance repository holds or would commit. */
   pathsOutsideFolders(): Promise<readonly PathInFile[]>;

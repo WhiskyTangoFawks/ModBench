@@ -3,6 +3,7 @@ export const LOGGED_IN_KEY = 'modbench.nexus.loggedIn';
 export const INSTANCE_READ_KEY = 'modbench.instanceRead';
 export const ANY_SOURCE_MOD_KEY = 'modbench.mod.anySource';
 export const HAS_REPOSITORY_KEY = 'modbench.modlist.hasRepository';
+export const REPOSITORY_SET_UP_KEY = 'modbench.modlist.repositorySetUp';
 
 export const IN_AN_INSTANCE = `${FOLDER_KEY} == instance`;
 
