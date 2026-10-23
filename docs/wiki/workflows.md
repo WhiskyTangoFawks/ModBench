@@ -6,17 +6,17 @@ Modbench keeps two kinds of git repositories. The modlist repository in the Mod 
 
 Because a git repo can't hold gigabytes of files, Modbench is setup to commit a mod's manifest, which contains the list of installed files, the package they're installed from, and the host where the package can be retreived. This means we have a 2 step process for managing the modlist: 1- the git action, and 2- the modbench action to restore the mod from the manifest.
 
-- Before you commit the modlist, run Update Mod Manifest, so the manifests say what your mod folders hold. This is how you track new modlist changes in git.
-- After a checkout, a pull or a merge of the modlist, run Restore Mod from Manifest…, so your mod folders hold what the manifests say.
+- Before you commit the modlist, run Update Manifests, so the manifests say what your mod folders hold. This is how you track new modlist changes in git.
+- After a checkout, a pull or a merge of the modlist, run Restore from Manifests…, so your mod folders hold what the manifests say.
 - After a source mod's source changes, run Build Mod, so its mod folder holds what its source says.
 
-With no mod selected, Update Mod Manifest and Restore Mod from Manifest… act on every mod. Both are in the overflow menu of the Source Control view's title bar.
+With no mod selected, Update Manifests and Restore from Manifests… act on every mod. Both are in the overflow menu of the Source Control view's title bar.
 
 ## The modlist repository
 
 ### Put a modlist in git
 
-Run Git Init Modlist. It makes the instance folder a repository, with an ignore list that keeps the mods' files out of git. Run Update Mod Manifest, then stage and commit in Source Control.
+Run Git Init Modlist. It makes the instance folder a repository, with an ignore list that keeps the mods' files out of git. Run Update Manifests, then stage and commit in Source Control.
 
 GitIgnore is how the modlist knows which files to track, and what to ignore. It's setup with a default allow list, but can be managed by the user however they want. As the user, it is your responsibility to understand the limitations of git, and if you are going to publish this remotely, to only republish what you have permission to publish.
 
@@ -46,7 +46,7 @@ Decompile and Commit Mod puts a mod under git. It makes a repository in `source/
 
 ### Publish a source mod
 
-Give the source mod's repository a remote, and push it. The next Update Mod Manifest makes it a submodule of the modlist repository, pinned at its commit, and Source Control shows the change to commit.
+Give the source mod's repository a remote, and push it. The next Update Manifests makes it a submodule of the modlist repository, pinned at its commit, and Source Control shows the change to commit.
 
 Push the source mod before the modlist. A modlist repository made by Git Init Modlist refuses a push that pins a commit the source mod's remote lacks, so the modlist never pins a commit a clone cannot fetch.
 
