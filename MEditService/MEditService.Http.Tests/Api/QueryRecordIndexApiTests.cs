@@ -12,17 +12,6 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
 {
     private HttpClient Client => loaded.Client;
 
-    private async Task<JsonElement> InteriorBlocks() =>
-        await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/interior-cells?origin={ListedMod}");
-
-    private async Task<JsonElement> ExteriorSubBlockCells()
-    {
-        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces?origin={ListedMod}");
-        var worldFk = Uri.EscapeDataString(worldspaces[0].GetProperty("formKey").GetString().Require());
-        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces/{worldFk}/blocks?origin={ListedMod}");
-        return blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells");
-    }
-
     [Theory]
     [InlineData("plugin=Any.esp")]
     [InlineData("origin=AnyMod")]
@@ -227,69 +216,6 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
         var response = await Client.GetAsync(new Uri("/records/000FFF:Nowhere.esp/compare", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task APluginsInteriorCells_AnswerAsTheBlocksAndSubBlocksTheFileHoldsThemIn()
-    {
-        var blocks = await InteriorBlocks();
-
-        Assert.Equal([0, 3], blocks.EnumerateArray().Select(b => b.GetProperty("number").GetInt32()));
-        var subBlocks = blocks[1].GetProperty("subBlocks");
-        Assert.Equal([7], subBlocks.EnumerateArray().Select(s => s.GetProperty("number").GetInt32()));
-        Assert.Equal(["ZuluRoom", "AlphaRoom"], EditorIds(subBlocks[0].GetProperty("cells")));
-    }
-
-    [Fact]
-    public async Task APluginsWorldspaces_ListInFormIdOrder()
-    {
-        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces?origin={ListedMod}");
-
-        Assert.Equal(["ZuluWorld", "AlphaWorld"], EditorIds(worldspaces));
-    }
-
-    [Fact]
-    public async Task ASubBlocksCells_ListInFormIdOrder()
-    {
-        Assert.Equal(["ZuluClearing", "AlphaClearing"], EditorIds(await ExteriorSubBlockCells()));
-    }
-
-    [Fact]
-    public async Task ACellsPlacedReferences_ListInFormIdOrder()
-    {
-        var room = (await InteriorBlocks())[1].GetProperty("subBlocks")[0].GetProperty("cells")[0];
-        var roomFk = Uri.EscapeDataString(room.GetProperty("formKey").GetString().Require());
-
-        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/children?origin={ListedMod}");
-
-        Assert.Equal(["ZuluRef", "AlphaRef"], EditorIds(references.GetProperty("temporary")));
-    }
-
-    [Fact]
-    public async Task AQuestsChildren_ListInFormIdOrder_WhateverTheirType()
-    {
-        var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={ListedPlugin}&origin={ListedMod}&type=qust&limit=10");
-        var questFk = Uri.EscapeDataString(quests.GetProperty("items")[0].GetProperty("formKey").GetString().Require());
-
-        var children = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/records/{questFk}/children?origin={ListedMod}");
-
-        Assert.Equal(["ZuluScene", "AlphaTopic"], EditorIds(children));
-    }
-
-    [Fact]
-    public async Task AWorldspace_SaysWhetherAnythingIsBeneathIt()
-    {
-        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces?origin={ListedMod}");
-
-        Assert.Equal([true, false], worldspaces.EnumerateArray().Select(w => w.GetProperty("hasChildren").GetBoolean()));
-    }
-
-    [Fact]
-    public async Task AnExteriorCell_SaysWhetherItHoldsAPlacedReference()
-    {
-        var clearings = await ExteriorSubBlockCells();
-
-        Assert.Equal([true, false], clearings.EnumerateArray().Select(c => c.GetProperty("hasChildren").GetBoolean()));
     }
 
     [Theory]

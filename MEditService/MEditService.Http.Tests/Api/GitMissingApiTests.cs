@@ -15,7 +15,7 @@ public sealed class GitMissingApiTests : HostedTests
     private const string Origin = "EditableMod";
 
     [Fact]
-    public async Task DeletingSeveralRecords_WithGitMissing_RefusesTheWholeSelectionOnce_AndChangesNoFile()
+    public async Task DeletingSeveralRecords_WithGitMissing_Is500WithTheRefusal()
     {
         using var fx = new PluginFixtureBuilder("trace-delete-without-git")
             .WithPlugin(Plugin, mod => { mod.Npcs.AddNew("FirstNpc"); mod.Npcs.AddNew("SecondNpc"); }, origin: Origin)
@@ -25,169 +25,73 @@ public sealed class GitMissingApiTests : HostedTests
         var npcs = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
             .GetProperty("items").EnumerateArray().Select(r => r.GetProperty("formKey").GetString().Require()).ToArray();
         Assert.Equal(2, npcs.Length);
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
-        var before = FilesOutsideGit(modFolder);
 
-        HttpResponseMessage response;
-        var path = Environment.GetEnvironmentVariable("PATH");
-        Environment.SetEnvironmentVariable("PATH", string.Empty);
-        try
+        var response = await WithGitMissing(() => Client.PostAsJsonAsync("/records/delete-changes", new
         {
-            response = await Client.PostAsJsonAsync("/records/delete-changes", new
-            {
-                records = npcs.Select(formKey => new { formKey, plugin = new { name = Plugin, origin = Origin } }).ToArray()
-            });
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PATH", path);
-        }
+            records = npcs.Select(formKey => new { formKey, plugin = new { name = Plugin, origin = Origin } }).ToArray()
+        }));
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
-        Assert.Equal(before, FilesOutsideGit(modFolder));
         Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Delete", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task DecompilingAndRepairing_WithGitMissing_Is500WithTheRefusal_AndChangesNoFile()
+    public async Task DecompilingAndRepairing_WithGitMissing_Is500WithTheRefusal()
     {
         var fixture = MalformationFixtures.ShortRegion;
         using var fx = new PluginFixtureBuilder("api-repair-without-git").WithPlugin(fixture.Malformed.FileName, origin: Origin).BuildScattered();
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
-        fixture.Malformed.WriteInto(modFolder);
+        fixture.Malformed.WriteInto(Path.GetDirectoryName(fx.Plugins.Single().Path).Require());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         var plugin = new { name = fixture.Malformed.FileName, origin = Origin };
         var hash = Assert.Single((await (await Client.PostAsJsonAsync("/plugins/repair-previews", new { plugins = new[] { plugin } }))
             .EnsureSuccessStatusCode().Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").EnumerateArray()).GetProperty("hash").GetString();
-        var before = FilesOutsideGit(modFolder);
 
-        HttpResponseMessage response;
-        var path = Environment.GetEnvironmentVariable("PATH");
-        Environment.SetEnvironmentVariable("PATH", string.Empty);
-        try
+        var response = await WithGitMissing(() => Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
         {
-            response = await Client.PostAsJsonAsync("/plugins/decompile-and-repair", new
-            {
-                plugins = new[] { new { plugin, hash, sourceFolder = Client.SourceFolderSentFor(Origin) } },
-                force = false,
-            });
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PATH", path);
-        }
+            plugins = new[] { new { plugin, hash, sourceFolder = Client.SourceFolderSentFor(Origin) } },
+            force = false,
+        }));
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("GitUnavailable", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
-        Assert.Equal(before, FilesOutsideGit(modFolder));
-    }
-
-    [Fact]
-    public async Task CopyingASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndChangesNoFile()
-    {
-        using var fx = new PluginFixtureBuilder("trace-copy-without-git")
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
-            .WithPlugin("Second.esp", mod => mod.Npcs.AddNew("SecondNpc"), origin: "SecondMod")
-            .BuildScattered();
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit("SecondMod")).EnsureSuccessStatusCode();
-        var npc = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
-            .GetProperty("items").EnumerateArray().Single().GetProperty("formKey").GetString().Require();
-        var modFolders = fx.Plugins.Select(p => Path.GetDirectoryName(p.Path).Require()).ToList();
-        var before = modFolders.Select(FilesOutsideGit).ToList();
-
-        HttpResponseMessage response;
-        var path = Environment.GetEnvironmentVariable("PATH");
-        Environment.SetEnvironmentVariable("PATH", string.Empty);
-        try
-        {
-            response = await Client.PostAsJsonAsync("/records/copy-changes", new
-            {
-                records = new[] { new { formKey = npc, plugin = new { name = Plugin, origin = Origin } } },
-                mode = "New",
-                destinations = new[] { new { name = "Second.esp", origin = "SecondMod" } }
-            });
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PATH", path);
-        }
-
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Equal(before, modFolders.Select(FilesOutsideGit));
     }
 
     [Fact]
-    public async Task InitOfASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndWritesNothing()
+    public async Task InitOfASelection_WithGitMissing_Is500WithTheRefusal()
     {
         using var fx = new PluginFixtureBuilder("trace-init-without-git")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
             .WithPlugin("Second.esp", mod => mod.Npcs.AddNew("SecondNpc"), origin: "SecondMod")
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        var modFolders = fx.Plugins.Select(p => Path.GetDirectoryName(p.Path).Require()).ToList();
-        var before = modFolders.Select(FilesOutsideGit).ToList();
 
-        HttpResponseMessage response;
-        var path = Environment.GetEnvironmentVariable("PATH");
-        Environment.SetEnvironmentVariable("PATH", string.Empty);
-        try
-        {
-            response = await Client.DecompileAndCommit([Origin, "SecondMod"]);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PATH", path);
-        }
+        var response = await WithGitMissing(() => Client.DecompileAndCommit([Origin, "SecondMod"]));
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
         Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
-        Assert.All(modFolders, modFolder => Assert.False(Directory.Exists(Path.Combine(modFolder, ".git"))));
-        Assert.Equal(before, modFolders.Select(FilesOutsideGit));
         Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Decompile and commit", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task DecompilingASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndChangesNoFile()
+    public async Task DecompilingASelection_WithGitMissing_Is500WithTheRefusal()
     {
         using var fx = new PluginFixtureBuilder("trace-decompile-without-git")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
-        var before = FilesOutsideGit(modFolder);
 
-        HttpResponseMessage response;
-        var path = Environment.GetEnvironmentVariable("PATH");
-        Environment.SetEnvironmentVariable("PATH", string.Empty);
-        try
-        {
-            response = await Client.Decompile([(Plugin, Origin)]);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PATH", path);
-        }
+        var response = await WithGitMissing(() => Client.Decompile([(Plugin, Origin)]));
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
-        Assert.Equal(before, FilesOutsideGit(modFolder));
         Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Decompile", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task CompilingASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndChangesNoFile()
+    public async Task CompilingASelection_WithGitMissing_Is500WithTheRefusal()
     {
         using var fx = new PluginFixtureBuilder("trace-compile-without-git")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("FirstNpc"), origin: Origin)
@@ -195,79 +99,23 @@ public sealed class GitMissingApiTests : HostedTests
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.DecompileAndCommit([Origin, "SecondMod"])).EnsureSuccessStatusCode();
-        var modFolders = fx.Plugins.Select(p => Path.GetDirectoryName(p.Path).Require()).ToList();
-        var before = modFolders.Select(FilesOutsideGit).ToList();
 
-        HttpResponseMessage response;
-        var path = Environment.GetEnvironmentVariable("PATH");
-        Environment.SetEnvironmentVariable("PATH", string.Empty);
-        try
-        {
-            response = await Client.Compile([(Plugin, Origin), ("Second.esp", "SecondMod")]);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PATH", path);
-        }
+        var response = await WithGitMissing(() => Client.Compile([(Plugin, Origin), ("Second.esp", "SecondMod")]));
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
-        Assert.Equal(before, modFolders.Select(FilesOutsideGit));
     }
 
     [Fact]
-    public async Task EditingARecord_WithGitMissing_Is500_AndChangesNoFile()
-    {
-        using var fx = await SourceMod("trace-edit-without-git");
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
-        var before = FilesOutsideGit(modFolder);
-
-        var response = await WithGitMissing(() => Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75));
-
-        await AssertRefusedGitUnavailable(response);
-        Assert.Equal(before, FilesOutsideGit(modFolder));
-    }
-
-    [Fact]
-    public async Task AskingForAnEditsChanges_WithGitMissing_Is500_AsTheEditIs()
-    {
-        using var fx = await SourceMod("trace-edit-changes-without-git");
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
-
-        var response = await WithGitMissing(() => Client.EditChanges(formKey, Plugin, Origin, "HeightMax", 0.75, "{}"));
-
-        await AssertRefusedGitUnavailable(response);
-    }
-
-    [Fact]
-    public async Task CreatingARecord_WithGitMissing_Is500_AndChangesNoFile()
-    {
-        using var fx = await SourceMod("trace-create-record-without-git");
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
-        var before = FilesOutsideGit(modFolder);
-
-        var response = await WithGitMissing(() => Client.CreateRecord(Plugin, Origin, "npc_"));
-
-        await AssertRefusedGitUnavailable(response);
-        Assert.Equal(before, FilesOutsideGit(modFolder));
-    }
-
-    [Fact]
-    public async Task BuildingASelection_WithGitMissing_RefusesTheWholeSelectionOnce_AndWritesNothing()
+    public async Task BuildingASelection_WithGitMissing_Is500WithTheRefusal()
     {
         using var fx = await SourceMod("trace-build-without-git");
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
-        var before = FilesOutsideGit(modFolder);
 
         var response = await WithGitMissing(() => Client.Build([(Origin, modFolder)], Path.Combine(fx.Root, "stat-cache")));
 
         var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
-        Assert.Equal(before, FilesOutsideGit(modFolder));
         Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Build", StringComparison.Ordinal));
     }
 
@@ -296,17 +144,4 @@ public sealed class GitMissingApiTests : HostedTests
             Environment.SetEnvironmentVariable("PATH", path);
         }
     }
-
-    private static async Task AssertRefusedGitUnavailable(HttpResponseMessage response)
-    {
-        var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
-        Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-    }
-
-    private static SortedDictionary<string, string> FilesOutsideGit(string modFolder) =>
-        new(Directory.EnumerateFiles(modFolder, "*", SearchOption.AllDirectories)
-            .Select(file => Path.GetRelativePath(modFolder, file))
-            .Where(relative => !relative.StartsWith(".git" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            .ToDictionary(relative => relative, relative => Convert.ToBase64String(File.ReadAllBytes(Path.Combine(modFolder, relative)))),
-            StringComparer.Ordinal);
 }

@@ -1,20 +1,15 @@
-using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Http.Tests.Api;
+namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>Three plugins disagreeing over several records, loaded through the real host — the
-/// hardest classifications to get wrong, so the compare wire response reaches every shape at
-/// once.</summary>
-public sealed class CompareGoldenApiFixture : IDisposable
+public sealed class CompareGoldenFixture : IDisposable
 {
     public PluginFixtureData Fixture { get; }
-    public MEditHost App { get; } = new();
-    public HttpClient Client { get; }
+    internal OpenedIndex Index { get; }
 
     public static readonly FormKey ConflictedNpc = MakeKey("Base.esm", 0x800);
     public static readonly FormKey UnchangedWeapon = MakeKey("Base.esm", 0x801);
@@ -24,7 +19,7 @@ public sealed class CompareGoldenApiFixture : IDisposable
 
     private static FormKey MakeKey(string plugin, uint id) => new(ModKey.FromFileName(plugin), id);
 
-    public CompareGoldenApiFixture()
+    public CompareGoldenFixture()
     {
         Fixture = new PluginFixtureBuilder("compare-golden")
             .WithPlugin("Base.esm", mod =>
@@ -90,30 +85,12 @@ public sealed class CompareGoldenApiFixture : IDisposable
                 mod.ConstructibleObjects.Set(recipe);
             })
             .Build();
-
-        Client = App.CreateClient();
-        var response = Client.PutLoadOrderAndAwaitReady(new
-        {
-            dataFolder = Fixture.DataFolder,
-            instanceRoot = Fixture.InstanceRoot,
-            plugins = Fixture.Plugins.Select(p => p.Wire),
-            active = SnapshotPlugins.Active(Fixture.Plugins),
-            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(Fixture.Plugins),
-            archives = Array.Empty<string>(),
-            stringsFiles = Array.Empty<string>(),
-            mods = Array.Empty<object>(),
-            places = Array.Empty<object>(),
-            statCache = "stat-cache",
-            gameRelease = "Fallout4",
-            stringsLanguage = "English",
-        }).GetAwaiter().GetResult();
-        response.EnsureSuccessStatusCode();
+        Index = Indexes.Reconciled(Fixture);
     }
 
     public void Dispose()
     {
-        Client.Dispose();
-        App.Dispose();
+        Index.Dispose();
         Fixture.Dispose();
     }
 }

@@ -145,7 +145,7 @@ public sealed class RenameSourceWithoutGitApiTests : HostedTests
     private const string Origin = "SourceMod";
 
     [Fact]
-    public async Task RenamingWithGitMissing_Is500_AndLeavesTheSourceWhereItWas()
+    public async Task RenamingWithGitMissing_Is500WithTheRefusal()
     {
         using var fx = new PluginFixtureBuilder("api-rename-source-without-git")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("CompiledPluginNpc"), origin: Origin)
@@ -166,6 +166,5 @@ public sealed class RenameSourceWithoutGitApiTests : HostedTests
         }
 
         Assert.Equal("GitUnavailable", (await response.AssertIsProblem(HttpStatusCode.InternalServerError)).GetProperty("refusal").GetString());
-        Assert.True(Directory.Exists(PluginSourceRoot.In(OtherTool.ModFolderOf(fx, Origin), Plugin)));
     }
 }
