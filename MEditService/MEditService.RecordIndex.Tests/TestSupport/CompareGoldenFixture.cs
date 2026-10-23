@@ -6,8 +6,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>Three plugins disagreeing over several records, the hardest classifications to get wrong, so one
-/// comparison reaches every shape at once.</summary>
 public sealed class CompareGoldenFixture : IDisposable
 {
     public PluginFixtureData Fixture { get; }

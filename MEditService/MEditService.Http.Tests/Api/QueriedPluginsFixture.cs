@@ -7,8 +7,7 @@ using Noggog;
 namespace MEditService.Http.Tests.Api;
 
 /// <summary>Three plugins in three mods, each built for one family of questions: one of every kind
-/// of record, records whose order is not their editor IDs' order, and records another record
-/// holds.</summary>
+/// of record, rooms holding placed references, and records another record holds.</summary>
 public sealed class QueriedPluginsFixture : IApiPluginFixture<QueriedPluginsFixture>
 {
     public const string UserPlugin = "UserMod.esp";
@@ -20,7 +19,7 @@ public sealed class QueriedPluginsFixture : IApiPluginFixture<QueriedPluginsFixt
 
     public ScatteredFixtureData Data { get; } = new PluginFixtureBuilder("query-record-index")
         .WithPlugin(UserPlugin, OneOfEveryKind, origin: UserMod)
-        .WithPlugin(ListedPlugin, OutOfEditorIdOrder, origin: ListedMod)
+        .WithPlugin(ListedPlugin, RoomsHoldingReferences, origin: ListedMod)
         .WithPlugin(HeldPlugin, HeldByAnotherRecord, origin: HeldMod)
         .BuildScattered();
 
@@ -68,45 +67,18 @@ public sealed class QueriedPluginsFixture : IApiPluginFixture<QueriedPluginsFixt
         mod.Cells.Records.Add(interiorBlock);
     }
 
-    private static void OutOfEditorIdOrder(Fallout4Mod mod)
+    private static void RoomsHoldingReferences(Fallout4Mod mod)
     {
-        mod.Activators.AddNew("ZuluLever");
-        mod.Activators.AddNew("AlphaLever");
-
-        var quest = new Quest(mod) { EditorID = "ListedQuest" };
-        quest.Scenes.Add(new Scene(mod) { EditorID = "ZuluScene" });
-        quest.DialogTopics.Add(new DialogTopic(mod) { EditorID = "AlphaTopic" });
-        mod.Quests.Add(quest);
-
-        var zuluWorld = mod.Worldspaces.AddNew("ZuluWorld");
-        mod.Worldspaces.AddNew("AlphaWorld");
-        var zuluClearing = new Cell(mod) { EditorID = "ZuluClearing", Grid = new CellGrid { Point = new P2Int(1, 1) } };
-        zuluClearing.Temporary.Add(new PlacedObject(mod) { EditorID = "ClearingRef" });
-        var alphaClearing = new Cell(mod) { EditorID = "AlphaClearing", Grid = new CellGrid { Point = new P2Int(0, 0) } };
-        var exteriorSubBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
-        exteriorSubBlock.Items.Add(zuluClearing);
-        exteriorSubBlock.Items.Add(alphaClearing);
-        var exteriorBlock = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
-        exteriorBlock.Items.Add(exteriorSubBlock);
-        zuluWorld.SubCells.Add(exteriorBlock);
-
         var zuluRoom = new Cell(mod) { EditorID = "ZuluRoom" };
         zuluRoom.Temporary.Add(new PlacedObject(mod) { EditorID = "ZuluRef" });
         zuluRoom.Temporary.Add(new PlacedObject(mod) { EditorID = "AlphaRef" });
         var alphaRoom = new Cell(mod) { EditorID = "AlphaRoom" };
-        var roomSubBlock = new CellSubBlock { BlockNumber = 7 };
-        roomSubBlock.Cells.Add(zuluRoom);
-        roomSubBlock.Cells.Add(alphaRoom);
-        var roomBlock = new CellBlock { BlockNumber = 3 };
-        roomBlock.SubBlocks.Add(roomSubBlock);
-
-        var otherSubBlock = new CellSubBlock { BlockNumber = 0 };
-        otherSubBlock.Cells.Add(new Cell(mod) { EditorID = "OtherRoom" });
-        var otherBlock = new CellBlock { BlockNumber = 0 };
-        otherBlock.SubBlocks.Add(otherSubBlock);
-
-        mod.Cells.Records.Add(roomBlock);
-        mod.Cells.Records.Add(otherBlock);
+        var subBlock = new CellSubBlock { BlockNumber = 0 };
+        subBlock.Cells.Add(zuluRoom);
+        subBlock.Cells.Add(alphaRoom);
+        var block = new CellBlock { BlockNumber = 0 };
+        block.SubBlocks.Add(subBlock);
+        mod.Cells.Records.Add(block);
     }
 
     private static void HeldByAnotherRecord(Fallout4Mod mod)

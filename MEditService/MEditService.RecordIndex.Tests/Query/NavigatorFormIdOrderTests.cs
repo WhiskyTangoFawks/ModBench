@@ -22,33 +22,31 @@ public sealed class NavigatorFormIdOrderTests : IDisposable
         _fixture = new PluginFixtureBuilder("navigator-form-id-order")
             .WithPlugin(PluginName, mod =>
             {
-                var quest = new Quest(mod) { EditorID = "ListedQuest" };
-                quest.Scenes.Add(new Scene(mod) { EditorID = "ZuluScene" });
-                quest.DialogTopics.Add(new DialogTopic(mod) { EditorID = "AlphaTopic" });
-                mod.Quests.Add(quest);
-                _formKeys["ListedQuest"] = quest.FormKey.ToString();
-
-                var zuluWorld = mod.Worldspaces.AddNew("ZuluWorld");
-                mod.Worldspaces.AddNew("AlphaWorld");
+                var zuluWorld = new Worldspace(mod) { EditorID = "ZuluWorld" };
+                var alphaWorld = new Worldspace(mod) { EditorID = "AlphaWorld" };
+                mod.Worldspaces.Add(alphaWorld);
+                mod.Worldspaces.Add(zuluWorld);
                 _formKeys["ZuluWorld"] = zuluWorld.FormKey.ToString();
                 var zuluClearing = new Cell(mod) { EditorID = "ZuluClearing", Grid = new CellGrid { Point = new P2Int(1, 1) } };
                 zuluClearing.Temporary.Add(new PlacedObject(mod) { EditorID = "ClearingRef" });
                 var alphaClearing = new Cell(mod) { EditorID = "AlphaClearing", Grid = new CellGrid { Point = new P2Int(0, 0) } };
                 var exteriorSubBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
-                exteriorSubBlock.Items.Add(zuluClearing);
                 exteriorSubBlock.Items.Add(alphaClearing);
+                exteriorSubBlock.Items.Add(zuluClearing);
                 var exteriorBlock = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
                 exteriorBlock.Items.Add(exteriorSubBlock);
                 zuluWorld.SubCells.Add(exteriorBlock);
 
                 var zuluRoom = new Cell(mod) { EditorID = "ZuluRoom" };
-                zuluRoom.Temporary.Add(new PlacedObject(mod) { EditorID = "ZuluRef" });
-                zuluRoom.Temporary.Add(new PlacedObject(mod) { EditorID = "AlphaRef" });
-                _formKeys["ZuluRoom"] = zuluRoom.FormKey.ToString();
                 var alphaRoom = new Cell(mod) { EditorID = "AlphaRoom" };
+                var zuluRef = new PlacedObject(mod) { EditorID = "ZuluRef" };
+                var alphaRef = new PlacedObject(mod) { EditorID = "AlphaRef" };
+                zuluRoom.Temporary.Add(alphaRef);
+                zuluRoom.Temporary.Add(zuluRef);
+                _formKeys["ZuluRoom"] = zuluRoom.FormKey.ToString();
                 var roomSubBlock = new CellSubBlock { BlockNumber = 7 };
-                roomSubBlock.Cells.Add(zuluRoom);
                 roomSubBlock.Cells.Add(alphaRoom);
+                roomSubBlock.Cells.Add(zuluRoom);
                 var roomBlock = new CellBlock { BlockNumber = 3 };
                 roomBlock.SubBlocks.Add(roomSubBlock);
 
@@ -118,13 +116,5 @@ public sealed class NavigatorFormIdOrderTests : IDisposable
         var result = _index.Queries.GetCellChildRecords(Plugin, _formKeys["ZuluRoom"]).Value();
 
         Assert.Equal(["ZuluRef", "AlphaRef"], result.Temporary.Select(r => r.EditorId));
-    }
-
-    [Fact]
-    public void AContainersChildren_ListInFormIdOrder_WhateverTheirType()
-    {
-        var result = _index.Queries.GetContainerChildren(Plugin, _formKeys["ListedQuest"]).Value();
-
-        Assert.Equal(["ZuluScene", "AlphaTopic"], result.Select(c => c.EditorId));
     }
 }

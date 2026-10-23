@@ -1,235 +1,235 @@
 {
-  "allNpcs": [
+  "AllNpcs": [
     {
-      "editorId": "ConflictedNPC",
-      "formKey": "000800:Base.esm",
-      "fullName": "Base name",
-      "hasContainerChildren": false,
-      "hasParseFailure": false,
-      "isWinner": false,
-      "loadOrderIndex": 0,
-      "origin": "Data/",
-      "parseDiagnosis": null,
-      "plugin": "Base.esm",
-      "workingTreeState": "None"
+      "EditorId": "ConflictedNPC",
+      "FormKey": "000800:Base.esm",
+      "FullName": "Base name",
+      "HasContainerChildren": false,
+      "HasParseFailure": false,
+      "IsWinner": false,
+      "LoadOrderIndex": 0,
+      "Origin": "Data/",
+      "ParseDiagnosis": null,
+      "Plugin": "Base.esm",
+      "WorkingTreeState": "None"
     },
     {
-      "editorId": "ConflictedNPC",
-      "formKey": "000800:Base.esm",
-      "fullName": "Mid name",
-      "hasContainerChildren": false,
-      "hasParseFailure": false,
-      "isWinner": false,
-      "loadOrderIndex": 1,
-      "origin": "Data/",
-      "parseDiagnosis": null,
-      "plugin": "Mid.esp",
-      "workingTreeState": "None"
+      "EditorId": "ConflictedNPC",
+      "FormKey": "000800:Base.esm",
+      "FullName": "Mid name",
+      "HasContainerChildren": false,
+      "HasParseFailure": false,
+      "IsWinner": false,
+      "LoadOrderIndex": 1,
+      "Origin": "Data/",
+      "ParseDiagnosis": null,
+      "Plugin": "Mid.esp",
+      "WorkingTreeState": "None"
     },
     {
-      "editorId": "ConflictedNPC",
-      "formKey": "000800:Base.esm",
-      "fullName": "Top name",
-      "hasContainerChildren": false,
-      "hasParseFailure": false,
-      "isWinner": true,
-      "loadOrderIndex": 2,
-      "origin": "Data/",
-      "parseDiagnosis": null,
-      "plugin": "Top.esp",
-      "workingTreeState": "None"
+      "EditorId": "ConflictedNPC",
+      "FormKey": "000800:Base.esm",
+      "FullName": "Top name",
+      "HasContainerChildren": false,
+      "HasParseFailure": false,
+      "IsWinner": true,
+      "LoadOrderIndex": 2,
+      "Origin": "Data/",
+      "ParseDiagnosis": null,
+      "Plugin": "Top.esp",
+      "WorkingTreeState": "None"
     },
     {
-      "editorId": "InjectedNPC",
-      "formKey": "000800:Mid.esp",
-      "fullName": "Injected",
-      "hasContainerChildren": false,
-      "hasParseFailure": false,
-      "isWinner": true,
-      "loadOrderIndex": 1,
-      "origin": "Data/",
-      "parseDiagnosis": null,
-      "plugin": "Mid.esp",
-      "workingTreeState": "None"
+      "EditorId": "InjectedNPC",
+      "FormKey": "000800:Mid.esp",
+      "FullName": "Injected",
+      "HasContainerChildren": false,
+      "HasParseFailure": false,
+      "IsWinner": true,
+      "LoadOrderIndex": 1,
+      "Origin": "Data/",
+      "ParseDiagnosis": null,
+      "Plugin": "Mid.esp",
+      "WorkingTreeState": "None"
     },
     {
-      "editorId": "SoleNPC",
-      "formKey": "000802:Base.esm",
-      "fullName": null,
-      "hasContainerChildren": false,
-      "hasParseFailure": false,
-      "isWinner": true,
-      "loadOrderIndex": 0,
-      "origin": "Data/",
-      "parseDiagnosis": null,
-      "plugin": "Base.esm",
-      "workingTreeState": "None"
+      "EditorId": "SoleNPC",
+      "FormKey": "000802:Base.esm",
+      "FullName": null,
+      "HasContainerChildren": false,
+      "HasParseFailure": false,
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data/",
+      "ParseDiagnosis": null,
+      "Plugin": "Base.esm",
+      "WorkingTreeState": "None"
     }
   ],
-  "perPluginTypes": {
+  "PerPluginTypes": {
     "Base.esm": [
       {
-        "count": 1,
-        "displayName": "Constructible Object",
-        "hasParseFailure": false,
-        "isContainer": false,
-        "isCreatable": true,
-        "type": "cobj"
+        "Count": 1,
+        "DisplayName": "Constructible Object",
+        "HasParseFailure": false,
+        "IsContainer": false,
+        "IsCreatable": true,
+        "Type": "cobj"
       },
       {
-        "count": 2,
-        "displayName": "Non-Player Character",
-        "hasParseFailure": false,
-        "isContainer": false,
-        "isCreatable": true,
-        "type": "npc_"
+        "Count": 2,
+        "DisplayName": "Non-Player Character",
+        "HasParseFailure": false,
+        "IsContainer": false,
+        "IsCreatable": true,
+        "Type": "npc_"
       },
       {
-        "count": 1,
-        "displayName": "Weapon",
-        "hasParseFailure": false,
-        "isContainer": false,
-        "isCreatable": true,
-        "type": "weap"
+        "Count": 1,
+        "DisplayName": "Weapon",
+        "HasParseFailure": false,
+        "IsContainer": false,
+        "IsCreatable": true,
+        "Type": "weap"
       }
     ],
     "Mid.esp": [
       {
-        "count": 2,
-        "displayName": "Non-Player Character",
-        "hasParseFailure": false,
-        "isContainer": false,
-        "isCreatable": true,
-        "type": "npc_"
+        "Count": 2,
+        "DisplayName": "Non-Player Character",
+        "HasParseFailure": false,
+        "IsContainer": false,
+        "IsCreatable": true,
+        "Type": "npc_"
       },
       {
-        "count": 1,
-        "displayName": "Weapon",
-        "hasParseFailure": false,
-        "isContainer": false,
-        "isCreatable": true,
-        "type": "weap"
+        "Count": 1,
+        "DisplayName": "Weapon",
+        "HasParseFailure": false,
+        "IsContainer": false,
+        "IsCreatable": true,
+        "Type": "weap"
       }
     ],
     "Top.esp": [
       {
-        "count": 1,
-        "displayName": "Constructible Object",
-        "hasParseFailure": false,
-        "isContainer": false,
-        "isCreatable": true,
-        "type": "cobj"
+        "Count": 1,
+        "DisplayName": "Constructible Object",
+        "HasParseFailure": false,
+        "IsContainer": false,
+        "IsCreatable": true,
+        "Type": "cobj"
       },
       {
-        "count": 1,
-        "displayName": "Non-Player Character",
-        "hasParseFailure": false,
-        "isContainer": false,
-        "isCreatable": true,
-        "type": "npc_"
+        "Count": 1,
+        "DisplayName": "Non-Player Character",
+        "HasParseFailure": false,
+        "IsContainer": false,
+        "IsCreatable": true,
+        "Type": "npc_"
       }
     ]
   },
-  "plugins": [
+  "Plugins": [
     {
-      "hasMatchingRecords": true,
-      "inLoadOrder": true,
-      "isImmutable": true,
-      "isLight": false,
-      "isMaster": true,
-      "loadOrderIndex": 0,
-      "masters": [],
-      "missingMasters": [],
-      "name": "Base.esm",
-      "origin": "Data/",
-      "recordCount": 4
+      "HasMatchingRecords": true,
+      "InLoadOrder": true,
+      "IsImmutable": true,
+      "IsLight": false,
+      "IsMaster": true,
+      "LoadOrderIndex": 0,
+      "Masters": [],
+      "MissingMasters": [],
+      "Name": "Base.esm",
+      "Origin": "Data/",
+      "RecordCount": 4
     },
     {
-      "hasMatchingRecords": true,
-      "inLoadOrder": true,
-      "isImmutable": true,
-      "isLight": false,
-      "isMaster": false,
-      "loadOrderIndex": 1,
-      "masters": [
+      "HasMatchingRecords": true,
+      "InLoadOrder": true,
+      "IsImmutable": true,
+      "IsLight": false,
+      "IsMaster": false,
+      "LoadOrderIndex": 1,
+      "Masters": [
         "Base.esm"
       ],
-      "missingMasters": [],
-      "name": "Mid.esp",
-      "origin": "Data/",
-      "recordCount": 3
+      "MissingMasters": [],
+      "Name": "Mid.esp",
+      "Origin": "Data/",
+      "RecordCount": 3
     },
     {
-      "hasMatchingRecords": true,
-      "inLoadOrder": true,
-      "isImmutable": true,
-      "isLight": false,
-      "isMaster": false,
-      "loadOrderIndex": 2,
-      "masters": [
+      "HasMatchingRecords": true,
+      "InLoadOrder": true,
+      "IsImmutable": true,
+      "IsLight": false,
+      "IsMaster": false,
+      "LoadOrderIndex": 2,
+      "Masters": [
         "Base.esm"
       ],
-      "missingMasters": [],
-      "name": "Top.esp",
-      "origin": "Data/",
-      "recordCount": 2
+      "MissingMasters": [],
+      "Name": "Top.esp",
+      "Origin": "Data/",
+      "RecordCount": 2
     }
   ],
-  "references": [
+  "References": [
     {
-      "editorId": "ConflictedNPC",
-      "fieldPath": "Race",
-      "formKey": "000800:Base.esm",
-      "origin": "Data/",
-      "plugin": "Base.esm",
-      "recordType": "npc_",
-      "recordTypeName": "Non-Player Character"
+      "EditorId": "ConflictedNPC",
+      "FieldPath": "Race",
+      "FormKey": "000800:Base.esm",
+      "Origin": "Data/",
+      "Plugin": "Base.esm",
+      "RecordType": "npc_",
+      "RecordTypeName": "Non-Player Character"
     },
     {
-      "editorId": "ConflictedNPC",
-      "fieldPath": "Race",
-      "formKey": "000800:Base.esm",
-      "origin": "Data/",
-      "plugin": "Mid.esp",
-      "recordType": "npc_",
-      "recordTypeName": "Non-Player Character"
+      "EditorId": "ConflictedNPC",
+      "FieldPath": "Race",
+      "FormKey": "000800:Base.esm",
+      "Origin": "Data/",
+      "Plugin": "Mid.esp",
+      "RecordType": "npc_",
+      "RecordTypeName": "Non-Player Character"
     }
   ],
-  "winningRecords": {
+  "WinningRecords": {
     "000800:Base.esm": {
-      "editorId": "ConflictedNPC",
-      "isWinner": true,
-      "origin": "Data/",
-      "plugin": "Top.esp",
-      "recordType": "npc_"
+      "EditorId": "ConflictedNPC",
+      "IsWinner": true,
+      "Origin": "Data/",
+      "Plugin": "Top.esp",
+      "RecordType": "npc_"
     },
     "000800:Mid.esp": {
-      "editorId": "InjectedNPC",
-      "isWinner": true,
-      "origin": "Data/",
-      "plugin": "Mid.esp",
-      "recordType": "npc_"
+      "EditorId": "InjectedNPC",
+      "IsWinner": true,
+      "Origin": "Data/",
+      "Plugin": "Mid.esp",
+      "RecordType": "npc_"
     },
     "000801:Base.esm": {
-      "editorId": "UnchangedWeapon",
-      "isWinner": true,
-      "origin": "Data/",
-      "plugin": "Mid.esp",
-      "recordType": "weap"
+      "EditorId": "UnchangedWeapon",
+      "IsWinner": true,
+      "Origin": "Data/",
+      "Plugin": "Mid.esp",
+      "RecordType": "weap"
     },
     "000802:Base.esm": {
-      "editorId": "SoleNPC",
-      "isWinner": true,
-      "origin": "Data/",
-      "plugin": "Base.esm",
-      "recordType": "npc_"
+      "EditorId": "SoleNPC",
+      "IsWinner": true,
+      "Origin": "Data/",
+      "Plugin": "Base.esm",
+      "RecordType": "npc_"
     },
     "000803:Base.esm": {
-      "editorId": "ConflictedRecipe",
-      "isWinner": true,
-      "origin": "Data/",
-      "plugin": "Top.esp",
-      "recordType": "cobj"
+      "EditorId": "ConflictedRecipe",
+      "IsWinner": true,
+      "Origin": "Data/",
+      "Plugin": "Top.esp",
+      "RecordType": "cobj"
     }
   }
 }

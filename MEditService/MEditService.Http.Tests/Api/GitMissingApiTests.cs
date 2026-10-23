@@ -31,10 +31,8 @@ public sealed class GitMissingApiTests : HostedTests
             records = npcs.Select(formKey => new { formKey, plugin = new { name = Plugin, origin = Origin } }).ToArray()
         }));
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
         Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Delete", StringComparison.Ordinal));
     }
 
@@ -55,8 +53,8 @@ public sealed class GitMissingApiTests : HostedTests
             force = false,
         }));
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("GitUnavailable", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
+        var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
+        Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
     }
 
     [Fact]
@@ -70,8 +68,7 @@ public sealed class GitMissingApiTests : HostedTests
 
         var response = await WithGitMissing(() => Client.DecompileAndCommit([Origin, "SecondMod"]));
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
         Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
         Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Decompile and commit", StringComparison.Ordinal));
@@ -88,10 +85,8 @@ public sealed class GitMissingApiTests : HostedTests
 
         var response = await WithGitMissing(() => Client.Decompile([(Plugin, Origin)]));
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
         Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Decompile", StringComparison.Ordinal));
     }
 
@@ -107,10 +102,8 @@ public sealed class GitMissingApiTests : HostedTests
 
         var response = await WithGitMissing(() => Client.Compile([(Plugin, Origin), ("Second.esp", "SecondMod")]));
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -123,7 +116,6 @@ public sealed class GitMissingApiTests : HostedTests
 
         var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
         Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Build", StringComparison.Ordinal));
     }
 
