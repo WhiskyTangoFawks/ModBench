@@ -125,7 +125,7 @@ export function registerDownloadsMultiRowCommands(
   ];
 }
 
-// MO2 writes what it has although a request for more failed, and says so (downloadmanager.cpp, nxmRequestFailed).
+// The mod manager writes what it has although a request for more failed, and says so (downloadmanager.cpp, nxmRequestFailed).
 const noticesOf = ({ landed }: SelectionOutcome<QueriedFile>): PartialFailure[] =>
   landed.flatMap(({ name, notice }) => (notice === undefined ? [] : [{ message: `Query info for "${name}" wrote less than Nexus knows`, detail: notice, severity: 'warning' as const }]));
 

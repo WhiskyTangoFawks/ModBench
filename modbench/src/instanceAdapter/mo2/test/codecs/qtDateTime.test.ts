@@ -3,10 +3,9 @@ import { localDateTimeStream } from '../../codecs/qtDateTime';
 import { setIniDateTime } from '../../codecs/qSettingsIni';
 
 describe('a QDateTime as MO2 stores it in a .meta', () => {
-  // MXPF-a-68617-v1-1-0.zip.meta, written by MO2 in UTC from the upload count 1455072761.
   const MO2_WROTE = '[General]\nfileTime="@DateTime(\\0\\0\\0\\x10\\0\\0\\0\\0\\0\\0%=\\x9c\\x4T\\xe5\\xf9\\0)"\n';
 
-  it('writes the value MO2 wrote for the same time', () => {
+  it('writes the value MO2 wrote in UTC for the upload count 1455072761 (a real .meta of LitR)', () => {
     expect(setIniDateTime('[General]\n', 'General', 'fileTime', localDateTimeStream(1_455_072_761, 0))).toBe(MO2_WROTE);
   });
 

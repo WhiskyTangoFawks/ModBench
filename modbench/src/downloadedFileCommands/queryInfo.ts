@@ -6,7 +6,7 @@ import { NOT_LOGGED_IN, type Nexus } from '../nexus/nexus';
 
 type NexusAsked = Pick<Nexus, 'fileByMd5' | 'fileByName' | 'loggedIn'>;
 
-// MO2 asks by MD5 first, and by the mod's page and file list when the MD5 settles nothing.
+// The mod manager asks by MD5 first, and by the mod's page and file list when the MD5 settles nothing.
 async function foundOnNexus(nexus: NexusAsked, { games, md5, modID, fileID }: DownloadedFileQuery, fileName: string): ReturnType<Nexus['fileByMd5']> {
   const byMd5 = await nexus.fileByMd5({ games, md5, fileName });
   const [game] = games;
@@ -15,7 +15,7 @@ async function foundOnNexus(nexus: NexusAsked, { games, md5, modID, fileID }: Do
   return byName.found ? byName : { found: false, reason: `${byMd5.reason} By its mod ID ${modID}: ${byName.reason}` };
 }
 
-/** A file looked up: `notice` is what MO2 says when it wrote the file's metadata although a request for more failed. */
+/** A file looked up: `notice` is what the mod manager says when it wrote the file's metadata although a request for more failed. */
 export interface QueriedFile {
   name: string;
   notice?: string;

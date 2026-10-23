@@ -158,7 +158,7 @@ export function nexusDomainForMetaGame(gameName: string): string | undefined {
   return release === undefined ? undefined : GAME_PATHS[release]?.nexusSlug;
 }
 
-/** The Nexus domains MO2 asks about a file of the game `gameName` names, in its order: the game's own, then each valid short name's. */
+/** The Nexus domains the mod manager asks about a file of the game `gameName` names, in its order: the game's own, then each valid short name's. */
 export function nexusDomainsForGame(gameName: string): string[] {
   const release = gameReleaseForGame(gameName);
   if (release === undefined) return [];

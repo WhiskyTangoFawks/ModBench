@@ -1,17 +1,17 @@
-// How MO2 learns what Nexus knows of a downloaded file (downloadmanager.cpp): by its MD5 over the game's names, and by the mod's page and file list when the MD5 does not settle it.
+// How the mod manager learns what Nexus knows of a downloaded file (downloadmanager.cpp): by its MD5 over the game's names, and by the mod's page and file list when the MD5 does not settle it.
 
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 
 const REMOVED = 6;
 const ARCHIVED = 7;
-export const NOT_READ = 'Nexus answered in a form Modbench does not read.';
+const NOT_READ = 'Nexus answered in a form Modbench does not read.';
 const NOT_KNOWN = 'Nexus does not know this file.';
 
 export type Read = (path: string, notFound?: string) => Promise<{ json: unknown } | { reason: string }>;
-/** `notice` is what MO2 says when it writes what it has although a request failed. */
+/** `notice` is what the mod manager says when it writes what it has although a request failed. */
 export type FileFound = { found: true; info: NexusFileInfo; notice?: string } | { found: false; reason: string };
 const failedRequest = (reason: string): string => `Failed to request file info from Nexus: ${reason}`;
-const NO_MATCH = 'No matching file found on Nexus! Maybe this file is no longer available or it was renamed?';
+const NO_MATCH = 'No matching file found on Nexus! Maybe this file was removed or renamed?';
 
 type Fields = Record<string, unknown>;
 interface Hit {

@@ -257,7 +257,7 @@ describe('asking which file has an MD5', () => {
     it('keeps what the search gave, and says no file matches, when the file list names none of its names', async () => {
       const { result } = await asking({ [SEARCH]: json([hit('a.7z', ACTIVE, 7, null)]), [LIST]: json({ files: [{ ...entry, file_name: 'Other.7z' }], file_updates: [] }) }, 'a.7z');
 
-      expect(result).toMatchObject({ found: true, info: { name: 'Main' }, notice: 'No matching file found on Nexus! Maybe this file is no longer available or it was renamed?' });
+      expect(result).toMatchObject({ found: true, info: { name: 'Main' }, notice: 'No matching file found on Nexus! Maybe this file was removed or renamed?' });
     });
   });
 
@@ -342,7 +342,7 @@ describe('asking which file of a mod bears a name', () => {
   });
 
   it.each([
-    ['no listed file bears the name', { [PAGE]: json(page), [LIST]: json({ files: [{ ...listed, file_name: 'Other.7z' }], file_updates: [] }) }, 'No matching file found on Nexus! Maybe this file is no longer available or it was renamed?'],
+    ['no listed file bears the name', { [PAGE]: json(page), [LIST]: json({ files: [{ ...listed, file_name: 'Other.7z' }], file_updates: [] }) }, 'No matching file found on Nexus! Maybe this file was removed or renamed?'],
     ['the file list cannot be had', { [PAGE]: json(page) }, 'Failed to request file info from Nexus: Nexus does not hold this mod.'],
   ])('keeps what the page said, and says why the file is missing, when %s', async (_name, answers, notice) => {
     const { result } = await asking(answers);

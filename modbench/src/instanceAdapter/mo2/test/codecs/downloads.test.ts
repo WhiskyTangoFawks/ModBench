@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseDownloadedFileMeta,
+  setNexusFileInfoInText,
   setHiddenInText,
   setInstalledInText,
   setUninstalledInText,
@@ -105,5 +106,19 @@ describe('setUninstalledInText', () => {
     expect(setUninstalledInText(text)).toBe(
       '[General]\r\nuninstalled=true\r\ninstalled=true\r\nmodid=12345\r\n',
     );
+  });
+});
+
+describe('setNexusFileInfoInText', () => {
+  const info = {
+    game: 'fallout4', modID: '4598', fileID: '78', name: 'Main', version: '2.1.5', fileCategory: 1, modName: 'Patch', category: 12,
+    author: 'Team', uploader: 'Uploader', uploaderUrl: 'https://nexus/users/1', description: '[b]Fixes[/b]',
+  };
+
+  it('writes the keys in the order MO2 writes them, the description as HTML and the version canonical', () => {
+    expect(setNexusFileInfoInText('', info, 'Fallout4')).toBe([
+      '[General]', 'gameName=Fallout4', 'modID=4598', 'fileID=78', 'name=Main', 'description=<b>Fixes</b>', 'modName=Patch',
+      'version=2.1.5.0', 'fileCategory=1', 'category=12', 'author=Team', 'uploader=Uploader', 'uploaderUrl=https://nexus/users/1', '',
+    ].join('\r\n'));
   });
 });

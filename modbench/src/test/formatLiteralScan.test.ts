@@ -24,7 +24,7 @@ interface Format {
 }
 
 const MANAGER_FORMATS: Format = {
-  codecs: codecsIn(ADAPTER_CODECS, join('instanceAdapter', 'mo2', 'test', 'codecs'), ['modlistText', 'metaIni', 'modOrganizerIni', 'downloads']),
+  codecs: codecsIn(ADAPTER_CODECS, join('instanceAdapter', 'mo2', 'test', 'codecs'), ['modlistText', 'metaIni', 'modOrganizerIni', 'downloads', 'bbcode']),
   tokens: [
     '+', '-', '*', '_separator', '[General]', 'selected_profile', 'gameName', 'gamePath',
     'download_directory', 'installed', 'uninstalled', 'removed',

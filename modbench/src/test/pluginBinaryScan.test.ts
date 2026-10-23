@@ -77,9 +77,10 @@ function undecodedReadsIn(sourceText: string, fileName: string): string[] {
 
 const DIGEST_IMPORTS: Readonly<Record<string, ReadonlySet<string>>> = {
   'node:fs': new Set(['createReadStream']),
+  'node:crypto': new Set(['createHash']),
   'xxhash-wasm': new Set(['default']),
 };
-const DIGEST_EXPORT = 'digestOf';
+const DIGEST_EXPORTS: ReadonlySet<string> = new Set(['digestOf', 'md5Of']);
 const DIGEST_RETURNS = 'Promise<string>';
 
 const isExported = (node: ts.Node): boolean =>
@@ -104,9 +105,9 @@ function digestModuleOffences(sourceText: string, fileName: string): string[] {
   for (const statement of source.statements) {
     if (ts.isImportDeclaration(statement)) {
       offences.push(...importOffences(statement));
-    } else if (ts.isFunctionDeclaration(statement) && statement.name?.text === DIGEST_EXPORT && isExported(statement)) {
+    } else if (ts.isFunctionDeclaration(statement) && DIGEST_EXPORTS.has(statement.name?.text ?? '') && isExported(statement)) {
       const returns = statement.type?.getText() ?? 'nothing declared';
-      if (returns !== DIGEST_RETURNS) offences.push(`${DIGEST_EXPORT} returns ${returns}, not ${DIGEST_RETURNS}`);
+      if (returns !== DIGEST_RETURNS) offences.push(`${statement.name?.text} returns ${returns}, not ${DIGEST_RETURNS}`);
     } else if (ts.isExportAssignment(statement) || ts.isExportDeclaration(statement) || isExported(statement)) {
       offences.push(firstLine(statement));
     }
@@ -137,7 +138,7 @@ describe('the extension interprets no plugin binary (ADR-0004): its one byte-lev
     expect(offenders).toEqual({});
   });
 
-  it('holds the digest module to node:fs, xxhash-wasm and one exported function, so its bytes reach only a hash', () => {
+  it('holds the digest module to node:fs, node:crypto, xxhash-wasm and its two exported hashes, so its bytes reach only a hash', () => {
     expect(digestModuleOffences(readFileSync(THE_DIGEST, 'utf8'), THE_DIGEST)).toEqual([]);
   });
 
@@ -157,6 +158,11 @@ describe('the extension interprets no plugin binary (ADR-0004): its one byte-lev
     expect(digestModuleOffences(dynamic, 'contentDigest.ts')).toEqual(['imports ./layout']);
     const required = "export async function digestOf(p): Promise<string> { const { keep } = require('./layout'); }\n";
     expect(digestModuleOffences(required, 'contentDigest.ts')).toEqual(['imports ./layout']);
+  });
+
+  it('flags a hash that answers anything but a string, whichever of the two it is', () => {
+    const md5 = "export async function md5Of(p): Promise<Buffer> {}\n";
+    expect(digestModuleOffences(md5, 'contentDigest.ts')).toEqual(['md5Of returns Promise<Buffer>, not Promise<string>']);
   });
 
   it('flags a second export of any form, which is a second way out for the bytes', () => {

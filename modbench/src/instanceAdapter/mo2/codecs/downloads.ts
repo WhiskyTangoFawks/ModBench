@@ -67,8 +67,8 @@ export function setHiddenInText(text: string, hidden: boolean): string {
   return setMetaFlag(text, 'removed', hidden);
 }
 
-/** What Nexus names of the file, under the keys and in the order MO2's createMetaFile writes them, the description as the HTML MO2 keeps
- *  and the version as its canonical string. A key lands right after the header, so they go in reversed; a key `info` does not name stays as found. */
+/** What Nexus names of the file, under createMetaFile's keys in its order: the description as HTML, the version canonical.
+ *  Keys land after the header, so they go in reversed; a key `info` omits stays as found. */
 export function setNexusFileInfoInText(text: string, info: NexusFileInfo, gameName: string): string {
   const version = [info.version, info.modVersion].map((v) => canonicalVersion(v ?? '')).find((v) => v !== '');
   const fileTime = info.fileTime === undefined ? undefined : localDateTimeStream(info.fileTime, -new Date(info.fileTime).getTimezoneOffset());

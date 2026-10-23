@@ -1,5 +1,5 @@
-// A QDateTime in the local time zone as QDataStream writes it for a QVariant (qdatetime.cpp, operator<<): the variant's type and null flag,
-// the date as a Julian day, the time as milliseconds into the day, and the time spec.
+// A local QDateTime as QDataStream writes it for a QVariant: type and null flag, the date as a Julian day,
+// the time as milliseconds into the day, the time spec.
 
 const QDATETIME_TYPE = 16;
 const LOCAL_TIME = 0;

@@ -2724,13 +2724,14 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.downloadedFileQuery(name)).toEqual({ kind: 'read', answer: undefined });
       });
 
-      it('writes what Nexus names into a metadata made for the file, in the order MO2 writes it', async () => {
+      it('writes what Nexus names into a metadata made for the file, which the downloaded file then reads', async () => {
         expect(await adapter.writeNexusFileInfo('manual.zip', info)).toEqual({ gone: false, wrote: true });
 
-        expect(await metaOf('manual.zip')).toBe([
-          '[General]', 'gameName=Fallout4', 'modID=4598', 'fileID=78', 'name=Main', 'description=<b>Fixes</b>', 'modName=Unofficial Fallout 4 Patch',
-          'version=2.1.5.0', 'fileCategory=1', 'category=12', 'author=Unofficial Patch Team', 'uploader=Uploader', 'uploaderUrl=https://nexus/users/1', '',
-        ].join('\r\n'));
+        const listed = await (await source.settings()).downloadedFiles(ignoreSkippedLink);
+        if (listed.kind !== 'listed') throw new Error(`expected listed, got ${listed.reason}`);
+        expect(listed.files?.find((file) => file.name === 'manual.zip')?.meta).toMatchObject({
+          modID: '4598', fileID: '78', gameName: 'Fallout4', name: 'Main', version: '2.1.5.0', modName: 'Unofficial Fallout 4 Patch', fileCategory: 1, author: 'Unofficial Patch Team',
+        });
       });
 
       it('writes the mod\'s version when the file has none', async () => {
