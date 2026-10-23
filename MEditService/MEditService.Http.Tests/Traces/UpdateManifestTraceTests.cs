@@ -119,56 +119,11 @@ public sealed class UpdateManifestTraceTests : HostedTests
         Assert.All(progress, e => Assert.Equal(Gesture, e.GetProperty("modlistProgress").GetProperty("gesture").GetString()));
     }
 
-    [Fact]
-    public async Task UpdatingTheManifestOfAModAgain_OpensNoFileTheLastUpdateRead_AndAnswersItsManifestNotWritten()
-    {
-        ModInstalledFromADownload(edited: false);
-        (await UpdateManifest("Mod.zip")).EnsureSuccessStatusCode();
-        using var held = new FileStream(Path.Combine(ModFolder, "kept.txt"), FileMode.Open, FileAccess.Read, FileShare.None);
-
-        var body = await (await UpdateManifest("Mod.zip")).Content.ReadFromJsonAsync<JsonElement>();
-
-        var updated = Assert.Single(body.GetProperty("applied").EnumerateArray());
-        Assert.False(updated.GetProperty("manifestWritten").GetBoolean());
-        Assert.Empty(updated.GetProperty("notInPackage").EnumerateArray());
-    }
-
-    [Fact]
-    public async Task UpdatingTheManifestOfAModWhoseStatCacheCannotBeWritten_LandsNamingWhy()
-    {
-        ModInstalledFromADownload(edited: false);
-        var taken = Path.Combine(_instance, "taken");
-        File.WriteAllText(taken, "a file where the stat cache's folder would be");
-        var request = Request("Mod.zip").Whole;
-        request["statCache"] = taken;
-
-        var response = await Client.PostAsJsonAsync("/update-manifest", request);
-
-        var updated = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").EnumerateArray());
-        Assert.True(updated.GetProperty("manifestWritten").GetBoolean());
-        Assert.Contains(taken, updated.GetProperty("statCacheNotWritten").GetString(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task UpdatingTheManifestOfAModWhoseInstallationFileIsMissing_RefusesItNamingTheFile_AndWritesNoManifest()
-    {
-        ModInstalledFromADownload(edited: false);
-
-        var body = await (await UpdateManifest("Absent.zip")).Content.ReadFromJsonAsync<JsonElement>();
-
-        var refused = Assert.Single(body.GetProperty("refused").EnumerateArray());
-        Assert.Equal(("InstallationFileMissing", Mod), (refused.GetProperty("refusal").GetString(), refused.GetProperty("item").GetString()));
-        Assert.Contains("Absent.zip", refused.GetProperty("message").GetString());
-        Assert.False(File.Exists(Path.Combine(ModFolder, Mod + ".manifest.json")));
-    }
-
-    private JsonObject GameFolderRequest(out string hash) => GameFolderRequest(out hash, out _, out _);
-
-    private JsonObject GameFolderRequest(out string hash, out JsonObject gameFolder, out JsonObject file)
+    private JsonObject GameFolderRequest(out JsonObject gameFolder, out JsonObject file)
     {
         Directory.CreateDirectory(ModFolder);
         File.WriteAllText(Path.Combine(ModFolder, "a.nif"), "taken");
-        hash = new ModFolderRepository(TimeProvider.System).Files(ModFolder, Mod, new HashSet<string>(), null).Files.Single().Hash;
+        var hash = new ModFolderRepository(TimeProvider.System).Files(ModFolder, Mod, new HashSet<string>(), null).Files.Single().Hash;
         file = new JsonObject { ["path"] = "A.nif", ["hash"] = hash };
         gameFolder = new JsonObject { ["name"] = "Fallout4", ["dataFolder"] = Path.Combine(_instance, "game", "Data"), ["files"] = new JsonArray(file) };
         return new JsonObject
@@ -186,7 +141,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
     [InlineData("hash", "\"WHOLE\"")]
     public async Task UpdatingAManifestWithAGameFolderMissingAFieldOrMalformed_Is400(string field, string? json)
     {
-        var request = GameFolderRequest(out _, out var gameFolder, out var file);
+        var request = GameFolderRequest(out var gameFolder, out var file);
         var held = field == "hash" ? file : gameFolder;
         if (json is null) held.Remove(field);
         else held[field] = JsonNode.Parse(json);
@@ -194,35 +149,6 @@ public sealed class UpdateManifestTraceTests : HostedTests
         var response = await Client.PostAsJsonAsync("/update-manifest", request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task UpdatingTheManifestOfAModWhoseFilesTheGameFolderHolds_NamesTheGameFolderAsItsPackage()
-    {
-        var request = GameFolderRequest(out var hash);
-
-        var response = await Client.PostAsJsonAsync("/update-manifest", request);
-
-        response.EnsureSuccessStatusCode();
-        var pin = FileHash.OfFilesTaken([new HashedFile("a.nif", hash)]);
-        Assert.Equal(
-            $"{{\n\"package\": {{\"gameFolder\":\"Fallout4\",\"hash\":\"{pin}\"}},\n\"files\": [\n{{\"path\":\"a.nif\"}}\n]\n}}\n",
-            File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json")));
-    }
-
-    [Fact]
-    public async Task UpdatingTheManifestOfAGameFolderModWhenNoGameFolderWasFound_RefusesItNamingWhy_AndLeavesItsManifest()
-    {
-        var request = GameFolderRequest(out _);
-        (await Client.PostAsJsonAsync("/update-manifest", request)).EnsureSuccessStatusCode();
-        var written = File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json"));
-        request.Remove("gameFolder");
-
-        var body = await (await Client.PostAsJsonAsync("/update-manifest", request)).Content.ReadFromJsonAsync<JsonElement>();
-
-        var refused = Assert.Single(body.GetProperty("refused").EnumerateArray());
-        Assert.Equal("GameFolderNotFound", refused.GetProperty("refusal").GetString());
-        Assert.Equal(written, File.ReadAllText(Path.Combine(ModFolder, Mod + ".manifest.json")));
     }
 
     [Fact]

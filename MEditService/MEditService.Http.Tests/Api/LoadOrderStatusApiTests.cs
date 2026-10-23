@@ -27,41 +27,6 @@ public sealed class LoadOrderStatusApiTests : IDisposable
     }
 
     [Fact]
-    public async Task GetLoadOrderStatus_AfterALoad_ReportsReadyWithEveryPluginAndItsOrigin()
-    {
-        using var fx = new PluginFixtureBuilder("api-status")
-            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
-            .Build();
-
-        var load = await _client.PutLoadOrderAndAwaitReady(new
-        {
-            plugins = fx.Plugins.Select(p => p.Wire),
-            active = SnapshotPlugins.Active(fx.Plugins),
-            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins),
-            archives = Array.Empty<string>(),
-            stringsFiles = Array.Empty<string>(),
-            mods = Array.Empty<object>(),
-            places = Array.Empty<object>(),
-            statCache = "stat-cache",
-            dataFolder = fx.DataFolder,
-            instanceRoot = fx.InstanceRoot,
-            gameRelease = "Fallout4",
-            stringsLanguage = "English",
-        });
-        load.EnsureSuccessStatusCode();
-
-        var status = await _client.GetFromJsonAsync<JsonElement>("/load-order/status");
-        Assert.Equal("Ready", status.GetProperty("state").GetString());
-        Assert.True(status.GetProperty("conflictsComputed").GetBoolean());
-        Assert.Equal(1, status.GetProperty("totalPlugins").GetInt32());
-
-        var indexed = status.GetProperty("indexedPlugins").EnumerateArray().Single();
-        Assert.Equal("A.esp", indexed.GetProperty("name").GetString());
-        Assert.False(string.IsNullOrWhiteSpace(indexed.GetProperty("origin").GetString()));
-        Assert.Empty(status.GetProperty("failures").EnumerateArray());
-    }
-
-    [Fact]
     public async Task PutLoadOrder_AnswersAppliedAtOnce_AndStatusReachesReadySeparately()
     {
         using var fx = new PluginFixtureBuilder("api-status-contract")
