@@ -16,6 +16,7 @@ import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
   'gameFolder' | 'gameRelease' | 'modOrder' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'removeIgnoreList' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
+  | 'writePathTokens' | 'pathsOutsideFolders'
   | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule'>;
 
 interface ModlistRepositoryCommandsDeps {
@@ -31,14 +32,15 @@ export interface ModNote { readonly mod: string; readonly note: string }
 
 /** What update manifest answers: each mod updated or refused, and each entry a mod folder's listing skipped, or the
  *  whole gesture refused, as a message to show. */
-export type UpdateManifestResult = ({ applied: true; notes: readonly ModNote[]; submoduleNotes: readonly string[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
+export type UpdateManifestResult = ({ applied: true; notes: readonly ModNote[]; repositoryNotes: readonly string[] } & UpdateManifestOutcome) | { applied: false; refusal: string };
 
 /** Where update manifest is: the Instance adapter reading a mod's files, or mEdit updating manifests. */
 export type UpdateManifestStatus = { readonly phase: 'ReadingFiles'; readonly mod: string } | ({ readonly phase: 'Updating' } & ModlistProgress);
 
-/** pushRefusalNotWritten: why the instance repository does not refuse a push of a pin its source mod's remote lacks. */
+/** pushRefusalNotWritten: why the instance repository does not refuse a push of a pin its source mod's remote lacks.
+ *  pathTokensNotWritten: why a path token stays in the working tree. */
 export type RestoreResult =
-  | ({ applied: true; pushRefusalNotWritten?: string } & Omit<RestoreOutcome, 'notFound'>)
+  | ({ applied: true; pushRefusalNotWritten?: string; pathTokensNotWritten?: string } & Omit<RestoreOutcome, 'notFound'>)
   | { applied: false; refusal: string; unfinished: readonly string[] };
 
 /** What restore from manifest would destroy, each mod with a file it would replace or trash and each mod it skipped, or why
@@ -227,6 +229,7 @@ type FoldersNotFinished = Extract<RestoreResult, { applied: false }> & { readonl
 async function restoreFromManifest(
   deps: ModlistRepositoryCommandsDeps, mods: readonly string[], options: ModlistCallOptions<RestoreStatus>,
 ): Promise<RestoreResult> {
+  const pathTokensNotWritten = await pathTokensWrittenOrWhy(deps.adapter);
   const restored = await restoreFolders(deps, mods, options);
   const { finished, unfinished } = await withFilesNoLineNamesTrashed(deps, restored.landed);
   if (restored.applied) {
@@ -235,6 +238,7 @@ async function restoreFromManifest(
     return {
       ...restored, landed: finished, refused: options.signal?.aborted ? [...refused, ...cancelledBefore(mods, restored)] : refused,
       ...(pushRefusalNotWritten === undefined ? {} : { pushRefusalNotWritten }),
+      ...(pathTokensNotWritten === undefined ? {} : { pathTokensNotWritten }),
     };
   }
   return { applied: false, refusal: restored.refusal, unfinished: [...restored.unfinished, ...unfinished.map(({ item }) => item)] };
@@ -248,6 +252,16 @@ async function pushRefusalWrittenOrWhy(adapter: Adapter): Promise<string | undef
     return errorMessage(err);
   }
   return undefined;
+}
+
+// modlist-repository.md, The repository, story 4: a clone holds a path token where its game path is until restore puts
+// this machine's path there, so restore writes them before it reads the game folder.
+async function pathTokensWrittenOrWhy(adapter: Adapter): Promise<string | undefined> {
+  try {
+    return await adapter.writePathTokens();
+  } catch (err) {
+    return errorMessage(err);
+  }
 }
 
 // modlist-repository.md, Restore from manifest, story 6: an interrupted restore names each mod it did not finish.
@@ -354,43 +368,67 @@ async function refusalTakenBack(failure: unknown, undone: readonly { what: strin
   return refusal;
 }
 
-async function submodulesWritten(adapter: Adapter): Promise<{ notes: readonly ModNote[]; submoduleNotes: readonly string[] }> {
+async function submodulesWritten(adapter: Adapter): Promise<{ notes: readonly ModNote[]; repositoryNotes: readonly string[] }> {
   try {
     const { notes, other } = await adapter.writeSubmodules();
-    return { notes, submoduleNotes: other };
+    return { notes, repositoryNotes: other };
   } catch (err) {
-    return { notes: [], submoduleNotes: [errorMessage(err)] };
+    return { notes: [], repositoryNotes: [errorMessage(err)] };
   }
+}
+
+// modlist-repository.md, The repository, story 4: what a commit holds is what the path tokens make of the files now.
+async function pathsReported(adapter: Adapter): Promise<readonly string[]> {
+  let left: string | undefined;
+  try {
+    left = await adapter.writePathTokens();
+  } catch (err) {
+    return [`the path tokens could not be written: ${errorMessage(err)}`];
+  }
+  const kept = left === undefined ? [] : [left];
+  try {
+    return [...kept, ...(await adapter.pathsOutsideFolders()).map(({ file, path }) => `${file} holds a path no path token names: ${path}`)];
+  } catch (err) {
+    return [...kept, `the paths the instance repository's files hold could not be read: ${errorMessage(err)}`];
+  }
+}
+
+/** pathTokensNotWritten: why a path token stays in the working tree. */
+export type GitInitResult = CommandResult<{ pathTokensNotWritten?: string }>;
+
+async function gitInit({ adapter, instanceRoot, hostGit }: ModlistRepositoryCommandsDeps): Promise<GitInitResult> {
+  const ignoreList = { what: 'the ignore list it wrote', undo: () => adapter.removeIgnoreList() };
+  const repository = { what: 'the repository it made', undo: () => adapter.removeRepository() };
+  if (await adapter.repositoryOnDisk()) return { applied: false, refusal: `${instanceRoot} already holds a repository.` };
+  try {
+    await adapter.checkPushRefusalFree();
+    await adapter.writeIgnoreList();
+  } catch (err) {
+    return refuse(err);
+  }
+  try {
+    await initRepositoryIn(hostGit, instanceRoot);
+  } catch (err) {
+    return { applied: false, refusal: await refusalTakenBack(err, [ignoreList]) };
+  }
+  let pathTokensNotWritten: string | undefined;
+  try {
+    await adapter.refuseUnpublishedPins();
+    pathTokensNotWritten = await adapter.writePathTokens();
+  } catch (err) {
+    return { applied: false, refusal: await refusalTakenBack(err, [repository, ignoreList]) };
+  }
+  return pathTokensNotWritten === undefined ? { applied: true } : { applied: true, pathTokensNotWritten };
 }
 
 /** The modlist gestures, bound to the mEdit client and handing it the instance's facts. */
 export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
-  const { client, adapter, instanceRoot, hostGit } = deps;
-  const ignoreList = { what: 'the ignore list it wrote', undo: () => adapter.removeIgnoreList() };
-  const repository = { what: 'the repository it made', undo: () => adapter.removeRepository() };
+  const { client, adapter } = deps;
 
   return {
-    /** Makes the repository and its ignore list, and writes no manifest. Refused when the instance folder holds one already. */
-    gitInit: async (): Promise<CommandResult<object>> => {
-      if (await adapter.repositoryOnDisk()) return { applied: false, refusal: `${instanceRoot} already holds a repository.` };
-      try {
-        await adapter.checkPushRefusalFree();
-        await adapter.writeIgnoreList();
-      } catch (err) {
-        return refuse(err);
-      }
-      try {
-        await initRepositoryIn(hostGit, instanceRoot);
-      } catch (err) {
-        return { applied: false, refusal: await refusalTakenBack(err, [ignoreList]) };
-      }
-      try {
-        await adapter.refuseUnpublishedPins();
-      } catch (err) {
-        return { applied: false, refusal: await refusalTakenBack(err, [repository, ignoreList]) };
-      }
-      return { applied: true };
-    },
+    /** Makes the repository with its ignore list, push refusal and path tokens, and writes no manifest. Refused when the
+     *  instance folder holds one already. */
+    gitInit: (): Promise<GitInitResult> => gitInit(deps),
 
     /** A mod whose folder or installation files the Instance adapter cannot answer is refused here, naming why, and mEdit
      *  updates the rest. */
@@ -401,14 +439,14 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       const game = await gameToHand(adapter, sourceMods);
       const { sent, gameFiles, refused: unread, notes } = await readMods(adapter, mods, (mod) => adapter.installationFile(mod), game, { onProgress, signal });
       const refused = [...unread];
-      if (sent.length === 0) return { applied: true, landed: [], refused, notes, submoduleNotes: [] };
+      if (sent.length === 0) return { applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) };
       const versioned: UpdateManifestMod[] = [];
       for (const mod of sent) {
         const metadata = await adapter.modMetadata(mod.name);
         if (metadata.kind === 'unreadable') refused.push({ item: mod.name, reason: metadataUnreadable(metadata.reason) });
         else versioned.push({ ...mod, isSourceMod: sourceMods.folderOf(mod.name) !== undefined, version: metadata.answer.version });
       }
-      if (versioned.length === 0) return { applied: true, landed: [], refused, notes, submoduleNotes: [] };
+      if (versioned.length === 0) return { applied: true, landed: [], refused, notes, repositoryNotes: await pathsReported(adapter) };
       const outcome = await client.updateManifest(
         versioned,
         {
@@ -418,7 +456,10 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
         { onProgress: (progress) => onProgress?.({ phase: 'Updating', ...progress }), signal });
       if (isRefused(outcome)) return { applied: false, refusal: outcome.message };
       const submodules = await submodulesWritten(adapter);
-      return { applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes], submoduleNotes: submodules.submoduleNotes };
+      return {
+        applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes],
+        repositoryNotes: [...submodules.repositoryNotes, ...await pathsReported(adapter)],
+      };
     },
 
     /** Asks before anything is written, so a mod the Instance adapter gives no folder, which restore refuses, is not asked. */

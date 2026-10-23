@@ -94,7 +94,7 @@ async function updateManifestForAgent(
   return {
     applied: true,
     outcome: { landed: outcome.landed, refused: outcome.refused },
-    partial: warned('Update manifest:', [...notHeld, ...notesOf(label, result.notes), ...result.submoduleNotes, ...statCacheNotWritten(outcome.landed)]),
+    partial: warned('Update manifest:', [...notHeld, ...notesOf(label, result.notes), ...result.repositoryNotes, ...statCacheNotWritten(outcome.landed)]),
   };
 }
 
@@ -122,7 +122,7 @@ function reportUpdated(reporter: Reporter, label: Label, outcome: Omit<Extract<U
   const unchanged = outcome.landed.length - updated;
   const line = `Update manifest: ${unchanged} mod${unchanged === 1 ? '' : 's'} unchanged, ${updated} updated, `
     + `${outcome.refused.length} refused; their packages do not hold ${counted(notHeld.length, 'file', 'files')}.`;
-  const warnings = [...notHeld, ...notesOf(label, outcome.notes), ...outcome.submoduleNotes, ...statCacheNotWritten(outcome.landed)];
+  const warnings = [...notHeld, ...notesOf(label, outcome.notes), ...outcome.repositoryNotes, ...statCacheNotWritten(outcome.landed)];
   const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');
   if (outcome.refused.length > 0) reporter.report('error', line, detail);
   else if (warnings.length > 0) reporter.report('warning', line, detail);
@@ -141,8 +141,10 @@ const uncommittedWarnings = (landed: Restored): string[] => landed.filter(({ unc
 const leftDetachedWarnings = (landed: Restored): string[] =>
   landed.flatMap(({ mod, leftDetached }) => (leftDetached ? [`${mod}: ${leftDetached}`] : []));
 
-const pushNotRefused = ({ pushRefusalNotWritten: why }: { readonly pushRefusalNotWritten?: string }): string[] =>
-  (why === undefined ? [] : [`a push of a pin its source mod's remote lacks is not refused: ${why}`]);
+const repositoryNotSetUp = ({ pushRefusalNotWritten, pathTokensNotWritten }: { readonly pushRefusalNotWritten?: string; readonly pathTokensNotWritten?: string }): string[] => [
+  ...(pushRefusalNotWritten === undefined ? [] : [`a push of a pin its source mod's remote lacks is not refused: ${pushRefusalNotWritten}`]),
+  ...(pathTokensNotWritten === undefined ? [] : [`this machine's paths are not in place of every path token: ${pathTokensNotWritten}`]),
+];
 
 async function confirmRestore(ask: AskQuestion, label: Label, { mods, everyMod: all }: ModsToRun): Promise<boolean> {
   const manifests = mods.length === 1 ? 'its manifest' : 'their manifests';
@@ -215,7 +217,7 @@ async function restoreFromManifestForAgent(
   return {
     applied: true,
     outcome: answered,
-    partial: warned('Restore from manifest:', [...statCacheNotWritten(answered.landed), ...uncommittedWarnings(answered.landed), ...leftDetachedWarnings(answered.landed), ...pushNotRefused(outcome)]),
+    partial: warned('Restore from manifest:', [...statCacheNotWritten(answered.landed), ...uncommittedWarnings(answered.landed), ...leftDetachedWarnings(answered.landed), ...repositoryNotSetUp(outcome)]),
   };
 }
 
@@ -230,7 +232,7 @@ function restoreMessage(status: RestoreStatus, label: Label): string {
 // changes no commit holds in the Output.
 function reportRestored(reporter: Reporter, total: number, outcome: Omit<Extract<RestoreResult, { applied: true }>, 'applied'>): void {
   const warnings = [
-    ...statCacheNotWritten(outcome.landed), ...uncommittedWarnings(outcome.landed), ...leftDetachedWarnings(outcome.landed), ...pushNotRefused(outcome),
+    ...statCacheNotWritten(outcome.landed), ...uncommittedWarnings(outcome.landed), ...leftDetachedWarnings(outcome.landed), ...repositoryNotSetUp(outcome),
   ];
   if (outcome.refused.length > 0) {
     const detail = [...outcome.refused.map(({ item, reason }) => `"${item}" (${reason})`), ...warnings].join('\n');

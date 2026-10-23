@@ -1,10 +1,9 @@
 // A source mod with a remote is a submodule of the instance repository; git decides the config and the staging.
 
-import { execFile } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
-import { promisify } from 'node:util';
 import { errnoCode } from '../errno';
+import { git } from '../git';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, isRepository, remove, write } from '../files';
 import type { InstanceAdapter, SourceHost, Submodule, SubmoduleNote } from '../instanceAdapter';
@@ -14,11 +13,6 @@ import { PRE_PUSH_HOOK, PRE_PUSH_HOOK_NAME } from '../prePushHook';
 import { sourceModsIn } from './sourceMods';
 
 type Mo2Submodules = Pick<InstanceAdapter, 'writeSubmodules' | 'sourceHost' | 'submodule' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'>;
-
-const execFileAsync = promisify(execFile);
-
-const git = async (folder: string, ...args: string[]): Promise<string> =>
-  (await execFileAsync('git', ['-C', folder, ...args], { encoding: 'utf8' })).stdout;
 
 interface SubmoduleEntry { readonly name: string; readonly url: string; readonly branch: string }
 

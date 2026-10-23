@@ -208,6 +208,12 @@ export const WHITELIST_IGNORE_LIST = `${[
   ...heldInEachFolderOf(MODS, [MANIFEST_GLOB]),
 ].join('\n')}\n`;
 
+/** The mod manager's configuration as git's attributes match it. */
+export const SETTINGS_FILE_PATTERN = `/${SETTINGS_FILE_NAME}`;
+
+/** Each profile's INIs as git's attributes match them. */
+export const PROFILE_INIS_PATTERN = `/${PROFILES}/*/*.${anyCase('ini')}`;
+
 /** The archives at the root of the Data folder and the files of its strings folder, the Data folder its base. */
 export const dataFolderArchivesGlob = (archiveExtension: string, stringsFolder: string): string =>
   `{*${anyCase(archiveExtension)},${anyCase(stringsFolder)}/*}`;

@@ -294,6 +294,9 @@ export interface SubmoduleNote { readonly mod: string; readonly note: string }
 
 interface SubmoduleReport { readonly notes: readonly SubmoduleNote[]; readonly other: readonly string[] }
 
+// A path a file holds, the file by its path in the instance repository.
+interface PathInFile { readonly file: string; readonly path: string }
+
 /** Whether the game gets a file of a mod or of Overwrite. */
 export type OriginFileMark = 'Excluded' | 'Included';
 
@@ -544,6 +547,11 @@ export interface InstanceAdapter {
   /** Makes the instance repository refuse a pushed pin with no checkout, or whose URL in the pushed `.gitmodules` is
    *  missing, unreachable or lacks it. Rejects, writing nothing, when another pre-push hook is there. */
   refuseUnpublishedPins(): Promise<void>;
+  /** Makes git hold each folder's path by a path token, and the working tree this machine's paths. Answers why a path
+   *  token stays in the working tree. Writes nothing without a repository. */
+  writePathTokens(): Promise<string | undefined>;
+  /** Each path no path token names in a file the instance repository holds or would commit. */
+  pathsOutsideFolders(): Promise<readonly PathInFile[]>;
   /** The stamp of an origin file, at the path it is read from. */
   fileStamp(path: string): Promise<FileRead<FileStamp>>;
   /** An origin file's size and hash at the path it is read from, remembered for this session alone: its lasting hash

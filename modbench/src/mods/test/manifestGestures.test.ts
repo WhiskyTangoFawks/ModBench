@@ -92,7 +92,7 @@ beforeEach(() => {
   notification.cancellable.length = 0;
   notification.messages.length = 0;
   vi.clearAllMocks();
-  updateManifest.mockResolvedValue({ applied: true, notes: [], submoduleNotes: [], landed: [], refused: [] });
+  updateManifest.mockResolvedValue({ applied: true, notes: [], repositoryNotes: [], landed: [], refused: [] });
   restoreFromManifest.mockResolvedValue({ applied: true, landed: [], refused: [] });
   whatRestoreDestroys.mockResolvedValue({ destroys: [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: [], metadataDiffers: false }], refused: [] });
 });
@@ -183,7 +183,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
   it('update manifest shows its progress by mod in a notification with Cancel', async () => {
     updateManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'Updating', mod: 'ModA', modsDone: 0, modsTotal: 2 });
-      return Promise.resolve({ applied: true, notes: [], submoduleNotes: [], landed: [], refused: [] });
+      return Promise.resolve({ applied: true, notes: [], repositoryNotes: [], landed: [], refused: [] });
     });
     const { run } = register();
 
@@ -209,7 +209,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     updateManifest.mockImplementationOnce((_mods, options) => {
       notification.cancel();
       signal = options?.signal;
-      return Promise.resolve({ applied: true, notes: [], submoduleNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [] }], refused: [] });
+      return Promise.resolve({ applied: true, notes: [], repositoryNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [] }], refused: [] });
     });
     const { reporter, run } = register();
 
@@ -235,7 +235,7 @@ describe('Every mod (update manifest and restore from manifest)', () => {
   });
 
   it.each([
-    [UPDATE, () => updateManifest.mockResolvedValueOnce({ applied: true, notes: [], submoduleNotes: [], landed: [], refused: [], cancelRefusal: 'Could not cancel — not running.' })],
+    [UPDATE, () => updateManifest.mockResolvedValueOnce({ applied: true, notes: [], repositoryNotes: [], landed: [], refused: [], cancelRefusal: 'Could not cancel — not running.' })],
     [RESTORE, () => restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [], refused: [], cancelRefusal: 'Could not cancel — not running.' })],
   ])('%s reports a cancel mEdit refused', async (id, answersCancelRefused) => {
     answersCancelRefused();
@@ -252,7 +252,7 @@ describe('Update manifest', () => {
     updateManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'ReadingFiles', mod: 'ModA' });
       options?.onProgress?.({ phase: 'Updating', mod: 'ModA', modsDone: 0, modsTotal: 2 });
-      return Promise.resolve({ applied: true, notes: [], submoduleNotes: [], landed: [], refused: [] });
+      return Promise.resolve({ applied: true, notes: [], repositoryNotes: [], landed: [], refused: [] });
     });
     const { said, run } = register();
 
@@ -271,7 +271,7 @@ describe('Update manifest', () => {
   });
 
   it('runs under the Mods view\'s progress when a Mods row asked, and asks nothing', async () => {
-    updateManifest.mockImplementationOnce(() => { progressSteps.push('update manifest'); return Promise.resolve({ applied: true, notes: [], submoduleNotes: [], landed: [], refused: [] }); });
+    updateManifest.mockImplementationOnce(() => { progressSteps.push('update manifest'); return Promise.resolve({ applied: true, notes: [], repositoryNotes: [], landed: [], refused: [] }); });
     const { ask, run } = register();
 
     await run(UPDATE, modRow('ModA'));
@@ -282,7 +282,7 @@ describe('Update manifest', () => {
 
   it('says in one line how many mods were unchanged, updated and refused, and that no file is outside its package', async () => {
     updateManifest.mockResolvedValueOnce({
-      applied: true, notes: [], submoduleNotes: [], refused: [],
+      applied: true, notes: [], repositoryNotes: [], refused: [],
       landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [] }, { mod: 'ModB', manifestWritten: false, notInPackage: [] }, { mod: 'C', manifestWritten: false, notInPackage: [] }],
     });
     const { reporter, run } = register();
@@ -293,7 +293,7 @@ describe('Update manifest', () => {
   });
 
   it('warns in that line when a package does not hold a file, naming each by mod in the Output', async () => {
-    updateManifest.mockResolvedValueOnce({ applied: true, notes: [], submoduleNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif', 'b/c.dds'] }], refused: [] });
+    updateManifest.mockResolvedValueOnce({ applied: true, notes: [], repositoryNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif', 'b/c.dds'] }], refused: [] });
     const { reporter, run } = register();
 
     await run(UPDATE, modRow('ModA'));
@@ -305,7 +305,7 @@ describe('Update manifest', () => {
 
   it('errs in that line when a mod is refused, naming each refused mod with why, then each file its package does not hold', async () => {
     updateManifest.mockResolvedValueOnce({
-      applied: true, notes: [], submoduleNotes: [],
+      applied: true, notes: [], repositoryNotes: [],
       landed: [{ mod: 'ModA', manifestWritten: false, notInPackage: ['a.nif'] }],
       refused: [{ item: 'ModB', reason: "was not updated: 'B.zip' not in the downloads folder." }],
     });
@@ -320,7 +320,7 @@ describe('Update manifest', () => {
   });
 
   it('warns in that line when a mod folder\'s listing skipped an entry, naming each in the Output', async () => {
-    updateManifest.mockResolvedValueOnce({ applied: true, notes: [{ mod: 'ModA', note: 'broken link "a.nif", skipped' }], submoduleNotes: ['source/Odd is not a source mod'], landed: [{ mod: 'ModA', manifestWritten: false, notInPackage: [] }], refused: [] });
+    updateManifest.mockResolvedValueOnce({ applied: true, notes: [{ mod: 'ModA', note: 'broken link "a.nif", skipped' }], repositoryNotes: ['source/Odd is not a source mod'], landed: [{ mod: 'ModA', manifestWritten: false, notInPackage: [] }], refused: [] });
     const { reporter, run } = register();
 
     await run(UPDATE, modRow('ModA'));
@@ -332,7 +332,7 @@ describe('Update manifest', () => {
 
   it('warns in that line when the stat cache could not be written for a mod, naming why in the Output', async () => {
     updateManifest.mockResolvedValueOnce({
-      applied: true, notes: [], submoduleNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], statCacheNotWritten: '/i/stat-cache is read-only' }], refused: [],
+      applied: true, notes: [], repositoryNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], statCacheNotWritten: '/i/stat-cache is read-only' }], refused: [],
     });
     const { reporter, run } = register();
 
@@ -500,18 +500,18 @@ describe('Restore from manifest', () => {
     expect([reporter.landings, reporter.reports]).toEqual([[], [{ severity: 'warning', message: 'Restored "ModA" from its manifest.', detail: `ModA: ${why}` }]]);
   });
 
-  it('warns in its one line when the push refusal could not be written, naming why in the Output', async () => {
-    restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], pushRefusalNotWritten: '/i/.git/hooks/pre-push already exists',
-    });
+  it.each([
+    ['the push refusal could not be written', { pushRefusalNotWritten: '/i/.git/hooks/pre-push already exists' },
+      "a push of a pin its source mod's remote lacks is not refused: /i/.git/hooks/pre-push already exists"],
+    ['a path token stays in the working tree', { pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' },
+      "this machine's paths are not in place of every path token: ModOrganizer.ini still holds a path token"],
+  ])('warns in its one line when %s, naming why in the Output', async (_case, why, detail) => {
+    restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], ...why });
     const { reporter, run } = register();
 
     await run(RESTORE, modRow('ModA'));
 
-    expect([reporter.landings, reporter.reports]).toEqual([[], [{
-      severity: 'warning', message: 'Restored "ModA" from its manifest.',
-      detail: "a push of a pin its source mod's remote lacks is not refused: /i/.git/hooks/pre-push already exists",
-    }]]);
+    expect([reporter.landings, reporter.reports]).toEqual([[], [{ severity: 'warning', message: 'Restored "ModA" from its manifest.', detail }]]);
   });
 
   it('warns in its one line when a mod was built from a source holding changes no commit holds, naming it in the Output', async () => {
@@ -601,7 +601,7 @@ describe('A separator in a report or an outcome', () => {
 
   it('update manifest keeps it apart from a mod of the same name', async () => {
     updateManifest.mockResolvedValueOnce({
-      applied: true, notes: [], submoduleNotes: [],
+      applied: true, notes: [], repositoryNotes: [],
       landed: [{ mod: 'Weapons', manifestWritten: true, notInPackage: ['b.nif'] }, { mod: WIRE, manifestWritten: true, notInPackage: ['a.nif'] }],
       refused: [{ item: WIRE, reason: 'was not updated: its folder does not exist.' }, { item: 'Weapons', reason: 'was not updated: its folder does not exist.' }],
     });
@@ -644,7 +644,7 @@ describe('A separator in a report or an outcome', () => {
 
   it('an agent reads it as a separator in what landed and what was refused', async () => {
     updateManifest.mockResolvedValueOnce({
-      applied: true, notes: [], submoduleNotes: [], landed: [{ mod: WIRE, manifestWritten: true, notInPackage: ['a.nif'] }],
+      applied: true, notes: [], repositoryNotes: [], landed: [{ mod: WIRE, manifestWritten: true, notInPackage: ['a.nif'] }],
       refused: [{ item: 'ModB', reason: 'was not updated.' }],
     });
     const { run } = register();
@@ -691,7 +691,7 @@ describe('An agent call', () => {
 
   it('update manifest answers what landed and what was refused, each file its package does not hold and each note as a part that failed, and reports nothing', async () => {
     updateManifest.mockResolvedValueOnce({
-      applied: true, notes: [{ mod: 'ModA', note: 'a game file was unreadable' }], submoduleNotes: ['source/Odd is not a source mod'],
+      applied: true, notes: [{ mod: 'ModA', note: 'a game file was unreadable' }], repositoryNotes: ['source/Odd is not a source mod'],
       landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif'] }],
       refused: [{ item: 'ModB', reason: "was not updated." }],
     });
