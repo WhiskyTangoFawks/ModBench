@@ -55,38 +55,14 @@ internal static class OtherTool
     internal static void RenamesASourceDocument(string modFolder, string plugin, string textItCarries, string renamedTo)
     {
         var document = SourceDocumentCarrying(modFolder, plugin, textItCarries);
-        File.Move(document, Beside(document, renamedTo));
+        File.Move(document, AnotherTool.Beside(document, renamedTo));
     }
 
     /// <summary>The first half of a move that copies, then deletes: <paramref name="document"/> copied
     /// to <paramref name="copiedTo"/>, relative to its folder, <c>{0}</c> standing for its file
     /// name.</summary>
     internal static void CopiesASourceDocument(string document, string copiedTo) =>
-        File.Copy(document, Beside(document, copiedTo));
-
-    /// <summary><see cref="CopiesASourceDocument"/> for a container, whose document is a directory:
-    /// every file under <paramref name="directory"/>, at the same depth under the copy.</summary>
-    internal static void CopiesASourceDirectory(string directory, string copiedTo)
-    {
-        var target = Beside(directory, copiedTo);
-        foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
-        {
-            var copy = Path.Combine(target, Path.GetRelativePath(directory, file));
-            Directory.CreateDirectory(Path.GetDirectoryName(copy).Require());
-            File.Copy(file, copy);
-        }
-    }
-
-    /// <summary>A path relative to <paramref name="document"/>'s folder, <c>{0}</c> standing for its
-    /// file name, with the folders it needs made.</summary>
-    internal static string Beside(string document, string relativeTarget)
-    {
-        var target = Path.Combine(
-            Path.GetDirectoryName(document).Require(),
-            string.Format(System.Globalization.CultureInfo.InvariantCulture, relativeTarget, Path.GetFileName(document)));
-        Directory.CreateDirectory(Path.GetDirectoryName(target).Require());
-        return target;
-    }
+        File.Copy(document, AnotherTool.Beside(document, copiedTo));
 
     /// <summary>The user reverting one document to what the repository last saw: a write under the
     /// source tree that git makes rather than Modbench.</summary>

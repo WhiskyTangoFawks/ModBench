@@ -107,6 +107,13 @@ internal static class SourceMods
         index.NextSnapshot();
     }
 
+    /// <summary>The working tree's copy of <paramref name="document"/> put under <paramref name="newEditorId"/>, written from
+    /// <see cref="SourceTextOf"/> so a container keeps the children it embeds.</summary>
+    internal static void RenameEditorId(this OpenedIndex index, LoadOrderEntry entry, RecordDetail document, string newEditorId) =>
+        index.Rename(
+            entry, document, newEditorId,
+            entry.SourceTextOf(document).Replace($"\"{document.EditorId}\"", $"\"{newEditorId}\"", StringComparison.Ordinal));
+
     /// <summary>A document the working tree gains, then the next snapshot.</summary>
     internal static void Create(this OpenedIndex index, LoadOrderEntry entry, string formKey, string recordType, string? editorId, string body)
     {
