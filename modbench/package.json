@@ -727,12 +727,12 @@
       },
       {
         "command": "modbench.mod.updateManifest",
-        "title": "Update Mod Manifest",
+        "title": "Update Manifests",
         "category": "Modbench"
       },
       {
         "command": "modbench.mod.restoreFromManifest",
-        "title": "Restore Mod from Manifest…",
+        "title": "Restore from Manifests…",
         "category": "Modbench"
       },
       {
@@ -747,12 +747,12 @@
       },
       {
         "command": "modbench.modList.updateManifestHere",
-        "title": "Update Mod Manifest",
+        "title": "Update Manifests",
         "category": "Modbench"
       },
       {
         "command": "modbench.modList.restoreFromManifestHere",
-        "title": "Restore Mod from Manifest…",
+        "title": "Restore from Manifests…",
         "category": "Modbench"
       },
       {

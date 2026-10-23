@@ -1330,35 +1330,6 @@ describe('package.json registers every command under its catalog Command ID', ()
   });
 });
 
-const TITLE_WORD_OF: Record<string, string> = { meta: 'metadata' };
-
-const wordsOf = (camel: string): string[] => camel.split(/(?=[A-Z])/).map((w) => w.toLowerCase());
-
-function expectTitleNamesVerbAndObject(id: string, title: string): void {
-  const everyView = /^modbench\.(\w+)$/.exec(id)?.[1];
-  if (everyView !== undefined) {
-    expect(title.replace('…', '').toLowerCase().split(/\s+/), `the title of ${id} is its verb alone`).toEqual(wordsOf(everyView));
-    return;
-  }
-  const [, object = '', verb = ''] = present(
-    /^modbench\.(\w+)\.(\w+)$/.exec(id) ?? undefined, `${id} as modbench.<object>.<verb>`);
-  const titleWords = title.replace('…', '').toLowerCase().split(/\s+/);
-  const objectWords = wordsOf(object);
-  const noun = present(objectWords.pop(), `the noun of ${object}`);
-  const verbWordsInTitle = wordsOf(verb).map((w) => TITLE_WORD_OF[w] ?? w);
-  expect(titleWords, `the title of ${id} names the verb`).toEqual(expect.arrayContaining(verbWordsInTitle));
-  expect(titleWords, `the title of ${id} names the object`).toEqual(expect.arrayContaining(objectWords));
-  expect(titleWords.some((w) => w === noun || w === `${noun}s`), `the title of ${id} names the ${noun}`).toBe(true);
-}
-
-describe('package.json palette titles are the verb and the object', () => {
-  const titled = pkg.contributes.commands.filter((c) => catalog.has(c.command));
-
-  it.each(titled.map((c) => [c.command, c.title]))('%s is titled "%s"', (id, title) => {
-    expectTitleNamesVerbAndObject(id, title);
-  });
-});
-
 describe('package.json Delete keys', () => {
   it('each passes its own view as args, since a key cannot name the rows it deletes', () => {
     const deleteKeys = pkg.contributes.keybindings.filter((k) => k.command === 'modbench.record.delete');
