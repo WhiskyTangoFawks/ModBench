@@ -1,6 +1,6 @@
 # Publishing
 
-Modbench keeps the instance publishable and shows what each publisher will ship ([ADR-0024](../../adr/0024-wabbajack-is-the-reference-for-publishing.md)). What every view shares is in [common.md](common.md).
+Modbench keeps the instance publishable and shows what each publisher will ship ([ADR-0024](../../adr/0024-a-publisher-is-an-implementation-behind-the-instance-adapter.md)). What every view shares is in [common.md](common.md).
 
 Each story cites what decides it. A story that cites nothing is owned here.
 
@@ -15,7 +15,7 @@ As a user, I want:
 Wabbajack's publisher tags are Always Enabled, Include, No Match Include and Ignore. As a user, I want:
 
 1. Each row a tag covers, as the publisher applies it, to carry the tag's indicator: a mod, or a folder or file in one ([mods.md](mods.md), Indicators). Cites: ADR-0024; Never silently wrong
-2. Add publisher tag and remove publisher tag on the selected mods, folders and files, with a pick of the tag. Remove offers only the tags the selection holds. Cites: ADR-0024
+2. Add publisher tag and remove publisher tag on the selected mods, folders and files, with a pick of the tag. Remove offers only the tags the selection holds.
 3. A mod's tags to follow it through rename, and uninstall to remove them, so no tag names a mod that is gone. Cites: Never silently wrong
 4. A tag that names no path in the instance shown in the Problems panel, on its line in the publisher's configuration. Cites: Never silently wrong; VS Code's Problems panel
 5. Tags read and written in the publisher's configuration alone. A deprecated tag in a mod's metadata notes is neither shown nor written.
