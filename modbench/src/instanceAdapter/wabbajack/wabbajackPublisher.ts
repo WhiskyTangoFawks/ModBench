@@ -9,11 +9,11 @@ import type { Covering, PublisherConfiguration, PublisherTag } from '../instance
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { watchFiles } from '../watchFiles';
 
-// Wabbajack's configuration, at the instance root. Wabbajack writes this machine's own paths, a Windows one in JSON's
-// escaped backslashes (AbsolutePathConverter).
+// Wabbajack's configuration, at the instance root. Wabbajack writes this machine's own paths, or on Wine a Windows
+// program's, a Windows one in JSON's escaped backslashes (AbsolutePathConverter).
 const COMPILER_SETTINGS: ConfigurationFile = {
   name: 'compiler_settings.json',
-  spelling: { native: true, separators: [{ first: '\\\\', rest: '\\\\' }], ends: '"' },
+  spelling: { native: true, separators: [{ first: '\\\\', rest: '\\\\' }], starts: ['"'], ends: '"' },
 };
 
 /** What Wabbajack's compiler asks of the mod manager. */

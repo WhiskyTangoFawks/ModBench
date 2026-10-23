@@ -19,6 +19,7 @@ import type { DownloadedFile, DownloadedFiles, InstanceAdapter, ManagerNames, Ma
 import { DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadedFilePath, downloadedFileMetadataPath, modlistFile, modMetaFileIn, modSourceDir, pluginsFile, profilesDir, settingsFile } from './layout';
 import { mo2Archives } from './mo2Archives';
 import type { ReadingSource } from '../instanceReading';
+import type { ConfigurationFile } from '../publisher';
 import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 import { sourceModsIn } from './sourceMods';
@@ -64,7 +65,7 @@ export async function readMetaIni(context: Mo2Context, mod: string, folders: Mod
   return folder === undefined ? {} : readOrAbsent(async () => parseMetaIni(await get(modMetaFileIn(folder))), {});
 }
 
-export function readingSource(context: Mo2Context): ReadingSource {
+export function readingSource(context: Mo2Context, publisherFile?: ConfigurationFile): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
   return {
     names: MO2_NAMES,
@@ -126,7 +127,7 @@ export function readingSource(context: Mo2Context): ReadingSource {
     sourceMods: () => sourceModsIn(instanceRoot),
 
     holdsRepository: () => isRepository(instanceRoot),
-    repositorySetUp: async () => await isRepository(instanceRoot) && await pushRefusalWritten(instanceRoot) && await pathTokensWritten(instanceRoot),
+    repositorySetUp: async () => await isRepository(instanceRoot) && await pushRefusalWritten(instanceRoot) && await pathTokensWritten(instanceRoot, publisherFile),
     watchNotes: () => watch.watchNotes(),
     managerRunning: () => mo2Running().then(
       (running): ManagerRunning => ({ kind: running ? 'running' : 'notRunning' }),

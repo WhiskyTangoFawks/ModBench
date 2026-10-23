@@ -12,7 +12,7 @@ import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileRe
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { mo2InstanceAdapter } from '../mo2Instance';
-import type { ManagerAdapter as Adapter } from '../../publisher';
+import type { ConfigurationFile, ManagerAdapter as Adapter } from '../../publisher';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
 import { WHITELIST_IGNORE_LIST, withSourceModLines } from '../layout';
 
@@ -22,12 +22,14 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+const adapterAt = (instanceRoot: string, publisherConfigurationFile?: ConfigurationFile) => mo2InstanceAdapter({
+  instanceRoot, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS,
+  installationFileReader: fakeInstallationFileReader([]), publisherConfigurationFile,
+});
+
 async function instance() {
   root = await mkdtemp(join(tmpdir(), 'modbench-mo2-repository-'));
-  return mo2InstanceAdapter({
-    instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS,
-    installationFileReader: fakeInstallationFileReader([]),
-  });
+  return adapterAt(root);
 }
 
 async function put(path: string, text = 'x'): Promise<void> {
@@ -149,6 +151,21 @@ describe('the MO2 adapter\'s repository', () => {
       await arrange(adapter);
 
       expect((await adapter.reading()).repositorySetUp).toBe(expected);
+    });
+
+    it('reads a repository whose path tokens cover no publisher\'s configuration as set up only once they cover it', async () => {
+      const before = await instance();
+      await Promise.all(Object.entries(INSTANCE_FILES).map(([path, text]) => put(path, text)));
+      await mkdir(join(root, 'mods'));
+      runGit('init', '--quiet');
+      await before.refuseUnpublishedPins();
+      await before.writePathTokens();
+      const adapter = adapterAt(root, { name: 'publisher.json', spelling: { native: true, separators: [], starts: ['"'], ends: '"' } });
+
+      const beforeCovered = (await adapter.reading()).repositorySetUp;
+      await adapter.writePathTokens();
+
+      expect([beforeCovered, (await adapter.reading()).repositorySetUp]).toEqual([false, true]);
     });
   });
 

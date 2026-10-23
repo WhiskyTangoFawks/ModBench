@@ -35,7 +35,7 @@ const PUBLISHER_FILE = 'publisher.json';
 
 const adapterOver = (root: string, { game, detectors = NO_DETECTORS }: { game?: string; detectors?: GameDetectors } = {}) => mo2InstanceAdapter({
   instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(game), detectors, installationFileReader: fakeInstallationFileReader([]),
-  publisherConfigurationFile: { name: PUBLISHER_FILE, spelling: { native: true, separators: [{ first: '\\\\', rest: '\\\\' }], ends: '"' } },
+  publisherConfigurationFile: { name: PUBLISHER_FILE, spelling: { native: true, separators: [{ first: '\\\\', rest: '\\\\' }], starts: ['"'], ends: '"' } },
 });
 
 async function put(root: string, path: string, text: string): Promise<void> {
@@ -201,6 +201,26 @@ describe('the MO2 adapter\'s path tokens', () => {
 
       expect([await readFile(join(clone, PUBLISHER_FILE), 'utf8'), git(clone, 'status', '--porcelain')])
         .toEqual([publisherSettings(clone, cloneGame), '']);
+    });
+
+    it.skipIf(process.platform === 'win32')('(on Windows a Windows program spells a path natively) holds a Windows program\'s spelling on Wine by its Windows token, and a clone by its own', async () => {
+      const game = await gameFolder();
+      const { root, adapter } = await instanceRepository([], game);
+      await put(root, PUBLISHER_FILE, publisherSettings(onWineDrive(root, '\\'), onWineDrive(game, '\\')));
+      await adapter.writePathTokens();
+      const committed = held(root, PUBLISHER_FILE);
+      git(root, 'add', '--', 'ModOrganizer.ini');
+      git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'paths');
+      const clone = join(await folder('clone'), 'modlist');
+      git(dirname(clone), 'clone', '--quiet', '--config', 'core.autocrlf=false', root, clone);
+      await mkdir(join(clone, 'mods'));
+      const cloneGame = await gameFolder();
+
+      await adapterOver(clone, { game: cloneGame }).writePathTokens();
+
+      expect([committed, await readFile(join(clone, PUBLISHER_FILE), 'utf8'), git(clone, 'status', '--porcelain')]).toEqual([
+        publisherSettings('{instance folder:\\}', '{game folder:\\}'), publisherSettings(onWineDrive(clone, '\\'), onWineDrive(cloneGame, '\\')), '',
+      ]);
     });
 
     it('answers each path outside the two folders as a commit would hold it', async () => {

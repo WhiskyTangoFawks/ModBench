@@ -10,10 +10,11 @@ const DRIVER = 'tokens';
 const WINDOWS_PROGRAMS: PathSpelling = {
   native: false,
   separators: [{ first: '/', rest: '/' }, { first: '\\', rest: '\\' }, { first: '\\\\', rest: '\\\\' }, { first: '\\\\\\\\', rest: '\\\\' }],
+  starts: ['=', '"'],
   ends: '"',
 };
 
-const NATIVE_JSON: PathSpelling = { native: true, separators: [{ first: '\\\\', rest: '\\\\' }], ends: '"' };
+const NATIVE_JSON: PathSpelling = { native: true, separators: [{ first: '\\\\', rest: '\\\\' }], starts: ['"'], ends: '"' };
 
 const made: string[] = [];
 
@@ -55,6 +56,7 @@ describe('the token filter', () => {
     ['a network share, with forward slashes in another case', SHARE, 'win32', 'x=//NAS/share/modlists/LitR/x.exe', 'x={instance folder:/}/x.exe'],
     ['a network share, with escaped backslashes', SHARE, 'win32', 'x=\\"\\\\\\\\nas\\\\share\\\\Modlists\\\\LitR\\\\\\"', 'x=\\"{instance folder:\\\\}\\\\\\"'],
     ['a network share, for the game folder', SHARE, 'win32', 'x=\\\\nas\\share\\Games\\Fallout 4\\Data', 'x={game folder:\\}\\Data'],
+    ['a network share, at a line\'s start', SHARE, 'win32', 'x\n\\\\nas\\share\\Modlists\\LitR\\tools', 'x\n{instance folder:\\}\\tools'],
     ['a Wine prefix\'s drive C', PROTON, 'linux', 'x=C:\\\\Games\\\\Fallout 4\\\\Data', 'x={game folder:\\\\}\\\\Data'],
     ['a Wine prefix through drive Z', PROTON, 'linux', 'x=Z:/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4/x.exe', 'x={game folder:/}/x.exe'],
   ] as const)('holds a folder on %s by its token', async (_place, folders, platform, written, held) => {
@@ -85,5 +87,20 @@ describe('the token filter', () => {
     ['Windows, for the game folder', DRIVE, 'win32', '"x": "{game folder}"', '"x": "D:\\\\Games\\\\Fallout 4"'],
   ] as const)('puts the folder\'s native path in place of its native token on %s', async (_place, folders, platform, held, written) => {
     expect(await checkedOutByGit(folders, platform, held, NATIVE_JSON)).toBe(written);
+  });
+
+  it('holds a folder a Windows program spells on Wine, in a file spelt natively, by its Windows token', async () => {
+    expect(await heldByGit(PROTON, 'linux', '"x": "Z:\\\\home\\\\me\\\\LitR\\\\downloads"', NATIVE_JSON)).toBe('"x": "{instance folder:\\\\}\\\\downloads"');
+  });
+
+  it('puts the folder\'s Windows path in place of its Windows token on Windows, in a file spelt natively', async () => {
+    expect(await checkedOutByGit(DRIVE, 'win32', '"x": "{instance folder:\\\\}\\\\downloads"', NATIVE_JSON)).toBe('"x": "C:\\\\Users\\\\me\\\\LitR\\\\downloads"');
+  });
+
+  it.each([
+    ['natively on Linux', PROTON, 'linux', NATIVE_JSON, '"x": "/mnt/x/home/me/LitR/downloads"'],
+    ['on Windows, a network share\'s path after a drive', SHARE, 'win32', WINDOWS_PROGRAMS, 'x=D:\\\\nas\\share\\Modlists\\LitR\\tools'],
+  ] as const)('holds a path that only ends in a folder\'s path, spelt %s, as it is', async (_place, folders, platform, spelling, written) => {
+    expect(await heldByGit(folders, platform, written, spelling)).toBe(written);
   });
 });

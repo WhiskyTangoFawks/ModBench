@@ -65,7 +65,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): ManagerAdapter 
     mo2Running: () => programRunning(MO2_PROGRAM),
   };
   const hashes = hashIndex(hashIndexDir(instanceRoot), installationFileReader);
-  const source = readingSource(context);
+  const source = readingSource(context, options.publisherConfigurationFile);
   const gameFolder = async (): Promise<GameFolder> => (await source.settings()).gameFolder();
   return {
     names: source.names,

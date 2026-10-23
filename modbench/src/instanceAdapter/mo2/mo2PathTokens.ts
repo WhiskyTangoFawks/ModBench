@@ -9,7 +9,7 @@ import { exists, get, isRepository, makeTempDir, putIfChanged, remove, undoAll, 
 import { git, gitFed, gitWritingInto } from '../git';
 import type { GameFolder, InstanceAdapter } from '../instanceAdapter';
 import {
-  folderTokens, holdsPathToken, sedLiteral, sedReplacement, tokenFilterConfig, type PathSpelling, type TokenProgram,
+  folderTokens, holdsPathToken, sedLiteral, sedReplacement, sedSubstitution, tokenFilterConfig, type PathSpelling, type TokenProgram,
 } from '../pathTokens';
 import { PROFILE_INIS_PATTERN, SETTINGS_FILE_PATTERN, settingsFile } from './layout';
 import type { ConfigurationFile } from '../publisher';
@@ -17,11 +17,12 @@ import type { Mo2Context } from './mo2Context';
 
 type Mo2PathTokens = Pick<InstanceAdapter, 'writePathTokens' | 'pathsOutsideFolders'>;
 
-// MO2 is a Windows program. Qt's INI escapes a backslash, MO2 can write a drive's own separator twice, and a value can
-// end at a quote or at @ByteArray's parenthesis.
+// MO2 is a Windows program. Qt's INI escapes a backslash, MO2 can write a drive's own separator twice, and a value is
+// a key's, quoted, or in @ByteArray's parentheses.
 const SPELLING: PathSpelling = {
   native: false,
   separators: [{ first: '/', rest: '/' }, { first: '\\', rest: '\\' }, { first: '\\\\', rest: '\\\\' }, { first: '\\\\\\\\', rest: '\\\\' }],
+  starts: ['=', '"', '@ByteArray('],
   ends: '")',
 };
 
@@ -45,8 +46,8 @@ function accountTokens(settings: string): TokenProgram {
     return value === ACCOUNT_TOKEN ? '' : value;
   };
   return {
-    clean: ACCOUNT_KEYS.map((key) => `${IN_SETTINGS}s|^\\(${key} *= *\\)[^[:cntrl:]]*|\\1${sedReplacement(ACCOUNT_TOKEN)}|`),
-    smudge: ACCOUNT_KEYS.map((key) => `${IN_SETTINGS}s|^\\(${key} *= *\\)${sedLiteral(ACCOUNT_TOKEN)}|\\1${sedReplacement(valueOf(key))}|`),
+    clean: ACCOUNT_KEYS.map((key) => IN_SETTINGS + sedSubstitution(`^\\(${key} *= *\\)[^[:cntrl:]]*`, `\\1${sedReplacement(ACCOUNT_TOKEN)}`)),
+    smudge: ACCOUNT_KEYS.map((key) => IN_SETTINGS + sedSubstitution(`^\\(${key} *= *\\)${sedLiteral(ACCOUNT_TOKEN)}`, `\\1${sedReplacement(valueOf(key))}`)),
   };
 }
 
@@ -154,9 +155,14 @@ const pathsIn = (text: string): string[] => [...text.matchAll(PATH)].map(({ 0: m
   return text[index - 1] === '(' ? quoted.replace(/\)$/, '') : quoted;
 });
 
-/** Whether the repository's local config holds the path filter. */
-export const pathTokensWritten = (instanceRoot: string): Promise<boolean> =>
-  git(instanceRoot, 'config', '--get', `filter.${FOLDERS_DRIVER}.clean`).then((value) => value.trim() !== '', () => false);
+const filterWritten = (instanceRoot: string, driver: string): Promise<boolean> =>
+  git(instanceRoot, 'config', '--get', `filter.${driver}.clean`).then((value) => value.trim() !== '', () => false);
+
+/** Whether the repository's local config holds the path filter of each file it covers, `publisherFile` among them. */
+export const pathTokensWritten = async (instanceRoot: string, publisherFile: ConfigurationFile | undefined): Promise<boolean> => {
+  const drivers = [FOLDERS_DRIVER, SETTINGS_DRIVER, ...(publisherFile === undefined ? [] : [PUBLISHER_DRIVER])];
+  return (await Promise.all(drivers.map((driver) => filterWritten(instanceRoot, driver)))).every(Boolean);
+};
 
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
@@ -203,7 +209,7 @@ export function mo2PathTokens({ instanceRoot }: Mo2Context, gameFolder: () => Pr
     // A repository that held the filter before keeps it: only a first write is taken back when it fails.
     async writePathTokens() {
       if (!(await isRepository(instanceRoot))) return undefined;
-      const held = await pathTokensWritten(instanceRoot);
+      const held = await filterWritten(instanceRoot, FOLDERS_DRIVER);
       const takeBack: Undo[] = [];
       try {
         return await written(takeBack);

@@ -13,12 +13,12 @@ interface Separator {
   readonly rest: string;
 }
 
-/** How a file spells a path: as a Windows program does, which on Linux is through Wine, or natively, as this machine's
- *  own programs do. A path ends at a separator, one of `ends` or its line's end. */
+/** How a file spells a path: as a Windows program on Wine does and, if native, as this machine does. A path runs from
+ *  a line start or a `starts` to a separator, an `ends` or a line end. */
 export interface PathSpelling {
   readonly native: boolean;
-  /** Each separator of a Windows path; a native token stands for them all, and puts back the first. */
   readonly separators: readonly Separator[];
+  readonly starts: readonly string[];
   readonly ends: string;
 }
 
@@ -58,15 +58,21 @@ function rootings(folder: string, platform: NodeJS.Platform): Rooted[] {
 
 const POSIX: Separator = { first: '/', rest: '/' };
 
+// On Windows a native spelling is a Windows program's, so it comes first and takes the token, and puts back the first
+// separator's spelling.
 function spellingsOf(name: string, folder: string | undefined, platform: NodeJS.Platform, { native, separators }: PathSpelling): Spelling[] {
   if (folder === undefined) return [];
   const caseless = platform === 'win32' ? () => true : (index: number) => index === 0;
-  const posix = native && platform !== 'win32';
-  const rooted = posix ? [{ root: ({ first }: Separator) => first, segments: segmentsOf(folder) }] : rootings(folder, platform);
-  const spelt = posix ? [POSIX] : separators;
-  return rooted.flatMap(({ root, segments }) => (segments.length === 0 ? [] : spelt.map((separator) => ({
-    token: native ? `{${name}}` : `{${name}:${separator.first}}`, text: root(separator) + segments.join(separator.rest), caseless,
-  }))));
+  const spelt = (rooted: readonly Rooted[], over: readonly Separator[], token: (separator: Separator) => string): Spelling[] =>
+    rooted.flatMap(({ root, segments }) => (segments.length === 0 ? [] : over.map((separator) => ({
+      token: token(separator), text: root(separator) + segments.join(separator.rest), caseless,
+    }))));
+  const windows = spelt(rootings(folder, platform), separators, ({ first }) => `{${name}:${first}}`);
+  if (!native) return windows;
+  const own = platform === 'win32'
+    ? spelt(rootings(folder, platform), separators, () => `{${name}}`)
+    : spelt([{ root: ({ first }) => first, segments: segmentsOf(folder) }], [POSIX], () => `{${name}}`);
+  return [...own, ...windows];
 }
 
 function isInside(folder: string, parent: string, platform: NodeJS.Platform): boolean {
@@ -75,33 +81,42 @@ function isInside(folder: string, parent: string, platform: NodeJS.Platform): bo
   return inner === outer || inner.startsWith(outer.endsWith(separator) ? outer : outer + separator);
 }
 
+// The delimiter is no character a regular expression needs, so `\|` is sed's alternation.
+const DELIMITER = '#';
+
 /** `text` matched as itself by sed. */
-export const sedLiteral = (text: string): string => text.replace(/[\\.*[\]^$|]/g, '\\$&');
+export const sedLiteral = (text: string): string => text.replace(/[\\.*[\]^$#]/g, '\\$&');
 
 /** `text` written as itself by sed. */
-export const sedReplacement = (text: string): string => text.replace(/[\\&|]/g, '\\$&');
+export const sedReplacement = (text: string): string => text.replace(/[\\&#]/g, '\\$&');
+
+/** The sed expression that puts `replacement` in place of what `pattern` matches, its delimiter escaped in both. */
+export const sedSubstitution = (pattern: string, replacement: string, flags = ''): string =>
+  ['s', pattern, replacement, flags].join(DELIMITER);
 
 const patternOf = ({ text, caseless }: Spelling): string =>
   text.replace(/./gs, (character: string, index: number) => (caseless(index) && /[A-Za-z]/.test(character)
     ? `[${character.toLowerCase()}${character.toUpperCase()}]` : sedLiteral(character)));
 
-const firstOfEach = (spellings: readonly Spelling[]): Spelling[] =>
-  spellings.filter((spelling, at) => spellings.findIndex(({ token }) => token === spelling.token) === at);
+const firstOfEach = (spellings: readonly Spelling[], key: (spelling: Spelling) => string): Spelling[] =>
+  spellings.filter((spelling, at) => spellings.findIndex((other) => key(other) === key(spelling)) === at);
 
 /** The folders' tokens in `spelling`. A game folder inside the instance folder takes the instance folder's token, so a
  *  clone finds its own. */
 export function folderTokens({ instance, game }: TokenFolders, platform: NodeJS.Platform, spelling: PathSpelling): TokenProgram {
   const instanceSpellings = spellingsOf('instance folder', instance, platform, spelling);
   const gameSpellings = spellingsOf('game folder', game, platform, spelling);
-  const cleaned = [...instanceSpellings, ...(game !== undefined && isInside(game, instance, platform) ? [] : gameSpellings)]
+  const cleaned = firstOfEach([...instanceSpellings, ...(game !== undefined && isInside(game, instance, platform) ? [] : gameSpellings)], ({ text }) => text)
     .sort((a, b) => b.text.length - a.text.length);
+  const start = `\\(${['^', ...spelling.starts.map(sedLiteral)].join('\\|')}\\)`;
   const boundary = `[/\\\\${spelling.ends}[:cntrl:]]`;
   return {
-    clean: cleaned.flatMap((spelling) => {
-      const [pattern, token] = [patternOf(spelling), sedReplacement(spelling.token)];
-      return [`s|${pattern}\\(${boundary}\\)|${token}\\1|g`, `s|${pattern}$|${token}|`];
+    clean: cleaned.flatMap((spelt) => {
+      const [pattern, token] = [patternOf(spelt), sedReplacement(spelt.token)];
+      return [sedSubstitution(`${start}${pattern}\\(${boundary}\\)`, `\\1${token}\\2`, 'g'), sedSubstitution(`${start}${pattern}$`, `\\1${token}`)];
     }),
-    smudge: firstOfEach([...instanceSpellings, ...gameSpellings]).map(({ token, text }) => `s|${sedLiteral(token)}|${sedReplacement(text)}|g`),
+    smudge: firstOfEach([...instanceSpellings, ...gameSpellings], ({ token }) => token)
+      .map(({ token, text }) => sedSubstitution(sedLiteral(token), sedReplacement(text), 'g')),
   };
 }
 
