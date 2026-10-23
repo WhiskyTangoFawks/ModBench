@@ -53,6 +53,8 @@ export interface SyncFailureReport extends SyncMessage {
   clear(): void;
 }
 
+const endedSentence = (text: string): string => (text.endsWith('.') ? text : `${text}.`);
+
 /** common.md, Reporting: a system command reports a failure once when it begins, and again only
  *  when its reason changes, in the Output and its view's message line. The message line clears
  *  when the command next lands. */
@@ -71,7 +73,7 @@ export function reportSyncFailures(
   const landed = <T extends SyncOutcome>(outcome: T): outcome is Extract<T, { applied: true }> => outcome.applied;
   return {
     clear: () => { latest++; settle(undefined); },
-    message: () => (reason === undefined ? undefined : `${unsynced}: ${reason}.`),
+    message: () => (reason === undefined ? undefined : endedSentence(`${unsynced}: ${reason}`)),
     onMessageChanged: (listener) => {
       listeners.add(listener);
       return { dispose: () => { listeners.delete(listener); } };
@@ -148,7 +150,7 @@ export function createPluginSync<T extends SyncOutcome>(sync: () => Promise<T>, 
     command: 'plugin sync',
     prefix: '[pluginCommands]',
     unsynced: 'plugins.txt is not synced',
-    added: 'disabled plugins.txt line(s) for plugin(s) on disk with no line',
-    dropped: 'plugins.txt line(s) with no plugin on disk',
+    added: 'disabled plugins.txt line(s) for plugin(s) provided with no line',
+    dropped: 'plugins.txt line(s) that nothing provides',
   });
 }

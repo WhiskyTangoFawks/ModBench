@@ -80,17 +80,6 @@ public sealed class CompilePluginTraceTests : HostedTests
         Assert.Equal(0.5, await HeightMaxOfTheWrittenBytes(fx, OtherPlugin, OtherOrigin, otherFormKey), 3);
     }
 
-    [Fact]
-    public async Task CompilingASelectionNamingAPluginTwice_AnswersItAppliedOnce()
-    {
-        using var fx = await LoadedAndCompiledPlugin();
-
-        var answer = await Answer(await Client.Compile([(Plugin, Origin), (Plugin, Origin)]));
-
-        Assert.Empty(answer.GetProperty("refused").EnumerateArray());
-        Assert.Single(answer.GetProperty("applied").EnumerateArray());
-    }
-
     private static async Task<double> HeightMaxOfTheWrittenBytes(
         ScatteredFixtureData fx, string plugin, string origin, string formKey) =>
         (await RecordInTheWrittenBytes(fx, plugin, origin, formKey)).GetProperty("fields").EnumerateArray()

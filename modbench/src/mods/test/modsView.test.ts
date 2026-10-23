@@ -57,6 +57,7 @@ import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { mod } from './indexedValue';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
+import { ModStatuses } from '../modStatuses';
 import { Uri } from 'vscode';
 import { createModSync } from '../../drivingLib/syncFailureReport';
 import type { ModSyncRun } from '../../modCommands/modCommands';
@@ -81,7 +82,7 @@ const shownLabels = async () => (await shownRows()).map((row) => rowLabelOf(row)
 const otherDeps = () => ({
   commands: modCommands(fakeInstanceAdapter().adapter, unscriptedMEdit, unreadStatus), copyReads: fakeInstanceAdapter().adapter, reporterFor: () => recordingReporter(), ask: scriptedDialog(), trash: vi.fn(),
   extensionUri: Uri.file('/extension'), warnIfFomod: vi.fn(), downloadedFileInstallReporting: { reporter: recordingReporter(), log: () => undefined, progressViewId: 'modbench.downloads' }, nexusRow: () => undefined,
-  modStatus: { push: new InMemoryMEditClient(), readStatus: () => Promise.resolve([]) },
+  statuses: new ModStatuses(new InMemoryMEditClient(), () => Promise.resolve([]), () => undefined),
   sourceGestures: {
     commands: sourceCommands({ client: new InMemoryMEditClient(), adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]) }), rows: () => [],
     pluginsView: 'modbench.pluginListTree', say: () => undefined,
@@ -411,7 +412,7 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
     const instance = new FakeInstance(instanceValueFixture({ holdsRepository: true, mods: [mod('ModA'), mod('ModB')] }));
     const read = (mods: readonly string[]) =>
       Promise.resolve(mods.map((name) => ({ mod: name, noManifest: true, differing: [], namedByNoLine: [], gone: [], notInPackage: [], metadataDiffers: false, noHost: false })));
-    const { view } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync(), modStatus: { push, readStatus: read } });
+    const { view } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync(), statuses: new ModStatuses(push, read, () => undefined) });
 
     push.emit({ kind: 'mod-status-changed', plugin: '', origin: '', keys: [], sequence: 0, mods: ['ModA'] });
 
@@ -422,7 +423,7 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
     const push = new InMemoryMEditClient();
     const instance = new FakeInstance(instanceValueFixture({ holdsRepository: true, mods: [mod('ModA')] }));
     const read = () => Promise.resolve({ failed: 'unreachable' as const });
-    const { view } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync(), modStatus: { push, readStatus: read } });
+    const { view } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync(), statuses: new ModStatuses(push, read, () => undefined) });
 
     push.emit({ kind: 'mod-status-changed', plugin: '', origin: '', keys: [], sequence: 0, mods: ['ModA'] });
 

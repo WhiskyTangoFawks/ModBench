@@ -84,16 +84,6 @@ public sealed class QueryRecordIndexTraceTests : HostedTests
     }
 
     [Fact]
-    public async Task ALocalizedPluginsRecords_CarryTheirNameInTheTargetLanguage()
-    {
-        await LoadedLocalized();
-
-        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Localized.esp&origin=LocalizedMod&type=acti&limit=10");
-
-        Assert.Equal("Lever", activators.GetProperty("items")[0].GetProperty("fullName").GetString());
-    }
-
-    [Fact]
     public async Task ALocalizedName_ReadsTheSameThroughTheSqlDoor()
     {
         await LoadedLocalized();

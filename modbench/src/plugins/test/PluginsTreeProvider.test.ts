@@ -6,7 +6,7 @@ import type { InstanceValue } from '../../instanceLoader/instance';
 import {
   type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
   type WorldspaceSummary, type InteriorCellBlock, type RecordSummary, type CellChildRecords,
-  type ContainerChildSummary, type CellSummary, type ChildRecordSummary, type MEditClient,
+  type ContainerChildSummary, type CellSummary, type ChildRecordSummary, type MEditClient, type ModStatus,
 } from '../../client';
 import type { ReadFailed } from '../../wire/readFailed';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -39,6 +39,7 @@ import { PluginsTreeProvider, NO_PLUGINS_MESSAGE } from '../PluginsTreeProvider'
 import { PluginNode, ImplicitMasterNode, type PluginsTreeNode } from '../pluginRows';
 import { RecordBrowser } from '../RecordBrowser';
 import { pluginsTreeOver } from './pluginsTreeOver';
+import { status } from '../../test/modStatusFixture';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -955,6 +956,69 @@ describe('PluginsTreeProvider — an enabled line no file answers to', () => {
 
   it('keeps its chevron while the Data folder cannot be listed, so the records mEdit holds still show', async () => {
     expect(await collapsibleStateWith({ kind: 'unreadable', reason: 'EACCES' })).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+  });
+});
+
+describe('PluginsTreeProvider — a line a mod\'s manifest names, not restored (plugins.md, A row, Plugin statuses)', () => {
+  const gone = (mod: string, ...paths: string[]): ModStatus => status(mod, { gone: paths });
+  const statusesAnswering = (...answered: ModStatus[]) => {
+    const changed = new EventEmitter<void>();
+    const byMod = new Map(answered.map((status) => [status.mod, status]));
+    return {
+      of: (mod: string) => byMod.get(mod),
+      onDidChange: changed.event,
+      answer: (status: ModStatus) => { byMod.set(status.mod, status); changed.fire(); },
+    };
+  };
+  const cloneValue = ({ holdsRepository = true, enabled = true, plugins = [plugin({ name: 'Unrestored.esp', origin: 'Data/', path: undefined })] } = {}) => ({
+    ...valueOf(plugins),
+    mods: [{ kind: 'mod' as const, name: 'Provider', enabled: true }, { kind: 'mod' as const, name: 'Unrestored', enabled }],
+    dataFolderPlugins: { kind: 'listed' as const, names: new Set<string>() },
+    holdsRepository,
+  });
+  const decorated = async (tree: PluginsTreeProvider) => {
+    const [row] = await tree.getChildren();
+    const item = tree.getTreeItem(present(row, 'the sole row'));
+    return { description: item.description, icon: item.iconPath, tooltip: item.tooltip };
+  };
+
+  it('says not restored, in yellow, on a line no file answers to that a mod\'s manifest names', async () => {
+    const tree = pluginsTreeOver(new FakeInstance(cloneValue()), { modStatuses: statusesAnswering(gone('Unrestored', 'Unrestored.esp')) });
+
+    expect(await decorated(tree)).toEqual({
+      description: 'not restored',
+      icon: new ThemeIcon('warning', new ThemeColor('problemsWarningIcon.foreground')),
+      tooltip: 'Unrestored.esp\nUnrestored\nNot restored: its mod\'s manifest names it, and the mod\'s folder lacks it.',
+    });
+  });
+
+  it('gives as its origin the mod that wins it in mod order, when two enabled mods\' manifests name it', async () => {
+    const tree = pluginsTreeOver(new FakeInstance(cloneValue()), {
+      modStatuses: statusesAnswering(gone('Unrestored', 'Unrestored.esp'), gone('Provider', 'Unrestored.esp')),
+    });
+
+    expect((await decorated(tree)).tooltip).toContain('Unrestored.esp\nProvider\n');
+  });
+
+  it('says it once mEdit\'s answer lands after the row is shown', async () => {
+    const statuses = statusesAnswering();
+    const tree = pluginsTreeOver(new FakeInstance(cloneValue()), { modStatuses: statuses });
+    await tree.getChildren();
+
+    statuses.answer(gone('Unrestored', 'Unrestored.esp'));
+
+    expect((await decorated(tree)).description).toBe('not restored');
+  });
+
+  it.each([
+    ['the instance holds no repository', cloneValue({ holdsRepository: false }), 'Unrestored.esp'],
+    ['a file answers to the line', cloneValue({ plugins: [plugin({ name: 'Unrestored.esp', origin: 'Provider' })] }), 'Unrestored.esp'],
+    ['the manifest names it only below its folder\'s root', cloneValue(), 'optional/Unrestored.esp'],
+    ['only a disabled mod\'s manifest names it', cloneValue({ enabled: false }), 'Unrestored.esp'],
+  ])('says nothing of it when %s', async (_, value, named) => {
+    const tree = pluginsTreeOver(new FakeInstance(value), { modStatuses: statusesAnswering(gone('Unrestored', named)) });
+
+    expect((await decorated(tree)).description).toBeUndefined();
   });
 });
 

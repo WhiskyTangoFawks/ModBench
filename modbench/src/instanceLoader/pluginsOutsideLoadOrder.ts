@@ -3,7 +3,7 @@
 
 import { exactPluginAddressKey, type PluginAddress } from '../wire/pluginAddress';
 import type { OriginFile } from '../instanceAdapter/instanceAdapter';
-import { isPluginFile, isRootLevel } from '../tables/pluginFile';
+import { isPluginAtRoot } from '../tables/pluginFile';
 
 interface PluginOutsideLoadOrder {
   name: string;
@@ -22,7 +22,7 @@ export function findPluginsOutsideLoadOrder(
   const outside: PluginOutsideLoadOrder[] = [];
   for (const [origin, files] of filesByOrigin) {
     for (const file of files) {
-      if (!isRootLevel(file.relativePath) || !isPluginFile(file.relativePath)) continue;
+      if (!isPluginAtRoot(file.relativePath)) continue;
       if (loaded.has(exactPluginAddressKey({ name: file.relativePath, origin }))) continue;
       outside.push({ name: file.relativePath, path: file.sourcePath, origin });
     }

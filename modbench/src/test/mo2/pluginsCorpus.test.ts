@@ -1,3 +1,5 @@
+import { NO_MOD_STATUSES } from '../noModStatuses';
+import { unreadStatus } from '../unreadStatus';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fakeVscodeModule } from './fakeVscodeWatcher';
 
@@ -22,7 +24,7 @@ async function syncWithGameFolderHolding(dir: string, plugin: string): Promise<P
   const game = join(dir, 'Game');
   await mkdir(join(game, 'Data'), { recursive: true });
   await writeFile(join(game, 'Data', plugin), '');
-  return pluginSyncOver(adapterOver(dir, { gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') } }));
+  return pluginSyncOver(adapterOver(dir, { gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') } }), unreadStatus, NO_MOD_STATUSES);
 }
 
 function pluginsFileHeld(dir: string): { release: () => void; done: Promise<void> } {

@@ -9,7 +9,7 @@ import type { PluginConditions } from '../drivingLib/recordRowContext';
 /** A diagnostic on one plugin's file, as the Problems panel shows it. */
 export type PluginProblem = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
 
-type StatusKind = 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed';
+type StatusKind = 'notRestored' | 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'sourceUnreadable' | 'changedOutside' | 'malformed';
 
 export interface PluginStatus {
   kind: StatusKind;
@@ -41,7 +41,7 @@ export type Expansion = { kind: 'records' } | { kind: 'error'; message: string }
 // snapshot's index failed.
 type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
-const WARNING_KINDS: ReadonlySet<StatusKind> = new Set(['sourceUnreadable', 'changedOutside', 'malformed']);
+const WARNING_KINDS: ReadonlySet<StatusKind> = new Set(['notRestored', 'sourceUnreadable', 'changedOutside', 'malformed']);
 
 const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
 
@@ -55,6 +55,9 @@ interface PluginRead {
 }
 
 // plugins.md, A row, Plugin: each status's words and tooltip line.
+const notRestored = (mod: string | undefined): PluginStatus | undefined => mod === undefined ? undefined
+  : { kind: 'notRestored', words: 'not restored', tooltipLine: 'Not restored: its mod\'s manifest names it, and the mod\'s folder lacks it.' };
+
 const failedToRead = (reason: string | undefined): PluginStatus | undefined => reason === undefined ? undefined
   : { kind: 'failedToRead', words: 'failed to read', tooltipLine: `Failed to read: ${reason}` };
 
@@ -105,6 +108,7 @@ export class PluginFacts {
   private diagnosisReports: PluginDiagnosisReport[] = [];
   private readonly changedByMod = new Map<string, readonly PluginAddress[]>();
   private changed = new ByPluginAddress<true>();
+  private notRestoredFrom = new ByPluginAddress<string>();
   // Row status only, no blink: merges across a reload's ticks and persists until `reconciled`
   // lands the new answer.
   private loadFailures = new ByPluginAddress<PluginLoadFailure>();
@@ -204,6 +208,12 @@ export class PluginFacts {
     for (const address of [...this.changedByMod.values()].flat()) this.changed.set(address, true);
   }
 
+  /** Each plugin a mod's manifest names that is not restored, with that mod, replacing the last. */
+  notRestored(plugins: readonly { readonly plugin: PluginAddress; readonly mod: string }[]): void {
+    this.notRestoredFrom = new ByPluginAddress<string>();
+    for (const { plugin, mod } of plugins) this.notRestoredFrom.set(plugin, mod);
+  }
+
   /** The record filter changed, so the last answer belongs to another filter. */
   forgetMatches(): void {
     this.matches = undefined;
@@ -264,6 +274,7 @@ export class PluginFacts {
   private statuses(address: PluginAddress): PluginStatus[] {
     const read = this.reads.get(address);
     return [
+      notRestored(this.notRestoredFrom.get(address)),
       failedToRead(this.loadFailures.get(address)?.reason),
       masterIssues(read?.missingMasters ?? [], read?.lateMasters ?? []),
       unreadableRecords(read?.parseFailure === true),
@@ -287,9 +298,9 @@ export class PluginFacts {
   }
 
   /** The tooltip: file name, origin, read-only when its records cannot be edited, and a line for
-   *  each status. */
+   *  each status. A plugin not restored has the mod whose manifest names it as its origin (ADR-0012). */
   tooltipLines(address: PluginAddress): string[] {
-    const lines = [address.name, pluginOriginName(address.origin)];
+    const lines = [address.name, this.notRestoredFrom.get(address) ?? pluginOriginName(address.origin)];
     if (this.reads.get(address)?.readOnly === true) lines.push('read-only');
     return [...lines, ...this.statuses(address).map((s) => s.tooltipLine)];
   }

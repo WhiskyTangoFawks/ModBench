@@ -78,6 +78,13 @@ describe('a sync: outcome handling', () => {
     expect(messageChanged).toHaveBeenCalledTimes(1);
   });
 
+  it('ends the message line with one full stop when the refusal already ends its sentence', async () => {
+    const { sync, run } = syncAnswering(refused('mEdit could not be reached.'));
+    await run();
+
+    expect(sync.message()).toBe('plugins.txt is not synced: mEdit could not be reached.');
+  });
+
   it('says a thrown sync error the same way', async () => {
     const { channel, sync, run } = syncAnswering(() => Promise.reject(new Error('disk unplugged')));
     await run();
@@ -183,8 +190,8 @@ describe('the sync wording', () => {
     {
       name: 'a plugin sync names plugins.txt', create: createPluginSync,
       lines: [
-        '[pluginCommands] plugin sync added 1 disabled plugins.txt line(s) for plugin(s) on disk with no line: A',
-        '[pluginCommands] plugin sync dropped 1 plugins.txt line(s) with no plugin on disk: B',
+        '[pluginCommands] plugin sync added 1 disabled plugins.txt line(s) for plugin(s) provided with no line: A',
+        '[pluginCommands] plugin sync dropped 1 plugins.txt line(s) that nothing provides: B',
       ],
       unsynced: 'plugins.txt is not synced: locked.',
     },

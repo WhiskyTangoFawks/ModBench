@@ -1,6 +1,7 @@
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { RecordBrowser } from '../RecordBrowser';
 import { PluginsTreeProvider } from '../PluginsTreeProvider';
+import { NO_MOD_STATUSES } from '../../test/noModStatuses';
 
 type PluginsTreeProviderOptions = ConstructorParameters<typeof PluginsTreeProvider>[0];
 
@@ -16,6 +17,7 @@ export function pluginsTreeOver(
     publishDiagnoses: () => undefined,
     publishChangedOutside: () => undefined,
     publishFailedToRead: () => undefined,
+    modStatuses: NO_MOD_STATUSES,
     ...overrides,
   });
 }

@@ -4,32 +4,28 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class WinningPluginOfASharedNameEditApiTests : HostedTests
+public sealed class SharedFilenameEditApiTests : HostedTests
 {
     private const string PluginName = "Shared.esp";
     private const string WinningOrigin = "WinningMod";
     private const string OverriddenOrigin = "OverriddenMod";
 
-    private async Task<ScatteredFixtureData> Loaded()
+    [Fact]
+    public async Task AnEditAimedAtTheOverriddenCopyOfASharedFilename_LandsInThatOriginsTree()
     {
-        var fx = new PluginFixtureBuilder("api-overridden-plugin")
+        using var fx = new PluginFixtureBuilder("api-overridden-plugin")
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("OverriddenNpc"), origin: OverriddenOrigin)
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("WinningNpc"), origin: WinningOrigin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.DecompileAndCommit([WinningOrigin, OverriddenOrigin])).EnsureSuccessStatusCode();
-        return fx;
-    }
+        var formKey = $"000800:{PluginName}";
 
-    [Fact]
-    public async Task EditingTheWinningPlugin_OfTheSameName_Lands()
-    {
-        using var fx = await Loaded();
-        var formKey = await Client.FirstFormKey(PluginName, WinningOrigin);
-
-        var response = await Client.Edit(formKey, PluginName, WinningOrigin, "HeightMax", 0.75);
+        var response = await Client.EditChanges(formKey, PluginName, OverriddenOrigin, "HeightMax", 0.75);
 
         response.EnsureSuccessStatusCode();
-        Assert.NotEmpty((await response.Body()).GetProperty("documents").EnumerateArray());
+        var document = (await response.Body()).GetProperty("documents").EnumerateArray().Single();
+        var path = document.GetProperty("path").GetString().Require();
+        Assert.StartsWith(OtherTool.ModFolderOf(fx, OverriddenOrigin) + Path.DirectorySeparatorChar, path, StringComparison.Ordinal);
     }
 }

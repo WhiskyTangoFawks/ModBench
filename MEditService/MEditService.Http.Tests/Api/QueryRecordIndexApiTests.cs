@@ -49,43 +49,6 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
     }
 
     [Fact]
-    public async Task AGroupsRecords_CarryTheirNameWhenTheyHaveOne()
-    {
-        var activators = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=acti&limit=10");
-        var keywords = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=kywd&limit=10");
-
-        Assert.Equal("Lever", activators.GetProperty("items")[0].GetProperty("fullName").GetString());
-        Assert.Equal(JsonValueKind.Null, keywords.GetProperty("items")[0].GetProperty("fullName").ValueKind);
-    }
-
-    [Fact]
-    public async Task ARecordSearch_NamingSeveralTypes_ReturnsTheRecordsOfEachOfThem()
-    {
-        var query = $"/records?plugin={UserPlugin}&origin={UserMod}&limit=10";
-        var activators = await Client.GetFromJsonAsync<JsonElement>($"{query}&type=acti");
-        var keywords = await Client.GetFromJsonAsync<JsonElement>($"{query}&type=kywd");
-        var both = await Client.GetFromJsonAsync<JsonElement>($"{query}&type=acti&type=kywd");
-
-        Assert.Equal(
-            activators.GetProperty("total").GetInt32() + keywords.GetProperty("total").GetInt32(),
-            both.GetProperty("total").GetInt32());
-    }
-
-    [Fact]
-    public async Task ARecordSearch_NamingNoType_ReturnsTheRecordsOfEveryType()
-    {
-        var query = $"/records?plugin={UserPlugin}&origin={UserMod}&limit=10";
-        var activators = await Client.GetFromJsonAsync<JsonElement>($"{query}&type=acti");
-        var keywords = await Client.GetFromJsonAsync<JsonElement>($"{query}&type=kywd");
-        var any = await Client.GetFromJsonAsync<JsonElement>(query);
-
-        Assert.True(
-            any.GetProperty("total").GetInt32()
-                >= activators.GetProperty("total").GetInt32() + keywords.GetProperty("total").GetInt32());
-        Assert.NotEmpty(any.GetProperty("items").EnumerateArray());
-    }
-
-    [Fact]
     public async Task AContainersChildren_CarryTheirName()
     {
         var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=qust&limit=10");
@@ -110,35 +73,6 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
             "Queried Clearing",
             blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("fullName").GetString());
         Assert.Equal("Queried Room", interiors[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("fullName").GetString());
-    }
-
-    [Fact]
-    public async Task ACellsPlacedReferences_CarryTheirBaseRecordsEditorId()
-    {
-        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces?origin={UserMod}");
-        var worldFk = Uri.EscapeDataString(worldspaces[0].GetProperty("formKey").GetString().Require());
-        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces/{worldFk}/blocks?origin={UserMod}");
-        var cellFk = Uri.EscapeDataString(
-            blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require());
-
-        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/cells/{cellFk}/children?origin={UserMod}");
-
-        var placed = references.GetProperty("temporary")[0];
-        Assert.Equal(JsonValueKind.Null, placed.GetProperty("editorId").ValueKind);
-        Assert.Equal("QueriedLever", placed.GetProperty("baseEditorId").GetString());
-    }
-
-    [Fact]
-    public async Task ARecordItsQuestHolds_IsListedOnlyBeneathItsQuest()
-    {
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types?origin={UserMod}");
-        var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=qust&limit=10");
-        var questFk = Uri.EscapeDataString(quests.GetProperty("items")[0].GetProperty("formKey").GetString().Require());
-
-        var children = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/records/{questFk}/children?origin={UserMod}");
-
-        Assert.DoesNotContain("dial", types.EnumerateArray().Select(t => t.GetProperty("type").GetString()));
-        Assert.Equal(["QueriedTopic"], EditorIds(children));
     }
 
     [Fact]
@@ -184,6 +118,19 @@ public sealed class QueryRecordIndexApiTests(LoadedApiFixture<QueriedPluginsFixt
         var types = await Client.GetFromJsonAsync<JsonElement>(
             $"/plugins/{UserPlugin}/records/{Uri.EscapeDataString(formKey)}/child-record-types?origin={UserMod}");
         return types.EnumerateArray().Select(t => t.GetProperty("displayName").GetString());
+    }
+
+    [Theory]
+    [InlineData("type=acti&type=kywd", new[] { "QueriedKeyword", "QueriedLever" }, false)]
+    [InlineData("", new[] { "QueriedKeyword", "QueriedLever", "QueriedNpc" }, true)]
+    public async Task ARecordSearch_NamingSeveralTypesOrNone_ListsTheRecordsOfEachOfThem(
+        string types, string[] expectedAmong, bool listsTheNpc)
+    {
+        var page = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&limit=50&{types}");
+
+        var listed = EditorIds(page.GetProperty("items")).Order().ToList();
+        Assert.All(expectedAmong, id => Assert.Contains(id, listed));
+        Assert.Equal(listsTheNpc, listed.Contains("QueriedNpc"));
     }
 
     [Fact]

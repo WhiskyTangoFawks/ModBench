@@ -62,6 +62,11 @@ export class PluginFactsFeed implements vscode.Disposable {
     this.changed.fire();
   }
 
+  /** Each row a mod's manifest names that is not restored, joined by the tree, which fires its own change. */
+  notRestored(plugins: Parameters<PluginFacts['notRestored']>[0]): void {
+    this.facts.notRestored(plugins);
+  }
+
   /** The load order's own refusal (ADR-0010; plugins.md, States, stories 4 and 6). */
   refused(refusal: LoadOrderRefusal): void {
     this.generation++;
