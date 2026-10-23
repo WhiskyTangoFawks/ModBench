@@ -21,6 +21,7 @@ import { entryKey, listModFolders, modFolderNamed, modFoldersOf, type Mo2Context
 import { originFilesIn } from './mo2Files';
 import { sourceModsIn } from './sourceMods';
 import { errorMessage } from '../../ports/errorMessage';
+import { holdsPathToken } from '../pathTokens';
 
 async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLink): Promise<DownloadedFile[] | undefined> {
   const dirents = await readOrAbsent(() => listEntries(downloadsDir, skippedLink), undefined);
@@ -42,9 +43,11 @@ async function listDownloadedFiles(downloadsDir: string, skippedLink: SkippedLin
 
 const GAME_PATH_PLACE = `${SETTINGS_FILE_NAME}'s gamePath`;
 
+// A clone's game path is a path token until the game folder is found elsewhere.
 function gamePathOf(iniText: string): string | undefined {
   try {
-    return readGamePath(iniText);
+    const path = readGamePath(iniText);
+    return holdsPathToken(path) ? undefined : path;
   } catch {
     return undefined;
   }

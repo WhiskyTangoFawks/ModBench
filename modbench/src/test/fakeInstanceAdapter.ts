@@ -76,6 +76,7 @@ export type AdapterCall =
   | { readonly verb: 'checkPushRefusalFree' }
   | { readonly verb: 'writeSubmodules' }
   | { readonly verb: 'refuseUnpublishedPins' }
+  | { readonly verb: 'writePathTokens' }
   | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly keys: InstallKeys };
 
 export type WriteVerb = AdapterCall['verb'];
@@ -115,10 +116,14 @@ export interface InstanceAnswers {
   /** Mods whose name gives them no source folder. */
   unsourcedMods?: ReadonlySet<string>;
   /** The reads beside `reading()` that reject, with the message each rejects with. */
-  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceMods', string>>;
+  unreadReads?: Partial<Record<'profiles' | 'modOrder' | 'downloadedFiles' | 'sourceMods' | 'pathsOutsideFolders', string>>;
   installed?: InstallOutcome;
   /** Whether the instance folder holds a repository on disk now, whatever its reading said. */
   repositoryOnDisk?: boolean;
+  /** Why a path token stays in the working tree once path tokens are written. */
+  pathTokenLeft?: string;
+  /** Each path no path token names in a file the instance repository holds. */
+  pathsOutsideFolders?: Awaited<ReturnType<InstanceAdapter['pathsOutsideFolders']>>;
   /** What writing the submodules says. */
   submodules?: Awaited<ReturnType<InstanceAdapter['writeSubmodules']>>;
   /** The host of each source folder, by its path; a folder not there has no remote. */
@@ -304,6 +309,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     checkPushRefusalFree: () => record({ verb: 'checkPushRefusalFree' }, undefined),
     writeSubmodules: () => record({ verb: 'writeSubmodules' }, answers.submodules ?? { notes: [], other: [] }),
     refuseUnpublishedPins: () => record({ verb: 'refuseUnpublishedPins' }, undefined),
+    writePathTokens: () => record({ verb: 'writePathTokens' }, answers.pathTokenLeft),
+    pathsOutsideFolders: () => unreadable('pathsOutsideFolders', answers.pathsOutsideFolders ?? []),
     fileStamp: (path) => answer(answers.stamps?.get(path), path),
     originFileHash: (path) => {
       hashed.push(path);

@@ -56,6 +56,27 @@ describe('Git init', () => {
     expect([reporter.reports, reporter.landings]).toEqual([[], []]);
   });
 
+  it('warns, naming why, when a path token stays in the working tree', async () => {
+    gitInit.mockResolvedValueOnce({ applied: true, pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' });
+    const { reporter, run } = register();
+
+    await run();
+
+    expect(reporter.reports).toEqual([{
+      severity: 'warning', message: 'Git init:', detail: "this machine's paths are not in place of every path token: ModOrganizer.ini still holds a path token",
+    }]);
+  });
+
+  it('answers an agent call with why a path token stays in the working tree', async () => {
+    gitInit.mockResolvedValueOnce({ applied: true, pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' });
+    const { run } = register();
+
+    expect(await run(new AgentCall([], {}))).toEqual({
+      applied: true, outcome: { landed: [], refused: [] },
+      partial: [{ message: 'Git init:', detail: "this machine's paths are not in place of every path token: ModOrganizer.ini still holds a path token", severity: 'warning' }],
+    });
+  });
+
   it('reports a refusal at error, naming why', async () => {
     gitInit.mockResolvedValueOnce({ applied: false, refusal: REFUSAL });
     const { reporter, run } = register();

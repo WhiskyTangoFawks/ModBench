@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { gameFolderResolver, STEAM, type GameDetectors } from '../gameFolder/gameFolderResolver';
 import { myGamesResolver } from '../gameFolder/myGames';
-import type { InstallationFileReader, GameFolderSetting, InstanceAdapter } from '../instanceAdapter';
+import type { GameFolder, InstallationFileReader, GameFolderSetting, InstanceAdapter } from '../instanceAdapter';
 import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
@@ -13,6 +13,7 @@ import type { Mo2Context } from './mo2Context';
 import { mo2Landing } from './mo2Landing';
 import { mo2Repository } from './mo2Repository';
 import { mo2Submodules } from './mo2Submodules';
+import { mo2PathTokens } from './mo2PathTokens';
 import { mo2PluginRename } from './mo2PluginRename';
 import { mo2Installation } from './mo2Installation';
 import { readInstance } from '../instanceReading';
@@ -54,13 +55,14 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): InstanceAdapter
   };
   const hashes = hashIndex(hashIndexDir(instanceRoot), installationFileReader);
   const source = readingSource(context);
+  const gameFolder = async (): Promise<GameFolder> => (await source.settings()).gameFolder();
   return {
     names: source.names,
     reading: () => readInstance(source),
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
-    gameFolder: async () => (await source.settings()).gameFolder(),
-    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source), ...mo2Repository(context, hashes), ...mo2Submodules(context),
+    gameFolder,
+    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source), ...mo2Repository(context, hashes), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder),
     originFileHash: hashes.originFileHash,
     statCacheFolder: statCacheDir(instanceRoot),
     subscribe: (listener) => context.watch.subscribe(listener),

@@ -1,0 +1,68 @@
+import { describe, it, expect, afterEach } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { folderTokens, tokenFilterConfig, type TokenFolders } from '../pathTokens';
+
+const DRIVER = 'tokens';
+
+const SEPARATORS = [
+  { first: '/', rest: '/' }, { first: '\\', rest: '\\' }, { first: '\\\\', rest: '\\\\' }, { first: '\\\\\\\\', rest: '\\\\' },
+];
+
+const made: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(made.splice(0).map((folder) => rm(folder, { recursive: true, force: true })));
+});
+
+async function repositoryFiltering(folders: TokenFolders, platform: NodeJS.Platform): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'modbench-token-filter-'));
+  made.push(root);
+  const git = (...args: string[]): string => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+  git('init', '--quiet');
+  git('config', 'core.autocrlf', 'false');
+  for (const [key, value] of Object.entries(tokenFilterConfig(DRIVER, folderTokens(folders, platform, SEPARATORS, '"')))) git('config', key, value);
+  await writeFile(join(root, '.git', 'info', 'attributes'), `* filter=${DRIVER}\n`);
+  return root;
+}
+
+async function heldByGit(folders: TokenFolders, platform: NodeJS.Platform, text: string): Promise<string> {
+  const root = await repositoryFiltering(folders, platform);
+  await writeFile(join(root, 'file.ini'), text);
+  execFileSync('git', ['add', 'file.ini'], { cwd: root });
+  return execFileSync('git', ['cat-file', 'blob', ':file.ini'], { cwd: root, encoding: 'utf8' });
+}
+
+async function checkedOutByGit(folders: TokenFolders, platform: NodeJS.Platform, held: string): Promise<string> {
+  const root = await repositoryFiltering(folders, platform);
+  const blob = execFileSync('git', ['hash-object', '-w', '--no-filters', '--stdin'], { cwd: root, input: held, encoding: 'utf8' }).trim();
+  return execFileSync('git', ['cat-file', '--filters', '--path=file.ini', blob], { cwd: root, encoding: 'utf8' });
+}
+
+const SHARE: TokenFolders = { instance: '\\\\nas\\share\\Modlists\\LitR', game: '//nas/share/Games/Fallout 4' };
+const PROTON: TokenFolders = { instance: '/home/me/LitR', game: '/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4' };
+
+describe('the token filter', () => {
+  it.each([
+    ['a network share, with backslashes', SHARE, 'win32', 'x=\\\\nas\\share\\Modlists\\LitR\\tools', 'x={instance folder:\\}\\tools'],
+    ['a network share, with forward slashes in another case', SHARE, 'win32', 'x=//NAS/share/modlists/LitR/x.exe', 'x={instance folder:/}/x.exe'],
+    ['a network share, with escaped backslashes', SHARE, 'win32', 'x=\\"\\\\\\\\nas\\\\share\\\\Modlists\\\\LitR\\\\\\"', 'x=\\"{instance folder:\\\\}\\\\\\"'],
+    ['a network share, for the game folder', SHARE, 'win32', 'x=\\\\nas\\share\\Games\\Fallout 4\\Data', 'x={game folder:\\}\\Data'],
+    ['a Wine prefix\'s drive C', PROTON, 'linux', 'x=C:\\\\Games\\\\Fallout 4\\\\Data', 'x={game folder:\\\\}\\\\Data'],
+    ['a Wine prefix through drive Z', PROTON, 'linux', 'x=Z:/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4/x.exe', 'x={game folder:/}/x.exe'],
+  ] as const)('holds a folder on %s by its token', async (_place, folders, platform, written, held) => {
+    expect(await heldByGit(folders, platform, written)).toBe(held);
+  });
+
+  it.each([
+    ['a network share, with forward slashes', SHARE, 'win32', 'x={instance folder:/}/tools', 'x=//nas/share/Modlists/LitR/tools'],
+    ['a network share, with backslashes', SHARE, 'win32', 'x={instance folder:\\}\\tools', 'x=\\\\nas\\share\\Modlists\\LitR\\tools'],
+    ['a network share, with escaped backslashes', SHARE, 'win32', 'x={instance folder:\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Modlists\\\\LitR\\\\tools'],
+    ['a network share, with the doubled separator\'s token', SHARE, 'win32', 'x={instance folder:\\\\\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Modlists\\\\LitR\\\\tools'],
+    ['a Wine prefix, on its drive C', PROTON, 'linux', 'x={game folder:\\\\}', 'x=C:\\\\Games\\\\Fallout 4'],
+  ] as const)('puts the path of a folder on %s in place of its token', async (_place, folders, platform, held, written) => {
+    expect(await checkedOutByGit(folders, platform, held)).toBe(written);
+  });
+});

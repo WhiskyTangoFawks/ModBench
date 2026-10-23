@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
-import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
+import { AgentCall, reportPartial, type GestureResult, type PartialFailure } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
 import type { Reporter } from '../ports/reporter';
-import type { ModlistRepositoryCommands } from '../sourceCommands/modlistRepositoryCommands';
+import type { GitInitResult, ModlistRepositoryCommands } from '../sourceCommands/modlistRepositoryCommands';
 
 import { TOOLBOX_VIEW } from './toolboxCommands';
 
@@ -22,12 +22,20 @@ export function registerModlistCommands(deps: ModlistGestureDeps): vscode.Dispos
 const gitInitInToolbox = ({ commands, instance }: ModlistGestureDeps) =>
   runWritingGesture(TOOLBOX_VIEW, instance, () => commands.gitInit());
 
+const partialOf = (result: Extract<GitInitResult, { applied: true }>): PartialFailure[] =>
+  (result.pathTokensNotWritten === undefined ? [] : [{
+    message: 'Git init:', detail: `this machine's paths are not in place of every path token: ${result.pathTokensNotWritten}`, severity: 'warning',
+  }]);
+
 async function gitInit(deps: ModlistGestureDeps): Promise<void> {
   const result = await gitInitInToolbox(deps);
-  if (!result.applied) deps.reporter.report('error', 'Could not git init.', result.refusal);
+  if (result.applied) reportPartial(deps.reporter, partialOf(result));
+  else deps.reporter.report('error', 'Could not git init.', result.refusal);
 }
 
 async function gitInitForAgent(deps: ModlistGestureDeps): Promise<GestureResult<never, string>> {
   const result = await gitInitInToolbox(deps);
-  return result.applied ? { applied: true, outcome: { landed: [], refused: [] } } : { applied: false, refusal: result.refusal };
+  if (!result.applied) return { applied: false, refusal: result.refusal };
+  const partial = partialOf(result);
+  return { applied: true, outcome: { landed: [], refused: [] }, ...(partial.length === 0 ? {} : { partial }) };
 }

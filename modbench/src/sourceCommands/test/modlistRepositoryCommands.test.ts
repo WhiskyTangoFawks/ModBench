@@ -42,12 +42,29 @@ function commandsOver(
 }
 
 describe('modlistRepositoryCommands git init', () => {
-  it('writes the ignore list, makes the instance folder a repository, then makes it refuse a push of a pin its remote lacks', async () => {
+  it('writes the ignore list, makes the instance folder a repository, then makes it refuse a push of a pin its remote lacks and hold paths by path tokens', async () => {
     const { commands, adapter, repositories } = commandsOver();
 
     const result = await commands.gitInit();
 
-    expect([result.applied, adapter.calls, repositories]).toEqual([true, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }], ['made']]);
+    expect([result.applied, adapter.calls, repositories]).toEqual([
+      true, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }, { verb: 'writePathTokens' }], ['made'],
+    ]);
+  });
+
+  it('names why a path token stays in the working tree beside the repository it made', async () => {
+    const { commands } = commandsOver({ pathTokenLeft: 'ModOrganizer.ini still holds a path token' });
+
+    expect(await commands.gitInit()).toEqual({ applied: true, pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' });
+  });
+
+  it('takes back the repository and the ignore list it made when the path tokens could not be written, naming why', async () => {
+    const { commands, adapter } = commandsOver({ refusals: refusing('writePathTokens', 'could not lock config file .git/config') });
+
+    expect([await commands.gitInit(), adapter.calls.map(({ verb }) => verb)]).toEqual([
+      { applied: false, refusal: 'could not lock config file .git/config' },
+      ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'removeRepository', 'removeIgnoreList'],
+    ]);
   });
 
   it('refuses an instance folder that holds a repository on disk, naming it, and changes nothing', async () => {
@@ -149,7 +166,43 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect([adapter.calls, outcome]).toMatchObject([[{ verb: 'writeSubmodules' }], { applied: true, notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], submoduleNotes: ['source/Odd is not a source mod'] }]);
+    expect([adapter.calls, outcome]).toMatchObject([[{ verb: 'writeSubmodules' }, { verb: 'writePathTokens' }], { applied: true, notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], repositoryNotes: ['source/Odd is not a source mod'] }]);
+  });
+
+  it('reports each path no path token names, naming its file, and why a path token stays', async () => {
+    const { commands, client, adapter } = commandsOver({
+      pathTokenLeft: 'ModOrganizer.ini still holds a path token', pathsOutsideFolders: [{ file: 'ModOrganizer.ini', path: 'C:/Modding/x.exe' }],
+    });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA']);
+
+    expect([adapter.calls.map(({ verb }) => verb), outcome]).toMatchObject([['writeSubmodules', 'writePathTokens'], {
+      applied: true, repositoryNotes: ['ModOrganizer.ini still holds a path token', 'ModOrganizer.ini holds a path no path token names: C:/Modding/x.exe'],
+    }]);
+  });
+
+  it.each([
+    ['writing the path tokens', { refusals: refusing('writePathTokens', 'git is not available') }, 'the path tokens could not be written: git is not available'],
+    ['reading the paths', { unreadReads: { pathsOutsideFolders: 'git is not available' } },
+      "the paths the instance repository's files hold could not be read: git is not available"],
+  ])('names the failure of %s beside the manifests that landed', async (_failure, failing: InstanceAnswers, note) => {
+    const { commands, client } = commandsOver(failing);
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA']);
+
+    expect(outcome).toMatchObject({ applied: true, landed: UPDATED.landed, repositoryNotes: [note] });
+  });
+
+  it('reports each path no path token names when every mod is refused', async () => {
+    const { commands } = commandsOver({
+      unreadableMetadata: new Map([['ModA', 'EISDIR: meta.ini']]), pathsOutsideFolders: [{ file: 'ModOrganizer.ini', path: 'C:/Modding/x.exe' }],
+    });
+
+    expect(await commands.updateManifest(['ModA'])).toMatchObject({
+      applied: true, landed: [], repositoryNotes: ['ModOrganizer.ini holds a path no path token names: C:/Modding/x.exe'],
+    });
   });
 
   it('makes no submodule when mEdit refuses the gesture', async () => {
@@ -167,7 +220,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect(outcome).toMatchObject({ applied: true, landed: UPDATED.landed, notes: [], submoduleNotes: ['git is not available'] });
+    expect(outcome).toMatchObject({ applied: true, landed: UPDATED.landed, notes: [], repositoryNotes: ['git is not available'] });
   });
 
   it('refuses a mod whose metadata cannot be read, naming why, and updates the rest', async () => {
@@ -277,7 +330,7 @@ describe('modlistRepositoryCommands update manifest', () => {
       const outcome = await commands.updateManifest(['ModA', 'ModB']);
 
       expect(client.calls.map((call) => sentNamesOf(call.args[0]))).toEqual([['ModB']]);
-      expect(outcome).toEqual({ applied: true, ...UPDATED, refused: [{ item: 'ModA', reason }], notes: [], submoduleNotes: [] });
+      expect(outcome).toEqual({ applied: true, ...UPDATED, refused: [{ item: 'ModA', reason }], notes: [], repositoryNotes: [] });
     });
   });
 
@@ -286,7 +339,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect([client.calls, outcome]).toEqual([[], { applied: true, landed: [], refused: [{ item: 'ModA', reason: 'not indexed' }], notes: [], submoduleNotes: [] }]);
+    expect([client.calls, outcome]).toEqual([[], { applied: true, landed: [], refused: [{ item: 'ModA', reason: 'not indexed' }], notes: [], repositoryNotes: [] }]);
   });
 
   it('answers the refusal of the user\'s cancel beside what mEdit updated', async () => {
@@ -313,7 +366,7 @@ describe('modlistRepositoryCommands update manifest', () => {
       signal: cancel.signal, onProgress: (status) => { if (status.phase === 'ReadingFiles') cancel.abort(); },
     });
 
-    expect([client.calls, outcome]).toEqual([[], { applied: true, landed: [], refused: [], notes: [], submoduleNotes: [] }]);
+    expect([client.calls, outcome]).toEqual([[], { applied: true, landed: [], refused: [], notes: [], repositoryNotes: [] }]);
   });
 
   it('hands mEdit the signal, so a cancel stops it after the mod in hand', async () => {
@@ -428,7 +481,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     const outcome = await commands.restoreFromManifest(['ModA']);
 
-    expect(adapter.calls.map(({ verb }) => verb).filter((verb) => verb !== 'writeModMetadata')).toEqual(['trashModFile', 'refuseUnpublishedPins']);
+    expect(adapter.calls.map(({ verb }) => verb).filter((verb) => verb !== 'writeModMetadata')).toEqual(['writePathTokens', 'trashModFile', 'refuseUnpublishedPins']);
     expect(outcome).not.toHaveProperty('pushRefusalNotWritten');
   });
 
@@ -448,6 +501,22 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     await commands.restoreFromManifest(['ModA']);
 
     expect(adapter.calls.map(({ verb }) => verb)).not.toContain('refuseUnpublishedPins');
+  });
+
+  it('writes the path tokens, as git init does, before it restores, and names why a path token stays', async () => {
+    const { commands, client, adapter } = commandsOver({ pathTokenLeft: 'ModOrganizer.ini still holds a path token' });
+    let writtenBeforeRestore: string[] = [];
+    client.setCommandHandler('restoreFromManifest', () => {
+      writtenBeforeRestore = adapter.calls.map(({ verb }) => verb);
+      return Promise.resolve(RESTORED);
+    });
+
+    const outcome = await commands.restoreFromManifest(['ModA']);
+
+    expect([writtenBeforeRestore, outcome]).toEqual([
+      ['writePathTokens'],
+      { applied: true, landed: RESTORED.landed, refused: [], pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' },
+    ]);
   });
 
   it('reports the phase of reading each mod\'s files, then mEdit\'s progress restoring them', async () => {
@@ -617,7 +686,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     await commands.restoreFromManifest(['ModA']);
 
     expect(adapter.calls).toEqual([
-      { verb: 'trashModFile', mod: 'ModA', relativePath: 'mine.txt' }, { verb: 'writeModMetadata', mod: 'ModA', metadata },
+      { verb: 'writePathTokens' }, { verb: 'trashModFile', mod: 'ModA', relativePath: 'mine.txt' }, { verb: 'writeModMetadata', mod: 'ModA', metadata },
     ]);
   });
 
@@ -630,7 +699,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
 
     await commands.restoreFromManifest(['ModA', 'ModB']);
 
-    expect(adapter.calls).toEqual([{ verb: 'writeModMetadata', mod: 'ModA', metadata }]);
+    expect(adapter.calls).toEqual([{ verb: 'writePathTokens' }, { verb: 'writeModMetadata', mod: 'ModA', metadata }]);
   });
 
   it('answers a mod whose metadata could not be written as not finished, naming why', async () => {
