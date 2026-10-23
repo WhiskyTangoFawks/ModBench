@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../../test/noDetectors';
@@ -12,6 +12,7 @@ import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { mo2InstanceAdapter } from '../mo2Instance';
+import { wabbajackPublisher } from '../../wabbajack/wabbajackPublisher';
 
 const made: string[] = [];
 
@@ -31,9 +32,14 @@ async function gameFolder(): Promise<string> {
   return game;
 }
 
+const PUBLISHER = wabbajackPublisher('', { neverShipped: [], enabledMods: () => Promise.resolve([]) }).configurationFile;
+const PUBLISHER_FILE = PUBLISHER.name;
+
 const adapterOver = (root: string, { game, detectors = NO_DETECTORS }: { game?: string; detectors?: GameDetectors } = {}) => mo2InstanceAdapter({
   instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(game), detectors, installationFileReader: fakeInstallationFileReader([]),
-});
+}, PUBLISHER);
+
+const steamAt = (game: string): GameDetectors => ({ ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(game, 'Data') }) });
 
 async function put(root: string, path: string, text: string): Promise<void> {
   await mkdir(dirname(join(root, path)), { recursive: true });
@@ -81,7 +87,22 @@ describe('the MO2 adapter\'s path tokens', () => {
   });
 
   it.each([
-    ['a longer name', (root: string) => `${onWineDrive(root, '/')}2/x.exe`],
+    ['unquoted in a program\'s arguments', (root: string) => `4\\arguments=-o ${onWineDrive(root, '\\\\')}\\\\out`, '4\\arguments=-o {instance folder:\\\\}\\\\out'],
+    ['in a list\'s second entry', (root: string) => `paths=${onWineDrive(root, '/')}/a, ${onWineDrive(root, '/')}/b`, 'paths={instance folder:/}/a, {instance folder:/}/b'],
+    ['after an option\'s colon', (root: string) => `4\\arguments="-o:${onWineDrive(root, '\\\\')}\\\\out"`, '4\\arguments="-o:{instance folder:\\\\}\\\\out"'],
+    ['after a semicolon', (root: string) => `paths=${onWineDrive(root, '/')}/a;${onWineDrive(root, '/')}/b`, 'paths={instance folder:/}/a;{instance folder:/}/b'],
+    ['after a comma', (root: string) => `paths=${onWineDrive(root, '/')}/a,${onWineDrive(root, '/')}/b`, 'paths={instance folder:/}/a,{instance folder:/}/b'],
+  ])('holds the instance folder by a token %s', async (_place, written, token) => {
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'ModOrganizer.ini', SETTINGS([written(root)]));
+
+    await adapter.writePathTokens();
+
+    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS([token]));
+  });
+
+  it.each([
+    ['a longer name',(root: string) => `${onWineDrive(root, '/')}2/x.exe`],
     ['a space and more', (root: string) => `${onWineDrive(root, '/')} Backup/x.exe`],
     ['a plus', (root: string) => `${onWineDrive(root, '/')}+/x.exe`],
     ['a parenthesis', (root: string) => `${onWineDrive(root, '/')}(GOG)/x.exe`],
@@ -167,20 +188,60 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(() => execFileSync('git', ['add', '--', 'ModOrganizer.ini'], { cwd: root, stdio: 'pipe' })).toThrow(/ModOrganizer\.ini/);
   });
 
-  describe('on a clone', () => {
-    async function cloned(lines: (origin: string, game: string) => readonly string[], detectors?: GameDetectors) {
+  async function cloned(lines: (origin: string, game: string) => readonly string[], detectors?: GameDetectors, publisherSettings?: (origin: string, game: string) => string) {
+    const game = await gameFolder();
+    const { root, adapter } = await instanceRepository([], game);
+    await put(root, 'ModOrganizer.ini', SETTINGS(lines(root, game)));
+    if (publisherSettings !== undefined) await put(root, PUBLISHER_FILE, publisherSettings(root, game));
+    await adapter.writePathTokens();
+    git(root, 'add', '--', 'ModOrganizer.ini', ...(publisherSettings === undefined ? [] : [PUBLISHER_FILE]));
+    git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'paths');
+    const clone = join(await folder('clone'), 'modlist');
+    git(dirname(clone), 'clone', '--quiet', '--config', 'core.autocrlf=false', root, clone);
+    await mkdir(join(clone, 'mods'));
+    return { clone, adapter: adapterOver(clone, { detectors }), game };
+  }
+
+  describe('in the publisher\'s configuration', () => {
+    const publisherSettings = (instance: string, game: string): string =>
+      JSON.stringify({ Source: instance, Downloads: `${instance}${sep}downloads`, GamePath: game }, null, 2);
+
+    it('holds each folder by its native token, and the working tree by this machine\'s paths', async () => {
       const game = await gameFolder();
       const { root, adapter } = await instanceRepository([], game);
-      await put(root, 'ModOrganizer.ini', SETTINGS(lines(root, game)));
-      await adapter.writePathTokens();
-      git(root, 'add', '--', 'ModOrganizer.ini');
-      git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'paths');
-      const clone = join(await folder('clone'), 'modlist');
-      git(dirname(clone), 'clone', '--quiet', '--config', 'core.autocrlf=false', root, clone);
-      await mkdir(join(clone, 'mods'));
-      return { clone, adapter: adapterOver(clone, { detectors }), game };
-    }
+      await put(root, PUBLISHER_FILE, publisherSettings(root, game));
 
+      await adapter.writePathTokens();
+
+      expect([held(root, PUBLISHER_FILE), await readFile(join(root, PUBLISHER_FILE), 'utf8')])
+        .toEqual([publisherSettings('{instance folder}', '{game folder}'), publisherSettings(root, game)]);
+    });
+
+    it.each([
+      ['natively', (folder: string) => folder],
+      ['by a Windows program on Wine', (folder: string) => onWineDrive(folder, '\\')],
+    ])('puts a clone\'s own folders in place of their tokens, spelt %s, and git holds the clone as committed', async (_spelt, spelt) => {
+      const steam = await gameFolder();
+      const { clone, adapter } = await cloned(() => [], steamAt(steam), (origin, game) => publisherSettings(spelt(origin), spelt(game)));
+
+      await adapter.writePathTokens();
+
+      expect([await readFile(join(clone, PUBLISHER_FILE), 'utf8'), git(clone, 'status', '--porcelain')])
+        .toEqual([publisherSettings(spelt(clone), spelt(steam)), '']);
+    });
+
+    it('answers each path outside the two folders as a commit would hold it', async () => {
+      const game = await gameFolder();
+      const { root, adapter } = await instanceRepository([], game);
+      const outside = join(tmpdir(), 'Life in the Ruins.wabbajack');
+      await put(root, PUBLISHER_FILE, JSON.stringify({ Source: root, GamePath: game, OutputFile: outside }));
+      await adapter.writePathTokens();
+
+      expect(await adapter.pathsOutsideFolders()).toEqual([{ file: PUBLISHER_FILE, path: JSON.stringify(outside).slice(1, -1) }]);
+    });
+  });
+
+  describe('on a clone', () => {
     it('puts the clone\'s own instance folder in place of its path token, and git holds the clone as committed', async () => {
       const { clone, adapter } = await cloned((origin) => [`1\\binary=${onWineDrive(origin, '/')}/tools/xEdit.exe`]);
 
@@ -212,8 +273,7 @@ describe('the MO2 adapter\'s path tokens', () => {
 
     it('finds the game folder where the game path is a path token, and puts it in place of the token', async () => {
       const steam = await gameFolder();
-      const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(steam, 'Data') }) };
-      const { clone, adapter } = await cloned((_origin, game) => [`gamePath=@ByteArray(${onWineDrive(game, '\\\\')})`], detectors);
+      const { clone, adapter } = await cloned((_origin, game) => [`gamePath=@ByteArray(${onWineDrive(game, '\\\\')})`], steamAt(steam));
 
       await adapter.writePathTokens();
 
@@ -236,7 +296,7 @@ describe('the MO2 adapter\'s path tokens', () => {
       `1\\binary=${onWineDrive(root, '/')}/tools/xEdit.exe`, `2\\binary=${onWineDrive(game, '/')}/Fallout4.exe`,
       '3\\binary=C:/Modding/Tools/CLASSIC.exe', '3\\workingDirectory=C:\\\\Modding\\\\Tools',
       '4\\arguments=-o:\\"C:\\\\Modding\\\\Out\\" -D:\\"C:\\\\Modding\\\\Out\\"', 'url=https://www.nexusmods.com/fallout4',
-      '5\\binary=\\\\\\\\nas\\\\share\\\\x.exe', '6\\binary=//nas/share/y.exe',
+      '5\\binary=\\\\\\\\nas\\\\share\\\\x.exe', '6\\binary=//nas/share/y.exe', '7\\arguments=-o:\\\\\\\\nas\\\\share\\\\Inst\\\\out',
     ]));
     await put(root, 'profiles/Default/Fallout4Custom.ini', 'sScreenShotBaseName=/home/me/Pictures/shot\r\n');
     await put(root, 'mods/Mod A/Mod A.manifest.json', `{"path": "C:/Modding/x", "folder": "${onWineDrive(root, '/')}/mods"}`);
@@ -249,6 +309,7 @@ describe('the MO2 adapter\'s path tokens', () => {
       { file: 'ModOrganizer.ini', path: 'C:\\\\Modding\\\\Out' },
       { file: 'ModOrganizer.ini', path: '\\\\\\\\nas\\\\share\\\\x.exe' },
       { file: 'ModOrganizer.ini', path: '//nas/share/y.exe' },
+      { file: 'ModOrganizer.ini', path: 'o:\\\\\\\\nas\\\\share\\\\Inst\\\\out' },
       { file: 'mods/Mod A/Mod A.manifest.json', path: 'C:/Modding/x' },
       { file: 'mods/Mod A/Mod A.manifest.json', path: `${onWineDrive(root, '/')}/mods` },
       { file: 'profiles/Default/Fallout4Custom.ini', path: '/home/me/Pictures/shot' },
@@ -273,5 +334,24 @@ describe('the MO2 adapter\'s path tokens', () => {
 
     const config = git(root, 'config', '--local', '--list').split('\n').filter((line) => line.includes('modbench-'));
     expect([config, await readFile(join(root, '.git', 'info', 'attributes'), 'utf8').catch(() => '')]).toEqual([[], '']);
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) takes back only the filter a failed write added, and keeps each the repository held', async () => {
+    const { root } = await instanceRepository([]);
+    await put(root, 'profiles/Default/Fallout4Prefs.ini', 'x=1\r\n');
+    const withoutPublisher = mo2InstanceAdapter({
+      instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS, installationFileReader: fakeInstallationFileReader([]),
+    }, undefined);
+    await withoutPublisher.writePathTokens();
+    const written = async () => [
+      git(root, 'config', '--local', '--list').split('\n').filter((line) => line.includes('modbench-')),
+      await readFile(join(root, '.git', 'info', 'attributes'), 'utf8'),
+    ];
+    const before = await written();
+    await chmod(join(root, 'profiles/Default/Fallout4Prefs.ini'), 0o000);
+
+    await expect(adapterOver(root).writePathTokens()).rejects.toThrow();
+
+    expect(await written()).toEqual(before);
   });
 });

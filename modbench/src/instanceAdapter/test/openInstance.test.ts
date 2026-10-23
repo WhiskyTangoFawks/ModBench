@@ -1,4 +1,5 @@
 import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -15,6 +16,7 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
   afterEach(async () => {
     watchers.length = 0;
     await rm(join(root, SETTINGS_FILE), { force: true });
+    await rm(join(root, '.git'), { recursive: true, force: true });
   });
 
   afterAll(() => rm(root, { recursive: true, force: true }));
@@ -64,5 +66,17 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     subscription.dispose();
 
     expect({ signals, armed: live().length }).toEqual({ signals: 2, armed: 0 });
+  });
+
+  it('has git hold the publisher\'s configuration, as the publisher writes it on this machine, by the path tokens', async () => {
+    const git = (...args: string[]): string => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+    git('init', '--quiet');
+    git('config', 'core.autocrlf', 'false');
+    await writeFile(join(root, SETTINGS_FILE), JSON.stringify({ Source: root }));
+
+    await adapterOver(root).writePathTokens();
+    git('add', '--', SETTINGS_FILE);
+
+    expect(git('cat-file', 'blob', `:${SETTINGS_FILE}`)).toBe(JSON.stringify({ Source: '{instance folder}' }));
   });
 });

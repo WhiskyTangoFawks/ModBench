@@ -29,7 +29,7 @@ describe('the MO2 adapter\'s hashes', () => {
     const adapter = mo2InstanceAdapter({
       instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS,
       installationFileReader: fakeInstallationFileReader([]),
-    });
+    }, undefined);
 
     await adapter.installationFile('Mod');
 

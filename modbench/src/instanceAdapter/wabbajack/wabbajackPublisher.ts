@@ -6,11 +6,15 @@ import { join, relative, sep } from 'node:path';
 import { errorMessage } from '../../ports/errorMessage';
 import { get, readOrAbsent } from '../files';
 import type { Covering, PublisherConfiguration, PublisherTag } from '../instanceAdapter';
-import type { Publisher } from '../publisher';
+import type { ConfigurationFile, Publisher } from '../publisher';
 import { watchFiles } from '../watchFiles';
 
-// Wabbajack's configuration, at the instance root.
-const COMPILER_SETTINGS_FILE = 'compiler_settings.json';
+// Wabbajack's configuration, at the instance root. Wabbajack writes this machine's own paths, or on Wine a Windows
+// program's, a Windows one in JSON's escaped backslashes (AbsolutePathConverter).
+const COMPILER_SETTINGS: ConfigurationFile = {
+  name: 'compiler_settings.json',
+  spelling: { separators: [{ first: '\\\\', rest: '\\\\' }], ends: '"', nativeStarts: ['"'] },
+};
 
 /** What Wabbajack's compiler asks of the mod manager. */
 export interface ManagerAnswers {
@@ -162,7 +166,7 @@ function coveringIn(instanceRoot: string, root: PathNode, neverShipped: readonly
 }
 
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
-  const file = join(instanceRoot, COMPILER_SETTINGS_FILE);
+  const file = join(instanceRoot, COMPILER_SETTINGS.name);
   const neverShipped = manager.neverShipped.map((folder) => namesOf(relative(instanceRoot, folder)));
   const read = async (text: string): Promise<PublisherConfiguration> => {
     const settings = settingsIn(text, file);
@@ -171,6 +175,7 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
   };
   return {
     tags: TAGS.map(({ tag }) => tag),
+    configurationFile: COMPILER_SETTINGS,
     configuration: async (): Promise<PublisherConfiguration> => {
       try {
         const text = await readOrAbsent(() => get(file), undefined);
@@ -179,6 +184,6 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         return { kind: 'unreadable', reason: errorMessage(err) };
       }
     },
-    subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS_FILE, () => listener()),
+    subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, () => listener()),
   };
 }
