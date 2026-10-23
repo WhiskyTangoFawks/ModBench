@@ -144,9 +144,6 @@ internal sealed class Store : IDisposable
         }
     }
 
-    // DuckDB.NET keeps one database instance per path while any connection on it is open, so a read
-    // outliving its store hands the next store on the path the old rows, even after a rebuild
-    // deleted the file.
     private readonly object _readsGate = new();
     private int _readsInFlight;
     private bool _closedToReads;
@@ -169,6 +166,10 @@ internal sealed class Store : IDisposable
             return _readsInFlight == 0;
         }
     }
+
+    internal bool SharesFileWith(string? instanceRoot) =>
+        _databasePath is { } path && instanceRoot is not null
+        && string.Equals(path, IndexFile.For(instanceRoot), StringComparison.OrdinalIgnoreCase);
 
     private static DuckDBConnection Opened(string connectionString) => Opened(new DuckDBConnection(connectionString));
 

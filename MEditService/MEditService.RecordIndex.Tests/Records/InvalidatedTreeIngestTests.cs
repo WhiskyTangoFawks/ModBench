@@ -37,7 +37,7 @@ public sealed class InvalidatedTreeIngestTests : IDisposable
     }
 
     [Fact]
-    public void AFatalErrorAsATreeIngestCommits_FailsTheSnapshot_NotTheTreesRead()
+    public void AnIndexFileInvalidatedAsATreeIngestBegins_FailsTheSnapshot_NotTheTreesRead()
     {
         _source.Arm();
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
