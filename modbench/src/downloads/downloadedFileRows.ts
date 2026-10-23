@@ -41,6 +41,7 @@ export function filterExcludedRows<T extends DownloadedFileRow>(rows: readonly T
 export function downloadedFileContextValue(row: DownloadedFileRow): string {
   const flags = [
     row.modID !== undefined && 'hasModID',
+    row.fileID !== undefined && 'hasFileID',
     row.hasMeta && 'hasMeta',
     row.excluded && 'excluded',
   ].filter((f): f is string => f !== false);

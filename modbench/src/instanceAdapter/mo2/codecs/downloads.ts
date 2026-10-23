@@ -3,6 +3,7 @@
 // Status, which `uninstalled=true` carries.
 
 import type { DownloadedFileMeta, DownloadedFileStatus } from '../../instanceAdapter';
+import type { NexusFileInfo } from '../../../ports/nexusFileInfo';
 import { qtToInt } from './qtInt';
 import { installedFileKey } from './metaIni';
 import { GENERAL_SECTION, readIniSection, setIniValue } from './qSettingsIni';
@@ -27,6 +28,7 @@ export function parseDownloadedFileMeta(text: string): { meta: DownloadedFileMet
   const meta: DownloadedFileMeta = {
     status,
     modID,
+    fileID,
     fileCategory: fileCategory === undefined ? undefined : qtToInt(fileCategory),
     name: values.get('name'),
     version: values.get('version'),
@@ -40,8 +42,9 @@ export function parseDownloadedFileMeta(text: string): { meta: DownloadedFileMet
 
 // Writes the value verbatim, so `false` clears rather than deleting the key,
 // matching MO2's `QSettings::setValue`. Empty text yields a minimal `.meta`, in MO2's CRLF.
-const setMetaFlag = (text: string, key: string, value: boolean): string =>
-  setIniValue(text === '' ? `[${GENERAL_SECTION}]\r\n` : text, GENERAL_SECTION, key, String(value));
+const setMetaValue = (text: string, key: string, value: string): string =>
+  setIniValue(text === '' ? `[${GENERAL_SECTION}]\r\n` : text, GENERAL_SECTION, key, value);
+const setMetaFlag = (text: string, key: string, value: boolean): string => setMetaValue(text, key, String(value));
 
 /** Both keys, as MO2's own markInstalled writes them: a reader resolves `uninstalled` first, so
  *  a downloaded file uninstalled and then reinstalled would otherwise still read Uninstalled. */
@@ -59,4 +62,15 @@ export function setUninstalledInText(text: string): string {
  *  `setValue("removed", false)`. */
 export function setHiddenInText(text: string, hidden: boolean): string {
   return setMetaFlag(text, 'removed', hidden);
+}
+
+/** What Nexus names of the file, under the keys and in the order MO2's createMetaFile writes them. A key lands
+ *  right after the header, so they go in reversed; a key `info` does not name stays as found. */
+export function setNexusFileInfoInText(text: string, info: NexusFileInfo, gameName: string): string {
+  const written: readonly (readonly [string, string | number | undefined])[] = [
+    ['gameName', gameName], ['modID', info.modID], ['fileID', info.fileID], ['name', info.name], ['modName', info.modName],
+    ['version', info.version], ['fileCategory', info.fileCategory], ['category', info.category], ['author', info.author],
+    ['uploader', info.uploader], ['uploaderUrl', info.uploaderUrl],
+  ];
+  return written.reduceRight((edited, [key, value]) => (value === undefined ? edited : setMetaValue(edited, key, String(value))), text);
 }

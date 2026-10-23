@@ -38,6 +38,11 @@ describe('parseDownloadedFileMeta', () => {
     expect(metaOf('[General]\r\nmodID=9\r\n').installedKey).toBeUndefined();
   });
 
+  it('reads the file ID, and reads 0 as none', () => {
+    expect(metaOf('[General]\r\nfileID=78\r\n').fileID).toBe('78');
+    expect(metaOf('[General]\r\nfileID=0\r\n').fileID).toBeUndefined();
+  });
+
   it('treats fileID=0 as no id, same as an absent fileID', () => {
     expect(metaOf('[General]\r\nmodID=9\r\nfileID=0\r\n').installedKey).toBeUndefined();
   });

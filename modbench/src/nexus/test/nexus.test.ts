@@ -176,3 +176,92 @@ describe('asking for a mod\'s newest version', () => {
     expect(sent).toEqual([]);
   });
 });
+
+describe('asking which file has an MD5', () => {
+  const MD5 = 'd41d8cd98f00b204e9800998ecf8427e';
+  const SEARCH = `https://api.nexusmods.com/v1/games/fallout4/mods/md5_search/${MD5}.json`;
+  const ACTIVE = 1;
+  const ARCHIVED = 7;
+  const hit = (file_name: string, category_id = ACTIVE, mod_id = 7) => ({
+    mod: {
+      mod_id, name: 'Sleep or Save', category_id: 12, author: 'Someone', uploaded_by: 'Uploader', uploaded_users_profile_url: 'https://nexus/users/1',
+    },
+    file_details: { file_id: 78, name: 'Main', version: '1.2', mod_version: '1.0', category_id, file_name },
+  });
+  const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
+  const asking = async (answer: Response | Error, fileName = 'Sleep-7-1-2.7z') => {
+    const { nexus, sent } = nexusAnswering(() => answer);
+    await nexus.keep(GOOD_KEY);
+    return { result: await nexus.fileByMd5({ game: 'fallout4', md5: MD5, fileName }), sent };
+  };
+
+  it('sends the kept key to the MD5 search of the game', async () => {
+    const { sent } = await asking(json([hit('Sleep-7-1-2.7z')]));
+
+    expect(sent.map(({ url, headers }) => [url, headers.get('apikey')])).toEqual([[SEARCH, GOOD_KEY]]);
+  });
+
+  it('gives what Nexus knows of the file and its mod', async () => {
+    const { result } = await asking(json([hit('Sleep-7-1-2.7z')]));
+
+    expect(result).toEqual({
+      found: true,
+      info: {
+        game: 'fallout4', modID: '7', fileID: '78', name: 'Main', version: '1.2', fileCategory: ACTIVE, modName: 'Sleep or Save', category: 12,
+        author: 'Someone', uploader: 'Uploader', uploaderUrl: 'https://nexus/users/1',
+      },
+    });
+  });
+
+  it('gives the mod\'s version when the file has none', async () => {
+    const body = hit('a.7z');
+    const { result } = await asking(json([{ ...body, file_details: { ...body.file_details, version: '' } }]), 'a.7z');
+
+    expect(result).toMatchObject({ found: true, info: { version: '1.0' } });
+  });
+
+  it('gives only what Nexus names', async () => {
+    const { result } = await asking(json([{ mod: { mod_id: 7 }, file_details: { file_id: 78 } }]));
+
+    expect(result).toEqual({ found: true, info: { game: 'fallout4', modID: '7', fileID: '78' } });
+  });
+
+  it.each([
+    ['the one whose file name is the downloaded file\'s, whatever the case', [hit('other.7z', ACTIVE, 1), hit('SLEEP-7-1-2.7Z', ACTIVE, 2)], '2'],
+    ['the only active one when no file name is the downloaded file\'s', [hit('a.7z', ARCHIVED, 1), hit('b.7z', ACTIVE, 2)], '2'],
+    ['the only active one when two files have the downloaded file\'s name', [hit('Sleep-7-1-2.7z', ARCHIVED, 1), hit('Sleep-7-1-2.7z', ACTIVE, 2)], '2'],
+  ])('chooses among several %s', async (_name, hits, modID) => {
+    const { result } = await asking(json(hits));
+
+    expect(result).toMatchObject({ found: true, info: { modID } });
+  });
+
+  it.each([
+    ['two active files have the downloaded file\'s name', [hit('Sleep-7-1-2.7z', ACTIVE, 1), hit('Sleep-7-1-2.7z', ACTIVE, 2)]],
+    ['none is named so and two are active', [hit('a.7z', ACTIVE, 1), hit('b.7z', ACTIVE, 2)]],
+  ])('refuses to choose when %s', async (_name, hits) => {
+    const { result } = await asking(json(hits));
+
+    expect(result).toEqual({ found: false, reason: 'Nexus holds several files with this MD5, and none is the one named so.' });
+  });
+
+  it.each([
+    ['Nexus does not know the file', new Response('', { status: 404 }), 'Nexus does not know this file.'],
+    ['Nexus answers an error', new Response('', { status: 503 }), 'Nexus answered 503.'],
+    ['Nexus cannot be reached', new Error('offline'), 'Could not reach Nexus: offline'],
+    ['Nexus answers no JSON', new Response('<html>', { status: 200 }), 'Nexus answered in a form Modbench does not read.'],
+    ['Nexus answers a list that holds nothing', json([]), 'Nexus does not know this file.'],
+    ['Nexus answers a hit without IDs', json([{ mod: {}, file_details: {} }]), 'Nexus answered in a form Modbench does not read.'],
+  ])('refuses when %s', async (_name, answer, reason) => {
+    const { result } = await asking(answer);
+
+    expect(result).toEqual({ found: false, reason });
+  });
+
+  it('asks nothing while logged out', async () => {
+    const { nexus, sent } = nexusAnswering(acceptingGoodKey);
+
+    expect(await nexus.fileByMd5({ game: 'fallout4', md5: MD5, fileName: 'a.7z' })).toEqual({ found: false, reason: 'You are not logged in to Nexus.' });
+    expect(sent).toEqual([]);
+  });
+});

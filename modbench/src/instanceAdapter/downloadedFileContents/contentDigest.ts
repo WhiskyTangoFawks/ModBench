@@ -1,5 +1,6 @@
 // The one byte-level read in the extension (ADR-0004): the bytes go into a hash and nowhere else.
 
+import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import xxhash from 'xxhash-wasm';
 
@@ -14,4 +15,12 @@ export async function digestOf(path: string): Promise<string> {
   const digest = Buffer.alloc(8);
   digest.writeBigUInt64LE(hash.digest());
   return digest.toString('base64');
+}
+
+/** MD5 in hex, the hash Nexus finds a file by. Streamed. */
+export async function md5Of(path: string): Promise<string> {
+  const hash = createHash('md5');
+  const bytes: AsyncIterable<Buffer> = createReadStream(path);
+  for await (const chunk of bytes) hash.update(chunk);
+  return hash.digest('hex');
 }

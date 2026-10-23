@@ -1,6 +1,7 @@
 import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../../ports/trash';
+import type { NexusFileInfo } from '../../../ports/nexusFileInfo';
 import { ignoreSkippedLink } from '../../files';
 import {
   access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, utimes, writeFile,
@@ -2697,6 +2698,62 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.trashDownloadedFile('manual.zip', () => Promise.resolve())).toEqual({ gone: false });
 
       expect(await isThere(leftover)).toBe(false);
+    });
+
+    describe('what Nexus knows of it', () => {
+      const info: NexusFileInfo = {
+        game: 'fallout4', modID: '4598', fileID: '78', name: 'Main', version: '2.1.5', fileCategory: 1, modName: 'Unofficial Fallout 4 Patch',
+        category: 12, author: 'Unofficial Patch Team', uploader: 'Uploader', uploaderUrl: 'https://nexus/users/1',
+      };
+
+      it('answers the MD5 of a downloaded file with the Nexus domain of the instance\'s game', async () => {
+        expect(await adapter.downloadedFileMd5('manual.zip')).toEqual({ kind: 'read', answer: { game: 'fallout4', md5: 'adcdbd79a8d84175c229b192aadc02f2' } });
+      });
+
+      it.each(['gone.zip', '../manual.zip'])('answers no MD5 for %s, which the downloads folder does not hold', async (name) => {
+        expect(await adapter.downloadedFileMd5(name)).toEqual({ kind: 'read', answer: undefined });
+      });
+
+      it('writes what Nexus names into a metadata made for the file, in the order MO2 writes it', async () => {
+        expect(await adapter.writeNexusFileInfo('manual.zip', info)).toEqual({ gone: false, wrote: true });
+
+        expect(await metaOf('manual.zip')).toBe([
+          '[General]', 'gameName=Fallout4', 'modID=4598', 'fileID=78', 'name=Main', 'modName=Unofficial Fallout 4 Patch', 'version=2.1.5',
+          'fileCategory=1', 'category=12', 'author=Unofficial Patch Team', 'uploader=Uploader', 'uploaderUrl=https://nexus/users/1', '',
+        ].join('\r\n'));
+      });
+
+      it('keeps a value Nexus does not name, and replaces one it does', async () => {
+        await writeFile(join(downloadsFolder(), 'manual.zip.meta'), '[General]\r\nauthor=Hand Written\r\nversion=0.1\r\ninstalled=true\r\n');
+
+        await adapter.writeNexusFileInfo('manual.zip', { game: 'fallout4', modID: '4598', fileID: '78', version: '2.1.5' });
+
+        const meta = await metaOf('manual.zip');
+        expect(meta).toMatch(/^author=Hand Written\r$/m);
+        expect(meta).toMatch(/^installed=true\r$/m);
+        expect(meta).toMatch(/^version=2\.1\.5\r$/m);
+        expect(meta).not.toMatch(/version=0\.1/);
+      });
+
+      it('rewrites nothing for what the metadata already says', async () => {
+        await adapter.writeNexusFileInfo('manual.zip', info);
+
+        expect(await adapter.writeNexusFileInfo('manual.zip', info)).toEqual({ gone: false, wrote: false });
+      });
+
+      it('writes no metadata beside a downloaded file that is gone', async () => {
+        expect(await adapter.writeNexusFileInfo('gone.zip', info)).toEqual({ gone: true });
+
+        expect(await isThere(join(downloadsFolder(), 'gone.zip.meta'))).toBe(false);
+      });
+
+      it('refuses, writing nothing, an instance whose game Nexus has no domain for', async () => {
+        await writeFile(join(root, INI), '[General]\r\ngameName=Morrowind\r\nselected_profile=@ByteArray(Default)\r\n');
+
+        expect((await adapter.downloadedFileMd5('manual.zip')).kind).toBe('unreadable');
+        await expect(adapter.writeNexusFileInfo('manual.zip', info)).rejects.toThrow();
+        expect(await isThere(join(downloadsFolder(), 'manual.zip.meta'))).toBe(false);
+      });
     });
 
     it('moves a downloaded file to the trash, then its metadata when it has any', async () => {

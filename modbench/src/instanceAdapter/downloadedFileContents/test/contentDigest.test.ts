@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { digestOf } from '../contentDigest';
+import { digestOf, md5Of } from '../contentDigest';
 
 describe('digestOf', () => {
   it.each([
@@ -22,5 +22,21 @@ describe('digestOf', () => {
 
   it('rejects with the reason when the file cannot be read, so the caller answers the reason', async () => {
     await expect(digestOf(join(tmpdir(), 'medit-digest-missing', 'none.dds'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+describe('md5Of', () => {
+  it.each([
+    ['', 'd41d8cd98f00b204e9800998ecf8427e'],
+    ['hello', '5d41402abc4b2a76b9719d911017c592'],
+  ])('answers the hex MD5 of %j', async (body, md5) => {
+    const root = await mkdtemp(join(tmpdir(), 'medit-md5-'));
+    try {
+      const path = join(root, 'a.7z');
+      await writeFile(path, body);
+      expect(await md5Of(path)).toBe(md5);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

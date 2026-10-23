@@ -36,6 +36,7 @@ import { join } from 'node:path';
 import {
   registerDownloadsExcludedToggleCommands,
   registerDownloadsMultiRowCommands,
+  registerDownloadsQueryInfoCommand,
   registerDownloadsSingleRowCommands,
   registerDownloadsSortCommand,
 } from '../DownloadsPanel';
@@ -43,6 +44,7 @@ import { DownloadedFileNode, DownloadsProvider } from '../DownloadsProvider';
 import { downloadedFileNodeFixture } from '../../test/mo2/downloadedFileNodeFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { downloadedFileCommands } from '../../downloadedFileCommands/downloads';
+import type { QueryInfo } from '../../downloadedFileCommands/queryInfo';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import type { MoveToTrash } from '../../ports/trash';
@@ -451,6 +453,81 @@ describe('the Downloads gestures called by the agent', () => {
     await expect(invoke(`modbench.downloadedFile.${verb}`, new AgentCall([{ kind: 'mod', name: 'a.7z' }], {}))).rejects.toBeInstanceOf(Refusal);
 
     expect(fake.calls).toEqual([]);
+  });
+});
+
+describe('registerDownloadsQueryInfoCommand', () => {
+  beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
+
+  const QUERY = 'modbench.downloadedFile.queryInfo';
+  const queryInfo = vi.fn<QueryInfo>();
+  const register = (reporter = recordingReporter(), instance = instanceThatReads) => {
+    registerDownloadsQueryInfoCommand(queryInfo, instance, reporter, () => [node(ROOT, 'selected.7z')]);
+    return reporter;
+  };
+
+  it('asks about the selected files, then reads the instance again, in one bar', async () => {
+    queryInfo.mockResolvedValue({ applied: true, outcome: { landed: ['a.7z', 'b.7z'], refused: [] } });
+    register();
+
+    await invoke(QUERY, node(ROOT, 'a.7z'), [node(ROOT, 'a.7z'), node(ROOT, 'b.7z')]);
+
+    expect(queryInfo).toHaveBeenCalledWith(['a.7z', 'b.7z']);
+    expect(progressSteps).toEqual(['progress opens on modbench.downloads', 'Instance loader: read every file again', 'progress closes']);
+  });
+
+  it('says in one line how many files it filled', async () => {
+    queryInfo.mockResolvedValue({ applied: true, outcome: { landed: ['a.7z', 'b.7z'], refused: [] } });
+    const reporter = register();
+
+    await invoke(QUERY, node(ROOT, 'a.7z'), [node(ROOT, 'a.7z'), node(ROOT, 'b.7z')]);
+
+    expect(reporter.landings).toEqual(['Query info: 2 of 2 files filled.']);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('warns once, naming each file Nexus does not know in the Output', async () => {
+    queryInfo.mockResolvedValue({
+      applied: true,
+      outcome: { landed: ['b.7z'], refused: [{ item: 'a.7z', reason: 'Nexus does not know this file.' }, { item: 'c.7z', reason: 'EACCES' }] },
+    });
+    const reporter = register();
+
+    await invoke(QUERY, node(ROOT, 'a.7z'), [node(ROOT, 'a.7z'), node(ROOT, 'b.7z'), node(ROOT, 'c.7z')]);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'warning', message: 'Query info: 1 of 3 files filled.', detail: '"a.7z" (Nexus does not know this file.)\n"c.7z" (EACCES)',
+    }]);
+    expect(reporter.landings).toEqual([]);
+  });
+
+  it('reports a refused selection as an error', async () => {
+    queryInfo.mockResolvedValue({ applied: false, refusal: 'You are not logged in to Nexus.' });
+    const reporter = register();
+
+    await invoke(QUERY, node(ROOT, 'a.7z'));
+
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'You are not logged in to Nexus.', detail: undefined }]);
+  });
+
+  it('asks about the files an agent names, never the selection, and answers the outcome without reporting it', async () => {
+    const outcome = { landed: ['a.7z'], refused: [] };
+    queryInfo.mockResolvedValue({ applied: true, outcome });
+    const reporter = register();
+
+    const answered = await invoke(QUERY, new AgentCall([{ kind: 'downloadedFile', name: 'a.7z' }], {}));
+
+    expect(queryInfo).toHaveBeenCalledWith(['a.7z']);
+    expect(answered).toEqual({ applied: true, outcome, partial: [] });
+    expect([reporter.reports, reporter.landings]).toEqual([[], []]);
+  });
+
+  it('refuses an Argument that is not a downloaded file, asking nothing', async () => {
+    register();
+
+    await expect(invoke(QUERY, new AgentCall([{ kind: 'mod', name: 'a.7z' }], {}))).rejects.toBeInstanceOf(Refusal);
+
+    expect(queryInfo).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { DownloadedFileSortColumn } from './downloadedFileRows';
 import type { DeletedDownloadedFile, DownloadedFileCommands } from '../downloadedFileCommands/downloads';
+import type { QueryInfo } from '../downloadedFileCommands/queryInfo';
 import type { DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { DOWNLOADS_KEY_ARGS } from './keyContext';
 import { pluralArgument, registerGesture, singularArgument } from '../drivingLib/gestureEntry';
@@ -122,6 +123,36 @@ export function registerDownloadsMultiRowCommands(
     registerAgentGesture('modbench.downloadedFile.exclude', viewSelection, markGesture(commands, instance, reporter, true)),
     registerAgentGesture('modbench.downloadedFile.include', viewSelection, markGesture(commands, instance, reporter, false)),
   ];
+}
+
+function queryInfoGesture(
+  queryInfo: QueryInfo, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter,
+): DownloadsGesture<readonly string[], string> {
+  return {
+    fromView: (entry) => {
+      const names = pluralArgument(entry, 'downloadedFile').map((node) => node.argument.row.name);
+      return names.length === 0 ? undefined : names;
+    },
+    fromAgent: ({ argument }) => argument.map(downloadedFileNameOf),
+    run: (names) => runDownloadsWriting(instance, async () => {
+      const result = await queryInfo(names);
+      return result.applied ? { ...result, partial: [] } : result;
+    }),
+    report: (result, names) => {
+      if (!result.applied) { reporter.report('error', result.refusal, result.detail); return; }
+      const { landed, refused } = result.outcome;
+      const line = `Query info: ${landed.length} of ${names.length} files filled.`;
+      if (refused.length === 0) reporter.landed(line);
+      else reporter.report('warning', line, refused.map(({ item, reason }) => `"${item}" (${reason})`).join('\n'));
+    },
+  };
+}
+
+/** Kept apart from the multi-row commands: it alone asks Nexus. */
+export function registerDownloadsQueryInfoCommand(
+  queryInfo: QueryInfo, instance: Pick<Instance, 'value' | 'refresh'>, reporter: Reporter, viewSelection: () => readonly DownloadsTreeNode[],
+): vscode.Disposable {
+  return registerAgentGesture('modbench.downloadedFile.queryInfo', viewSelection, queryInfoGesture(queryInfo, instance, reporter));
 }
 
 // Sorting and excluded-row filtering already happen inside DownloadsProvider's load(), so these

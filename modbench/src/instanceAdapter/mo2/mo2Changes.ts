@@ -8,18 +8,18 @@ import {
   type PluginEntry,
 } from '../../loadOrderFileCodec/pluginsText';
 import { loadOrderTextOf } from './codecs/loadOrderText';
-import { parseDownloadedFileMeta, setHiddenInText, setInstalledInText, setUninstalledInText } from './codecs/downloads';
+import { parseDownloadedFileMeta, setHiddenInText, setInstalledInText, setNexusFileInfoInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadedFileMeta, trashDownloadedFileMeta } from './downloadedFileMeta';
 import { ensureDir, exists, putIfChanged, withLock, write } from '../files';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
 import { downloadedFilePath, pluginOrderFiles, settingsFile } from './layout';
 import { sourceModsIn } from './sourceMods';
-import { currentDownloadsDir, entryKey, folderHolding, newModFolder, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
+import { currentDownloadsDir, entryKey, folderHolding, newModFolder, nexusGameOfInstance, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
 
 type Mo2Changes = Pick<InstanceAdapter,
-  | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile'
+  | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile' | 'writeNexusFileInfo'
   | 'trashDownloadedFile' | 'selectProfile'>;
 
 async function heldDownloadedFile(context: Mo2Context, name: string): Promise<{ downloadsDir: string; file: string } | undefined> {
@@ -123,6 +123,14 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
       if (held === undefined) return { gone: true };
       const { downloadsDir } = held;
       const { wrote } = await spliceDownloadedFileMeta(downloadsDir, name, (text) => markIn(text, mark));
+      return { gone: false, wrote };
+    },
+
+    async writeNexusFileInfo(name, info) {
+      const held = await heldDownloadedFile(context, name);
+      if (held === undefined) return { gone: true };
+      const { release } = await nexusGameOfInstance(context);
+      const { wrote } = await spliceDownloadedFileMeta(held.downloadsDir, name, (text) => setNexusFileInfoInText(text, info, release));
       return { gone: false, wrote };
     },
 

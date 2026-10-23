@@ -1,6 +1,8 @@
 // What every part of MO2's implementation shares: the instance root, the two resolvers over one
 // read of ModOrganizer.ini, the watch, and the reads and name rules more than one part uses.
 
+import { gameReleaseForGame, nexusDomainForMetaGame } from '../../tables/gamePaths';
+import { readGameName } from './codecs/modOrganizerIni';
 import { errorMessage } from '../../ports/errorMessage';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
@@ -29,6 +31,15 @@ export const entryKey = (entry: EntryRef): string =>
 /** The entry of `entry`'s kind `order` lists, matched as MO2 matches names. */
 export const listedAs = (order: readonly ModlistEntry[], entry: EntryRef): ModlistEntry | undefined =>
   order.find((e) => e.kind === entry.kind && entryKey(e) === entryKey(entry));
+
+/** The instance's game as a downloaded file's metadata spells it, with its Nexus domain; rejects when Nexus has no game for it. */
+export async function nexusGameOfInstance({ instanceRoot }: Mo2Context): Promise<{ release: string; domain: string }> {
+  const gameName = readGameName(await get(settingsFile(instanceRoot)));
+  const release = gameReleaseForGame(gameName);
+  const domain = release === undefined ? undefined : nexusDomainForMetaGame(release);
+  if (release === undefined || domain === undefined) throw new Error(`Nexus has no game for '${gameName}'`);
+  return { release, domain };
+}
 
 /** The mod folders as entries; the reserved overwrite name holds none. */
 export async function listModFolders(
