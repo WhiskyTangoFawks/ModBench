@@ -8,5 +8,5 @@ import { wabbajackPublisher } from './wabbajack/wabbajackPublisher';
 export const isInstance = isMo2Instance;
 export function adapterForInstance(options: Mo2InstanceOptions): InstanceAdapter {
   const publisher = wabbajackPublisher(options.instanceRoot, { neverShipped: [overwriteDir(options.instanceRoot)], enabledMods: enabledModsIn(options.instanceRoot) });
-  return withPublisher(mo2InstanceAdapter({ ...options, publisherConfigurationFile: publisher.configurationFile }), publisher);
+  return withPublisher(mo2InstanceAdapter(options, publisher.configurationFile), publisher);
 }

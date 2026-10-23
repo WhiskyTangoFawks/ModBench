@@ -43,8 +43,6 @@ interface Mo2Machine {
 export type Mo2InstanceOptions = {
   instanceRoot: string;
   installationFileReader: InstallationFileReader;
-  /** The publisher's configuration file, which git holds by tokens as it does MO2's. */
-  publisherConfigurationFile?: ConfigurationFile;
 } & (Mo2Machine | { context: Mo2Context });
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
@@ -54,7 +52,7 @@ export function isMo2Instance(root: string): boolean {
   return existsSync(settingsFile(root)) && existsSync(modsDir(root)) && existsSync(profilesDir(root));
 }
 
-export function mo2InstanceAdapter(options: Mo2InstanceOptions): ManagerAdapter {
+export function mo2InstanceAdapter(options: Mo2InstanceOptions, publisherFile: ConfigurationFile | undefined): ManagerAdapter {
   const { instanceRoot, installationFileReader } = options;
   const context: Mo2Context = 'context' in options ? options.context : {
     instanceRoot,
@@ -65,7 +63,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): ManagerAdapter 
     mo2Running: () => programRunning(MO2_PROGRAM),
   };
   const hashes = hashIndex(hashIndexDir(instanceRoot), installationFileReader);
-  const source = readingSource(context, options.publisherConfigurationFile);
+  const source = readingSource(context, publisherFile);
   const gameFolder = async (): Promise<GameFolder> => (await source.settings()).gameFolder();
   return {
     names: source.names,
@@ -73,7 +71,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): ManagerAdapter 
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder,
-    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source), ...mo2Repository(context, hashes), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, options.publisherConfigurationFile),
+    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source), ...mo2Repository(context, hashes), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, publisherFile),
     originFileHash: hashes.originFileHash,
     statCacheFolder: statCacheDir(instanceRoot),
     subscribe: (listener) => context.watch.subscribe(listener),

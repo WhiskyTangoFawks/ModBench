@@ -82,7 +82,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       gameFolderSetting: fixedGameFolderSetting(),
       detectors: NO_DETECTORS,
       installationFileReader: fakeInstallationFileReader([]),
-    });
+    }, undefined);
     for (const [before] of NAMED_FOR_IT.slice(1)) await put(before);
     for (const path of NOT_NAMED_FOR_IT) await put(path);
     await put(SECONDARY_PLUGINS, '*Unofficial Fallout 4 Patch.esp\r\nPatch Mod.esp\r\n*Last.esp\r\n');

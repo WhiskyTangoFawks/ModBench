@@ -22,14 +22,14 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const adapterAt = (instanceRoot: string, publisherConfigurationFile?: ConfigurationFile) => mo2InstanceAdapter({
+const adapterAt = (instanceRoot: string, publisherFile: ConfigurationFile | undefined) => mo2InstanceAdapter({
   instanceRoot, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS,
-  installationFileReader: fakeInstallationFileReader([]), publisherConfigurationFile,
-});
+  installationFileReader: fakeInstallationFileReader([]),
+}, publisherFile);
 
 async function instance() {
   root = await mkdtemp(join(tmpdir(), 'modbench-mo2-repository-'));
-  return adapterAt(root);
+  return adapterAt(root, undefined);
 }
 
 async function put(path: string, text = 'x'): Promise<void> {
@@ -160,7 +160,7 @@ describe('the MO2 adapter\'s repository', () => {
       runGit('init', '--quiet');
       await before.refuseUnpublishedPins();
       await before.writePathTokens();
-      const adapter = adapterAt(root, { name: 'publisher.json', spelling: { native: true, separators: [], starts: ['"'], ends: '"' } });
+      const adapter = adapterAt(root, { name: 'publisher.json', spelling: { separators: [], ends: '"' } });
 
       const beforeCovered = (await adapter.reading()).repositorySetUp;
       await adapter.writePathTokens();

@@ -58,12 +58,12 @@ const adapterAt = (
   installationFileReader: InstallationFileReader = fakeInstallationFileReader([]),
 ): ManagerAdapter => mo2InstanceAdapter({
   instanceRoot, gameFolderSetting: fixedGameFolderSetting(gameFolderSettingValue, gameFolderSettingChanged), detectors: NO_DETECTORS, installationFileReader,
-});
+}, undefined);
 
 const watchedOver = (context: Mo2Context): ReadingSource & Pick<ManagerAdapter, 'subscribe'> =>
-  ({ ...readingSource(context), subscribe: (listener) => context.watch.subscribe(listener) });
+  ({ ...readingSource(context, undefined), subscribe: (listener) => context.watch.subscribe(listener) });
 
-const sourceAt = (instanceRoot: string, gameFolderSettingValue?: string): ReadingSource => readingSource(contextOver(instanceRoot, { gameFolderSettingValue }));
+const sourceAt = (instanceRoot: string, gameFolderSettingValue?: string): ReadingSource => readingSource(contextOver(instanceRoot, { gameFolderSettingValue }), undefined);
 
 async function installHeld(root: string, target: InstallTarget): Promise<{ extraction: string; settle: () => Promise<void> }> {
   const release = fakeInstallationFileReader(['New.esp']);
@@ -752,7 +752,7 @@ describe('the MO2 Instance adapter', () => {
           await mkdir(myGames, { recursive: true });
           myGamesSource = readingSource(contextOver(root, {
             detectors: { ...NO_DETECTORS, winePrefix: () => Promise.resolve(prefix), documents: () => Promise.resolve(documents) },
-          }));
+          }), undefined);
           await writeFile(join(game, 'Fallout4_Default.ini'), '[Archive]\nsResourceArchiveList=Default.ba2\nsResourceArchiveList2=Default2.ba2\n');
           await localSettings(false);
         });

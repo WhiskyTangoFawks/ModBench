@@ -13,7 +13,7 @@ import { watchFiles } from '../watchFiles';
 // program's, a Windows one in JSON's escaped backslashes (AbsolutePathConverter).
 const COMPILER_SETTINGS: ConfigurationFile = {
   name: 'compiler_settings.json',
-  spelling: { native: true, separators: [{ first: '\\\\', rest: '\\\\' }], starts: ['"'], ends: '"' },
+  spelling: { separators: [{ first: '\\\\', rest: '\\\\' }], ends: '"', nativeStarts: ['"'] },
 };
 
 /** What Wabbajack's compiler asks of the mod manager. */

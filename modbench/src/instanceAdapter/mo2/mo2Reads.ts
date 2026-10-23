@@ -65,7 +65,7 @@ export async function readMetaIni(context: Mo2Context, mod: string, folders: Mod
   return folder === undefined ? {} : readOrAbsent(async () => parseMetaIni(await get(modMetaFileIn(folder))), {});
 }
 
-export function readingSource(context: Mo2Context, publisherFile?: ConfigurationFile): ReadingSource {
+export function readingSource(context: Mo2Context, publisherFile: ConfigurationFile | undefined): ReadingSource {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch, mo2Running } = context;
   return {
     names: MO2_NAMES,

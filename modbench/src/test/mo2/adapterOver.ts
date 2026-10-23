@@ -49,7 +49,7 @@ export function contextOver(root: string, answers: AdapterAnswers = {}): Mo2Cont
 }
 
 /** The parts of one reading, each asked on its own. */
-export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(contextOver(root, answers));
+export const sourceOver = (root: string, answers: AdapterAnswers = {}): ReadingSource => readingSource(contextOver(root, answers), undefined);
 
 /** The adapter the build composes over `root`, MO2's context fixed as `answers` say. */
 export const adapterOver = (root: string, answers: AdapterAnswers = {}): InstanceAdapter =>

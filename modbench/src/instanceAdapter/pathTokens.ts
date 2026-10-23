@@ -7,19 +7,17 @@ export interface TokenFolders {
   readonly game: string | undefined;
 }
 
-// How a file spells a path: the separator after its root, then between its names.
 interface Separator {
   readonly first: string;
   readonly rest: string;
 }
 
-/** How a file spells a path: as a Windows program on Wine does and, if native, as this machine does. A path runs from
- *  a line start or a `starts` to a separator, an `ends` or a line end. */
+/** How a file spells a path: as a Windows program does, on Wine on Linux, and in a native file as this machine does,
+ *  after a line start or a `nativeStarts`. A path ends at a separator or an `ends`. */
 export interface PathSpelling {
-  readonly native: boolean;
   readonly separators: readonly Separator[];
-  readonly starts: readonly string[];
   readonly ends: string;
+  readonly nativeStarts?: readonly string[];
 }
 
 /** The sed expressions that put each token in place of its value, and each value back. */
@@ -32,46 +30,53 @@ interface Spelling {
   readonly token: string;
   readonly text: string;
   readonly caseless: (index: number) => boolean;
+  /** The sed group a path starts after. */
+  readonly start: string;
 }
 
 interface Rooted {
   readonly root: (separator: Separator) => string;
   readonly segments: readonly string[];
+  readonly start: string;
 }
 
 const segmentsOf = (path: string): string[] => path.split(/[\\/]+/).filter((segment) => segment !== '');
+
+const startAfter = (alternatives: readonly string[]): string => `\\(${['^', ...alternatives].join('\\|')}\\)`;
+
+// A drive's letter follows no name's character in a path; a share's root can follow a drive's, and a POSIX path a name.
+const DRIVE_START = startAfter(['[^A-Za-z0-9]']);
+const SHARE_START = startAfter(['[^A-Za-z0-9:/\\\\]']);
 
 // A Windows program spells a path on a drive or a share, whose root is its name separator twice. Wine's drive Z is the
 // root, and drive C its prefix's drive_c, which the program names first.
 function rootings(folder: string, platform: NodeJS.Platform): Rooted[] {
   if (platform === 'win32') {
     const drive = /^([A-Za-z]):[\\/]/.exec(folder)?.[1]?.toUpperCase();
-    if (drive !== undefined) return [{ root: ({ first }) => `${drive}:${first}`, segments: segmentsOf(folder.slice(2)) }];
-    return /^[\\/]{2}[^\\/]/.test(folder) ? [{ root: ({ rest }) => rest + rest, segments: segmentsOf(folder) }] : [];
+    if (drive !== undefined) return [{ root: ({ first }) => `${drive}:${first}`, segments: segmentsOf(folder.slice(2)), start: DRIVE_START }];
+    return /^[\\/]{2}[^\\/]/.test(folder) ? [{ root: ({ rest }) => rest + rest, segments: segmentsOf(folder), start: SHARE_START }] : [];
   }
   if (!folder.startsWith('/')) return [];
   const segments = segmentsOf(folder);
-  const onZ: Rooted = { root: ({ first }) => `Z:${first}`, segments };
+  const onZ: Rooted = { root: ({ first }) => `Z:${first}`, segments, start: DRIVE_START };
   const driveC = segments.indexOf('drive_c');
-  return driveC === -1 ? [onZ] : [{ root: ({ first }) => `C:${first}`, segments: segments.slice(driveC + 1) }, onZ];
+  return driveC === -1 ? [onZ] : [{ root: ({ first }) => `C:${first}`, segments: segments.slice(driveC + 1), start: DRIVE_START }, onZ];
 }
 
 const POSIX: Separator = { first: '/', rest: '/' };
 
-// On Windows a native spelling is a Windows program's, so it comes first and takes the token, and puts back the first
-// separator's spelling.
-function spellingsOf(name: string, folder: string | undefined, platform: NodeJS.Platform, { native, separators }: PathSpelling): Spelling[] {
+function spellingsOf(name: string, folder: string | undefined, platform: NodeJS.Platform, { separators, nativeStarts }: PathSpelling): Spelling[] {
   if (folder === undefined) return [];
   const caseless = platform === 'win32' ? () => true : (index: number) => index === 0;
   const spelt = (rooted: readonly Rooted[], over: readonly Separator[], token: (separator: Separator) => string): Spelling[] =>
-    rooted.flatMap(({ root, segments }) => (segments.length === 0 ? [] : over.map((separator) => ({
-      token: token(separator), text: root(separator) + segments.join(separator.rest), caseless,
+    rooted.flatMap(({ root, segments, start }) => (segments.length === 0 ? [] : over.map((separator) => ({
+      token: token(separator), text: root(separator) + segments.join(separator.rest), caseless, start,
     }))));
   const windows = spelt(rootings(folder, platform), separators, ({ first }) => `{${name}:${first}}`);
-  if (!native) return windows;
+  if (nativeStarts === undefined) return windows;
   const own = platform === 'win32'
     ? spelt(rootings(folder, platform), separators, () => `{${name}}`)
-    : spelt([{ root: ({ first }) => first, segments: segmentsOf(folder) }], [POSIX], () => `{${name}}`);
+    : spelt([{ root: ({ first }) => first, segments: segmentsOf(folder), start: startAfter(nativeStarts.map(sedLiteral)) }], [POSIX], () => `{${name}}`);
   return [...own, ...windows];
 }
 
@@ -108,11 +113,10 @@ export function folderTokens({ instance, game }: TokenFolders, platform: NodeJS.
   const gameSpellings = spellingsOf('game folder', game, platform, spelling);
   const cleaned = firstOfEach([...instanceSpellings, ...(game !== undefined && isInside(game, instance, platform) ? [] : gameSpellings)], ({ text }) => text)
     .sort((a, b) => b.text.length - a.text.length);
-  const start = `\\(${['^', ...spelling.starts.map(sedLiteral)].join('\\|')}\\)`;
   const boundary = `[/\\\\${spelling.ends}[:cntrl:]]`;
   return {
     clean: cleaned.flatMap((spelt) => {
-      const [pattern, token] = [patternOf(spelt), sedReplacement(spelt.token)];
+      const [start, pattern, token] = [spelt.start, patternOf(spelt), sedReplacement(spelt.token)];
       return [sedSubstitution(`${start}${pattern}\\(${boundary}\\)`, `\\1${token}\\2`, 'g'), sedSubstitution(`${start}${pattern}$`, `\\1${token}`)];
     }),
     smudge: firstOfEach([...instanceSpellings, ...gameSpellings], ({ token }) => token)

@@ -12,6 +12,7 @@ import type { GameDetectors } from '../../gameFolder/gameFolderResolver';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { mo2InstanceAdapter } from '../mo2Instance';
+import { wabbajackPublisher } from '../../wabbajack/wabbajackPublisher';
 
 const made: string[] = [];
 
@@ -31,12 +32,14 @@ async function gameFolder(): Promise<string> {
   return game;
 }
 
-const PUBLISHER_FILE = 'publisher.json';
+const PUBLISHER = wabbajackPublisher('', { neverShipped: [], enabledMods: () => Promise.resolve([]) }).configurationFile;
+const PUBLISHER_FILE = PUBLISHER.name;
 
 const adapterOver = (root: string, { game, detectors = NO_DETECTORS }: { game?: string; detectors?: GameDetectors } = {}) => mo2InstanceAdapter({
   instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(game), detectors, installationFileReader: fakeInstallationFileReader([]),
-  publisherConfigurationFile: { name: PUBLISHER_FILE, spelling: { native: true, separators: [{ first: '\\\\', rest: '\\\\' }], starts: ['"'], ends: '"' } },
-});
+}, PUBLISHER);
+
+const steamAt = (game: string): GameDetectors => ({ ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(game, 'Data') }) });
 
 async function put(root: string, path: string, text: string): Promise<void> {
   await mkdir(dirname(join(root, path)), { recursive: true });
@@ -86,6 +89,9 @@ describe('the MO2 adapter\'s path tokens', () => {
   it.each([
     ['unquoted in a program\'s arguments', (root: string) => `4\\arguments=-o ${onWineDrive(root, '\\\\')}\\\\out`, '4\\arguments=-o {instance folder:\\\\}\\\\out'],
     ['in a list\'s second entry', (root: string) => `paths=${onWineDrive(root, '/')}/a, ${onWineDrive(root, '/')}/b`, 'paths={instance folder:/}/a, {instance folder:/}/b'],
+    ['after an option\'s colon', (root: string) => `4\\arguments="-o:${onWineDrive(root, '\\\\')}\\\\out"`, '4\\arguments="-o:{instance folder:\\\\}\\\\out"'],
+    ['after a semicolon', (root: string) => `paths=${onWineDrive(root, '/')}/a;${onWineDrive(root, '/')}/b`, 'paths={instance folder:/}/a;{instance folder:/}/b'],
+    ['after a comma', (root: string) => `paths=${onWineDrive(root, '/')}/a,${onWineDrive(root, '/')}/b`, 'paths={instance folder:/}/a,{instance folder:/}/b'],
   ])('holds the instance folder by a token %s', async (_place, written, token) => {
     const { root, adapter } = await instanceRepository([]);
     await put(root, 'ModOrganizer.ini', SETTINGS([written(root)]));
@@ -182,7 +188,21 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(() => execFileSync('git', ['add', '--', 'ModOrganizer.ini'], { cwd: root, stdio: 'pipe' })).toThrow(/ModOrganizer\.ini/);
   });
 
-  describe('in the publisher\'s configuration, spelt natively', () => {
+  async function cloned(lines: (origin: string, game: string) => readonly string[], detectors?: GameDetectors, publisherSettings?: (origin: string, game: string) => string) {
+    const game = await gameFolder();
+    const { root, adapter } = await instanceRepository([], game);
+    await put(root, 'ModOrganizer.ini', SETTINGS(lines(root, game)));
+    if (publisherSettings !== undefined) await put(root, PUBLISHER_FILE, publisherSettings(root, game));
+    await adapter.writePathTokens();
+    git(root, 'add', '--', 'ModOrganizer.ini', ...(publisherSettings === undefined ? [] : [PUBLISHER_FILE]));
+    git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'paths');
+    const clone = join(await folder('clone'), 'modlist');
+    git(dirname(clone), 'clone', '--quiet', '--config', 'core.autocrlf=false', root, clone);
+    await mkdir(join(clone, 'mods'));
+    return { clone, adapter: adapterOver(clone, { detectors }), game };
+  }
+
+  describe('in the publisher\'s configuration', () => {
     const publisherSettings = (instance: string, game: string): string =>
       JSON.stringify({ Source: instance, Downloads: `${instance}${sep}downloads`, GamePath: game }, null, 2);
 
@@ -197,42 +217,17 @@ describe('the MO2 adapter\'s path tokens', () => {
         .toEqual([publisherSettings('{instance folder}', '{game folder}'), publisherSettings(root, game)]);
     });
 
-    it('puts a clone\'s own folders in place of their tokens, and git holds the clone as committed', async () => {
-      const game = await gameFolder();
-      const { root, adapter } = await instanceRepository([], game);
-      await put(root, PUBLISHER_FILE, publisherSettings(root, game));
-      await adapter.writePathTokens();
-      git(root, 'add', '--', PUBLISHER_FILE, 'ModOrganizer.ini');
-      git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'paths');
-      const clone = join(await folder('clone'), 'modlist');
-      git(dirname(clone), 'clone', '--quiet', '--config', 'core.autocrlf=false', root, clone);
-      await mkdir(join(clone, 'mods'));
-      const cloneGame = await gameFolder();
+    it.each([
+      ['natively', (folder: string) => folder],
+      ['by a Windows program on Wine', (folder: string) => onWineDrive(folder, '\\')],
+    ])('puts a clone\'s own folders in place of their tokens, spelt %s, and git holds the clone as committed', async (_spelt, spelt) => {
+      const steam = await gameFolder();
+      const { clone, adapter } = await cloned(() => [], steamAt(steam), (origin, game) => publisherSettings(spelt(origin), spelt(game)));
 
-      await adapterOver(clone, { game: cloneGame }).writePathTokens();
+      await adapter.writePathTokens();
 
       expect([await readFile(join(clone, PUBLISHER_FILE), 'utf8'), git(clone, 'status', '--porcelain')])
-        .toEqual([publisherSettings(clone, cloneGame), '']);
-    });
-
-    it.skipIf(process.platform === 'win32')('(on Windows a Windows program spells a path natively) holds a Windows program\'s spelling on Wine by its Windows token, and a clone by its own', async () => {
-      const game = await gameFolder();
-      const { root, adapter } = await instanceRepository([], game);
-      await put(root, PUBLISHER_FILE, publisherSettings(onWineDrive(root, '\\'), onWineDrive(game, '\\')));
-      await adapter.writePathTokens();
-      const committed = held(root, PUBLISHER_FILE);
-      git(root, 'add', '--', 'ModOrganizer.ini');
-      git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'paths');
-      const clone = join(await folder('clone'), 'modlist');
-      git(dirname(clone), 'clone', '--quiet', '--config', 'core.autocrlf=false', root, clone);
-      await mkdir(join(clone, 'mods'));
-      const cloneGame = await gameFolder();
-
-      await adapterOver(clone, { game: cloneGame }).writePathTokens();
-
-      expect([committed, await readFile(join(clone, PUBLISHER_FILE), 'utf8'), git(clone, 'status', '--porcelain')]).toEqual([
-        publisherSettings('{instance folder:\\}', '{game folder:\\}'), publisherSettings(onWineDrive(clone, '\\'), onWineDrive(cloneGame, '\\')), '',
-      ]);
+        .toEqual([publisherSettings(spelt(clone), spelt(steam)), '']);
     });
 
     it('answers each path outside the two folders as a commit would hold it', async () => {
@@ -247,19 +242,6 @@ describe('the MO2 adapter\'s path tokens', () => {
   });
 
   describe('on a clone', () => {
-    async function cloned(lines: (origin: string, game: string) => readonly string[], detectors?: GameDetectors) {
-      const game = await gameFolder();
-      const { root, adapter } = await instanceRepository([], game);
-      await put(root, 'ModOrganizer.ini', SETTINGS(lines(root, game)));
-      await adapter.writePathTokens();
-      git(root, 'add', '--', 'ModOrganizer.ini');
-      git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'paths');
-      const clone = join(await folder('clone'), 'modlist');
-      git(dirname(clone), 'clone', '--quiet', '--config', 'core.autocrlf=false', root, clone);
-      await mkdir(join(clone, 'mods'));
-      return { clone, adapter: adapterOver(clone, { detectors }), game };
-    }
-
     it('puts the clone\'s own instance folder in place of its path token, and git holds the clone as committed', async () => {
       const { clone, adapter } = await cloned((origin) => [`1\\binary=${onWineDrive(origin, '/')}/tools/xEdit.exe`]);
 
@@ -291,8 +273,7 @@ describe('the MO2 adapter\'s path tokens', () => {
 
     it('finds the game folder where the game path is a path token, and puts it in place of the token', async () => {
       const steam = await gameFolder();
-      const detectors: GameDetectors = { ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(steam, 'Data') }) };
-      const { clone, adapter } = await cloned((_origin, game) => [`gamePath=@ByteArray(${onWineDrive(game, '\\\\')})`], detectors);
+      const { clone, adapter } = await cloned((_origin, game) => [`gamePath=@ByteArray(${onWineDrive(game, '\\\\')})`], steamAt(steam));
 
       await adapter.writePathTokens();
 
@@ -352,5 +333,24 @@ describe('the MO2 adapter\'s path tokens', () => {
 
     const config = git(root, 'config', '--local', '--list').split('\n').filter((line) => line.includes('modbench-'));
     expect([config, await readFile(join(root, '.git', 'info', 'attributes'), 'utf8').catch(() => '')]).toEqual([[], '']);
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) takes back only the filter a failed write added, and keeps each the repository held', async () => {
+    const { root } = await instanceRepository([]);
+    await put(root, 'profiles/Default/Fallout4Prefs.ini', 'x=1\r\n');
+    const withoutPublisher = mo2InstanceAdapter({
+      instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS, installationFileReader: fakeInstallationFileReader([]),
+    }, undefined);
+    await withoutPublisher.writePathTokens();
+    const written = async () => [
+      git(root, 'config', '--local', '--list').split('\n').filter((line) => line.includes('modbench-')),
+      await readFile(join(root, '.git', 'info', 'attributes'), 'utf8'),
+    ];
+    const before = await written();
+    await chmod(join(root, 'profiles/Default/Fallout4Prefs.ini'), 0o000);
+
+    await expect(adapterOver(root).writePathTokens()).rejects.toThrow();
+
+    expect(await written()).toEqual(before);
   });
 });

@@ -17,12 +17,10 @@ import type { Mo2Context } from './mo2Context';
 
 type Mo2PathTokens = Pick<InstanceAdapter, 'writePathTokens' | 'pathsOutsideFolders'>;
 
-// MO2 is a Windows program. Qt's INI escapes a backslash, MO2 can write a drive's own separator twice, and a path
-// follows a key, a quote, @ByteArray's parenthesis, or a space in arguments or a list.
+// MO2 is a Windows program. Qt's INI escapes a backslash, MO2 can write a drive's own separator twice, and a value can
+// end at a quote or at @ByteArray's parenthesis.
 const SPELLING: PathSpelling = {
-  native: false,
   separators: [{ first: '/', rest: '/' }, { first: '\\', rest: '\\' }, { first: '\\\\', rest: '\\\\' }, { first: '\\\\\\\\', rest: '\\\\' }],
-  starts: ['=', '"', '@ByteArray(', ' '],
   ends: '")',
 };
 
@@ -33,11 +31,22 @@ const ACCOUNT_TOKEN = '{account}';
 // From the [Settings] header to the next section's.
 const IN_SETTINGS = String.raw`/^\[Settings\]/,/^\[/`;
 
+interface CoveredFile {
+  /** As git's attributes match it. */
+  readonly pattern: string;
+  readonly driver: string;
+  readonly spelling: PathSpelling;
+  readonly holdsAccounts: boolean;
+}
+
 // The mod manager's configuration holds the accounts, so its filter is a driver of its own.
-const FOLDERS_DRIVER = 'modbench-tokens';
-const SETTINGS_DRIVER = 'modbench-settings-tokens';
-const PUBLISHER_DRIVER = 'modbench-publisher-tokens';
-const DRIVERS = new Set([FOLDERS_DRIVER, SETTINGS_DRIVER, PUBLISHER_DRIVER]);
+const coveredFiles = (publisherFile: ConfigurationFile | undefined): CoveredFile[] => [
+  { pattern: SETTINGS_FILE_PATTERN, driver: 'modbench-settings-tokens', spelling: SPELLING, holdsAccounts: true },
+  { pattern: PROFILE_INIS_PATTERN, driver: 'modbench-tokens', spelling: SPELLING, holdsAccounts: false },
+  ...(publisherFile === undefined ? [] : [
+    { pattern: `/${publisherFile.name}`, driver: 'modbench-publisher-tokens', spelling: publisherFile.spelling, holdsAccounts: false },
+  ]),
+];
 
 // A clone holds no account, so its value is empty.
 function accountTokens(settings: string): TokenProgram {
@@ -51,19 +60,16 @@ function accountTokens(settings: string): TokenProgram {
   };
 }
 
-const attribute = (pattern: string, driver: string): string => `${pattern} filter=${driver} diff=${driver}`;
-
-const ATTRIBUTES = [attribute(SETTINGS_FILE_PATTERN, SETTINGS_DRIVER), attribute(PROFILE_INIS_PATTERN, FOLDERS_DRIVER)];
-
 // The attributes live in the git directory, as the filter's config does, so the repository holds no file of Modbench's.
 // Answers the call that takes back the lines it added.
-async function attributesWritten(instanceRoot: string, attributes: readonly string[]): Promise<Undo> {
+async function attributesWritten(instanceRoot: string, covered: readonly CoveredFile[]): Promise<Undo> {
   const file = resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'info/attributes')).trim());
   await mkdir(dirname(file), { recursive: true });
+  const lines = covered.map(({ pattern, driver }) => `${pattern} filter=${driver} diff=${driver}`);
   let added: string[] = [];
   await putIfChanged(file, (before) => {
     const held = new Set(before.split(/\r?\n/));
-    added = attributes.filter((line) => !held.has(line));
+    added = lines.filter((line) => !held.has(line));
     return added.length === 0 ? before : `${before}${before === '' || before.endsWith('\n') ? '' : '\n'}${added.join('\n')}\n`;
   }, { ifMissing: '' });
   return async () => {
@@ -75,13 +81,13 @@ interface HeldFile { readonly file: string; readonly covered: boolean }
 
 // Each file git holds or would commit, and whether the token filter covers it. check-attr -z answers path, attribute,
 // value.
-async function filesGitHolds(instanceRoot: string): Promise<HeldFile[]> {
+async function filesGitHolds(instanceRoot: string, covered: readonly CoveredFile[]): Promise<HeldFile[]> {
   const listed = await git(instanceRoot, 'ls-files', '-z', '--cached', '--others', '--exclude-standard');
   const answers = (await gitFed(instanceRoot, listed, 'check-attr', '-z', '--stdin', 'filter')).split('\0');
   const files = new Map<string, boolean>();
   for (let at = 0; at + 2 < answers.length; at += 3) {
     const [file, , value] = answers.slice(at, at + 3);
-    if (file !== undefined) files.set(file, DRIVERS.has(value ?? ''));
+    if (file !== undefined) files.set(file, covered.some(({ driver }) => driver === value));
   }
   return [...files].map(([file, covered]) => ({ file, covered }));
 }
@@ -158,31 +164,30 @@ const pathsIn = (text: string): string[] => [...text.matchAll(PATH)].map(({ 0: m
 const filterWritten = (instanceRoot: string, driver: string): Promise<boolean> =>
   git(instanceRoot, 'config', '--get', `filter.${driver}.clean`).then((value) => value.trim() !== '', () => false);
 
-/** Whether the repository's local config holds the path filter of each file it covers, `publisherFile` among them. */
-export const pathTokensWritten = async (instanceRoot: string, publisherFile: ConfigurationFile | undefined): Promise<boolean> => {
-  const drivers = [FOLDERS_DRIVER, SETTINGS_DRIVER, ...(publisherFile === undefined ? [] : [PUBLISHER_DRIVER])];
-  return (await Promise.all(drivers.map((driver) => filterWritten(instanceRoot, driver)))).every(Boolean);
+const filesNotWritten = async (instanceRoot: string, covered: readonly CoveredFile[]): Promise<CoveredFile[]> => {
+  const written = await Promise.all(covered.map(({ driver }) => filterWritten(instanceRoot, driver)));
+  return covered.filter((_file, at) => !written[at]);
 };
+
+/** Whether the repository's local config holds the path filter of each file it covers, `publisherFile` among them. */
+export const pathTokensWritten = async (instanceRoot: string, publisherFile: ConfigurationFile | undefined): Promise<boolean> =>
+  (await filesNotWritten(instanceRoot, coveredFiles(publisherFile))).length === 0;
 
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
 export function mo2PathTokens({ instanceRoot }: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): Mo2PathTokens {
-  const attributes = [...ATTRIBUTES, ...(publisherFile === undefined ? [] : [attribute(`/${publisherFile.name}`, PUBLISHER_DRIVER)])];
-  const configOf = (game: string | undefined, accounts: TokenProgram): Readonly<Record<string, string>> => {
-    const tokensIn = (spelling: PathSpelling): TokenProgram => folderTokens({ instance: instanceRoot, game }, process.platform, spelling);
-    const folders = tokensIn(SPELLING);
-    return {
-      ...tokenFilterConfig(FOLDERS_DRIVER, folders),
-      ...tokenFilterConfig(SETTINGS_DRIVER, folders, accounts),
-      ...(publisherFile === undefined ? {} : tokenFilterConfig(PUBLISHER_DRIVER, tokensIn(publisherFile.spelling))),
-    };
-  };
+  const covered = coveredFiles(publisherFile);
+  const configOf = (files: readonly CoveredFile[], game: string | undefined, accounts: TokenProgram): Readonly<Record<string, string>> =>
+    Object.fromEntries(files.flatMap(({ driver, spelling, holdsAccounts }) => {
+      const folders = folderTokens({ instance: instanceRoot, game }, process.platform, spelling);
+      return Object.entries(tokenFilterConfig(driver, folders, ...(holdsAccounts ? [accounts] : [])));
+    }));
   const configWritten = async (game: string | undefined, accounts: TokenProgram): Promise<void> => {
-    for (const [key, value] of Object.entries(configOf(game, accounts))) await git(instanceRoot, 'config', key, value);
+    for (const [key, value] of Object.entries(configOf(covered, game, accounts))) await git(instanceRoot, 'config', key, value);
   };
   // An unset key is exit code 5.
-  const configTakenBack: Undo = async () => {
-    for (const key of Object.keys(configOf(undefined, accountTokens('')))) {
+  const configTakenBack = (files: readonly CoveredFile[]): Undo => async () => {
+    for (const key of Object.keys(configOf(files, undefined, accountTokens('')))) {
       await git(instanceRoot, 'config', '--unset-all', key).catch((err: unknown) => {
         if (typeof err !== 'object' || err === null || !('code' in err) || err.code !== 5) throw err;
       });
@@ -190,37 +195,37 @@ export function mo2PathTokens({ instanceRoot }: Mo2Context, gameFolder: () => Pr
   };
 
   const written = async (takeBack: Undo[]): Promise<string | undefined> => {
-    takeBack.push(await attributesWritten(instanceRoot, attributes));
-    const covered = (await filesGitHolds(instanceRoot)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
+    const added = await filesNotWritten(instanceRoot, covered);
+    takeBack.push(await attributesWritten(instanceRoot, covered));
+    const files = (await filesGitHolds(instanceRoot, covered)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
     const accounts = accountTokens(await get(settingsFile(instanceRoot), ''));
-    takeBack.push(configTakenBack);
+    takeBack.push(configTakenBack(added));
     await configWritten(undefined, accounts);
-    await withScratch((scratch) => smudged(scratch, instanceRoot, covered));
+    await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     const game = await gameFolder();
     await configWritten(foundRoot(game), accounts);
-    const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, covered));
-    await statsForgotten(instanceRoot, covered);
+    const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, files));
+    await statsForgotten(instanceRoot, files);
     if (holding.length === 0) return undefined;
     const why = game.kind === 'found' ? `${instanceRoot} or ${game.root} is on no drive or network share` : 'the game folder was not found';
     return `${holding.join(', ')} still hold${holding.length === 1 ? 's' : ''} a path token in place of this machine's path, because ${why}`;
   };
 
   return {
-    // A repository that held the filter before keeps it: only a first write is taken back when it fails.
+    // A failed write takes back what it added: its attribute lines, and each filter the repository did not hold.
     async writePathTokens() {
       if (!(await isRepository(instanceRoot))) return undefined;
-      const held = await filterWritten(instanceRoot, FOLDERS_DRIVER);
       const takeBack: Undo[] = [];
       try {
         return await written(takeBack);
       } catch (err) {
-        throw held ? err : await undoAll(takeBack.reverse(), err);
+        throw await undoAll(takeBack.reverse(), err);
       }
     },
 
     async pathsOutsideFolders() {
       if (!(await isRepository(instanceRoot))) return [];
-      const files = await filesGitHolds(instanceRoot);
+      const files = await filesGitHolds(instanceRoot, covered);
       return withScratch(async (scratch) => {
         const found = [];
         for (const { file, covered } of files) {
