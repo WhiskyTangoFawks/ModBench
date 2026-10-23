@@ -35,6 +35,7 @@ import { createToolboxView, type ToolboxView } from './toolbox/toolboxView';
 import { hostGit } from './hostGit';
 import { registerModlistCommands } from './toolbox/modlistGestures';
 import { publishRepository } from './toolbox/repositoryContext';
+import { queryInfoOver } from './downloadedFileCommands/queryInfo';
 import { checkForUpdatesOver } from './modCommands/checkForUpdates';
 import { createHttpNexus } from './nexus/httpNexus';
 import type { Nexus } from './nexus/nexus';
@@ -149,7 +150,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   }));
   const fomodWarning = warnIfFomod(reporterFor('install'));
   const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({
-    commands: downloadedFileCommands(adapter), instance, reporter: reporterFor('downloadedFiles'), ask, trash,
+    commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), instance, reporter: reporterFor('downloadedFiles'), ask, trash,
     log: (line) => outputChannel.warn(`[downloadedFiles] ${line}`),
     logUnresolved: (line) => outputChannel.warn(`[instance] ${line}`),
   }));

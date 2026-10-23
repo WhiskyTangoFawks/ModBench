@@ -222,6 +222,7 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.excludeFile', FILES],
   ['modbench.mod.includeFile', FILES],
   ['modbench.mod.install', INSTALL],
+  ['modbench.downloadedFile.queryInfo', DOWNLOADED_FILES],
   ['modbench.downloadedFile.exclude', DOWNLOADED_FILES],
   ['modbench.downloadedFile.include', DOWNLOADED_FILES],
   ['modbench.downloadedFile.delete', DOWNLOADED_FILES],
