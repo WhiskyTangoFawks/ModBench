@@ -23,7 +23,7 @@ public sealed class PluginByteComparisonTests : IDisposable
 
         Assert.True(comparison.Identical);
         Assert.Null(comparison.Loss);
-        Assert.Null(comparison.LossCause);
+        Assert.Null(comparison.LossCauses);
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public sealed class PluginByteComparisonTests : IDisposable
         Assert.Equal("WEAP", comparison.Loss.Value.RecordType);
         Assert.Equal(0x10u, comparison.Loss.Value.FormId);
         Assert.Equal(["RDMP"], comparison.Loss.Value.Signatures);
-        Assert.Null(comparison.LossCause);
+        Assert.Null(comparison.LossCauses);
     }
 
     [Fact]
@@ -50,8 +50,8 @@ public sealed class PluginByteComparisonTests : IDisposable
 
         var comparison = (await Adapter.CompareBytesAsync(Write("a.esp", original), Write("b.esp", rewritten), EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
-        Assert.Equal("fixed-size-subrecord-short", comparison.LossCause?.DefectClass);
-        Assert.StartsWith("REGN 00000020", comparison.LossCause?.Anchor);
+        Assert.Equal("fixed-size-subrecord-short", comparison.LossCauses?.Single().Diagnosis.DefectClass);
+        Assert.StartsWith("REGN 00000020", comparison.LossCauses?.Single().Diagnosis.Anchor);
     }
 
     [Fact]

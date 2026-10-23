@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using MEditService.Codec.Serialization;
+using MEditService.PluginAdapter.Repair;
 using MEditService.RepositoriesLib;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Exceptions;
@@ -46,6 +47,12 @@ public abstract record PluginFailure
         internal Unparsed(PluginDiagnosis diagnosis, Exception error) : base(error) => Diagnosis = diagnosis;
 
         public PluginDiagnosis Diagnosis { get; }
+
+        /// <summary>What the malformation scan found, or why it could not run; null when it was not asked.</summary>
+        public Answer<MalformationScan, PluginFailure>? Malformations { get; private init; }
+
+        internal Unparsed ScannedFor(Func<PluginDiagnosis, MalformationScan> scan) =>
+            this with { Malformations = Answer(() => scan(Diagnosis)) };
 
         public override string Reason => Diagnosis.Describe();
     }

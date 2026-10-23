@@ -152,7 +152,7 @@ public readonly record struct UnverifiedRecord(UnverifiedReason Reason, string R
 
 /// <summary>Whether two plugin files hold the same bytes, and if not, what the rewrite emptied, dropped, lacks or left unread.</summary>
 public sealed record PluginByteComparison(
-    bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, PluginDiagnosis? LossCause = null, string? DeletedRecordEmptied = null,
+    bool Identical, PluginBinaryWalk.SubrecordLoss? Loss = null, IReadOnlyList<RepairPreview>? LossCauses = null, string? DeletedRecordEmptied = null,
     UnverifiedRecord? Unverified = null);
 
 /// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> did, and for a plugin it wrote, the

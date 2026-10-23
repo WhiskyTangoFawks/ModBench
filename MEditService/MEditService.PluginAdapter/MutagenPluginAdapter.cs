@@ -250,9 +250,13 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
             if (PluginBinaryWalk.FindFirstSubrecordLoss(pairing.Pairs) is not { } loss)
                 return new PluginByteComparison(Identical: false, DeletedRecordEmptied: deletedRecordEmptied, Unverified: unverified);
 
-            var cause = Malformations.In(originalBytes, loadOrder.GameRelease).Select(found => found.Diagnosis).FirstOrDefault(d =>
-                d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
-            return new PluginByteComparison(Identical: false, loss, cause, deletedRecordEmptied, unverified);
+            IReadOnlyList<RepairPreview> causes =
+            [
+                .. Malformations.In(originalBytes, loadOrder.GameRelease)
+                    .Where(found => found.Diagnosis.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true)
+                    .Select(found => found.Preview),
+            ];
+            return new PluginByteComparison(Identical: false, loss, causes.Count > 0 ? causes : null, deletedRecordEmptied, unverified);
         });
 
     // Mutagen's parallel import shares the form version of the record being read across threads, so a
