@@ -11,7 +11,7 @@ As a user, I want:
 1. The instance folder to be the repository, so a change I make in the mod manager or in Modbench is a working-tree change in Source Control. Cites: ADR-0022
 2. The ignore list to be a whitelist: every manifest, each profile's mod order, plugin order and game INIs, the mod manager's configuration, `.gitmodules`, and each source mod with a remote. Everything else is ignored: each mod's metadata, the downloaded files' index and each source mod with no remote included.
 3. Every mod, every separator and every profile in the commit, enabled or not. A disabled mod is still mine.
-4. The mod manager's configuration committed with the paths it holds. A clone on another machine edits them.
+4. No path from this machine in the repository. Each file git holds names the instance folder and the game folder by a token, and the working tree holds this machine's paths, so my name and accounts never reach a remote and a clone runs with no edit, on Windows or Linux. Update manifest reports each path that a committed file holds outside those two folders, naming the file. Cites: Existing tools; Never silently wrong
 5. Commit, diff, history, branches and merge to be VS Code's. Modbench adds no gesture for them. Cites: Existing tools
 6. A push of the modlist refused while a commit it pins for a source mod is missing from that source mod's remote, so a clone can fetch every source mod. Git init makes the repository refuse such a push, and restore does the same on a clone. Cites: Existing tools; Never silently wrong
 
@@ -53,7 +53,7 @@ As a user, I want:
 As a user, I want:
 
 1. No prompt. Git init makes the repository with its ignore list and writes no manifest, so Source Control shows the profiles and the mod manager's configuration as untracked, and no mod, until I update the manifests, stage and commit. Cites: catalog `git init`
-2. Git init refused when the instance folder already holds a repository, naming it. Cites: Refuse, do not repair
+2. Git init on an instance folder that already holds a repository to adopt it: it adds the ignore list and the push check, and keeps the repository's history, remotes and tracked files. Cites: Existing tools
 3. Source Control, while the instance folder holds no repository, to offer git init beside git's own Initialize Repository, and to say that git init writes the ignore list, so git never reads the mod folders' files. Cites: VS Code's Source Control welcome content
 
 ## Every mod
@@ -94,6 +94,7 @@ As a user, I want:
 8. Restore to find each mod's files from its manifest alone, never from the mod's metadata, so a clone restores under a mod manager whose metadata git does not hold. Restore finds the installation file the manifest names by its name in the downloads folder. Cites: Orthogonality; ADR-0022
 9. Restore to write each mod's metadata from its manifest, and to keep what the metadata holds that the manifest does not. Notes, colour and category stay on the machine that set them: they are Metadata chrome. Cites: Never break the instance for its owner; commands.md, Metadata chrome
 10. An installation file the downloads folder lacks, whose page on Nexus the manifest names, downloaded from Nexus while I am logged in, refused when it is not the file the manifest names, and its metadata written as MO2 writes it. A clone then restores with no file fetched by hand. Cites: Minimal by default
+11. Restore on a clone to write this machine's paths into each file the repository holds with a token, so the mod manager's configuration and the publisher's configuration name this machine's folders. Cites: Windows and Linux alike
 
 ## Menus and keys
 

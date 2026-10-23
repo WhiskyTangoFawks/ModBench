@@ -84,8 +84,9 @@ medit_repositories: "MEDIT · Repositories — the only boxes that read or write
 }
 modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the one reader and writer of the mod manager's files" {
   class: band; grid-rows: 1
-  instanceadapter: "Instance adapter\nowns: the instance\nhides: the mod manager" {
+  instanceadapter: "Instance adapter\nowns: the instance\nhides: the mod manager and the publisher" {
     mo2: "MO2 — one implementation\nowns: the mod manager's files\nhides: MO2's layout and formats" {class: repositories}
+    wabbajack: "Wabbajack — one implementation\nowns: the publisher's configuration\nhides: Wabbajack's layout and formats" {class: repositories}
     gamefolder: "Game folder\nowns: where the game is and what it holds\nhides: Steam, Wine and the platform's Documents folder" {class: repositories}
     downloadedfilecontents: "Downloaded file contents\nowns: what each downloaded file holds, entry by entry,\nand its hash\nhides: the extraction tool and the hash index" {class: repositories}
     fomodinstaller: "FOMOD installer\nowns: the files a FOMOD installs for my choices\nhides: the engine" {class: repositories}
@@ -104,7 +105,7 @@ medit_data: "MEDIT · Systems of record" {
 }
 modbench_data: "MODBENCH · Systems of record; mEdit is the left column and always running" {
   class: band; grid-rows: 1
-  instance: "Instance\nthe mod manager's files · each profile's plugins.txt ·\nmods · Overwrite · downloaded files and their index ·\nthe manifests · the repository · the source folder" {class: sor}
+  instance: "Instance\nthe mod manager's files · each profile's plugins.txt ·\nmods · Overwrite · downloaded files and their index ·\nthe manifests · the repository · the source folder ·\nthe publisher's configuration" {class: sor}
   gamedata: "Game folder\nthe game's own plugins and files" {class: sor}
   tools: "Other tools\nthe mod manager, the user, the game — at any time" {class: other}
   medit: "mEdit\nthe left column" {class: driving}

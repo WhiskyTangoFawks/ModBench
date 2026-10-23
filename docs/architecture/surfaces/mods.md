@@ -83,8 +83,12 @@ A mod row carries an indicator for each status that holds. A disabled mod carrie
 | Redundant | the mod has a file the game could get, and every such file loses to another copy | on | off |
 | Contains excluded files | the mod has an excluded file | off | off |
 | Update available | the mod's version is older than the newest version check for updates found | on | off |
+| Always Enabled | Wabbajack's Always Enabled tag covers the row ([publishing.md](publishing.md), Tags, story 1) | on | off |
+| Include | Wabbajack's Include tag covers the row ([publishing.md](publishing.md), Tags, story 1) | on | off |
+| No Match Include | Wabbajack's No Match Include tag covers the row ([publishing.md](publishing.md), Tags, story 1) | on | off |
+| Ignore | Wabbajack's Ignore tag covers the row ([publishing.md](publishing.md), Tags, story 1) | on | off |
 
-The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Cites: mo2.md, divergence 12
+A tag's badge is its initials: AE, IN, NM, IG. The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Cites: mo2.md, divergence 12
 
 ## A source mod
 
@@ -117,11 +121,11 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod · check for updates, on every mod (I am logged in) · update manifest · restore from manifest…, on every mod (the instance has a repository). Collapse All last. |
-| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · decompile and commit (a mod with no source that holds a plugin) · build (a source mod) · update manifest · restore from manifest… (the instance has a repository) · copy value · uninstall |
+| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… · remove publisher tag… (the instance has a publisher's configuration) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · decompile and commit (a mod with no source that holds a plugin) · build (a source mod) · update manifest · restore from manifest… (the instance has a repository) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · check for updates (I am logged in) · update manifest · restore from manifest… (the instance has a repository) · copy value · delete |
 | Overwrite menu | open folder |
-| File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · copy value |
-| Folder menu | open folder · copy value |
+| File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · add publisher tag… · remove publisher tag… (the instance has a publisher's configuration) · copy value |
+| Folder menu | open folder · add publisher tag… · remove publisher tag… (the instance has a publisher's configuration) · copy value |
 | Check box | enable or disable |
 | Keys | Space: enable or disable. Delete: uninstall, or delete a separator. F2: rename a mod or a separator. Ctrl+C: copy value. |
 

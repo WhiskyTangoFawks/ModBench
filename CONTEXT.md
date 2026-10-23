@@ -208,3 +208,13 @@ Avoid: repository (MO2's word for a host), source
 The one file in a mod folder that names its package, its host when it has one, and each of the mod's files. For a source mod the build writes it.
 
 Avoid: record (a plugin's unit of data), recipe, directives
+
+# Publisher
+A tool that compiles an instance into the modlist players install, such as Wabbajack or a Vortex collection. Its configuration is files in the instance.
+
+Avoid: compiler (one stage of a publisher), installer
+
+# Publisher tag
+A publisher's mark on a path in the instance that changes what the published modlist ships, such as Wabbajack's Always Enabled.
+
+Avoid: flag, rule
