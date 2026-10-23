@@ -142,7 +142,7 @@ The instance's mods and profiles as git holds them ([modlist-repository.md](surf
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
-| git init | writes | `modbench.modlist.gitInit` | - | - | git init | Make the instance a repository with its ignore list. It writes no manifest and commits nothing. | init-modlist |
+| git init | writes | `modbench.modlist.gitInit` | - | - | git init | Make the instance a repository, or adopt the one it holds, with its ignore list, push check and path tokens. It writes no manifest and commits nothing. | init-modlist |
 
 ## Mod
 
@@ -152,7 +152,7 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 |---|---|---|---|---|---|---|---|
 | enable / disable | writes | `modbench.mod.enable`, `modbench.mod.disable` | mods | - | MO2 mod list | Flip each mod's enabled state in the active profile. Enable all is select all, then this gesture. | update-load-order-file |
 | move | writes | `modbench.mod.move` | mods or separators | target: a separator, above a mod, or the view's end | MO2 mod list | Move mods in mod order. | update-load-order-file |
-| uninstall | writes | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line. | update-load-order-file |
+| uninstall | writes | `modbench.mod.uninstall` | mods | - | MO2 mod list | Move a mod folder to the trash and remove its line and its publisher tags. | update-load-order-file |
 | create empty mod | writes | `modbench.mod.createEmpty` | - | name | MO2 mod list | Create an empty mod folder and its line. | update-load-order-file |
 | install | writes | `modbench.mod.install` | a file, a folder or a downloaded file | name, for a new mod; target mod, for an upgrade; choices, for a FOMOD ([mods-fomod.md](surfaces/mods-fomod.md)); force: [agent.md](surfaces/agent.md#any-agent), story 7 | MO2 mod list; MO2 Downloads | Install it as a new mod, or over an installed mod as an upgrade. | install-mod |
 | decompile and commit | writes | `modbench.mod.decompileAndCommit` | mods | - | none | Put a mod under git: a repository in the source folder holding its plugin source, every other file of the mod as its assets, and a build configuration naming this folder as the output, in one commit. On a plugin row or an Editor column, it acts on the plugin's mod. | decompile-and-commit |
@@ -168,7 +168,8 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | compare file | reads | `modbench.mod.compareFile` | a copy of a file in a mod or Overwrite | - | none | Open VS Code's diff editor on a mod's copy of a file and the winning copy. | none |
 | go to mod | reads | `modbench.mod.goToMod` | a copy of a file in a mod or Overwrite | other mod: a pick, when the copy wins over several | MO2 Information dialog, Conflicts tab, Go to... | Select, in Mods, the mod or Overwrite whose copy wins the file, or a mod whose copy it wins over. | none |
 | exclude / include file | writes | `modbench.mod.excludeFile`, `modbench.mod.includeFile` | files in mods or Overwrite | - | MO2 Information dialog, Conflicts tab, Hide; MO2 mod list, Restore hidden files | Keep each file from the game with the mod manager's exclusion mark, as MO2's `.mohidden` suffix, or clear the mark, and, in a source mod, the build configuration's exclusion with it. | update-load-order-file |
-| rename | writes | `modbench.mod.rename` | mod | name | MO2 mod list | Rename a mod's folder and its name in every profile's mod order, and, for a source mod, its output folder in the build configuration. | update-load-order-file |
+| rename | writes | `modbench.mod.rename` | mod | name | MO2 mod list | Rename a mod's folder and its name in every profile's mod order, and, for a source mod, its output folder in the build configuration. Its publisher tags follow it. | update-load-order-file |
+| add / remove publisher tag | writes | `modbench.mod.addPublisherTag`, `modbench.mod.removePublisherTag` | mods, or files and folders in mods | publisher tag: a pick | none | Add a publisher tag to each mod, folder or file, or remove it ([publishing.md](surfaces/publishing.md), Publisher tags). | - |
 
 ## Separator
 
