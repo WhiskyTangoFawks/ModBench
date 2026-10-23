@@ -52,17 +52,18 @@ internal static class PluginTrees
         }
     }
 
-    // The failing record's diagnoses, matched as the loss branch of CompareBytesAsync matches its own.
-    private static IReadOnlyList<RepairPreview> MalformationsAt(PluginDiagnosis failing, ModPath modPath, LoadOrderSnapshot loadOrder)
+    // The failing record is matched as the loss branch of CompareBytesAsync matches its own.
+    private static MalformationScan MalformationsAt(PluginDiagnosis failing, ModPath modPath, LoadOrderSnapshot loadOrder)
     {
         var masters = PluginBinaryWalk.MastersOf(modPath, loadOrder);
-        bool Names(Malformations.Found found)
+        bool AtFailure(Malformations.Found found)
         {
             var formKey = masters.GetFormKey(found.Record.FormID, reference: false).ToString();
             return failing.Anchor is { } anchor && (anchor.EndsWith($" {formKey}", StringComparison.Ordinal) || anchor.Contains($" {formKey} ", StringComparison.Ordinal));
         }
 
-        return [.. Malformations.In(File.ReadAllBytes(modPath.Path), loadOrder.GameRelease).Where(Names).Select(found => found.Preview)];
+        var found = Malformations.In(File.ReadAllBytes(modPath.Path), loadOrder.GameRelease).ToLookup(AtFailure, found => found.Preview);
+        return new MalformationScan([.. found[true]], [.. found[false]]);
     }
 
     /// <summary>One plugin's complete tree, ready to commit — the one implementation of the door's

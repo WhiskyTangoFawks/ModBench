@@ -6,6 +6,9 @@ namespace MEditService.PluginAdapter.Repair;
 /// came from, which a repair of them is handed (ADR-0003).</summary>
 public sealed record RepairPreviews(string Hash, IReadOnlyList<RepairPreview> Diagnoses);
 
+/// <summary>The malformations of a plugin Mutagen failed to read: those in the record it failed at, and those in the rest.</summary>
+public sealed record MalformationScan(IReadOnlyList<RepairPreview> AtFailure, IReadOnlyList<RepairPreview> Elsewhere);
+
 /// <summary>A diagnosis of a malformed record, and the change that repairs it; null when no repair answers it.</summary>
 public sealed record RepairPreview(PluginDiagnosis Diagnosis, RepairChange? Change);
 

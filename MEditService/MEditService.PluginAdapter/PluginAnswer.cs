@@ -48,11 +48,10 @@ public abstract record PluginFailure
 
         public PluginDiagnosis Diagnosis { get; }
 
-        /// <summary>What the malformation scan found in the record Mutagen failed at, or why the scan could not
-        /// run; null when it was not asked.</summary>
-        public Answer<IReadOnlyList<RepairPreview>, PluginFailure>? Malformations { get; private init; }
+        /// <summary>What the malformation scan found, or why it could not run; null when it was not asked.</summary>
+        public Answer<MalformationScan, PluginFailure>? Malformations { get; private init; }
 
-        internal Unparsed ScannedFor(Func<PluginDiagnosis, IReadOnlyList<RepairPreview>> scan) =>
+        internal Unparsed ScannedFor(Func<PluginDiagnosis, MalformationScan> scan) =>
             this with { Malformations = Answer(() => scan(Diagnosis)) };
 
         public override string Reason => Diagnosis.Describe();

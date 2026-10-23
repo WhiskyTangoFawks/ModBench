@@ -3,6 +3,8 @@ using MEditService.Commands.Build;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands.Tests.RealData;
 
@@ -93,6 +95,20 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
         Assert.Contains("could not be checked for malformations", result.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("correct plugin", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(scratch.Log, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Could not check", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DecompileAndCommit_WhenMutagenFailsAtNoRecordAndAnotherRecordIsMalformed_DoesNotCallThePluginCorrect()
+    {
+        using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.PluginWithAShortRegion);
+
+        var result = await scratch.DecompileAndCommitAsync();
+
+        Assert.Contains("Mutagen mishandles", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("correct plugin", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("HarborRegion", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Decompile and repair", result.Message, StringComparison.Ordinal);
     }
 
     private sealed class RealFixtureScratch : IDisposable
@@ -111,8 +127,16 @@ public sealed class PluginDiagnosisRoundTripGateTests
             _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, Origin, _dataFolder);
         }
 
-        public async Task<PluginDecompiledAndCommitted> DecompileAndCommitAsync() =>
-            (await DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, Origin)).Only();
+        public List<LogEntry> Log { get; } = [];
+
+        public async Task<PluginDecompiledAndCommitted> DecompileAndCommitAsync()
+        {
+            var holder = new LoadOrderHolder();
+            holder.Apply(_loadOrder);
+            var handler = TestEditService.Over(holder, logging: logging => logging.AddProvider(new CollectingLoggerProvider(Log)))
+                .GetRequiredService<DecompileAndCommitModHandler>();
+            return (await handler.DecompileAndCommitAsync(ToDecompileAndCommit.In(_loadOrder, Origin))).Only();
+        }
 
         public void Dispose()
         {

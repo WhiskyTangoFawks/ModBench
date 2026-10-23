@@ -52,20 +52,25 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter, I
     {
         if (unparsed.Malformations is null)
             return NotParsed(plugin, unparsed);
-        if (!unparsed.Malformations.Holds(out var malformations, out var scanFailure))
+        if (!unparsed.Malformations.Holds(out var scan, out var scanFailure))
         {
             logger.LogWarning(scanFailure.Error, "Could not check {Plugin} for malformations: {Reason}", plugin.Name, scanFailure.Reason);
             return $"{NotParsed(plugin, unparsed)} (it could not be checked for malformations: {scanFailure.Reason})";
         }
-        if (malformations.Count > 0)
+        if (scan.AtFailure.Count > 0)
         {
             return $"{plugin.Name} is a malformed plugin and cannot become source: " +
-                   $"{string.Join("; ", malformations.Select(malformation => malformation.Diagnosis.Describe()))}.{RepairClause(malformations, namesRepair)}";
+                   $"{string.Join("; ", scan.AtFailure.Select(malformation => malformation.Diagnosis.Describe()))}.{RepairClause(scan.AtFailure, namesRepair)}";
         }
 
-        return unparsed.Diagnosis.Tail is null
-            ? NotParsed(plugin, unparsed)
-            : $"{plugin.Name} is a correct plugin that Mutagen mishandles: {unparsed.Reason}";
+        var elsewhere = scan.Elsewhere.Count == 0
+            ? ""
+            : $" It also holds malformed records: {string.Join("; ", scan.Elsewhere.Select(malformation => malformation.Diagnosis.Describe()))}.{RepairClause(scan.Elsewhere, namesRepair)}";
+        if (unparsed.Diagnosis.Tail is null)
+            return NotParsed(plugin, unparsed) + elsewhere;
+        return scan.Elsewhere.Count == 0
+            ? $"{plugin.Name} is a correct plugin that Mutagen mishandles: {unparsed.Reason}"
+            : $"Mutagen mishandles {plugin.Name}: {unparsed.Reason}.{elsewhere}";
     }
 
     private static string RepairClause(IReadOnlyList<RepairPreview> malformations, bool namesRepair) =>
