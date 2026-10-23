@@ -17,7 +17,7 @@ import type { ModlistEntry, PublisherConfiguration } from '../../instanceAdapter
 import { modOrigin, RUNTIME_OUTPUT } from '../../instanceLoader/fileConflictIndex';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { fileRowUri } from '../modFiles';
-import { indicatorSetting, modRowUri, separatorRowUri } from '../modIndicators';
+import { indicatorSetting, modRowUri, overwriteRowUri, separatorRowUri } from '../modIndicators';
 import { PublisherTagDecorations } from '../publisherTagIndicators';
 import { file, folder, indexedValueOf, mod } from './indexedValue';
 
@@ -28,21 +28,18 @@ const IG = tag('IG');
 const AE = tag('AE', false);
 const DECLARED = [NM, IN, IG, AE];
 
-const COVERED_AS_THE_PUBLISHER_APPLIES_THEM_OUTSIDE_A_DISABLED_MOD: Record<string, readonly PublisherTag[]> = {
-  '/instance/A': [IN, AE],
-  '/instance/A/x.esp': [IN, AE],
-  '/instance/A/textures': [IN, AE],
-  '/instance/A/textures/a.dds': [IN, IG, AE],
-  '/instance/overwrite/o.log': [IG],
-};
-const COVERED_AS_THE_PUBLISHER_APPLIES_THEM_IN_A_DISABLED_MOD: Record<string, readonly PublisherTag[]> = {
-  '/instance/B': [IN, AE],
-  '/instance/B/y.esp': [IG, AE],
+const COVERED_AS_THE_PUBLISHER_APPLIES_THEM_BY_MOD_AND_PATH: Record<string, readonly PublisherTag[]> = {
+  'A /instance/A': [IN, AE],
+  'A /instance/A/x.esp': [IN, AE],
+  'A /instance/A/textures': [IN, AE],
+  'A /instance/A/textures/a.dds': [IN, IG, AE],
+  'B /instance/B': [IN, AE],
+  'B /instance/B/y.esp': [IG, AE],
+  'outside every mod /instance/overwrite/o.log': [IG],
 };
 const READ: PublisherConfiguration = {
   kind: 'read',
-  covering: (path, inDisabledMod) => (inDisabledMod
-    ? COVERED_AS_THE_PUBLISHER_APPLIES_THEM_IN_A_DISABLED_MOD : COVERED_AS_THE_PUBLISHER_APPLIES_THEM_OUTSIDE_A_DISABLED_MOD)[path] ?? [],
+  covering: (path, mod) => COVERED_AS_THE_PUBLISHER_APPLIES_THEM_BY_MOD_AND_PATH[`${mod ?? 'outside every mod'} ${path}`] ?? [],
 };
 
 const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });
@@ -82,7 +79,7 @@ describe('the publisher tags a row carries (mods.md, Indicators; publishing.md, 
     expect(badgesOn(decorations, modRowUri('A'))).toEqual(['IN', 'AE']);
   });
 
-  it('a disabled mod carries each publisher tag its publisher applies to a disabled mod, and no other', async () => {
+  it('a mod carries what its publisher answers for it, whichever profile the instance has selected', async () => {
     const decorations = expanded(decorationsOver(new FakeInstance(await valueOf())), modRowUri('B'), modRowUri('C'));
 
     expect([badgesOn(decorations, modRowUri('B')), badgesOn(decorations, modRowUri('C'))]).toEqual([['IN', 'AE'], []]);
@@ -138,6 +135,13 @@ describe('a collapsed row\'s publisher tags (common.md, A view, story 11)', () =
     const decorations = decorationsOver(new FakeInstance(await valueOf()));
 
     expect(badgesOn(decorations, modRowUri('B'))).toEqual(['IN', 'IG', 'AE']);
+  });
+
+  it('a collapsed Overwrite carries the publisher tags of its files, and an expanded one none', async () => {
+    const collapsed = decorationsOver(new FakeInstance(await valueOf()));
+    const open = expanded(decorationsOver(new FakeInstance(await valueOf())), overwriteRowUri());
+
+    expect([badgesOn(collapsed, overwriteRowUri()), badgesOn(open, overwriteRowUri())]).toEqual([['IG'], []]);
   });
 
   it('a row collapsed again carries the rows beneath it again', async () => {

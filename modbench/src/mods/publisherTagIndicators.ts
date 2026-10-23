@@ -2,15 +2,13 @@
 // mod's label.
 
 import * as vscode from 'vscode';
-import type { FileOrigin, InstanceValue, InstanceView, Mod, OriginFolder, PublisherTag } from '../instanceLoader/instance';
+import type { Covering, FileOrigin, InstanceValue, InstanceView, OriginFolder, PublisherTag } from '../instanceLoader/instance';
 import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { fileRowUri } from './modFiles';
-import { IndicatorDecorationProvider, isModRow, modRowUri, PUBLISHER_TAG_INDICATOR, separatorRowUri } from './modIndicators';
+import {
+  IndicatorDecorationProvider, isModRow, modRowUri, OpenableRowDecorations, overwriteRowUri, PUBLISHER_TAG_INDICATOR, separatorRowUri,
+} from './modIndicators';
 import type { WorkspaceSettings } from './workspaceSettings';
-
-type TagsValue = Pick<
-  InstanceValue, 'mods' | 'modGroups' | 'filesByMod' | 'foldersByMod' | 'overwriteFiles' | 'overwriteFolders' | 'paths' | 'publisherTags' | 'publisherConfiguration'
->;
 
 // A row's own publisher tags, and those of the rows beneath it, which it carries while collapsed (common.md, A view, story 11).
 interface Carried {
@@ -20,7 +18,6 @@ interface Carried {
 
 interface Carriers {
   readonly rows: ReadonlyMap<string, Carried>;
-  /** Every row that opens: each mod, separator and folder. */
   readonly openable: ReadonlySet<string>;
 }
 
@@ -33,13 +30,14 @@ class CarriersRead implements Carriers {
   readonly rows = new Map<string, Carried>();
   readonly openable = new Set<string>();
 
-  constructor(private readonly covering: (path: string, inDisabledMod: boolean) => readonly PublisherTag[]) {}
+  constructor(readonly covering: Covering) {}
 
-  /** Each file and folder in `entries`, and answers every publisher tag they carry. */
-  origin(origin: FileOrigin, inDisabledMod: boolean, entries: readonly OriginFolder[], folders: readonly OriginFolder[]): Set<PublisherTag> {
+  carryFilesAndFolders(
+    origin: FileOrigin, mod: string | undefined, entries: readonly OriginFolder[], folders: readonly OriginFolder[],
+  ): Set<PublisherTag> {
     const inOrigin = new Set<PublisherTag>();
     const beneath = new Map<string, Set<PublisherTag>>(folders.map(({ relativePath }) => [relativePath, new Set()]));
-    const own = new Map(entries.map((entry) => [entry, this.covering(entry.path, inDisabledMod).filter(({ marksPaths }) => marksPaths)]));
+    const own = new Map(entries.map((entry) => [entry, this.covering(entry.path, mod).filter(({ marksPaths }) => marksPaths)]));
     for (const [entry, tags] of own) {
       this.carry(vscode.Uri.file(entry.path).toString(), tags);
       for (const tag of tags) inOrigin.add(tag);
@@ -53,16 +51,10 @@ class CarriersRead implements Carriers {
     return inOrigin;
   }
 
-  /** The mod's row, and answers every publisher tag it carries while collapsed. */
-  mod(mod: Mod, folder: string | undefined, filesBeneath: ReadonlySet<PublisherTag>): Set<PublisherTag> {
-    const own = folder === undefined ? [] : this.covering(folder, !mod.enabled);
-    this.openableRow(modRowUri(mod.name).toString(), own, filesBeneath);
-    return new Set([...own, ...filesBeneath]);
-  }
-
-  openableRow(key: string, own: Iterable<PublisherTag>, beneath: Iterable<PublisherTag>): void {
+  carryOpenableRow(key: string, own: Iterable<PublisherTag>, beneath: Iterable<PublisherTag>): Set<PublisherTag> {
     this.carry(key, own, beneath);
     this.openable.add(key);
+    return new Set([...own, ...beneath]);
   }
 
   private carry(key: string, own: Iterable<PublisherTag>, beneath: Iterable<PublisherTag> = []): void {
@@ -71,64 +63,44 @@ class CarriersRead implements Carriers {
   }
 }
 
-function carriersOf(value: TagsValue): Carriers {
+function carriersOf(value: InstanceValue): Carriers {
   const configuration = value.publisherConfiguration;
-  const carriers = new CarriersRead(configuration.kind === 'read' ? (path, inDisabledMod) => configuration.covering(path, inDisabledMod) : () => []);
+  const carriers = new CarriersRead(configuration.kind === 'read' ? configuration.covering : () => []);
   const carriedByMod = new Map<string, Set<PublisherTag>>();
   for (const entry of value.mods) {
     if (entry.kind !== 'mod') continue;
     const folders = value.foldersByMod.get(entry.name) ?? [];
-    const filesBeneath = carriers.origin(modOrigin(entry.name), !entry.enabled, [...(value.filesByMod.get(entry.name) ?? []), ...folders], folders);
-    carriedByMod.set(entry.name, carriers.mod(entry, value.paths.modDirs.get(entry.name), filesBeneath));
+    const filesBeneath = carriers.carryFilesAndFolders(
+      modOrigin(entry.name), entry.name, [...(value.filesByMod.get(entry.name) ?? []), ...folders], folders,
+    );
+    const folder = value.paths.modDirs.get(entry.name);
+    const own = folder === undefined ? [] : carriers.covering(folder, entry.name);
+    carriedByMod.set(entry.name, carriers.carryOpenableRow(modRowUri(entry.name).toString(), own, filesBeneath));
   }
-  carriers.origin(RUNTIME_OUTPUT, false, [...value.overwriteFiles, ...value.overwriteFolders], value.overwriteFolders);
+  const overwriteBeneath = carriers.carryFilesAndFolders(
+    RUNTIME_OUTPUT, undefined, [...value.overwriteFiles, ...value.overwriteFolders], value.overwriteFolders,
+  );
+  carriers.carryOpenableRow(overwriteRowUri().toString(), [], overwriteBeneath);
   for (const { separator, mods } of value.modGroups.groups) {
-    carriers.openableRow(separatorRowUri(separator.name).toString(), [], mods.flatMap(({ name }) => [...(carriedByMod.get(name) ?? [])]));
+    const beneath = mods.flatMap(({ name }) => [...(carriedByMod.get(name) ?? [])]);
+    carriers.carryOpenableRow(separatorRowUri(separator.name).toString(), [], beneath);
   }
   return carriers;
 }
 
-/** One provider for each publisher tag the publisher declares. Each fires on every new instance value (ADR-0003), setting
- *  change, and row opened or closed. */
-export class PublisherTagDecorations implements vscode.Disposable {
+/** One provider for each publisher tag the publisher declares. */
+export class PublisherTagDecorations extends OpenableRowDecorations<Carriers> {
   readonly providers: readonly IndicatorDecorationProvider[];
-  private carriers: Carriers | undefined;
-  private readonly expanded = new Set<string>();
-  private readonly subscription: vscode.Disposable;
 
   constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, settings: WorkspaceSettings) {
+    super(instance, carriersOf, (carriers, key) => carriers.openable.has(key));
     const carries = (tag: PublisherTag) => (uri: vscode.Uri): boolean => {
-      this.carriers ??= carriersOf(instance.value);
       const key = uri.toString();
-      const carried = this.carriers.rows.get(key);
-      return carried !== undefined && (carried.own.has(tag) || (!this.expanded.has(key) && carried.beneath.has(tag)));
+      const carried = this.carriers().rows.get(key);
+      return carried !== undefined && (carried.own.has(tag) || (!this.isOpen(key) && carried.beneath.has(tag)));
     };
     this.providers = instance.value.publisherTags.map((tag) => new IndicatorDecorationProvider(
       { id: PUBLISHER_TAG_INDICATOR.id, name: tag.name, badge: tag.badge, colour: PUBLISHER_TAG_INDICATOR.colour }, carries(tag), settings, isModRow,
     ));
-    this.subscription = instance.subscribe((value) => {
-      this.carriers = carriersOf(value);
-      for (const key of this.expanded) if (!this.carriers.openable.has(key)) this.expanded.delete(key);
-      this.refresh();
-    });
-  }
-
-  expandedRow(uri: vscode.Uri): void {
-    this.expanded.add(uri.toString());
-    this.refresh();
-  }
-
-  collapsedRow(uri: vscode.Uri): void {
-    this.expanded.delete(uri.toString());
-    this.refresh();
-  }
-
-  private refresh(): void {
-    for (const provider of this.providers) provider.refresh();
-  }
-
-  dispose(): void {
-    this.subscription.dispose();
-    for (const provider of this.providers) provider.dispose();
   }
 }

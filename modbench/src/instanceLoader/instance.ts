@@ -26,7 +26,7 @@ import { errorMessage } from '../ports/errorMessage';
 export { sameEntry } from '../instanceAdapter/instanceAdapter';
 export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, UpgradeTier } from './downloadedFileRows';
-export type { DownloadedFileStatus, PublisherTag } from '../instanceAdapter/instanceAdapter';
+export type { Covering, DownloadedFileStatus, PublisherTag } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
@@ -379,7 +379,7 @@ export class Instance implements Subscription {
     const { manager } = this.options.adapter.names;
     this.tellOnce('managerRunning', managerRunning.kind === 'unknown' ? [`[instance] ${cannotTellRunning(manager, managerRunning.reason)}`] : [], 'warn');
     this.tellOnce('gameArchives', dataFolderArchives.kind === 'unreadable' ? [`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`] : [], 'warn');
-    this.tellOnce('publisherConfiguration', publisherConfiguration.kind === 'unreadable' ? [`[instance] No publisher tag shows: ${publisherConfiguration.reason}`] : [], 'warn');
+    this.tellOnce('publisherConfiguration', publisherConfiguration.kind === 'unreadable' ? [`[instance] no publisher tag shows: ${publisherConfiguration.reason}`] : [], 'warn');
   }
 
   private tellOnce(kind: NoteKind, lines: readonly string[], level: 'info' | 'warn'): void {

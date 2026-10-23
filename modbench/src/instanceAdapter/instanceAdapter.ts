@@ -431,15 +431,14 @@ export interface PublisherTag {
   readonly marksPaths: boolean;
 }
 
+/** Each publisher tag that covers the file or folder at `path`, as its publisher applies it; `mod` is the mod whose folder
+ *  `path` is or is in, undefined outside every mod. */
+export type Covering = (path: string, mod: string | undefined) => readonly PublisherTag[];
+
 /** The publisher's configuration: none while the instance holds no publisher's, or why it could not be read. */
 export type PublisherConfiguration =
   | { readonly kind: 'none' }
-  | {
-    readonly kind: 'read';
-    /** Each publisher tag that covers the file or folder at `path`, as its publisher applies it: to a disabled mod's
-     *  folder or a path in it when `inDisabledMod`. */
-    covering(path: string, inDisabledMod: boolean): readonly PublisherTag[];
-  }
+  | { readonly kind: 'read'; readonly covering: Covering }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
 /** The instance as parsed facts, every one from the same read of its settings, and what the watch cannot hear. */

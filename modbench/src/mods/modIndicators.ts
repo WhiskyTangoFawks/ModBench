@@ -72,10 +72,13 @@ function carriersOf(value: IndicatorsValue): Carriers {
 // Not `file:`: a decoration on a `file:` URI shows on the mod's folder in the Explorer too.
 const MOD_ROW_SCHEME = 'modbench-mod';
 const SEPARATOR_ROW_SCHEME = 'modbench-separator';
+const OVERWRITE_ROW_SCHEME = 'modbench-overwrite';
 
 export const modRowUri = (name: string): vscode.Uri => vscode.Uri.from({ scheme: MOD_ROW_SCHEME, path: `/${name}` });
 
 export const separatorRowUri = (name: string): vscode.Uri => vscode.Uri.from({ scheme: SEPARATOR_ROW_SCHEME, path: `/${name}` });
+
+export const overwriteRowUri = (): vscode.Uri => vscode.Uri.from({ scheme: OVERWRITE_ROW_SCHEME, path: '/' });
 
 /** @public Read by packageJson.test, which holds package.json to it. */
 export const indicatorSetting = (id: IndicatorId, part: 'badge' | 'colour'): string => `modbench.mods.indicators.${id}.${part}`;
@@ -127,23 +130,22 @@ export class IndicatorDecorationProvider implements vscode.FileDecorationProvide
 }
 
 /** VS Code takes one decoration from each provider and joins their badges, and never re-queries one,
- *  so each fires on every new instance value (ADR-0003), setting change, and separator opened or closed. */
-export class ModIndicatorDecorations implements vscode.Disposable {
-  readonly providers: readonly IndicatorDecorationProvider[];
-  private carriers: Carriers | undefined;
+ *  so each fires on every new instance value (ADR-0003), setting change, and row opened or closed. */
+export abstract class OpenableRowDecorations<C> implements vscode.Disposable {
+  abstract readonly providers: readonly IndicatorDecorationProvider[];
+  private current: C | undefined;
   private readonly expanded = new Set<string>();
   private readonly subscription: vscode.Disposable;
 
-  constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, settings: WorkspaceSettings) {
-    const carried = (uri: vscode.Uri) => {
-      this.carriers ??= carriersOf(instance.value);
-      const key = uri.toString();
-      return this.carriers.mods.get(key) ?? (this.expanded.has(key) ? undefined : this.carriers.separators.get(key));
-    };
-    this.providers = MOD_INDICATORS.map((indicator) => new IndicatorDecorationProvider(indicator, (uri) => carried(uri)?.includes(indicator.id) === true, settings));
+  constructor(
+    private readonly instance: Pick<InstanceView, 'value' | 'subscribe'>,
+    private readonly carriersOf: (value: InstanceValue) => C,
+    opens: (carriers: C, key: string) => boolean,
+  ) {
     this.subscription = instance.subscribe((value) => {
-      this.carriers = carriersOf(value);
-      for (const key of this.expanded) if (!this.carriers.separators.has(key)) this.expanded.delete(key);
+      const carriers = carriersOf(value);
+      this.current = carriers;
+      for (const key of this.expanded) if (!opens(carriers, key)) this.expanded.delete(key);
       this.refresh();
     });
   }
@@ -158,12 +160,35 @@ export class ModIndicatorDecorations implements vscode.Disposable {
     this.refresh();
   }
 
-  private refresh(): void {
-    for (const provider of this.providers) provider.refresh();
-  }
-
   dispose(): void {
     this.subscription.dispose();
     for (const provider of this.providers) provider.dispose();
+  }
+
+  protected carriers(): C {
+    this.current ??= this.carriersOf(this.instance.value);
+    return this.current;
+  }
+
+  protected isOpen(key: string): boolean {
+    return this.expanded.has(key);
+  }
+
+  private refresh(): void {
+    for (const provider of this.providers) provider.refresh();
+  }
+}
+
+export class ModIndicatorDecorations extends OpenableRowDecorations<Carriers> {
+  readonly providers: readonly IndicatorDecorationProvider[];
+
+  constructor(instance: Pick<InstanceView, 'value' | 'subscribe'>, settings: WorkspaceSettings) {
+    super(instance, carriersOf, (carriers, key) => carriers.separators.has(key));
+    const carried = (uri: vscode.Uri) => {
+      const carriers = this.carriers();
+      const key = uri.toString();
+      return carriers.mods.get(key) ?? (this.isOpen(key) ? undefined : carriers.separators.get(key));
+    };
+    this.providers = MOD_INDICATORS.map((indicator) => new IndicatorDecorationProvider(indicator, (uri) => carried(uri)?.includes(indicator.id) === true, settings));
   }
 }

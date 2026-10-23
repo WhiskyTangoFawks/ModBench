@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
-import { rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
@@ -28,8 +28,21 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     expect({
       declared: adapter.publisherTags.map(({ badge }) => badge),
       profile,
-      covering: publisherConfiguration.kind === 'read' && publisherConfiguration.covering(join(root, 'mods', 'Harder VATS'), false).map(({ badge }) => badge),
+      covering: publisherConfiguration.kind === 'read' && publisherConfiguration.covering(join(root, 'mods', 'Harder VATS'), 'Harder VATS').map(({ badge }) => badge),
     }).toEqual({ declared: ['NM', 'IN', 'IG', 'AE'], profile: 'Default', covering: ['IN'] });
+  });
+
+  it('gives the publisher the mods its compile profiles enable, not the instance\'s selected profile', async () => {
+    await mkdir(join(root, 'profiles', 'Compile'));
+    await writeFile(join(root, 'profiles', 'Compile', 'modlist.txt'), '+Harder VATS\r\n');
+    await writeFile(join(root, SETTINGS_FILE), JSON.stringify({ Profile: 'Secondary', AdditionalProfiles: ['Compile'], Include: ['mods'] }));
+
+    const { activeProfile, publisherConfiguration } = { activeProfile: await adapterOver(root).activeProfile(), ...await adapterOver(root).reading() };
+    const covering = (mod: string) => (publisherConfiguration.kind === 'read' ? publisherConfiguration.covering(join(root, 'mods', mod, 'x.esp'), mod) : [])
+      .map(({ badge }) => badge);
+
+    expect({ activeProfile, disabledInIt: covering('Harder VATS'), enabledInIt: covering('ENBoost - 12k') })
+      .toEqual({ activeProfile: 'Default', disabledInIt: ['IN'], enabledInIt: [] });
   });
 
   it('gives the publisher the mod manager\'s Overwrite as a folder it never ships', async () => {
@@ -37,7 +50,7 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
 
     const { publisherConfiguration } = await adapterOver(root).reading();
 
-    expect(publisherConfiguration.kind === 'read' && publisherConfiguration.covering(join(root, 'overwrite', 'x.ini'), false)).toEqual([]);
+    expect(publisherConfiguration.kind === 'read' && publisherConfiguration.covering(join(root, 'overwrite', 'x.ini'), undefined)).toEqual([]);
   });
 
   it('hears a change to the publisher\'s configuration and to the mod manager\'s files alike, and neither once the listener leaves', () => {

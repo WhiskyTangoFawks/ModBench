@@ -804,7 +804,7 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
     await instance.refresh();
     await instance.refresh();
 
-    expect(warnings).toEqual(['[instance] No publisher tag shows: compiler_settings.json is not JSON']);
+    expect(warnings).toEqual(['[instance] no publisher tag shows: compiler_settings.json is not JSON']);
   });
 
   it('carries the plugins the game loads with no line: its masters from the per-release table, then its Creation Club plugins, each only where the game can load it from', async () => {

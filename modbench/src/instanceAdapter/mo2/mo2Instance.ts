@@ -22,9 +22,15 @@ import { mo2Reads, readingSource } from './mo2Reads';
 import { mo2Watch } from './mo2Watch';
 import { programRunning } from '../processes';
 import { hashIndex } from '../downloadedFileContents/hashIndex';
-import { hashIndexDir, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
+import { hashIndexDir, modlistFile, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
+import { parseModlist } from './codecs/modlistText';
+import { get } from '../files';
 
 export { overwriteDir } from './layout';
+
+/** The mods `profile`'s mod order enables, by name, read now. */
+export const enabledModsIn = (instanceRoot: string) => async (profile: string): Promise<string[]> =>
+  parseModlist(await get(modlistFile(instanceRoot, profile))).flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? [entry.name] : []));
 
 const MO2_PROGRAM = 'ModOrganizer.exe';
 
