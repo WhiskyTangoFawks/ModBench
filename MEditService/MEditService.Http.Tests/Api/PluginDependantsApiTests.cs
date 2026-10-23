@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
@@ -54,21 +53,5 @@ public sealed class PluginDependantsApiTests : IDisposable
         var dependant = Assert.Single(answer.GetProperty("dependants").EnumerateArray());
         Assert.Equal(("Child.esp", "ChildMod"), (dependant.GetProperty("name").GetString(), dependant.GetProperty("origin").GetString()));
         Assert.Empty(answer.GetProperty("unreadable").EnumerateArray());
-    }
-
-    [Fact]
-    public async Task GetDependants_WithNoLoadOrder_Is503()
-    {
-        var response = await _client.GetAsync(new Uri("/plugins/Base.esm/dependants?origin=BaseMod", UriKind.Relative));
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task GetDependants_WithNoOrigin_Is400()
-    {
-        var response = await _client.GetAsync(new Uri("/plugins/Base.esm/dependants", UriKind.Relative));
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

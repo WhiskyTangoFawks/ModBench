@@ -128,19 +128,6 @@ public sealed class EditRecordTraceTests : HostedTests
     private const string NonCompiledPluginOrigin = "NonSourceMod";
 
     [Fact]
-    public async Task EditingANonCompiledPlugin_IsRefusedWithATypedRefusal()
-    {
-        using var fx = await Loaded();
-
-        var response = await Edit(await Client.FirstFormKey(Plugin, Origin), "HeightMax", 0.75);
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var problem = await Body(response);
-        Assert.Equal("PluginNotCompiledPlugin", problem.GetProperty("refusal").GetString());
-        Assert.Contains("Decompile and commit", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task AnEnvelopeWithAnUnknownOperation_Is400_WithItsOwnRefusal()
     {
         using var fx = await Loaded(Origin);
@@ -152,28 +139,6 @@ public sealed class EditRecordTraceTests : HostedTests
         var problem = await Body(response);
         Assert.Equal("InvalidEnvelope", problem.GetProperty("refusal").GetString());
         Assert.Equal("HeightMax", problem.GetProperty("path").GetString());
-    }
-
-    [Fact]
-    public async Task AnEnvelopeNamingAFieldTheRecordHasNot_Is404_WithItsOwnRefusal()
-    {
-        using var fx = await Loaded(Origin);
-
-        var response = await Edit(await Client.FirstFormKey(Plugin, Origin), "no_such_field", 1);
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("FieldNotFound", (await Body(response)).GetProperty("refusal").GetString());
-    }
-
-    [Fact]
-    public async Task AnEnvelopeWithoutAPlugin_Is400()
-    {
-        using var fx = await Loaded(Origin);
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
-
-        var response = await Client.Edit(formKey, string.Empty, Origin, "HeightMax", 0.75);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

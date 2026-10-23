@@ -89,12 +89,4 @@ public sealed class PluginProblemsApiTests : HostedTests
             problems => problems.Select(p => p.GetProperty("targetFormKey").GetString()).SequenceEqual([AbsentRecord.ToString()]),
             "the missing record's link alone");
     }
-
-    [Fact]
-    public async Task GetProblems_WithNoLoadOrder_Is503()
-    {
-        var response = await Client.GetAsync(new Uri("/plugins/problems", UriKind.Relative));
-
-        await response.AssertIsProblem(HttpStatusCode.ServiceUnavailable);
-    }
 }

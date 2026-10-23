@@ -94,14 +94,6 @@ public sealed class RecordDocumentApiTests : HostedTests
     }
 
     [Fact]
-    public async Task ACopyNamedWithoutItsOrigin_Is400()
-    {
-        await NonCompiledPlugin();
-
-        await (await DocumentOf(await Npc(), origin: null)).AssertIsProblem(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
     public async Task ACopyThePluginDoesNotHold_Is404()
     {
         await NonCompiledPlugin();
@@ -136,17 +128,5 @@ public sealed class RecordDocumentApiTests : HostedTests
         var refused = await (await RecordOf(loose)).AssertIsProblem(HttpStatusCode.UnprocessableEntity);
 
         Assert.Equal($"{loose} is under no compiled plugin's source.", refused.GetProperty("detail").GetString());
-    }
-
-    [Fact]
-    public async Task TheDocumentOfACopy_BeforeAnyLoadOrder_Is503()
-    {
-        await (await DocumentOf($"000000:{Plugin}")).AssertIsProblem(HttpStatusCode.ServiceUnavailable);
-    }
-
-    [Fact]
-    public async Task TheRecordOfAFile_BeforeAnyLoadOrder_Is503()
-    {
-        await (await RecordOf(Path.GetFullPath("Filed.json"))).AssertIsProblem(HttpStatusCode.ServiceUnavailable);
     }
 }

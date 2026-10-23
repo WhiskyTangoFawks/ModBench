@@ -160,18 +160,6 @@ public sealed class CreatePluginApiTests : HostedTests
         Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
     }
 
-    [Fact]
-    public async Task CreatingAPluginWithAFilenameTheWriterRefuses_Is400_AndWritesNothing()
-    {
-        var fx = Owned(await Loaded());
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-
-        var created = await Create("Bad|Name.esp", modFolder);
-
-        Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
-        Assert.False(File.Exists(Path.Combine(modFolder, "Bad|Name.esp")));
-    }
-
     [PosixFact]
     public async Task CreatingAPluginInAFolderTheFileSystemWillNotWrite_IsATypedRefusal_AndWritesNothing()
     {

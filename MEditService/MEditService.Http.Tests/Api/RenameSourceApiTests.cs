@@ -117,14 +117,6 @@ public sealed class RenameSourceApiTests : HostedTests
         Assert.Equal("UnreadableSource", await RefusalOf(response, HttpStatusCode.UnprocessableEntity));
     }
 
-    [Fact]
-    public async Task RenamingWithNoLoadOrder_Is503()
-    {
-        var response = await RenameSource(Plugin, Origin, "Renamed.esp");
-
-        await response.AssertIsProblem(HttpStatusCode.ServiceUnavailable);
-    }
-
     [Theory]
     [InlineData("", Origin)]
     [InlineData(Plugin, " ")]

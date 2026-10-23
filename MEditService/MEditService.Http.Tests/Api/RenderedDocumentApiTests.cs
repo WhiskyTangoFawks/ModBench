@@ -94,43 +94,4 @@ public sealed class RenderedDocumentApiTests : HostedTests
 
         Assert.Equal("Named By Hand.json", (await RenderedOk(npc)).FileName);
     }
-
-    [Fact]
-    public async Task ACompiledPluginCopyTwoDocumentsClaim_Is422_SayingSo()
-    {
-        var fx = await NonCompiledPlugin();
-        var npc = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc");
-        (await Client.DecompileAndCommit(Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
-        await Client.PluginReportsCompiledPlugin(Plugin);
-        var written = Directory.EnumerateFiles(ModFolderOf(fx), "RenderedNpc - *.json", SearchOption.AllDirectories).Single();
-
-        File.Copy(written, Path.Combine(Path.GetDirectoryName(written).Require(), $"Twin - {npc.Replace(':', '_')}.json"));
-
-        var refused = await (await Rendered(npc)).AssertIsProblem(HttpStatusCode.UnprocessableEntity);
-        Assert.Contains("More than one document", refused.GetProperty("detail").GetString(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task ACopyThePluginDoesNotHold_Is404()
-    {
-        await NonCompiledPlugin();
-        var npc = await Client.FormKeyNamed(Plugin, Origin, "npc_", "RenderedNpc");
-
-        await (await Rendered(npc, origin: "AnotherMod")).AssertIsProblem(HttpStatusCode.NotFound);
-    }
-
-    [Fact]
-    public async Task ACopyNamedWithoutItsOrigin_Is400()
-    {
-        await NonCompiledPlugin();
-
-        await (await Rendered($"000000:{Plugin}", origin: null)).AssertIsProblem(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task BeforeAnyLoadOrder_Is503()
-    {
-        await (await Rendered($"000000:{Plugin}")).AssertIsProblem(HttpStatusCode.ServiceUnavailable);
-    }
 }

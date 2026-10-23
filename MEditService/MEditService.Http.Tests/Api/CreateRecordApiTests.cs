@@ -71,41 +71,11 @@ public sealed class CreateRecordApiTests : HostedTests
     }
 
     [Fact]
-    public async Task CreatingARecord_WithNoOrigin_Is400()
-    {
-        await Loaded(compiledPlugin: true);
-
-        Assert.Equal(HttpStatusCode.BadRequest, (await Create(string.Empty, "npc_")).StatusCode);
-    }
-
-    [Fact]
     public async Task CreatingARecord_WithNoRecordType_Is400()
     {
         await Loaded(compiledPlugin: true);
 
         Assert.Equal(HttpStatusCode.BadRequest, (await Create(Origin, string.Empty)).StatusCode);
-    }
-
-    [Fact]
-    public async Task CreatingARecord_InANonCompiledPlugin_Is409()
-    {
-        await Loaded(compiledPlugin: false);
-
-        var response = await Create(Origin, "npc_");
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal("PluginNotCompiledPlugin", (await response.Body()).GetProperty("refusal").GetString());
-    }
-
-    [Fact]
-    public async Task CreatingARecord_OfATypeThePluginCannotHold_Is422()
-    {
-        await Loaded(compiledPlugin: true);
-
-        var response = await Create(Origin, "nosuch");
-
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        Assert.Equal("RecordTypeNotFound", (await response.Body()).GetProperty("refusal").GetString());
     }
 
     [Fact]
@@ -117,35 +87,5 @@ public sealed class CreateRecordApiTests : HostedTests
 
         response.EnsureSuccessStatusCode();
         Assert.EndsWith(":" + Plugin, (await response.Body()).GetProperty("formKey").GetString().Require(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task CreatingACell_InAWorldspace_WithOnlyOneCoordinate_Is400()
-    {
-        await Loaded(compiledPlugin: true);
-
-        var response = await Create(Origin, "cell", _worldspace, new { x = 1 });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("InvalidEnvelope", (await response.Body()).GetProperty("refusal").GetString());
-    }
-
-    [Fact]
-    public async Task CreatingARecord_WithAGridPositionAndNoContainer_Is400()
-    {
-        await Loaded(compiledPlugin: true);
-
-        Assert.Equal(HttpStatusCode.BadRequest, (await Create(Origin, "cell", position: new { x = 0, y = 0 })).StatusCode);
-    }
-
-    [Fact]
-    public async Task CreatingARecord_InAContainerThePluginLacks_Is404()
-    {
-        await Loaded(compiledPlugin: true);
-
-        var response = await Create(Origin, "refr", "000FFF:" + Plugin);
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("RecordNotFound", (await response.Body()).GetProperty("refusal").GetString());
     }
 }

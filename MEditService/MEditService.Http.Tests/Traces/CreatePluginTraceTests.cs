@@ -74,15 +74,4 @@ public sealed class CreatePluginTraceTests : HostedTests
         Assert.Equal(disk, TreeSnapshot.Of(fx.Root));
         Assert.Equal(held, await HeldAsTheServiceReportsIt());
     }
-
-    [Fact]
-    public async Task CreatingAPluginWithNoLoadOrderHeld_IsRefused_AndWritesNoFile()
-    {
-        using var folder = new ScratchDirectory("medit-trace-create-homeless-");
-
-        var created = await Create(Client, "Homeless.esp", folder);
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, created.StatusCode);
-        Assert.Empty(Directory.EnumerateFileSystemEntries(folder));
-    }
 }

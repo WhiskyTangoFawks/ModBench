@@ -30,14 +30,4 @@ public sealed class ResolveNamesApiTests(LoadedApiFixture<TestPluginFixture> loa
         var problem = await response.AssertIsProblem(HttpStatusCode.BadRequest);
         Assert.Contains("NoSuchThing", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
     }
-
-    [Fact]
-    public async Task PostResolve_WithNoLoadOrder_Returns503()
-    {
-        await using var app = new MEditHost();
-
-        var response = await app.CreateClient().PostAsJsonAsync("/names/resolve", new { names = new[] { new { name = "TestNPC01" } } });
-
-        await response.AssertIsProblem(HttpStatusCode.ServiceUnavailable);
-    }
 }

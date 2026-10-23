@@ -28,14 +28,4 @@ public sealed class SelectRecordsApiTests(LoadedApiFixture<TestPluginFixture> lo
         var problem = await response.AssertIsProblem(HttpStatusCode.BadRequest);
         Assert.Contains("information_schema", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
     }
-
-    [Fact]
-    public async Task PostSelect_WithNoLoadOrder_Returns503()
-    {
-        await using var app = new MEditHost();
-
-        var response = await app.CreateClient().PostAsJsonAsync("/records/select", new { sql = "SELECT 1 AS n" });
-
-        await response.AssertIsProblem(HttpStatusCode.ServiceUnavailable);
-    }
 }

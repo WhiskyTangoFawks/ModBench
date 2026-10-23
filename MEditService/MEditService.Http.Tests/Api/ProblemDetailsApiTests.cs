@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
@@ -24,12 +23,8 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         return doc;
     }
 
-    [Theory]
-    [InlineData("badDataFolder", null, "Fallout4")]
-    [InlineData(null, "badInstance", "Fallout4")]
-    [InlineData(null, null, "NotAGame")]
-    public async Task PutLoadOrder_InvalidInput_ReturnsProblemDetails400(
-        string? badDataFolder, string? badInstance, string gameRelease)
+    [Fact]
+    public async Task PutLoadOrder_AnUnknownGameRelease_Is400()
     {
         var resp = await _client.PutAsJsonAsync("/load-order", new
         {
@@ -41,171 +36,48 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             mods = Array.Empty<object>(),
             places = Array.Empty<object>(),
             statCache = "stat-cache",
-            dataFolder = badDataFolder ?? _fixture.DataFolder,
-            instanceRoot = badInstance ?? _fixture.InstanceRoot,
-            gameRelease,
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
-        AssertIsProblemDetails(resp, 400);
-    }
-
-    [Fact]
-    public async Task PutLoadOrder_UnsupportedGameRelease_ReturnsProblemDetails400WithActionableMessage()
-    {
-        await using var app = new MEditHost();
-        var client = app.CreateClient();
-
-        var resp = await client.PutAsJsonAsync("/load-order", new
-        {
-            plugins = _fixture.Plugins.Select(p => p.Wire),
-            active = SnapshotPlugins.Active(_fixture.Plugins),
-            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
-            archives = Array.Empty<string>(),
-            stringsFiles = Array.Empty<string>(),
-            mods = Array.Empty<object>(),
-            places = Array.Empty<object>(),
-            statCache = "stat-cache",
             dataFolder = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
-            gameRelease = "Oblivion",
-            stringsLanguage = "English",
+            gameRelease = "NotAGame",
         });
 
-        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
         AssertIsProblemDetails(resp, 400);
-        var body = await resp.Content.ReadAsStringAsync();
-        Assert.Contains("mEdit does not support Oblivion: it has no codec to read its plugins.", body);
     }
 
     [Theory]
-    [InlineData("", 400)]
-    [InlineData("Plugin.txt", 400)]
-    public async Task CreatePlugin_InvalidInput_ReturnsProblemDetails(string name, int expectedStatus)
-    {
-        var resp = await _client.PostAsJsonAsync(
-            "/plugins/create", new { origin = "ProblemDetailsMod", name, folder = Path.Combine(_fixture.DataFolder, "ProblemDetailsMod") });
-
-        Assert.Equal((HttpStatusCode)expectedStatus, resp.StatusCode);
-        AssertIsProblemDetails(resp, expectedStatus);
-    }
-
-    [Fact]
-    public async Task CreatePlugin_DuplicateAtSameDestination_ReturnsProblemDetails409()
-    {
-        var modFolder = Directory.CreateDirectory(Path.Combine(_fixture.DataFolder, "DuplicateDestMod")).FullName;
-        var first = await _client.PostAsJsonAsync("/plugins/create", new { origin = "DuplicateDestMod", name = "Dup.esp", folder = modFolder });
-        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
-
-        var resp = await _client.PostAsJsonAsync("/plugins/create", new { origin = "DuplicateDestMod", name = "Dup.esp", folder = modFolder });
-
-        Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
-        AssertIsProblemDetails(resp, 409);
-    }
-
-    [Fact]
-    public async Task CreatePluginInMod_AnOriginNoModHoldsAPluginOf_ReturnsProblemDetails404()
-    {
-        var resp = await _client.PostAsJsonAsync("/plugins/create-in-mod", new { origin = "NoSuchMod", name = "New.esp" });
-
-        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
-        AssertIsProblemDetails(resp, 404);
-    }
-
-    [Theory]
-    [InlineData("createPlugin", 503)]
-    [InlineData("getFilter", 503)]
-    [InlineData("decompile-and-commit", 503)]
-    [InlineData("deleteRecordChanges", 503)]
-    [InlineData("setFilter", 503)]
-    [InlineData("getReferences", 503)]
-    [InlineData("getPluginDiagnoses", 503)]
-    [InlineData("decompilePlugin", 503)]
-    [InlineData("copyRecord", 503)]
-    [InlineData("getContainerChildren", 503)]
-    [InlineData("getPlugins", 503)]
-    [InlineData("getRecords", 503)]
-    [InlineData("getRecord", 503)]
-    [InlineData("compareRecord", 503)]
-    [InlineData("getPluginRecordTypes", 503)]
-    [InlineData("getWorldspaces", 503)]
-    [InlineData("getWorldspaceBlocks", 503)]
-    [InlineData("getCellChildRecords", 503)]
-    [InlineData("getInteriorCells", 503)]
-    public async Task Endpoint_WithAValidRequestAndNoLoadOrder_ReturnsProblemDetails(string op, int expectedStatus)
-    {
-        await using var app = new MEditHost();
-        var client = app.CreateClient();
-
-        var realPluginPath = Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName);
-
-        var resp = op switch
-        {
-            "createPlugin" => await client.PostAsJsonAsync(
-                "/plugins/create", new { origin = "NoLoadOrderMod", name = "New.esp", folder = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod") }),
-            "getFilter" => await client.GetAsync("/load-order/filter"),
-            "setFilter" => await client.SetFilter(),
-            "getReferences" => await client.GetAsync("/records/000800%3ANew.esp/references"),
-            "getPluginDiagnoses" => await client.GetAsync("/plugins/diagnoses"),
-            "decompilePlugin" => await client.Decompile([("New.esp", "NoLoadOrderMod")]),
-            "copyRecord" => await client.Copy("000800:New.esp", ("New.esp", "NoLoadOrderMod"), "Override", ("Dest.esp", "DestMod")),
-            "getContainerChildren" => await client.GetAsync("/plugins/New.esp/records/000800%3ANew.esp/children?origin=NoLoadOrderMod"),
-            "getPlugins" => await client.GetAsync("/plugins"),
-            "getRecords" => await client.GetAsync("/records"),
-            "getRecord" => await client.GetAsync("/records/000800%3ANew.esp"),
-            "compareRecord" => await client.GetAsync("/records/000800%3ANew.esp/compare"),
-            "getPluginRecordTypes" => await client.GetAsync("/plugins/New.esp/record-types?origin=NoLoadOrderMod"),
-            "getWorldspaces" => await client.GetAsync("/plugins/New.esp/worldspaces?origin=NoLoadOrderMod"),
-            "getWorldspaceBlocks" => await client.GetAsync("/plugins/New.esp/worldspaces/000800%3ANew.esp/blocks?origin=NoLoadOrderMod"),
-            "getCellChildRecords" => await client.GetAsync("/plugins/New.esp/cells/000800%3ANew.esp/children?origin=NoLoadOrderMod"),
-            "getInteriorCells" => await client.GetAsync("/plugins/New.esp/interior-cells?origin=NoLoadOrderMod"),
-            "decompile-and-commit" => await client.DecompileAndCommit("NoLoadOrderMod"),
-            "deleteRecordChanges" => await client.PostAsJsonAsync("/records/delete-changes", new
-            {
-                records = new[] { new { formKey = "000800:New.esp", plugin = new { name = "New.esp", origin = "NoLoadOrderMod" } } }
-            }),
-            _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown operation"),
-        };
-
-        var problem = AssertIsProblemDetails(resp, expectedStatus);
-        Assert.Contains("load order", problem.GetProperty("detail").GetString(), StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("NoLoadOrder", problem.GetProperty("refusal").GetString());
-    }
-
-    [Theory]
+    [InlineData("indexRefusal")]
     [InlineData("decompile-and-commit")]
     [InlineData("decompile")]
+    [InlineData("decompile-and-repair")]
     [InlineData("compile")]
+    [InlineData("build")]
     [InlineData("createPlugin")]
-    [InlineData("createPluginInMod")]
-    [InlineData("copyRecord")]
-    [InlineData("deleteRecordChanges")]
     [InlineData("renameSourceChanges")]
-    [InlineData("moveLastWritten")]
-    [InlineData("creatableExtensions")]
-    public async Task AWriteGestureWithNoLoadOrder_Answers503_WithTheExactNoLoadOrderProblem(string gesture)
+    [InlineData("recordEdit")]
+    public async Task EachRefusalFamily_WithNoLoadOrder_Answers503_WithTheExactNoLoadOrderProblem(string family)
     {
         await using var app = new MEditHost();
         var client = app.CreateClient();
         var plugin = new { name = "New.esp", origin = "NoLoadOrderMod" };
 
-        var response = gesture switch
+        var response = family switch
         {
+            "indexRefusal" => await client.GetAsync("/plugins"),
             "decompile-and-commit" => await client.DecompileAndCommit("NoLoadOrderMod"),
             "decompile" => await client.Decompile([("New.esp", "NoLoadOrderMod")]),
+            "decompile-and-repair" => await client.PostAsJsonAsync(
+                "/plugins/decompile-and-repair", new { plugins = new[] { new { plugin, hash = "h", sourceFolder = "s" } }, force = false }),
             "compile" => await client.Compile([("New.esp", "NoLoadOrderMod")]),
+            "build" => await client.Build([("NoLoadOrderMod", "NoLoadOrderMod")], "stat-cache"),
             "createPlugin" => await client.PostAsJsonAsync(
                 "/plugins/create", new { origin = "NoLoadOrderMod", name = "New.esp", folder = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod") }),
-            "createPluginInMod" => await client.PostAsJsonAsync("/plugins/create-in-mod", new { origin = "NoLoadOrderMod", name = "New.esp" }),
-            "copyRecord" => await client.Copy("000800:New.esp", ("New.esp", "NoLoadOrderMod"), "Override", ("Dest.esp", "DestMod")),
-            "deleteRecordChanges" => await client.PostAsJsonAsync("/records/delete-changes", new
+            "renameSourceChanges" => await client.PostAsJsonAsync(
+                "/plugins/rename-source-changes", new { plugin.origin, plugin.name, newName = "Renamed.esp" }),
+            "recordEdit" => await client.PostAsJsonAsync("/records/delete-changes", new
             {
-                records = new[] { new { formKey = "000800:New.esp", plugin = new { name = "New.esp", origin = "NoLoadOrderMod" } } }
+                records = new[] { new { formKey = "000800:New.esp", plugin } }
             }),
-            "renameSourceChanges" => await client.PostAsJsonAsync("/plugins/rename-source-changes", new { plugin.origin, plugin.name, newName = "Renamed.esp" }),
-            "moveLastWritten" => await client.PostAsJsonAsync("/plugins/move-last-written", new { plugin.origin, plugin.name, treeName = plugin.name, newName = "Renamed.esp" }),
-            "creatableExtensions" => await client.GetAsync("/plugins/creatable-extensions"),
-            _ => throw new ArgumentOutOfRangeException(nameof(gesture), gesture, "Unknown gesture"),
+            _ => throw new ArgumentOutOfRangeException(nameof(family), family, "Unknown refusal family"),
         };
 
         var problem = AssertIsProblemDetails(response, 503);

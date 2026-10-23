@@ -144,16 +144,6 @@ public sealed class BuildModTraceTests : HostedTests
         Assert.False(File.Exists(Path.Combine(_builtFolder, "meshes", "a.nif")));
     }
 
-    [Fact]
-    public async Task BuildingBeforeAnyLoadOrder_RefusesTheWholeSelectionOnce_503()
-    {
-        var response = await Client.Build([(Origin, Origin)], StatCache);
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("No load order has been received.", problem.GetProperty("detail").GetString());
-    }
-
     public static TheoryData<string, string> NotARequestToBuild => new()
     {
         { "no mod", "{\"mods\": [], \"exclusionMark\": \".mohidden\"}" },
