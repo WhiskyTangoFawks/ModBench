@@ -1,5 +1,8 @@
 using System.Text.Json;
 using MEditService.Commands.Build;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -26,13 +29,12 @@ public sealed class GitMissingRefusalTests : IDisposable
     private static (string Refusal, string Message) WholeSelection<T, TRefusal>(Answer<T, SelectionRefusal<TRefusal>> answer)
         where TRefusal : struct, Enum
     {
-        var whole = answer.WholeSelectionRefusal();
-        return (whole.Refusal.ToString(), whole.Message);
+        return answer.Holds(out _, out var whole) ? ("Landed", "") : (whole.Refusal.ToString(), whole.Message);
     }
 
     private static (string Refusal, string Message) Single(RecordEditResult result) => (result.Refusal.ToString(), result.Message);
 
-    private async Task<(string Refusal, string Message)> Gesture(string name)
+    private async Task<(string Refusal, string Message)> Gesture(string name, bool force = false)
     {
         var npc = new RecordAt(_mod.Plugin, _mod.Npc.ToString());
         var otherNpc = new RecordAt(_mod.Plugin, _mod.OtherNpc.ToString());
@@ -41,10 +43,10 @@ public sealed class GitMissingRefusalTests : IDisposable
         {
             "delete" => WholeSelection(await Handler<DeleteRecordChangesHandler>().DeleteRecords([npc, otherNpc])),
             "copy" => WholeSelection(await Handler<CopyRecordChangesHandler>().CopyRecords([npc], CopyMode.New, [_mod.Plugin], replace: false)),
-            "decompile" => WholeSelection(await Handler<DecompilePluginHandler>().DecompileAsync([_mod.Plugin], force: false)),
+            "decompile" => WholeSelection(await Handler<DecompilePluginHandler>().DecompileAsync([_mod.Plugin], force)),
             "compile" => WholeSelection(await Handler<CompilePluginHandler>().CompileAsync([_mod.Plugin])),
             "decompile-and-repair" => WholeSelection(await Handler<DecompileAndRepairPluginHandler>()
-                .DecompileAndRepairAsync([new PluginToRepair(_mod.Plugin, "hash", _mod.ModFolder)], [], force: false)),
+                .DecompileAndRepairAsync([new PluginToRepair(_mod.Plugin, "hash", _mod.ModFolder)], [], force)),
             "build" => WholeSelection(await Handler<BuildModHandler>().BuildAsync(
                 [new ModToBuild(SourceEditFixture.ModFolderOrigin, _mod.ModFolder, _mod.ModFolder, [], null)], new InstanceToBuild("", null, statCache))),
             "edit" => Single(Handler<EditRecordChangesHandler>()
@@ -73,14 +75,24 @@ public sealed class GitMissingRefusalTests : IDisposable
     [InlineData("edit")]
     [InlineData("create")]
     [InlineData("rename-source")]
-    public async Task AGestureWithGitMissing_IsRefusedAsGitUnavailable_NamingPath_AndChangesNoFile(string gesture)
+    public async Task AGestureWithGitMissing_IsRefusedAsGitUnavailable_NamingPath(string gesture)
     {
-        var before = FilesOutsideGit();
-
         var (refusal, message) = await Gesture(gesture);
 
         Assert.Equal("GitUnavailable", refusal);
         Assert.Contains("PATH", message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("decompile")]
+    [InlineData("compile")]
+    public async Task AGestureThatWrites_WithGitMissing_ChangesNoFile(string gesture)
+    {
+        SourceEdits.Rewrite<Npc>(_mod.Repository.Require(), _mod.Plugin, _mod.NpcIdentity, GameRelease.Fallout4, npc => npc.HeightMax = 9);
+        var before = FilesOutsideGit();
+
+        await Gesture(gesture, force: true);
+
         Assert.Equal(before, FilesOutsideGit());
     }
 }
