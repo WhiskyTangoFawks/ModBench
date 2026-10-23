@@ -181,6 +181,95 @@ describe('the agent server, given an instance value', () => {
     ] });
   });
 
+  describe('a line whose file is not on disk', () => {
+    beforeEach(() => { fired.calls = []; });
+    const cloned = (...names: string[]) => new FakeInstance({
+      ...VALUE, holdsRepository: true, dataFolderPlugins: { kind: 'listed', names: new Set(['temp.esp']) },
+      mods: [{ kind: 'mod', name: 'Acc Mod B', enabled: true }, { kind: 'mod', name: 'Acc Mod C', enabled: true }],
+      plugins: names.map((name, line) => ({ name, path: undefined, origin: DATA_DIRECTORY_ORIGIN, line, enabled: true, winning: true })),
+    });
+
+    it.each([
+      ['a manifest names it', [status('Acc Mod C', { gone: ['AccC.esp'] })], 'Acc Mod C'],
+      ['two manifests name it, the first in mod order', [status('Acc Mod B', { gone: ['accc.esp'] }), status('Acc Mod C', { gone: ['AccC.esp'] })], 'Acc Mod B'],
+      ['no manifest names it', [status('Acc Mod C')], DATA_DIRECTORY_ORIGIN],
+    ])('has as its origin the mod whose manifest names it: %s', async (_case, answer, origin) => {
+      statusRead.answer = answer;
+
+      expect(await read(await clientOf(cloned('AccC.esp')), 'list_plugins')).toMatchObject({ plugins: [{ name: 'AccC.esp', origin }] });
+    });
+
+    it('answers in part when a mod\'s status cannot be read, naming each line it could not place', async () => {
+      statusRead.answer = [status('Acc Mod C', { gone: ['AccC.esp'], unreadable: { manifest: true, why: 'git is gone' } })];
+      const client = await clientOf(cloned('AccC.esp', 'Other.esp'));
+
+      const { isError, text } = await call(client, 'list_plugins');
+
+      expect({ isError, answer: JSON.parse(text) as unknown }).toMatchObject({
+        isError: true,
+        answer: {
+          plugins: [{ name: 'AccC.esp', origin: 'Acc Mod C' }, { name: 'Other.esp', origin: DATA_DIRECTORY_ORIGIN }],
+          notRestoredUndecided: { lines: ['Other.esp'], reason: 'the status of "Acc Mod C" could not be read: git is gone' },
+        },
+      });
+    });
+
+    it('answers in part for a line a lower mod names when the mod above it cannot be read', async () => {
+      statusRead.answer = [status('Acc Mod B', { unreadable: { manifest: true, why: 'git is gone' } }), status('Acc Mod C', { gone: ['AccC.esp'] })];
+      const client = await clientOf(cloned('AccC.esp'));
+
+      const { isError, text } = await call(client, 'list_plugins');
+
+      expect({ isError, answer: JSON.parse(text) as unknown }).toMatchObject({
+        isError: true, answer: { plugins: [{ name: 'AccC.esp', origin: 'Acc Mod C' }], notRestoredUndecided: { lines: ['AccC.esp'] } },
+      });
+    });
+
+    it('refuses a plugin named by an origin it could not read the manifests for, giving that reason', async () => {
+      statusRead.answer = localFailure('mEdit is down');
+      const client = await clientOf(cloned('AccC.esp'));
+
+      const { isError, text } = await call(client, 'plugin_enable', { argument: [{ name: 'AccC.esp', origin: 'Acc Mod C' }] });
+
+      expect(isError).toBe(true);
+      expect(text).toContain('The mods\' status could not be read: ');
+    });
+
+    it('asks for the manifests only when a plugin is named with its origin', async () => {
+      statusRead.asked = [];
+      fired.outcome = { applied: true, outcome: { landed: ['AccC.esp'], refused: [] } };
+      const client = await clientOf(cloned('AccC.esp'));
+
+      await call(client, 'plugin_enable', { argument: [{ name: 'AccC.esp' }] });
+
+      expect(statusRead.asked).toEqual([]);
+    });
+
+    it('answers in part when mEdit cannot be asked, so the read does not depend on it', async () => {
+      statusRead.answer = localFailure('mEdit is down');
+      const client = await clientOf(cloned('AccC.esp'));
+
+      const { isError, text } = await call(client, 'list_plugins');
+
+      expect({ isError, answer: JSON.parse(text) as unknown }).toMatchObject({
+        isError: true, answer: { plugins: [{ name: 'AccC.esp', origin: DATA_DIRECTORY_ORIGIN }], notRestoredUndecided: { lines: ['AccC.esp'] } },
+      });
+    });
+
+    it.each([
+      ['plugin_enable', 'modbench.plugin.enable', {}],
+      ['plugin_move', 'modbench.plugin.move', { drop: { kind: 'winningEnd' } }],
+    ])('fires %s on the line named by the origin list_plugins shows, as the load order holds it', async (tool, command, options) => {
+      statusRead.answer = [status('Acc Mod C', { gone: ['AccC.esp'] })];
+      fired.outcome = { applied: true, outcome: { landed: ['AccC.esp'], refused: [] } };
+      const client = await clientOf(cloned('AccC.esp'));
+
+      await call(client, tool, { argument: [{ name: 'AccC.esp', origin: 'Acc Mod C' }], options });
+
+      expect(fired.calls).toEqual([[command, new AgentCall([{ kind: 'plugin', plugin: { name: 'AccC.esp', origin: DATA_DIRECTORY_ORIGIN } }], options)]]);
+    });
+  });
+
   describe('reading each mod\'s status against its manifest', () => {
     const inRepository = new FakeInstance({
       ...VALUE, holdsRepository: true,

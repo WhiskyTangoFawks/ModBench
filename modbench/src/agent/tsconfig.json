@@ -10,6 +10,7 @@
     { "path": "../drivingLib" },
     { "path": "../instanceAdapter" },
     { "path": "../instanceLoader" },
+    { "path": "../pluginCommands" },
     { "path": "../ports" },
     { "path": "../wire" }
   ],

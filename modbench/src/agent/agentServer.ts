@@ -14,6 +14,8 @@ import { FILE_CONFLICTS } from './fileConflicts';
 import { GESTURE_TOOLS } from './gestures';
 import { RESOLVE_INSTANCE_NAMES } from './instanceNames';
 import { INSTANCE_READS } from './instanceReads';
+import { LIST_PLUGINS } from './listPlugins';
+import { withNotRestored } from './notRestored';
 import { Refusal } from '../drivingLib/refusal';
 import { parseOrRefuse } from './refusal';
 import { LIST_MOD_STATUSES } from './modStatuses';
@@ -82,6 +84,11 @@ function register<Shape extends z.ZodRawShape>(
 
 const NO_INPUT = {};
 
+// Only a plugin named with its origin is matched against the origins list_plugins shows.
+const namesAnOrigin = (args: unknown): boolean =>
+  typeof args === 'object' && args !== null
+  && Object.entries(args).some(([key, value]) => (key === 'origin' && typeof value === 'string') || namesAnOrigin(value));
+
 const INSTRUCTIONS = `Name objects as Modbench's views do: a plugin by its file name, a mod or a separator by its name, a record by its EditorID or FormKey, a downloaded file by its file name, an archive or a folder outside the downloads by its path, a file in a mod by its path in the mod. A name that means more than one thing is refused with each match listed as you can name it; name the one you mean that way.
 
 A plugin with source is a text file in a repository: edit it with your file tools, and the user reviews the change in Source Control. A plugin with no source is a binary: never edit it. Mod manager files change only through the gesture tools. A gesture runs on the argument and options given, never on the selection, with no picker, prompt or confirmation, and answers once Modbench's views show its change: with its outcome, or with what landed and each item refused and why. A change to many records by a rule is a script: write a Python file with import medit and run it in your shell with the variables script_environment returns. help(medit) lists its functions.
@@ -94,14 +101,16 @@ function mcpServerOf({ instance, mEdit, terminalEnvironment, readStatus, log }: 
   const server = new McpServer({ name: 'modbench', version: '0' }, { instructions: INSTRUCTIONS });
   const standing = () => instanceMessages(instance).filter((message) => message !== undefined);
   for (const read of INSTANCE_READS) register(server, log, standing, { ...read, input: NO_INPUT }, () => read.of(currentValue(instance)));
+  const naming = (args?: unknown) => (namesAnOrigin(args) ? withNotRestored(currentValue(instance), readStatus) : Promise.resolve(currentValue(instance)));
+  register(server, log, standing, { ...LIST_PLUGINS, input: NO_INPUT }, async () => LIST_PLUGINS.of(await withNotRestored(currentValue(instance), readStatus)));
   register(server, log, standing, { ...LIST_MOD_STATUSES, input: NO_INPUT }, () => LIST_MOD_STATUSES.of(currentValue(instance), readStatus));
   register(server, log, standing, FILE_CONFLICTS, (args) => FILE_CONFLICTS.of(currentValue(instance), args));
   register(server, log, standing, RESOLVE_INSTANCE_NAMES, (args) => RESOLVE_INSTANCE_NAMES.of(currentValue(instance), args));
   register(server, log, standing, RESOLVE_NAMES, (args) => RESOLVE_NAMES.of(mEdit, args));
-  register(server, log, standing, READ_RECORD, (args) => READ_RECORD.of(mEdit, currentValue(instance), args));
+  register(server, log, standing, READ_RECORD, async (args) => READ_RECORD.of(mEdit, await naming(args), args));
   register(server, log, standing, LIST_REFERENCES, (args) => LIST_REFERENCES.of(mEdit, args));
   register(server, log, standing, SELECT_ROWS, (args) => SELECT_ROWS.of(mEdit, args));
-  for (const gesture of GESTURE_TOOLS) register(server, log, standing, gesture, (args) => gesture.of(currentValue(instance), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
+  for (const gesture of GESTURE_TOOLS) register(server, log, standing, gesture, async (args) => gesture.of(await naming(args), mEdit, args, (line) => { log.warn(`[agent] ${gesture.name}: ${line}`); }));
   register(server, log, standing, { ...SCRIPT_ENVIRONMENT, input: NO_INPUT }, () => SCRIPT_ENVIRONMENT.of(terminalEnvironment));
   register(server, log, standing, { ...SOURCE_PROBLEMS, input: NO_INPUT }, SOURCE_PROBLEMS.of);
   return server;
