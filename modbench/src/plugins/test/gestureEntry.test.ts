@@ -97,6 +97,17 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([])).toMatchObject({ allInSourceMod: false });
   });
 
+  it('decompile and repair sees a selection of malformed plugins in mods, every one', () => {
+    const malformedInASourceMod = withFlags(pluginRow('Mu.esp', 'ModE'), 'plugin enabled inSourceMod compiledPlugin malformed');
+    const malformedInNoSourceMod = withFlags(pluginRow('Nu.esp', 'ModC'), 'plugin enabled inNonSourceMod nonCompiledPlugin malformed');
+    const malformedInTheGameFolder = withFlags(pluginRow('Xi.esp', 'Data/'), 'plugin enabled nonCompiledPlugin malformed');
+
+    expect(context([malformedInASourceMod, malformedInNoSourceMod])).toMatchObject({ allMalformedInAMod: true });
+    expect(context([malformedInASourceMod, compilable])).toMatchObject({ allMalformedInAMod: false });
+    expect(context([malformedInTheGameFolder])).toMatchObject({ allMalformedInAMod: false });
+    expect(context([])).toMatchObject({ allMalformedInAMod: false });
+  });
+
   it('rename sees exactly one selected compiled plugin, editable or not', () => {
     expect(context([compilable]).singleCompiledPlugin).toBe(true);
     expect(context([compiledPluginReadOnly]).singleCompiledPlugin).toBe(true);

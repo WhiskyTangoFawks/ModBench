@@ -40,6 +40,30 @@ public sealed class SourceRepositoryInitTests : IDisposable
     }
 
     [Fact]
+    public void Init_ThenARepairCommit_MakesItTheSecondCommit_HoldingOnlyThatPluginsRepairedTree()
+    {
+        var repaired = new TreeCommit([new TreeFile("npc_/A.esp/000001.json", "{\"repaired\":1}"u8.ToArray())], "Repair A.esp");
+
+        Assert.Null(TestAdapters.Source().Init(_sourceFolder, TestMod.Name, [DoorTreeOf("A.esp"), DoorTreeOf("B.esp")], [], ("A.esp", repaired)));
+
+        Assert.Equal([$"Init {TestMod.Name}", "Repair A.esp"], SubjectsOnMain());
+        Assert.Equal(["plugin-source/A.esp/npc_/A.esp/000001.json"], PathsIn("main"));
+        Assert.Equal("{\"repaired\":1}", Git("show", "main:plugin-source/A.esp/npc_/A.esp/000001.json"));
+        Assert.Equal(string.Empty, Git("status", "--porcelain"));
+    }
+
+    [Fact]
+    public void Init_WhoseRepairCommitFails_LeavesNoRepositoryAndNoFile()
+    {
+        TreeFile[] secondFileNeedsADirectoryTheFirstOccupies = [new("npc_", "{}"u8.ToArray()), new("npc_/A.esp/000002.json", "{}"u8.ToArray())];
+
+        Assert.NotNull(TestAdapters.Source().Init(
+            _sourceFolder, TestMod.Name, [DoorTreeOf("A.esp")], [], ("A.esp", new TreeCommit(secondFileNeedsADirectoryTheFirstOccupies, "Repair A.esp"))));
+
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_sourceFolder));
+    }
+
+    [Fact]
     public void Init_CommitsEachAssetWithItsExactBytes()
     {
         byte[] bytes = [0x44, 0x44, 0x53, 0x20, 0x00, 0xFF, 0x0D, 0x0A];

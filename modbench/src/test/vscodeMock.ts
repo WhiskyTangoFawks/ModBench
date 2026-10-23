@@ -68,6 +68,8 @@ export const uriFile = (p: string) => {
 export const uriFrom = (opts: { scheme: string; path: string; query?: string }) =>
   ({ scheme: opts.scheme, path: opts.path, query: opts.query ?? '' });
 
+export const uriParse = (value: string) => ({ toString: () => value });
+
 // Every member `vscode.DataTransferItem`/`vscode.DataTransfer` declare, so a test can pass one
 // where production code's own parameter is typed `vscode.DataTransfer` — no cast at the seam.
 export class DataTransferItem {

@@ -1,0 +1,138 @@
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.ModFolderAdapter;
+using MEditService.PluginAdapter;
+using MEditService.Ports;
+using MEditService.SourceAdapter;
+using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda;
+
+namespace MEditService.Commands.Build;
+
+/// <summary>A plugin whose source an init commits as it is given, not as decompile reads it, and the commit after the init
+/// that repairs it.</summary>
+internal sealed record RepairedInInit(RegisteredPlugin Plugin, PluginSource Flagged, TreeCommit Repaired);
+
+/// <summary>Decompile and commit's init of a mod's repository, which decompile and repair makes too: each plugin through
+/// the round-trip gate, every other file of the mod as an asset, in one commit, or nothing.</summary>
+internal sealed class ModInit(
+    ILogger logger, IPluginAdapter plugins, ISourceAdapter source, IModFolderRepository modFolders, PluginDecompiler decompiler)
+{
+    /// <summary>The repository of <paramref name="toCommit"/>, holding the source of each of the mod's
+    /// <paramref name="provided"/> but <paramref name="leftOut"/>, and <paramref name="repair"/>'s two commits when given.
+    /// Answers the plugins whose source it holds.</summary>
+    internal async Task<ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>> InitAsync(
+        LoadOrderSnapshot loadOrder, ModToDecompileAndCommit toCommit, List<RegisteredPlugin> provided, IReadOnlySet<PluginAddress> leftOut,
+        RepairedInInit? repair, Action<DecompileAndCommitPhase> setPhase, CancellationToken cancel)
+    {
+        if (provided.Count == 0)
+        {
+            return Refused(DecompileAndCommitRefusal.ModProvidesNoPlugin,
+                $"'{toCommit.Name}' provides no plugin in the load order, so there is nothing to decompile and commit.");
+        }
+
+        var mod = (PluginProvider.FromMod)provided[0].Provider;
+
+        if (source.IsSourceMod(toCommit.SourceFolder))
+        {
+            return Refused(DecompileAndCommitRefusal.AlreadyInitialized,
+                $"'{toCommit.SourceFolder}' already holds a repository. To put a plugin's source into its working tree, decompile it.");
+        }
+
+        // A .git with no main that Modbench did not make is someone else's, never written to (ADR-0003).
+        if (source.HoldsAnotherRepository(toCommit.SourceFolder))
+        {
+            return Refused(DecompileAndCommitRefusal.AlreadyInitialized,
+                $"'{toCommit.SourceFolder}' already holds a repository with no main branch, made outside Modbench.");
+        }
+
+        var verified = new List<(RegisteredPlugin Plugin, PluginSource Source)>();
+        var refused = new List<ItemRefused<PluginAddress, DecompileAndCommitRefusal>>();
+        foreach (var plugin in provided.Where(plugin => !leftOut.Contains(plugin.Key)))
+        {
+            cancel.ThrowIfCancellationRequested();
+            if (repair is { } repaired && PluginAddress.Comparer.Equals(repaired.Plugin.Key, plugin.Key))
+            {
+                verified.Add((plugin, repaired.Flagged));
+                continue;
+            }
+            setPhase(DecompileAndCommitPhase.Parsing);
+            var decompiled = await decompiler.DecompileAsync(
+                loadOrder, plugin, mod.Folder, onParsed: () => setPhase(DecompileAndCommitPhase.Serializing), cancel);
+            if (decompiled.Source is { } read)
+            {
+                verified.Add((plugin, read));
+            }
+            else
+            {
+                refused.Add(new ItemRefused<PluginAddress, DecompileAndCommitRefusal>(
+                    plugin.Key,
+                    decompiled.Refusal == DecompileRefusal.MissingLocalizationStrings
+                        ? DecompileAndCommitRefusal.MissingLocalizationStrings
+                        : DecompileAndCommitRefusal.RoundTripFailed,
+                    decompiled.Message));
+            }
+        }
+
+        if (refused.Count > 0)
+        {
+            var cause = refused.Select(r => r.Refusal).Distinct().ToList() is [var shared] ? shared : DecompileAndCommitRefusal.PluginsRefused;
+            return Refused(cause, string.Join('\n', refused.Select(r => r.Message)));
+        }
+
+        setPhase(DecompileAndCommitPhase.ReadingFiles);
+        List<Asset> assets;
+        try
+        {
+            assets = AssetsOf(mod, toCommit, provided, loadOrder.GameRelease);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Refused(DecompileAndCommitRefusal.ModFilesUnreadable,
+                $"'{mod.Name}' was not initialized: a file of its folder could not be read: {ex.Message}");
+        }
+
+        setPhase(DecompileAndCommitPhase.Committing);
+        if (Commit(mod, toCommit.SourceFolder, verified, assets, repair) is { } failure)
+        {
+            logger.LogWarning("Refused to decompile and commit {Mod}: {Reason}", mod.Name, failure.Reason);
+            return Refused(DecompileAndCommitRefusal.CommitFailed, $"'{mod.Name}' was not initialized: {failure.Reason}");
+        }
+
+        return ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Landed([.. verified.Select(v => v.Plugin.Key)]);
+    }
+
+    private static ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>> Refused(DecompileAndCommitRefusal refusal, string message) =>
+        ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Refused(refusal, message);
+
+    // The assets are every file of the mod but what compile writes for its plugins, a build output, and the mod
+    // manager's own files (plugins.md, Decompile and commit, story 2).
+    private List<Asset> AssetsOf(PluginProvider.FromMod mod, ModToDecompileAndCommit toCommit, List<RegisteredPlugin> provided, GameRelease release)
+    {
+        var all = modFolders.Files(mod.Folder, mod.Name, toCommit.MetadataFiles.ToHashSet(StringComparer.Ordinal), statCache: null).Files;
+        var paths = all.Select(file => file.Path).ToList();
+        var compiled = provided.SelectMany(plugin => plugins.WrittenByCompile(plugin, paths, release)).ToHashSet(StringComparer.Ordinal);
+        return
+        [
+            .. all
+                .Where(file => !compiled.Contains(file.Path))
+                .Select(file => new Asset(file.Path, () => modFolders.OpenFile(mod.Folder, file.Path))),
+        ];
+    }
+
+    // The adapter writes nothing when any of it fails (plugins.md, Decompile and commit, story 5).
+    private SourceFailure? Commit(
+        PluginProvider.FromMod mod, string sourceFolder, List<(RegisteredPlugin Plugin, PluginSource Source)> verified, List<Asset> assets,
+        RepairedInInit? repair)
+    {
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Initializing {SourceFolder} with {PluginCount} plugin(s), {FileCount} source files and {AssetCount} asset(s)",
+                sourceFolder, verified.Count, verified.Sum(v => v.Source.Files.Count), assets.Count);
+        }
+
+        return source.Init(sourceFolder, modFolders.FolderName(mod.Folder),
+            [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))], assets,
+            repair is { } repaired ? (repaired.Plugin.Name, repaired.Repaired) : null);
+    }
+}

@@ -60,11 +60,11 @@ public interface ISourceAdapter
     /// file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
     string ContentStamp(string text);
 
-    /// <summary>A repository for a mod that has none: one commit, <c>Init &lt;mod&gt;</c>, on <c>main</c>, of each
-    /// plugin's door tree, the assets and a build configuration naming <paramref name="output"/>.</summary>
+    /// <summary>A repository for a mod that has none: <c>Init &lt;mod&gt;</c> on <c>main</c>, of each plugin's tree,
+    /// the assets and a build configuration naming <paramref name="output"/>, then any <paramref name="repair"/>.</summary>
     SourceFailure? Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets);
+        IReadOnlyList<Asset> assets, (string Plugin, TreeCommit Commit)? repair = null);
 
     /// <summary>What the build of the source in <paramref name="sourceFolder"/> writes, as its working tree says now.</summary>
     Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder);

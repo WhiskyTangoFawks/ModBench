@@ -48,6 +48,10 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string repairedPath, GameRelease gameRelease) =>
         inner.VerifyRepaired(pluginPath, previewedHash, chosen, repairedPath, gameRelease);
 
+    public virtual Answer<PluginSource, PluginFailure> FlaggedSourceOf(
+        RegisteredPlugin plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, PluginSource repaired, LoadOrderSnapshot loadOrder) =>
+        inner.FlaggedSourceOf(plugin, previewedHash, chosen, repaired, loadOrder);
+
     public virtual Answer<IReadOnlyList<string>, PluginFailure> StringsPlacesOf(ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         inner.StringsPlacesOf(modPath, loadOrder, strings);
 

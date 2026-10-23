@@ -15,7 +15,7 @@ internal static class GitInit
 {
     internal static void Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets)
+        IReadOnlyList<Asset> assets, (string Plugin, TreeCommit Commit)? repair)
     {
         if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
@@ -34,6 +34,12 @@ internal static class GitInit
             journal.Write(Path.Combine(sourceFolder, SourceRepositoryLayout.BuildConfigurationFileName), BuildConfiguration.Of(output));
             git.Run("add", "-A");
             git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
+            if (repair is var (repaired, commit))
+            {
+                SourceRepositoryWrites.ReplaceTree(journal, sourceFolder, repaired, SourceRepositoryLayout.PristineFilesOf(repaired, commit.Tree));
+                git.Run("add", "-A");
+                git.Run("commit", "-q", "-m", commit.Message);
+            }
             foreach (var (_, plugin) in plugins)
             {
                 if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Plugin, binarySha256);

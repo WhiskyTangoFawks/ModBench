@@ -54,13 +54,27 @@ internal static class PluginRepair
         return null;
     }
 
-    private static Answer<Dictionary<int, PlannedRecord>, PluginFailure> Planned(
+    /// <summary>Each record a diagnosis of <paramref name="chosen"/> names, as the plugin holds it, with those
+    /// diagnoses.</summary>
+    internal static Answer<List<Malformations.Found[]>, PluginFailure> Diagnosed(
+        byte[] plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, GameRelease release) =>
+        Chosen(plugin, previewedHash, chosen, release)
+            .Then<List<Malformations.Found[]>>(found => found.GroupBy(f => f.Record.Location).Select(record => record.ToArray()).ToList());
+
+    private static Answer<List<Malformations.Found>, PluginFailure> Chosen(
         byte[] plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, GameRelease release)
     {
         if (PluginBinaryHash.OfBytes(plugin) != previewedHash) return new PluginFailure.ChangedSincePreview();
-        var repairing = Malformations.In(plugin, release).Where(found => chosen.Contains(found.Diagnosis)).ToList();
-        if (chosen.FirstOrDefault(diagnosis => repairing.All(found => found.Diagnosis != diagnosis)) is { } absent)
+        var found = Malformations.In(plugin, release).Where(f => chosen.Contains(f.Diagnosis)).ToList();
+        if (chosen.FirstOrDefault(diagnosis => found.All(f => f.Diagnosis != diagnosis)) is { } absent)
             throw new ArgumentException($"A diagnosis chosen for repair is one its preview made, and {absent.Describe()} is not.", nameof(chosen));
+        return found;
+    }
+
+    private static Answer<Dictionary<int, PlannedRecord>, PluginFailure> Planned(
+        byte[] plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, GameRelease release)
+    {
+        if (!Chosen(plugin, previewedHash, chosen, release).Holds(out var repairing, out var refused)) return refused;
         if (repairing.FirstOrDefault(found => found.Repair is null) is { } unanswered) return new PluginFailure.NoRepair(unanswered.Diagnosis);
 
         return repairing

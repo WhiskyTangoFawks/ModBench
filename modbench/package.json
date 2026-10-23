@@ -706,6 +706,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.plugin.decompileAndRepair",
+        "title": "Decompile and Repair Plugin",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.mod.build",
         "title": "Build Mod",
         "category": "Modbench"
@@ -910,6 +915,10 @@
         {
           "command": "modbench.plugin.decompile",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInSourceMod"
+        },
+        {
+          "command": "modbench.plugin.decompileAndRepair",
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allMalformedInAMod"
         },
         {
           "command": "modbench.mod.build",
@@ -1538,9 +1547,14 @@
           "group": "4_sourceControl@2"
         },
         {
+          "command": "modbench.plugin.decompileAndRepair",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\bmalformed\\b/ && viewItem =~ /\\b(inSourceMod|inNonSourceMod)\\b/",
+          "group": "4_sourceControl@3"
+        },
+        {
           "command": "modbench.mod.build",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binSourceMod\\b/",
-          "group": "4_sourceControl@3"
+          "group": "4_sourceControl@4"
         },
         {
           "command": "modbench.copyValue",

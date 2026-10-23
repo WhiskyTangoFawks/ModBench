@@ -128,6 +128,30 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         }
     }
 
+    public Answer<PluginSource, PluginFailure> FlaggedSourceOf(
+        RegisteredPlugin plugin, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, PluginSource repaired, LoadOrderSnapshot loadOrder)
+    {
+        try
+        {
+            var bytes = File.ReadAllBytes(plugin.Path);
+            if (!PluginRepair.Diagnosed(bytes, previewedHash, chosen, loadOrder.GameRelease).Holds(out var diagnosed, out var refused)) return refused;
+            var masters = PluginBinaryWalk.MastersOf(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder);
+            var flagged = diagnosed.Select(record => new PluginTrees.FlaggedRecord(
+                masters.GetFormKey(record[0].Record.FormID, reference: false).ToString(),
+                [.. record.Select(found => found.Diagnosis.Describe())],
+                [.. record[0].Subrecords.Select(subrecord => (subrecord.Signature, (ReadOnlyMemory<byte>)subrecord.Payload.ToArray()))]));
+            return repaired with
+            {
+                Files = PluginTrees.Flagged(repaired.Files, [.. flagged], loadOrder.GameRelease),
+                BinarySha256 = Convert.ToHexString(SHA256.HashData(bytes)),
+            };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new PluginFailure.Inaccessible(ex);
+        }
+    }
+
     public Answer<string, PluginFailure> VerifyRepaired(
         string pluginPath, string previewedHash, IReadOnlyCollection<PluginDiagnosis> chosen, string repairedPath, GameRelease gameRelease)
     {

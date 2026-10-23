@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
-  DiagnosticSeverity, FakeDiagnosticCollection, uriFile, uriFrom,
+  DiagnosticSeverity, FakeDiagnosticCollection, uriFile, uriFrom, uriParse,
 } from '../../test/vscodeMock';
 import {
   filterBoxCommandsMock, filterBoxWindowMock, currentBoxOf, waitForMessage, FakeTreeViews, type FakeInputBox,
@@ -35,7 +35,7 @@ vi.mock('vscode', () => {
   h.commands = state.commands;
   return {
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
-    DiagnosticSeverity, Uri: { file: uriFile, from: uriFrom },
+    DiagnosticSeverity, Uri: { file: uriFile, from: uriFrom, parse: uriParse },
     StatusBarAlignment: { Left: 1 },
     Position: class { constructor(public line: number, public character: number) {} },
     CodeLens: class { constructor(public range: unknown, public command: unknown) {} },

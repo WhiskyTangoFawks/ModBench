@@ -41,6 +41,20 @@ public static class MalformationFixtures
         }
     }
 
+    private static MalformationFixture ShortFixedSizeSubrecordOfAPerk
+    {
+        get
+        {
+            var mod = NewMod();
+            var perk = mod.Perks.AddNew("FTS_CallMarkerPerk");
+            perk.Effects.Add(new PerkEntryPointAddActivateChoice { ButtonLabel = "Call", Flags = 0 });
+            return Malformed(nameof(ShortFixedSizeSubrecord), mod, "PERK", perk,
+                subrecords => subrecords.Select(s => s.Signature == "EPF3" ? (s.Signature, s.Payload[..1]) : s),
+                "fixed-size-subrecord-short, repairable (lossless): EPF3 is 1 bytes; a PERK EPF3 is always 2",
+                "pads EPF3 from 1 to 2 bytes with zeros");
+        }
+    }
+
     private static MalformationFixture WrongFixedCountList
     {
         get

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, fakeUri } from '../../test/vscodeMock';
+import { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, fakeUri, uriParse } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ Diagnostic, Range, DiagnosticSeverity, Uri: { file: fakeUri } }));
+vi.mock('vscode', () => ({ Diagnostic, Range, DiagnosticSeverity, Uri: { file: fakeUri, parse: uriParse } }));
 
-import { publishPluginProblems } from '../loadDiagnostics';
+import { decompileAndRepairLink, publishPluginProblems } from '../loadDiagnostics';
 import type { PluginAddress, PluginDiagnosisReport } from '../../client';
 import { present } from '../../ports/present';
 
@@ -53,6 +53,21 @@ describe('publishPluginProblems', () => {
 
     expect(clear).toHaveBeenCalledTimes(2);
     expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection).map(([path]) => path)).toEqual(['/i/mods/M/B.esp']);
+  });
+
+  it('gives each diagnosis the code it is given for its plugin: a Malformed entry links to decompile and repair of that plugin', () => {
+    const collection = new FakeDiagnosticCollection();
+
+    publishPluginProblems(collection, pluginFilesFrom({ 'M/A.esp': '/i/mods/M/A.esp' }), [report('A.esp', 'M', 'malformed')], DiagnosticSeverity.Warning,
+      decompileAndRepairLink);
+
+    const [, [diagnostic]] = present(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)[0], 'the sole diagnostic-collection entry');
+    const code = diagnostic?.code;
+    if (typeof code !== 'object') throw new Error(`Expected the diagnostic's code to be a link, not ${String(code)}.`);
+    expect(code.value).toBe('decompile and repair');
+    const target = code.target.toString();
+    expect(target.startsWith('command:modbench.plugin.decompileAndRepair?')).toBe(true);
+    expect(JSON.parse(decodeURIComponent(target.slice(target.indexOf('?') + 1)))).toEqual([{ name: 'A.esp', origin: 'M' }]);
   });
 
   it('groups several diagnoses on one plugin under one file entry', () => {
