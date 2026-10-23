@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../../test/noDetectors';
@@ -31,8 +31,11 @@ async function gameFolder(): Promise<string> {
   return game;
 }
 
+const PUBLISHER_FILE = 'publisher.json';
+
 const adapterOver = (root: string, { game, detectors = NO_DETECTORS }: { game?: string; detectors?: GameDetectors } = {}) => mo2InstanceAdapter({
   instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(game), detectors, installationFileReader: fakeInstallationFileReader([]),
+  publisherConfigurationFile: { name: PUBLISHER_FILE, spelling: { native: true, separators: [{ first: '\\\\', rest: '\\\\' }], ends: '"' } },
 });
 
 async function put(root: string, path: string, text: string): Promise<void> {
@@ -165,6 +168,50 @@ describe('the MO2 adapter\'s path tokens', () => {
     git(root, 'config', 'filter.modbench-settings-tokens.clean', 'exit 1');
 
     expect(() => execFileSync('git', ['add', '--', 'ModOrganizer.ini'], { cwd: root, stdio: 'pipe' })).toThrow(/ModOrganizer\.ini/);
+  });
+
+  describe('in the publisher\'s configuration, spelt natively', () => {
+    const publisherSettings = (instance: string, game: string): string =>
+      JSON.stringify({ Source: instance, Downloads: `${instance}${sep}downloads`, GamePath: game }, null, 2);
+
+    it('holds each folder by its native token, and the working tree by this machine\'s paths', async () => {
+      const game = await gameFolder();
+      const { root, adapter } = await instanceRepository([], game);
+      await put(root, PUBLISHER_FILE, publisherSettings(root, game));
+
+      await adapter.writePathTokens();
+
+      expect([held(root, PUBLISHER_FILE), await readFile(join(root, PUBLISHER_FILE), 'utf8')])
+        .toEqual([publisherSettings('{instance folder}', '{game folder}'), publisherSettings(root, game)]);
+    });
+
+    it('puts a clone\'s own folders in place of their tokens, and git holds the clone as committed', async () => {
+      const game = await gameFolder();
+      const { root, adapter } = await instanceRepository([], game);
+      await put(root, PUBLISHER_FILE, publisherSettings(root, game));
+      await adapter.writePathTokens();
+      git(root, 'add', '--', PUBLISHER_FILE, 'ModOrganizer.ini');
+      git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'paths');
+      const clone = join(await folder('clone'), 'modlist');
+      git(dirname(clone), 'clone', '--quiet', '--config', 'core.autocrlf=false', root, clone);
+      await mkdir(join(clone, 'mods'));
+      const cloneGame = await gameFolder();
+
+      await adapterOver(clone, { game: cloneGame }).writePathTokens();
+
+      expect([await readFile(join(clone, PUBLISHER_FILE), 'utf8'), git(clone, 'status', '--porcelain')])
+        .toEqual([publisherSettings(clone, cloneGame), '']);
+    });
+
+    it('answers each path outside the two folders as a commit would hold it', async () => {
+      const game = await gameFolder();
+      const { root, adapter } = await instanceRepository([], game);
+      const outside = join(tmpdir(), 'Life in the Ruins.wabbajack');
+      await put(root, PUBLISHER_FILE, JSON.stringify({ Source: root, GamePath: game, OutputFile: outside }));
+      await adapter.writePathTokens();
+
+      expect(await adapter.pathsOutsideFolders()).toEqual([{ file: PUBLISHER_FILE, path: JSON.stringify(outside).slice(1, -1) }]);
+    });
   });
 
   describe('on a clone', () => {

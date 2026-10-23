@@ -2,13 +2,21 @@
 // (ADR-0024): the mod manager answers everything but the publisher's configuration.
 
 import type { InstanceAdapter, InstanceReading, PublisherConfiguration, PublisherTag, Subscription } from './instanceAdapter';
+import type { PathSpelling } from './pathTokens';
 
 export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
 export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags'> & { reading(): Promise<ManagerReading> };
 
+/** A configuration file, from the instance root, and how it spells a path. */
+export interface ConfigurationFile {
+  readonly name: string;
+  readonly spelling: PathSpelling;
+}
+
 export interface Publisher {
   readonly tags: readonly PublisherTag[];
+  readonly configurationFile: ConfigurationFile;
   configuration(): Promise<PublisherConfiguration>;
   /** Hears that the publisher's configuration changed. */
   subscribe(listener: () => void): Subscription;

@@ -13,6 +13,15 @@ export interface Separator {
   readonly rest: string;
 }
 
+/** How a file spells a path: as a Windows program does, which on Linux is through Wine, or natively, as this machine's
+ *  own programs do. A path ends at a separator, one of `ends` or its line's end. */
+export interface PathSpelling {
+  readonly native: boolean;
+  /** Each separator of a Windows path; a native token stands for them all, and puts back the first. */
+  readonly separators: readonly Separator[];
+  readonly ends: string;
+}
+
 /** The sed expressions that put each token in place of its value, and each value back. */
 export interface TokenProgram {
   readonly clean: readonly string[];
@@ -47,9 +56,16 @@ function rootings(folder: string, platform: NodeJS.Platform): Rooted[] {
   return driveC === -1 ? [onZ] : [{ root: ({ first }) => `C:${first}`, segments: segments.slice(driveC + 1) }, onZ];
 }
 
-function spellingsOf(name: string, folder: string | undefined, platform: NodeJS.Platform, separators: readonly Separator[]): Spelling[] {
+const POSIX: Separator = { first: '/', rest: '/' };
+
+function spellingsOf(name: string, folder: string | undefined, platform: NodeJS.Platform, { native, separators }: PathSpelling): Spelling[] {
+  if (folder === undefined) return [];
   const caseless = platform === 'win32' ? () => true : (index: number) => index === 0;
-  return (folder === undefined ? [] : rootings(folder, platform)).flatMap(({ root, segments }) => (segments.length === 0 ? [] : separators.map((separator) => ({ token: `{${name}:${separator.first}}`, text: root(separator) + segments.join(separator.rest), caseless }))));
+  const posix = native && platform !== 'win32';
+  const rooted = posix ? [{ root: ({ first }: Separator) => first, segments: segmentsOf(folder) }] : rootings(folder, platform);
+  return rooted.flatMap(({ root, segments }) => (segments.length === 0 ? [] : (posix ? [POSIX] : separators).map((separator) => ({
+    token: native ? `{${name}}` : `{${name}:${separator.first}}`, text: root(separator) + segments.join(separator.rest), caseless,
+  }))));
 }
 
 function isInside(folder: string, parent: string, platform: NodeJS.Platform): boolean {
@@ -71,14 +87,14 @@ const patternOf = ({ text, caseless }: Spelling): string =>
 const firstOfEach = (spellings: readonly Spelling[]): Spelling[] =>
   spellings.filter((spelling, at) => spellings.findIndex(({ token }) => token === spelling.token) === at);
 
-/** The folders' tokens in each separator; a path ends at a separator, one of `ends` or its line's end. A game folder
- *  inside the instance folder takes the instance folder's token, so a clone finds its own. */
-export function folderTokens({ instance, game }: TokenFolders, platform: NodeJS.Platform, separators: readonly Separator[], ends: string): TokenProgram {
-  const instanceSpellings = spellingsOf('instance folder', instance, platform, separators);
-  const gameSpellings = spellingsOf('game folder', game, platform, separators);
+/** The folders' tokens in `spelling`. A game folder inside the instance folder takes the instance folder's token, so a
+ *  clone finds its own. */
+export function folderTokens({ instance, game }: TokenFolders, platform: NodeJS.Platform, spelling: PathSpelling): TokenProgram {
+  const instanceSpellings = spellingsOf('instance folder', instance, platform, spelling);
+  const gameSpellings = spellingsOf('game folder', game, platform, spelling);
   const cleaned = [...instanceSpellings, ...(game !== undefined && isInside(game, instance, platform) ? [] : gameSpellings)]
     .sort((a, b) => b.text.length - a.text.length);
-  const boundary = `[/\\\\${ends}[:cntrl:]]`;
+  const boundary = `[/\\\\${spelling.ends}[:cntrl:]]`;
   return {
     clean: cleaned.flatMap((spelling) => {
       const [pattern, token] = [patternOf(spelling), sedReplacement(spelling.token)];
@@ -106,4 +122,4 @@ export function tokenFilterConfig(driver: string, ...programs: readonly TokenPro
 }
 
 /** Whether `text` holds a token in place of a folder's path. */
-export const holdsPathToken = (text: string): boolean => /\{(?:instance|game) folder:/.test(text);
+export const holdsPathToken = (text: string): boolean => /\{(?:instance|game) folder[:}]/.test(text);

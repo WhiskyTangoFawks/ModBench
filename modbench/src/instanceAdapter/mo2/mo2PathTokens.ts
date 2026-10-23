@@ -9,19 +9,21 @@ import { exists, get, isRepository, makeTempDir, putIfChanged, remove, undoAll, 
 import { git, gitFed, gitWritingInto } from '../git';
 import type { GameFolder, InstanceAdapter } from '../instanceAdapter';
 import {
-  folderTokens, holdsPathToken, sedLiteral, sedReplacement, tokenFilterConfig, type Separator, type TokenProgram,
+  folderTokens, holdsPathToken, sedLiteral, sedReplacement, tokenFilterConfig, type PathSpelling, type TokenProgram,
 } from '../pathTokens';
 import { PROFILE_INIS_PATTERN, SETTINGS_FILE_PATTERN, settingsFile } from './layout';
+import type { ConfigurationFile } from '../publisher';
 import type { Mo2Context } from './mo2Context';
 
 type Mo2PathTokens = Pick<InstanceAdapter, 'writePathTokens' | 'pathsOutsideFolders'>;
 
-// Qt's INI escapes a backslash, MO2 can write a drive's own separator twice, and a value can end at a quote or at
-// @ByteArray's parenthesis.
-const SEPARATORS: readonly Separator[] = [
-  { first: '/', rest: '/' }, { first: '\\', rest: '\\' }, { first: '\\\\', rest: '\\\\' }, { first: '\\\\\\\\', rest: '\\\\' },
-];
-const VALUE_ENDS = '")';
+// MO2 is a Windows program. Qt's INI escapes a backslash, MO2 can write a drive's own separator twice, and a value can
+// end at a quote or at @ByteArray's parenthesis.
+const SPELLING: PathSpelling = {
+  native: false,
+  separators: [{ first: '/', rest: '/' }, { first: '\\', rest: '\\' }, { first: '\\\\', rest: '\\\\' }, { first: '\\\\\\\\', rest: '\\\\' }],
+  ends: '")',
+};
 
 // The [Settings] keys MO2 keeps out of its log as accounts (settings.cpp, Settings::dump), and those it dropped in 2.2.0.
 const ACCOUNT_KEYS = ['username', 'password', 'steam_username', 'steam_password', 'nexus_username', 'nexus_password', 'nexus_login', 'nexus_api_key'];
@@ -33,7 +35,8 @@ const IN_SETTINGS = String.raw`/^\[Settings\]/,/^\[/`;
 // The mod manager's configuration holds the accounts, so its filter is a driver of its own.
 const FOLDERS_DRIVER = 'modbench-tokens';
 const SETTINGS_DRIVER = 'modbench-settings-tokens';
-const DRIVERS = new Set([FOLDERS_DRIVER, SETTINGS_DRIVER]);
+const PUBLISHER_DRIVER = 'modbench-publisher-tokens';
+const DRIVERS = new Set([FOLDERS_DRIVER, SETTINGS_DRIVER, PUBLISHER_DRIVER]);
 
 // A clone holds no account, so its value is empty.
 function accountTokens(settings: string): TokenProgram {
@@ -47,18 +50,19 @@ function accountTokens(settings: string): TokenProgram {
   };
 }
 
-const ATTRIBUTES = [[SETTINGS_FILE_PATTERN, SETTINGS_DRIVER], [PROFILE_INIS_PATTERN, FOLDERS_DRIVER]]
-  .map(([pattern, driver]) => `${pattern} filter=${driver} diff=${driver}`);
+const attribute = (pattern: string, driver: string): string => `${pattern} filter=${driver} diff=${driver}`;
+
+const ATTRIBUTES = [attribute(SETTINGS_FILE_PATTERN, SETTINGS_DRIVER), attribute(PROFILE_INIS_PATTERN, FOLDERS_DRIVER)];
 
 // The attributes live in the git directory, as the filter's config does, so the repository holds no file of Modbench's.
 // Answers the call that takes back the lines it added.
-async function attributesWritten(instanceRoot: string): Promise<Undo> {
+async function attributesWritten(instanceRoot: string, attributes: readonly string[]): Promise<Undo> {
   const file = resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'info/attributes')).trim());
   await mkdir(dirname(file), { recursive: true });
   let added: string[] = [];
   await putIfChanged(file, (before) => {
     const held = new Set(before.split(/\r?\n/));
-    added = ATTRIBUTES.filter((line) => !held.has(line));
+    added = attributes.filter((line) => !held.has(line));
     return added.length === 0 ? before : `${before}${before === '' || before.endsWith('\n') ? '' : '\n'}${added.join('\n')}\n`;
   }, { ifMissing: '' });
   return async () => {
@@ -156,10 +160,16 @@ export const pathTokensWritten = (instanceRoot: string): Promise<boolean> =>
 
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
-export function mo2PathTokens({ instanceRoot }: Mo2Context, gameFolder: () => Promise<GameFolder>): Mo2PathTokens {
+export function mo2PathTokens({ instanceRoot }: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): Mo2PathTokens {
+  const attributes = [...ATTRIBUTES, ...(publisherFile === undefined ? [] : [attribute(`/${publisherFile.name}`, PUBLISHER_DRIVER)])];
   const configOf = (game: string | undefined, accounts: TokenProgram): Readonly<Record<string, string>> => {
-    const folders = folderTokens({ instance: instanceRoot, game }, process.platform, SEPARATORS, VALUE_ENDS);
-    return { ...tokenFilterConfig(FOLDERS_DRIVER, folders), ...tokenFilterConfig(SETTINGS_DRIVER, folders, accounts) };
+    const tokensIn = (spelling: PathSpelling): TokenProgram => folderTokens({ instance: instanceRoot, game }, process.platform, spelling);
+    const folders = tokensIn(SPELLING);
+    return {
+      ...tokenFilterConfig(FOLDERS_DRIVER, folders),
+      ...tokenFilterConfig(SETTINGS_DRIVER, folders, accounts),
+      ...(publisherFile === undefined ? {} : tokenFilterConfig(PUBLISHER_DRIVER, tokensIn(publisherFile.spelling))),
+    };
   };
   const configWritten = async (game: string | undefined, accounts: TokenProgram): Promise<void> => {
     for (const [key, value] of Object.entries(configOf(game, accounts))) await git(instanceRoot, 'config', key, value);
@@ -174,7 +184,7 @@ export function mo2PathTokens({ instanceRoot }: Mo2Context, gameFolder: () => Pr
   };
 
   const written = async (takeBack: Undo[]): Promise<string | undefined> => {
-    takeBack.push(await attributesWritten(instanceRoot));
+    takeBack.push(await attributesWritten(instanceRoot, attributes));
     const covered = (await filesGitHolds(instanceRoot)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
     const accounts = accountTokens(await get(settingsFile(instanceRoot), ''));
     takeBack.push(configTakenBack);

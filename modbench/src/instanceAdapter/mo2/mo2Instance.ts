@@ -6,7 +6,7 @@ import { downloadsDirectoryResolver } from './downloadsDirectory';
 import { gameFolderResolver, STEAM, type GameDetectors } from '../gameFolder/gameFolderResolver';
 import { myGamesResolver } from '../gameFolder/myGames';
 import type { GameFolder, InstallationFileReader, GameFolderSetting } from '../instanceAdapter';
-import type { ManagerAdapter } from '../publisher';
+import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import { mo2Changes } from './mo2Changes';
 import { mo2ModOrder } from './mo2ModOrder';
 import { mo2OriginFiles } from './mo2OriginFiles';
@@ -43,6 +43,8 @@ interface Mo2Machine {
 export type Mo2InstanceOptions = {
   instanceRoot: string;
   installationFileReader: InstallationFileReader;
+  /** The publisher's configuration file, which git holds by tokens as it does MO2's. */
+  publisherConfigurationFile?: ConfigurationFile;
 } & (Mo2Machine | { context: Mo2Context });
 
 /** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
@@ -71,7 +73,7 @@ export function mo2InstanceAdapter(options: Mo2InstanceOptions): ManagerAdapter 
     activeProfile: async () => (await source.settings()).profile,
     gameRelease: async () => (await source.settings()).gameRelease,
     gameFolder,
-    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source), ...mo2Repository(context, hashes), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder),
+    ...mo2Reads(context, source), ...mo2Installation(context, hashes), ...mo2Changes(context, source), ...mo2ModOrder(context), ...mo2OriginFiles(context), ...mo2PluginRename(context, source), ...mo2Landing(context, installationFileReader, source), ...mo2Repository(context, hashes), ...mo2Submodules(context), ...mo2PathTokens(context, gameFolder, options.publisherConfigurationFile),
     originFileHash: hashes.originFileHash,
     statCacheFolder: statCacheDir(instanceRoot),
     subscribe: (listener) => context.watch.subscribe(listener),
