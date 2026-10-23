@@ -5,7 +5,7 @@ import { present } from '../ports/present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
 } from './vscodeMock';
-import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, LOGGED_IN_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
+import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, LOGGED_IN_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, REPOSITORY_SET_UP_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN, SPECIFIED_AHEAD_OF_CODE, RETIRED_AHEAD_OF_CODE } from './commandsCatalog';
 
 const groupOf = (entry: MenuEntry): string => (entry.group ?? '').split('@')[0] ?? '';
@@ -205,7 +205,7 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
   const OWNERS: Record<string, (subject: string) => boolean> = {
     onCommand: isCommand,
     onView: (subject) => views.has(subject) || isVsCodes(subject),
-    onContext: (subject) => [FOLDER_KEY, INSTANCE_READ_KEY, ANY_SOURCE_MOD_KEY, HAS_REPOSITORY_KEY].some((key) => subject.startsWith(`${key} `)),
+    onContext: (subject) => [FOLDER_KEY, INSTANCE_READ_KEY, ANY_SOURCE_MOD_KEY, HAS_REPOSITORY_KEY, REPOSITORY_SET_UP_KEY].some((key) => subject.startsWith(`${key} `)),
     onLink: (subject) => subject.startsWith(`${REPOSITORY}/blob/main/docs/wiki/`),
   };
   const owned = (event: string): boolean => {
@@ -222,8 +222,8 @@ describe('package.json getting started (user-docs.md, The walkthrough)', () => {
     expect(steps.filter((step) => step.completionEvents.length === 0 || !step.completionEvents.every(owned)).map(({ id }) => id)).toEqual([]);
   });
 
-  it('ticks the git init step when the instance holds a repository (story 3)', () => {
-    expect(steps.find(({ id }) => id === 'gitInit')?.completionEvents).toEqual([`onContext:${HAS_REPOSITORY_KEY} == true`]);
+  it('ticks the git init step when git init has set the repository up (story 1)', () => {
+    expect(steps.find(({ id }) => id === 'gitInit')?.completionEvents).toEqual([`onContext:${REPOSITORY_SET_UP_KEY} == true`]);
   });
 
   it('ticks the agent step when I list my MCP servers, where VS Code Chat already has Modbench, or open the page that sets up another agent (story 3)', () => {

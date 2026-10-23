@@ -69,7 +69,7 @@
               "markdown": "walkthrough/getting-started.md"
             },
             "completionEvents": [
-              "onContext:modbench.modlist.hasRepository == true"
+              "onContext:modbench.modlist.repositorySetUp == true"
             ]
           },
           {
