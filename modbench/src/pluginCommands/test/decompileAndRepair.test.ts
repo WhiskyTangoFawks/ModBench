@@ -7,7 +7,7 @@ import { pluginCommandsWith } from '../../test/pluginCommandsWith';
 import { fakeInstanceAdapter, readingFixture } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { MEditClient, PluginRepairPreview } from '../../client';
-import { previewLines, droppingData } from '../decompileAndRepair';
+import { previewLines } from '../decompileAndRepair';
 
 const MALFORMED = { name: 'Malformed.esp', origin: 'Harbor' };
 const CLEAN = { name: 'Clean.esp', origin: 'Harbor' };
@@ -85,13 +85,6 @@ describe('decompileAndRepair — the preview, then the repair of each plugin it 
       expect(agrees).not.toHaveBeenCalled();
       expect(repairedWith()).toEqual([true, false]);
     });
-  });
-
-  it('cuts each preview down to the changes that drop data, and leaves out one that drops none', () => {
-    const other = { diagnosis: { defectClass: 'long', message: 'EPFT 2' }, change: DROPS };
-
-    expect(droppingData([{ ...PREVIEW, diagnoses: [...PREVIEW.diagnoses, other] }, { ...PREVIEW, plugin: CLEAN }]))
-      .toEqual([{ ...PREVIEW, diagnoses: [other] }]);
   });
 
   it('names each change with its record, and a diagnosis no change answers', () => {

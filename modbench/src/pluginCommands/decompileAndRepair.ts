@@ -19,7 +19,7 @@ export function previewLines({ plugin, diagnoses }: PluginRepairPreview): string
 }
 
 /** The previews cut down to the changes that drop data. */
-export const droppingData = (previews: readonly PluginRepairPreview[]): PluginRepairPreview[] =>
+const droppingData = (previews: readonly PluginRepairPreview[]): PluginRepairPreview[] =>
   previews.map((preview) => ({ ...preview, diagnoses: preview.diagnoses.filter(({ change }) => (change?.droppedBytes ?? 0) > 0) }))
     .filter(({ diagnoses }) => diagnoses.length > 0);
 
