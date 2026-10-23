@@ -87,7 +87,8 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     records: recordBrowser,
     client,
     // A malformed plugin and one changed outside Modbench still load and play; one that failed to read does not.
-    publishDiagnoses: (reports) => publishPluginProblems(loadDiagnostics, pluginFile, reports, vscode.DiagnosticSeverity.Warning, decompileAndRepairLink),
+    publishDiagnoses: (reports) => publishPluginProblems(loadDiagnostics, pluginFile, reports, vscode.DiagnosticSeverity.Warning,
+      (plugin) => decompileAndRepairLink(plugin, tree.placeOf(plugin))),
     publishChangedOutside: (warnings) => publishPluginProblems(changedOutsideDiagnostics, pluginFile, warnings, vscode.DiagnosticSeverity.Warning),
     publishFailedToRead: (errors) => publishPluginProblems(failedToReadDiagnostics, pluginFile, errors, vscode.DiagnosticSeverity.Error),
   });

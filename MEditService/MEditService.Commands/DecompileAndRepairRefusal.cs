@@ -32,7 +32,7 @@ public enum DecompileAndRepairRefusal
     /// <summary>A diagnosis of the plugin that no repair answers.</summary>
     NoRepair,
 
-    /// <summary>A repair that drops data, which the gesture writes only with consent to that data.</summary>
+    /// <summary>A repair that drops data; the gesture refuses it, writing nothing.</summary>
     DropsData,
 
     /// <summary>The repaired plugin is not the original with its repairs, or cannot become source without losing meaning.</summary>
@@ -64,4 +64,7 @@ public enum DecompileAndRepairRefusal
 
     /// <summary>The repair passed its checks, and git or the file system refused the commits. Nothing was written.</summary>
     WriteFailed,
+
+    /// <summary>The plugin adapter could not make the repair, for a reason no other value names. Nothing was written.</summary>
+    RepairFailed,
 }

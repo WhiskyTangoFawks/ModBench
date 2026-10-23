@@ -382,6 +382,30 @@ describe('the Plugins view\'s Problems', () => {
     expect(published('modbench-failed-to-read')).toEqual([[onDisk, [['duplicate FormKey', DiagnosticSeverity.Error]]]]);
     expect(published('modbench-diagnosis')).toEqual([[onDisk, [['short', DiagnosticSeverity.Warning]]]]);
   });
+
+  it('links a malformed plugin\'s entry to decompile and repair in a mod, and not in the game folder', async () => {
+    const inAMod = '/instance/mods/ModA/Test.esp';
+    const inTheGameFolder = '/game/Data/Vanilla.esm';
+    const { client } = pluginsView(instanceValueFixture({
+      mods: [{ kind: 'mod', name: 'ModA', enabled: true }],
+      plugins: [
+        { name: 'Test.esp', path: inAMod, origin: 'ModA', line: 0, enabled: true, winning: true },
+        { name: 'Vanilla.esm', path: inTheGameFolder, origin: 'Data/', line: 1, enabled: true, winning: true },
+      ],
+    }));
+    client.setQueryAnswer('getPlugins', []);
+    client.setQueryAnswer('getDiagnoses', [
+      { plugin: 'Test.esp', origin: 'ModA', defectClass: 'fixed-size-subrecord-short', message: 'short', text: 'short' },
+      { plugin: 'Vanilla.esm', origin: 'Data/', defectClass: 'fixed-size-subrecord-short', message: 'short', text: 'short' },
+    ]);
+
+    client.emit(tick({ state: 'Ready', conflictsComputed: true }));
+    await settle();
+
+    expect([...present(h.diagnostics.get('modbench-diagnosis'), 'the malformed collection')]
+      .map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => (d.code as { value?: string } | undefined)?.value)]))
+      .toEqual([[inAMod, ['decompile and repair']], [inTheGameFolder, [undefined]]]);
+  });
 });
 
 describe('the Plugins view badges the records beneath a plugin', () => {

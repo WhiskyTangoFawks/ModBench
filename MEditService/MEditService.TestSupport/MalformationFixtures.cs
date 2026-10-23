@@ -27,6 +27,12 @@ public static class MalformationFixtures
             .OfType<MalformationFixture>(),
     ];
 
+    /// <summary>Each fixture whose repair drops nothing.</summary>
+    public static IReadOnlyList<MalformationFixture> Lossless => [.. All.Where(f => f.Diagnosis.Contains("repairable (lossless)", StringComparison.Ordinal))];
+
+    /// <summary>A REGN whose RDAT is short.</summary>
+    public static MalformationFixture ShortRegion => ShortFixedSizeSubrecord;
+
     private static MalformationFixture ShortFixedSizeSubrecord
     {
         get

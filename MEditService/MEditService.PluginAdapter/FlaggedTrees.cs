@@ -16,8 +16,6 @@ internal static class FlaggedTrees
     /// and its repair.</summary>
     internal sealed record FlaggedRecord(string FormKey, IReadOnlyList<string> Diagnoses, IReadOnlyList<Subrecord> Original, RecordRewrite Repair);
 
-    private static readonly string[] NeverHeld = [LoquiUnions.UnionTypeDiscriminator, RecordMembers.FormKey];
-
     /// <summary><paramref name="repaired"/>'s files with the document of each of <paramref name="flagged"/>, its own or
     /// embedded in its container's, flagged, and every other byte as it was.</summary>
     internal static async Task<IReadOnlyList<TreeFile>> FlaggedAsync(
@@ -32,7 +30,7 @@ internal static class FlaggedTrees
             if (at < 0) throw new InvalidOperationException($"Expected the repaired plugin's tree to carry {record.FormKey}, which its repair flags.");
             var carried = Carried.In(tree[at], record.FormKey, release);
             var writer = new RecordWriter(pluginName, header, carried, record.FormKey, repaired.Masters, loadOrder, cancel);
-            var flaggedText = await RawMembersAsync(carried.Text, record, writer) is { } raw
+            var flaggedText = await RawMembersAsync(carried.Text, record, writer, release) is { } raw
                 ? FlaggedDocument.WithMembersHeldRaw(carried.Text, record.Diagnoses, raw)
                 : FlaggedDocument.For(carried.Text, record.Diagnoses, Payloads(record.Original));
             tree[at] = carried.With(flaggedText);
@@ -42,7 +40,7 @@ internal static class FlaggedTrees
 
     // Null holds the whole record raw: a repair that drops a subrecord, or a repaired subrecord no member feeds.
     private static async Task<Dictionary<string, IReadOnlyList<(string Signature, ReadOnlyMemory<byte> Payload)>>?> RawMembersAsync(
-        string recordText, FlaggedRecord record, RecordWriter writer)
+        string recordText, FlaggedRecord record, RecordWriter writer, GameRelease release)
     {
         if (record.Repair.DropsAny) return null;
         var placed = record.Repair.Placing();
@@ -52,7 +50,7 @@ internal static class FlaggedTrees
 
         var changed = Enumerable.Range(0, placed.Count).Where(at => placed[at].Changed).ToHashSet();
         var fedBy = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
-        foreach (var member in FlaggedDocument.MembersOf(recordText).Except(NeverHeld, StringComparer.Ordinal))
+        foreach (var member in FlaggedDocument.MembersOf(recordText).Except(HeaderMembers(release), StringComparer.Ordinal))
         {
             if (await writer.SubrecordsOfAsync(FlaggedDocument.WithoutMember(recordText, member)) is { } without)
                 fedBy[member] = Gone(written, without);
@@ -66,8 +64,11 @@ internal static class FlaggedTrees
             StringComparer.Ordinal);
     }
 
-    // What the written subrecords hold and those without the member lack, by their longest common subsequence: a member's
-    // subrecords go, and a count or an order it shares changes.
+    // The record's type and its header's members are read from its header, which no repair changes, so none is held.
+    private static IEnumerable<string> HeaderMembers(GameRelease release) =>
+        [LoquiUnions.UnionTypeDiscriminator, .. GameCodecs.For(release).Annotations.RecordHeaderMembers.Select(member => member.MemberName)];
+
+    // A member's own subrecords go with it, and a count or an order it shares changes.
     private static HashSet<int> Gone(List<Subrecord> written, List<Subrecord> without)
     {
         var common = new int[written.Count + 1, without.Count + 1];
@@ -95,7 +96,6 @@ internal static class FlaggedTrees
         DocumentTokens.FormKeysIn(file.Content, release)
             .Any(key => key.Position != FormKeyPosition.Other && FormKeyComparer.Instance.Equals(key.FormKey, formKey));
 
-    // A record's own text in the file carrying it: the file's own, or a child's span in its container's.
     private sealed record Carried(TreeFile Owner, EmbeddedChildSpan? Span, string Text)
     {
         internal static Carried In(TreeFile file, string formKey, GameRelease release)
@@ -113,8 +113,7 @@ internal static class FlaggedTrees
         };
     }
 
-    // The subrecords Mutagen writes for one record's text, compiled with the plugin's header alone. Null when the text
-    // does not compile, which says nothing of which subrecords its members feed.
+    // Null for text that does not compile, which says nothing of which subrecords its members feed.
     private sealed class RecordWriter(
         string pluginName, TreeFile header, Carried carried, string formKey, IReadOnlyList<string> masters, LoadOrderSnapshot loadOrder,
         CancellationToken cancel)

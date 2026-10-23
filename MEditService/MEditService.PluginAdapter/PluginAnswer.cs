@@ -164,7 +164,7 @@ public abstract record PluginFailure
     }
 
     /// <summary>A repaired plugin whose records are not its original's with the repairs its preview planned.</summary>
-    internal sealed record RepairUnverified : PluginFailure
+    public sealed record RepairUnverified : PluginFailure
     {
         private readonly string _reason;
 

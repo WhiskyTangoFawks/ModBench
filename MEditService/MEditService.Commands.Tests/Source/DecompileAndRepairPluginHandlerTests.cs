@@ -36,13 +36,10 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
     public void Dispose() => _root.Dispose();
 
-    public static TheoryData<MalformationFixture> LosslessFixtures() =>
-        [.. MalformationFixtures.All.Where(f => f.Repaired != null && !f.Diagnosis.Contains("drops", StringComparison.Ordinal))];
-
-    [Theory]
-    [MemberData(nameof(LosslessFixtures))]
-    public async Task DecompileAndRepair_InASourceMod_CommitsTheMalformedRecordsFlagged_ThenTheRepairs_AndParksThePluginsBytes(MalformationFixture fixture)
+    [Fact]
+    public async Task DecompileAndRepair_InASourceMod_CommitsTheMalformedRecordsFlagged_ThenTheRepairs_AndParksThePluginsBytes()
     {
+        var fixture = Lossless;
         var plugin = AddToSourceMod(fixture.Malformed);
         var before = Head(_sourceMod);
 
@@ -95,6 +92,21 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         Assert.Equal(
             ["Repair Second Malformed.esp", "Decompile Second Malformed.esp, its malformed records flagged", $"Repair {Malformed}", $"Init {NewModName}"],
             Subjects(_newMod, 5));
+    }
+
+    [Fact]
+    public async Task DecompileAndRepair_OfTwoPluginsOfAModWithNoRepository_TheSecondRefused_SaysTheNewRepositoryHoldsNoSourceForIt()
+    {
+        var first = AddToNewMod(Lossless.Malformed);
+        var second = AddToNewMod(MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction").Malformed with { FileName = "Lossy.esp" });
+        Load(Entry(_newMod, Malformed), Entry(_newMod, "Lossy.esp"));
+
+        var result = await Repair([.. (await PreviewAll(first, second)).Applied.Select(p => new PluginToRepair(p.Plugin, p.Hash, null))]);
+
+        Assert.Equal([first], result.Applied);
+        var refused = Assert.Single(result.Refused);
+        Assert.Equal((second, DecompileAndRepairRefusal.DropsData), (refused.Item, refused.Refusal));
+        Assert.EndsWith("The repository made for its mod holds no source for it.", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -197,7 +209,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         Assert.Contains("Decompile it", refused.Message, StringComparison.Ordinal);
     }
 
-    private static MalformationFixture Lossless => MalformationFixtures.All.Single(f => f.Malformation == "ShortFixedSizeSubrecord" && f.Diagnosis.StartsWith("REGN", StringComparison.Ordinal));
+    private static MalformationFixture Lossless => MalformationFixtures.ShortRegion;
 
     private PluginAddress AddToSourceMod(GeneratedPlugin plugin)
     {

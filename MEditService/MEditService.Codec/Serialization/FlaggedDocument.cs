@@ -92,7 +92,6 @@ public static class FlaggedDocument
         return members;
     }
 
-    // The members of a written object, without its braces and the indentation the writer gave them.
     private static string InnerMembersOf(string writtenObject) =>
         string.Join('\n', writtenObject.Split('\n')[1..^1].Select(line => line[2..]));
 

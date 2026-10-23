@@ -125,8 +125,7 @@ public sealed class PluginRepairTests
     }
 
     public static TheoryData<MalformationFixture> FixturesWhoseRepairedFieldsTheWriterNames() =>
-        [.. MalformationFixtures.All.Where(f => f.Repaired != null && f.Change?.Contains("drops", StringComparison.Ordinal) == false
-            && f.Malformation != "WrongFixedCountList")];
+        [.. MalformationFixtures.Lossless.Where(f => f.Malformation != "WrongFixedCountList")];
 
     [Theory]
     [MemberData(nameof(FixturesWhoseRepairedFieldsTheWriterNames))]
@@ -144,6 +143,7 @@ public sealed class PluginRepairTests
         Assert.Equal([fixture.Diagnosis], record.GetProperty("Diagnoses").EnumerateArray().Select(d => d.GetString()));
         var held = asRepaired.EnumerateObject().Where(m => !JsonElement.DeepEquals(m.Value, record.GetProperty(m.Name))).Select(m => m.Name).ToList();
         Assert.NotEmpty(held);
+        Assert.Empty(held.Intersect(GameCodecs.For(Release).Annotations.RecordHeaderMembers.Select(member => member.MemberName)));
         Assert.All(held, name =>
         {
             Assert.Equal(["Subrecords"], record.GetProperty(name).EnumerateObject().Select(m => m.Name));

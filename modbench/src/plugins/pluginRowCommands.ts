@@ -55,7 +55,7 @@ export function registerDecompileCommand(
       return isRefused(outcome) ? { applied: false, refusal: outcome.message } : { applied: true, outcome };
     }),
     report: (result, { plugins }) => {
-      if (result.applied) reportDecompiled(deps.reporter, result.outcome, plugins.length);
+      if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile', pastTense: 'Decompiled' });
       else deps.reporter.report('error', result.refusal);
     },
   };
@@ -85,23 +85,11 @@ export function registerDecompileAndRepairCommand(
     run: ({ plugins, force }) => runWritingGesture(PLUGINS_KEY_ARGS.view, deps.instance, () =>
       deps.commands.decompileAndRepair(plugins, force, (preview) => { previewLines(preview).forEach(deps.log); })),
     report: (result, { plugins }) => {
-      if (result.applied) reportRepaired(deps.reporter, result.outcome, plugins.length);
+      if (result.applied) reportSelection(deps.reporter, result.outcome, plugins.length, { verb: 'decompile and repair', pastTense: 'Decompiled and repaired' });
       else deps.reporter.report('error', result.refusal);
     },
   };
   return registerAgentGesture('modbench.plugin.decompileAndRepair', viewSelection, gesture);
-}
-
-function reportRepaired(reporter: Reporter, outcome: SelectionOutcome<PluginAddress>, total: number): void {
-  const [refused] = outcome.refused;
-  if (refused !== undefined) {
-    const what = total === 1 ? `"${refused.item.name}"` : `${outcome.refused.length} of ${total} plugins`;
-    reporter.selectionOutcome(`Could not decompile and repair ${what}.`, outcome, pluginRowName);
-    return;
-  }
-  const [only, ...more] = outcome.landed;
-  if (only === undefined) return;
-  reporter.landed(more.length === 0 ? `Decompiled and repaired "${only.name}".` : `Decompiled and repaired ${outcome.landed.length} plugins.`);
 }
 
 // plugins.md, Decompile: one confirmation for the selection, naming the plugins; it replaces
@@ -116,14 +104,16 @@ async function confirmDecompile(ask: AskQuestion, plugins: readonly PluginAddres
   return answer === 'Decompile';
 }
 
-function reportDecompiled(reporter: Reporter, outcome: SelectionOutcome<PluginAddress>, total: number): void {
+function reportSelection(
+  reporter: Reporter, outcome: SelectionOutcome<PluginAddress>, total: number, { verb, pastTense }: { verb: string; pastTense: string },
+): void {
   const [refused] = outcome.refused;
   if (refused !== undefined) {
     const what = total === 1 ? `"${refused.item.name}"` : `${outcome.refused.length} of ${total} plugins`;
-    reporter.selectionOutcome(`Could not decompile ${what}.`, outcome, pluginRowName);
+    reporter.selectionOutcome(`Could not ${verb} ${what}.`, outcome, pluginRowName);
     return;
   }
   const [only, ...more] = outcome.landed;
   if (only === undefined) return;
-  reporter.landed(more.length === 0 ? `Decompiled "${only.name}".` : `Decompiled ${outcome.landed.length} plugins.`);
+  reporter.landed(more.length === 0 ? `${pastTense} "${only.name}".` : `${pastTense} ${outcome.landed.length} plugins.`);
 }

@@ -55,19 +55,27 @@ describe('publishPluginProblems', () => {
     expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection).map(([path]) => path)).toEqual(['/i/mods/M/B.esp']);
   });
 
-  it('gives each diagnosis the code it is given for its plugin: a Malformed entry links to decompile and repair of that plugin', () => {
+  it('gives each plugin\'s diagnoses the code it is given for that plugin', () => {
     const collection = new FakeDiagnosticCollection();
 
     publishPluginProblems(collection, pluginFilesFrom({ 'M/A.esp': '/i/mods/M/A.esp' }), [report('A.esp', 'M', 'malformed')], DiagnosticSeverity.Warning,
-      decompileAndRepairLink);
+      ({ name, origin }) => `${origin}/${name}`);
 
-    const [, [diagnostic]] = present(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)[0], 'the sole diagnostic-collection entry');
-    const code = diagnostic?.code;
-    if (typeof code !== 'object') throw new Error(`Expected the diagnostic's code to be a link, not ${String(code)}.`);
-    expect(code.value).toBe('decompile and repair');
-    const target = code.target.toString();
-    expect(target.startsWith('command:modbench.plugin.decompileAndRepair?')).toBe(true);
-    expect(JSON.parse(decodeURIComponent(target.slice(target.indexOf('?') + 1)))).toEqual([{ name: 'A.esp', origin: 'M' }]);
+    const [, diagnostics] = present(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)[0], 'the sole diagnostic-collection entry');
+    expect(diagnostics.map((d) => d.code)).toEqual(['M/A.esp']);
+  });
+
+  it.each(['inSourceMod', 'inNonSourceMod'] as const)('links a Malformed entry of a plugin %s to decompile and repair of that plugin', (place) => {
+    const plugin = { name: 'A.esp', origin: 'M' };
+
+    expect(decompileAndRepairLink(plugin, place)).toEqual({
+      value: 'decompile and repair',
+      target: uriParse(`command:modbench.plugin.decompileAndRepair?${encodeURIComponent(JSON.stringify([plugin]))}`),
+    });
+  });
+
+  it.each([['the game folder', undefined], ['Overwrite', 'inOverwrite']] as const)('offers no link on a plugin in %s, since no mod can hold its source', (_label, place) => {
+    expect(decompileAndRepairLink({ name: 'A.esp', origin: 'Data/' }, place)).toBeUndefined();
   });
 
   it('groups several diagnoses on one plugin under one file entry', () => {

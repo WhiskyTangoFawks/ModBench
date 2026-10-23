@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { PluginAddress } from '../client';
-import type { PluginProblem } from './pluginFacts';
+import type { PluginPlace, PluginProblem } from './pluginFacts';
 
 /** Targets the plugin binary itself, which is where a malformed plugin's diagnoses, a change
  *  outside Modbench and a failed read's diagnosis all live, and one call answers for the whole
@@ -29,8 +29,11 @@ export function publishPluginProblems(
 }
 
 /** plugin-source.md, Decompile and repair, story 1: a Malformed entry's link in the Problems panel, which fires the
- *  gesture on its plugin. */
-export const decompileAndRepairLink = (plugin: PluginAddress): vscode.Diagnostic['code'] => ({
-  value: 'decompile and repair',
-  target: vscode.Uri.parse(`command:modbench.plugin.decompileAndRepair?${encodeURIComponent(JSON.stringify([plugin]))}`),
-});
+ *  gesture on its plugin. Only a mod can hold a plugin's source, as on the row's menu. */
+export const decompileAndRepairLink = (plugin: PluginAddress, place: PluginPlace | undefined): vscode.Diagnostic['code'] =>
+  place === 'inSourceMod' || place === 'inNonSourceMod'
+    ? {
+      value: 'decompile and repair',
+      target: vscode.Uri.parse(`command:modbench.plugin.decompileAndRepair?${encodeURIComponent(JSON.stringify([plugin]))}`),
+    }
+    : undefined;

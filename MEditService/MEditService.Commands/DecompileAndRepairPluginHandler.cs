@@ -43,10 +43,14 @@ public sealed class DecompileAndRepairPluginHandler
             return new SelectionRefusal<DecompileAndRepairRefusal>(DecompileAndRepairRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
 
         var selected = plugins.Select(item => item.Plugin).ToHashSet(PluginAddress.Comparer);
-        var repaired = await ItemWrite.OverAsync(_source, plugins, SamePlugin.Instance, DecompileAndRepairRefusal.GitUnavailable, item =>
+        var leftOutOfANewRepository = new HashSet<PluginAddress>(PluginAddress.Comparer);
+        var repaired = await ItemWrite.OverAsync(_source, plugins, SamePlugin.Instance, DecompileAndRepairRefusal.GitUnavailable, async item =>
         {
             cancel.ThrowIfCancellationRequested();
-            return RepairOneAsync(loadOrder, item, selected, metadataFiles, force, cancel);
+            var answer = await RepairOneAsync(loadOrder, item, selected, leftOutOfANewRepository, metadataFiles, force, cancel);
+            return answer is ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Refusing(var refusal, var message) && leftOutOfANewRepository.Contains(item.Plugin)
+                ? Refused(refusal, $"{message} The repository made for its mod holds no source for it.")
+                : answer;
         });
         return repaired.ToAnswer(
             landed => landed.Item.Plugin,
@@ -58,8 +62,8 @@ public sealed class DecompileAndRepairPluginHandler
         ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Refused(refusal, message);
 
     private async Task<ItemAnswer<DecompileAndRepairRefusal, NoOutcome>> RepairOneAsync(
-        LoadOrderSnapshot loadOrder, PluginToRepair item, IReadOnlySet<PluginAddress> selected, IReadOnlyList<string> metadataFiles, bool force,
-        CancellationToken cancel)
+        LoadOrderSnapshot loadOrder, PluginToRepair item, IReadOnlySet<PluginAddress> selected, HashSet<PluginAddress> leftOutOfANewRepository,
+        IReadOnlyList<string> metadataFiles, bool force, CancellationToken cancel)
     {
         var target = RepairTarget.Of(_repairer, loadOrder, item.Plugin);
         if (target is RepairTarget.Refused(var targetRefusal, var targetMessage)) return Refused(targetRefusal, targetMessage);
@@ -95,11 +99,12 @@ public sealed class DecompileAndRepairPluginHandler
         {
             var leftOut = selected.Where(key => !PluginAddress.Comparer.Equals(key, plugin.Key)).ToHashSet(PluginAddress.Comparer);
             var init = await _init.InitAsync(
-                loadOrder, new ModToDecompileAndCommit(mod.Name, sourceFolder, metadataFiles), DecompileAndCommitModHandler.ProvidedBy(loadOrder, mod.Name),
+                loadOrder, new ModToDecompileAndCommit(mod.Name, sourceFolder, metadataFiles),
                 leftOut, new RepairedInInit(plugin, flagged, repairedCommit), _ => { }, cancel);
-            return init is ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Refusing(var initRefusal, var initMessage)
-                ? Refused(RefusalOfInit(initRefusal), $"{mod.Name} has no repository, and making one for {plugin.Name} was refused: {initMessage}")
-                : ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
+            if (init is ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Refusing(var initRefusal, var initMessage))
+                return Refused(RefusalOfInit(initRefusal), $"{mod.Name} has no repository, and making one for {plugin.Name} was refused: {initMessage}");
+            leftOutOfANewRepository.UnionWith(leftOut);
+            return ItemAnswer<DecompileAndRepairRefusal, NoOutcome>.Landed(default);
         }
 
         var flaggedCommit = new TreeCommit(flagged.Files, FlaggedMessage(plugin, previews));
@@ -126,7 +131,8 @@ public sealed class DecompileAndRepairPluginHandler
         PluginFailure.ChangedSincePreview => ChangedSincePreview(plugin),
         PluginFailure.NoRepair => Refused(DecompileAndRepairRefusal.NoRepair, $"{plugin.Name} cannot be repaired: {failure.Reason}."),
         PluginFailure.Inaccessible => Refused(DecompileAndRepairRefusal.Unreadable, $"{plugin.Name} could not be read: {failure.Reason}"),
-        _ => Refused(DecompileAndRepairRefusal.RoundTripFailed, $"{plugin.Name}'s repair was refused: {failure.Reason}."),
+        PluginFailure.RepairUnverified => Refused(DecompileAndRepairRefusal.RoundTripFailed, $"{plugin.Name}'s repair was refused: {failure.Reason}."),
+        _ => Refused(DecompileAndRepairRefusal.RepairFailed, $"{plugin.Name}'s repair could not be made: {failure.Reason}."),
     };
 
     private static DecompileAndRepairRefusal RefusalOfInit(DecompileAndCommitRefusal refusal) => refusal switch

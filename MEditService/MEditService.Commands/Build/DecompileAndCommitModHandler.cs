@@ -38,7 +38,7 @@ public sealed class DecompileAndCommitModHandler
         var decompiled = await ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new DecompileAndCommitProgressNotification(progress, Phase: null)),
             (mod, at) => _init.InitAsync(
-                loadOrder, mod, ProvidedBy(loadOrder, mod.Name), new HashSet<PluginAddress>(), repair: null,
+                loadOrder, mod, new HashSet<PluginAddress>(), repair: null,
                 phase => _notifications.Publish(new DecompileAndCommitProgressNotification(at, phase)), cancel),
             gesture: null, cancel);
         return decompiled.ToResult(
@@ -46,8 +46,4 @@ public sealed class DecompileAndCommitModHandler
             refused => new DecompileAndCommitRefused(refused.Item, refused.Refusal, refused.Message),
             (applied, refused) => new DecompileAndCommitResult(applied, refused));
     }
-
-    internal static List<RegisteredPlugin> ProvidedBy(LoadOrderSnapshot loadOrder, string modName) =>
-        [.. loadOrder.Plugins.Where(plugin => plugin.Provider is PluginProvider.FromMod mod
-            && string.Equals(mod.Name, modName, StringComparison.OrdinalIgnoreCase))];
 }

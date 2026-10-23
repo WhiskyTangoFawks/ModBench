@@ -8,7 +8,7 @@ namespace MEditService.Http.Tests.Api;
 public sealed class DecompileAndRepairApiTests : HostedTests
 {
     private const string Origin = "NewMod";
-    private static readonly MalformationFixture Fixture = MalformationFixtures.All.Single(f => f.Malformation == "ShortFixedSizeSubrecord" && f.Diagnosis.StartsWith("REGN", StringComparison.Ordinal));
+    private static readonly MalformationFixture Fixture = MalformationFixtures.ShortRegion;
 
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("api-decompile-and-repair")
         .WithPlugin(Fixture.Malformed.FileName, origin: Origin)

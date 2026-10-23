@@ -1239,7 +1239,7 @@ export interface components {
             refused: components["schemas"]["DecompileAndCommitRefused"][];
         };
         /** @enum {string} */
-        DecompileAndRepairRefusal: "None" | "NoLoadOrder" | "GitUnavailable" | "PluginNotLoaded" | "NotFromAMod" | "Unreadable" | "NotMalformed" | "ChangedSincePreview" | "NoRepair" | "DropsData" | "RoundTripFailed" | "MissingLocalizationStrings" | "WorkingTreeChanges" | "WorkingTreeStatusUnreadable" | "AmbiguousSource" | "NoSourceFolder" | "AnotherRepository" | "OtherPluginRefused" | "ModFilesUnreadable" | "WriteFailed";
+        DecompileAndRepairRefusal: "None" | "NoLoadOrder" | "GitUnavailable" | "PluginNotLoaded" | "NotFromAMod" | "Unreadable" | "NotMalformed" | "ChangedSincePreview" | "NoRepair" | "DropsData" | "RoundTripFailed" | "MissingLocalizationStrings" | "WorkingTreeChanges" | "WorkingTreeStatusUnreadable" | "AmbiguousSource" | "NoSourceFolder" | "AnotherRepository" | "OtherPluginRefused" | "ModFilesUnreadable" | "WriteFailed" | "RepairFailed";
         DecompileAndRepairRefused: {
             item: components["schemas"]["PluginAddress"];
             refusal: components["schemas"]["DecompileAndRepairRefusal"];

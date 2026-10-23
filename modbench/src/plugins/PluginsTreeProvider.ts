@@ -10,7 +10,7 @@ import { IndexingNode, type RecordBrowser } from './RecordBrowser';
 import { ImplicitMasterNode, PluginNode, rowIdentity, type PluginListNode, type PluginsTreeNode } from './pluginRows';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { pluginNameKey, samePluginAddress } from '../wire/pluginAddress';
-import { placeOf, type PluginProblem } from './pluginFacts';
+import { placeOf, type PluginPlace, type PluginProblem } from './pluginFacts';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
 import { PluginFactsFeed, type PluginFactsClient } from './pluginFactsFeed';
 import { isRecordRow } from './gestureEntry';
@@ -398,9 +398,14 @@ export class PluginsTreeProvider
   // plugins.md, Menus and keys: what every plugin menu condition reads. Where the plugin lives and
   // whether its line is enabled are the instance value's; whether it is a compiled plugin and whether it is editable wait on mEdit.
   private contextValueOf(row: PluginNode, address: PluginAddress): string {
-    const place = placeOf(row.origin, { modOfOrigin: (origin) => modOfOrigin(this.instanceValue, origin)?.name, listedSourceMods: this.instanceValue.listedSourceMods });
+    const place = this.placeOf(address);
     return ['plugin', row.plugin.enabled ? 'enabled' : 'disabled', ...(place === undefined ? [] : [place]), ...this.facts.rows.contextFlags(address)]
       .join(' ');
+  }
+
+  /** Where the plugin lives, as its row's menu reads it. */
+  placeOf({ origin }: PluginAddress): PluginPlace | undefined {
+    return placeOf(origin, { modOfOrigin: (of) => modOfOrigin(this.instanceValue, of)?.name, listedSourceMods: this.instanceValue.listedSourceMods });
   }
 
   /** The reconcile narrator's events go in here. */

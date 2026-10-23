@@ -19,12 +19,13 @@ internal sealed class ModInit(
     ILogger logger, IPluginAdapter plugins, ISourceAdapter source, IModFolderRepository modFolders, PluginDecompiler decompiler)
 {
     /// <summary>The repository of <paramref name="toCommit"/>, holding the source of each of the mod's
-    /// <paramref name="provided"/> but <paramref name="leftOut"/>, and <paramref name="repair"/>'s two commits when given.
+    /// plugins but <paramref name="leftOut"/>, and <paramref name="repair"/>'s two commits when given.
     /// Answers the plugins whose source it holds.</summary>
     internal async Task<ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>> InitAsync(
-        LoadOrderSnapshot loadOrder, ModToDecompileAndCommit toCommit, List<RegisteredPlugin> provided, IReadOnlySet<PluginAddress> leftOut,
+        LoadOrderSnapshot loadOrder, ModToDecompileAndCommit toCommit, IReadOnlySet<PluginAddress> leftOut,
         RepairedInInit? repair, Action<DecompileAndCommitPhase> setPhase, CancellationToken cancel)
     {
+        var provided = ProvidedBy(loadOrder, toCommit.Name);
         if (provided.Count == 0)
         {
             return Refused(DecompileAndCommitRefusal.ModProvidesNoPlugin,
@@ -101,6 +102,10 @@ internal sealed class ModInit(
 
         return ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Landed([.. verified.Select(v => v.Plugin.Key)]);
     }
+
+    private static List<RegisteredPlugin> ProvidedBy(LoadOrderSnapshot loadOrder, string modName) =>
+        [.. loadOrder.Plugins.Where(plugin => plugin.Provider is PluginProvider.FromMod mod
+            && string.Equals(mod.Name, modName, StringComparison.OrdinalIgnoreCase))];
 
     private static ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>> Refused(DecompileAndCommitRefusal refusal, string message) =>
         ItemAnswer<DecompileAndCommitRefusal, IReadOnlyList<PluginAddress>>.Refused(refusal, message);
