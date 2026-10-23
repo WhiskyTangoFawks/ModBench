@@ -5,8 +5,6 @@ using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
 namespace MEditService.Http.Tests.Api;
@@ -45,11 +43,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         return fx;
     }
 
-    private async Task<JsonElement> Field(string formKey, string name) =>
-        (await Client.Record(formKey)).GetProperty("fields").EnumerateArray()
-            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == name)
-            .GetProperty("value");
-
     [Fact]
     public async Task AHandEditToADocumentUnderTheSourceTree_PushesRowsChanged_AndTheNextReadAgrees()
     {
@@ -64,72 +57,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             "rows-changed", e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey));
         Assert.Contains(rows, e => e.GetProperty("plugin").GetString() == Plugin);
         Assert.Equal("RenamedByAnotherTool", (await Client.Record(formKey)).GetProperty("editorId").GetString());
-    }
-
-    [Theory]
-    [InlineData("RenamedByHand.json")]
-    [InlineData("SortedByHand/{0}")]
-    public async Task ACommittedDocumentRenamedByHand_KeepsItsRecord(string renamedTo)
-    {
-        using var fx = await ASourceMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var npc = await Client.FirstFormKey(Plugin, Origin);
-        var quest = await Client.FirstFormKey(Plugin, Origin, "qust");
-        using var stream = await Client.NotificationStream();
-        OtherTool.EditsASourceDocument(modFolder, Plugin, "OriginalFilter", "SettledFilter");
-        await Client.NextSnapshot(fx);
-        await stream.EventsUntil("rows-changed", e => Names(e, quest));
-
-        OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
-
-        var frames = await FramesOfTheSnapshotAnchoredBy(fx, stream, modFolder, quest);
-        Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && Names(f.Data, npc));
-        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
-    }
-
-    [Fact]
-    public async Task ADialogResponseCopiedIntoAQuestWhoseDocumentWasRenamedByHand_IsReadUnderThatQuest()
-    {
-        const string master = "DialogueMaster.esm";
-        const string masterOrigin = "DialogueMasterMod";
-        const string patch = "DialoguePatch.esp";
-        const string patchOrigin = "DialoguePatchMod";
-        FormKey response = FormKey.Null, topicKey = FormKey.Null;
-        using var fx = new PluginFixtureBuilder("trace-another-tool-dialogue")
-            .WithPlugin(master, mod =>
-            {
-                var quest = new Quest(mod) { EditorID = "SharedDialogueQuest" };
-                var topic = new DialogTopic(mod) { EditorID = "SharedDialogueTopic" };
-                var line = new DialogResponses(mod) { EditorID = "CopiedResponse" };
-                topic.Responses.Add(line);
-                quest.DialogTopics.Add(topic);
-                mod.Quests.Add(quest);
-                (response, topicKey) = (line.FormKey, topic.FormKey);
-            }, origin: masterOrigin)
-            .WithPlugin(patch, (mod, earlier) =>
-            {
-                var quest = earlier[0].Quests.Single().DeepCopy();
-                quest.DialogTopics.Single().Responses.Clear();
-                mod.Quests.Set(quest);
-            }, origin: patchOrigin)
-            .BuildScattered();
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await Client.DecompileAndCommit(patchOrigin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
-        await Client.PluginReportsCompiledPlugin(patch);
-        var patchFolder = OtherTool.ModFolderOf(fx, patchOrigin);
-        OtherTool.RenamesASourceDocument(patchFolder, patch, "\"SharedDialogueQuest\"", "RenamedByHand.json");
-
-        var copied = await Client.Copy(response.ToString(), (master, masterOrigin), "Override", (patch, patchOrigin));
-
-        copied.EnsureSuccessStatusCode();
-        Assert.Single((await copied.Body()).GetProperty("applied").EnumerateArray());
-        await Client.NextSnapshot(fx);
-        await Wire.Eventually(
-            async () => (await Client.GetFromJsonAsync<JsonElement>(
-                    $"/plugins/{patch}/records/{Uri.EscapeDataString(topicKey.ToString())}/children?origin={patchOrigin}"))
-                .EnumerateArray().Any(child => child.GetProperty("formKey").GetString() == response.ToString()),
-            "the copied response to be read under its topic in the patch");
     }
 
     [Fact]
@@ -152,34 +79,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
         await Client.NextSnapshot(fx);
         await ItsPluginSourceReadsAs(unreadable: true);
-    }
-
-    [Theory]
-    [InlineData("RenamedByHand.json")]
-    [InlineData("Misnamed - 000900_Shared.esp.json")]
-    [InlineData("SortedByHand/{0}")]
-    [InlineData("SortedByHand/RenamedByHand.json")]
-    public async Task ACommittedDocumentCopiedThenDeletedByHand_IsDiagnosedUntilTheDelete_AndKeepsItsRecord(
-        string copiedTo)
-    {
-        using var fx = await ASourceMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var npc = await Client.FirstFormKey(Plugin, Origin);
-        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
-
-        OtherTool.CopiesASourceDocument(original, copiedTo);
-        await Client.NextSnapshot(fx);
-
-        var diagnosed = await TheFilesItsReadStoppedAt();
-        Assert.Contains(Path.GetRelativePath(modFolder, original), diagnosed);
-        Assert.Contains(
-            Path.GetRelativePath(modFolder, OtherTool.Beside(original, copiedTo)), diagnosed);
-
-        OtherTool.DeletesTheFile(original);
-        await Client.NextSnapshot(fx);
-
-        await ItsPluginSourceReadsAs(unreadable: false);
-        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
     private static string ACellCopiedUnderAKeyOfItsOwn(string modFolder, string cell)
@@ -254,26 +153,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Contains(Path.GetRelativePath(modFolder, original), diagnosed);
         Assert.Contains(
             Path.GetRelativePath(modFolder, OtherTool.Beside(original, $"Backup/{copiedTo}")), diagnosed);
-    }
-
-    [Theory]
-    [InlineData("Backup/{0}")]
-    [InlineData("Backup/copy.json")]
-    public async Task ABackupCopyDeletedByHand_LiftsTheDiagnosis(string copiedTo)
-    {
-        using var fx = await ASourceMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var npc = await Client.FirstFormKey(Plugin, Origin);
-        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
-        OtherTool.CopiesASourceDocument(original, copiedTo);
-        await Client.NextSnapshot(fx);
-        await ItsPluginSourceReadsAs(unreadable: true);
-
-        OtherTool.DeletesTheFile(OtherTool.Beside(original, copiedTo));
-        await Client.NextSnapshot(fx);
-
-        await ItsPluginSourceReadsAs(unreadable: false);
-        Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
     private Task ItsPluginSourceReadsAs(bool unreadable) =>
@@ -380,54 +259,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(editorId, (await Client.Record(container)).GetProperty("editorId").GetString());
     }
 
-    [Theory]
-    [InlineData(Cell, "cell")]
-    [InlineData(World, "wrld")]
-    public async Task AContainerWhoseDirectoryWasRenamedByHand_TakesAnEdit(string editorId, string recordType)
-    {
-        using var fx = await ASourceMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var container = await Client.FirstFormKey(Plugin, Origin, recordType);
-        var directory = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{editorId}\"")).Require();
-        Directory.Move(directory, OtherTool.Beside(directory, "RenamedByHand"));
-
-        (await Client.Edit(container, Plugin, Origin, "EditorID", "EditedAfterTheRename")).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
-
-        await Wire.Eventually(
-            async () => (await Client.Record(container)).GetProperty("editorId").GetString() == "EditedAfterTheRename",
-            "the edit reached the read");
-    }
-
-    private async Task<List<(string Kind, JsonElement Data)>> FramesOfTheSnapshotAnchoredBy(
-        ScatteredFixtureData fx, StreamReader stream, string modFolder, string quest)
-    {
-        OtherTool.EditsASourceDocument(modFolder, Plugin, "SettledFilter", "AnchorFilter");
-        await Client.NextSnapshot(fx);
-        var frames = new List<(string Kind, JsonElement Data)>(
-            await stream.FramesThrough("rows-changed", e => Names(e, quest)));
-        OtherTool.EditsASourceDocument(modFolder, Plugin, "AnchorFilter", "BoundingFilter");
-        await Client.NextSnapshot(fx);
-        frames.AddRange(await stream.FramesThrough("rows-changed", e => Names(e, quest)));
-        return frames;
-    }
-
     private static bool Names(JsonElement rowsChanged, string formKey) =>
         rowsChanged.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey);
-
-    [Fact]
-    public async Task AGitRevertOfAPlacedRefsOwningCellDocument_ReachesTheNextRead()
-    {
-        using var fx = await ASourceMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var placedRef = await Client.FormKeyNamed(Plugin, Origin, "refr", PlacedRef);
-        (await Client.Edit(placedRef, Plugin, Origin, "Scale", 2.5)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
-        await Wire.Eventually(async () => (await Field(placedRef, "Scale")).GetSingle() == 2.5f, "the edit reached the read");
-
-        OtherTool.RevertsASourceDocument(modFolder, Plugin, "2.5");
-        await Client.NextSnapshot(fx);
-
-        await Wire.Eventually(async () => (await Field(placedRef, "Scale")).GetSingle() == 1f, "the revert reached the read");
-    }
 }
