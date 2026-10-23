@@ -20,11 +20,15 @@ afterEach(async () => {
 
 const SETTINGS_FILE = 'compiler_settings.json';
 
+const NEVER_SHIPPED = 'Runtime Output';
+
+const publisherOver = () => wabbajackPublisher(root, [join(root, NEVER_SHIPPED)]);
+
 const writeSettings = (settings: unknown): Promise<void> =>
   writeFile(join(root, SETTINGS_FILE), typeof settings === 'string' ? settings : JSON.stringify(settings));
 
 async function coveringIn(inDisabledMod: boolean, segments: string[]): Promise<string[]> {
-  const configuration = await wabbajackPublisher(root).configuration();
+  const configuration = await publisherOver().configuration();
   if (configuration.kind !== 'read') throw new Error(`expected read, got ${JSON.stringify(configuration)}`);
   return configuration.covering(join(root, ...segments), inDisabledMod).map(({ name }) => name);
 }
@@ -34,7 +38,7 @@ const coveringInDisabledMod = (...segments: string[]): Promise<string[]> => cove
 
 describe('Wabbajack as a publisher (publishing.md, Publishers, story 1)', () => {
   it('declares its four publisher tags, Always Enabled marking only mods', () => {
-    expect(wabbajackPublisher(root).tags).toEqual([
+    expect(publisherOver().tags).toEqual([
       { name: 'No Match Include', badge: 'NM', marksPaths: true },
       { name: 'Include', badge: 'IN', marksPaths: true },
       { name: 'Ignore', badge: 'IG', marksPaths: true },
@@ -43,13 +47,13 @@ describe('Wabbajack as a publisher (publishing.md, Publishers, story 1)', () => 
   });
 
   it('is no publisher while the instance holds no compiler settings', async () => {
-    expect(await wabbajackPublisher(root).configuration()).toEqual({ kind: 'none' });
+    expect(await publisherOver().configuration()).toEqual({ kind: 'none' });
   });
 
   it('reads no publisher tag from a mod\'s metadata, where Wabbajack once kept them (Publisher tags, story 5)', async () => {
     await mkdir(join(root, 'mods', 'A'), { recursive: true });
     await writeFile(join(root, 'mods', 'A', 'meta.ini'), '[General]\nnotes=WABBAJACK_ALWAYS_ENABLE WABBAJACK_INCLUDE\n');
-    expect(await wabbajackPublisher(root).configuration()).toEqual({ kind: 'none' });
+    expect(await publisherOver().configuration()).toEqual({ kind: 'none' });
 
     await writeSettings({ Include: [] });
     expect(await covering('mods', 'A')).toEqual([]);
@@ -82,7 +86,7 @@ describe('the rows a Wabbajack publisher tag covers (publishing.md, Publisher ta
   it('covers nothing outside the instance', async () => {
     await writeSettings({ Include: [''] });
 
-    const configuration = await wabbajackPublisher(root).configuration();
+    const configuration = await publisherOver().configuration();
     expect(configuration.kind === 'read' && [configuration.covering(join(root, 'a.dds'), false), configuration.covering(join(root, '..', 'a.dds'), false)].map((tags) => tags.length))
       .toEqual([1, 0]);
   });
@@ -109,9 +113,27 @@ describe('a disabled mod\'s rows, as Wabbajack\'s compiler applies its publisher
   });
 });
 
+describe('a folder Wabbajack\'s compiler never ships, as the mod manager names it', () => {
+  it('a path in it carries Ignore alone: the compiler drops the folder after it applies Ignore and before the rest', async () => {
+    await writeSettings({
+      Include: [NEVER_SHIPPED, 'Runtime Output2'], NoMatchInclude: [`${NEVER_SHIPPED}\\F4SE`], Ignore: [`${NEVER_SHIPPED}\\F4SE\\x.ini`], AlwaysEnabled: [NEVER_SHIPPED],
+    });
+
+    expect([
+      await covering(NEVER_SHIPPED), await covering('runtime output', 'F4SE'), await covering(NEVER_SHIPPED, 'F4SE', 'x.ini'), await covering('Runtime Output2', 'a'),
+    ]).toEqual([[], [], ['Ignore'], ['Include']]);
+  });
+
+  it('leaves every other path as the publisher tags that cover it say', async () => {
+    await writeSettings({ Include: ['mods'] });
+
+    expect(await covering('mods', 'A')).toEqual(['Include']);
+  });
+});
+
 describe('compiler settings Modbench cannot read (Never silently wrong)', () => {
   const reason = async (): Promise<string> => {
-    const configuration = await wabbajackPublisher(root).configuration();
+    const configuration = await publisherOver().configuration();
     return configuration.kind === 'unreadable' ? configuration.reason : `not unreadable: ${configuration.kind}`;
   };
 
@@ -141,7 +163,7 @@ describe('the watch on the compiler settings (ADR-0003)', () => {
   const live = () => watchers.filter((watcher) => !watcher.disposed);
 
   it('arms nothing until someone listens, hears the file created, changed or deleted at the instance root, and disarms when they leave', () => {
-    const publisher = wabbajackPublisher(root);
+    const publisher = publisherOver();
     const armedBefore = live().length;
     let signals = 0;
     const subscription = publisher.subscribe(() => { signals++; });

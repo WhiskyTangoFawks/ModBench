@@ -24,6 +24,8 @@ import { programRunning } from '../processes';
 import { hashIndex } from '../downloadedFileContents/hashIndex';
 import { hashIndexDir, modsDir, profilesDir, settingsFile, statCacheDir } from './layout';
 
+export { overwriteDir } from './layout';
+
 const MO2_PROGRAM = 'ModOrganizer.exe';
 
 interface Mo2Machine {

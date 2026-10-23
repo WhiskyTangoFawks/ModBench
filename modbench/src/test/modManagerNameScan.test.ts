@@ -97,7 +97,7 @@ describe('no extension file names a mod manager or a publisher outside its imple
   it('the construction\'s exemption is load-bearing: the file imports each implementation', () => {
     const path = join(SRC, CONSTRUCTION);
     expect(IMPLEMENTATIONS.map((implementation) => constructionImport(readFileSync(path, 'utf8'), path, implementation)?.bindings))
-      .toEqual([['isMo2Instance', 'mo2InstanceAdapter', 'Mo2InstanceOptions'], ['wabbajackPublisher']]);
+      .toEqual([['isMo2Instance', 'mo2InstanceAdapter', 'overwriteDir', 'Mo2InstanceOptions'], ['wabbajackPublisher']]);
   });
 
   it('holds the construction file to the rule beyond its imports and the names they bind', async () => {

@@ -32,6 +32,14 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     }).toEqual({ declared: ['NM', 'IN', 'IG', 'AE'], profile: 'Default', covering: ['IN'] });
   });
 
+  it('gives the publisher the mod manager\'s Overwrite as a folder it never ships', async () => {
+    await writeFile(join(root, SETTINGS_FILE), JSON.stringify({ Include: ['overwrite'] }));
+
+    const { publisherConfiguration } = await adapterOver(root).reading();
+
+    expect(publisherConfiguration.kind === 'read' && publisherConfiguration.covering(join(root, 'overwrite', 'x.ini'), false)).toEqual([]);
+  });
+
   it('hears a change to the publisher\'s configuration and to the mod manager\'s files alike, and neither once the listener leaves', () => {
     let signals = 0;
     const subscription = adapterOver(root).subscribe(() => { signals++; });

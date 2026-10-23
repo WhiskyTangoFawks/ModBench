@@ -12,22 +12,22 @@ import { watchFiles } from '../watchFiles';
 // Wabbajack's configuration, at the instance root.
 const COMPILER_SETTINGS_FILE = 'compiler_settings.json';
 
-// Wabbajack's compiler drops a disabled mod's files unless Always Enabled covers them, after it applies Ignore and
-// before the rest.
+// Wabbajack's compiler drops a folder it never ships, and a disabled mod's files unless Always Enabled covers them,
+// after it applies Ignore and before the rest.
 interface WabbajackTag {
   /** The key its paths are listed by. */
   readonly key: string;
   readonly tag: PublisherTag;
-  readonly appliedToDisabledMod: boolean;
+  readonly appliedFirst: boolean;
   readonly enablesMod: boolean;
 }
 
 // In the order Wabbajack's compiler declares them.
 const TAGS: readonly WabbajackTag[] = [
-  { key: 'NoMatchInclude', tag: { name: 'No Match Include', badge: 'NM', marksPaths: true }, appliedToDisabledMod: false, enablesMod: false },
-  { key: 'Include', tag: { name: 'Include', badge: 'IN', marksPaths: true }, appliedToDisabledMod: false, enablesMod: false },
-  { key: 'Ignore', tag: { name: 'Ignore', badge: 'IG', marksPaths: true }, appliedToDisabledMod: true, enablesMod: false },
-  { key: 'AlwaysEnabled', tag: { name: 'Always Enabled', badge: 'AE', marksPaths: false }, appliedToDisabledMod: true, enablesMod: true },
+  { key: 'NoMatchInclude', tag: { name: 'No Match Include', badge: 'NM', marksPaths: true }, appliedFirst: false, enablesMod: false },
+  { key: 'Include', tag: { name: 'Include', badge: 'IN', marksPaths: true }, appliedFirst: false, enablesMod: false },
+  { key: 'Ignore', tag: { name: 'Ignore', badge: 'IG', marksPaths: true }, appliedFirst: true, enablesMod: false },
+  { key: 'AlwaysEnabled', tag: { name: 'Always Enabled', badge: 'AE', marksPaths: false }, appliedFirst: false, enablesMod: true },
 ];
 
 // A path relative to the instance as Wabbajack splits one: at either separator, an empty name dropped,
@@ -72,31 +72,37 @@ function tagsByPath(text: string, file: string): PathNode {
 }
 
 // A publisher tag covers the path it names and every path in it.
-function coveringIn(instanceRoot: string, root: PathNode): (path: string, inDisabledMod: boolean) => readonly PublisherTag[] {
+function coveringIn(
+  instanceRoot: string, root: PathNode, neverShipped: readonly (readonly string[])[],
+): (path: string, inDisabledMod: boolean) => readonly PublisherTag[] {
   return (path, inDisabledMod) => {
     const inInstance = relative(instanceRoot, path);
     if (inInstance.split(sep)[0] === '..') return [];
+    const names = namesOf(inInstance);
     const found = new Set(root.tags);
     let at: PathNode | undefined = root;
-    for (const name of namesOf(inInstance)) {
+    for (const name of names) {
       at = at.below.get(name);
       if (at === undefined) break;
       for (const tag of at.tags) found.add(tag);
     }
     const covers = TAGS.filter(({ tag }) => found.has(tag));
-    const shipped = !inDisabledMod || covers.some(({ enablesMod }) => enablesMod);
-    return covers.flatMap(({ tag, appliedToDisabledMod }) => (shipped || appliedToDisabledMod ? [tag] : []));
+    const inNeverShipped = neverShipped.some((folder) => folder.every((name, depth) => names[depth] === name));
+    const shipped = !inNeverShipped && (!inDisabledMod || covers.some(({ enablesMod }) => enablesMod));
+    return covers.flatMap(({ tag, appliedFirst }) => (shipped || appliedFirst ? [tag] : []));
   };
 }
 
-export function wabbajackPublisher(instanceRoot: string): Publisher {
+/** `neverShipped`: the folders the mod manager keeps that Wabbajack's compiler never ships. */
+export function wabbajackPublisher(instanceRoot: string, neverShipped: readonly string[]): Publisher {
   const file = join(instanceRoot, COMPILER_SETTINGS_FILE);
+  const neverShippedNames = neverShipped.map((folder) => namesOf(relative(instanceRoot, folder)));
   return {
     tags: TAGS.map(({ tag }) => tag),
     configuration: async (): Promise<PublisherConfiguration> => {
       try {
         const text = await readOrAbsent(() => get(file), undefined);
-        return text === undefined ? { kind: 'none' } : { kind: 'read', covering: coveringIn(instanceRoot, tagsByPath(text, file)) };
+        return text === undefined ? { kind: 'none' } : { kind: 'read', covering: coveringIn(instanceRoot, tagsByPath(text, file), neverShippedNames) };
       } catch (err) {
         return { kind: 'unreadable', reason: errorMessage(err) };
       }
