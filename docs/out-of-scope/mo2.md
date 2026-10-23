@@ -39,6 +39,7 @@ Gestures Modbench does differently.
 | 14 | FOMOD installer | A page in an editor tab ([mods-fomod.md](../architecture/surfaces/mods-fomod.md)). The mod's name comes from install's own prompt. | A modal dialog, with the mod's name in it | Limitation: VS Code has no dialog that shows an option's image beside its groups. |
 | 15 | Scripted FOMOD | Installs as a plain copy, on Windows and Linux | A C# script installer runs on Windows, through a second installer plugin | Ruling: Windows and Linux alike. |
 | 16 | FOMOD Manual | Installs a plain copy; I arrange the files in the Explorer | Opens the manual installer, a dialog for arranging the files | Manual file management: VS Code's Explorer does it. |
+| 17 | Plugin sync | Keeps the line of a plugin a mod's manifest names until I restore the mod | Drops each line whose plugin is not on disk | ADR-0022: a mod is what its manifest says. |
 
 ## Omissions by object
 

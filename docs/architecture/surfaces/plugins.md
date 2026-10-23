@@ -23,6 +23,7 @@ As a user, I want:
 7. A row with nothing beneath it to show no expander, and an empty group of a cell's child records not to be a row. Cites: xEdit
 8. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what is on screen.
 9. Every row collapsed each time the extension activates, so the view opens clean. Cites: as in Mods
+10. A clone or a checkout to keep the plugin order of each mod I have not restored yet. Cites: modlist-repository.md, The repository, story 4; ADR-0022
 
 ## A row
 
@@ -42,6 +43,7 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 
 | Status | When | Icon | Words |
 |---|---|---|---|
+| Not restored | a mod's manifest names it, and I have not restored it | `$(warning)` yellow | not restored |
 | Failed to read | mEdit could not read it | `$(error)` red | failed to read |
 | Master issues | it is active, and a master in its header is not (xedit.md, divergence 28); once the snapshot is indexed | `$(error)` red | 1 master issue, N master issues |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
