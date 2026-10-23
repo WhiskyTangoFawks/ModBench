@@ -295,6 +295,16 @@ describe('PluginFacts — what a row states about its plugin', () => {
     expect(facts.conditions(A)).toEqual(conditions);
   });
 
+  it('flags a plugin the malformed-plugin scan diagnosed, and stops when the next scan does not', () => {
+    const facts = new PluginFacts();
+    malformed(facts);
+    const flagged = facts.contextFlags(A);
+    facts.diagnosed([]);
+
+    expect(flagged).toEqual(['malformed']);
+    expect(facts.contextFlags(A)).toEqual([]);
+  });
+
 });
 
 describe('PluginFacts — which plugins mEdit holds and the record filter', () => {

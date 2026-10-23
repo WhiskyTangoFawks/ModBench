@@ -1081,6 +1081,7 @@ describe('package.json Plugins palette entries', () => {
     ['modbench.plugin.disable', { 'modbench.plugin.holdsEnabledPlugin': true }],
     ['modbench.plugin.move', { 'modbench.plugin.holdsPluginLine': true }],
     ['modbench.plugin.decompile', { 'modbench.plugin.allInSourceMod': true }],
+    ['modbench.plugin.decompileAndRepair', { 'modbench.plugin.allMalformedInAMod': true }],
     ['modbench.record.create', { 'modbench.plugin.singleCreatable': true }],
     ['modbench.record.delete', { 'modbench.plugin.allDeletableRecords': true, ...IN_PLUGINS }],
     ['modbench.record.copy', { 'modbench.plugin.allRecords': true, ...IN_PLUGINS }],

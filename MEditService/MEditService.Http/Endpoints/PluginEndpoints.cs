@@ -168,6 +168,26 @@ internal static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
+        app.MapPost("/plugins/repair-previews", RepairPreviews)
+            .WithName("RepairPreviews")
+            .WithTags(Tag)
+            .WithSummary("Each malformed plugin's diagnoses and the change that repairs each, writing nothing.")
+            .Produces<RepairPreviewsResult>()
+            .ProducesProblem(400)
+            .ProducesProblem(503);
+
+        app.MapPost("/plugins/decompile-and-repair", DecompileAndRepair)
+            .WithName("DecompileAndRepairPlugin")
+            .WithTags(Tag)
+            .WithDescription(
+                "Writes each malformed plugin's source as two commits: its malformed records flagged, then repaired. A plugin " +
+                "is named with the hash its preview answered, and refused when its bytes changed since.")
+            .Produces<DecompileAndRepairResult>()
+            .ProducesProblem(400)
+            // git missing refuses the whole selection; every other refusal is an item of the answer.
+            .ProducesProblem(500)
+            .ProducesProblem(503);
+
         app.MapPost("/plugins/rename-source-changes", RenameSourceChanges)
             .WithName("RenameSourceChanges")
             .WithSummary("The changes renaming a compiled plugin's source makes, writing nothing.")
@@ -320,6 +340,28 @@ internal static class PluginEndpoints
             "Decompile", logger, decompileHandler.DecompileAsync(plugins, req.Force), EndpointMapping.Refusal));
     }
 
+    internal static Task<IResult> RepairPreviews(
+        RepairPreviewsRequest req, RepairPreviewsHandler previewsHandler, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        return OverPlugins(req.Plugins, plugins => EndpointMapping.Answered(
+            "Repair previews", logger, previewsHandler.PreviewAsync(plugins), EndpointMapping.Refusal));
+    }
+
+    internal static Task<IResult> DecompileAndRepair(
+        DecompileAndRepairRequest req, DecompileAndRepairPluginHandler repairHandler, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        var requested = req.Plugins ?? [];
+        if (requested.Any(p => string.IsNullOrWhiteSpace(p.Hash)))
+            return Task.FromResult(EndpointMapping.BadRequest("Every plugin needs the hash its preview answered."));
+        return OverPlugins([.. requested.Select(p => p.Plugin)], _ => EndpointMapping.Answered(
+            "Decompile and repair", logger,
+            repairHandler.DecompileAndRepairAsync(
+                [.. requested.Select(p => new PluginToRepair(p.Plugin, p.Hash, p.SourceFolder))], req.MetadataFiles ?? [], req.Force),
+            EndpointMapping.Refusal));
+    }
+
     // compile-plugin: the selection (commands.md, A selection is one gesture).
     internal static Task<IResult> Compile(
         CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
@@ -383,6 +425,14 @@ internal sealed record MoveLastWrittenRequest(string Origin, string Name, string
 internal sealed record DecompileRequest(IReadOnlyList<PluginAddress> Plugins, bool Force);
 
 internal sealed record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
+
+internal sealed record RepairPreviewsRequest(IReadOnlyList<PluginAddress> Plugins);
+
+/// <summary>The mod manager's own files are what a repository made for a mod with none leaves out of its assets.</summary>
+internal sealed record DecompileAndRepairRequest(IReadOnlyList<PluginToRepairRequest> Plugins, IReadOnlyList<string>? MetadataFiles, bool Force);
+
+/// <summary>A plugin, the hash its preview answered, and the source folder a repository for its mod is made in when it has none.</summary>
+internal sealed record PluginToRepairRequest(PluginAddress Plugin, string Hash, string? SourceFolder);
 
 /// <summary>Container is the FormKey, in the plugin the request names, of the record the new one goes into;
 /// Position is an exterior cell's grid position, and only a worldspace takes one.</summary>

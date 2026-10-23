@@ -100,6 +100,16 @@ internal static class EndpointMapping
             _ => 422,
         });
 
+    /// <summary>Decompile and repair's refusal of a whole selection, and its preview's, mapped as Decompile's is (ADR-0019).</summary>
+    internal static IResult Refusal(SelectionRefusal<DecompileAndRepairRefusal> refusal) => Problem(
+        refusal.Refusal, DecompileAndRepairRefusal.NoLoadOrder, refusal.Message,
+        r => r switch
+        {
+            // The request is sound; the machine lacks git.
+            DecompileAndRepairRefusal.GitUnavailable => 500,
+            _ => 422,
+        });
+
     /// <summary>Compile's refusal of a whole selection, mapped as Decompile's is (ADR-0019).</summary>
     internal static IResult Refusal(SelectionRefusal<CompileRefusal> refusal) => Problem(
         refusal.Refusal, CompileRefusal.NoLoadOrder, refusal.Message,

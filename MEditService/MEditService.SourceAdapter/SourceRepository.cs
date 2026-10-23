@@ -337,6 +337,14 @@ internal sealed class SourceRepository : ISourceRepository
             Writes.ReplaceSourceFrom(name, SourceRepositoryLayout.PristineFilesOf(name, tree), binarySha256);
         });
 
+    public SourceFailure? CommitRepair(PluginAddress plugin, TreeCommit flagged, TreeCommit repaired, string binarySha256) =>
+        SourceFailure.Answer(() =>
+        {
+            RefuseInASession();
+            if (!TreeNameFor(plugin).Holds(out var folder, out var why) && why is SourceFailure.TwinFolders) throw SourceStopException.Of(why);
+            Writes.CommitRepair(folder ?? plugin.Name, flagged, repaired, binarySha256);
+        });
+
     public Answer<SourceChanges?, SourceFailure> ChangesToRenameSource(PluginAddress plugin, string newName) =>
         SourceFailure.Answer<SourceChanges?>(() =>
         {

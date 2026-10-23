@@ -84,9 +84,9 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public SourceFailure? Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets)
+        IReadOnlyList<Asset> assets, (string Plugin, TreeCommit Commit)? repair = null)
     {
-        _inits.Add((sourceFolder, plugins, assets));
+        _inits.Add((sourceFolder, [.. plugins.Select(held => repair is var (name, commit) && held.Plugin.Plugin == name ? (commit.Tree, held.Plugin) : held)], assets));
         return null;
     }
 
@@ -250,6 +250,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
         public SourceFailure? ReplaceSourceFrom(PluginAddress plugin, IReadOnlyList<TreeFile> tree, string binarySha256) =>
             throw Unreached();
+
+        public SourceFailure? CommitRepair(PluginAddress plugin, TreeCommit flagged, TreeCommit repaired, string binarySha256) => throw Unreached();
 
         public SourceFailure? MoveLastWrittenTo(string treeName, string newName) => throw Unreached();
 

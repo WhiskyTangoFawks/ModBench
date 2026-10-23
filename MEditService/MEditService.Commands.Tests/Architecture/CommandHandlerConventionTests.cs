@@ -29,6 +29,7 @@ public sealed class CommandHandlerConventionTests
         typeof(CopyRecordChangesHandler),
         typeof(BuildModHandler),
         typeof(DecompileAndCommitModHandler),
+        typeof(DecompileAndRepairPluginHandler),
         typeof(UpdateManifestHandler),
         typeof(RestoreFromManifestHandler),
     ];
@@ -36,6 +37,7 @@ public sealed class CommandHandlerConventionTests
     private static readonly Type[] HandlersThatWriteNothing =
     [
         typeof(EditRecordChangesHandler),
+        typeof(RepairPreviewsHandler),
     ];
 
     private static readonly Type[] Handlers = [.. SingleWriteHandlers, .. SelectionHandlers, .. HandlersThatWriteNothing];
@@ -55,6 +57,9 @@ public sealed class CommandHandlerConventionTests
         typeof(DecompileAndCommitRefused),
         typeof(DecompileAndCommitResult),
         typeof(DecompiledAndCommittedMod),
+        typeof(DecompileAndRepairRefusal),
+        typeof(DecompileAndRepairRefused),
+        typeof(DecompileAndRepairResult),
         typeof(DecompileRefusal),
         typeof(DecompileRefused),
         typeof(DecompileResult),
@@ -67,6 +72,8 @@ public sealed class CommandHandlerConventionTests
         typeof(MoveLastWrittenResult),
         typeof(PluginCreateRefusal),
         typeof(PluginCreateRefused),
+        typeof(PluginRepairPreview),
+        typeof(PluginToRepair),
         typeof(PutLoadOrderApplied),
         typeof(PutLoadOrderRefusal),
         typeof(PutLoadOrderRefused),
@@ -77,6 +84,7 @@ public sealed class CommandHandlerConventionTests
         typeof(RenameSourceChanges),
         typeof(RenameSourceRefusal),
         typeof(RenameSourceResult),
+        typeof(RepairPreviewsResult),
         typeof(RestoreFromManifestResult),
         typeof(RestoreRefusal),
         typeof(RestoreRefused),

@@ -300,6 +300,7 @@ export class PluginFacts {
     const flags: string[] = [];
     if (read !== undefined) flags.push(read.compiledPlugin ? 'compiledPlugin' : 'nonCompiledPlugin');
     if (read?.readOnly === false) flags.push('editable');
+    if (this.diagnosisTexts.get(address) !== undefined) flags.push('malformed');
     return flags;
   }
 
