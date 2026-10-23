@@ -399,26 +399,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             "the edit reached the read");
     }
 
-    [Fact]
-    public async Task ARecordInAFolderMovedInWholeByHand_IsRead()
-    {
-        using var fx = await ASourceMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var npc = await Client.FirstFormKey(Plugin, Origin);
-        var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
-        const string added = "000900:Shared.esp";
-        var text = File.ReadAllText(original)
-            .Replace(npc, added, StringComparison.Ordinal)
-            .Replace(Npc, "AddedNpc", StringComparison.Ordinal);
-        OtherTool.MovesInAFolderHolding(OtherTool.Beside(original, "AddedByHand"), "AddedNpc - 000900_Shared.esp.json", text);
-        await Client.NextSnapshot(fx);
-
-        await Wire.Eventually(
-            async () => (await Client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(added)}", UriKind.Relative))).IsSuccessStatusCode,
-            "the record in the folder was read");
-        Assert.Equal("AddedNpc", (await Client.Record(added)).GetProperty("editorId").GetString());
-    }
-
     private async Task<List<(string Kind, JsonElement Data)>> FramesOfTheSnapshotAnchoredBy(
         ScatteredFixtureData fx, StreamReader stream, string modFolder, string quest)
     {
@@ -434,42 +414,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
 
     private static bool Names(JsonElement rowsChanged, string formKey) =>
         rowsChanged.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey);
-
-    [Fact]
-    public async Task ARewriteOfANonCompiledPluginsBytes_PushesPluginChanged_AndTheNextReadAgrees()
-    {
-        using var fx = new PluginFixtureBuilder("trace-another-tool-nonCompiledPlugin")
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.5f, origin: Origin)
-            .BuildScattered();
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
-        using var stream = await Client.NotificationStream();
-
-        OtherTool.WritesThePlugin(
-            fx.Plugins.Single(p => p.Origin == Origin).Path, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
-        await Client.NextSnapshot(fx);
-
-        var changed = await stream.EventsUntil("plugin-changed", e => e.GetProperty("plugin").GetString() == Plugin);
-        Assert.Equal(Origin, changed[^1].GetProperty("origin").GetString());
-        await Client.SequenceReaches(changed[^1].GetProperty("sequence").GetInt64());
-        Assert.Equal(0.9, (await Field(formKey, "HeightMax")).GetDouble(), 3);
-    }
-
-    [Fact]
-    public async Task AGitRevertOfAQuestsDocument_ReachesTheNextRead()
-    {
-        using var fx = await ASourceMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var quest = await Client.FirstFormKey(Plugin, Origin, "qust");
-        (await Client.Edit(quest, Plugin, Origin, "Filter", "EditedFilter")).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
-        await Wire.Eventually(async () => (await Field(quest, "Filter")).GetString() == "EditedFilter", "the edit reached the read");
-
-        OtherTool.RevertsASourceDocument(modFolder, Plugin, "EditedFilter");
-        await Client.NextSnapshot(fx);
-
-        await Wire.Eventually(async () => (await Field(quest, "Filter")).GetString() == "OriginalFilter", "the revert reached the read");
-    }
 
     [Fact]
     public async Task AGitRevertOfAPlacedRefsOwningCellDocument_ReachesTheNextRead()

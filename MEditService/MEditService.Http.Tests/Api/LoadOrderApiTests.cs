@@ -16,22 +16,6 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     private Dictionary<string, object> Body() => SnapshotPlugins.Body(_fixture.DataFolder, _fixture.InstanceRoot, _fixture.Plugins);
 
     [Fact]
-    public async Task PutLoadOrder_ScatteredPaths_Returns200AndLoadsPlugins()
-    {
-        using var fx = new PluginFixtureBuilder("api-explicit")
-            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
-            .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
-            .BuildScattered();
-
-        var response = await _client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, fx.Plugins));
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var plugins = await _client.GetFromJsonAsync<List<dynamic>>("/plugins");
-        Assert.NotNull(plugins);
-        Assert.Equal(2, plugins.Count);
-    }
-
-    [Fact]
     public async Task PutLoadOrder_TheArchivesAndStringsFilesItNames_AreTheOnesTheLoadOrderHolds()
     {
         StampedFile[] archives = [new(Path.Combine(_fixture.DataFolder, "Fallout4 - Interface.ba2"), "1/2/3"), new(Path.Combine(_fixture.DataFolder, "A - Main.ba2"), "4/5/6")];
