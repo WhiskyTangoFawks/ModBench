@@ -1,14 +1,21 @@
-using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Http.Tests.TestSupport;
+using System.Text.Json.Serialization;
 using MEditService.LoadOrder;
+using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
+using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Http.Tests.Api;
+namespace MEditService.RecordIndex.Tests.Query;
 
-public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : IClassFixture<CompareGoldenApiFixture>
+public sealed class CompareGoldenTests(CompareGoldenFixture fixture) : IClassFixture<CompareGoldenFixture>
 {
-    private HttpClient Client => fixture.Client;
+    private static readonly JsonSerializerOptions WireOptions = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
+
+    private OpenedIndex Index => fixture.Index;
+
+    private static JsonElement Wire<T>(T answered) => JsonSerializer.SerializeToElement(answered, WireOptions);
+
+    private JsonElement Compare(FormKey formKey) => Wire(Index.Queries.GetCompare(formKey.ToString()).Value());
 
     private static object PluginWithoutItsPerRunTempPath(JsonElement p) => new
     {
@@ -52,42 +59,36 @@ public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : ICl
                 .Any(s => s.Value.GetString() is not ("OnlyOne" or "IdenticalToMaster" or "Master")));
 
     [Fact]
-    public async Task Compare_AcrossThreePlugins_MatchesGolden()
+    public void Compare_AcrossThreePlugins_MatchesGolden()
     {
-        var conflictedNpc = await Client.Compare(CompareGoldenApiFixture.ConflictedNpc.ToString());
-        var unchangedWeapon = await Client.Compare(CompareGoldenApiFixture.UnchangedWeapon.ToString());
-        var soleNpc = await Client.Compare(CompareGoldenApiFixture.SoleNpc.ToString());
-        var injectedNpc = await Client.Compare(CompareGoldenApiFixture.InjectedNpc.ToString());
-        var conflictedRecipe = await Client.Compare(CompareGoldenApiFixture.ConflictedRecipe.ToString());
-
         var captured = new Dictionary<string, object?>
         {
-            ["conflicted-npc"] = Project(conflictedNpc),
-            ["unchanged-weapon"] = Project(unchangedWeapon),
-            ["sole-npc"] = Project(soleNpc),
-            ["injected-npc"] = Project(injectedNpc),
-            ["conflicted-conditions"] = Project(conflictedRecipe),
+            ["conflicted-npc"] = Project(Compare(CompareGoldenFixture.ConflictedNpc)),
+            ["unchanged-weapon"] = Project(Compare(CompareGoldenFixture.UnchangedWeapon)),
+            ["sole-npc"] = Project(Compare(CompareGoldenFixture.SoleNpc)),
+            ["injected-npc"] = Project(Compare(CompareGoldenFixture.InjectedNpc)),
+            ["conflicted-conditions"] = Project(Compare(CompareGoldenFixture.ConflictedRecipe)),
         };
 
         Golden.Verify("compare-three-plugins", captured);
     }
 
     [Fact]
-    public async Task WinnerAndListings_MatchGolden()
+    public void WinnerAndListings_MatchGolden()
     {
-        var plugins = await Client.Plugins();
+        var plugins = Wire(Index.Queries.GetPlugins().Value()).EnumerateArray().ToList();
         var perPluginTypes = new Dictionary<string, JsonElement>();
         foreach (var name in new[] { "Base.esm", "Mid.esp", "Top.esp" })
-            perPluginTypes[name] = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{name}/record-types?origin={PluginOrigin.DataDirectory}");
+            perPluginTypes[name] = Wire(Index.Queries.GetPluginRecordTypes(new PluginAddress(name, PluginOrigin.DataDirectory)).Value());
 
         var winningRecords = new Dictionary<string, object?>();
         foreach (var fk in new[]
         {
-            CompareGoldenApiFixture.ConflictedNpc, CompareGoldenApiFixture.UnchangedWeapon, CompareGoldenApiFixture.SoleNpc,
-            CompareGoldenApiFixture.InjectedNpc, CompareGoldenApiFixture.ConflictedRecipe,
+            CompareGoldenFixture.ConflictedNpc, CompareGoldenFixture.UnchangedWeapon, CompareGoldenFixture.SoleNpc,
+            CompareGoldenFixture.InjectedNpc, CompareGoldenFixture.ConflictedRecipe,
         })
         {
-            var d = await Client.Record(fk.ToString());
+            var d = Wire(Index.Queries.GetRecord(fk.ToString()).Value());
             winningRecords[fk.ToString()] = new
             {
                 plugin = d.GetProperty("plugin"),
@@ -98,9 +99,8 @@ public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : ICl
             };
         }
 
-        var allNpcs = await Client.GetFromJsonAsync<JsonElement>("/records?type=npc_&limit=50&offset=0");
-        var references = await Client.GetFromJsonAsync<JsonElement>(
-            $"/records/{Uri.EscapeDataString(new Mutagen.Bethesda.Plugins.FormKey(Mutagen.Bethesda.Plugins.ModKey.FromFileName("Base.esm"), 0x900).ToString())}/references");
+        var allNpcs = Wire(Index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 50, offset: 0).Value());
+        var references = Wire(Index.Queries.GetReferences(new FormKey(ModKey.FromFileName("Base.esm"), 0x900).ToString()).Value());
 
         var captured = new
         {
