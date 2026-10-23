@@ -11,8 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands;
 
 /// <summary>The decompile and repair gesture's handler (plugin-source.md, Decompile and repair): a malformed plugin into
-/// its mod's plugin source as two commits, the malformed records flagged, then repaired. A repair that drops data is
-/// refused unless forced.</summary>
+/// its mod's plugin source as two commits, the malformed records flagged, then repaired.</summary>
 public sealed class DecompileAndRepairPluginHandler
 {
     private readonly LoadOrderHolder _loadOrder;

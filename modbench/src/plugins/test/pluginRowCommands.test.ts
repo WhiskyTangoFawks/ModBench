@@ -257,7 +257,7 @@ describe('modbench.plugin.decompileAndRepair', () => {
     expect(repaired).toEqual([{ plugins: [MALFORMED], force: false }]);
     expect(logged).toEqual(['Malformed.esp: REGN 00000800: drops 25 bytes']);
     expect(ask.asked).toEqual([{
-      message: 'Repair drops data? Nothing is written until you agree, and the write replaces the plugin source's working tree.',
+      message: 'Repair drops data? Nothing is written until you agree, and the write replaces the source in the working tree.',
       detail: 'Malformed.esp: REGN 00000800: drops 25 bytes', buttons: ['Repair'],
     }]);
     expect(progressSteps).toEqual([

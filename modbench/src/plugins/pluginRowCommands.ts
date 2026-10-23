@@ -77,8 +77,7 @@ export interface DecompileAndRepairDeps {
 }
 
 /** commands.md, `decompile and repair`: the plugins of Plugins rows, the selection included, of the palette's Plugins
- *  selection, or of a Malformed entry's link in the Problems panel. A repair that drops data asks first; the agent's
- *  force stands for the answer. */
+ *  selection, or of a Malformed entry's link in the Problems panel. A repair that drops data asks first. */
 export function registerDecompileAndRepairCommand(
   deps: DecompileAndRepairDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {
@@ -101,7 +100,7 @@ export function registerDecompileAndRepairCommand(
 // plugin-source.md, Decompile and repair, story 3: one agreement for the selection, naming each change that drops
 // data. Agreed, the write is forced, so it also replaces what the plugin source holds in its working tree.
 async function confirmDrops(ask: AskQuestion, dropping: readonly PluginRepairPreview[]): Promise<boolean> {
-  const answer = await ask('Repair drops data? Nothing is written until you agree, and the write replaces the plugin source's working tree.',
+  const answer = await ask('Repair drops data? Nothing is written until you agree, and the write replaces the source in the working tree.',
     { modal: true, detail: dropping.flatMap(previewLines).join('\n') }, 'Repair');
   return answer === 'Repair';
 }
