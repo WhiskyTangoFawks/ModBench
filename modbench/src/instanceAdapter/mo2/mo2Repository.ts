@@ -40,12 +40,14 @@ function caseBlindFinder(dataFolder: string) {
   };
 }
 
-// What git would read as the whitelist ends the file, bar the block of source mods. An ignore list that does not end
-// with it gets it after its last line, in the file's own line ending.
+const WHITELIST_LINES = WHITELIST_IGNORE_LIST.trimEnd().split('\n');
+
+// The lines around the whitelist are the user's to manage (docs/wiki/workflows.md), so only a missing whitelist is appended.
 function whitelistAfter(ignoreList: string): string {
-  const lines = ignoreList.replaceAll('\r\n', '\n');
-  const withoutSourceMods = withSourceModLines(lines, []) ?? lines;
-  if (`${withoutSourceMods.trimEnd()}\n`.endsWith(WHITELIST_IGNORE_LIST)) return '';
+  const text = ignoreList.replaceAll('\r\n', '\n');
+  const gitLines = (withSourceModLines(text, []) ?? text).trimEnd().split('\n').map((line) => line.replace(/(?<!\\) +$/, ''));
+  const holdsWhitelist = gitLines.some((_, at) => WHITELIST_LINES.every((line, i) => gitLines[at + i] === line));
+  if (holdsWhitelist) return '';
   const lineEnding = ignoreList.includes('\r\n') ? '\r\n' : '\n';
   const separator = ignoreList === '' || ignoreList.endsWith('\n') ? '' : lineEnding;
   return separator + WHITELIST_IGNORE_LIST.replaceAll('\n', lineEnding);
