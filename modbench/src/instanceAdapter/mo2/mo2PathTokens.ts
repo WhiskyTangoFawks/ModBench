@@ -17,12 +17,12 @@ import type { Mo2Context } from './mo2Context';
 
 type Mo2PathTokens = Pick<InstanceAdapter, 'writePathTokens' | 'pathsOutsideFolders'>;
 
-// MO2 is a Windows program. Qt's INI escapes a backslash, MO2 can write a drive's own separator twice, and a value is
-// a key's, quoted, or in @ByteArray's parentheses.
+// MO2 is a Windows program. Qt's INI escapes a backslash, MO2 can write a drive's own separator twice, and a path
+// follows a key, a quote, @ByteArray's parenthesis, or a space in arguments or a list.
 const SPELLING: PathSpelling = {
   native: false,
   separators: [{ first: '/', rest: '/' }, { first: '\\', rest: '\\' }, { first: '\\\\', rest: '\\\\' }, { first: '\\\\\\\\', rest: '\\\\' }],
-  starts: ['=', '"', '@ByteArray('],
+  starts: ['=', '"', '@ByteArray(', ' '],
   ends: '")',
 };
 

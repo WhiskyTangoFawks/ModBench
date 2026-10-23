@@ -84,7 +84,19 @@ describe('the MO2 adapter\'s path tokens', () => {
   });
 
   it.each([
-    ['a longer name', (root: string) => `${onWineDrive(root, '/')}2/x.exe`],
+    ['unquoted in a program\'s arguments', (root: string) => `4\\arguments=-o ${onWineDrive(root, '\\\\')}\\\\out`, '4\\arguments=-o {instance folder:\\\\}\\\\out'],
+    ['in a list\'s second entry', (root: string) => `paths=${onWineDrive(root, '/')}/a, ${onWineDrive(root, '/')}/b`, 'paths={instance folder:/}/a, {instance folder:/}/b'],
+  ])('holds the instance folder by a token %s', async (_place, written, token) => {
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'ModOrganizer.ini', SETTINGS([written(root)]));
+
+    await adapter.writePathTokens();
+
+    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS([token]));
+  });
+
+  it.each([
+    ['a longer name',(root: string) => `${onWineDrive(root, '/')}2/x.exe`],
     ['a space and more', (root: string) => `${onWineDrive(root, '/')} Backup/x.exe`],
     ['a plus', (root: string) => `${onWineDrive(root, '/')}+/x.exe`],
     ['a parenthesis', (root: string) => `${onWineDrive(root, '/')}(GOG)/x.exe`],
