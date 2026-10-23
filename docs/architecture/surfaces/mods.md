@@ -69,12 +69,13 @@ Overwrite is always a row, even when it holds nothing. It is not a mod: it has n
 | Icon | the file icon theme's icon | VS Code's Explorer |
 | Colour | greyed when the game does not get the file (The tree, story 8) | |
 | Description | differs ([modlist-repository.md](modlist-repository.md), Status) | |
+| Indicators | a badge at the right edge for each publisher tag that covers it ([Indicators](#indicators)) | Wabbajack |
 | Tooltip | the path in its mod | |
 | Identity | the mod or Overwrite, and the path in it | |
 
 ## Indicators
 
-A mod row carries an indicator for each status that holds. A disabled mod carries none. Each indicator has a badge and a colour, and my settings switch each on or off. Each colour is a theme colour Modbench contributes. Cites: MO2's Conflicts and Flags columns; editor-conflicts, The colours, story 1
+A mod row carries an indicator for each status that holds, and a folder or file row one for each publisher tag that covers it. A disabled mod carries none but Always Enabled, which Wabbajack ships on a disabled mod. Each indicator has a badge and a colour, and my settings switch each on or off. Each colour is a theme colour Modbench contributes. Cites: MO2's Conflicts and Flags columns; editor-conflicts, The colours, story 1
 
 | Indicator | Holds when | Badge | Colour |
 |---|---|---|---|
@@ -88,7 +89,7 @@ A mod row carries an indicator for each status that holds. A disabled mod carrie
 | No Match Include | Wabbajack's No Match Include tag covers the row ([publishing.md](publishing.md), Tags, story 1) | on | off |
 | Ignore | Wabbajack's Ignore tag covers the row ([publishing.md](publishing.md), Tags, story 1) | on | off |
 
-A tag's badge is its initials: AE, IN, NM, IG. The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Cites: mo2.md, divergence 12
+A tag's badge is two letters: AE, IN, NM, IG. The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Cites: mo2.md, divergence 12
 
 ## A source mod
 
@@ -121,11 +122,11 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod · check for updates, on every mod (I am logged in) · update manifest · restore from manifest…, on every mod (the instance has a repository). Collapse All last. |
-| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… · remove publisher tag… (the instance has a publisher's configuration) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · decompile and commit (a mod with no source that holds a plugin) · build (a source mod) · update manifest · restore from manifest… (the instance has a repository) · copy value · uninstall |
+| Mod menu | open folder · open source (a source mod) · open conflicts · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · rename… · add publisher tag… (the instance has a publisher's configuration) · remove publisher tag… (the row holds a tag) · check for updates (the mod has a Nexus mod ID, and I am logged in) · add separator · create empty mod · install… · decompile and commit (a mod with no source that holds a plugin) · build (a source mod) · update manifest · restore from manifest… (the instance has a repository) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · check for updates (I am logged in) · update manifest · restore from manifest… (the instance has a repository) · copy value · delete |
 | Overwrite menu | open folder |
-| File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · add publisher tag… · remove publisher tag… (the instance has a publisher's configuration) · copy value |
-| Folder menu | open folder · add publisher tag… · remove publisher tag… (the instance has a publisher's configuration) · copy value |
+| File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · add publisher tag… (the instance has a publisher's configuration) · remove publisher tag… (the row holds a tag) · copy value |
+| Folder menu | open folder · add publisher tag… (the instance has a publisher's configuration) · remove publisher tag… (the row holds a tag) · copy value |
 | Check box | enable or disable |
 | Keys | Space: enable or disable. Delete: uninstall, or delete a separator. F2: rename a mod or a separator. Ctrl+C: copy value. |
 

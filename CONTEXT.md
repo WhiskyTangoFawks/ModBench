@@ -210,11 +210,11 @@ The one file in a mod folder that names its package, its host when it has one, a
 Avoid: record (a plugin's unit of data), recipe, directives
 
 # Publisher
-A tool that compiles an instance into the modlist players install, such as Wabbajack or a Vortex collection. Its configuration is files in the instance.
+A tool that compiles an instance into the modlist players install, such as Wabbajack, or Vortex through its collections.
 
 Avoid: compiler (one stage of a publisher), installer
 
 # Publisher tag
 A publisher's mark on a path in the instance that changes what the published modlist ships, such as Wabbajack's Always Enabled.
 
-Avoid: flag, rule
+Avoid: flag (a plugin header's flags), rule

@@ -32,7 +32,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 |---|---|
 | Title bar | 1: refresh. Overflow: open settings · log in, or log out while logged in. |
 | Profile menu | switch |
-| Modlist menu | git init (no repository) · update manifest · restore from manifest…, on every mod (a repository) |
+| Modlist menu | git init (no repository, or one git init has not set up) · update manifest · restore from manifest…, on every mod (a repository) |
 | Keys | Enter: the row's gesture, as a click does. |
 
 ## Pickers, prompts and confirmations
