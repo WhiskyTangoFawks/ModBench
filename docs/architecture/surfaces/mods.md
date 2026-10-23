@@ -75,7 +75,7 @@ Overwrite is always a row, even when it holds nothing. It is not a mod: it has n
 
 ## Indicators
 
-A mod row carries an indicator for each status that holds, and a folder or file row one for each publisher tag that covers it. A disabled mod carries none but a tag its publisher ships a disabled mod for, such as Wabbajack's Always Enabled. Each indicator has a badge and a colour, and my settings switch each on or off. Each colour is a theme colour Modbench contributes. Cites: MO2's Conflicts and Flags columns; editor-conflicts, The colours, story 1
+A mod row carries an indicator for each status that holds, and a folder or file row one for each publisher tag that covers it. A disabled mod carries none but a tag its publisher ships a disabled mod for. Each indicator has a badge and a colour, and my settings switch each on or off. Each colour is a theme colour Modbench contributes. Cites: MO2's Conflicts and Flags columns; editor-conflicts, The colours, story 1
 
 | Indicator | Holds when | Badge | Colour |
 |---|---|---|---|
@@ -86,7 +86,7 @@ A mod row carries an indicator for each status that holds, and a folder or file 
 | Update available | the mod's version is older than the newest version check for updates found | on | off |
 | Publisher tag | a tag covers the row ([publishing.md](publishing.md), Tags, story 1) | on | off |
 
-Each publisher tag is an indicator of its own, with the badge its publisher declares, such as Wabbajack's AE, IN, NM and IG. The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Cites: mo2.md, divergence 12
+Each publisher tag is an indicator of its own, with the badge its publisher declares. The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. Cites: mo2.md, divergence 12
 
 ## A source mod
 

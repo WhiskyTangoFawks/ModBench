@@ -215,6 +215,6 @@ A tool that compiles an instance into the modlist players install, such as Wabba
 Avoid: compiler (one stage of a publisher), installer
 
 # Publisher tag
-A publisher's own mark on a mod, or on a path in the instance, that changes what the published modlist ships, such as Wabbajack's Always Enabled or a mod's place in a Vortex collection. The publisher names it and gives it its meaning.
+A publisher's own mark on a mod, or on a path in the instance, that changes what the published modlist ships, such as Wabbajack's Always Enabled or a mod's place in a Vortex collection. The publisher names it and gives it its meaning. A row shows it as a badge.
 
-Avoid: flag (a plugin header's flags), rule
+Avoid: tag (a git tag, a modlist's gallery tag), badge (how a row shows it), flag (a plugin header's flags), rule
