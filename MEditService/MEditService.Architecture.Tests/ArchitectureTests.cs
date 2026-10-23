@@ -92,14 +92,6 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void DiskDerivedState_TheScanWalksMoreThanOneHundredFiles()
-    {
-        var root = ServiceProjects.SolutionDirectory();
-        var walked = Projects.SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p))).Count();
-        Assert.True(walked > 100, $"The mtime scan walked only {walked} files under {string.Join(", ", Projects)}.");
-    }
-
-    [Fact]
     public void DiskDerivedState_TheScanCatchesAPlantedLastWriteTimeRead()
     {
         using var root = new ScratchDirectory("medit-mtime-scan-");
@@ -282,11 +274,11 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void ExistingPluginBinary_TheScanWalksMoreThanOneHundredFiles()
+    public void TheScans_WalkMoreThanOneHundredFiles()
     {
         var root = ServiceProjects.SolutionDirectory();
         var walked = Projects.SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p))).Count();
-        Assert.True(walked > 100, $"The plugin-binary-write scan walked only {walked} files under {string.Join(", ", Projects)}.");
+        Assert.True(walked > 100, $"The scans walked only {walked} files under {string.Join(", ", Projects)}.");
     }
 
     [Fact]
