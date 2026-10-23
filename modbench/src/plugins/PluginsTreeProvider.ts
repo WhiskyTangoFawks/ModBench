@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import type { PluginDiagnosisReport, PluginAddress } from '../client';
+import { pluginsNotRestored } from '../pluginCommands/pluginsNotRestored';
 import { instanceLastGoodReadFailure, managerRunningMessage, type Instance, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 import { messageLine } from '../drivingLib/messageLine';
 import type { SortDirection } from '../drivingLib/sortDirectionToggle';
 import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
-import type { PluginsDrop } from '../pluginCommands/plugins';
+import type { LastModStatuses, PluginsDrop } from '../pluginCommands/plugins';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { IndexingNode, type RecordBrowser } from './RecordBrowser';
 import { ImplicitMasterNode, PluginNode, rowIdentity, type PluginListNode, type PluginsTreeNode } from './pluginRows';
@@ -51,6 +52,8 @@ interface PluginsTreeProviderOptions {
   /** The Failed to read status's other surface, the Problems panel, for a read a defect in the
    *  plugin's bytes stopped. */
   publishFailedToRead: (errors: readonly PluginProblem[]) => void;
+  /** Each mod's folder against its manifest, as mEdit last answered it. */
+  modStatuses: LastModStatuses;
 }
 
 
@@ -97,6 +100,7 @@ export class PluginsTreeProvider
 
   private readonly instance: PluginsInstance;
   private readonly records: RecordBrowserFacet;
+  private readonly modStatuses: LastModStatuses;
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
@@ -128,7 +132,12 @@ export class PluginsTreeProvider
       this.cache = undefined;
       this._onDidChangeTreeData.fire(undefined);
     }), options.instance.onReadFailure(() => this.render()));
+    this.modStatuses = options.modStatuses;
     this.subscriptions.push(
+      options.modStatuses.onDidChange(() => {
+        if (this.cache) this.reckonNotRestored(this.cache.rows);
+        this._onDidChangeTreeData.fire(undefined);
+      }),
       options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)),
       this.facts,
       this.facts.onDidChange(() => this._onDidChangeTreeData.fire(undefined)),
@@ -324,6 +333,7 @@ export class PluginsTreeProvider
     if (!this.cache) {
       const rows = this.buildRows();
       this.cache = { rows };
+      this.reckonNotRestored(rows);
       if ((rows.length === 0) !== this.lastBuildHadNoRows) {
         this.lastBuildHadNoRows = rows.length === 0;
         this.render();
@@ -343,6 +353,17 @@ export class PluginsTreeProvider
       ...lockedRows,
       ...fromLines.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)),
     ];
+  }
+
+  // plugins.md, A row, Plugin statuses: Not restored.
+  private reckonNotRestored(rows: readonly PluginListNode[]): void {
+    const { holdsRepository, mods } = this.instanceValue;
+    const enabledMods = holdsRepository ? mods.flatMap((entry) => (entry.kind === 'mod' && entry.enabled ? [entry.name] : [])) : [];
+    const notRestored = pluginsNotRestored(enabledMods, (mod) => this.modStatuses.of(mod)?.gone ?? []);
+    this.facts.notRestored(rows.flatMap((row) => {
+      const mod = row.kind === 'plugin' && this.namesNoFile(row) ? notRestored.get(pluginNameKey(row.plugin.name))?.mod : undefined;
+      return mod === undefined ? [] : [{ plugin: addressOfRow(row), mod }];
+    }));
   }
 
   // ── the tree item ─────────────────────────────────────────────────────────

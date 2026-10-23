@@ -3,7 +3,7 @@ import type { MEditClient, PluginAddress } from '../client';
 import { registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
 import { messageLine } from '../drivingLib/messageLine';
 import { joinSyncMessages, reportSyncFailures, type SyncChannel, type SyncFailureReport, type SyncMessage } from '../drivingLib/syncFailureReport';
-import type { PluginCommands } from '../pluginCommands/plugins';
+import type { LastModStatuses, PluginCommands } from '../pluginCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { CopyValueAdapter } from '../drivingLib/copyValue';
@@ -56,6 +56,7 @@ export interface PluginsViewDeps {
   sourceEditing: SourceEditing;
   /** Plugin sync, whose failure the view's message line says. */
   pluginSync: SyncMessage;
+  modStatuses: LastModStatuses;
   channel: SyncChannel;
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   reporterFor: (tag: string) => Reporter;
@@ -86,6 +87,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
     instance,
     records: recordBrowser,
     client,
+    modStatuses: deps.modStatuses,
     // A malformed plugin and one changed outside Modbench still load and play; one that failed to read does not.
     publishDiagnoses: (reports) => publishPluginProblems(loadDiagnostics, pluginFile, reports, vscode.DiagnosticSeverity.Warning,
       (plugin) => decompileAndRepairLink(plugin, tree.placeOf(plugin))),

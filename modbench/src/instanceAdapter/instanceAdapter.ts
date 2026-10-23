@@ -178,9 +178,12 @@ export type DataFolderPlugins =
   | { readonly kind: 'unreadable'; readonly reason: string };
 
 /** Each plugin the game can load, keyed as it compares names, spelled as the copy it loads: an
- *  enabled mod's or Overwrite's at their root, else the Data folder's. */
+ *  enabled mod's or Overwrite's at their root, else the Data folder's; and the enabled mods, by name. */
 export type PluginsProvided =
-  | { readonly kind: 'listed'; readonly plugins: ReadonlyMap<string, string>; readonly loadedWithNoLine: readonly string[] }
+  | {
+    readonly kind: 'listed'; readonly plugins: ReadonlyMap<string, string>; readonly loadedWithNoLine: readonly string[];
+    readonly enabledMods: readonly string[];
+  }
   | Exclude<DataFolderPlugins, { readonly kind: 'listed' }>;
 
 /** The release's archives at the Data folder's root, and the strings files in its strings folder by

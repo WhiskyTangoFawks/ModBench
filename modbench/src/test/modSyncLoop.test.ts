@@ -1,4 +1,5 @@
 import { GAME_FOLDER_SETTING_ID } from './gameFolderSetting';
+import { NO_MOD_STATUSES } from './noModStatuses';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -54,7 +55,7 @@ async function settledWiredInstance(): Promise<{
   instances.push(instance);
   const channel = channelDouble();
   const syncs: ReturnType<ModSyncRun>[] = [];
-  const { modSync } = instanceSyncs({
+  const { modSync } = instanceSyncs({ modStatuses: NO_MOD_STATUSES,
     instance, channel, syncPlugins: noPluginSync,
     syncMods: () => {
       const run = modSyncOver(adapterOver(root))();
@@ -93,7 +94,7 @@ async function settledFakeInstance(overrides: Partial<InstanceReading>) {
   const channel = channelDouble();
   const syncs: ReturnType<ModSyncRun>[] = [];
   const syncMods = modSyncOver(fake.adapter);
-  const { modSync } = instanceSyncs({
+  const { modSync } = instanceSyncs({ modStatuses: NO_MOD_STATUSES,
     instance, channel, syncPlugins: noPluginSync,
     syncMods: () => {
       const run = syncMods();
@@ -165,7 +166,7 @@ describe('mod sync, as each landed value drives it', () => {
   it('runs on every value that lands, from the first', async () => {
     const syncMods = vi.fn<ModSyncRun>(() => Promise.resolve({ applied: true, added: [], dropped: [] }));
     const instance = new FakeInstance(instanceValueFixture());
-    const { modSync } = instanceSyncs({ instance, syncPlugins: noPluginSync, channel: channelDouble(), syncMods });
+    const { modSync } = instanceSyncs({ modStatuses: NO_MOD_STATUSES, instance, syncPlugins: noPluginSync, channel: channelDouble(), syncMods });
 
     instance.publish(instanceValueFixture());
     instance.publish(instanceValueFixture());
@@ -179,7 +180,7 @@ describe('mod sync, as each landed value drives it', () => {
       managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt', downloadedFileMetadataFile: 'order.metadata' },
     }));
     const channel = channelDouble();
-    const { modSync } = instanceSyncs({
+    const { modSync } = instanceSyncs({ modStatuses: NO_MOD_STATUSES,
       instance, syncPlugins: noPluginSync, channel,
       syncMods: () => Promise.resolve({ applied: true, added: ['New Mod'], dropped: [] }),
     });
@@ -192,7 +193,7 @@ describe('mod sync, as each landed value drives it', () => {
 
   it('says a refusal on the Mods view\'s message line as modlist.txt not synced', async () => {
     const instance = new FakeInstance(instanceValueFixture());
-    const { modSync } = instanceSyncs({
+    const { modSync } = instanceSyncs({ modStatuses: NO_MOD_STATUSES,
       instance, syncPlugins: noPluginSync, channel: channelDouble(),
       syncMods: () => Promise.resolve({ applied: false, refusal: '/instance/mods does not exist' }),
     });

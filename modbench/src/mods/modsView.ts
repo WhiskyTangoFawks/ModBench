@@ -17,8 +17,7 @@ import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { MODS_KEY_ARGS, modsKeyContext } from './gestureEntry';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
-import { ModStatuses } from './modStatuses';
-import type { MEditClient, ReadModStatus } from '../client';
+import type { ModStatuses } from './modStatuses';
 import { registerModDecorations } from './modDecorations';
 import { registerModInstallCommands } from './installCommands';
 import { registerCompareFileCommand } from './compareFile';
@@ -68,8 +67,8 @@ interface ModsViewDeps {
   sourceGestures: SourceGestureDeps;
   manifestGestures: ManifestDeps;
   checkForUpdates: CheckForUpdates;
-  /** Each mod's status: mEdit pushes the mods whose status changed, and the view reads them. */
-  modStatus: { push: Pick<MEditClient, 'onNotification'>; readStatus: ReadModStatus };
+  /** Each mod's status, as mEdit last answered it. */
+  statuses: ModStatuses;
 }
 
 const checkForUpdatesDeps = (
@@ -86,8 +85,8 @@ interface ModsView extends vscode.Disposable {
  *  each have exactly one owner. Split apart, a row change and a filter keystroke race for them and
  *  the loser silently vanishes. */
 export function createModsView(deps: ModsViewDeps): ModsView {
-  const { instance, commands, log, modSync, reporterFor, ask, trash } = deps;
-  const { statuses, statusMessage } = modStatusesOf(deps);
+  const { instance, commands, log, modSync, reporterFor, ask, trash, statuses } = deps;
+  const statusMessage = () => (instance.value.holdsRepository ? statuses.message() : undefined); // modlist-repository.md, Status, story 1
   const provider = new ModListProvider({ instance, statuses });
   const view = vscode.window.createTreeView(MODS_KEY_ARGS.view, {
     treeDataProvider: provider,
@@ -159,7 +158,6 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     nameFilter,
     view,
     provider,
-    statuses,
   );
   return {
     view, nameFilter, copyValue: { text: modsCopyValueText(() => view.selection), reporterTag: 'mod.copyValue' },
@@ -188,13 +186,6 @@ function registerSourceGestures(
     provider.onDidChangeTreeData(showAnySource),
     problems,
   ];
-}
-
-// modlist-repository.md, Status, story 1: status shows while the instance holds a repository.
-function modStatusesOf({ instance, modStatus, log }: Pick<ModsViewDeps, 'instance' | 'modStatus' | 'log'>) {
-  const statuses = new ModStatuses(
-    modStatus.push, modStatus.readStatus, log);
-  return { statuses, statusMessage: () => (instance.value.holdsRepository ? statuses.message() : undefined) };
 }
 
 // VS Code keeps the expansion it remembers for a known row identity over the provider's state, so
