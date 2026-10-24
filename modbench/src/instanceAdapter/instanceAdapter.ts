@@ -475,10 +475,22 @@ export interface PublisherTag {
  *  `path` is or is in, undefined outside every mod. */
 export type Covering = (path: string, mod: string | undefined) => readonly PublisherTag[];
 
+/** Each publisher tag the configuration lists on exactly the file or folder at `path`: what remove takes away. */
+export type Listed = (path: string) => readonly PublisherTag[];
+
+/** Adding a publisher tag, or removing it. */
+export type PublisherTagChange = 'add' | 'remove';
+
+/** A path a change to a publisher tag refused, and why. */
+export interface PathRefusal {
+  readonly path: string;
+  readonly reason: string;
+}
+
 /** The publisher's configuration: none while the instance holds no publisher's, or why it could not be read. */
 export type PublisherConfiguration =
   | { readonly kind: 'none' }
-  | { readonly kind: 'read'; readonly covering: Covering }
+  | { readonly kind: 'read'; readonly covering: Covering; readonly listed: Listed }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
 /** The instance as parsed facts, every one from the same read of its settings, and what the watch cannot hear. */
@@ -554,6 +566,9 @@ export interface InstanceAdapter {
   readonly names: ManagerNames;
   /** Each publisher tag the instance's publisher declares. */
   readonly publisherTags: readonly PublisherTag[];
+  /** Adds or removes the publisher tag named `tag` on each path; a path already so changes nothing. Answers the paths it
+   *  refused; rejects, writing nothing, for an undeclared tag or a configuration it cannot read. */
+  changePublisherTag(change: PublisherTagChange, tag: string, paths: readonly string[]): Promise<readonly PathRefusal[]>;
 
   // Answers about a mod or a file.
   /** The folder a build of `mod` writes: the one that holds it, else the one its name gives it; undefined when its

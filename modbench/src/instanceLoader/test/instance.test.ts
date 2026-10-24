@@ -788,14 +788,14 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
 
   it('carries the publisher tags the adapter declares before any read, and the publisher\'s configuration once read', async () => {
     const tag: PublisherTag = { name: 'Include', badge: 'IN', marksPaths: true };
-    const covering = (): readonly PublisherTag[] => [tag];
-    const { instance } = loader({ publisherConfiguration: { kind: 'read', covering } }, (adapter) => ({ ...adapter, publisherTags: [tag] }));
+    const configuration = { kind: 'read', covering: (): readonly PublisherTag[] => [tag], listed: (): readonly PublisherTag[] => [] } as const;
+    const { instance } = loader({ publisherConfiguration: configuration }, (adapter) => ({ ...adapter, publisherTags: [tag] }));
     const before = { tags: instance.value.publisherTags, configuration: instance.value.publisherConfiguration };
 
     await instance.refresh();
 
     expect([before, { tags: instance.value.publisherTags, configuration: instance.value.publisherConfiguration }])
-      .toEqual([{ tags: [tag], configuration: { kind: 'none' } }, { tags: [tag], configuration: { kind: 'read', covering } }]);
+      .toEqual([{ tags: [tag], configuration: { kind: 'none' } }, { tags: [tag], configuration }]);
   });
 
   it('tells once while it stands that the publisher\'s configuration could not be read', async () => {

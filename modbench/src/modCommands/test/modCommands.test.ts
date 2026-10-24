@@ -639,6 +639,56 @@ describe('markFiles', () => {
   });
 });
 
+describe('changePublisherTag (publishing.md, Publisher tags, story 2)', () => {
+  const INCLUDE = { name: 'Include', badge: 'IN', marksPaths: true };
+  const ALWAYS_ENABLED = { name: 'Always Enabled', badge: 'AE', marksPaths: false };
+  const publisherOver = (answers: InstanceAnswers = {}) => over(FIXTURE_ORDER, { publisherTags: [INCLUDE, ALWAYS_ENABLED], ...answers });
+  const modRow = (name: string) => ({ origin: { kind: 'mod', name } }) as const;
+  const pathRow = (name: string, relativePath: string) => ({ origin: { kind: 'mod', name }, relativePath }) as const;
+  const changeCall = (change: 'add' | 'remove', tag: string, paths: string[]): AdapterCall => ({ verb: 'changePublisherTag', change, tag, paths });
+
+  it('changes the tag on the folder of each mod and the path of each file or folder in one, in one call', async () => {
+    const { fake, commands } = publisherOver();
+    const rows = [modRow('ENBoost'), pathRow('Harder VATS', 'Textures/a.dds')];
+
+    const result = await commands.changePublisherTag('add', 'Include', rows);
+
+    expect(result).toEqual({ applied: true, outcome: { landed: rows, refused: [] } });
+    expect(fake.calls).toEqual([changeCall('add', 'Include', ['/mods/ENBoost', '/mods/Harder VATS/Textures/a.dds'])]);
+  });
+
+  it('refuses a row the publisher refuses, by its row, and lands the rest', async () => {
+    const { commands } = publisherOver({ outsideInstance: new Set(['/mods/ENBoost']) });
+    const refusedRow = modRow('ENBoost');
+    const landedRow = modRow('Harder VATS');
+
+    const result = await commands.changePublisherTag('remove', 'Include', [refusedRow, landedRow]);
+
+    expect(result).toEqual({ applied: true, outcome: { landed: [landedRow], refused: [{ item: refusedRow, reason: 'It is outside the instance.' }] } });
+  });
+
+  it('refuses a file or folder for a tag that marks only mods, and an Overwrite row, calling for the rest', async () => {
+    const { fake, commands } = publisherOver();
+    const file = pathRow('ENBoost', 'a.dds');
+    const overwritten = { origin: { kind: 'runtimeOutput' }, relativePath: 'o.log' } as const;
+
+    const result = await commands.changePublisherTag('add', 'Always Enabled', [file, modRow('ENBoost')]);
+    const inOverwrite = await commands.changePublisherTag('add', 'Include', [overwritten]);
+
+    expect(result).toEqual({ applied: true, outcome: { landed: [modRow('ENBoost')], refused: [{ item: file, reason: 'Always Enabled marks mods only.' }] } });
+    expect(inOverwrite).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: overwritten, reason: 'Overwrite is not a mod.' }] } });
+    expect(fake.calls).toEqual([changeCall('add', 'Always Enabled', ['/mods/ENBoost'])]);
+  });
+
+  it('refuses the whole selection, naming it, for a tag the publisher does not declare, and when the publisher rejects', async () => {
+    const { fake, commands } = publisherOver({ refusals: refusing('changePublisherTag', 'compiler_settings.json is not JSON') });
+
+    expect(await commands.changePublisherTag('add', 'Nope', [modRow('ENBoost')])).toEqual({ applied: false, refusal: 'The publisher declares no publisher tag "Nope". It declares Include, Always Enabled.' });
+    expect(await commands.changePublisherTag('add', 'Include', [modRow('ENBoost')])).toEqual({ applied: false, refusal: 'compiler_settings.json is not JSON' });
+    expect(verbs(fake.calls)).toEqual(['changePublisherTag']);
+  });
+});
+
 describe('createEmptyMod', () => {
   it('makes the folder, then adds a line at the winning end', async () => {
     const { fake, commands } = over();

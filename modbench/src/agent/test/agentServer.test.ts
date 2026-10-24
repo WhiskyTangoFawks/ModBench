@@ -970,6 +970,19 @@ describe('the agent server, running a gesture', () => {
       ],
       options: {},
     },
+    ...(['add', 'remove'] as const).map((direction): GestureCase => ({
+      name: `mod_${direction}_publisher_tag carries each mod, or each file or folder by its path in its mod in the mod's own casing, and the tag as an Option`,
+      value: { ...CONFLICTED, foldersByMod: new Map([['B', [{ relativePath: 'Textures', path: '/m/Textures', excluded: false }]]]) },
+      tool: `mod_${direction}_publisher_tag`,
+      args: { argument: [{ mod: { name: 'C' } }, { mod: { name: 'B' }, path: 'textures' }, { mod: { name: 'C' }, path: 'meshes/X.NIF' }], options: { tag: 'Include' } },
+      command: `modbench.mod.${direction}PublisherTag`,
+      argument: [
+        mod('C'),
+        { kind: 'file', origin: mod('B'), relativePath: 'Textures' },
+        { kind: 'file', origin: mod('C'), relativePath: 'MESHES/x.nif' },
+      ],
+      options: { tag: 'Include' },
+    })),
     {
       name: 'modlist_git_init carries nothing',
       value: CONFLICTED,

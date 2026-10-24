@@ -1,0 +1,33 @@
+# One publisher tag added to or removed from the selected mods, folders and files.
+...@../../spec/architecture/styles
+shape: sequence_diagram
+mods: @../../spec/architecture/target-architecture.modbench_driving.mods
+mods.label: Mods
+cmds: @../../spec/architecture/target-architecture.modbench_core.modcommands
+cmds.label: mod commands
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+wabbajack: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter.wabbajack
+wabbajack.label: Wabbajack
+instance: @../../spec/architecture/target-architecture.modbench_data.instance
+instance.label: "Instance\nthe publisher's configuration"
+instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+
+mods."a pick of the publisher tags the publisher declares for the rows; remove offers those the rows hold"
+mods -> cmds: "the gesture: the rows and the publisher tag" {class: loadorder}
+cmds -> instanceadapter: "get: each mod's folder" {class: loadorder}
+instanceadapter -> cmds: "the folders" {class: loadorder}
+cmds -> instanceadapter: "the change: the publisher tag and the path of each row" {class: loadorder}
+instanceadapter -> wabbajack: "the change" {class: loadorder}
+wabbajack -> instance: "the configuration, whole, in its own form" {class: loadorder}
+wabbajack -> instanceadapter: "the paths it refused" {class: loadorder}
+instanceadapter -> cmds: "the paths it refused" {class: loadorder}
+cmds -> mods: "applied or refusal, per row" {class: loadorder}
+mods -> instanceloader: refresh {class: loadorder}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+
+refused: "refused, before any write" {
+  cmds -> mods: "the refusal" {class: loadorder}
+}

@@ -2,10 +2,10 @@
 // compiler settings hold, as its compiler applies them, and never a mod's metadata (publishing.md,
 // Publisher tags, story 5).
 
-import { join, relative, sep } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import { errorMessage } from '../../ports/errorMessage';
-import { get, readOrAbsent } from '../files';
-import type { Covering, PublisherConfiguration, PublisherTag } from '../instanceAdapter';
+import { get, putIfChanged, readOrAbsent } from '../files';
+import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedSubstitution } from '../pathTokens';
 import { watchFiles } from '../watchFiles';
@@ -146,14 +146,30 @@ async function shippedModsIn(settings: object, file: string, manager: ManagerAns
   return new Set(enabled.flat().map((mod) => mod.toLowerCase()));
 }
 
+function inInstance(instanceRoot: string, path: string): string | undefined {
+  const inside = relative(instanceRoot, path);
+  return isAbsolute(inside) || inside.split(sep)[0] === '..' ? undefined : inside;
+}
+
+function listedIn(instanceRoot: string, root: PathNode): Listed {
+  return (path) => {
+    const inside = inInstance(instanceRoot, path);
+    if (inside === undefined) return [];
+    let at: PathNode | undefined = root;
+    for (const name of namesOf(inside)) at = at?.below.get(name);
+    const found = at?.tags ?? new Set<PublisherTag>();
+    return TAGS.filter(({ tag }) => found.has(tag)).map(({ tag }) => tag);
+  };
+}
+
 // A publisher tag covers the path it names and every path in it.
 function coveringIn(instanceRoot: string, root: PathNode, neverShipped: readonly (readonly string[])[], shippedMods: ReadonlySet<string> | 'every'): Covering {
   const isShipped = (mod: string | undefined, covers: readonly WabbajackTag[]): boolean =>
     mod === undefined || shippedMods === 'every' || shippedMods.has(mod.toLowerCase()) || covers.some(({ enablesMod }) => enablesMod);
   return (path, mod) => {
-    const inInstance = relative(instanceRoot, path);
-    if (inInstance.split(sep)[0] === '..') return [];
-    const names = namesOf(inInstance);
+    const inside = inInstance(instanceRoot, path);
+    if (inside === undefined) return [];
+    const names = namesOf(inside);
     const found = new Set(root.tags);
     let at: PathNode | undefined = root;
     for (const name of names) {
@@ -168,13 +184,31 @@ function coveringIn(instanceRoot: string, root: PathNode, neverShipped: readonly
   };
 }
 
+// A file's own indentation, line ends and final newline, which a rewrite keeps.
+function serialized(settings: object, form: string): string {
+  const indent = /\n([ \t]+)"/.exec(form)?.[1] ?? (form.includes('\n') ? '  ' : undefined);
+  const eol = form.includes('\r\n') ? '\r\n' : '\n';
+  return JSON.stringify(settings, undefined, indent).replaceAll('\n', eol) + (form.endsWith('\n') ? eol : '');
+}
+
+const sameNames = (first: readonly string[], second: readonly string[]): boolean =>
+  first.length === second.length && first.every((name, at) => name === second[at]);
+
+function changedEntries(entries: readonly string[], change: PublisherTagChange, inside: string): readonly string[] {
+  const names = namesOf(inside);
+  const others = entries.filter((entry) => !sameNames(namesOf(entry), names));
+  if (change === 'remove') return others.length === entries.length ? entries : others;
+  return others.length === entries.length ? [...entries, inside.split(sep).join('\\')] : entries;
+}
+
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
   const file = join(instanceRoot, COMPILER_SETTINGS.name);
   const neverShipped = manager.neverShipped.map((folder) => namesOf(relative(instanceRoot, folder)));
   const read = async (text: string): Promise<PublisherConfiguration> => {
     const settings = settingsIn(text, file);
     const tags = tagsByPath(settings, file);
-    return { kind: 'read', covering: coveringIn(instanceRoot, tags, neverShipped, await shippedModsIn(settings, file, manager)) };
+    const covering = coveringIn(instanceRoot, tags, neverShipped, await shippedModsIn(settings, file, manager));
+    return { kind: 'read', covering, listed: listedIn(instanceRoot, tags) };
   };
   return {
     tags: TAGS.map(({ tag }) => tag),
@@ -186,6 +220,24 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       } catch (err) {
         return { kind: 'unreadable', reason: errorMessage(err) };
       }
+    },
+    changeTag: async (change, tagName, paths) => {
+      const wabbajackTag = TAGS.find(({ tag }) => tag.name === tagName);
+      if (wabbajackTag === undefined) throw new Error(`Wabbajack declares no publisher tag "${tagName}"`);
+      const { listedUnder } = wabbajackTag;
+      const refused: PathRefusal[] = [];
+      const insides = paths.flatMap((path) => {
+        const inside = inInstance(instanceRoot, path);
+        if (inside === undefined) refused.push({ path, reason: 'It is outside the instance.' });
+        return inside === undefined ? [] : [inside];
+      });
+      await putIfChanged(file, (before) => {
+        const settings: Record<string, unknown> = { ...settingsIn(before, file) };
+        const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']) ?? [];
+        const changed = insides.reduce<readonly string[]>((now, inside) => changedEntries(now, change, inside), entries);
+        return changed === entries ? before : serialized({ ...settings, [listedUnder]: changed }, before);
+      });
+      return refused;
     },
     subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, () => listener()),
   };

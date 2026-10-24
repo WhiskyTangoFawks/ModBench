@@ -1155,6 +1155,8 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.mod.disable', '2_change'],
       ['modbench.mod.move', '2_change'],
       ['modbench.mod.rename', '2_change'],
+      ['modbench.mod.addPublisherTag', '2_change'],
+      ['modbench.mod.removePublisherTag', '2_change'],
       ['modbench.mod.checkForUpdates', '2_change'],
       ['modbench.separator.add', '3_create'],
       ['modbench.mod.createEmpty', '3_create'],
@@ -1234,6 +1236,29 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     expect(menuOn(contextValue)).toEqual(entries);
   });
 
+  const ADD_PUBLISHER_TAG = 'modbench.mod.addPublisherTag';
+  const REMOVE_PUBLISHER_TAG = 'modbench.mod.removePublisherTag';
+  const publisherTagItems = (viewItem: string, facts: Context): string[] =>
+    inModsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.modList', viewItem, ...facts }))
+      .filter((e) => [ADD_PUBLISHER_TAG, REMOVE_PUBLISHER_TAG].includes(e.command)).map((e) => `${e.command} ${e.group}`);
+
+  it.each([
+    ['mod enabled', {}, []],
+    ['mod enabled', { 'modbench.mod.hasPublisher': true }, [`${ADD_PUBLISHER_TAG} 2_change@4`]],
+    ['mod enabled holdsPublisherTag', { 'modbench.mod.hasPublisher': true }, [`${ADD_PUBLISHER_TAG} 2_change@4`, `${REMOVE_PUBLISHER_TAG} 2_change@5`]],
+    ['mod enabled', { 'modbench.mod.hasPublisher': true, 'modbench.mod.holdsPublisherTag': true }, [`${ADD_PUBLISHER_TAG} 2_change@4`]],
+    ['file included', { 'modbench.mod.hasPublisher': true }, []],
+    ['file included', { 'modbench.mod.hasPathPublisher': true }, [`${ADD_PUBLISHER_TAG} 2_change@2`]],
+    ['file included holdsPublisherTag', { 'modbench.mod.hasPathPublisher': true }, [`${ADD_PUBLISHER_TAG} 2_change@2`, `${REMOVE_PUBLISHER_TAG} 2_change@3`]],
+    ['folder holdsPublisherTag', {}, [`${REMOVE_PUBLISHER_TAG} 2_change@3`]],
+    ['folder', { 'modbench.mod.hasPathPublisher': true, 'modbench.mod.holdsPublisherTag': true }, [`${ADD_PUBLISHER_TAG} 2_change@2`]],
+    ['file included inOverwrite holdsPublisherTag', { 'modbench.mod.hasPathPublisher': true }, []],
+    ['folder inOverwrite holdsPublisherTag', { 'modbench.mod.hasPathPublisher': true }, []],
+    ['separator', { 'modbench.mod.hasPublisher': true, 'modbench.mod.holdsPublisherTag': true }, []],
+  ])('on a %s row with %j, the publisher tag items are %j', (viewItem, facts, items) => {
+    expect(publisherTagItems(viewItem, facts)).toEqual(items);
+  });
+
   const ON_THE_TREE = { focusedView: 'modbench.modList', listFocus: true, ...inInstance };
   const COPY = { key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue' };
   const UNINSTALL = { key: 'Delete', mac: 'cmd+backspace', command: 'modbench.mod.uninstall' };
@@ -1271,6 +1296,8 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.compareFile', { 'modbench.mod.singleCompareFileRow': true }],
     ['modbench.mod.excludeFile', { 'modbench.mod.holdsIncludedFile': true }],
     ['modbench.mod.includeFile', { 'modbench.mod.holdsExcludedFile': true }],
+    ['modbench.mod.addPublisherTag', { 'modbench.mod.hasPublisher': true, 'modbench.mod.holdsTaggableRow': true }],
+    ['modbench.mod.removePublisherTag', { 'modbench.mod.holdsPublisherTag': true }],
   ]);
 
   it.each([

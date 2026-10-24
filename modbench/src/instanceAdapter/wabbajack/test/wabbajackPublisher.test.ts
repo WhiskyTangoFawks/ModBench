@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
@@ -206,6 +206,101 @@ describe('compiler settings Modbench cannot read (Never silently wrong)', () => 
     await writeSettings('[]');
 
     expect(await reason()).toContain(SETTINGS_FILE);
+  });
+});
+
+describe('the publisher tags the configuration lists on a path (publishing.md, Publisher tags, story 2: what remove takes away)', () => {
+  const listed = async (...segments: string[]): Promise<string[]> => {
+    const configuration = await publisherOver().configuration();
+    if (configuration.kind !== 'read') throw new Error(`expected read, got ${JSON.stringify(configuration)}`);
+    return configuration.listed(join(root, ...segments)).map(({ name }) => name);
+  };
+
+  it('are those that name exactly the path, in the order Wabbajack declares them, and not those that name a path above or below it', async () => {
+    await writeSettings({ AlwaysEnabled: ['mods\\A'], Include: ['MODS/a/', 'mods\\A\\x.esp'], NoMatchInclude: ['mods'] });
+
+    expect([await listed('mods', 'A'), await listed('mods', 'A', 'x.esp'), await listed('mods', 'A', 'y.esp'), await listed('mods')])
+      .toEqual([['Include', 'Always Enabled'], ['Include'], [], ['No Match Include']]);
+  });
+
+  it('are listed whatever the compiler does with the path: a disabled mod, and an Ignored path that shadows its other tags', async () => {
+    await writeSettings({ Profile: 'Main', Include: ['mods\\Disabled', 'mods\\Enabled\\x.esp'], Ignore: ['mods\\Enabled\\x.esp'] });
+
+    expect([await listed('mods', 'Disabled'), await listed('mods', 'Enabled', 'x.esp')]).toEqual([['Include'], ['Include', 'Ignore']]);
+    expect(await covering('mods', 'Disabled')).toEqual([]);
+    expect(await covering('mods', 'Enabled', 'x.esp')).toEqual(['Ignore']);
+  });
+});
+
+describe('changing a publisher tag in the compiler settings (publishing.md, Publisher tags, stories 2 and 5)', () => {
+  const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
+  const settings = async (): Promise<unknown> => JSON.parse(await settingsText());
+
+  it('adds the path under the tag\'s list, relative to the instance and spelled as Wabbajack spells one, keeping every other setting', async () => {
+    await writeSettings({ OutputFile: 'C:\\out\\list.wabbajack', Include: ['mods\\A'] });
+
+    const refused = await publisherOver().changeTag('add', 'Ignore', [join(root, 'mods', 'B', 'x.esp')]);
+
+    expect({ refused, settings: await settings() })
+      .toEqual({ refused: [], settings: { OutputFile: 'C:\\out\\list.wabbajack', Include: ['mods\\A'], Ignore: ['mods\\B\\x.esp'] } });
+  });
+
+  it('writes nothing for a path the tag already names, however it is spelled', async () => {
+    const text = '{"Include":["MODS/a/"]}';
+    await writeSettings(text);
+
+    const refused = await publisherOver().changeTag('add', 'Include', [join(root, 'mods', 'A')]);
+
+    expect({ refused, text: await settingsText() }).toEqual({ refused: [], text });
+  });
+
+  it('removes the entry that names the path, whatever its spelling, and leaves the other entries', async () => {
+    await writeSettings({ Include: ['MODS/a/', 'mods\\B'] });
+
+    const refused = await publisherOver().changeTag('remove', 'Include', [join(root, 'mods', 'A')]);
+
+    expect(refused).toEqual([]);
+    expect(await settings()).toMatchObject({ Include: ['mods\\B'] });
+  });
+
+  it('refuses a path outside the instance and lands the rest', async () => {
+    await writeSettings({ Include: ['mods\\A'] });
+    const outside = join(root, '..', 'elsewhere');
+
+    const refused = await publisherOver().changeTag('remove', 'Include', [outside, join(root, 'mods', 'A')]);
+
+    expect(refused).toEqual([{ path: outside, reason: 'It is outside the instance.' }]);
+    expect(await settings()).toMatchObject({ Include: [] });
+  });
+
+  it('removes nothing, writes nothing and refuses nothing for a path the tag does not name, though a path above it does', async () => {
+    const text = '{"Include":["mods\\\\A"]}';
+    await writeSettings(text);
+
+    const refused = await publisherOver().changeTag('remove', 'Include', [join(root, 'mods', 'A', 'x.esp'), join(root, 'mods', 'B')]);
+
+    expect({ refused, text: await settingsText() }).toEqual({ refused: [], text });
+  });
+
+  it('keeps the file\'s indentation, line ends and final newline', async () => {
+    await writeSettings('{\r\n    "Include": [\r\n        "mods\\\\A"\r\n    ]\r\n}\r\n');
+
+    await publisherOver().changeTag('add', 'Include', [join(root, 'mods', 'B')]);
+
+    expect(await settingsText()).toBe('{\r\n    "Include": [\r\n        "mods\\\\A",\r\n        "mods\\\\B"\r\n    ]\r\n}\r\n');
+  });
+
+  it('rejects, writing nothing, for a tag it does not declare, and for settings it cannot read', async () => {
+    await writeSettings('{"Include":[]}');
+    await expect(publisherOver().changeTag('add', 'Nope', [join(root, 'mods', 'A')])).rejects.toThrow('Nope');
+    await writeSettings('not json');
+    await expect(publisherOver().changeTag('add', 'Include', [join(root, 'mods', 'A')])).rejects.toThrow(SETTINGS_FILE);
+    expect(await settingsText()).toBe('not json');
+  });
+
+  it('rejects while the instance holds no compiler settings, creating none', async () => {
+    await expect(publisherOver().changeTag('add', 'Include', [join(root, 'mods', 'A')])).rejects.toThrow(SETTINGS_FILE);
+    await expect(readFile(join(root, SETTINGS_FILE), 'utf8')).rejects.toThrow();
   });
 });
 

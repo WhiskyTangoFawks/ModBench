@@ -15,6 +15,7 @@ import { messageLine } from '../drivingLib/messageLine';
 import { joinSyncMessages, type SyncMessage } from '../drivingLib/syncFailureReport';
 import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { MODS_KEY_ARGS, modsKeyContext } from './gestureEntry';
+import { publisherKeyContext, registerPublisherTagCommands } from './publisherTagCommands';
 import { onModCheckboxChanged } from './modCheckboxHandler';
 import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvider';
 import type { ModStatuses } from './modStatuses';
@@ -112,7 +113,9 @@ export function createModsView(deps: ModsViewDeps): ModsView {
   const showBadge = () => { view.badge = provider.badge(); };
   nameFilter.refresh();
   const showKeyContext = () => {
-    for (const [name, value] of Object.entries(modsKeyContext(view.selection, (row) => provider.isEnabled(row)))) {
+    for (const [name, value] of Object.entries({
+      ...modsKeyContext(view.selection, (row) => provider.isEnabled(row)), ...publisherKeyContext(instance.value, view.selection),
+    })) {
       void vscode.commands.executeCommand('setContext', `modbench.mod.${name}`, value);
     }
   };
@@ -137,6 +140,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     ...registerCheckForUpdatesGestures(checkForUpdatesDeps(deps, instance, reporterFor('mod.checkForUpdates'))),
     ...registerModEnableCommands(commands, instance, () => view.selection, reporterFor('mod.enableDisable')),
     ...registerFileExclusionCommands(commands, instance, () => view.selection, reporterFor('mod.excludeFile')),
+    ...registerPublisherTagCommands(commands, instance, () => view.selection, reporterFor('mod.publisherTag')),
     registerModMoveCommand(
       commands, instance, { selection: () => view.selection, direction: () => provider.viewDirection() }, reporterFor('mod.move')),
     ...registerSeparatorCommands(commands, instance, reporterFor('separator'), ask, trash, () => view.selection),

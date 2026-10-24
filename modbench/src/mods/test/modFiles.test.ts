@@ -257,6 +257,41 @@ describe('a file or folder row\'s parts (mods.md, A row, File and folder)', () =
   });
 });
 
+describe('a row\'s context, which the publisher tag items of the menus read (mods.md, Menus and keys)', () => {
+  const INCLUDE = { name: 'Include', badge: 'IN', marksPaths: true };
+  const LISTED = new Set(['/instance/mods/M', '/instance/mods/textures', '/instance/mods/textures/a.dds', '/instance/overwrite/o.log']);
+  const publisherProvider = (): ModListProvider => {
+    const value = instanceValueFixture({
+      mods: [mod('M')],
+      filesByMod: new Map([['M', [file('textures/a.dds'), file('textures/b.dds')]]]),
+      foldersByMod: new Map([['M', [{ relativePath: 'textures', path: '/instance/mods/textures', excluded: false }]]]),
+      overwriteFiles: [file('o.log', '/instance/overwrite/o.log'), file('p.log', '/instance/overwrite/p.log')],
+      paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/instance/mods/M']]), sourceDirs: new Map() },
+    });
+    const publisherConfiguration = { kind: 'read', covering: () => [], listed: (path: string) => (LISTED.has(path) ? [INCLUDE] : []) } as const;
+    return new ModListProvider({ statuses: NO_MOD_STATUSES, instance: new FakeInstance({ ...value, publisherTags: [INCLUDE], publisherConfiguration }) });
+  };
+  const contextOf = async (provider: ModListProvider, parent: ModlistNode): Promise<Record<string, string | undefined>> =>
+    Object.fromEntries((await provider.getChildren(parent)).map((child) => [labelOf(child), child.contextValue]));
+
+  it('flags a mod, folder or file the configuration lists a publisher tag on, and no other', async () => {
+    const provider = publisherProvider();
+    const mRow = await rootOf(provider, ModNode, 'M');
+    const textures = await childNamed(provider, mRow, 'textures');
+
+    expect(mRow.contextValue).toContain('holdsPublisherTag');
+    expect(await contextOf(provider, mRow)).toEqual({ textures: 'folder holdsPublisherTag' });
+    expect(await contextOf(provider, textures)).toEqual({ 'a.dds': 'file included holdsPublisherTag', 'b.dds': 'file included' });
+  });
+
+  it('flags an Overwrite row\'s files inOverwrite, which no publisher tag item is offered on, and a mod\'s files not', async () => {
+    const provider = publisherProvider();
+
+    expect(await contextOf(provider, await rootOf(provider, OverwriteNode, 'Overwrite')))
+      .toEqual({ 'o.log': 'file included inOverwrite holdsPublisherTag', 'p.log': 'file included inOverwrite' });
+  });
+});
+
 describe('a file or folder row\'s identity is its mod or Overwrite, and the path in it', () => {
   it('two mods, Overwrite and a mod folder named overwrite holding one path are four rows', async () => {
     const provider = providerOver(
@@ -497,7 +532,7 @@ describe('a file row\'s context, which the File menu\'s go to mod and compare fi
 
   it('flags a file whose path another enabled copy provides, in a mod or Overwrite', async () => {
     expect(await flagsOf([modOrigin('High'), modOrigin('Low')], 'High')).toEqual(['file conflict included']);
-    expect(await flagsOf([RUNTIME_OUTPUT, modOrigin('Low')], 'Overwrite')).toEqual(['file conflict included']);
+    expect(await flagsOf([RUNTIME_OUTPUT, modOrigin('Low')], 'Overwrite')).toEqual(['file conflict included inOverwrite']);
   });
 
   it('flags a file that loses the conflict losing, as compare file reads it, and not the winning copy', async () => {
