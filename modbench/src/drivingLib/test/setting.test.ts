@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { onSettingChange } from '../setting';
 
-describe('onSettingChange', () => {
+describe('a change to a setting', () => {
   it('signals for its setting and for no other', () => {
     let hear: (change: { affectsConfiguration(section: string): boolean }) => void = () => undefined;
     const listener = vi.fn();

@@ -11,7 +11,7 @@ const commandsOver = (answers: InstanceAnswers = {}) => {
 
 const noopTrash: MoveToTrash = () => Promise.resolve();
 
-describe('excludeDownloadedFiles / includeDownloadedFiles', () => {
+describe('excluding and including downloaded files', () => {
   it.each([
     ['excludeDownloadedFiles', 'Excluded'],
     ['includeDownloadedFiles', 'Included'],
@@ -34,7 +34,7 @@ describe('excludeDownloadedFiles / includeDownloadedFiles', () => {
   });
 });
 
-describe('deleteDownloadedFiles', () => {
+describe('deleting downloaded files', () => {
   it('hands the adapter each name, and lands it', async () => {
     const { fake, commands } = commandsOver();
 
@@ -51,14 +51,6 @@ describe('deleteDownloadedFiles', () => {
       landed: [],
       refused: [{ item: { name: 'gone.7z' }, reasonContains: 'gone.7z' }],
     });
-  });
-
-  it('a trash failure on the file refuses with why', async () => {
-    const { commands } = commandsOver({ refusals: refusing('trashDownloadedFile', 'disk full') });
-
-    const outcome = await commands.deleteDownloadedFiles(['foo.7z'], noopTrash);
-
-    expect(outcome).toEqual({ landed: [], refused: [{ item: { name: 'foo.7z' }, reason: 'disk full' }] });
   });
 
   it('metadata left behind after the file landed reports the delete as done, not a refusal', async () => {

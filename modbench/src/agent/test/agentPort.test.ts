@@ -8,7 +8,7 @@ vi.mock('vscode', () => ({
 
 import { agentPort } from '../agentPort';
 
-describe('agentPort', () => {
+describe('the port the agent server takes', () => {
   it('is the configured port', () => {
     h.configured = 47300;
 

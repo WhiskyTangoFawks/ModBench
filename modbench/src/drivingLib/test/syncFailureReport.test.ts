@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createModSync, createPluginSync, type SyncChannel } from '../syncFailureReport';
 import { present } from '../../ports/present';
+import { leveledLog } from '../../test/leveledLog';
 
 type Outcome =
   | { applied: true; added: readonly string[]; dropped: readonly string[] }
@@ -8,16 +9,16 @@ type Outcome =
   | { applied: false; toldAsInstanceState: true };
 
 function syncAnswering(...outcomes: (() => Promise<Outcome>)[]) {
-  const channel = { error: vi.fn(), info: vi.fn() };
-  const messageChanged = vi.fn();
+  const channel = leveledLog();
   let calls = 0;
   const sync = createPluginSync(() => present(outcomes[calls++], 'an outcome for this run')(), channel);
-  sync.onMessageChanged(messageChanged);
+  const messagesShown: (string | undefined)[] = [];
+  sync.onMessageChanged(() => messagesShown.push(sync.message()));
   const run = async (): Promise<void> => {
-    expect(() => { void sync.run(); }).not.toThrow();
+    void sync.run();
     await sync.settled();
   };
-  return { channel, messageChanged, sync, run };
+  return { lines: channel.lines, messagesShown, sync, run };
 }
 
 const refused = (refusal: string) => () => Promise.resolve<Outcome>({ applied: false, refusal });
@@ -26,7 +27,7 @@ const toldAsInstanceState = () => Promise.resolve<Outcome>({ applied: false, tol
 
 describe('a sync: settled', () => {
   it('resolves once every run begun has written its Output', async () => {
-    const channel = { error: vi.fn(), info: vi.fn() };
+    const channel = leveledLog();
     let answer = (): void => {};
     const answered = new Promise<Outcome>((resolve) => { answer = () => resolve({ applied: true, added: ['New'], dropped: [] }); });
     const sync = createPluginSync(() => answered, channel);
@@ -36,11 +37,13 @@ describe('a sync: settled', () => {
     answer();
     await settled;
 
-    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('New'));
+    expect(channel.lines.info).toEqual([
+      '[pluginCommands] plugin sync added 1 disabled plugins.txt line(s) for plugin(s) provided with no line: New',
+    ]);
   });
 
   it('resolves for a run whose Output write threw', async () => {
-    const channel = { error: vi.fn(), info: vi.fn(() => { throw new Error('the Output is gone'); }) };
+    const channel: SyncChannel = { error: () => undefined, info: () => { throw new Error('the Output is gone'); } };
     const sync = createPluginSync(() => Promise.resolve<Outcome>({ applied: true, added: ['New'], dropped: [] }), channel);
 
     const run = sync.run();
@@ -51,31 +54,26 @@ describe('a sync: settled', () => {
 });
 
 describe('a sync: outcome handling', () => {
-  it('logs the lines it added and dropped, one Output line each way, under its prefix and labels', async () => {
-    const { channel, run } = syncAnswering(() => Promise.resolve<Outcome>({ applied: true, added: ['New'], dropped: ['Gone'] }));
-    await run();
-
-    expect(channel.info).toHaveBeenCalledTimes(2);
-    expect(channel.info).toHaveBeenCalledWith(expect.stringMatching(/ added 1 .*: New$/));
-    expect(channel.info).toHaveBeenCalledWith(expect.stringMatching(/ dropped 1 .*: Gone$/));
-    expect(channel.error).not.toHaveBeenCalled();
-  });
-
   it('logs nothing when the file already agrees', async () => {
-    const { channel, run } = syncAnswering(landed);
+    const { lines, run } = syncAnswering(landed);
     await run();
 
-    expect(channel.info).not.toHaveBeenCalled();
-    expect(channel.error).not.toHaveBeenCalled();
+    expect(lines).toEqual({ info: [], warn: [], error: [] });
   });
 
-  it('says the command\'s own refusal in the Output and the message line', async () => {
-    const { channel, sync, messageChanged, run } = syncAnswering(refused('the folder is gone'));
+  it.each([
+    ['the command\'s own refusal', refused('the folder is gone'),
+      '[pluginCommands] plugin sync failed: the folder is gone', 'plugins.txt is not synced: the folder is gone.'],
+    ['a thrown sync error', () => Promise.reject(new Error('disk unplugged')),
+      '[pluginCommands] plugin sync failed: disk unplugged', 'plugins.txt is not synced: disk unplugged.'],
+  ])('says %s in the Output and the message line', async (_case, answer, line, message) => {
+    const { lines, messagesShown, run } = syncAnswering(answer);
     await run();
 
-    expect(channel.error).toHaveBeenCalledWith(expect.stringMatching(/ failed: the folder is gone$/));
-    expect(sync.message()).toMatch(/ is not synced: the folder is gone\.$/);
-    expect(messageChanged).toHaveBeenCalledTimes(1);
+    expect({ lines, messagesShown }).toEqual({
+      lines: { info: [], warn: [], error: [line] },
+      messagesShown: [message],
+    });
   });
 
   it('ends the message line with one full stop when the refusal already ends its sentence', async () => {
@@ -85,46 +83,39 @@ describe('a sync: outcome handling', () => {
     expect(sync.message()).toBe('plugins.txt is not synced: mEdit could not be reached.');
   });
 
-  it('says a thrown sync error the same way', async () => {
-    const { channel, sync, run } = syncAnswering(() => Promise.reject(new Error('disk unplugged')));
-    await run();
-
-    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('disk unplugged'));
-    expect(sync.message()).toContain('disk unplugged');
-  });
-
   it('reports the same refusal once, however many runs repeat it', async () => {
-    const { channel, messageChanged, run } = syncAnswering(refused('gone'), refused('gone'), refused('gone'));
+    const { lines, messagesShown, run } = syncAnswering(refused('gone'), refused('gone'), refused('gone'));
     await run();
     await run();
     await run();
 
-    expect(channel.error).toHaveBeenCalledTimes(1);
-    expect(messageChanged).toHaveBeenCalledTimes(1);
+    expect({ errors: lines.error, messagesShown }).toEqual({
+      errors: ['[pluginCommands] plugin sync failed: gone'],
+      messagesShown: ['plugins.txt is not synced: gone.'],
+    });
   });
 
   it('reports again when the reason changes', async () => {
-    const { channel, sync, messageChanged, run } = syncAnswering(refused('first cause'), refused('second cause'));
+    const { lines, messagesShown, run } = syncAnswering(refused('first cause'), refused('second cause'));
     await run();
     await run();
 
-    expect(channel.error).toHaveBeenCalledTimes(2);
-    expect(channel.error).toHaveBeenLastCalledWith(expect.stringContaining('second cause'));
-    expect(sync.message()).toContain('second cause');
-    expect(messageChanged).toHaveBeenCalledTimes(2);
+    expect({ errors: lines.error, messagesShown }).toEqual({
+      errors: ['[pluginCommands] plugin sync failed: first cause', '[pluginCommands] plugin sync failed: second cause'],
+      messagesShown: ['plugins.txt is not synced: first cause.', 'plugins.txt is not synced: second cause.'],
+    });
   });
 
   it('clears the message line when a run next lands, and reports a recurrence again', async () => {
-    const { channel, sync, messageChanged, run } = syncAnswering(refused('gone'), landed, refused('gone'));
+    const { lines, messagesShown, run } = syncAnswering(refused('gone'), landed, refused('gone'));
+    await run();
     await run();
     await run();
 
-    expect(sync.message()).toBeUndefined();
-    expect(messageChanged).toHaveBeenCalledTimes(2);
-
-    await run();
-    expect(channel.error).toHaveBeenCalledTimes(2);
-    expect(sync.message()).toContain('gone');
+    expect({ errors: lines.error, messagesShown }).toEqual({
+      errors: ['[pluginCommands] plugin sync failed: gone', '[pluginCommands] plugin sync failed: gone'],
+      messagesShown: ['plugins.txt is not synced: gone.', undefined, 'plugins.txt is not synced: gone.'],
+    });
   });
 
   it('the latest run decides the message line, whichever run answers last', async () => {
@@ -140,27 +131,23 @@ describe('a sync: outcome handling', () => {
     answerOlder({ applied: true, added: [], dropped: [] });
     await Promise.all([olderRun, newerRun]);
 
-    expect(sync.message()).toContain('gone');
+    expect(sync.message()).toBe('plugins.txt is not synced: gone.');
   });
 
   it('a landed run with no failure before it leaves the message line alone', async () => {
-    const { sync, messageChanged, run } = syncAnswering(landed);
+    const { messagesShown, run } = syncAnswering(landed);
     await run();
 
-    expect(sync.message()).toBeUndefined();
-    expect(messageChanged).not.toHaveBeenCalled();
+    expect(messagesShown).toEqual([]);
   });
 });
 
 describe('a sync: a refusal the instance\'s state already tells', () => {
   it('reports nothing of its own: no Output line and no message line', async () => {
-    const { channel, sync, messageChanged, run } = syncAnswering(toldAsInstanceState);
+    const { lines, messagesShown, run } = syncAnswering(toldAsInstanceState);
     await run();
 
-    expect(channel.error).not.toHaveBeenCalled();
-    expect(channel.info).not.toHaveBeenCalled();
-    expect(sync.message()).toBeUndefined();
-    expect(messageChanged).not.toHaveBeenCalled();
+    expect({ lines, messagesShown }).toEqual({ lines: { info: [], warn: [], error: [] }, messagesShown: [] });
   });
 
   it('takes its own standing refusal off the message line', async () => {
@@ -196,9 +183,9 @@ describe('the sync wording', () => {
       unsynced: 'plugins.txt is not synced: locked.',
     },
   ])('$name', async ({ create, lines, unsynced }) => {
-    const channel = { error: vi.fn(), info: vi.fn() };
+    const channel = leveledLog();
     await create(addedAndDropped, channel).run();
-    expect(channel.info.mock.calls).toEqual(lines.map((line) => [line]));
+    expect(channel.lines.info).toEqual(lines);
 
     const refused = create(refusing, channel);
     await refused.run();

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { toastOncePerFailure } from '../toastOncePerFailure';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
-describe('toastOncePerFailure', () => {
+describe('a source that throws, toasted once per failure', () => {
   const source = {};
 
   it('toasts a source\'s repeated throw once and still writes each repeat to the Output', () => {

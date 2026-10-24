@@ -16,7 +16,7 @@ function open(marked: { label: string } | undefined) {
   return { ...fake, result };
 }
 
-describe('pickWithMarked', () => {
+describe('a pick with its marked item active', () => {
   it('opens with the items, the placeholder and the marked item active', async () => {
     const { qp, escape, result } = open(b);
     escape();

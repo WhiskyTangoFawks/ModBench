@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pluginPlacesOf } from '../pluginPlacesOf';
 
-describe('pluginPlacesOf', () => {
+describe('where a new plugin can live', () => {
   const value = {
     mods: [
       { kind: 'mod' as const, name: 'ModA', enabled: true }, { kind: 'mod' as const, name: 'ModB', enabled: false },

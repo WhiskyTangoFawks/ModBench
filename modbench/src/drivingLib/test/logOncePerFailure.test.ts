@@ -12,7 +12,7 @@ function logged(instance: FakeInstance): string[] {
   return lines;
 }
 
-describe('logOncePerFailure', () => {
+describe('a failure that repeats, logged once', () => {
   it('logs a failure once however many values repeat it', () => {
     const instance = new FakeInstance(valueFor('ok'));
     const lines = logged(instance);

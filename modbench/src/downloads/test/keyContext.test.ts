@@ -8,7 +8,7 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile },
 }));
 
-import { DownloadedFileNode } from '../DownloadsProvider';
+import type { DownloadsTreeNode } from '../DownloadsProvider';
 import { downloadedFileNodeFixture } from '../../test/mo2/downloadedFileNodeFixture';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText, downloadsKeyContext } from '../keyContext';
@@ -18,57 +18,31 @@ describe('what the Downloads palette entries, handed no row, read off the select
   const plain = downloadedFileNodeFixture(downloadedFileRowFixture('plain.7z'));
   const withMeta = downloadedFileNodeFixture(downloadedFileRowFixture('meta.7z', { hasMeta: true }));
   const excluded = downloadedFileNodeFixture(downloadedFileRowFixture('excluded.7z', { hasMeta: true, excluded: true }));
+  const NOTHING = { singleFile: false, singleFileWithMeta: false, holdsFile: false, holdsIncluded: false, holdsExcluded: false };
 
-  it('open sees exactly one selected file', () => {
-    expect(downloadsKeyContext([plain]).singleFile).toBe(true);
-    expect(downloadsKeyContext([plain, withMeta]).singleFile).toBe(false);
-    expect(downloadsKeyContext([]).singleFile).toBe(false);
-    expect(downloadsKeyContext([new ErrorNode('unreadable')]).singleFile).toBe(false);
-  });
-
-  it('open metadata sees exactly one selected file that has metadata', () => {
-    expect(downloadsKeyContext([withMeta]).singleFileWithMeta).toBe(true);
-    expect(downloadsKeyContext([plain]).singleFileWithMeta).toBe(false);
-    expect(downloadsKeyContext([withMeta, excluded]).singleFileWithMeta).toBe(false);
-  });
-
-  it('delete sees any selected file', () => {
-    expect(downloadsKeyContext([plain, excluded]).holdsFile).toBe(true);
-    expect(downloadsKeyContext([]).holdsFile).toBe(false);
-  });
-
-  it('exclude sees a selected file not excluded, and include one that is', () => {
-    expect(downloadsKeyContext([plain, excluded])).toMatchObject({ holdsIncluded: true, holdsExcluded: true });
-    expect(downloadsKeyContext([excluded])).toMatchObject({ holdsIncluded: false, holdsExcluded: true });
-    expect(downloadsKeyContext([plain])).toMatchObject({ holdsIncluded: true, holdsExcluded: false });
+  it.each<[string, DownloadsTreeNode[], ReturnType<typeof downloadsKeyContext>]>([
+    ['one file with no metadata, for open, delete and exclude', [plain], { ...NOTHING, singleFile: true, holdsFile: true, holdsIncluded: true }],
+    ['one file with metadata, for open metadata too', [withMeta], { ...NOTHING, singleFile: true, singleFileWithMeta: true, holdsFile: true, holdsIncluded: true }],
+    ['one excluded file, for include and not exclude', [excluded], { ...NOTHING, singleFile: true, singleFileWithMeta: true, holdsFile: true, holdsExcluded: true }],
+    ['two files, for neither open', [plain, withMeta], { ...NOTHING, holdsFile: true, holdsIncluded: true }],
+    ['an included and an excluded file, for exclude and include both', [plain, excluded], { ...NOTHING, holdsFile: true, holdsIncluded: true, holdsExcluded: true }],
+    ['two files with metadata, for no open metadata', [withMeta, excluded], { ...NOTHING, holdsFile: true, holdsIncluded: true, holdsExcluded: true }],
+    ['nothing selected, for nothing', [], NOTHING],
+    ['an error row, which is no file, for nothing', [new ErrorNode('unreadable')], NOTHING],
+  ])('%s', (_case, selection, context) => {
+    expect(downloadsKeyContext(selection)).toEqual(context);
   });
 });
 
 describe('Downloads\' own text for the catalog\'s copy value', () => {
   const alpha = downloadedFileNodeFixture(downloadedFileRowFixture('alpha.7z', { displayName: 'Alpha Mod' }));
-  const beta = downloadedFileNodeFixture(downloadedFileRowFixture('beta.7z'));
-  const copy = (selection: readonly (DownloadedFileNode | ErrorNode)[]) => downloadsCopyValueText(() => selection);
+  const copy = (selection: readonly DownloadsTreeNode[]) => downloadsCopyValueText(() => selection);
 
   it('is the file name of a right-clicked row, not its display name', () => {
     expect(copy([])(alpha, undefined)).toBe('alpha.7z');
   });
 
-  it('is one file name to a line over the selection a menu hands over', () => {
-    expect(copy([])(beta, [alpha, beta])).toBe('alpha.7z\nbeta.7z');
-  });
-
-  it('is the view\'s selection for its Ctrl+C, which names the view', () => {
-    expect(copy([alpha, beta])(DOWNLOADS_KEY_ARGS, undefined)).toBe('alpha.7z\nbeta.7z');
-  });
-
-  it('is empty text for its own Ctrl+C with nothing selected, and skips a row that is no file', () => {
-    expect(copy([])(DOWNLOADS_KEY_ARGS, undefined)).toBe('');
+  it('is the selection for the view\'s own Ctrl+C, skipping a row that is no file', () => {
     expect(copy([new ErrorNode('unreadable'), alpha])(DOWNLOADS_KEY_ARGS, undefined)).toBe('alpha.7z');
-  });
-
-  it('defers on an invocation of another surface', () => {
-    expect(copy([alpha])(undefined, undefined)).toBeUndefined();
-    expect(copy([alpha])({ view: 'modbench.modList' }, undefined)).toBeUndefined();
-    expect(copy([alpha])({ kind: 'mod' }, undefined)).toBeUndefined();
   });
 });

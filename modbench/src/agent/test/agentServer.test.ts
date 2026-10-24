@@ -23,6 +23,7 @@ import type { MEditClient, ModStatus } from '../../client/MEditClient';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { comparisonOf } from '../../test/comparison';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
+import { fileIn } from '../../test/fakeInstanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { SILENT_LOG } from '../../ports/log';
@@ -81,12 +82,23 @@ async function serve(instance: FakeInstance | undefined, port = 0, mEdit = new I
   return { reporter, lines, warned, errored, address, bound: address?.port };
 }
 
-async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment): Promise<Client> {
-  const { bound } = await serve(instance, 0, mEdit, terminalEnvironment);
+async function clientOf(instance: FakeInstance | undefined, mEdit = new InMemoryMEditClient(), terminalEnvironment?: TerminalEnvironment) {
+  const { bound, ...heard } = await serve(instance, 0, mEdit, terminalEnvironment);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
   clients.push(client);
-  return client;
+  return { client, ...heard };
+}
+
+async function takenPort(): Promise<number> {
+  const blocker = createServer();
+  blockers.push(blocker);
+  return new Promise<number>((done) => {
+    blocker.listen(0, '127.0.0.1', () => {
+      const address = blocker.address();
+      done(typeof address === 'object' && address !== null ? address.port : 0);
+    });
+  });
 }
 
 async function call(client: Client, name: string, args?: Record<string, unknown>) {
@@ -102,7 +114,7 @@ async function read(client: Client, name: string, args?: Record<string, unknown>
 
 describe('the agent server, given an instance value', () => {
   it('lists each read as a tool', async () => {
-    const client = await clientOf(new FakeInstance(VALUE));
+    const { client } = await clientOf(new FakeInstance(VALUE));
 
     const { tools } = await client.listTools();
 
@@ -110,7 +122,7 @@ describe('the agent server, given an instance value', () => {
   });
 
   it('advertises the JSON type of every input of every tool, so a client sends JSON and never a string', async () => {
-    const client = await clientOf(new FakeInstance(VALUE));
+    const { client } = await clientOf(new FakeInstance(VALUE));
 
     const { tools } = await client.listTools();
 
@@ -122,27 +134,27 @@ describe('the agent server, given an instance value', () => {
   });
 
   it('hands the client its instructions on initialize', async () => {
-    const client = await clientOf(new FakeInstance(VALUE));
+    const { client } = await clientOf(new FakeInstance(VALUE));
 
     expect(client.getInstructions()).toContain('select_rows says which');
   });
 
   it('hands a shell the variables the terminals of its window hold, as they are now', async () => {
     const held = new Map([['MEDIT_PORT', { value: '5172' }], ['PYTHONPATH', { value: '/ext/scripts' }]]);
-    const client = await clientOf(new FakeInstance(VALUE), undefined, { forEach: (each) => { held.forEach((mutator, name) => { each(name, mutator); }); } });
+    const { client } = await clientOf(new FakeInstance(VALUE), undefined, { forEach: (each) => { held.forEach((mutator, name) => { each(name, mutator); }); } });
     held.set('MEDIT_PORT', { value: '6001' });
 
     expect(await read(client, 'script_environment')).toEqual({ MEDIT_PORT: '6001', PYTHONPATH: '/ext/scripts' });
   });
 
   it('reads the profiles and the active one', async () => {
-    const client = await clientOf(new FakeInstance(VALUE));
+    const { client } = await clientOf(new FakeInstance(VALUE));
 
     expect(await read(client, 'list_profiles')).toEqual({ active: 'Survival', profiles: ['Default', 'Survival'] });
   });
 
   it('reads the mod order with each entry enabled or not', async () => {
-    const client = await clientOf(new FakeInstance(VALUE));
+    const { client } = await clientOf(new FakeInstance(VALUE));
 
     expect(await read(client, 'list_mods')).toEqual([
       { kind: 'separator', name: 'Textures', enabled: true },
@@ -151,7 +163,7 @@ describe('the agent server, given an instance value', () => {
   });
 
   it('reads the plugin order by line, each plugin with its origin and whether it is enabled', async () => {
-    const client = await clientOf(new FakeInstance(VALUE));
+    const { client } = await clientOf(new FakeInstance(VALUE));
 
     expect(await read(client, 'list_plugins')).toMatchObject({ plugins: [
       { name: 'A.esp', origin: 'Big Rocks', line: 0, enabled: true, winning: true },
@@ -160,10 +172,7 @@ describe('the agent server, given an instance value', () => {
   });
 
   it('refuses in part when the game folder is not found, answering the lines with why the plugins loaded with no line are missing, in the Output', async () => {
-    const { bound, warned } = await serve(new FakeInstance(VALUE));
-    const client = new Client({ name: 'test', version: '0' });
-    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
-    clients.push(client);
+    const { client, warned } = await clientOf(new FakeInstance(VALUE));
 
     const { isError, text } = await call(client, 'list_plugins');
 
@@ -174,7 +183,7 @@ describe('the agent server, given an instance value', () => {
   });
 
   it('reads the plugins the game loads with no line first, with no line', async () => {
-    const client = await clientOf(new FakeInstance({ ...VALUE, pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/game/Data/Fallout4.esm' }] }));
+    const { client } = await clientOf(new FakeInstance({ ...VALUE, pluginsLoadedWithNoLine: [{ name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, path: '/game/Data/Fallout4.esm' }] }));
 
     expect(await read(client, 'list_plugins')).toEqual({ plugins: [
       { name: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, line: null, enabled: true, winning: true },
@@ -198,12 +207,12 @@ describe('the agent server, given an instance value', () => {
     ])('has as its origin the mod whose manifest names it: %s', async (_case, answer, origin) => {
       statusRead.answer = answer;
 
-      expect(await read(await clientOf(cloned('AccC.esp')), 'list_plugins')).toMatchObject({ plugins: [{ name: 'AccC.esp', origin }] });
+      expect(await read((await clientOf(cloned('AccC.esp'))).client, 'list_plugins')).toMatchObject({ plugins: [{ name: 'AccC.esp', origin }] });
     });
 
     it('answers in part when a mod\'s status cannot be read, naming each line it could not place', async () => {
       statusRead.answer = [status('Acc Mod C', { gone: ['AccC.esp'], unreadable: { manifest: true, why: 'git is gone' } })];
-      const client = await clientOf(cloned('AccC.esp', 'Other.esp'));
+      const { client } = await clientOf(cloned('AccC.esp', 'Other.esp'));
 
       const { isError, text } = await call(client, 'list_plugins');
 
@@ -218,7 +227,7 @@ describe('the agent server, given an instance value', () => {
 
     it('answers in part for a line a lower mod names when the mod above it cannot be read', async () => {
       statusRead.answer = [status('Acc Mod B', { unreadable: { manifest: true, why: 'git is gone' } }), status('Acc Mod C', { gone: ['AccC.esp'] })];
-      const client = await clientOf(cloned('AccC.esp'));
+      const { client } = await clientOf(cloned('AccC.esp'));
 
       const { isError, text } = await call(client, 'list_plugins');
 
@@ -229,7 +238,7 @@ describe('the agent server, given an instance value', () => {
 
     it('refuses a plugin named by an origin it could not read the manifests for, giving that reason', async () => {
       statusRead.answer = localFailure('mEdit is down');
-      const client = await clientOf(cloned('AccC.esp'));
+      const { client } = await clientOf(cloned('AccC.esp'));
 
       const { isError, text } = await call(client, 'plugin_enable', { argument: [{ name: 'AccC.esp', origin: 'Acc Mod C' }] });
 
@@ -240,7 +249,7 @@ describe('the agent server, given an instance value', () => {
     it('asks for the manifests only when a plugin is named with its origin', async () => {
       statusRead.asked = [];
       fired.outcome = { applied: true, outcome: { landed: ['AccC.esp'], refused: [] } };
-      const client = await clientOf(cloned('AccC.esp'));
+      const { client } = await clientOf(cloned('AccC.esp'));
 
       await call(client, 'plugin_enable', { argument: [{ name: 'AccC.esp' }] });
 
@@ -249,7 +258,7 @@ describe('the agent server, given an instance value', () => {
 
     it('answers in part when mEdit cannot be asked, so the read does not depend on it', async () => {
       statusRead.answer = localFailure('mEdit is down');
-      const client = await clientOf(cloned('AccC.esp'));
+      const { client } = await clientOf(cloned('AccC.esp'));
 
       const { isError, text } = await call(client, 'list_plugins');
 
@@ -264,7 +273,7 @@ describe('the agent server, given an instance value', () => {
     ])('fires %s on the line named by the origin list_plugins shows, as the load order holds it', async (tool, command, options) => {
       statusRead.answer = [status('Acc Mod C', { gone: ['AccC.esp'] })];
       fired.outcome = { applied: true, outcome: { landed: ['AccC.esp'], refused: [] } };
-      const client = await clientOf(cloned('AccC.esp'));
+      const { client } = await clientOf(cloned('AccC.esp'));
 
       await call(client, tool, { argument: [{ name: 'AccC.esp', origin: 'Acc Mod C' }], options });
 
@@ -285,7 +294,7 @@ describe('the agent server, given an instance value', () => {
 
     it('asks for every mod folder and separator folder in every profile, and answers each status', async () => {
       statusRead.answer = [status('Big Rocks', { differing: ['a.nif'], notInPackage: ['b.nif'] }), status('Textures_separator', { noManifest: true })];
-      const client = await clientOf(inRepository);
+      const { client } = await clientOf(inRepository);
 
       expect(await read(client, 'list_mod_statuses')).toEqual([
         { kind: 'mod', name: 'Big Rocks', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: ['b.nif'], metadataDiffers: false, noHost: false },
@@ -295,7 +304,7 @@ describe('the agent server, given an instance value', () => {
     });
 
     it('refuses an instance that is no repository, which has no manifest to compare', async () => {
-      const client = await clientOf(new FakeInstance(VALUE));
+      const { client } = await clientOf(new FakeInstance(VALUE));
 
       const refusal = await call(client, 'list_mod_statuses');
 
@@ -306,20 +315,20 @@ describe('the agent server, given an instance value', () => {
 
     it('refuses a read that failed, with why', async () => {
       statusRead.answer = localFailure('git is gone');
-      const client = await clientOf(inRepository);
+      const { client } = await clientOf(inRepository);
 
       expect(await call(client, 'list_mod_statuses')).toEqual({ isError: true, text: "The mods' status could not be read: git is gone" });
     });
   });
 
   it('reads the downloaded files by file name', async () => {
-    const client = await clientOf(new FakeInstance(VALUE));
+    const { client } = await clientOf(new FakeInstance(VALUE));
 
     expect(await read(client, 'list_downloads')).toEqual([{ name: 'rocks.7z', status: 'Installed', excluded: false }]);
   });
 
   it('reads the problems on plugin source files only, as the Problems panel holds them', async () => {
-    const client = await clientOf(new FakeInstance(VALUE));
+    const { client } = await clientOf(new FakeInstance(VALUE));
     const problem = (severity: number, line: number, message: string) => ({ severity, range: { start: { line } }, message });
     diagnosticsHeld.held = [
       [{ scheme: 'file', fsPath: '/i/source/Rocks/plugin-source/Rocks.esp.json' }, [problem(0, 4, 'bad reference'), problem(1, 9, 'odd value')]],
@@ -335,7 +344,7 @@ describe('the agent server, given an instance value', () => {
 
   it('reads the value as it stands on each request', async () => {
     const instance = new FakeInstance(VALUE);
-    const client = await clientOf(instance);
+    const { client } = await clientOf(instance);
     instance.publish(instanceValueFixture({ activeProfile: 'Default', profiles: ['Default'] }));
 
     expect(await read(client, 'list_profiles')).toEqual({ active: 'Default', profiles: ['Default'] });
@@ -343,27 +352,27 @@ describe('the agent server, given an instance value', () => {
 
   it('refuses a read whose downloads folder is unresolved with the reason, in the Output and in no notification', async () => {
     const instance = new FakeInstance(instanceValueFixture({ downloadedFiles: { kind: 'unresolved', reason: 'no downloads folder' } }));
-    const { bound, lines, reporter } = await serve(instance);
-    const client = new Client({ name: 'test', version: '0' });
-    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
-    clients.push(client);
+    const { client, lines, reporter } = await clientOf(instance);
 
     expect(await call(client, 'list_downloads')).toEqual({ isError: true, text: 'no downloads folder' });
     expect(lines.join('\n')).toContain('no downloads folder');
     expect(reporter.reports).toEqual([]);
   });
 
-  it('refuses a read before the instance has been read', async () => {
-    const client = await clientOf(new FakeInstance(VALUE, 0));
+  it.each([
+    ['before the instance has been read', undefined, 'The instance has not been read yet.'],
+    ['whose first read failed with the failure, as the view\'s error row does', 'Modbench does not support Oblivion', 'Failed to load: Modbench does not support Oblivion'],
+  ])('refuses a read %s', async (_case, readFailure, text) => {
+    const instance = new FakeInstance(VALUE, 0);
+    instance.readFailure = readFailure;
+    const { client } = await clientOf(instance);
 
-    const refusal = await call(client, 'list_profiles');
-    expect(refusal.isError).toBe(true);
-    expect(refusal.text).toContain('not been read');
+    expect(await call(client, 'list_profiles')).toEqual({ isError: true, text });
   });
 
   it('answers beside the last good read with the message every view shows, and with none once a read lands', async () => {
     const instance = new FakeInstance(VALUE);
-    const client = await clientOf(instance);
+    const { client } = await clientOf(instance);
     const blocks = async () => CallToolResultSchema.parse(await client.callTool({ name: 'list_profiles' })).content.map((block) => block.type === 'text' ? block.text : '');
 
     instance.readFailure = 'plugins.txt is half written';
@@ -371,14 +380,6 @@ describe('the agent server, given an instance value', () => {
 
     instance.publish(VALUE);
     expect(await blocks()).toHaveLength(1);
-  });
-
-  it('refuses a read whose first read failed with the failure, as the view\'s error row does', async () => {
-    const instance = new FakeInstance(VALUE, 0);
-    instance.readFailure = 'Modbench does not support Oblivion';
-    const client = await clientOf(instance);
-
-    expect(await call(client, 'list_profiles')).toEqual({ isError: true, text: 'Failed to load: Modbench does not support Oblivion' });
   });
 });
 
@@ -392,7 +393,6 @@ const asLookup = (...entries: ConflictEntry[]) => {
   entries.forEach((entry) => { files.set(entry); });
   return files;
 };
-const ownFile = (relativePath: string) => ({ relativePath, path: `/m/${relativePath}`, sourcePath: `/m/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath });
 const CONFLICTED = instanceValueFixture({
   mods: [
     { kind: 'mod', name: 'A', enabled: true },
@@ -403,9 +403,9 @@ const CONFLICTED = instanceValueFixture({
     { kind: 'mod', name: 'D', enabled: false },
   ],
   filesByMod: new Map([
-    ['B', [ownFile('Textures/Rock.DDS')]],
-    ['C', [ownFile('MESHES/x.nif'), ownFile('F.esp'), ownFile('readme.txt')]],
-    ['D', [ownFile('textures/rock.dds'), ownFile('Docs/a.txt'), ownFile('docs/A.TXT')]],
+    ['B', [fileIn('/m', 'Textures/Rock.DDS')]],
+    ['C', [fileIn('/m', 'MESHES/x.nif'), fileIn('/m', 'F.esp'), fileIn('/m', 'readme.txt')]],
+    ['D', [fileIn('/m', 'textures/rock.dds'), fileIn('/m', 'Docs/a.txt'), fileIn('/m', 'docs/A.TXT')]],
   ]),
   files: asLookup(
     providing('textures/rock.dds', A, B),
@@ -417,7 +417,7 @@ const CONFLICTED = instanceValueFixture({
 
 describe('the agent server, reading file order conflicts', () => {
   it('reads, for each mod, the files it wins over which mods and the files it loses to which winner', async () => {
-    const client = await clientOf(new FakeInstance(CONFLICTED));
+    const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'A' }, { name: 'B' }, { name: 'C' }] })).toEqual([
       { mod: 'A', enabled: true, wins: [{ file: 'textures/rock.dds', over: ['B'] }], loses: [] },
@@ -427,19 +427,19 @@ describe('the agent server, reading file order conflicts', () => {
   });
 
   it('says a disabled mod is disabled, so its empty answer is never read as no conflicts', async () => {
-    const client = await clientOf(new FakeInstance(CONFLICTED));
+    const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'D' }] })).toEqual([{ mod: 'D', enabled: false, wins: [], loses: [] }]);
   });
 
   it('reads every mod, and no separator, when it is given no mods', async () => {
-    const client = await clientOf(new FakeInstance(CONFLICTED));
+    const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
     expect(await read(client, 'list_file_conflicts')).toMatchObject([{ mod: 'A' }, { mod: 'Textures' }, { mod: 'B' }, { mod: 'C' }, { mod: 'D' }]);
   });
 
   it('names a mod apart from a separator of the same name by which of the two it is', async () => {
-    const client = await clientOf(new FakeInstance(CONFLICTED));
+    const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
     expect(await read(client, 'list_file_conflicts', { mods: [{ name: 'Textures', kind: 'mod' }] })).toEqual([{ mod: 'Textures', enabled: true, wins: [], loses: [] }]);
     const separator = await call(client, 'list_file_conflicts', { mods: [{ name: 'Textures', kind: 'separator' }] });
@@ -447,7 +447,7 @@ describe('the agent server, reading file order conflicts', () => {
   });
 
   it('refuses a name that means a mod and a separator, listing each as the agent can name it, and picks neither', async () => {
-    const client = await clientOf(new FakeInstance(CONFLICTED));
+    const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
     const refusal = await call(client, 'list_file_conflicts', { mods: [{ name: 'A' }, { name: 'Textures' }] });
 
@@ -458,7 +458,7 @@ describe('the agent server, reading file order conflicts', () => {
   });
 
   it('refuses every name that cannot be resolved in one answer, so several names are named as a selection is', async () => {
-    const client = await clientOf(new FakeInstance(CONFLICTED));
+    const { client } = await clientOf(new FakeInstance(CONFLICTED));
 
     const refusal = await call(client, 'list_file_conflicts', { mods: [{ name: 'Nope' }, { name: 'Textures' }, { name: 'A' }] });
 
@@ -471,7 +471,7 @@ describe('the agent server, reading file order conflicts', () => {
 const CONFLICTED_WITH_DOWNLOADED_FILES = { ...CONFLICTED, downloadedFiles: VALUE.downloadedFiles };
 
 describe('the agent server, resolving names against the instance', () => {
-  const resolve = async (args: Record<string, unknown>) => call(await clientOf(new FakeInstance(CONFLICTED_WITH_DOWNLOADED_FILES)), 'resolve_instance_names', args);
+  const resolve = async (args: Record<string, unknown>) => call((await clientOf(new FakeInstance(CONFLICTED_WITH_DOWNLOADED_FILES))).client, 'resolve_instance_names', args);
 
   it('names a downloaded file by its file name', async () => {
     expect(await resolve({ downloads: ['rocks.7z'] })).toEqual({ isError: false, text: JSON.stringify({ downloads: ['rocks.7z'], files: [] }) });
@@ -482,7 +482,7 @@ describe('the agent server, resolving names against the instance', () => {
   });
 
   it('refuses a downloaded file when the downloads folder is unresolved, with the reason', async () => {
-    const client = await clientOf(new FakeInstance(instanceValueFixture({ downloadedFiles: { kind: 'unresolved', reason: 'no downloads folder' } })));
+    const { client } = await clientOf(new FakeInstance(instanceValueFixture({ downloadedFiles: { kind: 'unresolved', reason: 'no downloads folder' } })));
 
     expect(await call(client, 'resolve_instance_names', { downloads: ['rocks.7z'] })).toEqual({ isError: true, text: 'no downloads folder' });
   });
@@ -538,7 +538,7 @@ describe('the agent server, resolving names through mEdit', () => {
   it('hands mEdit the names, with their origins, and answers what each means', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', [{ plugin: shared }, { formKey: '000800:Shared.esp', editorId: 'SharedNpc' }]);
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const named = await read(client, 'resolve_names', { names: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }] });
 
@@ -550,7 +550,7 @@ describe('the agent server, resolving names through mEdit', () => {
     const mEdit = new InMemoryMEditClient();
     const listing = '"Shared.esp" means more than one thing: plugin Shared.esp (origin ModA); plugin Shared.esp (origin ModB).';
     mEdit.setQueryAnswer('resolveNames', { failed: 'refused', refusal: listing });
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'resolve_names', { names: [{ name: 'Shared.esp' }] })).toEqual({ isError: true, text: listing });
   });
@@ -560,10 +560,7 @@ describe('the agent server, failing', () => {
   it('answers a failure that is not a refusal with its message, in the Output and in no notification', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.selectRows = () => Promise.reject(new Error('socket hang up'));
-    const { bound, lines, reporter } = await serve(new FakeInstance(VALUE), 0, mEdit);
-    const client = new Client({ name: 'test', version: '0' });
-    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
-    clients.push(client);
+    const { client, lines, reporter } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'select_rows', { sql: 'SELECT 1' })).toEqual({ isError: true, text: 'socket hang up' });
     expect(lines).toEqual(['[agent] select_rows: socket hang up']);
@@ -576,7 +573,7 @@ describe('the agent server, selecting records through mEdit', () => {
     const mEdit = new InMemoryMEditClient();
     const rows = [{ editorId: 'SharedNpc' }];
     mEdit.setQueryAnswer('selectRows', rows);
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const answered = await read(client, 'select_rows', { sql: 'SELECT editorId FROM records' });
 
@@ -587,7 +584,7 @@ describe('the agent server, selecting records through mEdit', () => {
   it('refuses with the database\'s reason', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('selectRows', { failed: 'refused', refusal: 'Only a SELECT runs.' });
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'select_rows', { sql: 'DROP TABLE records' })).toEqual({ isError: true, text: 'Only a SELECT runs.' });
   });
@@ -607,7 +604,7 @@ describe('the agent server, reading a record through mEdit', () => {
     mEdit.setQueryAnswer('getComparison', COPIES);
     mEdit.setQueryAnswerOnce('getCopyDocument', { kind: 'OwnFile', location: '/s/A.esp/000800.json' });
     mEdit.setQueryAnswerOnce('getCopyDocument', { kind: 'OwnFile', location: '/s/B.esp/000800.json' });
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const answered = await read(client, 'read_record', { name: 'SharedNpc' });
 
@@ -626,10 +623,7 @@ describe('the agent server, reading a record through mEdit', () => {
     mEdit.setQueryAnswer('getComparison', COPIES);
     mEdit.setQueryAnswerOnce('getCopyDocument', { failed: 'refused', refusal: 'A.esp is unreadable.' });
     mEdit.setQueryAnswerOnce('getCopyDocument', { kind: 'OwnFile', location: '/s/B.esp/000800.json' });
-    const { bound, warned } = await serve(new FakeInstance(VALUE), 0, mEdit);
-    const client = new Client({ name: 'test', version: '0' });
-    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
-    clients.push(client);
+    const { client, warned } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const { isError, text } = await call(client, 'read_record', { name: 'SharedNpc' });
 
@@ -647,7 +641,7 @@ describe('the agent server, reading a record through mEdit', () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
     mEdit.setQueryAnswer('getCopyDocument', { kind: 'OwnFile', location: '/s/A.esp/000800.json' });
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const answered = await read(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'b.esp' } });
 
@@ -660,7 +654,7 @@ describe('the agent server, reading a record through mEdit', () => {
     mEdit.setQueryAnswer('resolveNames', NPC);
     mEdit.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'SharedNpc.txt' });
     mEdit.setQueryAnswer('getRenderedDocument', { fileName: 'SharedNpc.txt', text: 'Name: Shared' });
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const answered = await read(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } });
 
@@ -676,15 +670,15 @@ describe('the agent server, reading a record through mEdit', () => {
     mEdit.setQueryAnswer('resolveNames', NPC);
     mEdit.setQueryAnswer('getCopyDocument', copyDocument);
     mEdit.setQueryAnswer('getRenderedDocument', null);
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
-    expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } })).toMatchObject({ isError: true });
+    expect(await call(client, 'read_record', { name: 'SharedNpc', plugin: { name: 'A.esp' } })).toEqual({ isError: true, text: 'A.esp (Big Rocks) holds no 000800:A.esp.' });
   });
 
   it('refuses a name that is not a record', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', [{ plugin: { name: 'A.esp', origin: 'Big Rocks' } }]);
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'read_record', { name: 'A.esp' })).toEqual({ isError: true, text: '"A.esp" is not a record.' });
   });
@@ -693,7 +687,7 @@ describe('the agent server, reading a record through mEdit', () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', NPC);
     mEdit.setQueryAnswer('getComparison', null);
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'read_record', { name: 'SharedNpc' })).toEqual({ isError: true, text: 'No active plugin holds 000800:A.esp.' });
   });
@@ -703,7 +697,7 @@ describe('the agent server, reading a record through mEdit', () => {
     const referrers = [{ formKey: '000900:B.esp', plugin: 'B.esp', origin: 'Big Rocks', fieldPath: 'Race', recordType: 'NPC_', recordTypeName: 'Npc' }];
     mEdit.setQueryAnswer('resolveNames', NPC);
     mEdit.setQueryAnswer('getReferences', referrers);
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     const answered = await read(client, 'list_references', { name: 'SharedNpc' });
 
@@ -714,7 +708,7 @@ describe('the agent server, reading a record through mEdit', () => {
   it('refuses with mEdit\'s listing of an ambiguous name, reading no references', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setQueryAnswer('resolveNames', { failed: 'refused', refusal: 'Ambiguous.' });
-    const client = await clientOf(new FakeInstance(VALUE), mEdit);
+    const { client } = await clientOf(new FakeInstance(VALUE), mEdit);
 
     expect(await call(client, 'list_references', { name: 'Dup' })).toEqual({ isError: true, text: 'Ambiguous.' });
     expect(mEdit.calls.map(({ method }) => method)).not.toContain('getReferences');
@@ -724,13 +718,12 @@ describe('the agent server, reading a record through mEdit', () => {
 describe('the agent server, running a gesture', () => {
   beforeEach(() => { fired.calls = []; fired.outcome = undefined; fired.failure = undefined; });
 
-  async function served(value: InstanceValue = CONFLICTED) {
-    const { bound, lines, warned, errored, reporter } = await serve(new FakeInstance(value));
-    const client = new Client({ name: 'test', version: '0' });
-    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
-    clients.push(client);
-    return { client, lines, warned, errored, reporter };
-  }
+  const served = (value: InstanceValue = CONFLICTED) => clientOf(new FakeInstance(value));
+  const fire = async (tool: string, args: Record<string, unknown> = {}, value: InstanceValue = CONFLICTED) => {
+    fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+    const { client } = await served(value);
+    return call(client, tool, args);
+  };
 
   it('fires the gesture\'s command with the mods named as its Argument, and answers its outcome', async () => {
     fired.outcome = { applied: true, outcome: { landed: ['A', 'Textures'], refused: [] } };
@@ -1177,12 +1170,6 @@ describe('the agent server, running a gesture', () => {
   });
 
   describe('the separator gestures', () => {
-    const fire = async (tool: string, args: Record<string, unknown> = {}) => {
-      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
-      const { client } = await served();
-      return call(client, tool, args);
-    };
-
     it('refuses a name that is a mod, not a separator, firing nothing', async () => {
       const answer = await fire('separator_delete', { argument: [{ name: 'B' }] });
 
@@ -1192,12 +1179,6 @@ describe('the agent server, running a gesture', () => {
   });
 
   describe('the mod gestures', () => {
-    const fire = async (tool: string, args: Record<string, unknown> = {}) => {
-      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
-      const { client } = await served();
-      return call(client, tool, args);
-    };
-
     it('refuses a place nothing is named, firing nothing', async () => {
       const answer = await fire('mod_move', { argument: [{ name: 'B' }], options: { place: { kind: 'mod', name: 'Gone' }, end: 'winning' } });
 
@@ -1225,21 +1206,15 @@ describe('the agent server, running a gesture', () => {
   });
 
   describe('the downloaded file gestures and install', () => {
-    const fire = async (tool: string, args: Record<string, unknown> = {}) => {
-      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
-      const { client } = await served(CONFLICTED_WITH_DOWNLOADED_FILES);
-      return call(client, tool, args);
-    };
-
     it('refuses a downloaded file nothing is named, firing nothing', async () => {
-      const answer = await fire('downloaded_file_delete', { argument: [{ name: 'gone.7z' }] });
+      const answer = await fire('downloaded_file_delete', { argument: [{ name: 'gone.7z' }] }, CONFLICTED_WITH_DOWNLOADED_FILES);
 
       expect(answer.text).toContain('Nothing is named "gone.7z" among the downloaded files.');
       expect(fired.calls).toEqual([]);
     });
 
     it('refuses an install over a mod nothing is named, firing nothing', async () => {
-      const answer = await fire('mod_install', { argument: [outside], options: { target: 'Gone' } });
+      const answer = await fire('mod_install', { argument: [outside], options: { target: 'Gone' } }, CONFLICTED_WITH_DOWNLOADED_FILES);
 
       expect(answer.text).toContain('Nothing is named "Gone" as a mod.');
       expect(fired.calls).toEqual([]);
@@ -1248,16 +1223,16 @@ describe('the agent server, running a gesture', () => {
 
   describe('the record open gesture', () => {
     const gun = { kind: 'record' as const, formKey: '000801:A.esp' };
-    const fire = async (args: Record<string, unknown>, answer: Awaited<ReturnType<MEditClient['resolveNames']>>) => {
+    const open = async (args: Record<string, unknown>, answer: Awaited<ReturnType<MEditClient['resolveNames']>>) => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const mEdit = new InMemoryMEditClient();
       mEdit.setQueryAnswer('resolveNames', answer);
-      const client = await clientOf(new FakeInstance({ ...CONFLICTED, plugins: VALUE.plugins }), mEdit);
+      const { client } = await clientOf(new FakeInstance({ ...CONFLICTED, plugins: VALUE.plugins }), mEdit);
       return { mEdit, answer: await call(client, 'record_open', args) };
     };
 
     it('resolves each record by EditorID or FormKey through mEdit, and fires the FormKeys as record Arguments with the pinned Option', async () => {
-      const { mEdit } = await fire(
+      const { mEdit } = await open(
         { argument: [{ name: 'Gun' }, { name: '000802:A.esp' }], options: { pinned: true } },
         [{ formKey: '000801:A.esp', editorId: 'Gun' }, { formKey: '000802:A.esp' }]);
 
@@ -1267,28 +1242,28 @@ describe('the agent server, running a gesture', () => {
 
     it('fires a copy when the record names its plugin, as list_plugins shows it', async () => {
       const { name, origin } = VALUE.plugins[1] ?? { name: '', origin: '' };
-      await fire({ argument: [{ name: 'Gun', plugin: { name, origin } }] }, [{ formKey: '000801:A.esp' }]);
+      await open({ argument: [{ name: 'Gun', plugin: { name, origin } }] }, [{ formKey: '000801:A.esp' }]);
 
       expect(fired.calls).toEqual([['modbench.record.open', new AgentCall([{ ...gun, plugin: { name, origin } }], { pinned: undefined })]]);
     });
 
     it('refuses with mEdit\'s listing of the matches a name means, firing nothing', async () => {
       const listing = '"Gun" means more than one thing: record 000801:A.esp (Gun); record 000802:B.esp (Gun).';
-      const { answer } = await fire({ argument: [{ name: 'Gun' }] }, { failed: 'refused', refusal: listing });
+      const { answer } = await open({ argument: [{ name: 'Gun' }] }, { failed: 'refused', refusal: listing });
 
       expect(answer).toEqual({ isError: true, text: listing });
       expect(fired.calls).toEqual([]);
     });
 
     it('refuses a name that is a plugin, not a record, firing nothing', async () => {
-      const { answer } = await fire({ argument: [{ name: 'A.esp' }] }, [{ plugin: { name: 'A.esp', origin: 'Big Rocks' } }]);
+      const { answer } = await open({ argument: [{ name: 'A.esp' }] }, [{ plugin: { name: 'A.esp', origin: 'Big Rocks' } }]);
 
       expect(answer.text).toContain('"A.esp" is not a record.');
       expect(fired.calls).toEqual([]);
     });
 
     it('refuses a plugin nothing is named, firing nothing', async () => {
-      const { answer } = await fire({ argument: [{ name: 'Gun', plugin: { name: 'Gone.esp' } }] }, [{ formKey: '000801:A.esp' }]);
+      const { answer } = await open({ argument: [{ name: 'Gun', plugin: { name: 'Gone.esp' } }] }, [{ formKey: '000801:A.esp' }]);
 
       expect(answer.text).toContain('No plugin is named "Gone.esp".');
       expect(fired.calls).toEqual([]);
@@ -1319,10 +1294,7 @@ describe('the agent server, given an input its tool does not take', () => {
     ['select_rows', { sql: 5 }, 'sql'],
     ['mod_enable', { argument: '[{"name":"A"}]' }, 'argument'],
   ])('%s refuses it, naming the input, in the Output and in no notification', async (name, args, input) => {
-    const { bound, lines, reporter } = await serve(new FakeInstance(CONFLICTED_WITH_DOWNLOADED_FILES));
-    const client = new Client({ name: 'test', version: '0' });
-    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
-    clients.push(client);
+    const { client, lines, reporter } = await clientOf(new FakeInstance(CONFLICTED_WITH_DOWNLOADED_FILES));
 
     const refusal = await call(client, name, args);
 
@@ -1333,7 +1305,7 @@ describe('the agent server, given an input its tool does not take', () => {
   });
 
   it('tells the agent select_rows reads only the views, and where their columns are listed', async () => {
-    const { tools } = await (await clientOf(new FakeInstance(VALUE))).listTools();
+    const { tools } = await (await clientOf(new FakeInstance(VALUE))).client.listTools();
 
     const description = tools.find((tool) => tool.name === 'select_rows')?.description;
     expect(description).toContain('only the views');
@@ -1341,8 +1313,8 @@ describe('the agent server, given an input its tool does not take', () => {
     expect(description).toContain('view_columns');
   });
 
-  it('still advertises the input select_rows takes', async () => {
-    const { tools } = await (await clientOf(new FakeInstance(VALUE))).listTools();
+  it('advertises the SQL select_rows takes as a required string', async () => {
+    const { tools } = await (await clientOf(new FakeInstance(VALUE))).client.listTools();
 
     expect(tools.find((tool) => tool.name === 'select_rows')?.inputSchema).toMatchObject({ properties: { sql: { type: 'string' } }, required: ['sql'] });
   });
@@ -1350,16 +1322,7 @@ describe('the agent server, given an input its tool does not take', () => {
 
 describe('the agent server, given no instance', () => {
   it('takes no port', async () => {
-    const blocker = createServer();
-    blockers.push(blocker);
-    const taken = await new Promise<number>((done) => {
-      blocker.listen(0, '127.0.0.1', () => {
-        const address = blocker.address();
-        done(typeof address === 'object' && address !== null ? address.port : 0);
-      });
-    });
-
-    const { address, reporter } = await serve(undefined, taken);
+    const { address, reporter } = await serve(undefined, await takenPort());
 
     expect(address).toBeUndefined();
     expect(reporter.reports).toEqual([]);
@@ -1398,14 +1361,7 @@ describe('the agent server, given a port', () => {
   });
 
   it('reports through the reporter, naming the setting and the port, when the port is taken', async () => {
-    const blocker = createServer();
-    blockers.push(blocker);
-    const taken = await new Promise<number>((done) => {
-      blocker.listen(0, '127.0.0.1', () => {
-        const address = blocker.address();
-        done(typeof address === 'object' && address !== null ? address.port : 0);
-      });
-    });
+    const taken = await takenPort();
 
     const { bound, reporter } = await serve(new FakeInstance(VALUE), taken);
 
