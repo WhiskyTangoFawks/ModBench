@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -41,7 +42,7 @@ internal sealed class SourceModFixture : TestInstance
     {
         var formKey = FormKey.Null;
         var fixture = new SourceModFixture(
-            "Stray.esp", PluginOrigin.Overwrite, compiledPlugin: false, mod => formKey = mod.Npcs.AddNew("StrayNpc").FormKey);
+            "Stray.esp", LoadOrderEntry.OverwriteOrigin, compiledPlugin: false, mod => formKey = mod.Npcs.AddNew("StrayNpc").FormKey);
         npc = formKey;
         return fixture;
     }

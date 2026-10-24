@@ -99,7 +99,7 @@ public sealed class InstanceCatalogTests
             .Reverse();
         foreach (var mod in modsLowestFirst)
             AddFiles(winningFileByName, mod, Path.Combine(instance, "mods", mod));
-        AddFiles(winningFileByName, PluginOrigin.Overwrite, Path.Combine(instance, "overwrite"));
+        AddFiles(winningFileByName, LoadOrderEntry.OverwriteOrigin, Path.Combine(instance, "overwrite"));
 
         var implicitMasters = RealInstallSmokeTests.MastersIn(release, dataDir);
         var listed = File.ReadLines(Path.Combine(profile, "plugins.txt"))
@@ -124,7 +124,7 @@ public sealed class InstanceCatalogTests
     {
         var plugin = Path.GetFileName(pluginPath);
         var folder = Path.GetDirectoryName(pluginPath) ?? throw new InvalidOperationException($"'{pluginPath}' has no folder.");
-        var target = origin == PluginOrigin.Overwrite
+        var target = origin == LoadOrderEntry.OverwriteOrigin
             ? Path.Combine(scratchRoot, "overwrite")
             : Path.Combine(scratchRoot, "mods", origin);
         Directory.CreateDirectory(target);

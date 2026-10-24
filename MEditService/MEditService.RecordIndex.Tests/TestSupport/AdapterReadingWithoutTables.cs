@@ -15,6 +15,6 @@ internal sealed class AdapterReadingWithoutTables(Func<string, bool> dropped) : 
 {
     public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null) =>
+        PluginStrings strings) =>
         base.OpenDocuments(modPath, loadOrder, schemas.Where(table => !dropped(table.Key)).ToDictionary(), strings);
 }

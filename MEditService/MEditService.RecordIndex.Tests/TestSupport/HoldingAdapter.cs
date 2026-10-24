@@ -15,7 +15,7 @@ internal sealed class HoldingAdapter(string plugin, int quests, int topicsPerQue
 {
     public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null) =>
+        PluginStrings strings) =>
         string.Equals(modPath.ModKey.FileName, plugin, StringComparison.OrdinalIgnoreCase)
             ? RequireExtensions.AnswerOf<IPluginDocuments>(() => new HoldingRecords(plugin, quests, topicsPerQuest))
             : base.OpenDocuments(modPath, loadOrder, schemas, strings);

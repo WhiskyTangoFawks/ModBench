@@ -76,7 +76,7 @@ public abstract class TestInstance : IDisposable
     public string FolderOf(string origin) => origin switch
     {
         PluginOrigin.DataDirectory => DataFolder,
-        PluginOrigin.Overwrite => Path.Combine(_root, "overwrite"),
+        LoadOrderEntry.OverwriteOrigin => Path.Combine(_root, "overwrite"),
         _ => Path.Combine(_root, "mods", origin),
     };
 

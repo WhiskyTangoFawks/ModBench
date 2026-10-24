@@ -15,7 +15,7 @@ internal sealed class LinkingAdapter(string plugin, Func<IEnumerable<(string For
 {
     public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null) =>
+        PluginStrings strings) =>
         RequireExtensions.AnswerOf<IPluginDocuments>(() => new LinkingRecords(plugin, records));
 
     private sealed class LinkingRecords(string plugin, Func<IEnumerable<(string FormKey, IEnumerable<string> Links)>> records) : IPluginDocuments

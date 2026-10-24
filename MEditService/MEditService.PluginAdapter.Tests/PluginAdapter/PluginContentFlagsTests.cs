@@ -1,3 +1,4 @@
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -19,7 +20,7 @@ public sealed class PluginContentFlagsTests
         var mod = new Fallout4Mod(ModKey.FromFileName(fileName), Fallout4Release.Fallout4);
         shape(mod);
         mod.WriteToBinary(path);
-        return Adapter.ReadContent(new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.Fallout4)).Answered().Content;
+        return Adapter.ReadContent(new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None).Answered().Content;
     }
 
     private static PluginContent ReadStarfield(string fileName, Action<StarfieldMod> shape)
@@ -29,7 +30,7 @@ public sealed class PluginContentFlagsTests
         var mod = new StarfieldMod(ModKey.FromFileName(fileName), StarfieldRelease.Starfield);
         shape(mod);
         mod.WriteToBinary(path);
-        return Adapter.ReadContent(new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.Starfield)).Answered().Content;
+        return Adapter.ReadContent(new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.Starfield), PluginStrings.None).Answered().Content;
     }
 
     [Theory]
@@ -52,6 +53,21 @@ public sealed class PluginContentFlagsTests
         var content = ReadFallout4(fileName, mod => mod.IsSmallMaster = flagged);
 
         Assert.Equal(expected, content.IsLight);
+    }
+
+    [Fact]
+    public void ReadContent_RecordCount_IsEveryRecordThePluginHolds_ThoseInsideAContainerToo()
+    {
+        var content = ReadFallout4("Counted.esp", mod =>
+        {
+            mod.Npcs.AddNew("Npc1");
+            mod.Npcs.AddNew("Npc2");
+            var cell = new Mutagen.Bethesda.Fallout4.Cell(mod) { EditorID = "Room" };
+            cell.Temporary.Add(new Mutagen.Bethesda.Fallout4.PlacedObject(mod) { EditorID = "PlacedInRoom" });
+            mod.AddInteriorCells(cell);
+        });
+
+        Assert.Equal(4, content.RecordCount);
     }
 
     [Fact]

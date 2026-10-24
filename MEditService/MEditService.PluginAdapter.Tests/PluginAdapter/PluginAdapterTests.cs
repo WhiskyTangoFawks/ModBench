@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -39,7 +40,7 @@ public sealed class PluginAdapterTests
     {
         using var data = TwoNpcPlugin("adapter-read");
 
-        using var documents = Adapter.OpenDocuments(PathOf(data), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+        using var documents = Adapter.OpenDocuments(PathOf(data), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas, PluginStrings.None).Answered();
         var npcs = documents.Records.Where(r => r.RecordType == "npc_").ToList();
 
         Assert.Equal(

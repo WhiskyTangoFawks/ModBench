@@ -39,27 +39,38 @@ public sealed class PluginSourceReadTests
         Assert.Contains(source.Files, file => Encoding.UTF8.GetString(file.Content).Contains("The Big Door", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task ARecordOfThePluginsOwnObjectIdZero_FailsNamingIt_SinceTheHeadersSourceHoldsThatFormKey()
+    public static TheoryData<string, uint, Type, string> RecordsOfAFormIdNoSourceCanHold => new()
     {
-        using var folder = new ScratchDirectory("medit-source-object-id-zero-");
-        const uint ownObjectIdZero = 0x01000000;
+        {
+            "the plugin's own object ID 000000, the FormKey the header's source holds", 0x01000000, typeof(PluginFailure.HeaderFormKeyHeld),
+            "NPC_ 000000:Fixture.esp holds object ID 000000, the FormKey its plugin header's source holds"
+        },
+        { "FormID 00000000, the null FormID", 0, typeof(PluginFailure.NullFormIdHeld), "NPC_ 00000000 holds the null FormID, so the plugin is malformed" },
+    };
 
-        Assert.False((await ReadSourceAsync(PluginWithAnNpcOfFormId(folder, ownObjectIdZero), GameRelease.Fallout4)).Holds(out _, out var failure));
-        Assert.Equal(
-            "NPC_ 000000:Fixture.esp holds object ID 000000, the FormKey its plugin header's source holds",
-            Assert.IsType<PluginFailure.HeaderFormKeyHeld>(failure).Reason);
+    [Theory]
+    [MemberData(nameof(RecordsOfAFormIdNoSourceCanHold))]
+    public async Task ARecordOfAFormIdNoSourceCanHold_FailsNamingIt(string _, uint formId, Type failureType, string reason)
+    {
+        using var folder = new ScratchDirectory("medit-source-formid-");
+
+        Assert.False((await ReadSourceAsync(PluginWithAnNpcOfFormId(folder, formId), GameRelease.Fallout4)).Holds(out var _, out var failure));
+        Assert.IsType(failureType, failure);
+        Assert.Equal(reason, failure.Reason);
     }
 
     [Fact]
-    public async Task ARecordOfFormIdZero_FailsNamingIt_SinceThatIsTheNullFormId()
+    public async Task TheSourceTree_HoldsNoCarriageReturn_WhateverNewlineTheOperatingSystemWrites()
     {
-        using var folder = new ScratchDirectory("medit-source-null-formid-");
+        using var folder = new ScratchDirectory("medit-source-newlines-");
+        var pluginPath = Path.Combine(folder, "Fixture.esp");
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        mod.Npcs.AddNew("Npc");
+        mod.WriteToBinary(pluginPath);
 
-        Assert.False((await ReadSourceAsync(PluginWithAnNpcOfFormId(folder, 0), GameRelease.Fallout4)).Holds(out _, out var failure));
-        Assert.Equal(
-            "NPC_ 00000000 holds the null FormID, so the plugin is malformed",
-            Assert.IsType<PluginFailure.NullFormIdHeld>(failure).Reason);
+        var source = (await ReadSourceAsync(pluginPath, GameRelease.Fallout4)).Answered();
+
+        Assert.All(source.Files, file => Assert.DoesNotContain((byte)'\r', file.Content));
     }
 
     private static string PluginWithAnNpcOfFormId(string folder, uint formId)

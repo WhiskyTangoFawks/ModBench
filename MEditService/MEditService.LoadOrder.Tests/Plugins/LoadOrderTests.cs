@@ -19,17 +19,63 @@ public sealed class LoadOrderTests
         RegisteredPlugin[] plugins, RegisteredPlugin[] loadedWithNoLine, params RegisteredPlugin[] active) =>
         new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [.. loadedWithNoLine.Select(p => p.Key)], [], [], [], Language.English);
 
-    private static StampedFile Stamped(string path) => new(path, "1/2/3");
+    private static readonly RegisteredPlugin A = Registered("A.esp", "ModA");
+
+    private static readonly StampedFile AStrings = new(@"C:\MO2\Fallout4\mods\ModA\Strings\A_en.STRINGS", "1/2/3");
+
+    private static LoadOrderSnapshot OfA(
+        PluginAddress[]? loadedWithNoLine = null, StampedFile[]? archives = null, StampedFile[]? stringsFiles = null, Language language = Language.English) =>
+        new(Data, Instance, GameRelease.Fallout4, [A], [A.Key], loadedWithNoLine ?? [], archives ?? [], stringsFiles ?? [AStrings], [], language);
+
+    public static TheoryData<string, LoadOrderSnapshot> DifferingInOneField => new()
+    {
+        { "loads a plugin with no line", OfA(loadedWithNoLine: [A.Key]) },
+        { "loads an archive", OfA(archives: [new(@"C:\Games\Fallout4\Data\A - Main.ba2", "1/2/3")]) },
+        { "reads no strings file", OfA(stringsFiles: []) },
+        { "reads its strings file under another stamp", OfA(stringsFiles: [AStrings with { Stamp = "1/2/4" }]) },
+        { "shows texts in another strings language", OfA(language: Language.French) },
+    };
+
+    [Theory]
+    [MemberData(nameof(DifferingInOneField))]
+    public void SamePlugins_DifferingInOneField_AreDifferentValues(string _, LoadOrderSnapshot other)
+    {
+        Assert.NotEqual(OfA(), other);
+    }
+
+    public static TheoryData<string, RegisteredPlugin[], PluginAddress[], PluginAddress[], string> Refusals => new()
+    {
+        {
+            "an active plugin that is no plugin in the instance",
+            [A], [new PluginAddress("B.esp", "ModB")], [],
+            "The active plugin B.esp from ModB is not a plugin in the snapshot."
+        },
+        {
+            "two active plugins of one filename, as the game loads one file per name",
+            [A, Registered("A.esp", "ModB")], [A.Key, new PluginAddress("A.esp", "ModB")], [],
+            "The snapshot names more than one active A.esp: ModA, ModB. The game loads one file per name."
+        },
+        {
+            "a plugin loaded with no line that is no plugin in the instance",
+            [A], [A.Key], [new PluginAddress("Fallout4.esm", PluginOrigin.DataDirectory)],
+            "The plugin loaded with no line Fallout4.esm from Data/ is not a plugin in the snapshot."
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(Refusals))]
+    public void RefusalOf_NamesWhyThePluginsMakeNoSnapshot(
+        string _, RegisteredPlugin[] plugins, PluginAddress[] active, PluginAddress[] loadedWithNoLine, string refusal)
+    {
+        Assert.Equal(refusal, LoadOrderSnapshot.RefusalOf(plugins, active, loadedWithNoLine));
+    }
 
     [Fact]
-    public void SamePlugins_ReadingAStringsFileWhoseStampChanged_AreDifferentValues()
+    public void ASnapshotOfPluginsRefusalOfRefuses_IsNotConstructed()
     {
-        var a = Registered("A.esp", "ModA");
-        const string stringsFile = @"C:\MO2\Fallout4\mods\ModA\Strings\A_en.STRINGS";
+        var thrown = Assert.Throws<ArgumentException>(() => Order([A], Registered("B.esp", "ModB")));
 
-        Assert.NotEqual(
-            new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], [], [new StampedFile(stringsFile, "1/2/3")], [], Language.English),
-            new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], [], [new StampedFile(stringsFile, "1/2/4")], [], Language.English));
+        Assert.Equal("The active plugin B.esp from ModB is not a plugin in the snapshot.", thrown.Message);
     }
 
     [Fact]
@@ -68,23 +114,6 @@ public sealed class LoadOrderTests
 
         Assert.NotNull(order.LoadOrderIndex(winner.Key));
         Assert.Null(order.LoadOrderIndex(overridden.Key));
-    }
-
-    [Fact]
-    public void AnActivePluginThatIsNoPluginInTheInstance_IsRefused()
-    {
-        Assert.Throws<ArgumentException>(() => Order([Registered("A.esp", "ModA")], Registered("B.esp", "ModB")));
-    }
-
-    [Fact]
-    public void TwoActivePluginsOfOneFilename_AreRefused_NamingBothOrigins_BecauseTheGameLoadsOneFilePerName()
-    {
-        RegisteredPlugin[] plugins = [Registered("A.esp", "ModA"), Registered("A.esp", "ModB")];
-
-        var refusal = LoadOrderSnapshot.RefusalOf(plugins, [.. plugins.Select(p => p.Key)], []);
-
-        Assert.Contains("ModA, ModB", refusal, StringComparison.Ordinal);
-        Assert.Throws<ArgumentException>(() => Order(plugins, plugins));
     }
 
     [Fact]
@@ -169,44 +198,6 @@ public sealed class LoadOrderTests
     }
 
     [Fact]
-    public void APluginLoadedWithNoLineThatIsNoPluginInTheInstance_IsRefused()
-    {
-        var a = Registered("A.esp", "ModA");
-
-        var refusal = LoadOrderSnapshot.RefusalOf([a], [a.Key], [new PluginAddress("Fallout4.esm", PluginOrigin.DataDirectory)]);
-
-        Assert.Contains("Fallout4.esm", refusal, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void SamePlugins_LoadingADifferentPluginWithNoLine_AreDifferentValues()
-    {
-        var a = Registered("A.esp", "ModA");
-
-        Assert.NotEqual(Order([a], a), OrderLoadingWithNoLine([a], [a], a));
-    }
-
-    [Theory]
-    [InlineData(new[] { @"C:\Games\Fallout4\Data\A - Main.ba2" }, new string[0])]
-    [InlineData(new string[0], new[] { @"C:\MO2\Fallout4\mods\ModA\Strings\A_en.STRINGS" })]
-    public void SamePlugins_LoadingADifferentArchiveOrReadingADifferentStringsFile_AreDifferentValues(string[] archives, string[] stringsFiles)
-    {
-        var a = Registered("A.esp", "ModA");
-
-        Assert.NotEqual(Order([a], a), new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], [.. archives.Select(Stamped)], [.. stringsFiles.Select(Stamped)], [], Language.English));
-    }
-
-    [Fact]
-    public void SamePlugins_ShowingTextsInAnotherStringsLanguage_AreDifferentValues()
-    {
-        var a = Registered("A.esp", "ModA");
-
-        Assert.NotEqual(
-            new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], [], [], [], Language.English),
-            new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, [a], [a.Key], [], [], [], [], Language.French));
-    }
-
-    [Fact]
     public void EmptySnapshot_HasNoActivePlugin_AndKnowsNoPlugin()
     {
         var order = Order([]);
@@ -214,33 +205,6 @@ public sealed class LoadOrderTests
         Assert.Empty(order.Active);
         Assert.Null(order.Plugin(new PluginAddress("A.esp", "ModA")));
         Assert.Null(order.LoadOrderIndex(new PluginAddress("A.esp", "ModA")));
-    }
-
-    [Fact]
-    public void ApplyingTheSameSnapshotTwice_KeepsTheValueHeld()
-    {
-        var holder = new LoadOrderHolder();
-        var a = Registered("A.esp", "ModA");
-        var b = Registered("B.esp", "ModB");
-
-        holder.Apply(Order([a, b], a));
-        var first = holder.Current;
-        holder.Apply(Order([a, b], a));
-
-        Assert.Same(first, holder.Current);
-    }
-
-    [Fact]
-    public void ASnapshotThatMovesOnlyTheActivePlugins_ReplacesTheValue()
-    {
-        var holder = new LoadOrderHolder();
-        var a = Registered("A.esp", "ModA");
-        var b = Registered("B.esp", "ModB");
-
-        holder.Apply(Order([a, b], a, b));
-        holder.Apply(Order([a, b], b, a));
-
-        Assert.Equal([b, a], holder.Current.Active);
     }
 
     [Fact]
@@ -318,17 +282,9 @@ public sealed class LoadOrderTests
         Assert.Equal(0, order.LoadOrderIndex(other.Key));
     }
 
-    [Fact]
-    public void PluginsDifferingOnlyInTheCaseOfTheirOrigin_AreACollision()
-    {
-        var upper = Registered("A.esp", "ModA");
-        var lower = Registered("A.esp", "moda");
-
-        Assert.Equal([upper, lower], Order([upper, lower]).CollisionReasons().Select(c => c.Plugin));
-    }
-
     public static TheoryData<string[][], string[]> CollisionCases => new()
     {
+        { [["A.esp", "ModA"], ["B.esp", "ModA"]], [] },
         {
             [["Dup.esp", "ModA"], ["dup.esp", "ModA"]],
             [
@@ -362,9 +318,4 @@ public sealed class LoadOrderTests
         Assert.Equal(reasons, order.CollisionReasons().Select(c => c.Reason));
     }
 
-    [Fact]
-    public void CollisionReasons_OfNoCollision_IsEmpty()
-    {
-        Assert.Empty(Order([Registered("A.esp", "ModA"), Registered("B.esp", "ModA")]).CollisionReasons());
-    }
 }

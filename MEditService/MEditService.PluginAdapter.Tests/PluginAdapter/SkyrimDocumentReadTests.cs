@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -38,7 +39,7 @@ public sealed class SkyrimDocumentReadTests
         mod.WriteToBinary(path);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.SkyrimSE), SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE)).Answered();
+            new ModPath(mod.ModKey, path), EmptyLoadOrder.Of(GameRelease.SkyrimSE), SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE), PluginStrings.None).Answered();
         var records = documents.Records.ToList();
 
         Assert.Equal(

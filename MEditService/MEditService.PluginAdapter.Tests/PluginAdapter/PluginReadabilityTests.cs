@@ -40,7 +40,7 @@ public sealed class PluginReadabilityTests : IDisposable
     {
         var path = Path.Combine(_data.DataFolder, "Absent.esp");
 
-        var read = Adapter.ReadContent(new ModPath(ModKey.FromFileName("Absent.esp"), path), EmptyLoadOrder.Of(GameRelease.Fallout4));
+        var read = Adapter.ReadContent(new ModPath(ModKey.FromFileName("Absent.esp"), path), EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None);
 
         Assert.IsType<PluginFailure.Inaccessible>(read.Failure());
     }
@@ -93,7 +93,7 @@ public sealed class PluginReadabilityTests : IDisposable
 
         using var documents = Adapter.OpenDocuments(
             new ModPath(ModKey.FromFileName(UninflatablePlugin), path), EmptyLoadOrder.Of(GameRelease.Fallout4),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)).Answered();
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), PluginStrings.None).Answered();
 
         Assert.Empty(documents.Records);
         Assert.Equal("npc_", Assert.Single(documents.Failures).RecordType);

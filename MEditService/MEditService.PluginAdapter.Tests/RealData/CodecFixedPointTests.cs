@@ -1,6 +1,7 @@
 using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -30,7 +31,7 @@ public sealed class CodecFixedPointTests(ITestOutputHelper output)
     {
         var modPath = new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath);
         using var documents = TestAdapters.Mutagen()
-            .OpenDocuments(modPath, EmptyLoadOrder.Of(GameRelease.Fallout4), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4))
+            .OpenDocuments(modPath, EmptyLoadOrder.Of(GameRelease.Fallout4), SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4), PluginStrings.None)
             .Answered();
         var all = new List<PluginDocument> { documents.Header };
         all.AddRange(documents.Records);
