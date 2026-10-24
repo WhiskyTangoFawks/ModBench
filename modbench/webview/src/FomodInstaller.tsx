@@ -1,6 +1,6 @@
 // mods-fomod.md: the FOMOD installer's page. It draws the installer as the engine sends it, and sends back each click.
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { fomodHost } from './vscode';
 import { listenToHost } from './nativeBridge';
 import { FOMOD_MOVE, FOMOD_READY, parseFomodShown, type FomodGroup, type FomodMove, type FomodOption, type FomodState, type FomodStep } from '../../src/wire/fomodPage';
@@ -134,26 +134,25 @@ function Header({ state }: { state: FomodState }) {
 export function FomodInstallerView() {
   const [state, setState] = useState<FomodState | undefined>(undefined);
   const [enlarged, setEnlarged] = useState<Enlarged | undefined>(undefined);
-  const enlargedRef = useRef(enlarged);
-  enlargedRef.current = enlarged;
 
   useEffect(() => {
     const stopListening = listenToHost((data) => {
       const shown = parseFomodShown(data);
       if (shown) setState(shown.state);
     });
+    fomodHost.postMessage({ type: FOMOD_READY });
+    return stopListening;
+  }, []);
+
+  useEffect(() => {
     const escape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (enlargedRef.current === undefined) send({ kind: 'cancel' });
+      if (enlarged === undefined) send({ kind: 'cancel' });
       else setEnlarged(undefined);
     };
     window.addEventListener('keydown', escape);
-    fomodHost.postMessage({ type: FOMOD_READY });
-    return () => {
-      stopListening();
-      window.removeEventListener('keydown', escape);
-    };
-  }, []);
+    return () => window.removeEventListener('keydown', escape);
+  }, [enlarged]);
 
   if (state === undefined) return null;
   return (

@@ -29,7 +29,7 @@ describe('a page of the webview build, loaded into a webview', () => {
   });
 
   it('reaches the images folder a page names, and no page that names none', () => {
-    const withImages = shown({ ...RECORD_PAGE, imagesFolder: 'staging/release' as unknown as vscode.Uri });
+    const withImages = shown({ ...RECORD_PAGE, imagesFolder: vscode.Uri.from({ scheme: 'file', path: 'staging/release' }) });
     expect(withImages.options).toEqual({ enableScripts: true, localResourceRoots: ['ext/out/webview', 'staging/release'] });
     expect(withImages.html).toContain('img-src vscode-webview-resource:;');
 

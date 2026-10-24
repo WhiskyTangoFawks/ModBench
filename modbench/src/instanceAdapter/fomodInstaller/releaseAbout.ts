@@ -31,8 +31,8 @@ export async function aboutIn(root: string, files: readonly string[]): Promise<A
   return { author: fieldOf(text, 'Author'), version: fieldOf(text, 'Version'), website: fieldOf(text, 'Website') };
 }
 
-/** A path the FOMOD gives, as the release spells the file it names; empty for a path that names no file of the
- *  release, which includes every path that climbs out of it. The engine gives no path for an image the FOMOD omits. */
+/** A path as the release spells the file it names; empty when it names none, as a path out of the release does. The
+ *  engine gives no path for an image the FOMOD omits. */
 export function imageResolver(files: readonly string[]): (path: string | null | undefined) => string {
   const spelled = new Map(files.map((file) => [keyOf(file), file]));
   return (path) => spelled.get(posix.normalize(keyOf(path ?? ''))) ?? '';

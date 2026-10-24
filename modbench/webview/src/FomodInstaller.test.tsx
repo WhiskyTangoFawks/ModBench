@@ -213,7 +213,7 @@ describe('the FOMOD installer page', () => {
     it('shows the description and image of the option under the pointer, and then of the one with focus', () => {
       described();
 
-      fireEvent.mouseEnter(screen.getByRole('checkbox', { name: 'A' }).closest('label') as HTMLElement);
+      fireEvent.mouseEnter(screen.getByText('A'));
       expect(screen.getByText('About A')).toBeInTheDocument();
       expect(screen.getByRole('img', { name: 'A' })).toHaveAttribute('src', 'img://a.png');
 
