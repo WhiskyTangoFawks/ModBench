@@ -195,6 +195,21 @@ describe('the MO2 adapter\'s repository', () => {
       expect((await adapter.reading()).repositorySetUp).toBe(expected);
     });
 
+    it('reads a repository whose filter programs are gone as set up only once they are written again', async () => {
+      const adapter = await instance();
+      await Promise.all(Object.entries(INSTANCE_FILES).map(([path, text]) => put(path, text)));
+      await mkdir(join(root, 'mods'));
+      runGit('init', '--quiet');
+      await adapter.refuseUnpublishedPins();
+      await adapter.writePathTokens();
+      await rm(join(root, '.git', 'modbench'), { recursive: true });
+
+      const withoutPrograms = (await adapter.reading()).repositorySetUp;
+      await adapter.writePathTokens();
+
+      expect([withoutPrograms, (await adapter.reading()).repositorySetUp]).toEqual([false, true]);
+    });
+
     it('reads a repository whose path tokens cover no publisher\'s configuration as set up only once they cover it', async () => {
       const before = await instance();
       await Promise.all(Object.entries(INSTANCE_FILES).map(([path, text]) => put(path, text)));

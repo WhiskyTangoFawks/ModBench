@@ -1,9 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { folderTokens, tokenFilterConfig, type PathSpelling, type TokenFolders } from '../pathTokens';
+import { folderTokens, tokenFilter, type PathSpelling, type TokenFolders } from '../pathTokens';
 
 const DRIVER = 'tokens';
 
@@ -26,7 +26,11 @@ async function repositoryFiltering(folders: TokenFolders, platform: NodeJS.Platf
   const git = (...args: string[]): string => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
   git('init', '--quiet');
   git('config', 'core.autocrlf', 'false');
-  for (const [key, value] of Object.entries(tokenFilterConfig(DRIVER, folderTokens(folders, platform, spelling)))) git('config', key, value);
+  const directory = join(root, '.git', 'modbench');
+  const { config, programFiles } = tokenFilter(DRIVER, directory, folderTokens(folders, platform, spelling));
+  await mkdir(directory);
+  for (const [file, text] of Object.entries(programFiles)) await writeFile(file, text);
+  for (const [key, value] of Object.entries(config)) git('config', key, value);
   await writeFile(join(root, '.git', 'info', 'attributes'), `* filter=${DRIVER}\n`);
   return root;
 }
@@ -49,6 +53,17 @@ const DRIVE: TokenFolders = { instance: 'C:\\Users\\me\\LitR', game: 'D:\\Games\
 const PROTON: TokenFolders = { instance: '/home/me/LitR', game: '/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4', downloads: '/mnt/data/Downloads', committedOutsideInstance: [] };
 
 describe('the token filter', () => {
+  it('cleans and smudges folders whose paths no inline program could carry in a Windows command line', async () => {
+    const long = (name: string): string => `C:\\${Array.from({ length: 12 }, (_, at) => `${name}${at}`.padEnd(40, 'x')).join('\\')}`;
+    const folders: TokenFolders = { instance: long('instance'), game: long('game'), downloads: long('downloads'), committedOutsideInstance: [] };
+    const root = await repositoryFiltering(folders, 'win32', WINDOWS_PROGRAMS);
+    const configured = execFileSync('git', ['config', '--get-regexp', '^filter\\.'], { cwd: root, encoding: 'utf8' });
+
+    expect(Math.max(...configured.split('\n').map((line) => line.length))).toBeLessThan(500);
+    expect(await heldByGit(folders, 'win32', `x=${folders.downloads}\\a.7z`)).toBe('x={downloads folder:\\}\\a.7z');
+    expect(await checkedOutByGit(folders, 'win32', 'x={game folder:/}/Data')).toBe(`x=${folders.game?.replaceAll('\\', '/')}/Data`);
+  });
+
   it.each([
     ['a network share, with backslashes', SHARE, 'win32', 'x=\\\\nas\\share\\Modlists\\LitR\\tools', 'x={instance folder:\\}\\tools'],
     ['a network share, with forward slashes in another case', SHARE, 'win32', 'x=//NAS/share/modlists/LitR/x.exe', 'x={instance folder:/}/x.exe'],
