@@ -527,71 +527,63 @@ describe('a write to the compiler settings changes only the entries it names (Ne
   const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
   const folder = (name: string) => join(root, 'mods', name);
   const kept = (...present: string[]) => ({ present, owns: (path: string) => path.toLowerCase().endsWith('.manifest.json') });
-  const handKept = (lines: string[]) => lines.join('\r\n');
-  const BEFORE = [
-    '// shaped by hand',
-    '{',
-    '   /* the output */',
-    '   "OutputFile": "",',
-    '   "Include": [',
-    '      "mods\\\\A", // keep',
-    '      "mods\\\\B",',
-    '   ],',
-    '   "Ignore": [',
-    '      "mods\\\\Old\\\\Old.manifest.json", /* gone */',
-    '      "mine",',
-    '   ],',
-    '   "Mine": 1,',
-    '}',
-    '',
+  const settingsWith = (list: string, key = 'Include') => `// shaped by hand\n{\n  /* mine */\n  "${key}": ${list},\n  "Mine": 1,\n}\n`;
+  const entries = (...lines: string[]) => `[\n${lines.map((line) => `    ${line}`).join('\n')}\n  ]`;
+
+  type Gesture = () => Promise<unknown>;
+  const removal = (name: string): Gesture => () => publisherOver().changeTag('remove', 'Include', [folder(name)]);
+  const addition = (name: string): Gesture => () => publisherOver().changeTag('add', 'Include', [folder(name)]);
+  const renaming = (from: string, to: string): Gesture => () => publisherOver().followFolders([{ from: folder(from), to: folder(to) }]);
+
+  const cases: readonly [name: string, gesture: Gesture, before: string, after: string][] = [
+    ['remove: a block comment before the comma stays', removal('A'),
+      settingsWith(entries('"mods/A" /* x */,', '"mods/B"')), settingsWith(entries(' /* x */', '"mods/B"'))],
+    ['remove: a line comment after the comma stays', removal('A'),
+      settingsWith(entries('"mods/A", // about a', '"mods/B"')), settingsWith(entries(' // about a', '"mods/B"'))],
+    ['remove: the first entry takes its line', removal('A'),
+      settingsWith(entries('"mods/A",', '"mods/B",', '"mods/C"')), settingsWith(entries('"mods/B",', '"mods/C"'))],
+    ['remove: a middle entry takes its line', removal('B'),
+      settingsWith(entries('"mods/A", // about a', '"mods/B",', '"mods/C" // about c')), settingsWith(entries('"mods/A", // about a', '"mods/C" // about c'))],
+    ['remove: the last entry without a trailing comma takes the comma before it, not the comment after that comma', removal('C'),
+      settingsWith(entries('"mods/A",', '"mods/B", // about b', '"mods/C"')), settingsWith(entries('"mods/A",', '"mods/B" // about b'))],
+    ['remove: the last entry with a trailing comma takes its line', removal('C'),
+      settingsWith(entries('"mods/A",', '"mods/C",')), settingsWith(entries('"mods/A",'))],
+    ['remove: the only entry leaves an empty list', removal('A'),
+      settingsWith(entries('"mods/A"')), settingsWith('[\n  ]')],
+    ['remove: an inline entry with a comment between it and its comma', removal('A'),
+      settingsWith('["mods/A" /* x */, "mods/B"]'), settingsWith('[ /* x */ "mods/B"]')],
+    ['remove: a block comment before the value stays', removal('A'),
+      settingsWith(entries('/* c */ "mods/A",', '"mods/B"')), settingsWith(entries('/* c */ ', '"mods/B"'))],
+    ['add: after a last entry with a trailing comma and a comment, the comment stays on its entry', addition('X'),
+      settingsWith(entries('"mods/C", // about c')), settingsWith(entries('"mods/C", // about c', '"mods\\\\X",'))],
+    ['add: after a last entry without a comma, the comment stays on its entry', addition('X'),
+      settingsWith(entries('"mods/C" // about c')), settingsWith(entries('"mods/C", // about c', '"mods\\\\X"'))],
+    ['add: after a last entry with a block comment, the comment stays on its entry', addition('X'),
+      settingsWith(entries('"mods/B",', '"mods/C" /* about c */')), settingsWith(entries('"mods/B",', '"mods/C", /* about c */', '"mods\\\\X"'))],
+    ['add: after a plain last entry', addition('X'),
+      settingsWith(entries('"mods/C"')), settingsWith(entries('"mods/C",', '"mods\\\\X"'))],
+    ['add: to an inline list', addition('X'),
+      settingsWith('["mods/C"]'), settingsWith('["mods/C", "mods\\\\X"]')],
+    ['add: to an empty list', addition('X'),
+      settingsWith('[]'), settingsWith(entries('"mods\\\\X"'))],
+    ['add: a list the settings lack follows the settings it keeps', () => publisherOver().changeTag('add', 'Always Enabled', [folder('C')]),
+      settingsWith(entries('"mods/A"')), settingsWith(entries('"mods/A"')).replace('  "Mine": 1,\n', '  "Mine": 1,\n  "AlwaysEnabled": [\n    "mods\\\\C"\n  ],\n')],
+    ['keep-out: a gone manifest goes and the file is added, leaving the comment', () => publisherOver().keepOut(kept(join(root, 'mods', 'B', 'B.manifest.json'))),
+      settingsWith(entries('"mods/Old/Old.manifest.json", // gone', '"mine"'), 'Ignore'),
+      settingsWith(entries(' // gone', '"mine",', '"mods\\\\B\\\\B.manifest.json"'), 'Ignore')],
+    ['follow: a renamed entry keeps its comments and its place', renaming('B', 'D'),
+      settingsWith(entries('"mods/A",', '"mods/B", // about b', '"mods/C"')), settingsWith(entries('"mods/A",', '"mods\\\\D", // about b', '"mods/C"'))],
   ];
-  const changedLines = (...replacements: [at: number, lines: string[]][]) =>
-    handKept(replacements.reduceRight((lines, [at, now]) => lines.toSpliced(at, 1, ...now), BEFORE));
 
-  beforeEach(async () => {
-    await writeSettings(handKept(BEFORE));
-  });
+  for (const eol of ['\n', '\r\n']) {
+    it.each(cases)(`${eol === '\n' ? 'LF' : 'CRLF'} %s`, async (_, gesture, before, after) => {
+      await writeSettings(before.replaceAll('\n', eol));
 
-  it('an add inserts its entry and leaves every comment, comma, indent and line end', async () => {
-    await publisherOver().changeTag('add', 'Include', [folder('C')]);
+      await gesture();
 
-    expect(await settingsText()).toBe(changedLines([6, ['      "mods\\\\B",', '      "mods\\\\C",']]));
-  });
-
-  it('a remove takes its entry away and leaves the rest', async () => {
-    await publisherOver().changeTag('remove', 'Include', [folder('B')]);
-
-    expect(await settingsText()).toBe(changedLines([6, []]));
-  });
-
-  it('a follow renames its entry in place', async () => {
-    await publisherOver().followFolders([{ from: folder('B'), to: folder('D') }]);
-
-    expect(await settingsText()).toBe(changedLines([6, ['      "mods\\\\D",']]));
-  });
-
-  it('a keep-out adds its file to Ignore and drops the gone manifest, leaving the rest', async () => {
-    await publisherOver().keepOut(kept(join(root, 'mods', 'B', 'B.manifest.json')));
-
-    expect(await settingsText()).toBe(changedLines([9, [" /* gone */"]], [10, ['      "mine",', '      "mods\\\\B\\\\B.manifest.json",']]));
-  });
-
-  it('adds a list the settings lack, after the settings it keeps', async () => {
-    await publisherOver().changeTag('add', 'Always Enabled', [folder('C')]);
-
-    expect(await settingsText()).toBe(changedLines([12, ['   "Mine": 1,', '   "AlwaysEnabled": [', '      "mods\\\\C"', '   ],']]));
-  });
-
-  it('edits the last of a key listed twice, the one the compiler reads', async () => {
-    const twice = '{\n  "Ignore": [\n    "ignored"\n  ],\n  "Ignore": [\n    "read"\n  ]\n}';
-    await writeSettings(twice);
-
-    await publisherOver().changeTag('add', 'Ignore', [folder('C')]);
-    await publisherOver().followFolders([{ from: join(root, 'read'), to: folder('D') }]);
-    await publisherOver().changeTag('remove', 'Ignore', [folder('C')]);
-
-    expect(await settingsText()).toBe('{\n  "Ignore": [\n    "ignored"\n  ],\n  "Ignore": [\n    "mods\\\\D"\n  ]\n}');
-  });
+      expect(await settingsText()).toBe(after.replaceAll('\n', eol));
+    });
+  }
 
   it('keeps a tab indent and a missing final newline', async () => {
     await writeSettings('{\n\t"Include": [\n\t\t"mods\\\\A"\n\t]\n}');
@@ -599,5 +591,15 @@ describe('a write to the compiler settings changes only the entries it names (Ne
     await publisherOver().changeTag('add', 'Include', [folder('C')]);
 
     expect(await settingsText()).toBe('{\n\t"Include": [\n\t\t"mods\\\\A",\n\t\t"mods\\\\C"\n\t]\n}');
+  });
+
+  it('edits the last of a key listed twice, the one the compiler reads', async () => {
+    await writeSettings('{\n  "Ignore": [\n    "ignored"\n  ],\n  "Ignore": [\n    "read"\n  ]\n}');
+
+    await publisherOver().changeTag('add', 'Ignore', [folder('C')]);
+    await publisherOver().followFolders([{ from: join(root, 'read'), to: folder('D') }]);
+    await publisherOver().changeTag('remove', 'Ignore', [folder('C')]);
+
+    expect(await settingsText()).toBe('{\n  "Ignore": [\n    "ignored"\n  ],\n  "Ignore": [\n    "mods\\\\D"\n  ]\n}');
   });
 });

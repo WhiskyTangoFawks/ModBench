@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
+
 vi.mock('vscode', () => fakeVscodeModule());
 
 const SETTINGS_FILE = 'compiler_settings.json';

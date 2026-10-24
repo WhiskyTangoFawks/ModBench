@@ -897,6 +897,14 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
     expect(outcome).toEqual({ applied: true, lineRefusals: [], tagRefusal: 'compiler_settings.json is not JSON' });
   });
 
+  it('rename lands with its own failure when the tags followed and Modbench\'s files could not be kept out', async () => {
+    const { commands } = publisherOver({ refusals: refusing('keepOutOfPublisher', 'compiler_settings.json is not JSON') });
+
+    const outcome = await commands.renameMod('Harder VATS', 'Harder VATS 2');
+
+    expect(outcome).toEqual({ applied: true, lineRefusals: [], keepOutRefusal: 'compiler_settings.json is not JSON' });
+  });
+
   it('uninstall removes them for every mod it trashed, in one write after the trash', async () => {
     const { fake, commands } = publisherOver();
 

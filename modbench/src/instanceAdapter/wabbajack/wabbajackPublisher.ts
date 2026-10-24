@@ -3,7 +3,7 @@
 // Publisher tags, story 5).
 
 import { isAbsolute, join, relative, sep } from 'node:path';
-import { applyEdits, findNodeAtLocation, modify, parse, parseTree, printParseErrorCode, type Edit, type FormattingOptions, type ParseError } from 'jsonc-parser';
+import { applyEdits, modify, parse, parseTree, printParseErrorCode, type Edit, type FormattingOptions, type Node, type ParseError } from 'jsonc-parser';
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { get, listDir, putIfChanged, readOrAbsent } from '../files';
@@ -204,10 +204,8 @@ function coveringIn(instanceRoot: string, root: PathNode, neverShipped: readonly
   };
 }
 
-// What a rewrite of one list does to the entries it holds: each keeps its place, takes another entry's, or goes;
-// then the new ones follow.
 interface ListChange {
-  readonly slots: readonly (string | undefined)[];
+  readonly changed: ReadonlyMap<number, string | undefined>;
   readonly appended: readonly string[];
 }
 
@@ -220,13 +218,13 @@ const wabbajackSpelling = (inside: string): string => inside.split(sep).join('\\
 
 function changedEntries(entries: readonly string[], change: PublisherTagChange, insides: readonly string[]): ListChange {
   const named = (entry: string): boolean => insides.some((inside) => sameNames(namesOf(inside), namesOf(entry)));
-  if (change === 'remove') return { slots: entries.map((entry) => (named(entry) ? undefined : entry)), appended: [] };
+  if (change === 'remove') return { changed: new Map(entries.flatMap((entry, at) => (named(entry) ? [[at, undefined] as const] : []))), appended: [] };
   const appended: string[] = [];
   for (const inside of insides) {
     const listed = [...entries, ...appended].some((entry) => sameNames(namesOf(entry), namesOf(inside)));
     if (!listed) appended.push(wabbajackSpelling(inside));
   }
-  return { slots: entries, appended };
+  return { changed: new Map(), appended };
 }
 
 interface InstanceMove {
@@ -240,75 +238,104 @@ function followedEntries(entries: readonly string[], moves: readonly InstanceMov
     return moves.find(({ from }) => isUnder(names, from));
   };
   const listed = new Set(entries.filter((entry) => moveOf(entry) === undefined).map((entry) => namesOf(entry).join('/')));
-  const slots = entries.map((entry) => {
+  const changed = new Map<number, string | undefined>();
+  for (const [at, entry] of entries.entries()) {
     const move = moveOf(entry);
-    if (move === undefined) return entry;
-    if (move.to === undefined) return undefined;
+    if (move === undefined) continue;
     const rest = entry.split(/[\\/]/).filter((name) => name !== '').slice(move.from.length);
-    const followed = [move.to, ...rest].join('\\');
-    const key = namesOf(followed).join('/');
-    if (listed.has(key)) return undefined;
-    listed.add(key);
-    return followed;
-  });
-  return { slots, appended: [] };
+    const followed = move.to === undefined ? undefined : [move.to, ...rest].join('\\');
+    const key = followed === undefined ? undefined : namesOf(followed).join('/');
+    if (key === undefined || listed.has(key)) {
+      changed.set(at, undefined);
+    } else {
+      listed.add(key);
+      changed.set(at, followed);
+    }
+  }
+  return { changed, appended: [] };
 }
 
-// A file's own indentation and line ends, which an edit of its text keeps.
 function formatOf(text: string): FormattingOptions {
   const indent = /\n([ \t]+)"/.exec(text)?.[1] ?? '  ';
   const tabbed = indent.startsWith('\t');
   return { insertSpaces: !tabbed, tabSize: tabbed ? 1 : indent.length, eol: text.includes('\r\n') ? '\r\n' : '\n' };
 }
 
-// Takes an entry out with its comma and its line, leaving any comment that trails it.
-function withoutEntry(text: string, key: string, at: number): string {
-  const root = parseTree(text, [], READS);
-  const entries = (root === undefined ? undefined : findNodeAtLocation(root, [key]))?.children;
-  const entry = entries?.[at];
-  if (entry === undefined) throw new Error(`no entry ${at} in ${key}`);
-  const afterBlank = (from: number): number => from + (/^\s*/.exec(text.slice(from))?.[0].length ?? 0);
-  const previous = entries?.[at - 1];
-  const edits: Edit[] = [];
-  let start = entry.offset;
-  let end = entry.offset + entry.length;
-  if (text[afterBlank(end)] === ',') end = afterBlank(end) + 1;
-  else if (previous !== undefined && text[afterBlank(previous.offset + previous.length)] === ',') {
-    edits.push({ offset: afterBlank(previous.offset + previous.length), length: 1, content: '' });
+// The list the read takes: the last of a key listed twice.
+const listOf = (text: string, key: string): Node | undefined =>
+  parseTree(text, [], READS)?.children?.findLast((property) => property.children?.[0]?.value === key)?.children?.[1];
+
+const SKIPPED = /\s+|\/\/[^\n]*|\/\*[\s\S]*?\*\//y;
+
+function afterSkipped(text: string, from: number): number {
+  let at = from;
+  for (;;) {
+    SKIPPED.lastIndex = at;
+    const skipped = SKIPPED.exec(text);
+    if (skipped === null) return at;
+    at += skipped[0].length;
   }
-  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
-  if (text.slice(lineStart, start).trim() === '') {
-    start = lineStart;
-    end += /^[ \t]*\r?\n/.exec(text.slice(end))?.[0].length ?? 0;
-  }
-  edits.push({ offset: start, length: end - start, content: '' });
+}
+
+function commaFrom(text: string, from: number): number | undefined {
+  const at = afterSkipped(text, from);
+  return text[at] === ',' ? at : undefined;
+}
+
+const lineStartOf = (text: string, offset: number): number => text.lastIndexOf('\n', offset - 1) + 1;
+
+function withoutEntry(text: string, list: Node, at: number): string {
+  const entry = list.children?.[at];
+  const previous = list.children?.[at - 1];
+  if (entry === undefined) throw new Error(`no entry ${at}`);
+  const end = entry.offset + entry.length;
+  const own = commaFrom(text, end);
+  const separator = own ?? (previous === undefined ? undefined : commaFrom(text, previous.offset + previous.length));
+  const bare = own === undefined || text.slice(end, own).trim() === '';
+  const tail = own !== undefined && bare ? own + 1 : end;
+  const lineStart = lineStartOf(text, entry.offset);
+  const lineEnd = /^[ \t]*\r?\n/.exec(text.slice(tail))?.[0];
+  const whole = bare && lineEnd !== undefined && text.slice(lineStart, entry.offset).trim() === '';
+  const edits: Edit[] = whole
+    ? [{ offset: lineStart, length: tail + lineEnd.length - lineStart, content: '' }]
+    : [{ offset: entry.offset, length: entry.length, content: '' }];
+  if (separator !== undefined && !(whole && own !== undefined)) edits.push({ offset: separator, length: 1, content: '' });
   return applyEdits(text, edits);
 }
 
-// Edits the list the read takes, the last of a key listed twice, and nothing else. Alone in a document, it is the only one.
-function withListChanged(text: string, key: string, entries: readonly string[] | undefined, change: ListChange): string {
-  const read = parseTree(text, [], READS)?.children?.findLast((property) => property.children?.[0]?.value === key)?.children?.[1];
-  if (read === undefined) return withFirstListChanged(text, key, entries, change);
-  const { insertSpaces, tabSize, eol } = formatOf(text);
-  const head = `{${eol}${insertSpaces ? ' '.repeat(tabSize ?? 2) : '\t'}${JSON.stringify(key)}: `;
-  const tail = `${eol}}`;
-  const alone = `${head}${text.slice(read.offset, read.offset + read.length)}${tail}`;
-  const edited = withFirstListChanged(alone, key, entries, change);
-  return text.slice(0, read.offset) + edited.slice(head.length, edited.length - tail.length) + text.slice(read.offset + read.length);
+function withAppended(text: string, key: string, value: string): string {
+  const list = listOf(text, key);
+  const last = list?.children?.at(-1);
+  const formattingOptions = formatOf(text);
+  if (list === undefined) return applyEdits(text, modify(text, [key], [value], { formattingOptions }));
+  if (last === undefined) return applyEdits(text, modify(text, [key, -1], value, { formattingOptions, isArrayInsertion: true }));
+  const end = last.offset + last.length;
+  const own = commaFrom(text, end);
+  const entry = JSON.stringify(value);
+  const from = own === undefined ? end : own + 1;
+  const lineEnd = text.indexOf('\n', from);
+  const lineEndAt = lineEnd > 0 && text[lineEnd - 1] === '\r' ? lineEnd - 1 : lineEnd;
+  const indent = text.slice(lineStartOf(text, last.offset), last.offset);
+  const ownLine = lineEnd !== -1 && indent.trim() === '' && afterSkipped(text.slice(0, lineEndAt), from) === lineEndAt;
+  if (!ownLine) return applyEdits(text, [{ offset: end, length: 0, content: `, ${entry}` }]);
+  const comma = own === undefined ? ',' : '';
+  const line = `${formattingOptions.eol}${indent}${entry}${own === undefined ? '' : ','}`;
+  const edits: Edit[] = lineEndAt === end
+    ? [{ offset: end, length: 0, content: comma + line }]
+    : [{ offset: end, length: 0, content: comma }, { offset: lineEndAt, length: 0, content: line }];
+  return applyEdits(text, edits);
 }
 
-function withFirstListChanged(text: string, key: string, entries: readonly string[] | undefined, { slots, appended }: ListChange): string {
-  const formattingOptions = formatOf(text);
-  const edit = (now: string, path: (string | number)[], value: unknown, isArrayInsertion = false): string =>
-    applyEdits(now, modify(now, path, value, { formattingOptions, isArrayInsertion }));
-  if (entries === undefined) return appended.length === 0 ? text : edit(text, [key], appended);
+function withListChanged(text: string, key: string, change: ListChange): string {
   let after = text;
-  for (let at = entries.length - 1; at >= 0; at--) {
-    const now = slots[at];
-    if (now === entries[at]) continue;
-    after = now === undefined ? withoutEntry(after, key, at) : edit(after, [key, at], now);
+  for (const at of [...change.changed.keys()].sort((a, b) => b - a)) {
+    const list = listOf(after, key);
+    const entry = list?.children?.[at];
+    if (list === undefined || entry === undefined) throw new Error(`${key} holds no entry ${at}`);
+    const now = change.changed.get(at);
+    after = now === undefined ? withoutEntry(after, list, at) : applyEdits(after, [{ offset: entry.offset, length: entry.length, content: JSON.stringify(now) }]);
   }
-  for (const entry of appended) after = edit(after, [key, -1], entry, true);
+  for (const value of change.appended) after = withAppended(after, key, value);
   return after;
 }
 
@@ -354,8 +381,8 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         return inside === undefined ? [] : [inside];
       });
       await putIfChanged(file, (before) => {
-        const entries = valueOf(settingsIn(before, file), listedUnder, file, [isNames, 'a list of paths']);
-        return withListChanged(before, listedUnder, entries, changedEntries(entries ?? [], change, insides));
+        const entries = valueOf(settingsIn(before, file), listedUnder, file, [isNames, 'a list of paths']) ?? [];
+        return withListChanged(before, listedUnder, changedEntries(entries, change, insides));
       });
       return refused;
     },
@@ -363,13 +390,13 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       const inside = moves.flatMap(({ from, to }) => {
         const fromInside = inInstance(instanceRoot, from);
         const toInside = to === undefined ? undefined : inInstance(instanceRoot, to);
-        return fromInside === undefined ? [] : [{ from: namesOf(fromInside), to: toInside?.split(sep).join('\\') }];
+        return fromInside === undefined ? [] : [{ from: namesOf(fromInside), to: toInside === undefined ? undefined : wabbajackSpelling(toInside) }];
       });
       await putIfChanged(file, (before) => {
         const settings = settingsIn(before, file);
         return TAGS.reduce((text, { listedUnder }) => {
-          const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']);
-          return withListChanged(text, listedUnder, entries, followedEntries(entries ?? [], inside));
+          const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']) ?? [];
+          return withListChanged(text, listedUnder, followedEntries(entries, inside));
         }, before);
       }, { ifMissing: '{}' });
     },
@@ -379,11 +406,11 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       const isGone = (entry: string): boolean => owns(join(instanceRoot, ...namesOf(entry))) && !insides.some((inside) => sameNames(namesOf(inside), namesOf(entry)));
       let written: { before: string; after: string } | undefined;
       await putIfChanged(file, (before) => {
-        const entries = valueOf(settingsIn(before, file), 'Ignore', file, [isNames, 'a list of paths']);
-        const slots = (entries ?? []).map((entry) => (isGone(entry) ? undefined : entry));
-        const remaining = slots.filter((entry) => entry !== undefined);
+        const entries = valueOf(settingsIn(before, file), 'Ignore', file, [isNames, 'a list of paths']) ?? [];
+        const changed = new Map(entries.flatMap((entry, at) => (isGone(entry) ? [[at, undefined] as const] : [])));
+        const remaining = entries.filter((_, at) => !changed.has(at));
         const missing = insides.filter((inside) => !remaining.some((entry) => isUnder(namesOf(inside), namesOf(entry))));
-        const after = withListChanged(before, 'Ignore', entries, { slots, appended: missing.map(wabbajackSpelling) });
+        const after = withListChanged(before, 'Ignore', { changed, appended: missing.map(wabbajackSpelling) });
         if (after !== before) written = { before, after };
         return after;
       });
