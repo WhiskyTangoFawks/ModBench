@@ -5,7 +5,7 @@ vi.mock('vscode', () => ({ window: { showInputBox } }));
 
 import { promptRename } from '../promptRename';
 
-describe('promptRename', () => {
+describe('asking for a new name', () => {
   beforeEach(() => showInputBox.mockReset());
 
   it('asks with the prompt, prefilled with the current name', async () => {

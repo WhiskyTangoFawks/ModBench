@@ -20,7 +20,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched over an ordered adapter list', () => {
+describe('the catalog\'s one copy value id, dispatched over an ordered adapter list', () => {
   it('writes the first adapter\'s text when it applies', async () => {
     const first: CopyValueAdapter = { text: () => 'first', reporterTag: 'first.copy' };
     const second: CopyValueAdapter = { text: () => 'second', reporterTag: 'second.copy' };
@@ -41,15 +41,13 @@ describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched
     expect(writeText).toHaveBeenCalledWith('second');
   });
 
-  it('writes nothing, and tries no further adapter, when the owning adapter has empty text', async () => {
-    const owns: CopyValueAdapter = { text: () => '', reporterTag: 'first.copy' };
-    const next = vi.fn(() => 'second');
-    await register([owns, { text: next, reporterTag: 'second.copy' }], recordingReporter);
+  it('writes nothing, says nothing and tries no further adapter when the owning adapter has empty text', async () => {
+    await register([{ text: () => '', reporterTag: 'first.copy' }, { text: () => 'second', reporterTag: 'second.copy' }], recordingReporter);
 
     await invokeCommand();
 
     expect(writeText).not.toHaveBeenCalled();
-    expect(next).not.toHaveBeenCalled();
+    expect(setStatusBarMessage).not.toHaveBeenCalled();
   });
 
   it('writes nothing and says so when every adapter defers', async () => {
@@ -62,14 +60,6 @@ describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched
 
     expect(writeText).not.toHaveBeenCalled();
     expect(setStatusBarMessage.mock.calls).toEqual([['Focus a list or a cell to copy its value.', 5000]]);
-  });
-
-  it('says nothing when an adapter owns the invocation with empty text', async () => {
-    await register([{ text: () => '', reporterTag: 'first.copy' }], recordingReporter);
-
-    await invokeCommand();
-
-    expect(setStatusBarMessage).not.toHaveBeenCalled();
   });
 
   it('reports a failed clipboard write under the owning adapter\'s own tag', async () => {

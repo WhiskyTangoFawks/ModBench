@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { TreeItem } from '../../test/vscodeMock';
+import { present } from '../../ports/present';
 
 const { registerCommand } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
@@ -16,71 +17,39 @@ class Row extends TreeItem {
 }
 
 const KEY_ARGS = { view: 'modbench.test' };
+const alpha = new Row('a', 'Alpha');
+const beta = new Row('a', 'Beta');
+const gamma = new Row('a', 'Gamma');
+const other = new Row('b', 'Other');
 
-function entryWhenInvoked(viewSelection: readonly Row[], ...args: unknown[]): GestureEntry<Row> {
+type Take = (entry: GestureEntry<Row>) => unknown;
+const plural: Take = (entry) => pluralArgument(entry, 'a');
+const singular: Take = (entry) => singularArgument(entry, 'a');
+
+function entryWhenInvoked(viewSelection: readonly Row[], args: readonly unknown[]): GestureEntry<Row> {
   let received: GestureEntry<Row> | undefined;
   const disposable = registerGesture('modbench.test.gesture', () => viewSelection, (entry) => { received = entry; });
-  const call = registerCommand.mock.calls.at(-1);
-  if (!call || call[0] !== 'modbench.test.gesture') throw new Error('the gesture registered no command');
-  call[1](...args);
+  present(registerCommand.mock.calls.at(-1), 'the gesture\'s command')[1](...args);
   disposable.dispose();
-  if (!received) throw new Error('the gesture was not run');
-  return received;
+  return present(received, 'the gesture\'s entry');
 }
 
 describe('what VS Code hands a gesture becomes its entry', () => {
-  const alpha = new Row('a', 'Alpha');
-  const beta = new Row('a', 'Beta');
-  const gamma = new Row('a', 'Gamma');
-
-  it('a right-click inside a multi-selection gives a plural gesture the selection', () => {
-    const entry = entryWhenInvoked([alpha, beta], beta, [alpha, beta]);
-    expect(pluralArgument(entry, 'a')).toEqual([alpha, beta]);
-  });
-
-  it('a right-click outside the selection gives a plural gesture the right-clicked row alone', () => {
-    const entry = entryWhenInvoked([alpha, beta], gamma, undefined);
-    expect(pluralArgument(entry, 'a')).toEqual([gamma]);
-  });
-
-  it('a right-click gives a singular gesture the right-clicked row', () => {
-    const entry = entryWhenInvoked([alpha, beta], beta, [alpha, beta]);
-    expect(singularArgument(entry, 'a')).toBe(beta);
-  });
-
-  it('the palette gives a plural gesture the view\'s selection', () => {
-    const entry = entryWhenInvoked([alpha, gamma]);
-    expect(pluralArgument(entry, 'a')).toEqual([alpha, gamma]);
-  });
-
-  it('a key gives a plural gesture the view\'s selection, VS Code invoking a keybinding with no args of its own with null', () => {
-    const entry = entryWhenInvoked([beta, gamma], null);
-    expect(pluralArgument(entry, 'a')).toEqual([beta, gamma]);
-  });
-
-  it('the palette gives a singular gesture the one selected row', () => {
-    const entry = entryWhenInvoked([alpha]);
-    expect(singularArgument(entry, 'a')).toBe(alpha);
-  });
-
-  it('the palette gives a singular gesture nothing while several rows are selected', () => {
-    const entry = entryWhenInvoked([alpha, beta]);
-    expect(singularArgument(entry, 'a')).toBeUndefined();
-  });
-
-  it('a key\'s own args give a plural gesture the view\'s selection, not the args', () => {
-    const entry = entryWhenInvoked([beta, gamma], KEY_ARGS);
-    expect(pluralArgument(entry, 'a')).toEqual([beta, gamma]);
-  });
-
-  it('a key\'s own args give a singular gesture the one selected row', () => {
-    const entry = entryWhenInvoked([gamma], KEY_ARGS);
-    expect(singularArgument(entry, 'a')).toBe(gamma);
-  });
-
-  it('a key with one row selected gives a plural gesture that one row', () => {
-    const entry = entryWhenInvoked([beta], null);
-    expect(pluralArgument(entry, 'a')).toEqual([beta]);
+  it.each<[string, readonly Row[], readonly unknown[], Take, unknown]>([
+    ['a right-click inside a multi-selection gives a plural gesture the selection', [alpha, beta], [beta, [alpha, beta]], plural, [alpha, beta]],
+    ['a right-click outside the selection gives a plural gesture the right-clicked row alone', [alpha, beta], [gamma, undefined], plural, [gamma]],
+    ['a right-click gives a singular gesture the right-clicked row', [alpha, beta], [beta, [alpha, beta]], singular, beta],
+    ['the palette gives a plural gesture the view\'s selection', [alpha, gamma], [], plural, [alpha, gamma]],
+    ['a key, which VS Code invokes with null when it has no args of its own, gives a plural gesture the view\'s selection', [beta, gamma], [null], plural, [beta, gamma]],
+    ['a key with one row selected gives a plural gesture that one row', [beta], [null], plural, [beta]],
+    ['a key\'s own args give a plural gesture the view\'s selection, not the args', [beta, gamma], [KEY_ARGS], plural, [beta, gamma]],
+    ['a key\'s own args give a singular gesture the one selected row', [gamma], [KEY_ARGS], singular, gamma],
+    ['the palette gives a singular gesture the one selected row', [alpha], [], singular, alpha],
+    ['the palette gives a singular gesture nothing while several rows are selected', [alpha, beta], [], singular, undefined],
+    ['the palette gives a plural gesture nothing with nothing selected', [], [], plural, []],
+    ['the palette gives a singular gesture nothing with nothing selected', [], [], singular, undefined],
+  ])('%s', (_case, viewSelection, args, take, expected) => {
+    expect(take(entryWhenInvoked(viewSelection, args))).toEqual(expected);
   });
 
   it('hands the command\'s option to the gesture', () => {
@@ -91,97 +60,48 @@ describe('what VS Code hands a gesture becomes its entry', () => {
   });
 });
 
-describe('a plural gesture\'s Argument', () => {
-  const alpha = new Row('a', 'Alpha');
-  const beta = new Row('a', 'Beta');
-  const gamma = new Row('a', 'Gamma');
-
-  it('is the whole selection from a context menu', () => {
-    expect(pluralArgument({ clicked: beta, selection: [alpha, beta, gamma] }, 'a')).toEqual([alpha, beta, gamma]);
-  });
-
-  it('is the whole selection from a key', () => {
-    expect(pluralArgument({ focused: gamma, selection: [alpha, beta, gamma] }, 'a')).toEqual([alpha, beta, gamma]);
-  });
-
-  it('is the whole selection from the palette', () => {
-    expect(pluralArgument({ selection: [alpha, beta, gamma] }, 'a')).toEqual([alpha, beta, gamma]);
-  });
-
-  it('is nothing with no row and no selection', () => {
-    expect(pluralArgument<Row, 'a'>({ selection: [] }, 'a')).toEqual([]);
-  });
-
-  it('narrows a mixed selection to the right-clicked or focused row\'s kind', () => {
-    const other = new Row('b', 'Other');
-    expect(pluralArgument({ clicked: alpha, selection: [alpha, other] }, 'a', 'b')).toEqual([alpha]);
-    expect(pluralArgument({ focused: other, selection: [alpha, other] }, 'a', 'b')).toEqual([other]);
+describe('a plural gesture\'s Argument, of the kinds it takes', () => {
+  it.each<[string, GestureEntry<Row>, ('a' | 'b')[], Row[]]>([
+    ['narrows a mixed selection to the right-clicked row\'s kind', { clicked: alpha, selection: [alpha, other] }, ['a', 'b'], [alpha]],
+    ['narrows a mixed selection to the focused row\'s kind', { focused: other, selection: [alpha, other] }, ['a', 'b'], [other]],
+    ['drops a selected row of a kind it does not take', { clicked: alpha, selection: [other, alpha] }, ['a'], [alpha]],
+    ['is nothing when the right-clicked row is of a kind it does not take', { clicked: other, selection: [alpha, other] }, ['a'], []],
+  ])('%s', (_case, entry, kinds, expected) => {
+    expect(pluralArgument(entry, ...kinds)).toEqual(expected);
   });
 });
 
-describe('selectionArgument', () => {
-  const alpha = new Row('a', 'Alpha');
-  const other = new Row('b', 'Other');
-
-  it('keeps every selected row of the kinds given, whatever the anchor row\'s kind', () => {
-    expect(selectionArgument({ clicked: alpha, selection: [alpha, other] }, 'a', 'b')).toEqual([alpha, other]);
-    expect(selectionArgument({ selection: [alpha, other] }, 'a', 'b')).toEqual([alpha, other]);
-  });
-
-  it('still excludes a kind not requested', () => {
-    expect(selectionArgument({ clicked: alpha, selection: [alpha, other] }, 'a')).toEqual([alpha]);
+describe('the catalog\'s whole-selection Argument, of the kinds given', () => {
+  it.each<[string, GestureEntry<Row>, ('a' | 'b')[], Row[]]>([
+    ['keeps every kind given, whatever the right-clicked row\'s kind', { clicked: alpha, selection: [alpha, other] }, ['a', 'b'], [alpha, other]],
+    ['keeps every kind given from the palette', { selection: [alpha, other] }, ['a', 'b'], [alpha, other]],
+    ['still excludes a kind not requested', { clicked: alpha, selection: [alpha, other] }, ['a'], [alpha]],
+  ])('%s', (_case, entry, kinds, expected) => {
+    expect(selectionArgument(entry, ...kinds)).toEqual(expected);
   });
 });
 
-describe('a singular gesture\'s Argument', () => {
-  const alpha = new Row('a', 'Alpha');
-  const beta = new Row('a', 'Beta');
-  const gamma = new Row('a', 'Gamma');
-  const other = new Row('b', 'Other');
-
-  it('is the right-clicked row, not the selection around it', () => {
-    expect(singularArgument({ clicked: beta, selection: [alpha, beta, gamma] }, 'a')).toBe(beta);
-  });
-
-  it('is the focused row when reached by a key', () => {
-    expect(singularArgument({ focused: gamma, selection: [alpha, beta, gamma] }, 'a')).toBe(gamma);
-  });
-
-  it('is nothing with no right-clicked or focused row', () => {
-    expect(singularArgument<Row, 'a'>({ selection: [] }, 'a')).toBeUndefined();
-  });
-
-  it('is nothing when the right-clicked row is not of a kind the gesture takes', () => {
+describe('a singular gesture\'s Argument, of the kinds it takes', () => {
+  it('is nothing when the right-clicked row is of a kind it does not take', () => {
     expect(singularArgument({ clicked: other, selection: [alpha] }, 'a')).toBeUndefined();
   });
 });
 
-describe('isClickedRow', () => {
-  const plugin = { name: 'A.esp', origin: 'Mod' };
+describe('what a gesture that refuses unreadable rows aloud takes as clicked', () => {
   const selected = { argument: { kind: 'mod', name: 'ModA' } };
   const viewSelection = (): readonly unknown[] => [selected, selected];
+  const bare = new TreeItem('Odd');
+  const pluginContext = { argument: { kind: 'plugin', plugin: { name: 'A.esp', origin: 'Mod' } } };
+  const recordContext = { argument: { kind: 'record', formKey: '000800:A.esp' } };
 
-  it('takes a tree row that carries no Argument, for the gesture to refuse aloud', () => {
-    const bare = new TreeItem('Odd');
-    expect(gestureEntry(bare, undefined, viewSelection, isClickedRow).selection).toEqual([bare]);
-  });
-
-  it('takes a webview context that carries an Argument', () => {
-    expect(gestureEntry(selected, undefined, viewSelection, isClickedRow).selection).toEqual([selected]);
-  });
-
-  it.each([
-    { argument: { kind: 'plugin', plugin } },
-    { argument: { kind: 'record', formKey: '000800:A.esp' } },
-  ])('takes a webview context carrying %o', (context) => {
-    expect(gestureEntry(context, undefined, viewSelection, isClickedRow).selection).toEqual([context]);
-  });
-
-  it('leaves a clicked object whose Argument names no kind to the view\'s selection', () => {
-    expect(gestureEntry({ argument: { name: 'ModA' } }, undefined, viewSelection, isClickedRow).selection).toEqual(viewSelection());
-  });
-
-  it('leaves any other clicked object, such as a key\'s own args, to the view\'s selection', () => {
-    expect(gestureEntry(KEY_ARGS, undefined, viewSelection, isClickedRow).selection).toEqual(viewSelection());
+  it.each<[string, unknown, readonly unknown[]]>([
+    ['a tree row that carries no Argument, for the gesture to refuse aloud', bare, [bare]],
+    ['a webview context carrying a mod', selected, [selected]],
+    ['a webview context carrying a plugin', pluginContext, [pluginContext]],
+    ['a webview context carrying a record', recordContext, [recordContext]],
+    ['not an object whose Argument names no kind, which leaves the view\'s selection', { argument: { name: 'ModA' } }, [selected, selected]],
+    ['not a key\'s own args, which leave the view\'s selection', KEY_ARGS, [selected, selected]],
+  ])('%s', (_case, clicked, expected) => {
+    expect(gestureEntry(clicked, undefined, viewSelection, isClickedRow).selection).toEqual(expected);
   });
 });

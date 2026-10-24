@@ -37,16 +37,14 @@ function pythonPathOf(): string | undefined {
   return entries.get('PYTHONPATH')?.value;
 }
 
-describe('reachMEditFromTerminals', () => {
+describe('what a terminal of this window is handed to reach mEdit', () => {
   const platform = process.platform;
-  const hostPythonPath = process.env.PYTHONPATH;
   beforeEach(() => {
     Object.defineProperty(process, 'platform', { value: 'linux' });
   });
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: platform });
-    if (hostPythonPath === undefined) delete process.env.PYTHONPATH;
-    else process.env.PYTHONPATH = hostPythonPath;
+    vi.unstubAllEnvs();
     terminalSettings = {};
   });
 
@@ -64,8 +62,7 @@ describe('reachMEditFromTerminals', () => {
   it.each([[undefined, SCRIPTS], ['', SCRIPTS], ['/other', `${SCRIPTS}${delimiter}/other`]])(
     'hands a terminal inheriting PYTHONPATH %j the scripts folder first and no empty entry, which Python reads as the working directory',
     (inherited, expected) => {
-      if (inherited === undefined) delete process.env.PYTHONPATH;
-      else process.env.PYTHONPATH = inherited;
+      vi.stubEnv('PYTHONPATH', inherited);
 
       expect(pythonPathOf()).toBe(expected);
     },
@@ -75,7 +72,7 @@ describe('reachMEditFromTerminals', () => {
     'gives %s terminals the PYTHONPATH the user sets for them, ahead of the extension host\'s own',
     (os, setting) => {
       Object.defineProperty(process, 'platform', { value: os });
-      process.env.PYTHONPATH = '/host';
+      vi.stubEnv('PYTHONPATH', '/host');
       terminalSettings = { [setting]: { PYTHONPATH: '/user' } };
 
       expect(pythonPathOf()).toBe(`${SCRIPTS}${delimiter}/user`);
@@ -83,7 +80,7 @@ describe('reachMEditFromTerminals', () => {
   );
 
   it('gives terminals the extension host\'s own PYTHONPATH when the setting names none', () => {
-    process.env.PYTHONPATH = '/host';
+    vi.stubEnv('PYTHONPATH', '/host');
     terminalSettings = { 'env.linux': { OTHER: 'x' } };
 
     expect(pythonPathOf()).toBe(`${SCRIPTS}${delimiter}/host`);

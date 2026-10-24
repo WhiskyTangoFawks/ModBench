@@ -6,52 +6,34 @@ vi.mock('vscode', () => ({ commands: { executeCommand } }));
 
 import { firstReadOf, markFirstReadLanded } from '../instanceFirstRead';
 import { INSTANCE_READ_KEY } from '../../test/manifest';
-import type { InstanceSubscriber, ReadFailureListener } from '../../instanceLoader/instance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-describe('firstReadOf', () => {
-  function fakeInstanceThatMayAlreadyHoldAFailure(initial: { sequence: number; readFailure?: string }) {
-    let failureListener: ReadFailureListener | undefined;
-    let subscriber: InstanceSubscriber | undefined;
-    const instance = {
-      sequence: initial.sequence,
-      readFailure: initial.readFailure,
-      subscribe: (fn: InstanceSubscriber) => { subscriber = fn; return { dispose: () => {} }; },
-      onReadFailure: (fn: ReadFailureListener) => { failureListener = fn; return { dispose: () => {} }; },
-      fail: (reason: string) => { instance.readFailure = reason; failureListener?.(); },
-      land: () => { instance.readFailure = undefined; instance.sequence++; subscriber?.(instanceValueFixture(), instance.sequence); },
-    };
-    return instance;
-  }
-
+describe('a tree\'s first-render gate', () => {
   it('settles at once, with the failure, when the first read failed before the tree subscribed', async () => {
-    const gate = firstReadOf(fakeInstanceThatMayAlreadyHoldAFailure({ sequence: 0, readFailure: 'ENOENT modlist.txt' }));
+    const instance = new FakeInstance(instanceValueFixture(), 0);
+    instance.readFailure = 'ENOENT modlist.txt';
+    const gate = firstReadOf(instance);
 
-    await explicitFailureIfNotSettledWithin(gate.settled, 500);
+    await gate.settled;
 
     expect(gate.failure).toBe('ENOENT modlist.txt');
   });
 
   it('shows the latest failure while nothing has landed, clears when a value lands and stays clear when a later read fails', async () => {
-    const instance = fakeInstanceThatMayAlreadyHoldAFailure({ sequence: 0 });
+    const instance = new FakeInstance(instanceValueFixture(), 0);
     const gate = firstReadOf(instance);
 
     instance.fail('ENOENT modlist.txt');
-    await explicitFailureIfNotSettledWithin(gate.settled, 500);
+    await gate.settled;
     instance.fail('EACCES plugins.txt');
 
     expect(gate.failure).toBe('EACCES plugins.txt');
 
-    instance.land();
+    instance.publish(instanceValueFixture());
     instance.fail('EISDIR meta.ini');
     expect(gate.failure).toBeUndefined();
   });
 });
-
-const explicitFailureIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
-  pending,
-  new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`did not settle within ${ms} ms`)), ms)),
-]);
 
 beforeEach(() => { executeCommand.mockClear(); });
 

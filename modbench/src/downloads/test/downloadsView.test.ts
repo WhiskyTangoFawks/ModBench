@@ -5,7 +5,7 @@ import {
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom,
 } from '../../test/vscodeMock';
 import {
-  filterBoxWindowMock, filterBoxCommandsMock, commandInvoker, currentBoxOf, waitForMessage, FakeTreeViews,
+  filterBoxWindowMock, filterBoxCommandsMock, commandInvoker, currentBoxOf, FakeTreeViews,
 } from '../../drivingLib/test/nameFilterViewHarness';
 
 const h = vi.hoisted(() => ({
@@ -83,16 +83,13 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
 
     downloadsFilter.open();
     currentBox().type('zzznomatch');
-    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
-    expect(downloadsView.message).toBe('No matches for "zzznomatch".');
+    await vi.waitFor(() => expect(downloadsView.message).toBe('No matches for "zzznomatch".'));
 
     instance.publish(instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('zzznomatch.7z')] } }));
-    await waitForMessage(downloadsView, (m) => m === undefined, 'the message clearing once a matching downloaded file lands');
-    expect(downloadsView.message).toBeUndefined();
+    await vi.waitFor(() => expect(downloadsView.message).toBeUndefined());
 
     instance.publish(instanceValueFixture());
-    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message returning once the downloaded file is gone');
-    expect(downloadsView.message).toBe('No matches for "zzznomatch".');
+    await vi.waitFor(() => expect(downloadsView.message).toBe('No matches for "zzznomatch".'));
   });
 });
 
@@ -103,16 +100,13 @@ describe('the Downloads filter follows a toggle with no new instance value', () 
 
     downloadsFilter.open();
     currentBox().type('zzznomatch');
-    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message with the excluded downloaded file left out');
-    expect(downloadsView.message).toBe('No matches for "zzznomatch".');
+    await vi.waitFor(() => expect(downloadsView.message).toBe('No matches for "zzznomatch".'));
 
     await command('modbench.downloadedFile.showExcluded')();
-    await waitForMessage(downloadsView, (m) => m === undefined, 'the message clearing once the excluded downloaded file counts');
-    expect(downloadsView.message).toBeUndefined();
+    await vi.waitFor(() => expect(downloadsView.message).toBeUndefined());
 
     await command('modbench.downloadedFile.hideExcluded')();
-    await waitForMessage(downloadsView, (m) => m === 'No matches for "zzznomatch".', 'the message returning once excluded rows are left out again');
-    expect(downloadsView.message).toBe('No matches for "zzznomatch".');
+    await vi.waitFor(() => expect(downloadsView.message).toBe('No matches for "zzznomatch".'));
   });
 });
 

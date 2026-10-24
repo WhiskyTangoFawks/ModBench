@@ -22,7 +22,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('registerSortDirectionToggle', () => {
+describe('the title-bar icons that reverse a view\'s sort', () => {
   const directionKeys = () => executeCommand.mock.calls
     .filter((c) => c[0] === 'setContext' && c[1] === 'modbench.thing.winningAtTop')
     .map((c) => c[2]);

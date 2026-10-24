@@ -79,10 +79,6 @@ export class FileConflictLookup {
     return this.byFoldedPath.get(foldPath(relativePath));
   }
 
-  has(relativePath: string): boolean {
-    return this.byFoldedPath.has(foldPath(relativePath));
-  }
-
   values(): IterableIterator<ConflictEntry> {
     return this.byFoldedPath.values();
   }

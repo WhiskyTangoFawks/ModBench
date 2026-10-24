@@ -7,7 +7,7 @@ const absent = ({ name, origin }: { name: string; origin: string }): Row => row(
 const orderOf = (plugins: Row[], noLine: { name: string; origin: string }[]) =>
   pluginOrderOf({ plugins, pluginsLoadedWithNoLine: noLine }, absent);
 
-describe('pluginOrderOf', () => {
+describe('the plugin order: the plugins the game loads with no line, then the lines', () => {
   it('places the plugins the game loads with no line before every line, and the lines by line number', () => {
     const { loadedWithNoLine, fromLines } = orderOf([row('B.esp', 'Mod', 1), row('A.esp', 'Mod', 0)], [{ name: 'Fallout4.esm', origin: 'Data/' }]);
 
