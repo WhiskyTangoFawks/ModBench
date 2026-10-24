@@ -15,7 +15,7 @@ import { buildDownloadedFileRows, modsByInstallationFileName, type LocatedDownlo
 import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
   type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
+  type ProgramVersion, type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
   type PublisherTag, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
@@ -32,7 +32,7 @@ export type { GameFolder, ProgramVersion } from '../instanceAdapter/instanceAdap
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
 const SETTLE_MS = 200;
 
-type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration';
+type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
 
 type DownloadedFilesResult =
   | { readonly kind: 'listed'; readonly rows: readonly LocatedDownloadedFileRow[] }
@@ -101,7 +101,6 @@ export interface InstanceValue {
   /** The setting, then the mod manager's configuration, then detection; or each place looked when
    *  none answered. */
   readonly gameFolder: GameFolder;
-  /** The versions of the game's program and its script extender's loader in the game folder. */
   readonly programVersions: ProgramVersions;
   /** What the game's Data folder holds at its root — presence, never provision — or the reason
    *  it could not be read. */
@@ -143,7 +142,25 @@ export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' |
 
 const cannotTellRunning = (manager: string, reason: string): string => `Cannot tell whether ${manager} is running: ${reason}.`;
 
-export function managerRunningMessage({ managerRunning, managerNames: { manager } }: InstanceValue): string | undefined {
+function programVersionFailure(label: string, version: ProgramVersion): string[] {
+  switch (version.kind) {
+    case 'read': case 'notFound': return [];
+    case 'noVersionResource': return [`[instance] ${label}: ${version.program} has no version resource`];
+    case 'notAProgram': return [`[instance] ${label}: ${version.program} is not a Windows program`];
+    case 'unreadable': return [`[instance] ${label}: ${version.program} cannot be read: ${version.why}`];
+  }
+}
+
+// A missing extender loader is an answer, never a failure; a missing game program is one.
+function programVersionFailures(versions: ProgramVersions): string[] {
+  if (versions.kind !== 'found') return [];
+  const game = versions.game.kind === 'notFound'
+    ? [`[instance] the game's version: ${versions.game.program} is not in the game folder`]
+    : programVersionFailure('the game\'s version', versions.game);
+  return [...game, ...programVersionFailure('the script extender\'s version', versions.extender)];
+}
+
+function managerRunningMessage({ managerRunning, managerNames: { manager } }: InstanceValue): string | undefined {
   if (managerRunning.kind === 'unknown') return cannotTellRunning(manager, managerRunning.reason);
   return managerRunning.kind === 'running' ? `${manager} is running, and overwrites your changes when it launches a program or exits.` : undefined;
 }
@@ -366,7 +383,7 @@ export class Instance implements Subscription {
 
   private tellReading({
     linkNotes, archiveListNotes, orderNotes, sourceMods, modFiles, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes, managerRunning,
-    publisherConfiguration,
+    publisherConfiguration, programVersions,
   }: InstanceReading): void {
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
     this.tellOnce('notes', notes.map((note) => `[instance] ${note}`), 'info');
@@ -382,6 +399,7 @@ export class Instance implements Subscription {
     const { manager } = this.options.adapter.names;
     this.tellOnce('managerRunning', managerRunning.kind === 'unknown' ? [`[instance] ${cannotTellRunning(manager, managerRunning.reason)}`] : [], 'warn');
     this.tellOnce('gameArchives', dataFolderArchives.kind === 'unreadable' ? [`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`] : [], 'warn');
+    this.tellOnce('programVersions', programVersionFailures(programVersions), 'warn');
     this.tellOnce('publisherConfiguration', publisherConfiguration.kind === 'unreadable' ? [`[instance] no publisher tag shows: ${publisherConfiguration.reason}`] : [], 'warn');
   }
 

@@ -14,6 +14,7 @@ const GAME_FOLDER = '/games/Fallout 4';
 const VALUE = instanceValueFixture({
   activeProfile: 'Survival',
   gameFolder: { kind: 'found', root: GAME_FOLDER, dataFolder: `${GAME_FOLDER}/Data` },
+  programVersions: { kind: 'found', game: { kind: 'read', version: '1.10.163.0' }, extender: { kind: 'read', version: '0.0.6.23' } },
 });
 
 const SILENT = { warn: () => undefined };
@@ -31,43 +32,34 @@ describe('the Toolbox view, given an instance value', () => {
     expect(rowsOf(new FakeInstance(VALUE)).map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist']);
   });
 
-  it('reads the game as MO2 names it, with the game folder first in its tooltip and no click', () => {
+  it('reads the game as MO2 names it, and no click', () => {
     const game = row(new FakeInstance(VALUE), 'Game');
 
     expect(game.description).toBe('Fallout 4');
     expect(game.iconPath).toEqual(new ThemeIcon('game'));
-    expect(game.tooltip).toBe(GAME_FOLDER);
     expect(game.command).toBeUndefined();
   });
 
   describe('the Game row\'s tooltip, given the versions the game folder holds', () => {
-    const tooltipFor = (programVersions: InstanceValue['programVersions']) =>
-      row(new FakeInstance({ ...VALUE, programVersions }), 'Game').tooltip;
+    const NO_LOADER: ProgramVersion = { kind: 'notFound', program: 'f4se_loader.exe' };
     const read = (version: string): ProgramVersion => ({ kind: 'read', version });
+    const found = (game: ProgramVersion, extender: ProgramVersion): InstanceValue['programVersions'] => ({ kind: 'found', game, extender });
 
-    it('names the game folder, the game\'s version and the script extender\'s version', () => {
-      expect(tooltipFor({ kind: 'found', game: read('1.10.163.0'), extender: read('0.0.6.23') }))
-        .toBe(`${GAME_FOLDER}\nGame: 1.10.163.0\nScript extender: 0.0.6.23`);
+    it.each<[string, InstanceValue['programVersions'], string]>([
+      ['the game\'s and the extender\'s versions', found(read('1.10.163.0'), read('0.0.6.23')), 'Game: 1.10.163.0\nScript extender: 0.0.6.23'],
+      ['that the game folder holds no loader', found(read('1.10.163.0'), NO_LOADER), 'Game: 1.10.163.0\nScript extender: none'],
+      ['a loader with no version resource', found(read('1.10.163.0'), { kind: 'noVersionResource', program: 'f4se_loader.exe' }),
+        'Game: 1.10.163.0\nScript extender: f4se_loader.exe has no version resource'],
+      ['a loader that is no program', found(read('1.10.163.0'), { kind: 'notAProgram', program: 'f4se_loader.exe' }),
+        'Game: 1.10.163.0\nScript extender: f4se_loader.exe is not a Windows program'],
+      ['a loader the file system would not read, and why', found(read('1.10.163.0'), { kind: 'unreadable', program: 'f4se_loader.exe', why: 'EACCES' }),
+        'Game: 1.10.163.0\nScript extender: f4se_loader.exe cannot be read: EACCES'],
+      ['a game program the game folder lacks', found({ kind: 'notFound', program: 'Fallout4.exe' }, read('0.0.6.23')),
+        'Game: Fallout4.exe not found\nScript extender: 0.0.6.23'],
+      ['that Modbench knows no program of the game', { kind: 'unknownGame' }, 'Modbench knows no program of this game'],
+    ])('names the game folder, then %s', (_, programVersions, lines) => {
+      expect(row(new FakeInstance({ ...VALUE, programVersions }), 'Game').tooltip).toBe(`${GAME_FOLDER}\n${lines}`);
     });
-
-    it.each<[string, ProgramVersion, string]>([
-      ['a loader the game folder lacks, that it holds none', { kind: 'notFound', program: 'f4se_loader.exe' }, 'none'],
-      ['a loader with no version resource, that it names no version', { kind: 'noVersionResource', program: 'f4se_loader.exe' }, 'f4se_loader.exe names no version'],
-      ['a loader that is no program, that it is no program', { kind: 'notAProgram', program: 'f4se_loader.exe' }, 'f4se_loader.exe is not a Windows program'],
-      ['a loader the file system would not read, why', { kind: 'unreadable', program: 'f4se_loader.exe', why: 'EACCES' }, 'f4se_loader.exe could not be read: EACCES'],
-    ])('says, of %s', (_, extender, line) => {
-      expect(tooltipFor({ kind: 'found', game: read('1.10.163.0'), extender })).toBe(`${GAME_FOLDER}\nGame: 1.10.163.0\nScript extender: ${line}`);
-    });
-
-    it('says, of a game program that is not read, the program and why', () => {
-      expect(tooltipFor({ kind: 'found', game: { kind: 'notFound', program: 'Fallout4.exe' }, extender: read('0.0.6.23') }))
-        .toBe(`${GAME_FOLDER}\nGame: Fallout4.exe not found\nScript extender: 0.0.6.23`);
-    });
-
-    it.each<InstanceValue['programVersions']>([{ kind: 'unknownGame' }, { kind: 'unresolved' }])(
-      'names the game folder alone where the versions are %o, as the game has no programs to read', (programVersions) => {
-        expect(tooltipFor(programVersions)).toBe(GAME_FOLDER);
-      });
   });
 
   it('reads the active profile, and a click switches profile', () => {
@@ -182,7 +174,7 @@ describe('the Toolbox view, given the game folder not found', () => {
     const game = present(provider.getChildren().find((r) => r.label === 'Game'), 'the Game row');
     expect(game.description).toBe('Fallout 4');
     expect(game.iconPath).toEqual(new ThemeIcon('game'));
-    expect(game.tooltip).toBe(GAME_FOLDER);
+    expect(game.tooltip).toBe(`${GAME_FOLDER}\nGame: 1.10.163.0\nScript extender: 0.0.6.23`);
   });
 });
 

@@ -13,9 +13,9 @@ const versionText = (version: ProgramVersion): string => {
   switch (version.kind) {
     case 'read': return version.version;
     case 'notFound': return 'none';
-    case 'noVersionResource': return `${version.program} names no version`;
+    case 'noVersionResource': return `${version.program} has no version resource`;
     case 'notAProgram': return `${version.program} is not a Windows program`;
-    case 'unreadable': return `${version.program} could not be read: ${version.why}`;
+    case 'unreadable': return `${version.program} cannot be read: ${version.why}`;
   }
 };
 
@@ -25,16 +25,16 @@ const gameVersionText = (version: ProgramVersion): string =>
 function foundTooltip(root: string, programVersions: InstanceValue['programVersions']): string {
   return programVersions.kind === 'found'
     ? [root, `Game: ${gameVersionText(programVersions.game)}`, `Script extender: ${versionText(programVersions.extender)}`].join('\n')
-    : root;
+    : [root, 'Modbench knows no program of this game'].join('\n');
 }
 
 function gameRow(value: InstanceValue): vscode.TreeItem {
-  const { gameName, gameFolder } = value;
+  const { gameName, gameFolder, programVersions } = value;
   const row = new vscode.TreeItem('Game');
   if (gameFolder.kind === 'found') {
     row.description = gameName;
     row.iconPath = new vscode.ThemeIcon('game');
-    row.tooltip = foundTooltip(gameFolder.root, value.programVersions);
+    row.tooltip = foundTooltip(gameFolder.root, programVersions);
     return row;
   }
   // common.md, States, story 5: the name stays, and the warning rides beside it.
