@@ -217,15 +217,15 @@ public sealed class ModelIdentityTests
 
     public static IEnumerable<object[]> AllowListedHeaderFieldCorruptions()
     {
-        yield return new object[] { "TypeOffsets", Setter(h => h.TypeOffsets = new byte[] { 1, 2, 3 }), Setter(h => h.TypeOffsets = new byte[] { 9, 9, 9 }) };
-        yield return new object[] { "Deleted", Setter(h => h.Deleted = new byte[] { 1, 2, 3 }), Setter(h => h.Deleted = new byte[] { 9, 9, 9 }) };
-        yield return new object[] { "Screenshot", Setter(h => h.Screenshot = new byte[] { 1, 2, 3 }), Setter(h => h.Screenshot = new byte[] { 9, 9, 9 }) };
-        yield return new object[] { "INTV", Setter(h => h.INTV = new byte[] { 1, 0, 0, 0 }), Setter(h => h.INTV = new byte[] { 99, 0, 0, 0 }) };
-        yield return new object[] { "INCC", Setter(h => h.INCC = 1), Setter(h => h.INCC = 2) };
-        yield return new object[] { "Author", Setter(h => h.Author = "Original"), Setter(h => h.Author = "Corrupted") };
-        yield return new object[] { "Description", Setter(h => h.Description = "Original"), Setter(h => h.Description = "Corrupted") };
-        yield return new object[] { "TransientTypes", Setter(h => h.TransientTypes.Add(new TransientType { FormType = 7 })), Setter(h => h.TransientTypes.Add(new TransientType { FormType = 99 })) };
-        yield return new object[] { "TransientTypes", Setter(h => h.TransientTypes.Add(new TransientType { FormType = 7 })), Setter(_ => { }) };
+        yield return new object[] { "TypeOffsets", "TypeOffsets", Setter(h => h.TypeOffsets = new byte[] { 1, 2, 3 }), Setter(h => h.TypeOffsets = new byte[] { 9, 9, 9 }) };
+        yield return new object[] { "Deleted", "Deleted", Setter(h => h.Deleted = new byte[] { 1, 2, 3 }), Setter(h => h.Deleted = new byte[] { 9, 9, 9 }) };
+        yield return new object[] { "Screenshot", "Screenshot", Setter(h => h.Screenshot = new byte[] { 1, 2, 3 }), Setter(h => h.Screenshot = new byte[] { 9, 9, 9 }) };
+        yield return new object[] { "INTV", "INTV", Setter(h => h.INTV = new byte[] { 1, 0, 0, 0 }), Setter(h => h.INTV = new byte[] { 99, 0, 0, 0 }) };
+        yield return new object[] { "INCC", "INCC", Setter(h => h.INCC = 1), Setter(h => h.INCC = 2) };
+        yield return new object[] { "Author", "Author", Setter(h => h.Author = "Original"), Setter(h => h.Author = "Corrupted") };
+        yield return new object[] { "Description", "Description", Setter(h => h.Description = "Original"), Setter(h => h.Description = "Corrupted") };
+        yield return new object[] { "TransientTypes, an item", "TransientTypes", Setter(h => h.TransientTypes.Add(new TransientType { FormType = 7 })), Setter(h => h.TransientTypes.Add(new TransientType { FormType = 99 })) };
+        yield return new object[] { "TransientTypes, the count", "TransientTypes", Setter(h => h.TransientTypes.Add(new TransientType { FormType = 7 })), Setter(_ => { }) };
 
         static Action<Fallout4ModHeader> Setter(Action<Fallout4ModHeader> action) => action;
     }
@@ -233,7 +233,7 @@ public sealed class ModelIdentityTests
     [Theory]
     [MemberData(nameof(AllowListedHeaderFieldCorruptions))]
     public async Task DivergenceFrom_ForEveryAllowListedField_NamesItWhenItAloneDiverges(
-        string fieldName, Action<Fallout4ModHeader> setOriginal, Action<Fallout4ModHeader> setCorrupted)
+        string _, string fieldName, Action<Fallout4ModHeader> setOriginal, Action<Fallout4ModHeader> setCorrupted)
     {
         var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         setOriginal(original.ModHeader);

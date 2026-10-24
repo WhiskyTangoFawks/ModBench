@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -10,8 +11,7 @@ namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
 public sealed class SubrecordLossTests : IDisposable
 {
-    private const uint DeletedFlag = 0x20;
-    private const uint CompressedFlag = 0x00040000;
+    private const int RecordHeaderLength = 24;
     private const ushort NoFormVersion = 0;
 
     private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
@@ -46,9 +46,9 @@ public sealed class SubrecordLossTests : IDisposable
         return (original, rewritten);
     }
 
-    private static byte[] CompressedPayload(params byte[][] subrecords) => DeflatedRecord("REGN", 0x42, CompressionLevel.Optimal, subrecords)[24..];
+    private static byte[] CompressedPayload(params byte[][] subrecords) => DeflatedRecord("REGN", 0x42, CompressionLevel.Optimal, subrecords)[RecordHeaderLength..];
 
-    private static byte[] Unreadable(byte[] compressedPayload) => Record("REGN", 0x42, CompressedFlag, NoFormVersion, compressedPayload);
+    private static byte[] Unreadable(byte[] compressedPayload) => Record("REGN", 0x42, (uint)CompressedFlag.Bit, NoFormVersion, compressedPayload);
 
     private static readonly byte[] UnreadableAfterADeclaredLengthPastAnInt =
         Unreadable([0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03]);
@@ -63,13 +63,12 @@ public sealed class SubrecordLossTests : IDisposable
 
     private static readonly byte[] AnEmptyWeapon = Record("WEAP", 0x00000802);
 
-    public static TheoryData<string, byte[], byte[]> NotALoss => new()
+    private static readonly (byte[] Original, byte[] Rewritten) UnchangedWhenTheRewritePrunesAMaster =
+        OwnRecordAndOverrideOfB_SwappingRawFormIds_AsTheRewritePrunesA(Subrecord("EDID", "Own"u8.ToArray()), Subrecord("RDMP", [1]));
+
+    public static TheoryData<string, byte[], byte[]> NotReportedAsLoss => new()
     {
-        {
-            "an unchanged record, when the rewrite prunes a master",
-            OwnRecordAndOverrideOfB_SwappingRawFormIds_AsTheRewritePrunesA(Subrecord("EDID", "Own"u8.ToArray()), Subrecord("RDMP", [1])).Original,
-            OwnRecordAndOverrideOfB_SwappingRawFormIds_AsTheRewritePrunesA(Subrecord("EDID", "Own"u8.ToArray()), Subrecord("RDMP", [1])).Rewritten
-        },
+        { "an unchanged record, when the rewrite prunes a master", UnchangedWhenTheRewritePrunesAMaster.Original, UnchangedWhenTheRewritePrunesAMaster.Rewritten },
         {
             "a signature with more occurrences in the rewrite",
             Record("FURN", 1, Subrecord("EDID", "Furniture"u8.ToArray())),
@@ -85,7 +84,7 @@ public sealed class SubrecordLossTests : IDisposable
         {
             "a structural divergence of compression, rather than a misdiagnosis",
             Record("REGN", 0x42, Subrecord("EDID", "Region"u8.ToArray()), Subrecord("RDMP", [1])),
-            Record("REGN", 0x42, CompressedFlag, NoFormVersion, CompressedPayload(Subrecord("EDID", "Region"u8.ToArray())))
+            Record("REGN", 0x42, (uint)CompressedFlag.Bit, NoFormVersion, CompressedPayload(Subrecord("EDID", "Region"u8.ToArray())))
         },
         { "an unreadable compressed record, its declared length past an int", UnreadableAfterADeclaredLengthPastAnInt, Concat(UnreadableAfterADeclaredLengthPastAnInt, AnEmptyWeapon) },
         { "an unreadable compressed record, its declared length more than an array holds", UnreadableAfterADeclaredLengthNoArrayHolds, Concat(UnreadableAfterADeclaredLengthNoArrayHolds, AnEmptyWeapon) },
@@ -99,8 +98,8 @@ public sealed class SubrecordLossTests : IDisposable
     };
 
     [Theory]
-    [MemberData(nameof(NotALoss))]
-    public async Task ARewrite_ThatDropsNoSubrecord_IsNotLoss(string _, byte[] original, byte[] rewritten)
+    [MemberData(nameof(NotReportedAsLoss))]
+    public async Task ARewrite_TheComparisonDoesNotCountAsLoss_ReportsNone(string _, byte[] original, byte[] rewritten)
     {
         Assert.Null(await LossAsync(original, rewritten));
     }
@@ -136,8 +135,8 @@ public sealed class SubrecordLossTests : IDisposable
     [Fact]
     public async Task ADeletedRecordWhoseRewriteHoldsNoSubrecord_IsNamedBySignatureAndFormKey()
     {
-        var original = Record("REFR", 0x00000801, DeletedFlag, NoFormVersion, Subrecord("NAME", [1, 2, 3, 4]));
-        var rewritten = Record("REFR", 0x00000801, DeletedFlag, NoFormVersion);
+        var original = Record("REFR", 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion, Subrecord("NAME", [1, 2, 3, 4]));
+        var rewritten = Record("REFR", 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion);
 
         Assert.Equal("REFR 000801:original.esp", (await ComparisonAsync(original, rewritten)).DeletedRecordEmptied);
     }
@@ -145,7 +144,7 @@ public sealed class SubrecordLossTests : IDisposable
     [Fact]
     public async Task ADeletedRecordWhoseRewriteKeepsItsSubrecords_IsNotNamed()
     {
-        var deleted = Record("WRLD", 0x00000801, DeletedFlag, NoFormVersion, Subrecord("EDID", "World"u8.ToArray()));
+        var deleted = Record("WRLD", 0x00000801, (uint)DeletedFlag.Bit, NoFormVersion, Subrecord("EDID", "World"u8.ToArray()));
 
         Assert.Null((await ComparisonAsync(deleted, Concat(deleted, AnEmptyWeapon))).DeletedRecordEmptied);
     }

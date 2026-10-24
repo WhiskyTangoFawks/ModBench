@@ -9,7 +9,7 @@ export type PluginPlace = components['schemas']['PluginPlace'];
 export type StampedFile = components['schemas']['StampedFile'];
 
 // The two origins that are not mods end in `/`, which no folder name holds, so no mod shares them.
-// Equal to mEdit's PluginOrigin.
+// mEdit's PluginOrigin holds the Data directory's.
 export const DATA_DIRECTORY_ORIGIN = 'Data/';
 export const OVERWRITE_ORIGIN = 'overwrite/';
 

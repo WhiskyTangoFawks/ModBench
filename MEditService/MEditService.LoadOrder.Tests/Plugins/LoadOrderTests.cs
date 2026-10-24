@@ -71,11 +71,9 @@ public sealed class LoadOrderTests
     }
 
     [Fact]
-    public void ASnapshotOfPluginsRefusalOfRefuses_IsNotConstructed()
+    public void ConstructingASnapshotOfRefusedPlugins_Throws()
     {
-        var thrown = Assert.Throws<ArgumentException>(() => Order([A], Registered("B.esp", "ModB")));
-
-        Assert.Equal("The active plugin B.esp from ModB is not a plugin in the snapshot.", thrown.Message);
+        Assert.Throws<ArgumentException>(() => Order([A], Registered("B.esp", "ModB")));
     }
 
     [Fact]

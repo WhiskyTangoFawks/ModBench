@@ -239,7 +239,7 @@ public sealed class PluginTreeReadTests
 
         var written = await Adapter.WriteFromTreeAsync(source.Files, recompiledPath, source.Masters, loadOrder);
 
-        Assert.False(written.Holds(out _, out _));
+        Assert.Equal(LightMasterAndChild.Master.FileName, Assert.IsType<PluginFailure.MasterUnreadable>(written.Failure()).Master);
         Assert.False(File.Exists(recompiledPath));
     }
 }

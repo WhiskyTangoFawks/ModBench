@@ -34,11 +34,17 @@ public sealed class PluginWriterSaveTests
         var stale = StaleHeaderPlugins.Named(fileName);
         stale.WriteInto(folder);
         var pluginPath = Path.Combine(folder, fileName);
+        Assert.Equal((stale.StoredNextObjectId, stale.StoredNumRecords), HeaderStatsOf(pluginPath));
 
         await RewriteAsync(pluginPath);
 
-        using var saved = Fallout4Mod.CreateFromBinaryOverlay(new ModPath(ModKey.FromFileName(fileName), pluginPath), Fallout4Release.Fallout4);
-        Assert.Equal((stale.StoredNextObjectId, derivedNumRecords), (saved.ModHeader.Stats.NextFormID, saved.ModHeader.Stats.NumRecords));
+        Assert.Equal((stale.StoredNextObjectId, derivedNumRecords), HeaderStatsOf(pluginPath));
+    }
+
+    private static (uint NextObjectId, uint NumRecords) HeaderStatsOf(string pluginPath)
+    {
+        using var plugin = Fallout4Mod.CreateFromBinaryOverlay(new ModPath(ModKey.FromFileName(Path.GetFileName(pluginPath)), pluginPath), Fallout4Release.Fallout4);
+        return (plugin.ModHeader.Stats.NextFormID, plugin.ModHeader.Stats.NumRecords);
     }
 
     [Fact]
@@ -158,7 +164,7 @@ public sealed class PluginWriterSaveTests
             return true;
         });
 
-        Assert.False(saved.Holds(out _, out _));
+        Assert.Equal(LightMasterAndChild.Master.FileName, Assert.IsType<PluginFailure.MasterUnreadable>(saved.Failure()).Master);
         Assert.Equal(before, File.ReadAllBytes(child.Path));
     }
 

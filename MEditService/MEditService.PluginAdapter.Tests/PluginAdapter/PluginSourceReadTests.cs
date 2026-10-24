@@ -70,6 +70,7 @@ public sealed class PluginSourceReadTests
 
         var source = (await ReadSourceAsync(pluginPath, GameRelease.Fallout4)).Answered();
 
+        Assert.NotEmpty(source.Files);
         Assert.All(source.Files, file => Assert.DoesNotContain((byte)'\r', file.Content));
     }
 
