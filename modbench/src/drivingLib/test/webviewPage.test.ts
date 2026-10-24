@@ -28,6 +28,14 @@ describe('a page of the webview build, loaded into a webview', () => {
     expect(shown(RECORD_PAGE).options).toEqual({ enableScripts: true, localResourceRoots: ['ext/out/webview'] });
   });
 
+  it('reaches the images folder a page names, and no page that names none', () => {
+    const withImages = shown({ ...RECORD_PAGE, imagesFolder: 'staging/release' as unknown as vscode.Uri });
+    expect(withImages.options).toEqual({ enableScripts: true, localResourceRoots: ['ext/out/webview', 'staging/release'] });
+    expect(withImages.html).toContain('img-src vscode-webview-resource:;');
+
+    expect(shown(RECORD_PAGE).html).not.toContain('img-src');
+  });
+
   it('loads the page\'s own script and stylesheet', () => {
     const { html } = shown(RECORD_PAGE);
     expect(html).toContain('<script type="module" src="ext/out/webview/assets/main.js">');

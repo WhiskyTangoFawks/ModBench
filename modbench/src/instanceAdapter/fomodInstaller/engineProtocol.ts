@@ -26,7 +26,7 @@ export type EngineRequest =
 /** `dialog` is the installer opening, `step` its state after a change, `cause` that change: a selection, or a move.
  *  `failed` is an installer it cannot read, `broken` an engine that cannot run. */
 export type EngineReport =
-  | { readonly kind: 'dialog'; readonly module: string }
+  | { readonly kind: 'dialog'; readonly module: string; readonly image: string }
   | { readonly kind: 'step'; readonly steps: readonly types.IInstallStep[]; readonly current: number; readonly cause: 'select' | 'move' }
   | { readonly kind: 'unanswered'; readonly question: string; readonly why: string }
   | { readonly kind: 'done'; readonly result: types.InstallResult | null }

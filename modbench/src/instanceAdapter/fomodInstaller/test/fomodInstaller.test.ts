@@ -303,6 +303,7 @@ describe('the FOMOD installer', () => {
   describe('answered by the user on a page', () => {
     interface Page {
       readonly states: FomodState[];
+      readonly roots: string[];
       readonly confirmed: (string[])[];
       readonly asking: boolean[];
       closed: number;
@@ -316,11 +317,12 @@ describe('the FOMOD installer', () => {
       replies: readonly Reply[],
       { engine = FOMOD_ENGINE, confirms = true, onShow = () => undefined }: { engine?: FomodEngine; confirms?: boolean; onShow?: () => void } = {},
     ): Promise<{ page: Page; landing: Awaited<ReturnType<typeof fomodLanding>> }> {
-      const page: Page = { states: [], confirmed: [], asking: [], closed: 0 };
+      const page: Page = { states: [], roots: [], confirmed: [], asking: [], closed: 0 };
       let handler: ((move: FomodMove) => void) | undefined;
       const dialog: FomodDialog = {
         ...FOMOD_PAGE,
-        show: (state) => {
+        show: (state, shownRoot) => {
+          page.roots.push(shownRoot);
           const reply = present(replies[Math.min(page.states.length, replies.length - 1)], 'the reply to this state');
           page.states.push(state);
           setImmediate(() => {
@@ -368,6 +370,64 @@ describe('the FOMOD installer', () => {
       expect(page.closed).toBe(1);
     });
 
+    describe('its header, descriptions and images', () => {
+      const INFO = '<fomod><Name>Info name</Name><Author>Ada &amp; Bo</Author><Version MachineVersion="1.2.3">1.2</Version><Website>https://example.com/m</Website></fomod>';
+      const imaged = (headerImage: string, optionImage: string): string => config(
+        `<moduleImage path="${headerImage}"/>${steps(step('Main', group('Pick', 'SelectExactlyOne',
+          `<plugin name="A"><description>About A</description><image path="${optionImage}"/><files>${file('a/A.esp', 'A.esp')}</files>`
+          + '<typeDescriptor><type name="Optional"/></typeDescriptor></plugin>')))}`);
+      const shown = async (moduleConfig: string, files: readonly string[]): Promise<{ state: FomodState; root: string }> => {
+        await release(moduleConfig, ['a/A.esp', ...files]);
+        const { page } = await answered([INSTALL]);
+        return { state: present(page.states[0], 'the first state'), root: present(page.roots[0], 'the root it was shown with') };
+      };
+      const imageOf = (state: FomodState): string | undefined => state.steps[0]?.optionalFileGroups?.group[0]?.options[0]?.image;
+
+      it('carries the author, version and website of the FOMOD\'s info file, found as the release spells it', async () => {
+        await release(imaged('', ''), ['a/A.esp']);
+        await mkdir(join(root, 'FOMOD'), { recursive: true });
+        await writeFile(join(root, 'FOMOD', 'Info.XML'), INFO);
+
+        const { page } = await answered([INSTALL]);
+
+        expect(page.states[0]).toMatchObject({ module: 'Test', author: 'Ada & Bo', version: '1.2', website: 'https://example.com/m' });
+      });
+
+      it('leaves a header field empty when the FOMOD gives no info file', async () => {
+        const { state } = await shown(imaged('', ''), []);
+
+        expect(state).toMatchObject({ author: '', version: '', website: '' });
+      });
+
+      it('names the header image and an option\'s image as the release spells them, whatever case and slash the FOMOD wrote', async () => {
+        const { state } = await shown(imaged('images\\HEADER.png', 'Images/a.PNG'), ['Images/Header.png', 'images/A.png']);
+
+        expect(state.image).toBe('Images/Header.png');
+        expect(imageOf(state)).toBe('images/A.png');
+        expect(state.steps[0]?.optionalFileGroups?.group[0]?.options[0]?.description).toBe('About A');
+      });
+
+      it.each([
+        ['one the release lacks', 'nothing.png'],
+        ['one outside the release', '../outside.png'],
+        ['one that climbs out and back in', 'img/../../release/img/a.png'],
+        ['an absolute one', '/etc/hostname'],
+        ['a drive path', 'C:\\Windows\\win.ini'],
+      ])('shows no image for %s', async (_, path) => {
+        await writeFile(join(base, 'outside.png'), 'outside');
+        const { state } = await shown(imaged(path, path), ['img/a.png']);
+
+        expect(state.image).toBe('');
+        expect(imageOf(state)).toBe('');
+      });
+
+      it('shows the page the folder of the release, where its images are', async () => {
+        const { root: shownRoot } = await shown(imaged('', ''), []);
+
+        expect(shownRoot).toBe(root);
+      });
+    });
+
     it('moves on to the next step visible, and reports the installer module on every state', async () => {
       await release(TWO_STEPS, TWO_STEPS_FILES);
 
@@ -411,7 +471,7 @@ describe('the FOMOD installer', () => {
 
       const { page, landing } = await answered([INSTALL]);
 
-      expect(page.states).toEqual([{ module: 'Test', steps: [], current: 0 }]);
+      expect(page.states).toEqual([{ module: 'Test', author: '', version: '', website: '', image: '', steps: [], current: 0 }]);
       expect(landing).toMatchObject({ fomod: { kind: 'installer' } });
       expect(await filesLanded()).toEqual(['Core.esp']);
     });

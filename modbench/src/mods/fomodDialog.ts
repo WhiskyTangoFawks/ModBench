@@ -5,7 +5,7 @@ import type { FomodDialog } from '../modCommands/modCommands';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import type { AskQuestion } from '../ports/dialog';
 import type { Progress } from '../drivingLib/pausableProgress';
-import { FOMOD_STATE, isFomodReady, parseFomodMove, type FomodMove, type FomodState } from '../wire/fomodPage';
+import { FOMOD_STATE, isFomodReady, parseFomodMove, withImages, type FomodMove, type FomodState } from '../wire/fomodPage';
 import { WEBVIEW_SCRIPTS } from '../wire/webviewPages';
 
 const INSTALL_ANYWAY = 'Install anyway';
@@ -17,11 +17,18 @@ export function fomodDialog(extensionUri: vscode.Uri, ask: AskQuestion, progress
   let latest: FomodState | undefined;
   let closing = false;
 
+  let release: vscode.Uri | undefined;
+
+  // The state's images are paths in the release's folder; the page loads each from the webview's URI for it.
   const post = (): void => {
-    if (panel !== undefined && latest !== undefined) void panel.webview.postMessage({ type: FOMOD_STATE, state: latest });
+    if (panel === undefined || latest === undefined || release === undefined) return;
+    const { webview } = panel;
+    const folder = release;
+    const state = withImages(latest, (image) => (image === '' ? '' : webview.asWebviewUri(vscode.Uri.joinPath(folder, ...image.split('/'))).toString()));
+    void webview.postMessage({ type: FOMOD_STATE, state });
   };
 
-  const open = (module: string): vscode.WebviewPanel => {
+  const open = (module: string, imagesFolder: vscode.Uri): vscode.WebviewPanel => {
     const opened = vscode.window.createWebviewPanel('modbench.fomod', `FOMOD: ${module}`, vscode.ViewColumn.Active, { retainContextWhenHidden: true });
     opened.onDidDispose(() => {
       if (!closing) moved({ kind: 'cancel' });
@@ -31,14 +38,15 @@ export function fomodDialog(extensionUri: vscode.Uri, ask: AskQuestion, progress
       if (move !== undefined) moved(move);
       else if (isFomodReady(message)) post();
     });
-    showWebviewPage(opened.webview, extensionUri, { script: WEBVIEW_SCRIPTS.FOMOD });
+    showWebviewPage(opened.webview, extensionUri, { script: WEBVIEW_SCRIPTS.FOMOD, imagesFolder });
     return opened;
   };
 
   return {
-    show: (state) => {
+    show: (state, folder) => {
       latest = state;
-      panel ??= open(state.module);
+      release ??= vscode.Uri.file(folder);
+      panel ??= open(state.module, release);
       post();
     },
     onMove: (handler) => {

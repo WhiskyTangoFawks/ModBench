@@ -217,9 +217,10 @@ export interface FomodStepChoice {
 }
 
 /** The page a user answers a FOMOD's installer on: it shows the installer, sends the user's moves, and asks whether to
- *  install without files the archive lacks. `close` ends it. */
+ *  install without files the archive lacks. A state's images are paths in `release`, the folder of the extracted
+ *  FOMOD, and the page loads no file outside it. `close` ends it. */
 export interface FomodDialog {
-  readonly show: (state: FomodState) => void;
+  readonly show: (state: FomodState, release: string) => void;
   readonly onMove: (handler: (move: FomodMove) => void) => void;
   readonly confirmMissing: (missing: readonly string[]) => Promise<boolean>;
   /** Whether the install now waits on the user, and not on itself. */

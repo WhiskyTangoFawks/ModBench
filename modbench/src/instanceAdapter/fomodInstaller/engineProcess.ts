@@ -25,6 +25,9 @@ const report = (message: EngineReport, then?: () => void): void => {
 
 const exit = (): void => process.exit(0);
 
+// The engine passes no image at all for a module that names none.
+const headerImagePath = (image: types.IHeaderImage | null): string => image?.path ?? '';
+
 const isEngine = (value: unknown): value is types.IExtension => typeof value === 'object' && value !== null && 'ModInstaller' in value;
 
 function answer<T>(question: string, known: Known<T>, unanswered: T): T {
@@ -58,9 +61,9 @@ function install(engineFolder: string, root: string, files: readonly string[], f
     () => FOMM_VERSION,
     () => answer('the game\'s version', facts.gameVersion, ''),
     () => answer('the script extender\'s version', facts.extenderVersion, ''),
-    (module, _image, select, cont, cancel) => {
+    (module, image, select, cont, cancel) => {
       dialog = { select, cont, cancel };
-      report({ kind: 'dialog', module });
+      report({ kind: 'dialog', module, image: headerImagePath(image) });
     },
     () => undefined,
     (steps, current) => report({ kind: 'step', steps, current, cause }),
