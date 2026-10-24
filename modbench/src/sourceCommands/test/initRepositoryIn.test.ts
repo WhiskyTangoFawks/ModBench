@@ -1,17 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import type { HostGit } from '../../ports/repository';
 import { initRepositoryIn } from '../initRepositoryIn';
-
-const hostWith = (init: () => Promise<unknown>, folders: string[] = []): HostGit<string> => ({
-  extension: () => ({ activate: () => Promise.resolve({ getAPI: () => ({ init: (folder) => { folders.push(folder); return init(); } }) }) }),
-  folderOf: (path) => `uri:${path}`,
-});
+import { hostGitMaking } from './hostGitDouble';
 
 describe('initRepositoryIn', () => {
   it('asks VS Code\'s git to make the folder a repository', async () => {
     const folders: string[] = [];
 
-    await initRepositoryIn(hostWith(() => Promise.resolve({}), folders), '/instance');
+    await initRepositoryIn(hostGitMaking(folders), '/instance');
 
     expect(folders).toEqual(['uri:/instance']);
   });
@@ -21,6 +16,6 @@ describe('initRepositoryIn', () => {
   });
 
   it('fails when git made no repository', async () => {
-    await expect(initRepositoryIn(hostWith(() => Promise.resolve(null)), '/instance')).rejects.toThrow("VS Code's git did not make /instance a repository.");
+    await expect(initRepositoryIn(hostGitMaking([], null), '/instance')).rejects.toThrow("VS Code's git did not make /instance a repository.");
   });
 });

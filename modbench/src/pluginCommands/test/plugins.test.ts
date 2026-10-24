@@ -130,7 +130,7 @@ describe('reorderPlugins hands the adapter a move decided against the order it h
 describe('plugin participation is a change for each plugin the order lists', () => {
   const ORDER = ['Base.esp', 'Other.esp'];
 
-  it('setPluginsEnabled gives every named plugin the one state', async () => {
+  it('enable or disable gives every named plugin one state', async () => {
     const fake = fakeOver(...ORDER);
 
     const result = await pluginCommandsWith(fake.adapter).setPluginsEnabled(ORDER, false);
@@ -139,13 +139,21 @@ describe('plugin participation is a change for each plugin the order lists', () 
     expect(fake.calls).toEqual(handed([{ kind: 'enable', plugin: 'Base.esp', enabled: false }, { kind: 'enable', plugin: 'Other.esp', enabled: false }]));
   });
 
-  it('setPluginsParticipation gives each named plugin its own state', async () => {
+  it('the check box gives each named plugin its own state', async () => {
     const fake = fakeOver(...ORDER);
 
     const result = await pluginCommandsWith(fake.adapter).setPluginsParticipation([{ name: 'Base.esp', enabled: false }, { name: 'Other.esp', enabled: true }]);
 
     expect(result).toEqual({ applied: true, outcome: { landed: ORDER, refused: [] } });
     expect(fake.calls).toEqual(handed([{ kind: 'enable', plugin: 'Base.esp', enabled: false }, { kind: 'enable', plugin: 'Other.esp', enabled: true }]));
+  });
+
+  it('writes the profile the mod manager selects', async () => {
+    const fake = fakeInstanceAdapter(readingFixture({ profile: 'Other', pluginOrder: lines(...ORDER) }));
+
+    await pluginCommandsWith(fake.adapter).setPluginsEnabled(['Base.esp'], false);
+
+    expect(fake.calls).toEqual(handed([{ kind: 'enable', plugin: 'Base.esp', enabled: false }], 'Other'));
   });
 
   it('a plugin named in another case than its line lands, for the check box and for enable alike', async () => {

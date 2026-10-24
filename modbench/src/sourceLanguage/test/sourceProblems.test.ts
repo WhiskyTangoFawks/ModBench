@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { feedSourceProblems, type ProblemsByFile } from '../sourceProblems';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import type { PluginProblems } from '../../client';
-import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
+import type { NotificationEvent } from '../../client/apiClient';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 
 const MISSING = '000ABC:Absent.esp';
@@ -30,7 +31,7 @@ function feed(files: Record<string, string>, sourceFiles = sourceFolders, answer
   const client = new InMemoryMEditClient();
   if (answeredAtSubscribe) client.setQueryAnswerOnce('getPluginProblems', answeredAtSubscribe);
   const published: ProblemsByFile[] = [];
-  const reporter = { shownOnSurface: vi.fn() };
+  const reporter = recordingReporter();
   const status: (string | undefined)[] = [];
   feedSourceProblems({
     client,
@@ -119,8 +120,8 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     const shown = await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
     expect(shown.get('/source/ReferringMod/Refers.esp/Npc.json')?.map(({ start }) => start)).toEqual([{ line: 0, character: 0 }]);
-    expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel shows the problems of "/source/ReferringMod/Refers.esp/Npc.json" on its first line.', 'no /source/ReferringMod/Refers.esp/Npc.json'],
+    expect(reporter.shownFailures).toEqual([
+      { severity: 'warning', message: 'The Problems panel shows the problems of "/source/ReferringMod/Refers.esp/Npc.json" on its first line.', detail: 'no /source/ReferringMod/Refers.esp/Npc.json' },
     ]);
   });
 
@@ -169,14 +170,15 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   });
 
   it('says nothing when mEdit cannot answer at subscribe, and asks nothing on a save until the record index is ready', async () => {
-    const { client, reporter, answered } = feed({});
-    await new Promise((settled) => { setTimeout(settled, 0); });
+    const refused = Promise.reject(new Error('mEdit is down.'));
+    const { client, reporter, answered } = feed({}, sourceFolders, refused);
+    await refused.catch(() => undefined);
     client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
 
     await answered([]);
 
     expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
-    expect(reporter.shownOnSurface).not.toHaveBeenCalled();
+    expect(reporter.shownFailures).toEqual([]);
   });
 
   it('asks nothing on a save when the record index began reconciling while the ask at subscribe was in flight', async () => {
@@ -212,7 +214,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await answered([{ plugin: PLUGIN, problems: [] }]);
     await answered(failed('Unexpected end at 3.'));
 
-    expect(reporter.shownOnSurface).not.toHaveBeenCalled();
+    expect(reporter.shownFailures).toEqual([]);
     expect(status.at(-1)).toBe('Showing the last good read: "Refers.esp" (ReferringMod): Unexpected end at 3.');
   });
 
@@ -224,9 +226,9 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await answered(failed('Refers.esp\'s source holds no file for 000800:Refers.esp.'));
     await answered(failed('Refers.esp is a compiled plugin but no mod folder provides it.'));
 
-    expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp\'s source holds no file for 000800:Refers.esp.'],
-      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'Refers.esp is a compiled plugin but no mod folder provides it.'],
+    expect(reporter.shownFailures).toEqual([
+      { severity: 'warning', message: 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', detail: 'Refers.esp\'s source holds no file for 000800:Refers.esp.' },
+      { severity: 'warning', message: 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', detail: 'Refers.esp is a compiled plugin but no mod folder provides it.' },
     ]);
   });
 
@@ -237,7 +239,9 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     const shown = await answered([{ plugin: PLUGIN, problems: [stray], failure: 'Refers.esp\'s source could not place 000800:Refers.esp.', failureKind: 'Placement' }]);
 
     expect([...shown.keys()]).toEqual(['/source/ReferringMod/Refers.esp/Stray.json']);
-    expect(reporter.shownOnSurface).toHaveBeenCalledTimes(1);
+    expect(reporter.shownFailures).toEqual([
+      { severity: 'warning', message: 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', detail: 'Refers.esp\'s source could not place 000800:Refers.esp.' },
+    ]);
   });
 
   it('tells of a plugin whose mod the instance holds no source folder for, rather than dropping its problems', async () => {
@@ -245,8 +249,8 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
 
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
-    expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', 'The instance holds no source folder for ReferringMod.'],
+    expect(reporter.shownFailures).toEqual([
+      { severity: 'warning', message: 'The Problems panel keeps the last problems of "Refers.esp" (ReferringMod).', detail: 'The instance holds no source folder for ReferringMod.' },
     ]);
   });
 
@@ -262,8 +266,8 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await answered([{ plugin: PLUGIN, problems: [problem()] }]);
 
     expect(published).toHaveLength(2);
-    expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel shows mEdit\'s last answer.', 'mEdit did not answer in time.'],
+    expect(reporter.shownFailures).toEqual([
+      { severity: 'warning', message: 'The Problems panel shows mEdit\'s last answer.', detail: 'mEdit did not answer in time.' },
     ]);
   });
 
@@ -290,7 +294,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     overtaken(new Error('mEdit did not answer in time.'));
     await answered([]);
 
-    expect(reporter.shownOnSurface).not.toHaveBeenCalled();
+    expect(reporter.shownFailures).toEqual([]);
   });
 
   it('publishes an older answer when the ask that overtook it fails', async () => {
@@ -381,7 +385,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   });
 
   it('keeps the status of a failed ask when an older, slower answer arrives after it', async () => {
-    const { client, answered, status } = feed({});
+    const { client, answered, published, status } = feed({});
     let older!: (answer: PluginProblems[]) => void;
     client.setQueryAnswerOnce('getPluginProblems', new Promise<PluginProblems[]>((resolve) => { older = resolve; }));
     client.setQueryFailureOnce('getPluginProblems', { failed: 'refused', refusal: 'timed out' });
@@ -390,8 +394,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     await vi.waitFor(() => { expect(status.at(-1)).toBe('Showing the last good read: timed out'); });
 
     older([]);
-    await vi.waitFor(() => { expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(3); });
-    await new Promise((settled) => { setTimeout(settled, 10); });
+    await vi.waitFor(() => { expect(published).toHaveLength(1); });
 
     expect(status.at(-1)).toBe('Showing the last good read: timed out');
     await answered([]);
@@ -409,8 +412,8 @@ describe('feedSourceProblems, when mEdit cannot take the unsaved plugin source',
     client.settleHandOver({ failed: 'refused', refusal: 'connection reset' });
 
     expect(status.at(-1)).toBe(lastRead('connection reset'));
-    expect(reporter.shownOnSurface.mock.calls).toEqual([
-      ['warning', 'The Problems panel shows what mEdit last took of the unsaved plugin source.', 'connection reset'],
+    expect(reporter.shownFailures).toEqual([
+      { severity: 'warning', message: 'The Problems panel shows what mEdit last took of the unsaved plugin source.', detail: 'connection reset' },
     ]);
   });
 

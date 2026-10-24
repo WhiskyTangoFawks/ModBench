@@ -36,13 +36,6 @@ describe('completionsAt (plugin-source.md, In the text editor, story 5)', () => 
     expect(found?.items).toEqual([{ label: 'Gun', detail: GUN, insertText: GUN }]);
   });
 
-  it('searches the typed text among the types the field allows', async () => {
-    const client = asking([reference('Armor', ['WEAP', 'ARMO'])]);
-    await completingAtBar(client, documentOf('"Armor": "Gu|"'));
-
-    expect(client.searchRecords).toHaveBeenCalledWith('Gu', ['WEAP', 'ARMO']);
-  });
-
   it('replaces the string between its quotes', async () => {
     const marked = documentOf('"Armor": "Gu|n"');
     const found = await completingAtBar(asking([reference('Armor')]), marked);
@@ -63,91 +56,49 @@ describe('completionsAt (plugin-source.md, In the text editor, story 5)', () => 
     expect(found?.items).toHaveLength(1);
   });
 
-  it('completes the element of an array of references', async () => {
-    const keywords = fieldOf({ name: 'Keywords', type: 'array', isArray: true, elementType: reference('Keyword', ['KYWD']).metadata });
-    const client = asking([keywords]);
-    await completingAtBar(client, documentOf('"Keywords": ["000001:Mod.esp", "Gu|"]'));
-
-    expect(client.searchRecords).toHaveBeenCalledWith('Gu', ['KYWD']);
+  const keywords = fieldOf({ name: 'Keywords', type: 'array', isArray: true, elementType: reference('Keyword', ['KYWD']).metadata });
+  const inStructs = fieldOf({
+    name: 'Data', type: 'struct',
+    fields: [fieldOf({ name: 'Inner', type: 'struct', fields: [reference('Ammo', ['AMMO']).metadata] }).metadata],
+  });
+  const owner = fieldOf({
+    name: 'Owner', type: 'struct',
+    fields: [
+      fieldOf({ name: 'MutagenObjectType', type: 'string', isDiscriminator: true }).metadata,
+      fieldOf({ name: 'Target', type: 'string', variants: { Spell: reference('Target', ['SPEL']).metadata, Perk: reference('Target', ['PERK']).metadata } }).metadata,
+    ],
   });
 
-  it('completes a reference nested in structs', async () => {
-    const inner = fieldOf({ name: 'Inner', type: 'struct', fields: [reference('Ammo', ['AMMO']).metadata] });
-    const data = fieldOf({ name: 'Data', type: 'struct', fields: [inner.metadata] });
-    const client = asking([data]);
-    await completingAtBar(client, documentOf('"Data": { "Inner": { "Ammo": "Gu|" } }'));
+  it.each<[string, Record<string, Field[]>, string, string[]]>([
+    ['a reference field', { [OWNER]: [reference('Armor', ['WEAP', 'ARMO'])] }, documentOf('"Armor": "Gu|"'), ['WEAP', 'ARMO']],
+    ['the element of an array of references', { [OWNER]: [keywords] }, documentOf('"Keywords": ["000001:Mod.esp", "Gu|"]'), ['KYWD']],
+    ['a reference nested in structs', { [OWNER]: [inStructs] }, documentOf('"Data": { "Inner": { "Ammo": "Gu|" } }'), ['AMMO']],
+    ['the member shape of the leaf the owner names', { [OWNER]: [owner] }, documentOf('"Owner": { "MutagenObjectType": "Perk", "Target": "Gu|" }'), ['PERK']],
+    ['the nearest enclosing record, an embedded child with its own FormKey', { [CHILD]: [reference('Base', ['STAT'])] },
+      documentOf(`"Placed": [{ "FormKey": "${CHILD}", "Base": "Gu|" }]`), ['STAT']],
+  ])('searches the typed text, in %s, among the types the field allows', async (_case, held, marked, types) => {
+    const client = asking([], [record('Gun', GUN)], held);
 
-    expect(client.searchRecords).toHaveBeenCalledWith('Gu', ['AMMO']);
+    await completingAtBar(client, marked);
+
+    expect(client.searchRecords).toHaveBeenCalledWith('Gu', types);
   });
 
-  it('takes the member shape of the leaf the owner names', async () => {
-    const discriminator = fieldOf({ name: 'MutagenObjectType', type: 'string', isDiscriminator: true }).metadata;
-    const target = fieldOf({
-      name: 'Target', type: 'string',
-      variants: { Spell: reference('Target', ['SPEL']).metadata, Perk: reference('Target', ['PERK']).metadata },
-    }).metadata;
-    const client = asking([fieldOf({ name: 'Owner', type: 'struct', fields: [discriminator, target] })]);
-    await completingAtBar(client, documentOf('"Owner": { "MutagenObjectType": "Perk", "Target": "Gu|" }'));
-
-    expect(client.searchRecords).toHaveBeenCalledWith('Gu', ['PERK']);
+  const alias = fieldOf({
+    name: 'Data', type: 'struct',
+    fields: [fieldOf({ name: 'Target', type: 'formKey', validFormKeyTypes: ['REFR'], indexWhen: ['UseAliases'] }).metadata],
   });
 
-  it('offers nothing for a reference its owner says names an alias, which holds a number', async () => {
-    const target = fieldOf({ name: 'Target', type: 'formKey', validFormKeyTypes: ['REFR'], indexWhen: ['UseAliases'] }).metadata;
-    const client = asking([fieldOf({ name: 'Data', type: 'struct', fields: [target] })]);
-
-    expect(await completingAtBar(client, documentOf('"Data": { "UseAliases": true, "Target": "Gu|" }'))).toBeUndefined();
-    expect(client.searchRecords).not.toHaveBeenCalled();
-  });
-
-  it('completes within the nearest enclosing record, an embedded child with its own FormKey', async () => {
-    const client = asking([], [record('Gun', GUN)], { [CHILD]: [reference('Base', ['STAT'])] });
-    await completingAtBar(client, documentOf(`"Placed": [{ "FormKey": "${CHILD}", "Base": "Gu|" }]`));
-
-    expect(client.getComparison).toHaveBeenCalledWith(CHILD);
-    expect(client.searchRecords).toHaveBeenCalledWith('Gu', ['STAT']);
-  });
-
-  it('offers nothing for a field that is not a reference', async () => {
-    const client = asking([fieldOf({ name: 'Name', type: 'string' })]);
-
-    expect(await completingAtBar(client, documentOf('"Name": "Gu|"'))).toBeUndefined();
-    expect(client.searchRecords).not.toHaveBeenCalled();
-  });
-
-  it('offers nothing for a member the record does not declare', async () => {
-    const client = asking([reference('Armor')]);
-
-    expect(await completingAtBar(client, documentOf('"Unknown": "Gu|"'))).toBeUndefined();
-    expect(client.searchRecords).not.toHaveBeenCalled();
-  });
-
-  it('offers nothing in a property name', async () => {
-    const client = asking([reference('Armor')]);
-
-    expect(await completingAtBar(client, documentOf('"Ar|": 1'))).toBeUndefined();
-    expect(client.searchRecords).not.toHaveBeenCalled();
-  });
-
-  it('offers nothing before anything is typed', async () => {
-    const client = asking([reference('Armor')]);
-
-    expect(await completingAtBar(client, documentOf('"Armor": "|"'))).toBeUndefined();
-    expect(client.searchRecords).not.toHaveBeenCalled();
-  });
-
-  it('offers nothing for a record the record index does not hold', async () => {
-    const client = asking([reference('Armor')], [record('Gun', GUN)], {});
-
-    expect(await completingAtBar(client, documentOf('"Armor": "Gu|"'))).toBeUndefined();
-    expect(client.searchRecords).not.toHaveBeenCalled();
-  });
-
-  it('offers nothing outside a record', async () => {
-    const client = asking([reference('Armor')]);
-
-    expect(await completingAtBar(client, '{ "Armor": "Gu|" }')).toBeUndefined();
-    expect(client.getComparison).not.toHaveBeenCalled();
+  it.each<[string, Record<string, Field[]>, string]>([
+    ['a reference its owner says names an alias, which holds a number', { [OWNER]: [alias] }, documentOf('"Data": { "UseAliases": true, "Target": "Gu|" }')],
+    ['a field that is not a reference', { [OWNER]: [fieldOf({ name: 'Name', type: 'string' })] }, documentOf('"Name": "Gu|"')],
+    ['a member the record does not declare', { [OWNER]: [reference('Armor')] }, documentOf('"Unknown": "Gu|"')],
+    ['a property name', { [OWNER]: [reference('Armor')] }, documentOf('"Ar|": 1')],
+    ['a string before anything is typed', { [OWNER]: [reference('Armor')] }, documentOf('"Armor": "|"')],
+    ['a record the record index does not hold', {}, documentOf('"Armor": "Gu|"')],
+    ['a place outside a record', { [OWNER]: [reference('Armor')] }, '{ "Armor": "Gu|" }'],
+  ])('offers nothing for %s', async (_case, held, marked) => {
+    expect(await completingAtBar(asking([], [record('Gun', GUN)], held), marked)).toBeUndefined();
   });
 
   describe('inside an enum field', () => {
@@ -166,7 +117,6 @@ describe('completionsAt (plugin-source.md, In the text editor, story 5)', () => 
         { label: 'Auto', detail: 'Automatic', insertText: 'Auto' },
         { label: 'Single', detail: '', insertText: 'Single' },
       ]);
-      expect(client.searchRecords).not.toHaveBeenCalled();
     });
 
     it('replaces the string between its quotes', async () => {

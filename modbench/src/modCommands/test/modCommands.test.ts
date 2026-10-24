@@ -95,7 +95,7 @@ describe('setModsEnabled', () => {
 });
 
 describe('moveMods and moveSeparators', () => {
-  it('moveMods hands the selection that is listed, with the place and end chosen, refusing a gone mod by name, in one write', async () => {
+  it('a mod move hands the selection that is listed, with the place and end chosen, refusing a gone mod by name, in one write', async () => {
     const { fake, commands } = over();
     const place: MovePlace = { kind: 'separator', name: UNASSIGNED };
 
@@ -108,7 +108,7 @@ describe('moveMods and moveSeparators', () => {
     expect(fake.calls).toEqual([orderWrite([{ kind: 'moveMods', mods: ['Harder VATS'], place, end: 'losing' }])]);
   });
 
-  it('moveSeparators hands the selection that is listed, with the place and end chosen, refusing a gone separator by name', async () => {
+  it('a separator move hands the selection that is listed, with the place and end chosen, refusing a gone separator by name', async () => {
     const { fake, commands } = over();
     const place: SeparatorsPlace = { kind: 'separator', name: RADFALL };
 
@@ -824,16 +824,16 @@ describe('the names a separator or mod may take', () => {
 });
 
 describe('a name the mod order already holds', () => {
-  const clash = (run: (c: ModCommands) => Promise<unknown>, refusal: string) => async () => {
+  it.each<[string, (c: ModCommands) => Promise<unknown>, string]>([
+    ['add separator, writing nothing', (c) => c.insertSeparator(RADFALL, { kind: 'mod', name: 'ENBoost' }), 'A separator with this name already exists'],
+    ['rename separator, writing nothing', (c) => c.renameSeparator(UNASSIGNED, RADFALL), 'A separator with this name already exists'],
+    ['rename mod, renaming no folder', (c) => c.renameMod('Harder VATS', 'ENBoost'), 'A mod with this name already exists'],
+  ])('is refused by %s', async (_case, run, refusal) => {
     const { fake, commands } = over();
 
     expect(await run(commands)).toEqual({ applied: false, refusal });
     expect(verbs(fake.calls)).toEqual([]);
-  };
-
-  it('is refused by add separator, writing nothing', clash((c) => c.insertSeparator(RADFALL, { kind: 'mod', name: 'ENBoost' }), 'A separator with this name already exists'));
-  it('is refused by rename separator, writing nothing', clash((c) => c.renameSeparator(UNASSIGNED, RADFALL), 'A separator with this name already exists'));
-  it('is refused by rename mod, renaming no folder', clash((c) => c.renameMod('Harder VATS', 'ENBoost'), 'A mod with this name already exists'));
+  });
 
   it('is no clash for the entry being renamed, in another case', async () => {
     const { commands } = over();

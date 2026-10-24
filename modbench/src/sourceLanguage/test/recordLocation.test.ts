@@ -1,16 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { uriFrom } from '../../test/vscodeMock';
-
-interface TestUri { scheme: string; path: string; query: string; with(change: Partial<Pick<TestUri, 'scheme' | 'query'>>): TestUri }
-
-const h = vi.hoisted(() => {
-  const uri = (scheme: string, path: string, query = ''): TestUri =>
-    ({ scheme, path, query, with: (change) => uri(change.scheme ?? scheme, path, change.query ?? query) });
-  return { uri };
-});
+import { uriFrom, uriWith } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
-  Uri: { from: uriFrom, file: (path: string) => h.uri('file', path) },
+  Uri: { from: uriFrom, file: (path: string) => uriWith('file', path) },
 }));
 
 import { locateRecord } from '../recordLocation';

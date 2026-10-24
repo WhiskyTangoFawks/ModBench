@@ -1,22 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
-import { uriFrom } from '../../test/vscodeMock';
-
-interface TestUri { scheme: string; path: string; query: string; with(change: Partial<Pick<TestUri, 'scheme' | 'query'>>): TestUri }
-
-const h = vi.hoisted(() => {
-  const uri = (scheme: string, path: string, query = ''): TestUri =>
-    ({ scheme, path, query, with: (change) => uri(change.scheme ?? scheme, path, change.query ?? query) });
-  return { uri };
-});
+import { uriFrom, uriWith } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
-  Uri: { from: uriFrom, file: (path: string) => h.uri('file', path) },
+  Uri: { from: uriFrom, file: (path: string) => uriWith('file', path) },
 }));
 
 import type * as vscode from 'vscode';
 import { referencesOf } from '../formKeyReferences';
 import type { ReferenceResult } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { copyDocuments, copyKey as key, type Copy } from './copyDocuments';
 
 const GUN = '000900:A.esp';
 const STAND = '000700:A.esp';
@@ -30,32 +23,23 @@ const ASKING = `{ "FormKey": "000600:A.esp", "Template": "${GUN}" }`;
 const row = (formKey: string, plugin: typeof modA, fieldPath: string): ReferenceResult =>
   ({ formKey, plugin: plugin.name, origin: plugin.origin, fieldPath, recordType: 'STAT', recordTypeName: 'Static' });
 
-const key = (formKey: string, { name, origin }: { name: string; origin: string }) => `${formKey} ${name} ${origin}`;
-
-interface Copy { file?: string; rendered?: string; text?: string }
-
 type ReferencesClient = Parameters<typeof referencesOf<{ getText(): string }>>[0]['client'];
 
 function references(rows: ReferenceResult[], copies: Record<string, Copy>, answering: Partial<ReferencesClient> = {}) {
-  const firstOnFile = (path: string) => Object.entries(copies).find(([, copy]) => copy.file === path);
+  const { getCopyDocument, textOnFile } = copyDocuments(copies);
   const client: ReferencesClient = {
     getReferencesInActiveOrCompiledPlugins: () => Promise.resolve(rows),
     getRecordOwner: () => Promise.reject(new Error('A referrer\'s copy names its plugin.')),
-    getCopyDocument: (plugin, formKey) => {
-      const copyKey = key(formKey, plugin);
-      const copy = copies[copyKey];
-      if (copy?.file) return Promise.resolve({ kind: firstOnFile(copy.file)?.[0] !== copyKey ? 'ContainersFile' : 'OwnFile', location: copy.file });
-      return Promise.resolve(copy?.rendered ? { kind: 'Rendered', location: copy.rendered } : null);
-    },
+    getCopyDocument,
     ...answering,
   };
   const textAt = (uri: vscode.Uri): string => {
     const query = new URLSearchParams(uri.query);
     const found = uri.scheme === 'modbench-rendered'
-      ? copies[key(query.get('formKey') ?? '', { name: query.get('name') ?? '', origin: query.get('origin') ?? '' })]
-      : firstOnFile(uri.path)?.[1];
-    if (found?.text === undefined) throw new Error('The file is gone.');
-    return found.text;
+      ? copies[key(query.get('formKey') ?? '', { name: query.get('name') ?? '', origin: query.get('origin') ?? '' })]?.text
+      : textOnFile(uri.path);
+    if (found === undefined) throw new Error('The file is gone.');
+    return found;
   };
   const reporter = recordingReporter();
   const referencesAt = referencesOf({ client, reporter, open: (uri) => new Promise<{ getText(): string }>((resolve) => { const text = textAt(uri); resolve({ getText: () => text }); }) });

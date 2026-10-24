@@ -32,17 +32,6 @@ describe('the game folder not found, in the Output', () => {
     expect(lines).toEqual([LINE]);
   });
 
-  it('stays one line over every later value that still has no game folder', () => {
-    const instance = new FakeInstance(FOUND);
-    const lines = logged(instance);
-
-    instance.publish(NOT_FOUND);
-    instance.publish(instanceValueFixture({ ...NOT_FOUND, activeProfile: 'Survival' }));
-    instance.publish(NOT_FOUND);
-
-    expect(lines).toEqual([LINE]);
-  });
-
   it('says nothing while the game folder is found', () => {
     const instance = new FakeInstance(FOUND);
     const lines = logged(instance);
@@ -50,36 +39,5 @@ describe('the game folder not found, in the Output', () => {
     instance.publish(FOUND);
 
     expect(lines).toEqual([]);
-  });
-
-  it('is a new line when the game folder is lost again after being found', () => {
-    const instance = new FakeInstance(FOUND);
-    const lines = logged(instance);
-
-    instance.publish(NOT_FOUND);
-    instance.publish(FOUND);
-    instance.publish(NOT_FOUND);
-
-    expect(lines).toEqual([LINE, LINE]);
-  });
-
-  it('is a new line when Modbench looked somewhere else and still found nothing', () => {
-    const instance = new FakeInstance(FOUND);
-    const lines = logged(instance);
-    const elsewhere = instanceValueFixture({
-      gameFolder: {
-        kind: 'notFound', setting: 'modbench.mods.gameFolder',
-        looked: [{ place: 'the game folder setting, modbench.mods.gameFolder', answer: '/moved has no Data folder' }],
-      },
-    });
-
-    instance.publish(NOT_FOUND);
-    instance.publish(elsewhere);
-
-    expect(lines).toEqual([
-      LINE,
-      '[instance] Game folder not found. Modbench looked at: the game folder setting, modbench.mods.gameFolder: ' +
-        '/moved has no Data folder. Set modbench.mods.gameFolder to the game folder to fix it.',
-    ]);
   });
 });

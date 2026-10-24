@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import type { TakenNames } from '../../instanceAdapter/instanceAdapter';
+import type { EntryRef, TakenNames } from '../../instanceAdapter/instanceAdapter';
+import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 import { entryNameRefusal, newModNameRefusal } from '../nameRefusals';
 
 const mod = (name: string) => ({ kind: 'mod', name } as const);
 const separator = (name: string) => ({ kind: 'separator', name } as const);
 const folder = (kind: 'mod' | 'separator', name: string) => ({ kind, name, path: `/instance/mods/${name}`, modName: name });
 
-const key = (entry: { kind: string; name: string }): string =>
-  (entry.kind === 'separator' ? `${entry.name.trim().replace(/\.+$/, '')}_separator` : entry.name).toLowerCase();
+const { adapter } = fakeInstanceAdapter();
+const key = (entry: EntryRef): string => adapter.entryKey(entry);
 
 const taken: TakenNames = {
   mods: [mod('Listed Only'), mod('Harder VATS'), separator('Group A')],
@@ -24,11 +25,13 @@ describe('newModNameRefusal', () => {
     expect(newModNameRefusal(key, taken, 'harder vats')).toMatch(/"harder vats" already exists/);
   });
 
-  it('is silent for a free name, a separator\'s name, a name only mod order lists, and a blank one', () => {
-    expect(newModNameRefusal(key, taken, 'A New Mod')).toBeUndefined();
-    expect(newModNameRefusal(key, taken, 'Group A')).toBeUndefined();
-    expect(newModNameRefusal(key, taken, 'Listed Only')).toBeUndefined();
-    expect(newModNameRefusal(key, taken, '   ')).toBeUndefined();
+  it.each([
+    ['a free name', 'A New Mod'],
+    ['a separator\'s name', 'Group A'],
+    ['a name only mod order lists', 'Listed Only'],
+    ['a blank name', '   '],
+  ])('is silent for %s', (_case, name) => {
+    expect(newModNameRefusal(key, taken, name)).toBeUndefined();
   });
 
   it('checks the name trimmed', () => {
@@ -45,19 +48,14 @@ describe('newModNameRefusal', () => {
 });
 
 describe('entryNameRefusal', () => {
-  it('refuses a name another entry of the kind has, listed or in a folder, without case', () => {
-    expect(entryNameRefusal(key, taken, 'mod', 'listed only', 'clash')).toBe('clash');
-    expect(entryNameRefusal(key, taken, 'mod', 'FOLDER ONLY', 'clash')).toBe('clash');
-    expect(entryNameRefusal(key, taken, 'separator', 'group a', 'clash', 'Group B')).toBe('clash');
-  });
-
-  it('names the collision for a name a separator\'s folder is named, and for a separator\'s name the manager folds to it', () => {
-    expect(entryNameRefusal(key, taken, 'mod', 'group a_separator', 'clash', 'Harder VATS')).toBe('clash');
-    expect(entryNameRefusal(key, taken, 'separator', ' group a. ', 'clash', 'Group B')).toBe('clash');
-  });
-
-  it('takes the entry\'s own name in any case, and a name only the other kind has', () => {
-    expect(entryNameRefusal(key, taken, 'mod', 'harder vats', 'clash', 'Harder VATS')).toBeUndefined();
-    expect(entryNameRefusal(key, taken, 'mod', 'Group A', 'clash', 'Harder VATS')).toBeUndefined();
+  it.each<[string, EntryRef['kind'], string, string | undefined, string | undefined]>([
+    ['refuses a name another mod has listed, without case', 'mod', 'listed only', undefined, 'clash'],
+    ['refuses a name another mod\'s folder has, without case', 'mod', 'FOLDER ONLY', undefined, 'clash'],
+    ['refuses a name another separator has, without case', 'separator', 'group a', 'Group B', 'clash'],
+    ['refuses a mod name a separator\'s folder is named', 'mod', 'group a_separator', 'Harder VATS', 'clash'],
+    ['takes the entry\'s own name in any case', 'mod', 'harder vats', 'Harder VATS', undefined],
+    ['takes a name only the other kind has', 'mod', 'Group A', 'Harder VATS', undefined],
+  ])('%s', (_case, kind, requested, own, expected) => {
+    expect(entryNameRefusal(key, taken, kind, requested, 'clash', own)).toBe(expected);
   });
 });

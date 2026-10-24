@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { settled } from '../../test/settled';
 
 interface FakeDocument {
   uri: { scheme: string; fsPath: string; toString(): string };
@@ -66,7 +65,7 @@ function document(scheme: string, text: string, isDirty = false, fsPath = CELL):
     positionAt: (offset) => offset,
     save: () => {
       document_.isDirty = false;
-      for (const listener of h.saved) listener(document_);
+      heard(h.saved, document_);
       return Promise.resolve(true);
     },
   };
@@ -74,9 +73,11 @@ function document(scheme: string, text: string, isDirty = false, fsPath = CELL):
   return document_;
 }
 
+const heard = <T>(listeners: ((event: T) => void)[], event: T): void => { listeners.forEach((listener) => { listener(event); }); };
+
 function changed(changing: FakeDocument, text: string, isDirty: boolean, reason?: number): void {
   Object.assign(changing, { text, isDirty });
-  for (const listener of h.changed) listener({ document: changing, contentChanges: [{}], reason });
+  heard(h.changed, { document: changing, contentChanges: [{}], reason });
 }
 
 const shown = (...documents: FakeDocument[]) => documents.map(({ text, isDirty }) => ({ text, unsaved: isDirty }));
@@ -98,9 +99,8 @@ describe('the documents over one file', () => {
     const elsewhere = document('file', 'saved', false, '/source/ModA/plugin-source/A.esp/Cells/Other.json');
 
     changed(file, 'typed', true);
-    await settled();
 
-    expect(shown(child, elsewhere)).toEqual([{ text: 'typed', unsaved: true }, { text: 'saved', unsaved: false }]);
+    await vi.waitFor(() => { expect(shown(child, elsewhere)).toEqual([{ text: 'typed', unsaved: true }, { text: 'saved', unsaved: false }]); });
   });
 
   it('keep a change typed while another takes the one before it, passing none back', async () => {
@@ -111,80 +111,73 @@ describe('the documents over one file', () => {
     };
 
     changed(file, 'typed', true);
-    await settled();
 
-    expect([file.text, child.text]).toEqual(['typed again', 'typed again']);
+    await vi.waitFor(() => { expect([file.text, child.text]).toEqual(['typed again', 'typed again']); });
   });
 
   it('keep what is typed in one while another, having taken the change before, reports turning unsaved', async () => {
     const [file, child] = [document('file', 'saved'), document('modbench-child-record', 'saved')];
     h.afterEdit = () => {
       h.afterEdit = () => undefined;
-      for (const listener of h.changed) listener({ document: child, contentChanges: [] });
+      heard(h.changed, { document: child, contentChanges: [] });
       changed(file, 'typed again', true);
     };
 
     changed(file, 'typed', true);
-    await settled();
 
-    expect([file.text, child.text]).toEqual(['typed again', 'typed again']);
+    await vi.waitFor(() => { expect([file.text, child.text]).toEqual(['typed again', 'typed again']); });
   });
 
   it('give a change to the others from one opened again on a text it took before it closed', async () => {
     const [file, child] = [document('file', 'saved'), document('modbench-child-record', 'saved')];
     changed(file, 'taken', true);
-    await settled();
-    await file.save();
-    await settled();
+    await vi.waitFor(() => { expect(child.text).toBe('taken'); });
+    void file.save();
+    await vi.waitFor(() => { expect(child.isDirty).toBe(false); });
     h.documents.splice(h.documents.indexOf(child), 1);
-    for (const listener of h.closed) listener(child);
+    heard(h.closed, child);
     changed(file, 'saved again', true);
-    await file.save();
-    await settled();
+    void file.save();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     Object.assign(child, { text: 'saved again', isDirty: false });
     h.documents.push(child);
 
     changed(child, 'taken', true);
-    await settled();
 
-    expect(file.text).toBe('taken');
+    await vi.waitFor(() => { expect(file.text).toBe('taken'); });
   });
 
   it('keep an unsaved text when another reads the file again, as a revert does, and that one takes it', async () => {
     const [file, child] = [document('file', 'typed', true), document('modbench-child-record', 'typed', true)];
 
     changed(child, 'saved', false);
-    await settled();
 
-    expect(shown(file, child)).toEqual([{ text: 'typed', unsaved: true }, { text: 'typed', unsaved: true }]);
+    await vi.waitFor(() => { expect(shown(file, child)).toEqual([{ text: 'typed', unsaved: true }, { text: 'typed', unsaved: true }]); });
   });
 
   it('give an undo back to the saved text to each other document', async () => {
     const [file, child] = [document('file', 'typed', true), document('modbench-child-record', 'typed', true)];
 
     changed(file, 'saved', false, UNDO);
-    await settled();
 
-    expect(child.text).toBe('saved');
+    await vi.waitFor(() => { expect(child.text).toBe('saved'); });
   });
 
   it('have one that opens take the unsaved text of another', async () => {
     document('file', 'typed', true);
     const child = document('modbench-child-record', 'saved');
 
-    for (const listener of h.opened) listener(child);
-    await settled();
+    heard(h.opened, child);
 
-    expect(shown(child)).toEqual([{ text: 'typed', unsaved: true }]);
+    await vi.waitFor(() => { expect(shown(child)).toEqual([{ text: 'typed', unsaved: true }]); });
   });
 
   it('save with one each other holding the text it saved, and no other', async () => {
     const file = document('file', 'typed', true);
     const [holding, other] = [document('modbench-child-record', 'typed', true), document('modbench-child-record', 'other', true)];
 
-    await file.save();
-    await settled();
+    void file.save();
 
-    expect(shown(holding, other)).toEqual([{ text: 'typed', unsaved: false }, { text: 'other', unsaved: true }]);
+    await vi.waitFor(() => { expect(shown(holding, other)).toEqual([{ text: 'typed', unsaved: false }, { text: 'other', unsaved: true }]); });
   });
 });

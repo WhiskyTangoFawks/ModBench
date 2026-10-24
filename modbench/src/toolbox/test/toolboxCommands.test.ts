@@ -95,13 +95,6 @@ describe('Switch profile', () => {
     expect(qp.activeItems).toEqual([{ label: 'Default', description: 'current' }]);
   });
 
-  it('switches nothing and says nothing on Esc', async () => {
-    const { reporter } = await switchProfileChoosing('Esc');
-
-    expect(switchProfile).not.toHaveBeenCalled();
-    expect(reporter.reports).toEqual([]);
-  });
-
   it('switches to the picked profile', async () => {
     switchProfile.mockResolvedValueOnce({ applied: true, wrote: true });
 
@@ -133,13 +126,6 @@ describe('Switch profile', () => {
     ]);
   });
 
-  it('opens no progress on Esc, or when the pick is the active profile', async () => {
-    await switchProfileChoosing('Esc');
-    await switchProfileChoosing('Default');
-
-    expect(progressSteps).toEqual([]);
-  });
-
   it('reports a refused switch at error', async () => {
     switchProfile.mockResolvedValueOnce({ applied: false, refusal: 'ModOrganizer.ini is read-only' });
 
@@ -150,10 +136,15 @@ describe('Switch profile', () => {
     ]);
   });
 
-  it('switches nothing when the picked profile is the active one', async () => {
-    await switchProfileChoosing('Default');
+  it.each([
+    ['on Esc', 'Esc'],
+    ['when the pick is the active profile', 'Default'],
+  ])('switches nothing, says nothing and opens no progress %s', async (_case, choice) => {
+    const { reporter } = await switchProfileChoosing(choice);
 
     expect(switchProfile).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([]);
+    expect(progressSteps).toEqual([]);
   });
 });
 
@@ -207,31 +198,22 @@ describe('Refresh', () => {
     expect(progressSteps.at(-1)).toBe('progress closes');
   });
 
-  it('reports the second-window refusal in toolbox.md\'s words, naming this instance since Modbench cannot name the other window, and still reads again', async () => {
-    const { reporter, run } = registerRefresh({ applied: false, heldElsewhere: true }, '/instance/FO4');
+  it.each<[string, RefreshResult, string, { severity: string; message: string; detail: string }]>([
+    ['the second-window refusal in toolbox.md\'s words, naming this instance since Modbench cannot name the other window',
+      { applied: false, heldElsewhere: true }, '/instance/FO4',
+      { severity: 'error', message: 'This instance is open in another Modbench window', detail: '/instance/FO4' }],
+    ['any other refused refresh with its own generic message at error, the backend\'s refusal as its reason',
+      { applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' }, '/instance',
+      { severity: 'error', message: 'Could not refresh.', detail: 'Failed to rebuild the store.' }],
+  ])('reports %s, and still reads again', async (_case, result, instanceRoot, report) => {
+    const { reporter, run } = registerRefresh(result, instanceRoot);
 
     await run();
 
     expect(progressSteps).toEqual([
       'progress opens on modbench.toolbox', 'instance commands: refresh', 'Instance loader: read every file again', 'progress closes',
     ]);
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: "This instance is open in another Modbench window", detail: '/instance/FO4' },
-    ]);
-  });
-
-  it('reports any other refused refresh with its own generic message at error, the backend\'s refusal as its reason, and still reads again', async () => {
-    const refusal = 'Failed to rebuild the store.';
-    const { reporter, run } = registerRefresh({ applied: false, heldElsewhere: false, refusal });
-
-    await run();
-
-    expect(progressSteps).toEqual([
-      'progress opens on modbench.toolbox', 'instance commands: refresh', 'Instance loader: read every file again', 'progress closes',
-    ]);
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not refresh.', detail: refusal },
-    ]);
+    expect(reporter.reports).toEqual([report]);
   });
 
   it('releases the wait it armed for a refill, since a refused rebuild starts none', async () => {

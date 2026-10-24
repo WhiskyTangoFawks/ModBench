@@ -2,12 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { errorMessage } from '../errorMessage';
 
 describe('errorMessage', () => {
-  it('reads the message off an Error', () => {
-    expect(errorMessage(new Error('disk full'))).toBe('disk full');
-  });
-
-  it('stringifies a thrown non-Error', () => {
-    expect(errorMessage('boom')).toBe('boom');
-    expect(errorMessage(42)).toBe('42');
+  it.each<[string, unknown, string]>([
+    ['reads the message off an Error', new Error('disk full'), 'disk full'],
+    ['stringifies a thrown string', 'boom', 'boom'],
+    ['stringifies a thrown number', 42, '42'],
+  ])('%s', (_case, thrown, expected) => {
+    expect(errorMessage(thrown)).toBe(expected);
   });
 });

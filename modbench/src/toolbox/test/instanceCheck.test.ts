@@ -36,23 +36,13 @@ const answerInstanceCheck = (root: string | undefined, isInstance: (root: string
 };
 
 describe('the instance check', () => {
-  it('answers not an instance with no folder open, without asking the mod manager', () => {
-    const isInstance = vi.fn(() => true);
-    expect(answerInstanceCheck(undefined, isInstance)).toBe('notAnInstance');
-    expect(isInstance).not.toHaveBeenCalled();
-    expect(writesOfTheKey()).toEqual([['setContext', FOLDER_KEY, 'notAnInstance']]);
-  });
-
-  it('answers not an instance for a folder the mod manager does not recognize', () => {
-    expect(answerInstanceCheck('/some/folder', () => false)).toBe('notAnInstance');
-    expect(writesOfTheKey()).toEqual([['setContext', FOLDER_KEY, 'notAnInstance']]);
-  });
-
-  it('answers instance for a folder the mod manager recognizes', () => {
-    const isInstance = vi.fn(() => true);
-    expect(answerInstanceCheck('/instance', isInstance)).toBe('instance');
-    expect(isInstance).toHaveBeenCalledWith('/instance');
-    expect(writesOfTheKey()).toEqual([['setContext', FOLDER_KEY, 'instance']]);
+  it.each<[string, string | undefined, (root: string) => boolean, string]>([
+    ['not an instance with no folder open, whatever the mod manager would say', undefined, () => true, 'notAnInstance'],
+    ['not an instance for a folder the mod manager does not recognize', '/some/folder', () => false, 'notAnInstance'],
+    ['instance for the folder the mod manager recognizes', '/instance', (asked) => asked === '/instance', 'instance'],
+  ])('answers %s', (_case, root, isInstance, answer) => {
+    expect(answerInstanceCheck(root, isInstance)).toBe(answer);
+    expect(writesOfTheKey()).toEqual([['setContext', FOLDER_KEY, answer]]);
   });
 });
 

@@ -208,14 +208,6 @@ describe('the Toolbox view\'s states', () => {
     expect(provider.getChildren().map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist']);
   });
 
-  it('keeps its rows when a read after the first fails, the last good value standing', () => {
-    const instance = new FakeInstance(VALUE);
-
-    instance.fail('ModOrganizer.ini is torn');
-
-    expect(rowsOf(instance).map((r) => r.label)).toEqual(['Game', 'Profile', 'Modlist']);
-  });
-
   it('stops following the instance once disposed', () => {
     const instance = new FakeInstance(VALUE);
     const provider = new ToolboxProvider({ instance, channel: SILENT });

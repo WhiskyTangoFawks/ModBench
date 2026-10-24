@@ -199,11 +199,16 @@ describe('installMod', () => {
     expect(calls[0]).toMatchObject({ verb: 'install', keys: { installationFileName: 'Freshly-1-0.7z', nexusId: undefined, installedFileKeys: undefined } });
   });
 
-  it('marks a downloaded file installed once it landed, and marks no file for an installation file, though a downloaded file bears its name', async () => {
-    expect((await install(DOWNLOADED_FILE)).calls.map((call) => call.verb)).toEqual(['install', 'changeModOrder', 'markDownloadedFile']);
-    expect((await install(DOWNLOADED_FILE)).calls[2]).toEqual({ verb: 'markDownloadedFile', name: DOWNLOADED_FILE.name, mark: 'Installed' });
-    expect((await install({ kind: 'archive', path: DOWNLOADED_FILE_PATH })).calls[2]).toEqual({ verb: 'markDownloadedFile', name: DOWNLOADED_FILE.name, mark: 'Installed' });
-    expect((await install({ kind: 'archive', path: '/elsewhere/Freshly-1-0.7z' })).calls.map((call) => call.verb)).toEqual(['install', 'changeModOrder']);
+  const MARKED = { verb: 'markDownloadedFile', name: DOWNLOADED_FILE.name, mark: 'Installed' };
+
+  it.each<[string, ModPackage, unknown[]]>([
+    ['marks a downloaded file installed once it landed', DOWNLOADED_FILE, [MARKED]],
+    ['marks a downloaded file installed for an archive at its path', { kind: 'archive', path: DOWNLOADED_FILE_PATH }, [MARKED]],
+    ['marks no file for an installation file elsewhere, though a downloaded file bears its name', INSTALLATION_FILE, []],
+  ])('%s', async (_case, installed, marks) => {
+    const { calls } = await install(installed);
+
+    expect(calls.filter((call) => call.verb === 'markDownloadedFile')).toEqual(marks);
   });
 
   it('refuses a downloaded file the downloads folder lacks, installing nothing', async () => {
@@ -238,8 +243,7 @@ describe('installMod', () => {
   it('reports a downloaded file it could not mark, because its metadata cannot be written, beside the landed mod', async () => {
     const { result } = await install(DOWNLOADED_FILE, NEW_MOD, { refusals: refusing('markDownloadedFile', 'EISDIR: illegal operation on a directory') });
 
-    expect(result).toMatchObject({ applied: true });
-    expect(result.applied && result.downloadedFileRefusal).toMatch(/EISDIR/);
+    expect(result).toEqual({ applied: true, downloadedFile: 'Freshly-1-0.7z', downloadedFileRefusal: 'EISDIR: illegal operation on a directory' });
   });
 
   it('reports a downloaded file it could not mark, because it went from disk during the install, beside the landed mod', async () => {
@@ -252,7 +256,6 @@ describe('installMod', () => {
 
     const result = await modCommands(fake.adapter, new InMemoryMEditClient(), unreadStatus).installMod(DOWNLOADED_FILE, NEW_MOD, true);
 
-    expect(result).toMatchObject({ applied: true });
-    expect(result.applied && result.downloadedFileRefusal).toMatch(/"Freshly-1-0.7z" is gone from disk/);
+    expect(result).toEqual({ applied: true, downloadedFile: 'Freshly-1-0.7z', downloadedFileRefusal: '"Freshly-1-0.7z" is gone from disk.' });
   });
 });

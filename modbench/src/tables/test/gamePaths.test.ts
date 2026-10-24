@@ -4,26 +4,30 @@ import {
   archiveListsOf, ba2VersionsOf, creationClubListFile, gameReleaseForGame, loadedWithNoLineOf, nexusDomainsForGame, shortNameForNexusDomain, nexusDomainForMetaGame, gamePathInfoForRelease, pluginCompanionRule, SCRIPT_EXTENDER_FOLDERS, type PluginCompanionRule,
 } from '../gamePaths';
 
+const NOT_WRITTEN = 'a game whose plugins.txt Modbench does not write';
+
 describe('gameReleaseForGame', () => {
-  it('maps a game\'s name, as an instance\'s settings spell it, to Mutagen\'s release name', () => {
-    expect(gameReleaseForGame('Fallout 4')).toBe('Fallout4');
-    expect(gameReleaseForGame('Fallout 4 VR')).toBe('Fallout4VR');
-    expect(gameReleaseForGame('Skyrim Special Edition')).toBe('SkyrimSE');
-    expect(gameReleaseForGame('Skyrim VR')).toBe('SkyrimVR');
-    expect(gameReleaseForGame('Starfield')).toBe('Starfield');
+  it.each([
+    ['Fallout 4', 'Fallout4'],
+    ['Fallout 4 VR', 'Fallout4VR'],
+    ['Skyrim Special Edition', 'SkyrimSE'],
+    ['Skyrim VR', 'SkyrimVR'],
+    ['Starfield', 'Starfield'],
+  ])('maps %s, as an instance\'s settings spell it, to Mutagen\'s release name %s', (game, release) => {
+    expect(gameReleaseForGame(game)).toBe(release);
   });
 
-  it.each(['Skyrim', 'Enderal', 'Oblivion', 'Fallout 3', 'Fallout New Vegas'])('answers undefined for %s, a game whose plugins.txt Modbench does not write', (game) => {
+  it.each([
+    ['Skyrim', NOT_WRITTEN],
+    ['Enderal', NOT_WRITTEN],
+    ['Oblivion', NOT_WRITTEN],
+    ['Fallout 3', NOT_WRITTEN],
+    ['Fallout New Vegas', NOT_WRITTEN],
+    ['Morrowind', 'a game Mutagen has no release for, as every value must be a name the backend\'s Enum.TryParse<GameRelease> accepts'],
+    ['Some Game', 'an unknown game, never a guess'],
+    ['', 'an empty name, never a guess'],
+  ])('answers undefined for "%s", %s', (game) => {
     expect(gameReleaseForGame(game)).toBeUndefined();
-  });
-
-  it('answers undefined for a game Mutagen has no release for, as every value must be a name the backend\'s Enum.TryParse<GameRelease> accepts', () => {
-    expect(gameReleaseForGame('Morrowind')).toBeUndefined();
-  });
-
-  it('answers undefined for an unknown game rather than guessing one', () => {
-    expect(gameReleaseForGame('Some Game')).toBeUndefined();
-    expect(gameReleaseForGame('')).toBeUndefined();
   });
 });
 
@@ -56,11 +60,11 @@ describe('nexusDomainForMetaGame', () => {
 
 describe('gamePathInfoForRelease', () => {
   it.each([
-    ['Fallout4', '377160', 'Fallout 4'],
-    ['SkyrimSE', '489830', 'Skyrim Special Edition'],
-    ['Starfield', '1716740', 'Starfield'],
-  ])('answers %s\'s Steam install facts', (release, steamAppId, steamFolderName) => {
-    expect(gamePathInfoForRelease(release)).toMatchObject({ steamAppId, steamFolderName });
+    ['Fallout4', 'fallout4', '377160', 'Fallout 4'],
+    ['SkyrimSE', 'skyrimspecialedition', '489830', 'Skyrim Special Edition'],
+    ['Starfield', 'starfield', '1716740', 'Starfield'],
+  ])('answers %s\'s Nexus slug and Steam install facts', (release, nexusSlug, steamAppId, steamFolderName) => {
+    expect(gamePathInfoForRelease(release)).toMatchObject({ nexusSlug, steamAppId, steamFolderName });
   });
 
   it('answers no Steam facts for a release the table only knows the Nexus slug for, the autodetector\'s signal to give up rather than guess a folder', () => {
@@ -82,39 +86,40 @@ describe('SCRIPT_EXTENDER_FOLDERS', () => {
 });
 
 describe('loadedWithNoLineOf', () => {
-  it('answers the game\'s masters, as Mutagen\'s Implicits.Listings, in the order the game loads them', () => {
-    expect(loadedWithNoLineOf('Fallout4', [])).toEqual([
+  it.each<[string, string | undefined, string[]]>([
+    ['Fallout4', 'Fallout4', [
       'Fallout4.esm', 'DLCRobot.esm', 'DLCworkshop01.esm', 'DLCCoast.esm', 'DLCworkshop02.esm', 'DLCworkshop03.esm',
       'DLCNukaWorld.esm',
-    ]);
-    expect(loadedWithNoLineOf('SkyrimSE', [])).toEqual(['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm']);
-    expect(loadedWithNoLineOf('Starfield', [])).toEqual([
+    ]],
+    ['SkyrimSE', 'SkyrimSE', ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm']],
+    ['Starfield', 'Starfield', [
       'Starfield.esm', 'Constellation.esm', 'OldMars.esm', 'BlueprintShips-Starfield.esm', 'ShatteredSpace.esm',
       'SFBGS006.esm', 'SFBGS007.esm', 'SFBGS003.esm', 'SFBGS008.esm', 'SFBGS004.esm', 'SFBGS00D.esm', 'SFBGS047.esm',
       'SFBGS050.esm', 'BlueprintShips-SFBGS050.esm',
-    ]);
-  });
-
-  it('answers no master for a release the table holds no row for', () => {
-    expect(loadedWithNoLineOf(undefined, [])).toEqual([]);
-    expect(loadedWithNoLineOf('SomeRelease', [])).toEqual([]);
+    ]],
+    ['no release', undefined, []],
+    ['a release the table holds no row for', 'SomeRelease', []],
+  ])('answers the masters of %s, as Mutagen\'s Implicits.Listings, in the order the game loads them', (_case, release, masters) => {
+    expect(loadedWithNoLineOf(release, [])).toEqual(masters);
   });
 
   it('answers the game\'s masters, then the Creation Club plugins, in that order', () => {
-    expect(loadedWithNoLineOf('SkyrimSE', ['ccA.esl', 'ccB.esl'])).toEqual([...loadedWithNoLineOf('SkyrimSE', []), 'ccA.esl', 'ccB.esl']);
+    expect(loadedWithNoLineOf('SkyrimSE', ['ccA.esl', 'ccB.esl']))
+      .toEqual(['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', 'ccA.esl', 'ccB.esl']);
   });
 });
 
 describe('creationClubListFile', () => {
-  it('names the release\'s Creation Club list in the game folder', () => {
-    expect(creationClubListFile('/game', 'Fallout4')).toBe(join('/game', 'Fallout4.ccc'));
-    expect(creationClubListFile('/game', 'SkyrimSE')).toBe(join('/game', 'Skyrim.ccc'));
-    expect(creationClubListFile('/game', 'Starfield')).toBe(join('/game', 'Starfield.ccc'));
+  it.each([
+    ['Fallout4', 'Fallout4.ccc'],
+    ['SkyrimSE', 'Skyrim.ccc'],
+    ['Starfield', 'Starfield.ccc'],
+  ])('names %s\'s Creation Club list in the game folder, %s', (release, file) => {
+    expect(creationClubListFile('/game', release)).toBe(join('/game', file));
   });
 
-  it('names none for a release with no Creation Club, or no release', () => {
-    expect(creationClubListFile('/game', 'SomeRelease')).toBeUndefined();
-    expect(creationClubListFile('/game', undefined)).toBeUndefined();
+  it.each([['a release with no Creation Club', 'SomeRelease'], ['no release', undefined]])('names none for %s', (_case, release) => {
+    expect(creationClubListFile('/game', release)).toBeUndefined();
   });
 });
 
@@ -125,22 +130,25 @@ describe('pluginCompanionRule', () => {
     return found;
   };
 
-  it('takes the archive of a plugin: its own name, or its name cut at the last " - ", with the release\'s extension', () => {
-    expect(rule('Fallout4').inRoot('Foo.esp', 'Foo.ba2')).toBe(true);
-    expect(rule('Fallout4').inRoot('Foo.esp', 'FOO - Main.BA2')).toBe(true);
-    expect(rule('Fallout4').inRoot('Foo.esp', 'Foo - Bar - Main.ba2')).toBe(false);
-    expect(rule('Fallout4').inRoot('Foo - Bar.esp', 'Foo - Bar - Main.ba2')).toBe(true);
-    expect(rule('Fallout4').inRoot('Foo.esp', 'Foo - Main.bsa')).toBe(false);
-    expect(rule('SkyrimSE').inRoot('Foo.esp', 'Foo - Main.bsa')).toBe(true);
-    expect(rule('Fallout4').inRoot('Foo.esp', 'Foobar.ba2')).toBe(false);
-    expect(rule('Starfield').inRoot('Foo.esp', 'Foo - Main.ba2')).toBe(true);
-    expect(rule('Starfield').inStringsFolder('Foo.esp', 'Foo_en.STRINGS')).toBe(true);
+  it.each([
+    ['Fallout4', 'Foo.esp', 'Foo.ba2', true],
+    ['Fallout4', 'Foo.esp', 'FOO - Main.BA2', true],
+    ['Fallout4', 'Foo.esp', 'Foo - Bar - Main.ba2', false],
+    ['Fallout4', 'Foo - Bar.esp', 'Foo - Bar - Main.ba2', true],
+    ['Fallout4', 'Foo.esp', 'Foo - Main.bsa', false],
+    ['SkyrimSE', 'Foo.esp', 'Foo - Main.bsa', true],
+    ['Fallout4', 'Foo.esp', 'Foobar.ba2', false],
+    ['Starfield', 'Foo.esp', 'Foo - Main.ba2', true],
+  ])('in %s takes as the archive of %s, its own name or its name cut at the last " - " with the release\'s extension, %s: %s', (release, plugin, file, taken) => {
+    expect(rule(release).inRoot(plugin, file)).toBe(taken);
   });
 
-  it('takes as the archives the game loads with a plugin the archives it takes in the root, never the ini', () => {
-    expect(rule('Fallout4').isArchiveOf('Foo.esp', 'FOO - Main.BA2')).toBe(true);
-    expect(rule('Fallout4').isArchiveOf('Foo.esp', 'Foo.ini')).toBe(false);
-    expect(rule('Fallout4').isArchiveOf('Foo.esp', 'Foo - Main.bsa')).toBe(false);
+  it.each([
+    ['FOO - Main.BA2', true],
+    ['Foo.ini', false],
+    ['Foo - Main.bsa', false],
+  ])('takes as the archives the game loads with a plugin the archives it takes in the root, never the ini: %s is %s', (file, taken) => {
+    expect(rule('Fallout4').isArchiveOf('Foo.esp', file)).toBe(taken);
   });
 
   it.each([
@@ -165,17 +173,19 @@ describe('pluginCompanionRule', () => {
     expect(rule('Fallout4').inRoot('Foo.esp', 'foo.INI')).toBe(true);
   });
 
-  it('takes the strings of the plugin in each language of the release, whatever their case', () => {
-    expect(rule('Fallout4').inStringsFolder('Foo.esp', 'FOO_en.STRINGS')).toBe(true);
-    expect(rule('Fallout4').inStringsFolder('Foo.esp', 'Foo_en.ilstrings')).toBe(true);
-    expect(rule('Fallout4').inStringsFolder('Foo.esp', 'Foo_English.STRINGS')).toBe(false);
-    expect(rule('SkyrimSE').inStringsFolder('Foo.esp', 'Foo_English.STRINGS')).toBe(true);
-    expect(rule('Fallout4').inStringsFolder('Foo.esp', 'Foo_Bar_en.STRINGS')).toBe(false);
+  it.each([
+    ['Fallout4', 'FOO_en.STRINGS', true],
+    ['Fallout4', 'Foo_en.ilstrings', true],
+    ['Fallout4', 'Foo_English.STRINGS', false],
+    ['SkyrimSE', 'Foo_English.STRINGS', true],
+    ['Fallout4', 'Foo_Bar_en.STRINGS', false],
+    ['Starfield', 'Foo_en.STRINGS', true],
+  ])('in %s takes %s for a strings file of Foo.esp, in each language of the release, whatever its case: %s', (release, file, taken) => {
+    expect(rule(release).inStringsFolder('Foo.esp', file)).toBe(taken);
   });
 
-  it('answers undefined for no release, or a release the table holds no row for', () => {
-    expect(pluginCompanionRule(undefined)).toBeUndefined();
-    expect(pluginCompanionRule('SomeRelease')).toBeUndefined();
+  it.each([['no release', undefined], ['a release the table holds no row for', 'SomeRelease']])('answers undefined for %s', (_case, release) => {
+    expect(pluginCompanionRule(release)).toBeUndefined();
   });
 });
 
@@ -191,9 +201,8 @@ describe('archiveListsOf', () => {
     expect(archiveListsOf(release)?.myGamesFolder).toBe(folder);
   });
 
-  it('answers none for no release, or a release the table holds no row for', () => {
-    expect(archiveListsOf(undefined)).toBeUndefined();
-    expect(archiveListsOf('SomeRelease')).toBeUndefined();
+  it.each([['no release', undefined], ['a release the table holds no row for', 'SomeRelease']])('answers none for %s', (_case, release) => {
+    expect(archiveListsOf(release)).toBeUndefined();
   });
 });
 
