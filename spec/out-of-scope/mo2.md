@@ -41,6 +41,8 @@ Gestures Modbench does differently.
 | 16 | FOMOD Manual | Installs a plain copy; I arrange the files in the Explorer | Opens the manual installer, a dialog for arranging the files | Manual file management: VS Code's Explorer does it. |
 | 17 | Plugin sync | Keeps the line of a plugin a mod's manifest names until I restore the mod | Drops each line whose plugin is not on disk | ADR-0022: a mod is what its manifest says. |
 | 18 | Highlight of related rows | VS Code's find highlight on the label, from the view I last selected in. A selected separator stands for its mods, open or collapsed ([plugins.md](../surfaces/plugins.md), The highlight) | A row colour, masters in a colour of their own, and the markers of both lists at once. A selected separator stands for its mods only while collapsed | Limitation: a tree view cannot colour a row's background. Ruling: one highlight answers one selection, and a separator stands for its mods whether open or collapsed. |
+| 19 | FOMOD conditions on a program's version | A game program that is missing, or a game program or script extender loader whose version cannot be read, refuses the install and says why. A loader the game folder lacks reads as 0.0.0.0, as in MO2 ([mods-fomod.md](../surfaces/mods-fomod.md), Groups and options, story 3) | Reads each of these as version 0.0.0.0, so a condition on it fails with nothing said | Principle: Never silently wrong. |
+| 20 | Fallout 4 VR's script extender | Its loader is `f4sevr_loader.exe` | Looks for `f4se_loader.exe` | Principle: Never silently wrong. |
 
 ## Omissions by object
 
