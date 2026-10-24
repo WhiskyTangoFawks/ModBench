@@ -473,7 +473,6 @@ internal sealed class RecordQueries(
     /// window holds, or a read that never ended, is refused.</summary>
     public StoreRebuildRefused? RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
-        if (source.InstanceRootNotFound(instanceRoot) is { } notFound) return new(StoreRebuildRefusal.InstanceRootNotFound, notFound);
         if (!_index.WhileClosed(file => file.Rebuild(gameRelease, instanceRoot), out var heldElsewhere))
         {
             return new(StoreRebuildRefusal.StillServingReads,

@@ -90,7 +90,8 @@ internal sealed class Store : IDisposable
     }
 
     /// <summary>Opens the file, or the in-memory database when no path was given. Another window
-    /// holding the file answers its refusal, leaving the store unopened (ADR-0010).</summary>
+    /// holding the file answers its refusal, leaving the store unopened (ADR-0010). A missing instance root
+    /// throws rather than be created.</summary>
     public string? Open()
     {
         if (_databasePath == null)
@@ -99,6 +100,8 @@ internal sealed class Store : IDisposable
             return null;
         }
 
+        if (!Directory.Exists(_instanceRoot))
+            throw new IndexFaultException($"Instance root not found: {_instanceRoot}") { Fault = IndexFault.Refused };
         Directory.CreateDirectory(Path.GetDirectoryName(_databasePath)
             ?? throw new InvalidOperationException($"Expected '{_databasePath}' to name a file in a folder."));
         try

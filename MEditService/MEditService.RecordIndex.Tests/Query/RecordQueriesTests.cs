@@ -771,20 +771,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void RebuildStore_OfAnInstanceRootThatIsNotThere_RefusesNamingIt()
-    {
-        var fixture = Built(TwoNpcsPlugin());
-        var index = Reconciled(fixture, instanceRoot: fixture.InstanceRoot);
-        var gone = Path.Combine(fixture.InstanceRoot, "no-such-instance");
-
-        var refusal = index.Queries.RebuildStore(GameRelease.Fallout4, gone);
-
-        Assert.Equal(StoreRebuildRefusal.InstanceRootNotFound, refusal?.Refusal);
-        Assert.Contains(gone, refusal?.Message, StringComparison.Ordinal);
-        Assert.Equal("TestNPC02", index.Queries.GetRecord(Npc02).Value()?.EditorId);
-    }
-
-    [Fact]
     public void GetRecords_MapsEveryWorkingTreeStateTheIndexHas()
     {
         var fixture = Built(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
