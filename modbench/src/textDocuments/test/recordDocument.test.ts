@@ -1,18 +1,8 @@
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 import { describe, it, expect, vi } from 'vitest';
-import { uriFrom } from '../../test/vscodeMock';
+import { UriWith } from '../../test/vscodeMock';
 
-interface TestUri { scheme: string; path: string; query: string; with(change: Partial<Pick<TestUri, 'scheme' | 'query'>>): TestUri }
-
-const h = vi.hoisted(() => {
-  const uri = (scheme: string, path: string, query = ''): TestUri =>
-    ({ scheme, path, query, with: (change) => uri(change.scheme ?? scheme, path, change.query ?? query) });
-  return { uri };
-});
-
-vi.mock('vscode', () => ({
-  Uri: { from: uriFrom, file: (path: string) => h.uri('file', path) },
-}));
+vi.mock('vscode', () => ({ Uri: UriWith }));
 
 import * as vscode from 'vscode';
 import { copyDocument, copyOf, type RecordDocumentClient } from '../recordDocument';

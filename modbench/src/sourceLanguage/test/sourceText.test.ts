@@ -25,9 +25,14 @@ describe('fieldAt', () => {
 describe('a document spelling a FormKey as Mutagen reads it, not as the Index writes it', () => {
   const spelled = '{ "FormKey": "00080a_A.esp", "Ref": "00080A:B.esp" }';
 
-  it('has its record found by the canonical FormKey', () => {
-    expect(formKeyMember(spelled, '00080A:A.esp')).toBeDefined();
-    expect(referenceSpan(spelled, '00080A:A.esp', '00080a_B.esp')).not.toEqual({ start: 0, end: 0 });
+  const spanned = (span: { start: number; end: number } | undefined) => spelled.slice(span?.start, span?.end);
+
+  it('has its record\'s FormKey member found by the canonical FormKey', () => {
+    expect(spanned(formKeyMember(spelled, '00080A:A.esp'))).toBe('"FormKey": "00080a_A.esp"');
+  });
+
+  it('has a reference found by the canonical FormKeys of its record and its target', () => {
+    expect(spanned(referenceSpan(spelled, '00080A:A.esp', '00080a_B.esp'))).toBe('"00080A:B.esp"');
   });
 
   it('answers the canonical FormKey at a FormKey string', () => {

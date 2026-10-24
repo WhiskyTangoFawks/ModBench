@@ -128,9 +128,11 @@ describe('renameRefusal — what the prompt is told before the rename is asked f
     { origin: { kind: 'mod', name: heldIn }, name: 'Renamed Patch.esp' },
   ))).adapter).renameRefusal(PLUGIN, newName, ['.esm', '.esl', '.esp']);
 
-  it('refuses a name the plugin\'s origin holds, and not one another origin holds', async () => {
-    expect(await refusal('Renamed Patch.esp', 'Patch Mod')).toBe('"Patch Mod" already holds "Renamed Patch.esp".');
-    expect(await refusal('Renamed Patch.esp', 'OtherMod')).toBeUndefined();
+  it.each<[string, string, string, string | undefined]>([
+    ['refuses a name the plugin\'s origin holds', 'Renamed Patch.esp', 'Patch Mod', '"Patch Mod" already holds "Renamed Patch.esp".'],
+    ['lets through a name only another origin holds', 'Renamed Patch.esp', 'OtherMod', undefined],
+  ])('%s', async (_case, newName, heldIn, expected) => {
+    expect(await refusal(newName, heldIn)).toBe(expected);
   });
 });
 

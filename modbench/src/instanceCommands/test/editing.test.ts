@@ -1,7 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { settled } from '../../test/settled';
 import { editingFlow } from '../editing';
 import type { PutLoadOrderResult } from '../loadOrder';
 import type { LoadOrderSource } from '../loadOrder';
@@ -153,10 +152,6 @@ function pending() {
   return { promise, resolve };
 }
 
-const until = async (check: () => boolean): Promise<void> => {
-  while (!check()) await new Promise((resolve) => setTimeout(resolve, 0));
-};
-
 describe('a tell that threw', () => {
   it('reaches the Output once, and the entries after it still end', async () => {
     const { flow, toldCount, land, logged, failNextTell, around } = wired();
@@ -186,9 +181,8 @@ describe('telling a launch that threw', () => {
     editingFlow({ client, instanceRoot: '/instance', onPut: () => Promise.resolve(), log: (line) => { logged.push(line); }, around: (entry) => entry() });
 
     client.heard(Promise.reject(new Error('no kill')));
-    await settled();
 
-    expect(logged).toEqual(['[loadOrder] telling the launch of mEdit threw: no kill']);
+    await vi.waitFor(() => { expect(logged).toEqual(['[loadOrder] telling the launch of mEdit threw: no kill']); });
   });
 });
 
@@ -197,12 +191,12 @@ describe('a recompute after a failed launch', () => {
     const { client, told, land, around } = wired('stopped');
     client.answerStart(() => Promise.resolve());
     void client.start();
-    await until(() => around.settled);
+    await vi.waitFor(() => { expect(around.settled).toBe(true); });
     const toldBefore = told.length;
 
     land(valueWith('A.esp'));
     await client.latestLoadOrder();
-    await settled();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(told.slice(toldBefore)).toEqual([]);
     expect(around.entered).toBe(1);
