@@ -7,10 +7,11 @@ import { delimiter, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import type { types } from '@nexusmods/fomod-installer-native';
 import { copyTree, ensureDir, makeTempDir, ownTempPrefix, remove, textIfUtf8, write } from '../files';
 import { moduleConfigForEngine } from './moduleConfig';
-import { aboutIn, imageResolver, keyOf, NO_ABOUT, type About } from './releaseAbout';
+import { aboutIn, NO_ABOUT, type About } from './releaseAbout';
+import { keyOf, resolverIn } from './releasePaths';
 import { errorMessage } from '../../ports/errorMessage';
 import type { FomodKind } from '../gameFolder/releaseRoot';
-import { withImages, type FomodState } from '../../wire/fomodPage';
+import { withImages, type FomodState, type ReleaseImage } from '../../wire/fomodPage';
 import type { FomodAnswer, FomodDialog, FomodGroupChoice, FomodLanded, FomodStepChoice } from '../instanceAdapter';
 import { isReport, type ConditionFacts, type EngineReport, type EngineRequest, type Selection } from './engineProtocol';
 
@@ -158,12 +159,15 @@ function conversing(dialog: FomodDialog): Driver {
   let headerImage = '';
   let about: About = NO_ABOUT;
   let folder = '';
-  let imageIn = imageResolver([]);
+  let imageIn = resolverIn([]);
   let shown = false;
   let ended: Stopped | undefined;
   let release: (() => void) | undefined;
-  const stateOf = (steps: readonly Step[], current: number): FomodState =>
-    withImages({ module, ...about, image: headerImage, steps, current }, imageIn);
+  const stateOf = (steps: readonly Step[], current: number): FomodState<ReleaseImage> =>
+    withImages({ module, ...about, image: headerImage, steps, current }, (image) => {
+      const path = imageIn(image);
+      return path === undefined ? undefined : { path };
+    });
   return {
     waitsOnUser: true,
     attach: (send) => dialog.onMove((move) => {
@@ -189,7 +193,7 @@ function conversing(dialog: FomodDialog): Driver {
     },
     released: async ({ root, files }) => {
       folder = root;
-      imageIn = imageResolver(files);
+      imageIn = resolverIn(files);
       about = await aboutIn(root, files);
     },
     step: ({ steps, current }) => {
@@ -292,7 +296,7 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
 
 async function filesUnder(root: string): Promise<string[]> {
   const entries = await readdir(root, { recursive: true, withFileTypes: true });
-  return entries.filter((entry) => entry.isFile()).map((entry) => relative(root, join(entry.parentPath, entry.name)));
+  return entries.filter((entry) => entry.isFile()).map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/'));
 }
 
 // The engine reads the config from a folder of its own, so the release keeps its own. A config that is not UTF-8 it

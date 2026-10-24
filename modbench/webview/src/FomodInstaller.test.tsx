@@ -183,9 +183,10 @@ describe('the FOMOD installer page', () => {
       expect(screen.getByRole('img', { name: 'My Module' })).toHaveAttribute('src', 'img://header.png');
     });
 
-    it('shows a website as a link, and a website that is no web address as text', () => {
+    it('shows a website as a link named Link, with the address as its tooltip, and a website that is no web address as text', () => {
       show([], 0, { website: 'https://example.com/mod' });
-      expect(screen.getByRole('link', { name: 'https://example.com/mod' })).toHaveAttribute('href', 'https://example.com/mod');
+      expect(screen.getByRole('link', { name: 'Link' })).toHaveAttribute('href', 'https://example.com/mod');
+      expect(screen.getByRole('link', { name: 'Link' })).toHaveAttribute('title', 'https://example.com/mod');
 
       show([], 0, { website: 'javascript:alert(1)' });
       expect(screen.queryByRole('link')).not.toBeInTheDocument();
@@ -204,10 +205,28 @@ describe('the FOMOD installer page', () => {
     const described = () => show([step(0, 'One', true, group(0, 'Pick', 'SelectAny',
       option(0, 'A', { description: 'About A', image: 'img://a.png' }), option(1, 'B', { description: 'About B' })))]);
 
-    it('shows nothing of an option until the pointer or focus is on one', () => {
+    it('shows the first option\'s description and image when a step opens, and the first of the next step when it opens', () => {
       described();
+      expect(screen.getByText('About A')).toBeInTheDocument();
 
-      expect(screen.queryByText('About A')).not.toBeInTheDocument();
+      fireEvent.focus(screen.getByRole('checkbox', { name: 'B' }));
+      show([step(1, 'Two', true, group(0, 'Pick', 'SelectAny', option(0, 'C', { description: 'About C' })))], 0);
+
+      expect(screen.getByText('About C')).toBeInTheDocument();
+    });
+
+    it('shows the first option again when the user comes back to a step', () => {
+      const steps = [
+        step(0, 'One', true, group(0, 'Pick', 'SelectAny', option(0, 'A', { description: 'About A' }), option(1, 'B', { description: 'About B' }))),
+        step(1, 'Two', true),
+      ];
+      show(steps, 0);
+      fireEvent.focus(screen.getByRole('checkbox', { name: 'B' }));
+
+      show(steps, 1);
+      show(steps, 0);
+
+      expect(screen.getByText('About A')).toBeInTheDocument();
     });
 
     it('shows the description and image of the option under the pointer, and then of the one with focus', () => {

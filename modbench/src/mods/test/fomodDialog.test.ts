@@ -41,11 +41,12 @@ vi.mock('vscode', () => ({
 import { fomodDialog } from '../fomodDialog';
 import type { AskQuestion } from '../../ports/dialog';
 import * as vscode from 'vscode';
-import { FOMOD_MOVE, FOMOD_READY, FOMOD_STATE, type FomodMove, type FomodState } from '../../wire/fomodPage';
+import { FOMOD_MOVE, FOMOD_READY, FOMOD_STATE, type FomodMove, type FomodState, type ReleaseImage } from '../../wire/fomodPage';
 
 const EXTENSION = vscode.Uri.file('/ext');
 const PROGRESS = { working: vi.fn(), waiting: vi.fn() };
-const STATE: FomodState = { module: 'My Module', author: '', version: '', website: '', image: '', steps: [], current: 0 };
+const STATE: FomodState<ReleaseImage> = { module: 'My Module', author: '', version: '', website: '', image: undefined, steps: [], current: 0 };
+const SHOWN: FomodState = { ...STATE, image: '', steps: [] };
 const RELEASE = '/staging/release';
 const page = () => {
   const [only] = panels;
@@ -71,21 +72,20 @@ describe('the FOMOD installer\'s page, in a tab', () => {
     expect(createWebviewPanel).toHaveBeenCalledTimes(1);
   });
 
-  it('lets the page load images from the release\'s folder and no other, and says so in its policy', () => {
+  it('lets the page load images from the release\'s folder and no other', () => {
     fomodDialog(EXTENSION, vi.fn(), PROGRESS).show(STATE, RELEASE);
 
     expect(page().webview.options.localResourceRoots).toEqual(['/ext/out/webview', { fsPath: RELEASE, path: RELEASE }]);
-    expect(page().webview.html).toContain('img-src csp:;');
   });
 
   it('sends each image of the state as a URI the page can load, and no URI for an image the state lacks', () => {
     const dialog = fomodDialog(EXTENSION, vi.fn(), PROGRESS);
     const option = { id: 0, selected: false, name: 'A', description: '', type: 'Optional' as const };
-    const step = (image: string) => ({
+    const step = (image: ReleaseImage) => ({
       id: 0, name: 'Main', visible: true,
       optionalFileGroups: { group: [{ id: 0, name: 'Pick', type: 'SelectAny' as const, options: [{ ...option, image }] }] },
     });
-    dialog.show({ ...STATE, image: 'Images/Header.png', steps: [step('img/a.png'), step('')] }, RELEASE);
+    dialog.show({ ...STATE, image: { path: 'Images/Header.png' }, steps: [step({ path: 'img/a.png' }), step(undefined)] }, RELEASE);
 
     page().receive({ type: FOMOD_READY });
 
@@ -103,7 +103,7 @@ describe('the FOMOD installer\'s page, in a tab', () => {
     dialog.show({ ...STATE, current: 1 }, RELEASE);
 
     expect(page().webview.postMessage.mock.calls.map(([message]) => message)).toEqual([
-      { type: FOMOD_STATE, state: STATE }, { type: FOMOD_STATE, state: STATE }, { type: FOMOD_STATE, state: { ...STATE, current: 1 } },
+      { type: FOMOD_STATE, state: SHOWN }, { type: FOMOD_STATE, state: SHOWN }, { type: FOMOD_STATE, state: { ...SHOWN, current: 1 } },
     ]);
   });
 

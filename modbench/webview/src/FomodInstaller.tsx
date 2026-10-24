@@ -75,9 +75,8 @@ function Description({ option, enlarge }: { option: FomodOption | undefined; enl
 function Steps({ state, enlarge }: { state: FomodState; enlarge: (image: Enlarged) => void }) {
   const [looked, look] = useState<string | undefined>(undefined);
   const step = state.steps[state.current];
-  const described = step?.optionalFileGroups?.group
-    .flatMap((group) => group.options.map((option) => ({ key: keyOf(step, group, option), option })))
-    .find(({ key }) => key === looked)?.option;
+  const options = step?.optionalFileGroups?.group.flatMap((group) => group.options.map((option) => ({ key: keyOf(step, group, option), option }))) ?? [];
+  const described = (options.find(({ key }) => key === looked) ?? options[0])?.option;
   const waiting = step === undefined ? [] : groupsNeedingPick(step);
   const stepId = step?.id ?? 0;
   const last = isLastVisible(state.steps, state.current);
@@ -118,7 +117,7 @@ function Header({ state }: { state: FomodState }) {
     state.version !== '' && <span key="version">Version: {state.version}</span>,
     state.website !== '' && (
       <span key="website">
-        Website: {isWebAddress(state.website) ? <a href={state.website}>{state.website}</a> : state.website}
+        Website: {isWebAddress(state.website) ? <a href={state.website} title={state.website}>Link</a> : state.website}
       </span>
     ),
   ].filter((field) => field !== false);
@@ -158,7 +157,7 @@ export function FomodInstallerView() {
   return (
     <>
       <Header state={state} />
-      <Steps state={state} enlarge={setEnlarged} />
+      <Steps key={state.steps[state.current]?.id} state={state} enlarge={setEnlarged} />
       {enlarged !== undefined && (
         <div
           role="dialog" aria-label={enlarged.name} onClick={() => setEnlarged(undefined)}

@@ -5,7 +5,7 @@ import type { FomodDialog } from '../modCommands/modCommands';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import type { AskQuestion } from '../ports/dialog';
 import type { Progress } from '../drivingLib/pausableProgress';
-import { FOMOD_STATE, isFomodReady, parseFomodMove, withImages, type FomodMove, type FomodState } from '../wire/fomodPage';
+import { FOMOD_STATE, isFomodReady, parseFomodMove, withImages, type FomodMove, type FomodState, type ReleaseImage } from '../wire/fomodPage';
 import { WEBVIEW_SCRIPTS } from '../wire/webviewPages';
 
 const INSTALL_ANYWAY = 'Install anyway';
@@ -14,7 +14,7 @@ const INSTALL_ANYWAY = 'Install anyway';
 export function fomodDialog(extensionUri: vscode.Uri, ask: AskQuestion, progress: Progress): FomodDialog {
   let panel: vscode.WebviewPanel | undefined;
   let moved: (move: FomodMove) => void = () => undefined;
-  let latest: FomodState | undefined;
+  let latest: FomodState<ReleaseImage> | undefined;
   let closing = false;
 
   let release: vscode.Uri | undefined;
@@ -24,7 +24,7 @@ export function fomodDialog(extensionUri: vscode.Uri, ask: AskQuestion, progress
     if (panel === undefined || latest === undefined || release === undefined) return;
     const { webview } = panel;
     const folder = release;
-    const state = withImages(latest, (image) => (image === '' ? '' : webview.asWebviewUri(vscode.Uri.joinPath(folder, ...image.split('/'))).toString()));
+    const state = withImages(latest, (image) => (image === undefined ? '' : webview.asWebviewUri(vscode.Uri.joinPath(folder, ...image.path.split('/'))).toString()));
     void webview.postMessage({ type: FOMOD_STATE, state });
   };
 
