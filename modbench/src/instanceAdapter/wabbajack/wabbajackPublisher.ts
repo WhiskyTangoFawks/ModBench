@@ -3,7 +3,7 @@
 // Publisher tags, story 5).
 
 import { isAbsolute, join, relative, sep } from 'node:path';
-import { applyEdits, modify, parse, parseTree, printParseErrorCode, type Edit, type FormattingOptions, type Node, type ParseError } from 'jsonc-parser';
+import { applyEdits, parse, parseTree, printParseErrorCode, type Edit, type Node, type ParseError } from 'jsonc-parser';
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { get, listDir, putIfChanged, readOrAbsent } from '../files';
@@ -255,10 +255,8 @@ function followedEntries(entries: readonly string[], moves: readonly InstanceMov
   return { changed, appended: [] };
 }
 
-function formatOf(text: string): FormattingOptions {
-  const indent = /\n([ \t]+)"/.exec(text)?.[1] ?? '  ';
-  const tabbed = indent.startsWith('\t');
-  return { insertSpaces: !tabbed, tabSize: tabbed ? 1 : indent.length, eol: text.includes('\r\n') ? '\r\n' : '\n' };
+function layoutOf(text: string): { eol: string; unit: string } {
+  return { eol: text.includes('\r\n') ? '\r\n' : '\n', unit: /\n([ \t]+)"/.exec(text)?.[1] ?? '  ' };
 }
 
 // The list the read takes: the last of a key listed twice.
@@ -303,15 +301,32 @@ function withoutEntry(text: string, list: Node, at: number): string {
   return applyEdits(text, edits);
 }
 
+function insertIntoEmpty(text: string, container: Node, item: string): string {
+  const { eol, unit } = layoutOf(text);
+  const multiline = text.slice(container.offset, container.offset + container.length).includes('\n');
+  const lineStart = lineStartOf(text, container.offset);
+  const indent = /^[ \t]*/.exec(text.slice(lineStart))?.[0] ?? '';
+  const content = multiline ? `${eol}${indent}${unit}${item}` : item;
+  return applyEdits(text, [{ offset: container.offset + 1, length: 0, content }]);
+}
+
 function withAppended(text: string, key: string, value: string): string {
   const list = listOf(text, key);
-  const last = list?.children?.at(-1);
-  const formattingOptions = formatOf(text);
-  if (list === undefined) return applyEdits(text, modify(text, [key], [value], { formattingOptions }));
-  if (last === undefined) return applyEdits(text, modify(text, [key, -1], value, { formattingOptions, isArrayInsertion: true }));
+  const entry = JSON.stringify(value);
+  if (list === undefined) {
+    const root = parseTree(text, [], READS);
+    if (root === undefined) throw new Error('no settings object');
+    const property = `${JSON.stringify(key)}: [ ${entry} ]`;
+    const lastProperty = root.children?.at(-1);
+    return lastProperty === undefined ? insertIntoEmpty(text, root, property) : insertAfter(text, lastProperty, property);
+  }
+  const last = list.children?.at(-1);
+  return last === undefined ? insertIntoEmpty(text, list, entry) : insertAfter(text, last, entry);
+}
+
+function insertAfter(text: string, last: Node, entry: string): string {
   const end = last.offset + last.length;
   const own = commaFrom(text, end);
-  const entry = JSON.stringify(value);
   const from = own === undefined ? end : own + 1;
   const lineEnd = text.indexOf('\n', from);
   const lineEndAt = lineEnd > 0 && text[lineEnd - 1] === '\r' ? lineEnd - 1 : lineEnd;
@@ -319,7 +334,7 @@ function withAppended(text: string, key: string, value: string): string {
   const ownLine = lineEnd !== -1 && indent.trim() === '' && afterSkipped(text.slice(0, lineEndAt), from) === lineEndAt;
   if (!ownLine) return applyEdits(text, [{ offset: end, length: 0, content: `, ${entry}` }]);
   const comma = own === undefined ? ',' : '';
-  const line = `${formattingOptions.eol}${indent}${entry}${own === undefined ? '' : ','}`;
+  const line = `${layoutOf(text).eol}${indent}${entry}${own === undefined ? '' : ','}`;
   const edits: Edit[] = lineEndAt === end
     ? [{ offset: end, length: 0, content: comma + line }]
     : [{ offset: end, length: 0, content: comma }, { offset: lineEndAt, length: 0, content: line }];
