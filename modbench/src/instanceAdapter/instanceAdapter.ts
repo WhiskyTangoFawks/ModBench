@@ -216,8 +216,8 @@ export interface FomodStepChoice {
   readonly groups: readonly FomodGroupChoice[];
 }
 
-/** The page a user answers a FOMOD's installer on: it shows the installer as it stands, sends the user's moves, and asks
- *  whether to install without the files the FOMOD names and its archive lacks. `close` ends it, whatever else did. */
+/** The page a user answers a FOMOD's installer on: it shows the installer, sends the user's moves, and asks whether to
+ *  install without files the archive lacks. `close` ends it. */
 export interface FomodDialog {
   readonly show: (state: FomodState) => void;
   readonly onMove: (handler: (move: FomodMove) => void) => void;
@@ -232,9 +232,8 @@ export type FomodAnswer =
   | { readonly kind: 'dialog'; readonly dialog: FomodDialog }
   | { readonly kind: 'manual' };
 
-/** A FOMOD its installer installed, with each file it names that its archive lacks and anything else its installer
- *  said; one installed as a plain copy because Manual was asked for; or one installed as a plain copy because its
- *  installer did not run, and why. */
+/** A FOMOD its installer installed, with each file its archive lacks and anything else it said; a plain copy because
+ *  Manual was asked for; or a plain copy because its installer did not run, and why. */
 export type FomodLanded =
   | { readonly kind: 'installer'; readonly missing: readonly string[]; readonly notes: readonly string[] }
   | { readonly kind: 'manual' }

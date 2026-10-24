@@ -306,7 +306,6 @@ describe('the FOMOD installer', () => {
       closed: number;
     }
 
-    // The user is a script: given the state just shown, the moves that follow.
     async function answered(
       react: (state: FomodState, move: (move: FomodMove) => void, seen: number) => void,
       { engine = FOMOD_ENGINE, confirms = true }: { engine?: FomodEngine; confirms?: boolean } = {},

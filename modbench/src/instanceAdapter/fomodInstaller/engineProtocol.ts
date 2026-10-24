@@ -23,8 +23,8 @@ export type EngineRequest =
   | { readonly kind: 'continue'; readonly forward: boolean; readonly stepId: number }
   | { readonly kind: 'cancel' };
 
-/** `dialog` is the installer opening, `step` the installer as it stands after each change, and `cause` what changed it: a
- *  selection, or the start and every move between steps. `failed` an installer it cannot read, `broken` an engine that cannot run. */
+/** `dialog` is the installer opening, `step` its state after a change, `cause` that change: a selection, or a move.
+ *  `failed` is an installer it cannot read, `broken` an engine that cannot run. */
 export type EngineReport =
   | { readonly kind: 'dialog'; readonly module: string }
   | { readonly kind: 'step'; readonly steps: readonly types.IInstallStep[]; readonly current: number; readonly cause: 'select' | 'move' }

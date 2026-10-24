@@ -35,15 +35,15 @@ const { createWebviewPanel, panels } = vi.hoisted(() => {
 vi.mock('vscode', () => ({
   window: { createWebviewPanel },
   ViewColumn: { Active: -1 },
-  Uri: { joinPath: (base: unknown, ...parts: string[]) => [String(base), ...parts].join('/') },
+  Uri: { file: (path: string) => ({ fsPath: path, path }), joinPath: (base: unknown, ...parts: string[]) => [String(base), ...parts].join('/') },
 }));
 
 import { fomodDialog } from '../fomodDialog';
 import type { AskQuestion } from '../../ports/dialog';
-import { uriFile } from '../../test/vscodeMock';
+import * as vscode from 'vscode';
 import { FOMOD_MOVE, FOMOD_READY, FOMOD_STATE, type FomodMove, type FomodState } from '../../wire/fomodPage';
 
-const EXTENSION = uriFile('/ext');
+const EXTENSION = vscode.Uri.file('/ext');
 const STATE: FomodState = { module: 'My Module', steps: [], current: 0 };
 const page = () => {
   const [only] = panels;

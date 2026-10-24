@@ -44,20 +44,20 @@ type EngineRun =
 
 type StepReport = Extract<EngineReport, { readonly kind: 'step' }>;
 
-/** Who answers the installer: the choices an agent gave, or the user on a page. */
+// Who answers the installer: the choices an agent gave, or the user on a page.
 interface Driver {
-  /** Whether the installer may wait on the answer without being taken for stopped. */
+  // Whether the installer may wait on the answer without being taken for stopped.
   readonly patient: boolean;
-  /** Called before the installer runs; `send` carries answers that come when they come. */
+  // Called before the installer runs; `send` carries answers that come when they come.
   readonly attach: (send: (request: EngineRequest) => void) => void;
   readonly opened: (module: string) => void;
-  /** The requests that answer the installer as it stands. Throws when the installer cannot be left. */
+  // The requests that answer the installer as it stands. Throws when the installer cannot be left.
   readonly step: (report: StepReport) => readonly EngineRequest[];
-  /** Resolves when the installer, which finished with no step shown, may install. */
+  // Resolves when the installer, which finished with no step shown, may install.
   readonly finish: () => Promise<void>;
   readonly confirmMissing: (missing: readonly string[]) => Promise<boolean>;
   readonly ended: () => 'manual' | 'cancelled' | undefined;
-  /** The choices that no step the installer showed took. */
+  // The choices that no step the installer showed took.
   readonly untaken: () => readonly FomodStepChoice[];
 }
 
@@ -344,9 +344,8 @@ async function installFomod(engine: FomodEngine, { root, into, facts, driver }: 
 const driverFor = (answer: Extract<FomodAnswer, { readonly kind: 'choices' | 'dialog' }>): Driver =>
   (answer.kind === 'choices' ? choosing(answer.steps) : conversing(answer.dialog));
 
-/** Where a release that holds a FOMOD lands its files from, and how: the folder its installer filled, inside the
- *  release's own, or the release as it is when the installer does not run, and why; or none, because the user
- *  cancelled. */
+/** Where a release that holds a FOMOD lands its files from, and how: the folder its installer filled, or the release
+ *  as it is; or none, because the user cancelled. */
 export async function fomodLanding(
   engine: FomodEngine, release: { readonly root: string; readonly fomod: FomodKind }, answer: FomodAnswer | undefined, facts: () => Promise<ConditionFacts>,
 ): Promise<{ readonly root: string; readonly fomod: FomodLanded } | { readonly cancelled: true }> {
