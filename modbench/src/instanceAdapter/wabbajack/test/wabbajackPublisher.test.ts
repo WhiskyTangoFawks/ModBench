@@ -522,3 +522,71 @@ describe('the publisher tags that name no path in the instance (publishing.md, P
     expect(await publisherOver().configuration()).toMatchObject({ kind: 'unreadable', reason: expect.stringMatching(/ at line 3, column 9$/) as unknown });
   });
 });
+
+describe('a write to the compiler settings changes only the entries it names (Never silently wrong)', () => {
+  const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
+  const folder = (name: string) => join(root, 'mods', name);
+  const kept = (...present: string[]) => ({ present, owns: (path: string) => path.toLowerCase().endsWith('.manifest.json') });
+  const handKept = (lines: string[]) => lines.join('\r\n');
+  const BEFORE = [
+    '// shaped by hand',
+    '{',
+    '   /* the output */',
+    '   "OutputFile": "",',
+    '   "Include": [',
+    '      "mods\\\\A", // keep',
+    '      "mods\\\\B",',
+    '   ],',
+    '   "Ignore": [',
+    '      "mods\\\\Old\\\\Old.manifest.json", /* gone */',
+    '      "mine",',
+    '   ],',
+    '   "Mine": 1,',
+    '}',
+    '',
+  ];
+  const changedLines = (...replacements: [at: number, lines: string[]][]) =>
+    handKept(replacements.reduceRight((lines, [at, now]) => lines.toSpliced(at, 1, ...now), BEFORE));
+
+  beforeEach(async () => {
+    await writeSettings(handKept(BEFORE));
+  });
+
+  it('an add inserts its entry and leaves every comment, comma, indent and line end', async () => {
+    await publisherOver().changeTag('add', 'Include', [folder('C')]);
+
+    expect(await settingsText()).toBe(changedLines([6, ['      "mods\\\\B",', '      "mods\\\\C",']]));
+  });
+
+  it('a remove takes its entry away and leaves the rest', async () => {
+    await publisherOver().changeTag('remove', 'Include', [folder('B')]);
+
+    expect(await settingsText()).toBe(changedLines([6, []]));
+  });
+
+  it('a follow renames its entry in place', async () => {
+    await publisherOver().followFolders([{ from: folder('B'), to: folder('D') }]);
+
+    expect(await settingsText()).toBe(changedLines([6, ['      "mods\\\\D",']]));
+  });
+
+  it('a keep-out adds its file to Ignore and drops the gone manifest, leaving the rest', async () => {
+    await publisherOver().keepOut(kept(join(root, 'mods', 'B', 'B.manifest.json')));
+
+    expect(await settingsText()).toBe(changedLines([9, [" /* gone */"]], [10, ['      "mine",', '      "mods\\\\B\\\\B.manifest.json",']]));
+  });
+
+  it('adds a list the settings lack, after the settings it keeps', async () => {
+    await publisherOver().changeTag('add', 'Always Enabled', [folder('C')]);
+
+    expect(await settingsText()).toBe(changedLines([12, ['   "Mine": 1,', '   "AlwaysEnabled": [', '      "mods\\\\C"', '   ],']]));
+  });
+
+  it('keeps a tab indent and a missing final newline', async () => {
+    await writeSettings('{\n\t"Include": [\n\t\t"mods\\\\A"\n\t]\n}');
+
+    await publisherOver().changeTag('add', 'Include', [folder('C')]);
+
+    expect(await settingsText()).toBe('{\n\t"Include": [\n\t\t"mods\\\\A",\n\t\t"mods\\\\C"\n\t]\n}');
+  });
+});

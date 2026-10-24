@@ -856,6 +856,7 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
     expect(fake.calls).toEqual([
       { verb: 'renameModFolder', from: 'Harder VATS', to: 'Harder VATS 2' },
       follow({ from: '/mods/Harder VATS', to: '/mods/Harder VATS 2' }),
+      { verb: 'keepOutOfPublisher' },
       expect.objectContaining({ verb: 'changeModOrder' }),
     ]);
   });

@@ -499,6 +499,7 @@ async function moveTagsAfterRename(adapter: InstanceAdapter, from: string | unde
   try {
     const target = await adapter.modFolderPath(to);
     if (from !== undefined && target !== undefined) await adapter.followModFolders([{ from, to: target }]);
+    await adapter.keepOutOfPublisher();
     return undefined;
   } catch (err) {
     return errorMessage(err);

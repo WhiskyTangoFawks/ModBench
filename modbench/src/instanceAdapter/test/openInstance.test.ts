@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
+import { unreadStatus } from '../../test/unreadStatus';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { modCommands } from '../../modCommands/modCommands';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -86,6 +89,20 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     await writeFile(join(root, 'mods', 'Y', 'Y.manifest.json'), '{}');
 
     await adapter.keepOutOfPublisher();
+
+    const entries: unknown = Reflect.get(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8')), 'Ignore');
+    expect(entries).toEqual(expect.arrayContaining(['mods\\Y\\Y.manifest.json']));
+    expect(entries).not.toContain('mods\\Y\\X.manifest.json');
+  });
+
+  it('ignores a renamed mod\'s manifest under its new name, and drops the entry for the old name, when rename ends', async () => {
+    const adapter = adapterOver(root);
+    await writeFile(join(root, SETTINGS_FILE), '{}');
+    await mkdir(join(root, 'mods', 'X'), { recursive: true });
+    await writeFile(join(root, 'mods', 'X', 'X.manifest.json'), '{}');
+    await adapter.keepOutOfPublisher();
+
+    await modCommands(adapter, new InMemoryMEditClient(), unreadStatus).renameMod('X', 'Y');
 
     const entries: unknown = Reflect.get(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8')), 'Ignore');
     expect(entries).toEqual(expect.arrayContaining(['mods\\Y\\Y.manifest.json']));
