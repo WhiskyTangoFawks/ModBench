@@ -40,6 +40,7 @@ Gestures Modbench does differently.
 | 15 | Scripted FOMOD | Installs as a plain copy, on Windows and Linux | A C# script installer runs on Windows, through a second installer plugin | Ruling: Windows and Linux alike. |
 | 16 | FOMOD Manual | Installs a plain copy; I arrange the files in the Explorer | Opens the manual installer, a dialog for arranging the files | Manual file management: VS Code's Explorer does it. |
 | 17 | Plugin sync | Keeps the line of a plugin a mod's manifest names until I restore the mod | Drops each line whose plugin is not on disk | ADR-0022: a mod is what its manifest says. |
+| 18 | Highlight of related rows | VS Code's find highlight on the label, from the view I last selected in. A selected separator stands for its mods, open or collapsed ([plugins.md](../surfaces/plugins.md), The highlight) | A row colour, masters in a colour of their own, and the markers of both lists at once. A selected separator stands for its mods only while collapsed | Limitation: a tree view cannot colour a row's background. Ruling: one highlight answers one selection, and a separator stands for its mods whether open or collapsed. |
 
 ## Omissions by object
 

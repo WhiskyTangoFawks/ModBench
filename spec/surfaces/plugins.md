@@ -109,6 +109,17 @@ As a user, I want:
 3. The record filter to narrow the records to the FormKeys a SQL query returns. Its title-bar slot becomes a clear icon while it is active. It is its own filter, beside the name filter. It narrows the groups' counts too, and applies again after every change to the record index. It never narrows the Editor or Referenced By. Cites: catalog `filter` under Record; Chrome
 4. A plugin with no record left under the record filter hidden while the record filter is active. A later snapshot keeps the rows the record filter hides until the new ones land.
 
+## The highlight
+
+A selection here or in Mods highlights the rows related to it. The highlight marks a row's label as VS Code's find marks a match. Every row stays in its place, with its icon, colours and badges. The highlight shows where the related rows sit in the plugin order and the mod order. As a user, I want:
+
+1. A selection of mods or Overwrite to highlight every plugin they hold. For an overridden plugin, it highlights the row of the plugin that overrides it. A disabled mod highlights nothing. Cites: MO2
+2. A selected separator to highlight what the mods it holds highlight, open or collapsed. Cites: mo2.md, Divergences, 18
+3. A selection of plugins to highlight, in Mods, the mod or Overwrite each one comes from. A plugin from the game folder highlights no row in Mods. Cites: MO2; ADR-0012
+4. A selection of plugins to highlight their masters here. A plugin mEdit has not read yet highlights no masters. Cites: MO2
+5. The highlight to follow the view I last selected in. The selection left in the other view highlights nothing until I select there again. Cites: mo2.md, Divergences, 18
+6. Selected rows of any other kind to highlight nothing, so a selection of only those clears the highlight.
+
 ## States
 
 The states every view shares are in [common.md](common.md#states). As a user, I want:
@@ -138,7 +149,7 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 As a user, I want:
 
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's Argument in the catalog says. Cites: catalog Argument
-2. A click on a record to open it in the record panel, and a click on an enabled plugin row to open its header, which is a record. A click on a disabled plugin row only selects it. Cites: catalog `open`
+2. A click on a record to open it in the record panel, and a click on an enabled plugin row to open its header, which is a record. A click on a disabled plugin row only selects it, which highlights its related rows (The highlight). Cites: catalog `open`
 3. Enable or disable over a mixed selection to behave as in Mods (Menus and keys, story 2). Cites: mods.md
 4. The gestures that edit a plugin's records absent on a plugin with no source and on a plugin whose plugin source is unreadable: create record and delete, and the plugin as a copy destination. Decompile and commit, or decompile, is on its row. Cites: No dead entries
 5. Copy value to copy each selected record as `EditorID [FormKey]` and each selected plugin as its file name. Cites: catalog `copy value`; [editor-fields.md](editor-fields.md)

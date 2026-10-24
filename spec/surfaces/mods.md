@@ -26,6 +26,7 @@ As a user, I want:
 8. The name of a file the game does not get to be greyed. The game does not get a file when another copy wins its path, when it is excluded, or when its mod is disabled. Cites: MO2
 9. Only the mod's own files to show: not the mod manager's metadata or the manifest. An excluded file shows its name as the mod manager marks it, as MO2's `.mohidden` suffix. A folder so marked is excluded with everything in it, and is greyed. Cites: MO2
 10. The same grey and badges on the same files in VS Code's Explorer. Cites: VS Code
+11. The mods and Overwrite related to my selection in Plugins highlighted ([plugins.md](plugins.md), The highlight), and a collapsed separator highlighted while a mod it holds is highlighted. Cites: MO2
 
 ## A row
 
@@ -132,7 +133,7 @@ As a user, I want:
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's Argument in the catalog says. Cites: catalog Argument
 2. Enable or disable, over a selection that mixes enabled and disabled mods, to apply the right-clicked row's direction to every mod. Space takes the focused row's direction. A mod already in that state is left alone. Cites: MO2; Doing nothing is not an error
 3. Delete to act on the selected rows of the focused row's kind: uninstall for mods, delete for separators.
-4. A click or double click on a separator, a mod, Overwrite or a folder to do nothing but select it; its expander opens it. A click on a file opens it as a preview editor. Cites: VS Code's Explorer
+4. A click or double click on a separator, a mod, Overwrite or a folder to do nothing but select it, which highlights its related rows ([plugins.md](plugins.md), The highlight); its expander opens it. A click on a file opens it as a preview editor. Cites: VS Code's Explorer
 5. Copy value to copy each selected mod's or separator's name, and each selected file's or folder's path in its mod. Cites: catalog `copy value`
 6. Go to mod to select, in this tree, the row it names. Cites: catalog `go to mod`; MO2's Go to...
 7. Exclude or include, over a selection that mixes both, to apply the right-clicked row's direction to every file, as enable or disable does. Cites: story 2
