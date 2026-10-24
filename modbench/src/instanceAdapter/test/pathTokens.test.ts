@@ -65,12 +65,11 @@ describe('the token filter', () => {
   });
 
   it.each([
-    ['the instance folder\'s token, the commit holding no token of its own', 'x={instance folder:/}/downloads/a.7z', []],
-    ['the downloads folder\'s own token, the commit holding it', 'x={downloads folder:/}/a.7z', ['downloads folder']],
-    ['the game folder\'s own token, the commit holding it', 'x={game folder:/}/Data', ['game folder']],
-  ] as const)('holds a game or downloads folder inside the instance folder by %s', async (_token, held, committedOutsideInstance) => {
+    ['the instance folder\'s token, the commit holding no token of its own', 'x=C:/Users/me/LitR/downloads/a.7z', 'x={instance folder:/}/downloads/a.7z', []],
+    ['the downloads folder\'s own token, the commit holding it', 'x=C:/Users/me/LitR/downloads/a.7z', 'x={downloads folder:/}/a.7z', ['downloads folder']],
+    ['the game folder\'s own token, the commit holding it', 'x=C:/Users/me/LitR/Stock Game/Data', 'x={game folder:/}/Data', ['game folder']],
+  ] as const)('holds a game or downloads folder inside the instance folder by %s', async (_token, written, held, committedOutsideInstance) => {
     const inside: TokenFolders = { ...DRIVE, game: 'C:\\Users\\me\\LitR\\Stock Game', downloads: 'C:\\Users\\me\\LitR\\downloads', committedOutsideInstance };
-    const written = held.includes('game') ? 'x=C:/Users/me/LitR/Stock Game/Data' : 'x=C:/Users/me/LitR/downloads/a.7z';
 
     expect(await heldByGit(inside, 'win32', written)).toBe(held);
   });

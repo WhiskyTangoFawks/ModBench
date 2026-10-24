@@ -137,6 +137,20 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(held(root, 'profiles/Default/Fallout4Custom.INI')).toBe('sPath={instance folder:\\}\\Stock Game\r\n');
   });
 
+  it('keeps the game folder\'s own token once the repository holds it, though the game folder then moves into the instance folder', async () => {
+    const game = await gameFolder();
+    const { root, adapter } = await instanceRepository([], game);
+    await put(root, 'ModOrganizer.ini', SETTINGS([`gamePath=@ByteArray(${onWineDrive(game, '\\\\')})`]));
+    await adapter.writePathTokens();
+    held(root, 'ModOrganizer.ini');
+    await mkdir(join(root, 'Stock Game', 'Data'), { recursive: true });
+    await put(root, 'ModOrganizer.ini', SETTINGS([`gamePath=@ByteArray(${onWineDrive(join(root, 'Stock Game'), '\\\\')})`]));
+
+    await adapterOver(root, { game: join(root, 'Stock Game') }).writePathTokens();
+
+    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['gamePath=@ByteArray({game folder:\\\\})']));
+  });
+
   it('shows each committed file to a diff with this machine\'s paths', async () => {
     const { root, adapter } = await instanceRepository([]);
     const written = SETTINGS([`path=${onWineDrive(root, '/')}/x.exe`]);
