@@ -481,7 +481,6 @@ export type Listed = (path: string) => readonly PublisherTag[];
 /** Adding a publisher tag, or removing it. */
 export type PublisherTagChange = 'add' | 'remove';
 
-/** A mod folder whose publisher tags move to `to`, or go with no `to`. */
 interface FolderMove {
   readonly from: string;
   readonly to?: string;
