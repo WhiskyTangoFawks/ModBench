@@ -36,6 +36,7 @@ export function readingFixture(overrides: Partial<InstanceReading> = {}): Instan
     orderNotes: [],
     downloadedFiles: { kind: 'listed', downloadsDir: '/downloads', files: [] },
     gameFolder: GAME_FOLDER_NOT_FOUND,
+    programVersions: { kind: 'unresolved' },
     dataFolderPlugins: { kind: 'unresolved' },
     creationClubList: [],
     archiveList: [],

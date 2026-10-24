@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type {
   DataFolderArchives, DataFolderPlugins, DownloadedFile, DownloadedFiles, GameFolder, InstanceAdapter, InstanceReading, Mod,
-  OriginFiles, Separator, PublisherTag,
+  OriginFiles, Separator, PublisherTag, ProgramVersions,
 } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
@@ -119,7 +119,7 @@ describe('Instance — the value', () => {
     const mods = [mod(NONO), separator('Section'), mod('Harder VATS', false)];
     const { instance } = loader({
       mods, modFolders: modFoldersOf(NONO, 'Hand Extracted Mod'), profile: 'Secondary', profiles: ['Default', 'Secondary'],
-      gameName: 'Fallout 4', gameRelease: 'Fallout4', gameFolder: GAME_FOLDER,
+      gameName: 'Fallout 4', gameRelease: 'Fallout4', gameFolder: GAME_FOLDER, programVersions: { kind: 'unknownGame' },
     });
 
     await instance.refresh();
@@ -131,6 +131,7 @@ describe('Instance — the value', () => {
     expect(value.profiles).toEqual(['Default', 'Secondary']);
     expect(value.gameName).toBe('Fallout 4');
     expect(value.gameFolder).toEqual(GAME_FOLDER);
+    expect(value.programVersions).toEqual({ kind: 'unknownGame' });
   });
 
   it('carries whether the instance holds a repository', async () => {
@@ -784,6 +785,23 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
 
     expect(instance.value.dataFolderPlugins).toEqual({ kind: 'unreadable', reason: 'EACCES' });
     expect(warnings).toEqual(['[instance] the game\'s Data folder could not be listed: EACCES']);
+  });
+
+  it.each<[string, ProgramVersions, string[]]>([
+    ['a game program the game folder lacks', { kind: 'found', game: { kind: 'notFound', program: 'Fallout4.exe' }, extender: { kind: 'read', version: '1' } },
+      ['[instance] the game\'s version: Fallout4.exe is not in the game folder']],
+    ['a loader that is unreadable', { kind: 'found', game: { kind: 'read', version: '1' }, extender: { kind: 'unreadable', program: 'f4se_loader.exe', why: 'EACCES' } },
+      ['[instance] the script extender\'s version: f4se_loader.exe cannot be read: EACCES']],
+    ['a loader that is no program', { kind: 'found', game: { kind: 'read', version: '1' }, extender: { kind: 'notAProgram', program: 'f4se_loader.exe' } },
+      ['[instance] the script extender\'s version: f4se_loader.exe is not a Windows program']],
+    ['a loader the game folder lacks, which is an answer', { kind: 'found', game: { kind: 'read', version: '1' }, extender: { kind: 'notFound', program: 'f4se_loader.exe' } }, []],
+  ])('tells once while it stands of %s', async (_, programVersions, lines) => {
+    const { instance, warnings } = loader({ gameFolder: GAME_FOLDER, programVersions });
+
+    await instance.refresh();
+    await instance.refresh();
+
+    expect(warnings).toEqual(lines);
   });
 
   it('carries the publisher tags the adapter declares before any read, and the publisher\'s configuration once read', async () => {

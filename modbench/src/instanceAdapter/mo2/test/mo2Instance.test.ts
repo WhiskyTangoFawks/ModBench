@@ -1,4 +1,5 @@
 import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
+import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../../ports/trash';
 import type { NexusFileInfo } from '../../../ports/nexusFileInfo';
@@ -266,6 +267,22 @@ describe('the MO2 Instance adapter', () => {
         }
       });
 
+      it('answers the versions of the game\'s program and its script extender\'s loader, read from the game folder', async () => {
+        const game = await mkdtemp(join(tmpdir(), 'mo2-instance-versions-'));
+        try {
+          await mkdir(join(game, 'Data'));
+          await writeFile(join(game, 'Fallout4.exe'), windowsProgram({ version: versionInfo([1, 10, 163, 0]) }));
+
+          const { programVersions } = await adapterAt(root, game).reading();
+
+          expect(programVersions).toEqual({
+            kind: 'found', game: { kind: 'read', version: '1.10.163.0' }, extender: { kind: 'notFound', program: 'f4se_loader.exe' },
+          });
+        } finally {
+          await rm(game, { recursive: true, force: true });
+        }
+      });
+
       it('answers the mod order with each mod\'s meta folded into its entry', async () => {
         const { mods } = await adapter.reading();
 
@@ -358,6 +375,7 @@ describe('the MO2 Instance adapter', () => {
         const reading = await adapter.reading();
 
         expect(reading.gameFolder.kind).toBe('notFound');
+        expect(reading.programVersions).toEqual({ kind: 'unresolved' });
         expect(reading.dataFolderPlugins).toEqual({ kind: 'unresolved' });
         expect(reading.creationClubList).toEqual([]);
       });

@@ -15,7 +15,7 @@ import { buildDownloadedFileRows, modsByInstallationFileName, type LocatedDownlo
 import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
   type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
+  type ProgramVersion, type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
   type PublisherTag, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { pluginPlacesOf } from './pluginPlacesOf';
@@ -27,12 +27,12 @@ export { sameEntry } from '../instanceAdapter/instanceAdapter';
 export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, UpgradeTier } from './downloadedFileRows';
 export type { Covering, DownloadedFileStatus, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter/instanceAdapter';
-export type { GameFolder } from '../instanceAdapter/instanceAdapter';
+export type { GameFolder, ProgramVersion } from '../instanceAdapter/instanceAdapter';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
 const SETTLE_MS = 200;
 
-type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration';
+type NoteKind = 'notes' | 'links' | 'archiveListNotes' | 'orderNotes' | 'dataFolder' | 'gameArchives' | 'archives' | 'watchNotes' | 'listingNotes' | 'managerRunning' | 'publisherConfiguration' | 'programVersions';
 
 type DownloadedFilesResult =
   | { readonly kind: 'listed'; readonly rows: readonly LocatedDownloadedFileRow[] }
@@ -101,6 +101,7 @@ export interface InstanceValue {
   /** The setting, then the mod manager's configuration, then detection; or each place looked when
    *  none answered. */
   readonly gameFolder: GameFolder;
+  readonly programVersions: ProgramVersions;
   /** What the game's Data folder holds at its root — presence, never provision — or the reason
    *  it could not be read. */
   readonly dataFolderPlugins: DataFolderPlugins;
@@ -140,6 +141,24 @@ export type ListenerOutcomeListener = (outcome: ListenerOutcome) => void;
 export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
 
 const cannotTellRunning = (manager: string, reason: string): string => `Cannot tell whether ${manager} is running: ${reason}.`;
+
+function programVersionFailure(label: string, version: ProgramVersion): string[] {
+  switch (version.kind) {
+    case 'read': case 'notFound': return [];
+    case 'noVersionResource': return [`[instance] ${label}: ${version.program} has no version resource`];
+    case 'notAProgram': return [`[instance] ${label}: ${version.program} is not a Windows program`];
+    case 'unreadable': return [`[instance] ${label}: ${version.program} cannot be read: ${version.why}`];
+  }
+}
+
+// A missing extender loader is an answer, never a failure; a missing game program is one.
+function programVersionFailures(versions: ProgramVersions): string[] {
+  if (versions.kind !== 'found') return [];
+  const game = versions.game.kind === 'notFound'
+    ? [`[instance] the game's version: ${versions.game.program} is not in the game folder`]
+    : programVersionFailure('the game\'s version', versions.game);
+  return [...game, ...programVersionFailure('the script extender\'s version', versions.extender)];
+}
 
 export function managerRunningMessage({ managerRunning, managerNames: { manager } }: InstanceValue): string | undefined {
   if (managerRunning.kind === 'unknown') return cannotTellRunning(manager, managerRunning.reason);
@@ -221,6 +240,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   nexusDomainOf: nexusDomainForMetaGame,
   // Not read yet reads as not found, so a view that says not found waits for sequence 1.
   gameFolder: { kind: 'notFound', looked: [], setting: gameFolderSettingId },
+  programVersions: { kind: 'unresolved' },
   dataFolderPlugins: { kind: 'unresolved' },
   pluginsLoadedWithNoLine: undefined,
   loadOrderSnapshot: undefined,
@@ -363,7 +383,7 @@ export class Instance implements Subscription {
 
   private tellReading({
     linkNotes, archiveListNotes, orderNotes, sourceMods, modFiles, runtimeOutput, dataFolderPlugins, dataFolderArchives, watchNotes, managerRunning,
-    publisherConfiguration,
+    publisherConfiguration, programVersions,
   }: InstanceReading): void {
     const notes = [...runtimeOutput.notes.map((n) => `${runtimeOutput.origin}: ${n}`), ...sourceMods.notes];
     this.tellOnce('notes', notes.map((note) => `[instance] ${note}`), 'info');
@@ -379,6 +399,7 @@ export class Instance implements Subscription {
     const { manager } = this.options.adapter.names;
     this.tellOnce('managerRunning', managerRunning.kind === 'unknown' ? [`[instance] ${cannotTellRunning(manager, managerRunning.reason)}`] : [], 'warn');
     this.tellOnce('gameArchives', dataFolderArchives.kind === 'unreadable' ? [`[instance] the game's archives and strings files could not be listed: ${dataFolderArchives.reason}`] : [], 'warn');
+    this.tellOnce('programVersions', programVersionFailures(programVersions), 'warn');
     this.tellOnce('publisherConfiguration', publisherConfiguration.kind === 'unreadable' ? [`[instance] no publisher tag shows: ${publisherConfiguration.reason}`] : [], 'warn');
   }
 
@@ -445,7 +466,7 @@ export class Instance implements Subscription {
     const { adapter } = this.options;
     const reading = await adapter.reading();
     const {
-      profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadedFilesOutcome, gameFolder, dataFolderPlugins,
+      profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadedFilesOutcome, gameFolder, programVersions, dataFolderPlugins,
       creationClubList: creationClub, dataFolderArchives, runtimeOutput, modFolders, profiles, sourceMods,
     } = reading;
     this.tellReading(reading);
@@ -497,6 +518,7 @@ export class Instance implements Subscription {
       gameName,
       nexusDomainOf: nexusDomainForMetaGame,
       gameFolder,
+      programVersions,
       dataFolderPlugins,
       pluginsLoadedWithNoLine,
       loadOrderSnapshot: loadOrderSnapshot === undefined || 'refusal' in loadOrderSnapshot

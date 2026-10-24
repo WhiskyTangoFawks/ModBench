@@ -3,18 +3,38 @@ import { gameFolderNotFoundLine } from './gameFolderNotFoundLog';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { messageLine } from '../drivingLib/messageLine';
 import { logOncePerFailure } from '../drivingLib/logOncePerFailure';
-import { instanceMessages, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
+import { instanceMessages, type InstanceValue, type ProgramVersion, type InstanceView } from '../instanceLoader/instance';
 
 type ToolboxDeps =
   | { instance: InstanceView; channel: Pick<vscode.LogOutputChannel, 'warn'> }
   | { instance: undefined };
 
-function gameRow({ gameName, gameFolder }: InstanceValue): vscode.TreeItem {
+const versionText = (version: ProgramVersion): string => {
+  switch (version.kind) {
+    case 'read': return version.version;
+    case 'notFound': return 'none';
+    case 'noVersionResource': return `${version.program} has no version resource`;
+    case 'notAProgram': return `${version.program} is not a Windows program`;
+    case 'unreadable': return `${version.program} cannot be read: ${version.why}`;
+  }
+};
+
+const gameVersionText = (version: ProgramVersion): string =>
+  (version.kind === 'notFound' ? `${version.program} not found` : versionText(version));
+
+function foundTooltip(root: string, programVersions: InstanceValue['programVersions']): string {
+  return programVersions.kind === 'found'
+    ? [root, `Game: ${gameVersionText(programVersions.game)}`, `Script extender: ${versionText(programVersions.extender)}`].join('\n')
+    : [root, 'Modbench knows no program of this game'].join('\n');
+}
+
+function gameRow(value: InstanceValue): vscode.TreeItem {
+  const { gameName, gameFolder, programVersions } = value;
   const row = new vscode.TreeItem('Game');
   if (gameFolder.kind === 'found') {
     row.description = gameName;
     row.iconPath = new vscode.ThemeIcon('game');
-    row.tooltip = gameFolder.root;
+    row.tooltip = foundTooltip(gameFolder.root, programVersions);
     return row;
   }
   // common.md, States, story 5: the name stays, and the warning rides beside it.

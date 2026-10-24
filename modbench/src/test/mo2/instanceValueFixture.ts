@@ -29,6 +29,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     nexusDomainOf: nexusDomainForMetaGame,
     entryKey,
     gameFolder: GAME_FOLDER_NOT_FOUND,
+    programVersions: { kind: 'unresolved' },
     dataFolderPlugins: { kind: 'unresolved' },
     pluginsLoadedWithNoLine: undefined,
     loadOrderSnapshot: undefined,

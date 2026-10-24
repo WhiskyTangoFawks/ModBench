@@ -12,6 +12,7 @@ import { groupModOrder } from './modGroups';
 import type { ManagerReading } from './publisher';
 import { pluginsProvidedOf } from './pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
+import { programVersions } from './gameFolder/programVersions';
 
 export interface ArchiveReads {
   /** The archives the game's INIs list, in load order, a key's last value winning. `notes` says what
@@ -117,6 +118,7 @@ export async function readInstance(source: ReadingSource): Promise<ManagerReadin
     downloadedFilesRead,
     settings.gameFolder().then(async (gameFolder) => ({
       gameFolder,
+      programVersions: await programVersions(gameFolder, gameRelease),
       dataFolderPlugins: await source.gameFolderPlugins(gameFolder, skipLink),
       creationClubList: await source.creationClubList(gameFolder, gameRelease),
       archiveList: await source.archiveList(profile, gameFolder, gameRelease),
