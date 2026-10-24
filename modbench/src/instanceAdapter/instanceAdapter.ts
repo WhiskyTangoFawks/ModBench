@@ -216,9 +216,8 @@ export interface FomodStepChoice {
   readonly groups: readonly FomodGroupChoice[];
 }
 
-/** The page a user answers a FOMOD's installer on: it shows the installer, sends the user's moves, and asks whether to
- *  install without files the archive lacks. A state's images are paths in `release`, the extracted FOMOD's folder.
- *  `close` ends it. */
+/** The page a user answers a FOMOD's installer on. A state's images are paths in `release`, the extracted FOMOD's
+ *  folder. */
 export interface FomodDialog {
   readonly show: (state: FomodState, release: string) => void;
   readonly onMove: (handler: (move: FomodMove) => void) => void;
