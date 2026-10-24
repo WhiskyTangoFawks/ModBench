@@ -246,11 +246,11 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
     it('lands the release as it is when its installer cannot be read, saying why', async () => {
       await mkdir(join(source, 'fomod'), { recursive: true });
-      await writeFile(join(source, 'fomod', 'ModuleConfig.xml'), '<config><moduleName>No schema</moduleName></config>');
+      await writeFile(join(source, 'fomod', 'ModuleConfig.xml'), '<config><moduleName>Never closed</moduleName>');
 
       const outcome = await holding([]).install({ kind: 'folder', path: source }, { kind: 'new', name: MOD }, KEYS, { kind: 'choices', steps: [] });
 
-      expect(outcome.landed && outcome.fomod?.kind === 'plainCopy' && outcome.fomod.why).toMatch(/^its installer cannot be read: .*NullReferenceException/);
+      expect(outcome.landed && outcome.fomod?.kind === 'plainCopy' && outcome.fomod.why).toMatch(/^its installer cannot be read: \S/);
       expect(await filesIn(folder(MOD))).toEqual(['fomod/ModuleConfig.xml', 'meta.ini']);
     });
 

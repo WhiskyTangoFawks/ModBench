@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fomodLanding, type ConditionFacts } from '../fomodInstaller';
@@ -181,12 +181,30 @@ describe('the FOMOD installer', () => {
     await releaseLeftAsItWas(['core/Core.esp']);
   });
 
+  it('names each folder the options chosen name and its archive lacks, and no folder of an option not chosen', async () => {
+    const folder = (source: string): string => `<folder source="${source}" destination=""/>`;
+    await release(config(`<requiredInstallFiles>${folder('core')}${folder('Gone Required')}</requiredInstallFiles>${steps(
+      step('Main', group('Pick', 'SelectExactlyOne', option('A', folder('gone/a')) + option('B', `<folder source='gone\\b'></folder>`))))}`), ['core/Core.esp']);
+
+    expect(await install(choose(['Main', { Pick: ['A'] }]))).toEqual({ kind: 'installer', missing: ['Gone Required', 'gone/a'] });
+    expect(await filesLanded()).toEqual(['Core.esp']);
+  });
+
+  it('reads a module config that names no schema, as MO2 reads it, and leaves the release\'s own as it was', async () => {
+    const unnamed = `<config><moduleName>No schema</moduleName><requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}</requiredInstallFiles></config>`;
+    await release(unnamed, ['core/Core.esp']);
+
+    expect(await install([])).toEqual({ kind: 'installer', missing: [] });
+    expect(await filesLanded()).toEqual(['Core.esp']);
+    expect(await readFile(join(root, 'fomod', 'ModuleConfig.xml'), 'utf8')).toBe(unnamed);
+  });
+
   it('lands a FOMOD whose installer cannot be read as a plain copy, saying why', async () => {
-    await release('<config><moduleName>No schema</moduleName></config>', ['core/Core.esp']);
+    await release('<config><moduleName>Never closed</moduleName>', ['core/Core.esp']);
 
     const answered = await install([]);
 
-    expect(answered.kind === 'plainCopy' && answered.why).toMatch(/^its installer cannot be read: .*NullReferenceException/);
+    expect(answered.kind === 'plainCopy' && answered.why).toMatch(/^its installer cannot be read: \S/);
     expect(landedIn).toBe(root);
     await releaseLeftAsItWas(['core/Core.esp']);
   });

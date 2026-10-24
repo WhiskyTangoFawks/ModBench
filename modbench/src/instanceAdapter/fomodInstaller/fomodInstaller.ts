@@ -5,7 +5,8 @@ import { fork } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
 import { delimiter, dirname, join, relative } from 'node:path';
 import type { types } from '@nexusmods/fomod-installer-native';
-import { copyTree, ensureDir, makeTempDir, ownTempPrefix, remove } from '../files';
+import { copyTree, ensureDir, makeTempDir, ownTempPrefix, remove, textIfUtf8, write } from '../files';
+import { moduleConfigForEngine } from './moduleConfig';
 import { errorMessage } from '../../ports/errorMessage';
 import type { FomodKind } from '../gameFolder/releaseRoot';
 import type { FomodAnswer, FomodGroupChoice, FomodLanded, FomodStepChoice } from '../instanceAdapter';
@@ -159,6 +160,25 @@ async function filesUnder(root: string): Promise<string[]> {
 // A path compared as Windows compares it, so a FOMOD written there finds its files and merges its folders.
 const keyOf = (path: string): string => path.replaceAll('\\', '/').toLowerCase();
 
+const MODULE_CONFIG = 'fomod/moduleconfig.xml';
+
+// The engine reads the config from a folder of its own, so the release keeps its own. A config that is not UTF-8 it
+// reads as the release holds it.
+async function scriptFolder(root: string, files: readonly string[]): Promise<{ readonly root: string; dispose(): Promise<void> }> {
+  const config = files.find((file) => keyOf(file) === MODULE_CONFIG);
+  const text = config === undefined ? undefined : await textIfUtf8(join(root, config));
+  if (text === undefined) return { root, dispose: () => Promise.resolve() };
+  const keys = files.map(keyOf);
+  const holds = (folder: string): boolean => {
+    const key = keyOf(folder).replace(/\/+$/, '');
+    return key === '' || keys.some((file) => file.startsWith(`${key}/`));
+  };
+  const script = await makeTempDir(ownTempPrefix(root, 'fomodScript'));
+  await ensureDir(join(script, 'fomod'));
+  await write(join(script, 'fomod', 'ModuleConfig.xml'), moduleConfigForEngine(text, holds));
+  return { root: script, dispose: () => remove(script) };
+}
+
 async function land(root: string, files: readonly string[], into: string, instructions: readonly types.InstallInstruction[]): Promise<void> {
   const sources = new Map(files.map((file) => [keyOf(file), file]));
   const spelled = new Map<string, string>();
@@ -186,7 +206,9 @@ async function land(root: string, files: readonly string[], into: string, instru
 // fact its conditions read is unknown.
 async function installFomod(engine: FomodEngine, { root, into, facts, choices }: FomodInstall): Promise<FomodInstalled> {
   const files = await filesUnder(root);
-  const run = await runEngine(engine, { kind: 'install', engineFolder: engine.folder, root, files, facts }, answerer(choices));
+  const script = await scriptFolder(root, files);
+  const run = await runEngine(engine, { kind: 'install', engineFolder: engine.folder, root: script.root, files, facts }, answerer(choices))
+    .finally(() => script.dispose());
   if (run.kind === 'failed') return { kind: 'unreadable', why: run.why };
   if (run.refusal !== undefined) throw new Error(run.refusal);
   if (run.unanswered.length > 0) throw new Error(`The FOMOD's conditions read ${run.unanswered.join('; ')}.`);
