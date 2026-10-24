@@ -18,6 +18,7 @@ import {
   type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
   type PublisherTag, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
+import type { ProgramVersions } from '../instanceAdapter/gameFolder/programVersions';
 import { pluginPlacesOf } from './pluginPlacesOf';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -101,6 +102,8 @@ export interface InstanceValue {
   /** The setting, then the mod manager's configuration, then detection; or each place looked when
    *  none answered. */
   readonly gameFolder: GameFolder;
+  /** The versions of the game's program and its script extender's loader in the game folder. */
+  readonly programVersions: ProgramVersions;
   /** What the game's Data folder holds at its root — presence, never provision — or the reason
    *  it could not be read. */
   readonly dataFolderPlugins: DataFolderPlugins;
@@ -221,6 +224,7 @@ const emptyValue = (adapter: Pick<InstanceAdapter, 'names' | 'entryKey' | 'publi
   nexusDomainOf: nexusDomainForMetaGame,
   // Not read yet reads as not found, so a view that says not found waits for sequence 1.
   gameFolder: { kind: 'notFound', looked: [], setting: gameFolderSettingId },
+  programVersions: { kind: 'unresolved' },
   dataFolderPlugins: { kind: 'unresolved' },
   pluginsLoadedWithNoLine: undefined,
   loadOrderSnapshot: undefined,
@@ -445,7 +449,7 @@ export class Instance implements Subscription {
     const { adapter } = this.options;
     const reading = await adapter.reading();
     const {
-      profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadedFilesOutcome, gameFolder, dataFolderPlugins,
+      profile, gameName, gameRelease, mods: entries, pluginOrder, downloadedFiles: downloadedFilesOutcome, gameFolder, programVersions, dataFolderPlugins,
       creationClubList: creationClub, dataFolderArchives, runtimeOutput, modFolders, profiles, sourceMods,
     } = reading;
     this.tellReading(reading);
@@ -497,6 +501,7 @@ export class Instance implements Subscription {
       gameName,
       nexusDomainOf: nexusDomainForMetaGame,
       gameFolder,
+      programVersions,
       dataFolderPlugins,
       pluginsLoadedWithNoLine,
       loadOrderSnapshot: loadOrderSnapshot === undefined || 'refusal' in loadOrderSnapshot

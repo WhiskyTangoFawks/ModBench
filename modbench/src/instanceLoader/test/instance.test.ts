@@ -119,7 +119,7 @@ describe('Instance — the value', () => {
     const mods = [mod(NONO), separator('Section'), mod('Harder VATS', false)];
     const { instance } = loader({
       mods, modFolders: modFoldersOf(NONO, 'Hand Extracted Mod'), profile: 'Secondary', profiles: ['Default', 'Secondary'],
-      gameName: 'Fallout 4', gameRelease: 'Fallout4', gameFolder: GAME_FOLDER,
+      gameName: 'Fallout 4', gameRelease: 'Fallout4', gameFolder: GAME_FOLDER, programVersions: { kind: 'unknownGame' },
     });
 
     await instance.refresh();
@@ -131,6 +131,7 @@ describe('Instance — the value', () => {
     expect(value.profiles).toEqual(['Default', 'Secondary']);
     expect(value.gameName).toBe('Fallout 4');
     expect(value.gameFolder).toEqual(GAME_FOLDER);
+    expect(value.programVersions).toEqual({ kind: 'unknownGame' });
   });
 
   it('carries whether the instance holds a repository', async () => {

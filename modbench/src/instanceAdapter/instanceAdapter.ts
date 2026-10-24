@@ -9,6 +9,7 @@ import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import type { NexusPage } from './nexusPage';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
+import type { ProgramVersions } from './gameFolder/programVersions';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { dataFolderFile } from './gameFolder/dataFolder';
@@ -523,6 +524,7 @@ export interface InstanceReading extends InstanceGame {
   readonly pluginOrder: readonly PluginEntry[];
   readonly downloadedFiles: DownloadedFiles;
   readonly gameFolder: GameFolder;
+  readonly programVersions: ProgramVersions;
   readonly dataFolderPlugins: DataFolderPlugins;
   readonly creationClubList: readonly string[];
   /** The archives the INIs list, in load order. */
