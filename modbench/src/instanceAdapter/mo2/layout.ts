@@ -205,9 +205,7 @@ export function withSourceModLines(ignoreList: string, folderNames: readonly str
   return `${lines.join('\n')}\n`;
 }
 
-/** The whitelist: the ignore list itself, the mod manager's configuration, the publisher's, each profile's mod order,
- *  plugin order and INIs, and each mod's manifest. Each mod's metadata stays out (modlist-repository.md, The repository,
- *  story 2). */
+/** The whitelist (modlist-repository.md, The repository, story 2): each mod's metadata stays out. */
 export const whitelistIgnoreList = (publisherFileName: string | undefined): string => `${[
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
   ...publisherFileName === undefined ? [] : [`!/${escapedForIgnoreList(publisherFileName)}`],

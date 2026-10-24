@@ -33,9 +33,7 @@ export interface Publisher {
   configuration(): Promise<PublisherConfiguration>;
   changeTag: InstanceAdapter['changePublisherTag'];
   followFolders: InstanceAdapter['followModFolders'];
-  /** Lists each present file in the publisher's ignore list unless an entry already covers it, and drops an entry that
-   *  names an owned path no present file has, leaving every other entry as written. Rejects, writing nothing, for a
-   *  configuration it cannot read; does nothing when the instance holds none. */
+  /** Rejects, writing nothing, for a configuration it cannot read; does nothing when the instance holds none. */
   keepOut(kept: KeptFiles): Promise<void>;
   /** Hears that the publisher's configuration changed. */
   subscribe(listener: () => void): Subscription;
