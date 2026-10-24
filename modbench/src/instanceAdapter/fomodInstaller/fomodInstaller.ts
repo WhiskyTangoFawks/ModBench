@@ -72,6 +72,8 @@ const OPTION_TYPES: Record<types.PluginType, string> = {
   Required: ' (required)', Recommended: ' (recommended)', NotUsable: ' (not usable)', CouldBeUsable: ' (could be usable)', Optional: '',
 };
 
+const slashed = (path: string): string => path.replaceAll('\\', '/');
+
 // The engine's one word for a source its archive lacks; it says nothing else that is not passed on as it says it.
 const MISSING_SOURCE = /^Source doesn't match any files: "(.*)"$/;
 
@@ -344,7 +346,7 @@ async function land(root: string, files: readonly string[], into: string, instru
   const placed = instructions.filter(({ type }) => type === 'mkdir' || type === 'copy')
     .sort((a, b) => Number(a.priority) - Number(b.priority))
     .map((instruction) => ({ ...instruction, to: destinationOf(instruction.destination) }));
-  const outside = placed.filter(({ to }) => isOutside(into, to)).map(({ destination }) => destination);
+  const outside = placed.filter(({ to }) => isOutside(into, to)).map(({ destination }) => slashed(destination));
   if (outside.length > 0) throw new Error(`The FOMOD installs to ${quoted(outside)}, outside the mod's folder.`);
   for (const { to } of placed.filter(({ type }) => type === 'mkdir')) await ensureDir(to);
   for (const { source, to } of placed.filter(({ type }) => type === 'copy')) {
@@ -376,7 +378,7 @@ async function installFomod(engine: FomodEngine, { root, into, facts, driver }: 
   if (fatal !== undefined) throw new Error(fatal.source.replaceAll('\n', '; '));
   await driver.finish();
   const errors = instructions.filter(({ type }) => type === 'error').map(({ source }) => ({ source, missing: MISSING_SOURCE.exec(source)?.[1] }));
-  const missing = errors.flatMap(({ missing: each }) => each ?? []);
+  const missing = errors.flatMap(({ missing: each }) => (each === undefined ? [] : [slashed(each)]));
   const finished = driver.ended() ?? (missing.length > 0 && !(await driver.confirmMissing(missing)) ? { kind: 'cancelled' as const } : undefined);
   if (finished !== undefined) return finished;
   await land(root, files, into, instructions);
