@@ -259,12 +259,14 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains("its 'EditorID' is not a string", refused.Reason, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void AChildWhoseEditorIdIsNoString_RefusesItsLookupNamingItsOwnersFileAndTheField()
+    [Theory]
+    [InlineData(Read.RecordByFormKey)]
+    [InlineData(Read.ReadingTheTree)]
+    public void AChildWhoseEditorIdIsNoString_RefusesNamingItsOwnersFileTheChildAndTheField(Read read)
     {
         GiveANumberForTheEditorId(InteriorCellPath, "TempRef");
 
-        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.RecordByFormKey(Plugin, _temporaryRef.FormKey.ToString()).Stopped());
+        var refused = Assert.IsType<SourceFailure.Unreadable>(Stopped(read, _temporaryRef, "refr", InteriorCellPath));
 
         Assert.Equal((InteriorCellPath, _temporaryRef.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
         Assert.Contains($"its 'Temporary' names '{_temporaryRef.FormKey}', whose 'EditorID' is not a string", refused.Reason, StringComparison.Ordinal);
@@ -1031,17 +1033,6 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Equal(
             new ClaimedFormKey(_temporaryRef.FormKey.ToString(), [InteriorCellPath, ExteriorCellPath]),
             refused.Claim);
-    }
-
-    [Fact]
-    public void AChildWhoseEditorIdIsNoString_RefusesTheTreesRead_NamingItsOwnersFileTheChildAndTheField()
-    {
-        GiveANumberForTheEditorId(InteriorCellPath, "TempRef");
-
-        var refused = Assert.IsType<SourceFailure.Unreadable>(Stopped(Read.ReadingTheTree, _temporaryRef, "refr", InteriorCellPath));
-
-        Assert.Equal((InteriorCellPath, _temporaryRef.FormKey.ToString()), (refused.File?.SourceRelativePath, refused.File?.FormKey));
-        Assert.Contains($"its 'Temporary' names '{_temporaryRef.FormKey}', whose 'EditorID' is not a string", refused.Reason, StringComparison.Ordinal);
     }
 
     [Fact]

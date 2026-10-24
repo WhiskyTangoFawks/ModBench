@@ -81,8 +81,8 @@ public interface ISourceRepository : ISourceRepositoryReads
     Answer<SourceChanges, SourceFailure> ChangesToRekey(PluginAddress plugin, RecordIdentity identity, string newFormKey);
 
     /// <summary>What removing the record changes: its file, its directory, or its element of another record's document.
-    /// An absent flat record still answers its file's deletion; another absent record, or one its document lacks, is
-    /// not carried.</summary>
+    /// An absent flat record or header still answers its file's deletion; another absent record, or one its document
+    /// lacks, is not carried.</summary>
     Answer<SourceChanges, SourceFailure> ChangesToRemove(PluginAddress plugin, RecordIdentity identity);
 
     /// <summary>What renaming the plugin's source to <paramref name="newName"/> changes: the tree moves, and every

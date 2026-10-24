@@ -85,7 +85,7 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null)
     {
-        _inits.Add((sourceFolder, [.. plugins.Select(held => repair is var (name, commit) && held.Plugin.Plugin == name ? (commit.Tree, held.Plugin) : held)], assets));
+        _inits.Add((sourceFolder, [.. plugins.Select(held => repair is var (name, commit) && held.Plugin.Address == name ? (commit.Tree, held.Plugin) : held)], assets));
         return null;
     }
 

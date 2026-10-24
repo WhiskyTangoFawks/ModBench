@@ -134,28 +134,6 @@ public sealed class SourceRepositoryInitTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_sourceFolder, "plugin-source", "B.esp")));
     }
 
-    private static readonly PluginAddress AnotherModsA = new("A.esp", "AnotherMod");
-
-    [Fact]
-    public void ADecompiledPluginAnotherModProvides_IsADefect_AndTheInitWritesNothing()
-    {
-        (IReadOnlyList<TreeFile>, DecompiledPlugin) anotherMods = (OneRecordOf("A.esp").Tree, new DecompiledPlugin(AnotherModsA, null));
-
-        Assert.Throws<ArgumentException>(() => TestAdapters.Source().Init(_sourceFolder, [OneRecordOf("A.esp"), anotherMods]));
-
-        Assert.Empty(Directory.EnumerateFileSystemEntries(_sourceFolder));
-    }
-
-    [Fact]
-    public void ARepairOfAPluginAnotherModProvides_IsADefect_AndTheInitWritesNothing()
-    {
-        var repair = (AnotherModsA, new TreeCommit(OneRecordOf("A.esp").Tree, "Repair A.esp"));
-
-        Assert.Throws<ArgumentException>(() => TestAdapters.Source().Init(_sourceFolder, TestMod.Name, [OneRecordOf("A.esp")], [], repair));
-
-        Assert.Empty(Directory.EnumerateFileSystemEntries(_sourceFolder));
-    }
-
     private static Asset Asset(string path, string text) => new(path, () => new MemoryStream(Encoding.UTF8.GetBytes(text)));
 
     private string[] SubjectsOnMain() =>

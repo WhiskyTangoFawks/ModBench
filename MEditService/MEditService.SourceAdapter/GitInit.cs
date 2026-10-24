@@ -5,7 +5,7 @@ using MEditService.LoadOrder;
 namespace MEditService.SourceAdapter;
 
 /// <summary>A plugin whose source init writes, and the hash of the binary it was decompiled from.</summary>
-public sealed record DecompiledPlugin(PluginAddress Plugin, string? BinarySha256);
+public sealed record DecompiledPlugin(PluginAddress Address, string? BinarySha256);
 
 /// <summary>A file of the mod no installation file yields, by its forward-slash path in the mod folder.</summary>
 public sealed record Asset(string Path, Func<Stream> Open);
@@ -18,8 +18,6 @@ internal static class GitInit
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair)
     {
-        var decompiled = plugins.Select(plugin => plugin.Plugin.Plugin);
-        RefuseAnotherModsPlugin(repair is var (repairedPlugin, _) ? decompiled.Append(repairedPlugin) : decompiled);
         if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
 
@@ -45,23 +43,13 @@ internal static class GitInit
             }
             foreach (var (_, plugin) in plugins)
             {
-                if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Plugin.Name, binarySha256);
+                if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Address.Name, binarySha256);
             }
         }
         catch (Exception ex)
         {
             if (journal.Report(ex, journal.UndoSince(0)) is { } report) throw report;
             throw;
-        }
-    }
-
-    // A source folder is one mod's (ADR-0012): two mods' plugins of one filename would share a tree.
-    private static void RefuseAnotherModsPlugin(IEnumerable<PluginAddress> plugins)
-    {
-        if (plugins.Select(plugin => plugin.Origin).Distinct(StringComparer.OrdinalIgnoreCase).ToList() is { Count: > 1 } origins)
-        {
-            throw new ArgumentException(
-                $"An init writes one mod's plugins, and these are of {string.Join(", ", origins.Select(origin => $"'{origin}'"))}.", nameof(plugins));
         }
     }
 
@@ -72,11 +60,11 @@ internal static class GitInit
         {
             try
             {
-                journal.WriteAll(tree.Select(file => SourceRepositoryLayout.PlacedFileOf(plugin.Plugin.Name, file)), workTree);
+                journal.WriteAll(tree.Select(file => SourceRepositoryLayout.PlacedFileOf(plugin.Address.Name, file)), workTree);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
-                throw new IOException($"{plugin.Plugin.Name}'s source could not be written: {ex.Message}", ex);
+                throw new IOException($"{plugin.Address.Name}'s source could not be written: {ex.Message}", ex);
             }
         }
     }
