@@ -12,8 +12,8 @@ import type { ModlistNode } from './ModListProvider';
 
 type Rows = Pick<InstanceValue, 'publisherConfiguration' | 'paths'>;
 
-/** The publisher tags that cover the row itself, a mod by its folder (publishing.md, Publisher tags, story 2: what remove offers). */
-export function publisherTagsHeld({ publisherConfiguration, paths }: Rows, row: ModlistNode): readonly PublisherTag[] {
+// The publisher tags that cover the row itself, a mod by its folder: what remove offers (publishing.md, Publisher tags, story 2).
+function publisherTagsHeld({ publisherConfiguration, paths }: Rows, row: ModlistNode): readonly PublisherTag[] {
   if (publisherConfiguration.kind !== 'read') return [];
   const { covering } = publisherConfiguration;
   if (row.kind === 'mod') {

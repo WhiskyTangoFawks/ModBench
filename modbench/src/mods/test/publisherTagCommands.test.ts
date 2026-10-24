@@ -19,9 +19,9 @@ vi.mock('vscode', async () => {
 import { progressSteps } from '../../test/recordedProgress';
 import { quickPickChoosing } from '../../drivingLib/test/quickPickDouble';
 import { AgentCall } from '../../drivingLib/agentGesture';
-import { registerPublisherTagCommands, publisherKeyContext, publisherTagsHeld } from '../publisherTagCommands';
+import { registerPublisherTagCommands, publisherKeyContext } from '../publisherTagCommands';
 import { FileNode, FolderNode } from '../modFiles';
-import { ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
+import { ModNode, type ModlistNode } from '../ModListProvider';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { InstanceValue, PublisherTag } from '../../instanceLoader/instance';
@@ -80,22 +80,6 @@ beforeEach(() => {
   progressSteps.length = 0;
   offered = [];
   changePublisherTag.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
-});
-
-describe('the publisher tags a row holds', () => {
-  it('are those covering its own path: a mod\'s folder, a file, a folder', () => {
-    expect([modM, modN, fileA, fileB, folderTextures].map((row) => publisherTagsHeld(value, row))).toEqual([[INCLUDE, ALWAYS_ENABLED], [], [INCLUDE], [], [IGNORE]]);
-  });
-
-  it('are none while the publisher\'s configuration is not read', () => {
-    expect(publisherTagsHeld({ ...value, publisherConfiguration: { kind: 'unreadable', reason: 'x' } }, modM)).toEqual([]);
-  });
-
-  it('are those covering an Overwrite file, outside every mod', () => {
-    const overwrite = new OverwriteNode([], 'MO2');
-    const inOverwrite = new FileNode(overwrite, { kind: 'runtimeOutput' }, { relativePath: 'a.dds', path: '/instance/mods/M/a.dds', sourcePath: '', excluded: false, markedExcluded: false, includedPath: 'a.dds' }, 'a.dds');
-    expect(publisherTagsHeld(value, inOverwrite)).toEqual([INCLUDE]);
-  });
 });
 
 describe('the keys the publisher tag items of the menus wait on (mods.md, Menus and keys)', () => {
