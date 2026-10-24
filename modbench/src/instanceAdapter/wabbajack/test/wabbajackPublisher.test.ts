@@ -372,6 +372,70 @@ describe('publisher tags following a mod folder (publishing.md, Publisher tags, 
   });
 });
 
+describe('keeping Modbench\'s files out of what Wabbajack ships (publishing.md, What ships, story 1)', () => {
+  const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
+  const kept = (...present: string[]) => ({ present, owns: (path: string) => path.toLowerCase().endsWith('.manifest.json') });
+
+  it('lists each file in Ignore, after the entries already there, in every other list left as written', async () => {
+    await writeSettings({ Include: ['mods\\A'], Ignore: ['mine'] });
+
+    await publisherOver().keepOut(kept(join(root, '.gitignore'), join(root, 'mods', 'A', 'A.manifest.json')));
+
+    expect(JSON.parse(await settingsText())).toEqual({ Include: ['mods\\A'], Ignore: ['mine', '.gitignore', 'mods\\A\\A.manifest.json'] });
+  });
+
+  it('writes nothing for a file an entry already lists, however it is spelled, or an ignored folder holds', async () => {
+    const text = '{"Ignore":["HASH-INDEX/","mods/a/A.MANIFEST.json"]}';
+    await writeSettings(text);
+
+    await publisherOver().keepOut(kept(join(root, 'hash-index'), join(root, 'mods', 'A', 'A.manifest.json'), join(root, 'hash-index', 'x', 'y')));
+
+    expect(await settingsText()).toBe(text);
+  });
+
+  it('drops an entry for a file of Modbench\'s that is gone, however it is spelled, and keeps every other entry as written', async () => {
+    await writeSettings({ Ignore: ['MODS/Gone/gone.MANIFEST.json', 'mods\\Here\\Here.manifest.json', 'mods\\Gone', 'mods\\Gone\\notes.txt', 'mine'], Include: ['mods\\Gone\\Gone.manifest.json'] });
+
+    await publisherOver().keepOut(kept(join(root, 'mods', 'Here', 'Here.manifest.json')));
+
+    expect(JSON.parse(await settingsText())).toEqual({ Ignore: ['mods\\Here\\Here.manifest.json', 'mods\\Gone', 'mods\\Gone\\notes.txt', 'mine'], Include: ['mods\\Gone\\Gone.manifest.json'] });
+  });
+
+  it('hands back what takes the entries it wrote away, leaving settings another program changed since', async () => {
+    const text = '{\n  "Ignore": [\n    "mine"\n  ]\n}\n';
+    await writeSettings(text);
+    const takeBack = await publisherOver().keepOut(kept(join(root, 'x')));
+    const written = await settingsText();
+    await takeBack();
+    const restored = await settingsText();
+    await publisherOver().keepOut(kept(join(root, 'x')));
+    await writeSettings('{"Ignore":["theirs"]}');
+    await takeBack();
+
+    expect([written === text, restored, await settingsText()]).toEqual([false, text, '{"Ignore":["theirs"]}']);
+  });
+
+  it('skips a file outside the instance', async () => {
+    const text = '{"Ignore":[]}';
+    await writeSettings(text);
+
+    await publisherOver().keepOut(kept(join(root, '..', 'elsewhere')));
+
+    expect(await settingsText()).toBe(text);
+  });
+
+  it('rejects, writing nothing, for settings it cannot read', async () => {
+    await writeSettings('not json');
+    await expect(publisherOver().keepOut(kept(join(root, 'x')))).rejects.toThrow(SETTINGS_FILE);
+    expect(await settingsText()).toBe('not json');
+  });
+
+  it('does nothing while the instance holds no compiler settings, creating none', async () => {
+    await publisherOver().keepOut(kept(join(root, 'x')));
+    await expect(settingsText()).rejects.toThrow();
+  });
+});
+
 describe('the watch on the compiler settings (ADR-0003)', () => {
   const live = () => watchers.filter((watcher) => !watcher.disposed);
 

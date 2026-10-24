@@ -6,7 +6,10 @@ import type { PathSpelling, TokenProgram } from './pathTokens';
 
 export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
-export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag' | 'followModFolders' | 'publisherConfigurationRefusal'> & { reading(): Promise<ManagerReading> };
+export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag' | 'followModFolders' | 'publisherConfigurationRefusal' | 'keepOutOfPublisher'> & {
+  reading(): Promise<ManagerReading>;
+  filesKept(): Promise<KeptFiles>;
+};
 
 /** A configuration file, from the instance root, and how it spells a path. */
 export interface ConfigurationFile {
@@ -16,12 +19,22 @@ export interface ConfigurationFile {
   readonly blanked?: TokenProgram;
 }
 
+/** The files Modbench keeps in the instance, all absolute paths. */
+export interface KeptFiles {
+  readonly present: readonly string[];
+  /** Whether a path is one of the shapes Modbench keeps a file at, there now or not. */
+  readonly owns: (path: string) => boolean;
+}
+
 export interface Publisher {
   readonly tags: readonly PublisherTag[];
   readonly configurationFile: ConfigurationFile;
   configuration(): Promise<PublisherConfiguration>;
   changeTag: InstanceAdapter['changePublisherTag'];
   followFolders: InstanceAdapter['followModFolders'];
+  /** Rejects, writing nothing, for a configuration it cannot read; does nothing when the instance holds none.
+   *  Answers the call that takes back what it wrote. */
+  keepOut(kept: KeptFiles): Promise<() => Promise<void>>;
   /** Hears that the publisher's configuration changed. */
   subscribe(listener: () => void): Subscription;
 }
@@ -32,6 +45,7 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher): In
     publisherTags: publisher.tags,
     changePublisherTag: publisher.changeTag,
     followModFolders: publisher.followFolders,
+    keepOutOfPublisher: async () => publisher.keepOut(await manager.filesKept()),
     publisherConfigurationRefusal: async () => {
       const configuration = await publisher.configuration();
       return configuration.kind === 'unreadable' ? configuration.reason : undefined;

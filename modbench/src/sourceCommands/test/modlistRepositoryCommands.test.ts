@@ -54,7 +54,7 @@ describe('modlistRepositoryCommands git init', () => {
     const result = await commands.gitInit();
 
     expect([result.applied, adapter.calls, repositories]).toEqual([
-      true, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }, { verb: 'writePathTokens' }], ['made'],
+      true, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }, { verb: 'keepOutOfPublisher' }, { verb: 'writePathTokens' }], ['made'],
     ]);
   });
 
@@ -64,12 +64,12 @@ describe('modlistRepositoryCommands git init', () => {
     expect(await commands.gitInit()).toEqual({ applied: true, pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' });
   });
 
-  it('takes back the repository and the ignore list it made when the path tokens could not be written, naming why', async () => {
+  it('takes back the repository, the ignore list and the publisher\'s ignore list entries it made when the path tokens could not be written, naming why', async () => {
     const { commands, adapter } = commandsOver({ refusals: refusing('writePathTokens', 'could not lock config file .git/config') });
 
     expect([await commands.gitInit(), adapter.calls.map(({ verb }) => verb)]).toEqual([
       { applied: false, refusal: 'could not lock config file .git/config' },
-      ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'takeBackPushRefusal', 'removeRepository', 'takeBackIgnoreList'],
+      ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'keepOutOfPublisher', 'writePathTokens', 'takeBackKeepOutOfPublisher', 'takeBackPushRefusal', 'removeRepository', 'takeBackIgnoreList'],
     ]);
   });
 
@@ -80,7 +80,7 @@ describe('modlistRepositoryCommands git init', () => {
       const result = await commands.gitInit();
 
       expect([result, repositories, adapter.calls]).toEqual([
-        { applied: true }, [], [{ verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }, { verb: 'writePathTokens' }],
+        { applied: true }, [], [{ verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }, { verb: 'keepOutOfPublisher' }, { verb: 'writePathTokens' }],
       ]);
     });
 
@@ -91,7 +91,7 @@ describe('modlistRepositoryCommands git init', () => {
 
       expect([await commands.gitInit(), adapter.calls.map(({ verb }) => verb)]).toEqual([
         { applied: true, pushRefusalNotWritten: '/instance/.git/hooks/pre-push already exists' },
-        ['writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens'],
+        ['writeIgnoreList', 'refuseUnpublishedPins', 'keepOutOfPublisher', 'writePathTokens'],
       ]);
     });
 
@@ -99,9 +99,24 @@ describe('modlistRepositoryCommands git init', () => {
       const { commands, adapter, repositories } = commandsOver({ repositoryOnDisk: true, refusals: refusing('writePathTokens', 'could not lock config file') });
 
       expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
-        { applied: false, refusal: 'could not lock config file' }, [], ['writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'takeBackPushRefusal', 'takeBackIgnoreList'],
+        { applied: false, refusal: 'could not lock config file' }, [], ['writeIgnoreList', 'refuseUnpublishedPins', 'keepOutOfPublisher', 'writePathTokens', 'takeBackKeepOutOfPublisher', 'takeBackPushRefusal', 'takeBackIgnoreList'],
       ]);
     });
+  });
+
+  it('takes back everything before the publisher\'s ignore list when it could not be written', async () => {
+    const { commands, repositories, adapter } = commandsOver({ refusals: refusing('keepOutOfPublisher', 'compiler_settings.json cannot be written') });
+
+    expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
+      { applied: false, refusal: 'compiler_settings.json cannot be written' }, ['made'],
+      ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'keepOutOfPublisher', 'takeBackPushRefusal', 'removeRepository', 'takeBackIgnoreList'],
+    ]);
+  });
+
+  it('refuses before it writes anything when the publisher\'s configuration cannot be read, naming why', async () => {
+    const { commands, repositories, adapter } = commandsOver({ unreadablePublisher: 'compiler_settings.json is not JSON' });
+
+    expect([await commands.gitInit(), repositories, adapter.calls]).toEqual([{ applied: false, refusal: 'compiler_settings.json is not JSON' }, [], [{ verb: 'checkPushRefusalFree' }]]);
   });
 
   it('makes no repository when the ignore list could not be written, and says why', async () => {
@@ -195,7 +210,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect([adapter.calls, outcome]).toMatchObject([[{ verb: 'writeSubmodules' }, { verb: 'writePathTokens' }], { applied: true, notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], repositoryNotes: ['source/Odd is not a source mod'] }]);
+    expect([adapter.calls, outcome]).toMatchObject([[{ verb: 'writeSubmodules' }, { verb: 'keepOutOfPublisher' }, { verb: 'writePathTokens' }], { applied: true, notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], repositoryNotes: ['source/Odd is not a source mod'] }]);
   });
 
   it('reports each path no path token names, naming its file, and why a path token stays', async () => {
@@ -206,7 +221,7 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect([adapter.calls.map(({ verb }) => verb), outcome]).toMatchObject([['writeSubmodules', 'writePathTokens'], {
+    expect([adapter.calls.map(({ verb }) => verb), outcome]).toMatchObject([['writeSubmodules', 'keepOutOfPublisher', 'writePathTokens'], {
       applied: true, repositoryNotes: ['ModOrganizer.ini still holds a path token', 'ModOrganizer.ini holds a path no path token names: C:/Modding/x.exe'],
     }]);
   });
@@ -232,6 +247,15 @@ describe('modlistRepositoryCommands update manifest', () => {
     expect(await commands.updateManifest(['ModA'])).toMatchObject({
       applied: true, landed: [], repositoryNotes: ['ModOrganizer.ini holds a path no path token names: C:/Modding/x.exe'],
     });
+  });
+
+  it('names the failure to keep Modbench\'s files out of the publisher beside the manifests that landed', async () => {
+    const { commands, client } = commandsOver({ refusals: refusing('keepOutOfPublisher', 'compiler_settings.json is not JSON') });
+    client.setCommandResult('updateManifest', UPDATED);
+
+    const outcome = await commands.updateManifest(['ModA']);
+
+    expect(outcome).toMatchObject({ applied: true, landed: UPDATED.landed, repositoryNotes: ['compiler_settings.json is not JSON'] });
   });
 
   it('makes no submodule when mEdit refuses the gesture', async () => {
