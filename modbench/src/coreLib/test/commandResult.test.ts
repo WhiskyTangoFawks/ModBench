@@ -3,12 +3,12 @@ import { selectionOutcomeOf, type CommandResult } from '../commandResult';
 
 describe('selectionOutcomeOf', () => {
   it('lands each applied item and refuses each refused one by its reason', async () => {
-    const results: Record<number, CommandResult> = {
+    const results = {
       1: { applied: false, refusal: 'odd 1' },
       2: { applied: true, wrote: true },
       3: { applied: false, refusal: 'odd 3' },
-    };
-    const run = (n: number) => Promise.resolve(results[n]);
+    } satisfies Record<number, CommandResult>;
+    const run = (n: keyof typeof results): Promise<CommandResult> => Promise.resolve(results[n]);
     expect(await selectionOutcomeOf([1, 2, 3], run, (n) => n)).toEqual({
       landed: [2],
       refused: [{ item: 1, reason: 'odd 1' }, { item: 3, reason: 'odd 3' }],
