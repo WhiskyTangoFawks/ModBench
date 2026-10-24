@@ -149,7 +149,7 @@ export function mo2Landing(
           return fomod === undefined ? { landed: true } : { landed: true, fomod };
         });
       } catch (err) {
-        return abandonAfter(extraction, err);
+        return await abandonAfter(extraction, err);
       } finally {
         claimedMods.delete(target.name.toLowerCase());
       }
