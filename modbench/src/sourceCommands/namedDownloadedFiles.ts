@@ -26,6 +26,9 @@ async function downloadedOrWhy({ adapter, nexus }: Deps, { name, hash, page }: M
     return put ? undefined : notDownloaded('the file Nexus sent is not the one its manifest names');
   } catch (err) {
     return notDownloaded(errorMessage(err));
+  } finally {
+    // Bytes a put never read hold the server's connection open. A cancel of bytes that ended or failed answers nothing new.
+    await fetched.bytes.cancel().catch(() => undefined);
   }
 }
 

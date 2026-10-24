@@ -358,15 +358,15 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         return { gone: false, wrote: held.excluded !== excluded } as const;
       }),
     putDownloadedFile: async (name, bytes, { hash, info }) => {
+      await write({ verb: 'putDownloadedFile', name, info }, () => {
+        if (answers.downloadedFiles?.has(name) || put.has(name)) throw new Error(`'${name}' is already in the downloads folder`);
+      });
       const chunks: Uint8Array[] = [];
       for await (const chunk of bytes) chunks.push(chunk);
       const text = Buffer.concat(chunks).toString();
-      return write({ verb: 'putDownloadedFile', name, info }, () => {
-        if (answers.downloadedFiles?.has(name) || put.has(name)) throw new Error(`'${name}' is already in the downloads folder`);
-        if (text !== hash) return { put: false };
-        put.set(name, { kind: 'read', answer: { path: `/downloads/${name}`, size: text.length, hash, entries: [] } });
-        return { put: true };
-      });
+      if (text !== hash) return { put: false };
+      put.set(name, { kind: 'read', answer: { path: `/downloads/${name}`, size: text.length, hash, entries: [] } });
+      return { put: true };
     },
     writeNexusFileInfo: (name, info) =>
       write({ verb: 'writeNexusFileInfo', name, info }, () => (downloadedFileNamed(name) === undefined ? { gone: true } as const : { gone: false, wrote: true } as const)),

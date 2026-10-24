@@ -646,6 +646,18 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: `${INSTALLATION_FILE_MISSING} It could not be downloaded from Nexus: ENOSPC.` }] });
     });
 
+    it('lets the server\'s connection go when the Instance adapter refuses the file before it reads it', async () => {
+      let cancelled = false;
+      const body = new ReadableStream<Uint8Array>({ cancel: () => { cancelled = true; } });
+      const { nexus } = await nexusServing({ ...servingFile78('the bytes'), [FILE_78.server]: new Response(body) });
+      const { commands, client } = commandsOver({ refusals: refusing('putDownloadedFile', 'ENOSPC') }, new InMemoryMEditClient(), {}, readingOf(), nexus);
+      lackedUntilHanded(client);
+
+      await commands.restoreFromManifest(['ModA']);
+
+      expect(cancelled).toBe(true);
+    });
+
     it('asks Nexus nothing for an installation file the downloads folder holds', async () => {
       const { nexus, sent } = await nexusServing(servingFile78('the bytes'));
       const { commands, client } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) }, new InMemoryMEditClient(), {}, readingOf(), nexus);
