@@ -970,7 +970,7 @@ describe('the agent server, running a gesture', () => {
       ],
       options: {},
     },
-    ...(['add', 'remove'] as const).map((direction) => ({
+    ...(['add', 'remove'] as const).map((direction): GestureCase => ({
       name: `mod_${direction}_publisher_tag carries each mod, or each file or folder by its path in its mod in the mod's own casing, and the tag as an Option`,
       value: { ...CONFLICTED, foldersByMod: new Map([['B', [{ relativePath: 'Textures', path: '/m/Textures', excluded: false }]]]) },
       tool: `mod_${direction}_publisher_tag`,

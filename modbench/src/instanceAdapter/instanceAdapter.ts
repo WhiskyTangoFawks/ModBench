@@ -560,9 +560,8 @@ export interface InstanceAdapter {
   readonly names: ManagerNames;
   /** Each publisher tag the instance's publisher declares. */
   readonly publisherTags: readonly PublisherTag[];
-  /** Adds or removes the publisher tag named `tag` on each path, in the publisher's configuration alone; a path already as
-   *  asked changes nothing. Answers the paths it refused; rejects, writing nothing, for a tag the publisher does not declare
-   *  or a configuration it cannot read. */
+  /** Adds or removes the publisher tag named `tag` on each path; a path already so changes nothing. Answers the paths it
+   *  refused; rejects, writing nothing, for an undeclared tag or a configuration it cannot read. */
   changePublisherTag(change: 'add' | 'remove', tag: string, paths: readonly string[]): Promise<readonly PathRefusal[]>;
 
   // Answers about a mod or a file.

@@ -68,7 +68,6 @@ function fileIn(mod: Entry | undefined, given: FileName, own: readonly OriginFol
   return { mod: name, file: matches.join() };
 }
 
-/** Each file by its path in its mod, answered in the mod's own casing. */
 function pathsIn(
   value: InstanceValue, given: readonly FileName[], heldBy: (mod: string) => readonly OriginFolder[],
 ): { mod: string; file: string }[] {
@@ -79,6 +78,7 @@ function pathsIn(
   return resolved.filter((one) => typeof one !== 'string');
 }
 
+/** Each file by its path in its mod, answered in the mod's own casing. */
 export const filesNamed = (value: InstanceValue, given: readonly FileName[]): { mod: string; file: string }[] =>
   pathsIn(value, given, (mod) => value.filesByMod.get(mod) ?? []);
 
