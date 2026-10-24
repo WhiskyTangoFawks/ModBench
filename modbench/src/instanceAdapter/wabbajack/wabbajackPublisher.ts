@@ -5,7 +5,7 @@
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { errorMessage } from '../../ports/errorMessage';
 import { get, putIfChanged, readOrAbsent } from '../files';
-import type { Covering, FolderMove, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange } from '../instanceAdapter';
+import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedSubstitution } from '../pathTokens';
 import { watchFiles } from '../watchFiles';
@@ -264,7 +264,7 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       });
       return refused;
     },
-    followFolders: async (moves: readonly FolderMove[]) => {
+    followFolders: async (moves) => {
       const inside = moves.flatMap(({ from, to }) => {
         const fromInside = inInstance(instanceRoot, from);
         const toInside = to === undefined ? undefined : inInstance(instanceRoot, to);

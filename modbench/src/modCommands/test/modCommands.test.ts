@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { unreadStatus } from '../../test/unreadStatus';
 import { modSyncOver, modCommands, type ModCommands } from '../modCommands';
 import type {
-  EntryRef, InstanceReading, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
+  EntryRef, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, refusing, readingFixture, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
@@ -845,7 +845,7 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
   const INCLUDE = { name: 'Include', badge: 'IN', marksPaths: true };
   const publisherOver = (answers: InstanceAnswers = {}, mEdit = new InMemoryMEditClient(), reading: Partial<InstanceReading> = {}) =>
     over(FIXTURE_ORDER, { publisherTags: [INCLUDE], ...answers }, mEdit, reading);
-  const follow = (...moves: { from: string; to?: string }[]): AdapterCall => ({ verb: 'followModFolders', moves });
+  const follow = (...moves: Parameters<InstanceAdapter['followModFolders']>[0]): AdapterCall => ({ verb: 'followModFolders', moves });
   const unreadable = { unreadablePublisher: 'compiler_settings.json is not JSON' };
 
   it('rename moves them to the new folder once the folder has moved', async () => {
