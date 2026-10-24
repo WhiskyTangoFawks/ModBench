@@ -2,10 +2,10 @@
 // compiler settings hold, as its compiler applies them, and never a mod's metadata (publishing.md,
 // Publisher tags, story 5).
 
-import { join, relative, sep } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import { errorMessage } from '../../ports/errorMessage';
-import { get, readOrAbsent } from '../files';
-import type { Covering, PublisherConfiguration, PublisherTag } from '../instanceAdapter';
+import { get, putIfChanged, readOrAbsent } from '../files';
+import type { Covering, PathRefusal, PublisherConfiguration, PublisherTag } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedSubstitution } from '../pathTokens';
 import { watchFiles } from '../watchFiles';
@@ -168,6 +168,16 @@ function coveringIn(instanceRoot: string, root: PathNode, neverShipped: readonly
   };
 }
 
+// A file's own indentation, line ends and final newline, which a rewrite keeps.
+function serialized(settings: object, form: string): string {
+  const indent = /\n([ \t]+)"/.exec(form)?.[1] ?? (form.includes('\n') ? '  ' : undefined);
+  const eol = form.includes('\r\n') ? '\r\n' : '\n';
+  return JSON.stringify(settings, undefined, indent).replaceAll('\n', eol) + (form.endsWith('\n') ? eol : '');
+}
+
+const sameNames = (first: readonly string[], second: readonly string[]): boolean =>
+  first.length === second.length && first.every((name, at) => name === second[at]);
+
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
   const file = join(instanceRoot, COMPILER_SETTINGS.name);
   const neverShipped = manager.neverShipped.map((folder) => namesOf(relative(instanceRoot, folder)));
@@ -186,6 +196,31 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       } catch (err) {
         return { kind: 'unreadable', reason: errorMessage(err) };
       }
+    },
+    changeTag: async (change, tagName, paths) => {
+      const wabbajackTag = TAGS.find(({ tag }) => tag.name === tagName);
+      if (wabbajackTag === undefined) throw new Error(`Wabbajack declares no publisher tag "${tagName}"`);
+      const { listedUnder } = wabbajackTag;
+      const refused: PathRefusal[] = [];
+      await putIfChanged(file, (before) => {
+        const settings: Record<string, unknown> = { ...settingsIn(before, file) };
+        const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']) ?? [];
+        let changed = entries;
+        for (const path of paths) {
+          const inInstance = relative(instanceRoot, path);
+          if (inInstance === '' || isAbsolute(inInstance) || inInstance.split(sep)[0] === '..') {
+            refused.push({ path, reason: 'It is outside the instance.' });
+            continue;
+          }
+          const names = namesOf(inInstance);
+          const listed = changed.some((entry) => sameNames(namesOf(entry), names));
+          if (change === 'add' && !listed) changed = [...changed, inInstance.split(sep).join('\\')];
+          else if (change === 'remove' && listed) changed = changed.filter((entry) => !sameNames(namesOf(entry), names));
+          else if (change === 'remove') refused.push({ path, reason: `${tagName} does not list it. It covers the path from a path above it, or not at all.` });
+        }
+        return changed === entries ? before : serialized({ ...settings, [listedUnder]: changed }, before);
+      });
+      return refused;
     },
     subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, () => listener()),
   };

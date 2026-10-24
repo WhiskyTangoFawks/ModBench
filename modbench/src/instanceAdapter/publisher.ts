@@ -6,7 +6,7 @@ import type { PathSpelling, TokenProgram } from './pathTokens';
 
 export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
-export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags'> & { reading(): Promise<ManagerReading> };
+export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag'> & { reading(): Promise<ManagerReading> };
 
 /** A configuration file, from the instance root, and how it spells a path. */
 export interface ConfigurationFile {
@@ -20,6 +20,7 @@ export interface Publisher {
   readonly tags: readonly PublisherTag[];
   readonly configurationFile: ConfigurationFile;
   configuration(): Promise<PublisherConfiguration>;
+  changeTag: InstanceAdapter['changePublisherTag'];
   /** Hears that the publisher's configuration changed. */
   subscribe(listener: () => void): Subscription;
 }
@@ -28,6 +29,7 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher): In
   return {
     ...manager,
     publisherTags: publisher.tags,
+    changePublisherTag: publisher.changeTag,
     reading: async () => {
       const [reading, publisherConfiguration] = await Promise.all([manager.reading(), publisher.configuration()]);
       return { ...reading, publisherConfiguration };

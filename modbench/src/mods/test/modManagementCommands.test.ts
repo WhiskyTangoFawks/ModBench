@@ -34,6 +34,7 @@ import { quickPickChoosing } from '../../drivingLib/test/quickPickDouble';
 const commands = {
   uninstallMods: vi.fn(), deleteSeparators: vi.fn(), renameMod: vi.fn(), renameSeparator: vi.fn(), insertSeparator: vi.fn(),
   createEmptyMod: vi.fn(), setModsEnabled: vi.fn(), moveMods: vi.fn(), moveSeparators: vi.fn(), markFiles: vi.fn(),
+  changePublisherTag: vi.fn(),
   newModNameRefusal: vi.fn(), separatorNameRefusal: vi.fn(), renameModNameRefusal: vi.fn(), installMod: vi.fn(), upgradeLoss: vi.fn(),
   names: { manager: 'MO2', modOrderFile: 'modlist.txt', downloadedFileMetadataFile: '.meta' },
 } satisfies Record<keyof ModCommands, unknown>;

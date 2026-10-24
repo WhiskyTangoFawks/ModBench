@@ -594,6 +594,16 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.mod.addPublisherTag",
+        "title": "Add Publisher Tag",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.mod.removePublisherTag",
+        "title": "Remove Publisher Tag",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.mod.enable",
         "title": "Enable Mod",
         "category": "Modbench"
@@ -874,6 +884,14 @@
         {
           "command": "modbench.mod.includeFile",
           "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsExcludedFile"
+        },
+        {
+          "command": "modbench.mod.addPublisherTag",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.hasPublisher"
+        },
+        {
+          "command": "modbench.mod.removePublisherTag",
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsPublisherTag"
         },
         {
           "command": "modbench.mod.enable",
@@ -1346,9 +1364,19 @@
           "group": "1_open@4"
         },
         {
+          "command": "modbench.mod.addPublisherTag",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.mod.hasPublisher",
+          "group": "2_change@4"
+        },
+        {
+          "command": "modbench.mod.removePublisherTag",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && modbench.mod.holdsPublisherTag",
+          "group": "2_change@5"
+        },
+        {
           "command": "modbench.mod.checkForUpdates",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bhasNexus\\b/ && modbench.nexus.loggedIn",
-          "group": "2_change@4"
+          "group": "2_change@6"
         },
         {
           "command": "modbench.mod.enable",
@@ -1484,6 +1512,16 @@
           "command": "modbench.mod.includeFile",
           "when": "view == modbench.modList && viewItem =~ /\\bfile\\b/ && viewItem =~ /\\bexcluded\\b/",
           "group": "2_change@1"
+        },
+        {
+          "command": "modbench.mod.addPublisherTag",
+          "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem == folder) && modbench.mod.hasPathPublisher",
+          "group": "2_change@2"
+        },
+        {
+          "command": "modbench.mod.removePublisherTag",
+          "when": "view == modbench.modList && (viewItem =~ /\\bfile\\b/ || viewItem == folder) && modbench.mod.holdsPublisherTag",
+          "group": "2_change@3"
         },
         {
           "command": "modbench.copyValue",

@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import type { InstanceValue } from '../instanceLoader/instance';
-import { downloadedFilesNamed, filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
+import type { Argument } from '../wire/argument';
+import { downloadedFilesNamed, filesAndFoldersNamed, filesNamed, linesNamed, modsNamed, pluginsNamed } from './names';
 import type { MEditClient } from '../client/MEditClient';
 import { Refusal } from '../drivingLib/refusal';
 import { formKeysNamed } from './recordNames';
@@ -100,6 +101,20 @@ const FILES = gestureInput(
   z.object({ argument: z.array(z.object({ mod: ENTRY_NAME, path: z.string() })) }),
   (value, { argument }) => new AgentCall(filesNamed(value, argument).map(({ mod, file }) =>
     ({ kind: 'file', origin: { kind: 'mod', name: mod }, relativePath: file })), {}),
+);
+
+const PUBLISHER_TAG_ROWS = gestureInput(
+  'argument: the mods, each { mod: { name, kind? } as list_mods names it }, or the files and folders in a mod, each { mod, path: its path in the mod }; options: { tag: the publisher tag\'s name }',
+  z.object({
+    argument: z.array(z.object({ mod: ENTRY_NAME, path: z.string().optional() })),
+    options: z.object({ tag: z.string() }),
+  }),
+  (value, { argument, options }) => {
+    const mods = modArguments(value, argument.filter(({ path }) => path === undefined).map(({ mod }) => mod));
+    const paths = filesAndFoldersNamed(value, argument.flatMap(({ mod, path }) => (path === undefined ? [] : [{ mod, path }])))
+      .map(({ mod, file }): Argument => ({ kind: 'file', origin: { kind: 'mod', name: mod }, relativePath: file }));
+    return new AgentCall([...mods, ...paths], options);
+  },
 );
 
 const DOWNLOADED_FILES = gestureInput(
@@ -237,6 +252,8 @@ export const AGENT_GESTURES: ReadonlyMap<string, GestureInput> = new Map([
   ['modbench.mod.createEmpty', CREATE_EMPTY_MOD],
   ['modbench.mod.excludeFile', FILES],
   ['modbench.mod.includeFile', FILES],
+  ['modbench.mod.addPublisherTag', PUBLISHER_TAG_ROWS],
+  ['modbench.mod.removePublisherTag', PUBLISHER_TAG_ROWS],
   ['modbench.mod.install', INSTALL],
   ['modbench.downloadedFile.queryInfo', DOWNLOADED_FILES],
   ['modbench.downloadedFile.exclude', DOWNLOADED_FILES],

@@ -475,6 +475,12 @@ export interface PublisherTag {
  *  `path` is or is in, undefined outside every mod. */
 export type Covering = (path: string, mod: string | undefined) => readonly PublisherTag[];
 
+/** A path a change to a publisher tag refused, and why. */
+export interface PathRefusal {
+  readonly path: string;
+  readonly reason: string;
+}
+
 /** The publisher's configuration: none while the instance holds no publisher's, or why it could not be read. */
 export type PublisherConfiguration =
   | { readonly kind: 'none' }
@@ -554,6 +560,10 @@ export interface InstanceAdapter {
   readonly names: ManagerNames;
   /** Each publisher tag the instance's publisher declares. */
   readonly publisherTags: readonly PublisherTag[];
+  /** Adds or removes the publisher tag named `tag` on each path, in the publisher's configuration alone; a path already as
+   *  asked changes nothing. Answers the paths it refused; rejects, writing nothing, for a tag the publisher does not declare
+   *  or a configuration it cannot read. */
+  changePublisherTag(change: 'add' | 'remove', tag: string, paths: readonly string[]): Promise<readonly PathRefusal[]>;
 
   // Answers about a mod or a file.
   /** The folder a build of `mod` writes: the one that holds it, else the one its name gives it; undefined when its

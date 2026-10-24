@@ -3,8 +3,8 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
-  entryNotFound, sameEntry, type DecideModOrder, type EntryRef, type FileOrigin, type FileRead, type InstanceAdapter,
-  type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type SeparatorsPlace, type SourceMods,
+  entryNotFound, fileInFolder, sameEntry, type DecideModOrder, type EntryRef, type FileOrigin, type FileRead, type InstanceAdapter,
+  type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type PublisherTag, type SeparatorsPlace, type SourceMods,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, type EntryKey } from './nameRefusals';
@@ -246,6 +246,45 @@ async function markFiles(
     refused.push(...outcome.refused);
   }
   return { applied: true, outcome: { landed, refused } };
+}
+
+/** A row `modbench.mod.addPublisherTag` and `modbench.mod.removePublisherTag` act on: a mod, or a file or folder in one by
+ *  its path there. */
+export interface PublisherTagRow {
+  readonly origin: FileOrigin;
+  readonly relativePath?: string;
+}
+
+// The path a publisher keeps a tag by, or why the row has none.
+async function publisherTagPath(adapter: InstanceAdapter, tag: PublisherTag, row: PublisherTagRow): Promise<string | ItemRefusal<PublisherTagRow>> {
+  const { origin, relativePath } = row;
+  if (origin.kind === 'runtimeOutput') return { item: row, reason: 'Overwrite is not a mod.' };
+  if (relativePath !== undefined && !tag.marksPaths) return { item: row, reason: `${tag.name} marks mods only.` };
+  const folder = await adapter.modFolderPath(origin.name);
+  if (folder === undefined) return { item: row, reason: goneFromDisk(origin.name) };
+  return relativePath === undefined ? folder : fileInFolder(folder, relativePath);
+}
+
+// `modbench.mod.addPublisherTag` / `modbench.mod.removePublisherTag`, the publisher's own refusals by row.
+async function changePublisherTag(
+  adapter: InstanceAdapter, change: 'add' | 'remove', tagName: string, rows: readonly PublisherTagRow[],
+): Promise<SelectionResult<PublisherTagRow>> {
+  const tag = adapter.publisherTags.find(({ name }) => name === tagName);
+  if (tag === undefined) return { applied: false, refusal: `The publisher declares no publisher tag "${tagName}".` };
+  try {
+    const resolved = await Promise.all(rows.map(async (row) => ({ row, path: await publisherTagPath(adapter, tag, row) })));
+    const asked = resolved.flatMap(({ row, path }) => (typeof path === 'string' ? [{ row, path }] : []));
+    const refusals = asked.length === 0 ? [] : await adapter.changePublisherTag(change, tagName, asked.map(({ path }) => path));
+    const refusedBefore = resolved.flatMap(({ path }) => (typeof path === 'string' ? [] : [path]));
+    const refusedByPublisher = asked.flatMap(({ row, path }) => {
+      const refusal = refusals.find((refused) => refused.path === path);
+      return refusal === undefined ? [] : [{ item: row, reason: refusal.reason }];
+    });
+    const refused = [...refusedBefore, ...refusedByPublisher];
+    return { applied: true, outcome: { landed: rows.filter((row) => !refused.some(({ item }) => item === row)), refused } };
+  } catch (err) {
+    return refuse(err);
+  }
 }
 
 const keyOf = (adapter: InstanceAdapter): EntryKey => (entry) => adapter.entryKey(entry);
@@ -519,6 +558,7 @@ export function modCommands(adapter: InstanceAdapter, mEdit: SourceModWriters['m
     moveMods: (...args: TailOf<typeof moveMods>) => moveMods(adapter, ...args),
     moveSeparators: (...args: TailOf<typeof moveSeparators>) => moveSeparators(adapter, ...args),
     markFiles: (...args: TailOf<typeof markFiles>) => markFiles({ adapter, mEdit }, ...args),
+    changePublisherTag: (...args: TailOf<typeof changePublisherTag>) => changePublisherTag(adapter, ...args),
     insertSeparator: (...args: TailOf<typeof insertSeparator>) => insertSeparator(adapter, ...args),
     renameSeparator: (...args: TailOf<typeof renameSeparator>) => renameSeparator(adapter, ...args),
     deleteSeparators: (...args: TailOf<typeof deleteSeparators>) => deleteSeparators(adapter, ...args),
