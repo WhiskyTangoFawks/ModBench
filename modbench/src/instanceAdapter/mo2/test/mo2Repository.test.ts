@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { NO_DETECTORS } from '../../../test/noDetectors';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
@@ -14,7 +14,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { mo2InstanceAdapter } from '../mo2Instance';
 import type { ConfigurationFile, ManagerAdapter as Adapter } from '../../publisher';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
-import { WHITELIST_IGNORE_LIST, withSourceModLines } from '../layout';
+import { whitelistIgnoreList, withSourceModLines } from '../layout';
 import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 
 let root: string;
@@ -55,28 +55,28 @@ describe('the MO2 adapter\'s repository', () => {
 
   describe('the ignore list', () => {
     const crlf = (text: string): string => text.replaceAll('\n', '\r\n');
-    const withSourceMod = withSourceModLines(WHITELIST_IGNORE_LIST, ['Mod A']) ?? '';
+    const withSourceMod = withSourceModLines(whitelistIgnoreList(undefined), ['Mod A']) ?? '';
     const ignoreList = (): Promise<string> => readFile(join(root, '.gitignore'), 'utf8');
 
-    const whitelistLines = WHITELIST_IGNORE_LIST.trimEnd().split('\n');
+    const whitelistLines = whitelistIgnoreList(undefined).trimEnd().split('\n');
     const joined = (lines: string[]): string => `${lines.join('\n')}\n`;
     const withoutLastLine = joined(whitelistLines.slice(0, -1));
     const swapped = joined([whitelistLines[1] ?? '', whitelistLines[0] ?? '', ...whitelistLines.slice(2)]);
     const trailingSpace = joined([`${whitelistLines[0] ?? ''} `, ...whitelistLines.slice(1)]);
 
     it.each([
-      ['the lines of an ignore list already there', 'mine\n', `mine\n${WHITELIST_IGNORE_LIST}`],
-      ['an ignore list with no final newline', 'mine', `mine\n${WHITELIST_IGNORE_LIST}`],
-      ['an ignore list of CRLF lines', 'mine\r\n', `mine\r\n${crlf(WHITELIST_IGNORE_LIST)}`],
-      ['an ignore list whose whitelist lacks a line', withoutLastLine, `${withoutLastLine}${WHITELIST_IGNORE_LIST}`],
-      ['an ignore list whose whitelist lines are out of order', swapped, `${swapped}${WHITELIST_IGNORE_LIST}`],
-      ['an ignore list that holds its whitelist', WHITELIST_IGNORE_LIST, WHITELIST_IGNORE_LIST],
+      ['the lines of an ignore list already there', 'mine\n', `mine\n${whitelistIgnoreList(undefined)}`],
+      ['an ignore list with no final newline', 'mine', `mine\n${whitelistIgnoreList(undefined)}`],
+      ['an ignore list of CRLF lines', 'mine\r\n', `mine\r\n${crlf(whitelistIgnoreList(undefined))}`],
+      ['an ignore list whose whitelist lacks a line', withoutLastLine, `${withoutLastLine}${whitelistIgnoreList(undefined)}`],
+      ['an ignore list whose whitelist lines are out of order', swapped, `${swapped}${whitelistIgnoreList(undefined)}`],
+      ['an ignore list that holds its whitelist', whitelistIgnoreList(undefined), whitelistIgnoreList(undefined)],
       ['an ignore list that holds its whitelist and its source mods', withSourceMod, withSourceMod],
-      ['an ignore list that holds its whitelist, then lines of the user', `${WHITELIST_IGNORE_LIST}!/README.md\n!/docs/\n`, `${WHITELIST_IGNORE_LIST}!/README.md\n!/docs/\n`],
-      ['an ignore list that holds lines of the user, then its whitelist', `mine/\n${WHITELIST_IGNORE_LIST}`, `mine/\n${WHITELIST_IGNORE_LIST}`],
-      ['an ignore list that holds lines of the user on both sides of its whitelist', `mine/\n${WHITELIST_IGNORE_LIST}!/docs/\n`, `mine/\n${WHITELIST_IGNORE_LIST}!/docs/\n`],
+      ['an ignore list that holds its whitelist, then lines of the user', `${whitelistIgnoreList(undefined)}!/README.md\n!/docs/\n`, `${whitelistIgnoreList(undefined)}!/README.md\n!/docs/\n`],
+      ['an ignore list that holds lines of the user, then its whitelist', `mine/\n${whitelistIgnoreList(undefined)}`, `mine/\n${whitelistIgnoreList(undefined)}`],
+      ['an ignore list that holds lines of the user on both sides of its whitelist', `mine/\n${whitelistIgnoreList(undefined)}!/docs/\n`, `mine/\n${whitelistIgnoreList(undefined)}!/docs/\n`],
       ['an ignore list that holds its whitelist and its source mods, then lines of the user', `${withSourceMod}!/docs/\n`, `${withSourceMod}!/docs/\n`],
-      ['an ignore list of CRLF lines that holds its whitelist, then lines of the user', crlf(`${WHITELIST_IGNORE_LIST}!/docs/\n`), crlf(`${WHITELIST_IGNORE_LIST}!/docs/\n`)],
+      ['an ignore list of CRLF lines that holds its whitelist, then lines of the user', crlf(`${whitelistIgnoreList(undefined)}!/docs/\n`), crlf(`${whitelistIgnoreList(undefined)}!/docs/\n`)],
       ['an ignore list that holds its whitelist with a trailing space, then lines of the user', `${trailingSpace}!/docs/\n`, `${trailingSpace}!/docs/\n`],
     ])('writes the ignore list for %s, and takes back to what the file was', async (_name, before, after) => {
       const adapter = await instance();
@@ -102,13 +102,26 @@ describe('the MO2 adapter\'s repository', () => {
 
     it('takes back nothing, and keeps what another program wrote, when it added nothing', async () => {
       const adapter = await instance();
-      await put('.gitignore', WHITELIST_IGNORE_LIST);
+      await put('.gitignore', whitelistIgnoreList(undefined));
       const takeBack = await adapter.writeIgnoreList();
       await put('.gitignore', 'theirs\n');
 
       await takeBack();
 
       expect(await ignoreList()).toBe('theirs\n');
+    });
+
+    it('lets git see the publisher\'s configuration', async () => {
+      root = await mkdtemp(join(tmpdir(), 'modbench-mo2-repository-'));
+      const adapter = adapterAt(root, { name: 'publisher.json', spelling: { separators: [], ends: '"', nativeStarts: [] } });
+      await put('publisher.json', '{}');
+      await put('other.json', '{}');
+      runGit('init', '--quiet');
+
+      await adapter.writeIgnoreList();
+
+      expect(runGit('status', '--porcelain', '--untracked-files=all')).toContain('publisher.json');
+      expect(runGit('status', '--porcelain', '--untracked-files=all')).not.toContain('other.json');
     });
 
     it('takes back the ignore list it wrote', async () => {
@@ -118,6 +131,20 @@ describe('the MO2 adapter\'s repository', () => {
       await takeBack();
 
       expect(existsSync(join(root, '.gitignore'))).toBe(false);
+    });
+  });
+
+  describe('the files Modbench keeps in the instance', () => {
+    it('are its record index, hash index, stat cache and repository files, and every manifest a mod folder holds', async () => {
+      const adapter = await instance();
+      await put('mods/A/A.manifest.json');
+      await put('mods/A/meta.ini');
+      await put('mods/B/B.manifest.json');
+      await mkdir(join(root, 'mods', 'C'));
+
+      expect((await adapter.filesKept()).map((path) => relative(root, path).replaceAll('\\', '/')).sort()).toEqual([
+        '.git', '.gitignore', '.gitmodules', 'hash-index', 'modbench', 'mods/A/A.manifest.json', 'mods/B/B.manifest.json', 'stat-cache',
+      ].sort());
     });
   });
 

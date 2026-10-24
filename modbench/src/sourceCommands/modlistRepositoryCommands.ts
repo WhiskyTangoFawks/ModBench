@@ -5,7 +5,6 @@ import {
 import type { CommandResult } from '../coreLib/commandResult';
 import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModMetadata, SourceMods } from '../instanceAdapter/instanceAdapter';
 import { errorMessage } from '../ports/errorMessage';
-import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { HostGit } from '../ports/repository';
 import type { MoveToTrash } from '../ports/trash';
@@ -17,7 +16,7 @@ import type { Nexus } from '../nexus/nexus';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'gameFolder' | 'gameRelease' | 'modOrder' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
+  'gameFolder' | 'gameRelease' | 'modOrder' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
   | 'writePathTokens' | 'pathsOutsideFolders'
   | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule' | 'nexusFileAt' | 'putDownloadedFile'>;
 
@@ -359,6 +358,16 @@ async function refusalTakenBack(failure: unknown, undone: readonly TakenBack[]):
   return refusal;
 }
 
+// publishing.md, What ships, story 1: update manifest writes manifests, and each one stays out of what the publisher ships.
+async function keptOutOfPublisher(adapter: Adapter): Promise<readonly string[]> {
+  try {
+    await adapter.keepOutOfPublisher();
+    return [];
+  } catch (err) {
+    return [errorMessage(err)];
+  }
+}
+
 async function submodulesWritten(adapter: Adapter): Promise<{ notes: readonly ModNote[]; repositoryNotes: readonly string[] }> {
   try {
     const { notes, other } = await adapter.writeSubmodules();
@@ -394,8 +403,9 @@ async function gitInit({ adapter, instanceRoot, hostGit }: ModlistRepositoryComm
   try {
     if (!adopting) await adapter.checkPushRefusalFree();
     takenBack = [{ what: 'the ignore list it wrote', undo: await adapter.writeIgnoreList() }];
+    await adapter.keepOutOfPublisher();
   } catch (err) {
-    return refuse(err);
+    return { applied: false, refusal: await refusalTakenBack(err, takenBack) };
   }
   if (!adopting) {
     try {
@@ -462,7 +472,7 @@ export function modlistRepositoryCommands(deps: ModlistRepositoryCommandsDeps) {
       const submodules = await submodulesWritten(adapter);
       return {
         applied: true, ...outcome, refused: [...outcome.refused, ...refused], notes: [...notes, ...submodules.notes],
-        repositoryNotes: [...submodules.repositoryNotes, ...await pathsReported(adapter)],
+        repositoryNotes: [...submodules.repositoryNotes, ...await keptOutOfPublisher(adapter), ...await pathsReported(adapter)],
       };
     },
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
@@ -53,6 +53,14 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     const { publisherConfiguration } = await adapterOver(root).reading();
 
     expect(publisherConfiguration.kind === 'read' && publisherConfiguration.covering(join(root, 'overwrite', 'x.ini'), undefined)).toEqual([]);
+  });
+
+  it('lists the files the mod manager\'s side keeps in the publisher\'s ignore list, leaving the entries already there', async () => {
+    await writeFile(join(root, SETTINGS_FILE), JSON.stringify({ Ignore: ['mine'] }));
+
+    await adapterOver(root).keepOutOfPublisher();
+
+    expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Ignore: expect.arrayContaining(['mine', 'modbench', '.gitignore']) as unknown });
   });
 
   it('hears a change to the publisher\'s configuration and to the mod manager\'s files alike, and neither once the listener leaves', () => {

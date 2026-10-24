@@ -17,6 +17,8 @@ import { BUILD_CONFIGURATION_FILE } from '../../wire/sourceMod';
 const PROFILES = 'profiles';
 const MODS = 'mods';
 const DOWNLOADS = 'downloads';
+// Where mEdit keeps the record index (ADR-0010).
+const RECORD_INDEX = 'modbench';
 const HASH_INDEX = 'hash-index';
 const STAT_CACHE = 'stat-cache';
 const IGNORE_LIST_FILE = '.gitignore';
@@ -138,6 +140,9 @@ export const hashIndexDir = (instanceRoot: string): string => join(instanceRoot,
  *  of each mod's files. */
 export const statCacheDir = (instanceRoot: string): string => join(instanceRoot, STAT_CACHE);
 
+/** The folder at the instance root where mEdit keeps the record index. */
+export const recordIndexDir = (instanceRoot: string): string => join(instanceRoot, RECORD_INDEX);
+
 /** The instance repository's ignore list file. */
 export const ignoreListFile = (instanceRoot: string): string => join(instanceRoot, IGNORE_LIST_FILE);
 
@@ -200,10 +205,12 @@ export function withSourceModLines(ignoreList: string, folderNames: readonly str
   return `${lines.join('\n')}\n`;
 }
 
-/** The whitelist: the ignore list itself, the mod manager's configuration, each profile's mod order, plugin order
- *  and INIs, and each mod's manifest. Each mod's metadata stays out (modlist-repository.md, The repository, story 2). */
-export const WHITELIST_IGNORE_LIST = `${[
+/** The whitelist: the ignore list itself, the mod manager's configuration, the publisher's, each profile's mod order,
+ *  plugin order and INIs, and each mod's manifest. Each mod's metadata stays out (modlist-repository.md, The repository,
+ *  story 2). */
+export const whitelistIgnoreList = (publisherFileName: string | undefined): string => `${[
   '/*', `!/${IGNORE_LIST_FILE}`, `!/${SUBMODULES_FILE}`, `!/${SETTINGS_FILE_NAME}`,
+  ...publisherFileName === undefined ? [] : [`!/${escapedForIgnoreList(publisherFileName)}`],
   ...heldInEachFolderOf(PROFILES, [MODLIST_FILE_NAME, PLUGINS_FILE_NAME, PLUGIN_ORDER_FILE, `*.${anyCase('ini')}`]),
   ...heldInEachFolderOf(MODS, [MANIFEST_GLOB]),
 ].join('\n')}\n`;

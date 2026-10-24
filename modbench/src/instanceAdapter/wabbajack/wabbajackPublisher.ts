@@ -226,6 +226,8 @@ function followedEntries(entries: readonly string[], moves: readonly InstanceMov
   });
 }
 
+const isUnder = (names: readonly string[], folder: readonly string[]): boolean => folder.every((name, depth) => names[depth] === name);
+
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
   const file = join(instanceRoot, COMPILER_SETTINGS.name);
   const neverShipped = manager.neverShipped.map((folder) => namesOf(relative(instanceRoot, folder)));
@@ -283,6 +285,16 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         }
         return changed ? serialized(settings, before) : before;
       }, { ifMissing: '{}' });
+    },
+    keepOut: async (paths) => {
+      if (await readOrAbsent(() => get(file), undefined) === undefined) return;
+      const insides = paths.flatMap((path) => inInstance(instanceRoot, path) ?? []);
+      await putIfChanged(file, (before) => {
+        const settings: Record<string, unknown> = { ...settingsIn(before, file) };
+        const entries = valueOf(settings, 'Ignore', file, [isNames, 'a list of paths']) ?? [];
+        const missing = insides.filter((inside) => !entries.some((entry) => isUnder(namesOf(inside), namesOf(entry))));
+        return missing.length === 0 ? before : serialized({ ...settings, Ignore: [...entries, ...missing.map((inside) => inside.split(sep).join('\\'))] }, before);
+      });
     },
     subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, () => listener()),
   };

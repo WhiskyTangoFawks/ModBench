@@ -3,14 +3,15 @@
 import { join } from 'node:path';
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { exists, get, ignoreSkippedLink, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
+import { exists, get, GIT_DIR, ignoreSkippedLink, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
 import type { FileRead, GameFile, InstanceAdapter } from '../instanceAdapter';
-import { ignoreListFile, WHITELIST_IGNORE_LIST, withSourceModLines } from './layout';
+import { hashIndexDir, ignoreListFile, manifestFileIn, modsDir, recordIndexDir, statCacheDir, submodulesFile, whitelistIgnoreList, withSourceModLines } from './layout';
+import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import type { Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 
-type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList'>;
+type Mo2Repository = Pick<InstanceAdapter, 'gameFiles' | 'gameFilesTakenBy' | 'writeIgnoreList'> & Pick<ManagerAdapter, 'filesKept'>;
 
 const lowerCased = (names: readonly ResolvedEntry[]): Map<string, ResolvedEntry> => new Map(names.map((entry) => [entry.name.toLowerCase(), entry]));
 
@@ -40,23 +41,23 @@ function caseBlindFinder(dataFolder: string) {
   };
 }
 
-const WHITELIST_LINES = WHITELIST_IGNORE_LIST.trimEnd().split('\n');
-
 // The lines around the whitelist are the user's to manage (docs/wiki/workflows.md), so only a missing whitelist is appended.
-function whitelistAfter(ignoreList: string): string {
+function whitelistAfter(ignoreList: string, whitelist: string): string {
+  const whitelistLines = whitelist.trimEnd().split('\n');
   const text = ignoreList.replaceAll('\r\n', '\n');
   const gitLines = (withSourceModLines(text, []) ?? text).trimEnd().split('\n').map((line) => line.replace(/(?<!\\) +$/, ''));
-  const holdsWhitelist = gitLines.some((_, at) => WHITELIST_LINES.every((line, i) => gitLines[at + i] === line));
+  const holdsWhitelist = gitLines.some((_, at) => whitelistLines.every((line, i) => gitLines[at + i] === line));
   if (holdsWhitelist) return '';
   const lineEnding = ignoreList.includes('\r\n') ? '\r\n' : '\n';
   const separator = ignoreList === '' || ignoreList.endsWith('\n') ? '' : lineEnding;
-  return separator + WHITELIST_IGNORE_LIST.replaceAll('\n', lineEnding);
+  return separator + whitelist.replaceAll('\n', lineEnding);
 }
 
 export function mo2Repository(
-  context: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>,
+  context: Mo2Context, { gameFileHash }: Pick<HashIndex, 'gameFileHash'>, publisherFile: ConfigurationFile | undefined,
 ): Mo2Repository {
   const { instanceRoot } = context;
+  const whitelist = whitelistIgnoreList(publisherFile?.name);
   const gameFiles: InstanceAdapter['gameFiles'] = async (dataFolder, modFilePaths) => {
     const find = caseBlindFinder(dataFolder);
     const files = new Map<string, GameFile>();
@@ -79,7 +80,7 @@ export function mo2Repository(
       const existed = await exists(file);
       let appended = '';
       await putIfChanged(file, (before) => {
-        appended = whitelistAfter(before);
+        appended = whitelistAfter(before, whitelist);
         return before + appended;
       }, { ifMissing: '' });
       return async () => {
@@ -89,6 +90,16 @@ export function mo2Repository(
         });
         if (!existed && await get(file, '') === '') await remove(file);
       };
+    },
+
+    async filesKept() {
+      const mods = await readOrAbsent(() => listFolders(modsDir(instanceRoot), ignoreSkippedLink), []);
+      const manifests = mods.map((mod) => manifestFileIn(join(modsDir(instanceRoot), mod), mod));
+      const present = await Promise.all(manifests.map((manifest) => exists(manifest)));
+      return [
+        join(instanceRoot, GIT_DIR), ignoreListFile(instanceRoot), submodulesFile(instanceRoot), recordIndexDir(instanceRoot),
+        hashIndexDir(instanceRoot), statCacheDir(instanceRoot), ...manifests.filter((_, at) => present[at]),
+      ];
     },
 
     gameFiles,

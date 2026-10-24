@@ -6,7 +6,11 @@ import type { PathSpelling, TokenProgram } from './pathTokens';
 
 export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
-export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag' | 'followModFolders' | 'publisherConfigurationRefusal'> & { reading(): Promise<ManagerReading> };
+export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag' | 'followModFolders' | 'publisherConfigurationRefusal' | 'keepOutOfPublisher'> & {
+  reading(): Promise<ManagerReading>;
+  /** Each file (absolute) Modbench keeps in the instance. */
+  filesKept(): Promise<readonly string[]>;
+};
 
 /** A configuration file, from the instance root, and how it spells a path. */
 export interface ConfigurationFile {
@@ -22,6 +26,9 @@ export interface Publisher {
   configuration(): Promise<PublisherConfiguration>;
   changeTag: InstanceAdapter['changePublisherTag'];
   followFolders: InstanceAdapter['followModFolders'];
+  /** Lists each path (absolute) in the publisher's ignore list unless an entry already covers it, leaving every other
+   *  entry as written. Rejects, writing nothing, for a configuration it cannot read; does nothing when the instance holds none. */
+  keepOut(paths: readonly string[]): Promise<void>;
   /** Hears that the publisher's configuration changed. */
   subscribe(listener: () => void): Subscription;
 }
@@ -32,6 +39,7 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher): In
     publisherTags: publisher.tags,
     changePublisherTag: publisher.changeTag,
     followModFolders: publisher.followFolders,
+    keepOutOfPublisher: async () => publisher.keepOut(await manager.filesKept()),
     publisherConfigurationRefusal: async () => {
       const configuration = await publisher.configuration();
       return configuration.kind === 'unreadable' ? configuration.reason : undefined;
