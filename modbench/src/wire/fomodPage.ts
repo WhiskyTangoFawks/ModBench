@@ -2,7 +2,7 @@
 // shows and enforces as the reference installer does.
 
 export type FomodGroupType = 'SelectAtLeastOne' | 'SelectAtMostOne' | 'SelectExactlyOne' | 'SelectAll' | 'SelectAny';
-export type FomodOptionType = 'Required' | 'Optional' | 'Recommended' | 'NotUsable' | 'CouldBeUsable';
+type FomodOptionType = 'Required' | 'Optional' | 'Recommended' | 'NotUsable' | 'CouldBeUsable';
 
 export interface FomodOption {
   readonly id: number;
