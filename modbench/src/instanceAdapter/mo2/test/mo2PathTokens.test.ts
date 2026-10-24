@@ -13,6 +13,7 @@ vi.mock('vscode', () => fakeVscodeModule());
 
 import { mo2InstanceAdapter } from '../mo2Instance';
 import { wabbajackPublisher } from '../../wabbajack/wabbajackPublisher';
+import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 
 const made: string[] = [];
 
@@ -36,7 +37,7 @@ const PUBLISHER = wabbajackPublisher('', { neverShipped: [], enabledMods: () => 
 const PUBLISHER_FILE = PUBLISHER.name;
 
 const adapterOver = (root: string, { game, detectors = NO_DETECTORS }: { game?: string; detectors?: GameDetectors } = {}) => mo2InstanceAdapter({
-  instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(game), detectors, installationFileReader: fakeInstallationFileReader([]),
+  instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(game), detectors, installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE,
 }, PUBLISHER);
 
 const steamAt = (game: string): GameDetectors => ({ ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(game, 'Data') }) });
@@ -340,7 +341,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     const { root } = await instanceRepository([]);
     await put(root, 'profiles/Default/Fallout4Prefs.ini', 'x=1\r\n');
     const withoutPublisher = mo2InstanceAdapter({
-      instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS, installationFileReader: fakeInstallationFileReader([]),
+      instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS, installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE,
     }, undefined);
     await withoutPublisher.writePathTokens();
     const written = async () => [

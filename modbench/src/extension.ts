@@ -120,11 +120,17 @@ interface Opened {
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
 }
 
-function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened {
+// esbuild writes the engine's process and copies its add-on beside the extension.
+const fomodEngineIn = (extensionUri: vscode.Uri) => ({
+  process: vscode.Uri.joinPath(extensionUri, 'out', 'fomodEngine.js').fsPath,
+  folder: vscode.Uri.joinPath(extensionUri, 'out', 'fomodEngine').fsPath,
+});
+
+function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, extensionUri: vscode.Uri): Opened {
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
-        instanceRoot, gameFolderSetting, installationFileReader: downloadedFileReader,
+        instanceRoot, gameFolderSetting, installationFileReader: downloadedFileReader, fomodEngine: fomodEngineIn(extensionUri),
       });
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
@@ -252,7 +258,7 @@ function start(context: vscode.ExtensionContext): void {
   const focusedView = createFocusedView();
 
   const ownedByViews = ownership();
-  const opened = openFolderAsInstance(outputChannel, ownedByViews.own);
+  const opened = openFolderAsInstance(outputChannel, ownedByViews.own, context.extensionUri);
   const sourceModRepositories = sourceModRepositoriesOver({ client: meditClient, outputChannel, ...opened.facts });
   const sourceEditing: SourceEditing = {
     applyWorkspaceChanges: (items) => applyWorkspaceChanges(items),

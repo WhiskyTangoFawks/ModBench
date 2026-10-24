@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceView } from '../instanceLoader/instance';
-import type { ModCommands } from '../modCommands/modCommands';
+import type { FomodLanded, ModCommands } from '../modCommands/modCommands';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import { sourceFiles } from '../instanceLoader/loadOrderSnapshot';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
@@ -58,7 +58,7 @@ interface ModsViewDeps {
   ask: AskQuestion;
   trash: MoveToTrash;
   extensionUri: vscode.Uri;
-  warnIfFomod: (name: string, isFomod: boolean) => void;
+  warnIfFomod: (name: string, fomod: FomodLanded | undefined) => void;
   downloadedFileInstallReporting: Parameters<typeof registerModInstallCommands>[0]['downloadedFileInstallReporting'];
   /** The one selected mod row with a Nexus id in the focused Mods or Downloads view, for the palette. */
   nexusRow: () => NexusModRow | undefined;

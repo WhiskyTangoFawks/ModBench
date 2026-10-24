@@ -33,4 +33,6 @@ out/**
 # regardless of line order. Whitelist exactly the runtime output instead of
 # re-including the whole tree.
 !out/extension.js
+!out/fomodEngine.js
+!out/fomodEngine/**
 !out/webview/**

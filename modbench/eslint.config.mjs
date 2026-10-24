@@ -46,11 +46,15 @@ const PATH_IMPORT = {
 };
 const PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$)',
-    message: 'Only the mEdit client, the Source language and the content digest (xxhash-wasm) import a package.',
+    message: 'Only the mEdit client, the Source language, the content digest (xxhash-wasm) and the FOMOD installer (its engine) import a package.',
 };
 const DIGEST_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|xxhash-wasm$)',
     message: 'The content digest imports one package: the xxHash mEdit\'s manifest is hashed with.',
+};
+const FOMOD_ENGINE_PACKAGE_IMPORT = {
+    regex: '^(?![.]|node:|vscode$|@nexusmods/fomod-installer-native$)',
+    message: 'The FOMOD installer imports one package: the engine it hides.',
 };
 const adapterInternalsImport = (constructs) => ({
     regex: `^(\\.{1,2}/)+instanceAdapter(/(?!(instanceAdapter${constructs ? '|openInstance' : ''})$).*)?$`,
@@ -249,6 +253,15 @@ export default defineConfig(
         rules: {
             'no-restricted-imports': restrictedImports({
                 vscode: true, packages: false, path: false, inAdapter: true, byteReads: false, extra: [DIGEST_PACKAGE_IMPORT],
+            }),
+        },
+    },
+    {
+        files: ['src/instanceAdapter/fomodInstaller/*.ts'],
+        ignores: NOT_PRODUCTION,
+        rules: {
+            'no-restricted-imports': restrictedImports({
+                vscode: true, packages: false, path: false, inAdapter: true, extra: [FOMOD_ENGINE_PACKAGE_IMPORT],
             }),
         },
     },

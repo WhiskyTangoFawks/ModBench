@@ -11,6 +11,7 @@ import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileRe
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { mo2InstanceAdapter } from '../mo2Instance';
+import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 
 let root: string;
 
@@ -28,7 +29,7 @@ describe('the MO2 adapter\'s hashes', () => {
     await writeFile(join(root, 'mods', 'Mod', 'meta.ini'), setIniValue('[General]\r\n', 'General', 'installationFile', join(root, 'Mod.7z')));
     const adapter = mo2InstanceAdapter({
       instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS,
-      installationFileReader: fakeInstallationFileReader([]),
+      installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE,
     }, undefined);
 
     await adapter.installationFile('Mod');

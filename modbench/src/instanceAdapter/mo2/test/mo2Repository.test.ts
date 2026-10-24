@@ -15,6 +15,7 @@ import { mo2InstanceAdapter } from '../mo2Instance';
 import type { ConfigurationFile, ManagerAdapter as Adapter } from '../../publisher';
 import { PRE_PUSH_HOOK } from '../../prePushHook';
 import { WHITELIST_IGNORE_LIST, withSourceModLines } from '../layout';
+import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 
 let root: string;
 
@@ -24,7 +25,7 @@ afterEach(async () => {
 
 const adapterAt = (instanceRoot: string, publisherFile: ConfigurationFile | undefined) => mo2InstanceAdapter({
   instanceRoot, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS,
-  installationFileReader: fakeInstallationFileReader([]),
+  installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE,
 }, publisherFile);
 
 async function instance() {

@@ -12,6 +12,8 @@ import { errorMessage } from '../../ports/errorMessage';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 import type { ReadingSource } from '../instanceReading';
 import { releaseRoot } from '../gameFolder/releaseRoot';
+import { fomodLanding, type FomodEngine } from '../fomodInstaller/fomodInstaller';
+import { conditionFacts } from '../fomodInstaller/conditionFacts';
 
 interface Extraction {
   readonly path: string;
@@ -89,22 +91,27 @@ async function abandonAfter(extraction: Extraction, failure: unknown): Promise<n
   throw failure;
 }
 
-export function mo2Landing(context: Mo2Context, installationFileReader: InstallationFileReader, { settings }: Pick<ReadingSource, 'settings'>): Pick<InstanceAdapter, 'install'> {
+export function mo2Landing(
+  context: Mo2Context, installationFileReader: InstallationFileReader, source: ReadingSource, fomodEngine: FomodEngine,
+): Pick<InstanceAdapter, 'install'> {
   const fill = (installed: InstallPackage, path: string): Promise<void> =>
     (installed.kind === 'archive' ? installationFileReader.extract(installed.path, path) : copyTree(installed.path, path));
 
   return {
     // One lock per instance: two installs of one name must not both pass the name check.
-    install: (installed, target, keys) => withLock(context.instanceRoot, async () => {
-      const { gameName } = await settings();
+    install: (installed, target, keys, answer) => withLock(context.instanceRoot, async () => {
+      const { gameName } = await source.settings();
       const holding = await folderHolding(context, { kind: 'mod', name: target.name });
       if ((target.kind === 'new') !== (holding === undefined)) return { landed: false };
       const extraction = holding === undefined ? await extractNewMod(context, target.name) : await extractUpgrade(target.name, holding.path, manifestFileIn(holding.path, holding.modName));
       try {
         await fill(installed, extraction.path);
-        const { root, isFomod } = await releaseRoot(extraction.path);
+        const release = await releaseRoot(extraction.path);
+        const { root, fomod } = release.fomod === undefined
+          ? { root: release.root, fomod: undefined }
+          : await fomodLanding(fomodEngine, { root: release.root, fomod: release.fomod }, answer, () => conditionFacts(source));
         await extraction.land(root, { ...metaIniOf(keys), nexusId: effectiveModId(keys.nexusId, keys.installationFileName), gameName });
-        return { landed: true, isFomod };
+        return fomod === undefined ? { landed: true } : { landed: true, fomod };
       } catch (err) {
         return abandonAfter(extraction, err);
       }

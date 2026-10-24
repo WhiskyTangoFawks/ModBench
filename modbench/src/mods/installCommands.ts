@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { LocatedDownloadedFileRow, Instance } from '../instanceLoader/instance';
 import { INSTALLATION_FILE_EXTENSIONS } from '../instanceAdapter/instanceAdapter';
-import type { InstallTarget, ModCommands, ModPackage } from '../modCommands/modCommands';
+import type { FomodAnswer, FomodLanded, FomodStepChoice, InstallTarget, ModCommands, ModPackage } from '../modCommands/modCommands';
 import { downloadedFileArgumentOf, downloadedFileNamed } from '../drivingLib/argument';
 import {
   argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure,
@@ -20,7 +20,7 @@ import { MODS_KEY_ARGS } from './gestureEntry';
 
 interface InstalledMod {
   readonly name: string;
-  readonly isFomod: boolean;
+  readonly fomod?: FomodLanded;
 }
 
 type InstallResult = GestureResult<InstalledMod>;
@@ -32,12 +32,15 @@ interface Install {
   readonly target: InstallTarget;
   readonly via: InstallVia;
   readonly force: boolean;
+  readonly fomod?: FomodAnswer;
 }
 
 interface InstallOptions {
   readonly name?: string;
   readonly target?: string;
   readonly force?: boolean;
+  readonly choices?: readonly FomodStepChoice[];
+  readonly manual?: boolean;
 }
 
 interface ModInstallDeps {
@@ -45,7 +48,7 @@ interface ModInstallDeps {
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
-  warnIfFomod: (name: string, isFomod: boolean) => void;
+  warnIfFomod: (name: string, fomod: FomodLanded | undefined) => void;
   downloadedFileInstallReporting: { reporter: Reporter; log: (line: string) => void; progressViewId: string };
 }
 
@@ -86,6 +89,13 @@ const targetOf = async (
   throw new Refusal('An agent call to install carries exactly one of the name of a new mod and the target mod to upgrade.');
 };
 
+// No choices answer a FOMOD with none, so a FOMOD with a step to answer is refused, listing it.
+const fomodAnswerOf = ({ choices, manual }: InstallOptions): FomodAnswer => {
+  if (manual !== true) return { kind: 'choices', steps: choices ?? [] };
+  if (choices !== undefined) throw new Refusal('An agent call to install carries choices or manual, not both.');
+  return { kind: 'manual' };
+};
+
 async function pickPackage(): Promise<{ kind: 'archive' | 'folder'; path: string; name: string } | undefined> {
   const picked = await vscode.window.showQuickPick<PackageKindItem>(
     [
@@ -114,11 +124,11 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
 
   const installedMod = async (install: Install): Promise<InstallResult> => {
     try {
-      const outcome = await commands.installMod(install.package, install.target, install.force);
+      const outcome = await commands.installMod(install.package, install.target, install.force, install.fomod);
       if (!outcome.applied) return { applied: false, refusal: failedMessage(install), detail: outcome.refusal };
       return {
         applied: true,
-        outcome: { landed: [{ name: install.target.name, isFomod: outcome.isFomod }], refused: [] },
+        outcome: { landed: [{ name: install.target.name, ...(outcome.fomod && { fomod: outcome.fomod }) }], refused: [] },
         partial: [
           ...unlined(install.target.name, commands.names.modOrderFile, outcome.lineRefusal),
           ...unmarked(outcome.downloadedFile, outcome.downloadedFileRefusal),
@@ -165,8 +175,10 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         return undefined;
       }
     },
-    fromAgent: async ({ argument, options }) =>
-      ({ ...packageOf(argument), target: await targetOf(options, (name) => commands.newModNameRefusal(name)), force: options.force === true }),
+    fromAgent: async ({ argument, options }) => ({
+      ...packageOf(argument), target: await targetOf(options, (name) => commands.newModNameRefusal(name)), force: options.force === true,
+      fomod: fomodAnswerOf(options),
+    }),
     run: (install) => runWritingGesture(
       install.via === 'downloadedFile' ? downloadedFileInstallReporting.progressViewId : MODS_KEY_ARGS.view, instance, () => installedMod(install)),
     report: (result, install) => {
@@ -174,7 +186,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         reporterOf(install.via).report('error', result.refusal, result.detail);
         return;
       }
-      for (const { name, isFomod } of result.outcome.landed) warnIfFomod(name, isFomod);
+      for (const { name, fomod } of result.outcome.landed) warnIfFomod(name, fomod);
       reportPartial(downloadedFileInstallReporting.reporter, result.partial, downloadedFileInstallReporting.log);
     },
   };

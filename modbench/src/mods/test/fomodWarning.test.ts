@@ -1,16 +1,20 @@
 import { describe, it, expect, vi } from 'vitest';
 import { warnIfFomod } from '../fomodWarning';
 
-describe('a FOMOD installer is copied as-is', () => {
-  it('warns that its files need manual arrangement', () => {
+describe('a FOMOD installed as a plain copy', () => {
+  it('warns that its files need arranging by hand, because its installer\'s steps did not run, and why', () => {
     const report = vi.fn();
-    warnIfFomod({ report })('Some Mod', true);
-    expect(report).toHaveBeenCalledWith('warning', expect.stringContaining('"Some Mod" is a FOMOD installer'));
+    warnIfFomod({ report })('Some Mod', { kind: 'plainCopy', why: 'Manual was asked for' });
+    expect(report).toHaveBeenCalledWith('warning',
+      '"Some Mod" is a FOMOD installed as a plain copy: its files need arranging by hand, because its installer\'s own steps did not run: Manual was asked for.');
   });
 
-  it('says nothing for a mod that is not one', () => {
+  it.each([
+    ['a mod that is not one', undefined],
+    ['a FOMOD its installer installed', { kind: 'installer', missing: [] } as const],
+  ])('says nothing for %s', (_, fomod) => {
     const report = vi.fn();
-    warnIfFomod({ report })('Some Mod', false);
+    warnIfFomod({ report })('Some Mod', fomod);
     expect(report).not.toHaveBeenCalled();
   });
 });

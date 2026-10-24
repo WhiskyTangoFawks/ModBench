@@ -87,7 +87,7 @@ describe('installMod', () => {
     it('installs over a mod whose folder only lacks files its manifest names, which the upgrade does not lose', async () => {
       const { result } = await install(INSTALLATION_FILE, UPGRADED, {}, false, reading([statusOf({ gone: ['b.nif'] })]));
 
-      expect(result).toEqual({ applied: true, isFomod: false });
+      expect(result).toEqual({ applied: true });
     });
 
     it('lists only what the upgrade destroys when the folder also lacks files', async () => {
@@ -102,7 +102,7 @@ describe('installMod', () => {
     it('installs over a mod whose status shows nothing to lose', async () => {
       const { result } = await install(INSTALLATION_FILE, UPGRADED, {}, false, reading([statusOf()]));
 
-      expect(result).toEqual({ applied: true, isFomod: false });
+      expect(result).toEqual({ applied: true });
     });
   });
 
@@ -114,7 +114,7 @@ describe('installMod', () => {
 
     const { result } = await install(INSTALLATION_FILE, target, {}, force, readStatus);
 
-    expect(result).toEqual({ applied: true, isFomod: false });
+    expect(result).toEqual({ applied: true });
     expect(readStatus).not.toHaveBeenCalled();
   });
 
@@ -137,7 +137,7 @@ describe('installMod', () => {
   it('lists a new mod in mod order before it ends, so the read after it holds the mod', async () => {
     const { result, calls } = await install(INSTALLATION_FILE, NEW_MOD);
 
-    expect(result).toEqual({ applied: true, isFomod: false });
+    expect(result).toEqual({ applied: true });
     expect(calls.map((call) => call.verb)).toEqual(['install', 'changeModOrder']);
     expect(calls[1]).toMatchObject({ changes: [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name: MOD } }] });
   });
@@ -145,7 +145,7 @@ describe('installMod', () => {
   it('lands the mod carrying why its line could not be written', async () => {
     const { result } = await install(INSTALLATION_FILE, NEW_MOD, { refusals: refusing('changeModOrder', 'modlist.txt is locked') });
 
-    expect(result).toEqual({ applied: true, isFomod: false, lineRefusal: 'modlist.txt is locked' });
+    expect(result).toEqual({ applied: true, lineRefusal: 'modlist.txt is locked' });
   });
 
   it('refuses with why the adapter failed', async () => {
@@ -154,10 +154,11 @@ describe('installMod', () => {
     expect(result).toEqual({ applied: false, refusal: 'archive is corrupt' });
   });
 
-  it('says whether the package is a scripted installer, as the adapter found', async () => {
-    const { result } = await install(INSTALLATION_FILE, NEW_MOD, { installed: { landed: true, isFomod: true } });
+  it('says how a FOMOD landed, as the adapter found', async () => {
+    const fomod = { kind: 'installer', missing: ['gone.esp'] } as const;
+    const { result } = await install(INSTALLATION_FILE, NEW_MOD, { installed: { landed: true, fomod } });
 
-    expect(result).toEqual({ applied: true, isFomod: true });
+    expect(result).toEqual({ applied: true, fomod });
   });
 
   it.each([
@@ -230,7 +231,7 @@ describe('installMod', () => {
   it('reports a downloaded file it could not mark, because its metadata cannot be written, beside the landed mod', async () => {
     const { result } = await install(DOWNLOADED_FILE, NEW_MOD, { refusals: refusing('markDownloadedFile', 'EISDIR: illegal operation on a directory') });
 
-    expect(result).toMatchObject({ applied: true, isFomod: false });
+    expect(result).toMatchObject({ applied: true });
     expect(result.applied && result.downloadedFileRefusal).toMatch(/EISDIR/);
   });
 
@@ -244,7 +245,7 @@ describe('installMod', () => {
 
     const result = await modCommands(fake.adapter, new InMemoryMEditClient(), unreadStatus).installMod(DOWNLOADED_FILE, NEW_MOD, true);
 
-    expect(result).toMatchObject({ applied: true, isFomod: false });
+    expect(result).toMatchObject({ applied: true });
     expect(result.applied && result.downloadedFileRefusal).toMatch(/"Freshly-1-0.7z" is gone from disk/);
   });
 });

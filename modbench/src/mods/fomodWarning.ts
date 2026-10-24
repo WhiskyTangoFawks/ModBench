@@ -1,10 +1,10 @@
+import type { FomodLanded } from '../modCommands/modCommands';
 import type { Reporter } from '../ports/reporter';
 
-export const warnIfFomod = (reporter: Pick<Reporter, 'report'>) => (name: string, isFomod: boolean): void => {
-  if (isFomod)
+export const warnIfFomod = (reporter: Pick<Reporter, 'report'>) => (name: string, fomod: FomodLanded | undefined): void => {
+  if (fomod?.kind === 'plainCopy')
     reporter.report(
       'warning',
-      `"${name}" is a FOMOD installer — its files were copied as-is and need manual ` +
-        `arrangement; Modbench does not run the installer's own install steps.`,
+      `"${name}" is a FOMOD installed as a plain copy: its files need arranging by hand, because its installer's own steps did not run: ${fomod.why}.`,
     );
 };

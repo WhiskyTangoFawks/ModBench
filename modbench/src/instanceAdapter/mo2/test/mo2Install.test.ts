@@ -57,7 +57,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
       const outcome = await holding([...PAYLOAD, 'meta.ini']).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, { installationFileName: 'Release-1-0.7z' });
 
-      expect(outcome).toEqual({ landed: true, isFomod: false });
+      expect(outcome).toEqual({ landed: true });
       expect(await filesIn(folder(MOD))).toEqual([...PAYLOAD, 'meta.ini'].sort());
       expect(await meta(MOD)).toBe('[General]\ngameName=Fallout 4\ninstallationFile=Release-1-0.7z\n');
       assertOnlyChanged(before, await snapshotTree(root), new Set([...PAYLOAD, 'meta.ini'].map((file) => `mods/${MOD}/${file}`)));
@@ -121,7 +121,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         adapter.install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS),
       ]);
 
-      expect(outcomes).toEqual(expect.arrayContaining([{ landed: true, isFomod: false }, { landed: false }]));
+      expect(outcomes).toEqual(expect.arrayContaining([{ landed: true }, { landed: false }]));
       expect(await filesIn(folder(MOD))).toEqual([...PAYLOAD, 'meta.ini'].sort());
     });
 
@@ -159,22 +159,25 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     });
   });
 
-  describe('the root it chooses inside the release, and whether the release is a scripted installer', () => {
+  describe('the root it chooses inside the release, and whether the release is a FOMOD', () => {
+    const NO_CHOICES = { fomod: { kind: 'plainCopy', why: 'no choices were given for its steps' } };
     it.each([
-      ['a Data folder', ['Data/foo.esp', 'Data/meshes/x.nif'], ['foo.esp', 'meshes/x.nif'], false],
-      ['files at the top', ['foo.esp', 'meshes/x.nif'], ['foo.esp', 'meshes/x.nif'], false],
-      ['a lone wrapper folder', ['MyMod-Main/foo.esp', 'MyMod-Main/textures/x.dds'], ['foo.esp', 'textures/x.dds'], false],
-      ['a Data folder inside a wrapper', ['MyMod-Main/Data/foo.esp'], ['foo.esp'], false],
-      ['a Data folder beside a file', ['Data/foo.esp', 'readme.txt'], ['foo.esp'], false],
-      ['a wrapper beside a file', ['ModA/foo.esp', 'readme.txt'], ['ModA/foo.esp', 'readme.txt'], false],
-      ['a FOMOD', ['fomod/ModuleConfig.xml', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/ModuleConfig.xml'], true],
-      ['a wrapped FOMOD, its config named in any case', ['MyMod/fomod/moduleconfig.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/moduleconfig.xml'], true],
-      ['a FOMOD with more than its config', ['MyMod/fomod/ModuleConfig.xml', 'MyMod/fomod/info.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/ModuleConfig.xml', 'fomod/info.xml'], true],
-      ['a folder named fomod with no config', ['fomod/readme.txt', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/readme.txt'], false],
-    ])('%s', async (_, release, landed, isFomod) => {
-      const outcome = await holding(release).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS);
+      ['a Data folder', ['Data/foo.esp', 'Data/meshes/x.nif'], ['foo.esp', 'meshes/x.nif'], {}],
+      ['files at the top', ['foo.esp', 'meshes/x.nif'], ['foo.esp', 'meshes/x.nif'], {}],
+      ['a lone wrapper folder', ['MyMod-Main/foo.esp', 'MyMod-Main/textures/x.dds'], ['foo.esp', 'textures/x.dds'], {}],
+      ['a Data folder inside a wrapper', ['MyMod-Main/Data/foo.esp'], ['foo.esp'], {}],
+      ['a Data folder beside a file', ['Data/foo.esp', 'readme.txt'], ['foo.esp'], {}],
+      ['a wrapper beside a file', ['ModA/foo.esp', 'readme.txt'], ['ModA/foo.esp', 'readme.txt'], {}],
+      ['a FOMOD', ['fomod/ModuleConfig.xml', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/ModuleConfig.xml'], NO_CHOICES],
+      ['a wrapped FOMOD, its config named in any case', ['MyMod/fomod/moduleconfig.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/moduleconfig.xml'], NO_CHOICES],
+      ['a FOMOD with more than its config', ['MyMod/fomod/ModuleConfig.xml', 'MyMod/fomod/info.xml', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/ModuleConfig.xml', 'fomod/info.xml'], NO_CHOICES],
+      ['a scripted FOMOD, whatever its answer', ['MyMod/fomod/script.cs', 'MyMod/00 Core/foo.esp'], ['00 Core/foo.esp', 'fomod/script.cs'],
+        { fomod: { kind: 'plainCopy', why: 'its installer is a script, which Modbench does not run' } }],
+      ['a folder named fomod with no config', ['fomod/readme.txt', '00 Core/Data/foo.esp'], ['00 Core/Data/foo.esp', 'fomod/readme.txt'], {}],
+    ])('%s', async (_, release, landed, how) => {
+      const outcome = await holding(release).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS, how === NO_CHOICES ? undefined : { kind: 'choices', steps: [] });
 
-      expect(outcome).toEqual({ landed: true, isFomod });
+      expect(outcome).toEqual({ landed: true, ...how });
       expect(await filesIn(folder(MOD))).toEqual([...landed, 'meta.ini'].sort());
     });
 
@@ -197,6 +200,94 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     });
   });
 
+  describe('a FOMOD with its installer\'s answer', () => {
+    const SCHEMA = 'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd"';
+    const file = (source: string, destination: string): string => `<file source="${source}" destination="${destination}"/>`;
+    const PICK = `<installSteps order="Explicit"><installStep name="Main"><optionalFileGroups order="Explicit"><group name="Pick" type="SelectExactlyOne">`
+      + '<plugins order="Explicit">'
+      + `<plugin name="A"><description/><files>${file('a/A.esp', 'A.esp')}</files><typeDescriptor><type name="Optional"/></typeDescriptor></plugin>`
+      + `<plugin name="B"><description/><files>${file('b/B.esp', 'B.esp')}</files><typeDescriptor><type name="Recommended"/></typeDescriptor></plugin>`
+      + '</plugins></group></optionalFileGroups></installStep></installSteps>';
+    const conditional = (dependency: string, destination: string): string =>
+      `<pattern><dependencies>${dependency}</dependencies><files>${file('a/A.esp', destination)}</files></pattern>`;
+    let source: string;
+
+    beforeEach(async () => {
+      source = await mkdtemp(join(tmpdir(), 'medit-fomod-source-'));
+    });
+    afterEach(() => rm(source, { recursive: true, force: true }));
+
+    async function fomod(body: string): Promise<InstallPackage> {
+      for (const path of ['a/A.esp', 'b/B.esp']) {
+        await mkdir(join(source, path, '..'), { recursive: true });
+        await writeFile(join(source, path), path);
+      }
+      await mkdir(join(source, 'fomod'), { recursive: true });
+      await writeFile(join(source, 'fomod', 'ModuleConfig.xml'), `<config ${SCHEMA}><moduleName>Test</moduleName>${body}</config>`);
+      return { kind: 'folder', path: source };
+    }
+
+    it('lands the files its choices select in the mod\'s folder, and nothing of the release else', async () => {
+      const before = await snapshotTree(root);
+
+      const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS,
+        { kind: 'choices', steps: [{ step: 'Main', groups: [{ group: 'Pick', options: ['A'] }] }] });
+
+      expect(outcome).toEqual({ landed: true, fomod: { kind: 'installer', missing: [] } });
+      assertOnlyChanged(before, await snapshotTree(root), new Set([`mods/${MOD}/A.esp`, `mods/${MOD}/meta.ini`]));
+    });
+
+    it('lands the release as it is for Manual', async () => {
+      const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, { kind: 'manual' });
+
+      expect(outcome).toEqual({ landed: true, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
+      expect(await filesIn(folder(MOD))).toEqual(['a/A.esp', 'b/B.esp', 'fomod/ModuleConfig.xml', 'meta.ini']);
+    });
+
+    it('lands the release as it is when its installer cannot be read, saying why', async () => {
+      await mkdir(join(source, 'fomod'), { recursive: true });
+      await writeFile(join(source, 'fomod', 'ModuleConfig.xml'), '<config><moduleName>No schema</moduleName></config>');
+
+      const outcome = await holding([]).install({ kind: 'folder', path: source }, { kind: 'new', name: MOD }, KEYS, { kind: 'choices', steps: [] });
+
+      expect(outcome.landed && outcome.fomod?.kind === 'plainCopy' && outcome.fomod.why).toMatch(/^its installer cannot be read: .*NullReferenceException/);
+      expect(await filesIn(folder(MOD))).toEqual(['fomod/ModuleConfig.xml', 'meta.ini']);
+    });
+
+    it('writes nothing when its installer refuses the choices', async () => {
+      const before = await snapshotTree(root);
+
+      await expect(holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, { kind: 'choices', steps: [] }))
+        .rejects.toThrow('The choices leave step "Main" unanswered.');
+
+      assertOnlyChanged(before, await snapshotTree(root), new Set());
+    });
+
+    it('answers its conditions from the active profile\'s plugins, and refuses one that reads the game\'s version', async () => {
+      const game = await mkdtemp(join(tmpdir(), 'medit-fomod-game-'));
+      try {
+        await mkdir(join(game, 'Data'));
+        const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') } });
+        const plugins = [
+          conditional('<fileDependency file="Patch Mod.esp" state="Active"/>', 'active.esp'),
+          conditional('<fileDependency file="NonAsciiRetexture - Addon.esl" state="Inactive"/>', 'inactive.esp'),
+          conditional('<fileDependency file="Unofficial Fallout 4 Patch.esp" state="Missing"/>', 'missing.esp'),
+          conditional('<fileDependency file="NonAsciiRetexture - Addon.esl" state="Active"/>', 'wrong.esp'),
+        ].join('');
+        const installing = (patterns: string) => async (name: string) => adapter.install(
+          await fomod(`<conditionalFileInstalls><patterns>${patterns}</patterns></conditionalFileInstalls>`), { kind: 'new', name }, KEYS, { kind: 'choices', steps: [] });
+
+        await installing(plugins)(MOD);
+        await expect(installing(conditional('<gameDependency version="1.10.163.0"/>', 'game.esp'))('Versioned'))
+          .rejects.toThrow('The FOMOD\'s conditions read the game\'s version, which could not be read: Modbench reads no program\'s version.');
+
+        expect(await filesIn(folder(MOD))).toEqual(['active.esp', 'inactive.esp', 'meta.ini', 'missing.esp']);
+      } finally {
+        await rm(game, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe('an upgrade', () => {
     beforeEach(async () => {
       await writeFile(join(folder(UPGRADED), '.gitignore'), 'shipped');
@@ -213,7 +304,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
       const outcome = await holding(['New.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: 'unofficial fallout 4 patch' }, KEYS);
 
-      expect(outcome).toEqual({ landed: true, isFomod: false });
+      expect(outcome).toEqual({ landed: true });
       expect(await filesIn(folder(UPGRADED))).toEqual(['New.esp', 'meta.ini']);
       expect(await snapshotTree(repository)).toEqual(before);
     });
@@ -230,7 +321,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     it('unwraps a release nested in a wrapper folder', async () => {
       const outcome = await holding(['Wrapper/Nested.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS);
 
-      expect(outcome).toEqual({ landed: true, isFomod: false });
+      expect(outcome).toEqual({ landed: true });
       expect(await filesIn(folder(UPGRADED))).toEqual(['Nested.esp', 'meta.ini']);
     });
 

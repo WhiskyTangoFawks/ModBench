@@ -21,7 +21,7 @@ function suppliedTexts() {
   return byId;
 }
 
-function npmPackages() {
+function npmPackages(supplied) {
   const found = new Map();
   const visit = (name, fromDir, optional = false) => {
     for (let dir = fromDir; ; dir = join(dir, '..')) {
@@ -35,7 +35,8 @@ function npmPackages() {
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
       const id = `${manifest.name}@${manifest.version}`;
       if (found.has(id)) return;
-      found.set(id, { id, license: manifest.license, texts: licenseTexts(packageDir) });
+      const shipped = licenseTexts(packageDir);
+      found.set(id, { id, license: manifest.license, texts: shipped.length > 0 ? shipped : [supplied.get(id)].filter(Boolean) });
       for (const dependency of Object.keys(manifest.dependencies ?? {})) visit(dependency, packageDir);
       for (const dependency of Object.keys(manifest.optionalDependencies ?? {})) visit(dependency, packageDir, true);
       return;
@@ -46,9 +47,8 @@ function npmPackages() {
   return [...found.values()];
 }
 
-function nugetPackages() {
+function nugetPackages(supplied) {
   const cache = process.env.NUGET_PACKAGES ?? join(homedir(), '.nuget', 'packages');
-  const supplied = suppliedTexts();
   const deps = JSON.parse(readFileSync('backend/MEditService.Http.deps.json', 'utf8'));
   return Object.entries(deps.libraries)
     .filter(([, library]) => library.type === 'package' || library.type === 'runtimepack')
@@ -64,10 +64,11 @@ function nugetPackages() {
     });
 }
 
-const packages = [...npmPackages(), ...nugetPackages()].sort((a, b) => a.id.localeCompare(b.id));
+const supplied = suppliedTexts();
+const packages = [...npmPackages(supplied), ...nugetPackages(supplied)].sort((a, b) => a.id.localeCompare(b.id));
 const textless = packages.filter(({ texts }) => texts.length === 0).map(({ id }) => id);
 if (textless.length > 0) {
-  throw new Error(`No license text for ${textless.join(', ')}. A NuGet package that ships none takes its text from ${LICENSE_TEXTS}/sources.json: recheck the license at the new version and key its entry to that version. An npm package must ship its own.`);
+  throw new Error(`No license text for ${textless.join(', ')}. A package that ships none takes its text from ${LICENSE_TEXTS}/sources.json: recheck the license at the new version and key its entry to that version.`);
 }
 const sections = packages.map(({ id, license, texts }) => [`${id} (${license ?? 'see license text'})`, ...texts].join('\n\n'));
 

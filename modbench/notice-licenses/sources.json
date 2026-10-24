@@ -5,7 +5,8 @@
       "https://raw.githubusercontent.com/Noggog/Loqui/da23e9867105c91e855edf791a35386ef038f063/LICENSE.txt",
       "https://raw.githubusercontent.com/Noggog/CSharpExt/dc1558f85e7595bdbae20a18a57905c3a07add9d/LICENSE.txt",
       "https://raw.githubusercontent.com/erri120/GameFinder/efa23bd6d02ec07aa9fb1abe1025efafe3190d9f/LICENSE",
-      "https://raw.githubusercontent.com/Mutagen-Modding/Mutagen.Bethesda.Serialization/427a683037bdbb9e3c607bf29257b809703833e6/LICENSE.txt"
+      "https://raw.githubusercontent.com/Mutagen-Modding/Mutagen.Bethesda.Serialization/427a683037bdbb9e3c607bf29257b809703833e6/LICENSE.txt",
+      "https://raw.githubusercontent.com/Nexus-Mods/fomod-installer/af3c8355b2e22f1c7c4272c8eb3cb928ccb5f8c1/LICENSE.md"
     ],
     "packages": {
       "Loqui": "3.7.0",
@@ -22,7 +23,8 @@
       "GameFinder.StoreHandlers.Xbox": "4.9.0",
       "GameFinder.Wine": "4.9.0",
       "Mutagen.Bethesda.Serialization": "1.37.1",
-      "Mutagen.Bethesda.Serialization.Newtonsoft": "1.37.1"
+      "Mutagen.Bethesda.Serialization.Newtonsoft": "1.37.1",
+      "@nexusmods/fomod-installer-native": "0.13.4"
     }
   },
   "Apache-2.0-Serilog.txt": {
