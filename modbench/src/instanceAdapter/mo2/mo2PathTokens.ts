@@ -5,11 +5,11 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { errnoCode } from '../errno';
-import { exists, get, isRepository, makeTempDir, putIfChanged, remove, undoAll, type Undo } from '../files';
+import { exists, get, isRepository, makeTempDir, putIfChanged, remove, undoAll, write, type Undo } from '../files';
 import { git, gitFed, gitWritingInto } from '../git';
 import type { GameFolder, InstanceAdapter } from '../instanceAdapter';
 import {
-  folderTokens, holdsPathToken, sedLiteral, sedReplacement, sedSubstitution, tokenFilterConfig, type FolderName, type PathSpelling, type TokenFolders, type TokenProgram,
+  folderTokens, holdsPathToken, sedLiteral, sedReplacement, sedSubstitution, tokenFilter, type FolderName, type TokenFilter, type PathSpelling, type TokenFolders, type TokenProgram,
 } from '../pathTokens';
 import { readDownloadDirectory } from './codecs/modOrganizerIni';
 import { defaultDownloadsDir, PROFILE_INIS_PATTERN, SETTINGS_FILE_PATTERN, settingsFile } from './layout';
@@ -203,26 +203,44 @@ async function committedOutsideInstanceIn(instanceRoot: string, covered: readonl
 
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
+// The programs sit in the git directory, spelt with forward slashes, which Windows' sed reads too.
+const programDirectory = async (instanceRoot: string): Promise<string> =>
+  resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'modbench')).trim()).replaceAll('\\', '/');
+
 export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): Mo2PathTokens {
   const { instanceRoot } = context;
   const covered = coveredFiles(publisherFile);
-  const configOf = (files: readonly CoveredFile[], { game, downloads, committedOutsideInstance }: Omit<TokenFolders, 'instance'>, accounts: TokenProgram): Readonly<Record<string, string>> =>
-    Object.fromEntries(files.flatMap(({ driver, spelling, holdsAccounts, blanked }) => {
+  const filterOf = (directory: string, { game, downloads, committedOutsideInstance }: Omit<TokenFolders, 'instance'>, accounts: TokenProgram): TokenFilter => {
+    const filters = covered.map(({ driver, spelling, holdsAccounts, blanked }) => {
       const folders = folderTokens({ instance: instanceRoot, game, downloads, committedOutsideInstance }, process.platform, spelling);
-      return Object.entries(tokenFilterConfig(driver, folders, ...(holdsAccounts ? [accounts] : []), ...(blanked === undefined ? [] : [blanked])));
-    }));
-  const configWritten = async (folders: Omit<TokenFolders, 'instance'>, accounts: TokenProgram): Promise<void> => {
-    for (const [key, value] of Object.entries(configOf(covered, folders, accounts))) await git(instanceRoot, 'config', key, value);
+      return tokenFilter(driver, directory, folders, ...(holdsAccounts ? [accounts] : []), ...(blanked === undefined ? [] : [blanked]));
+    });
+    const merged = (of: (filter: TokenFilter) => Readonly<Record<string, string>>): Record<string, string> => Object.fromEntries(filters.flatMap((filter) => Object.entries(of(filter))));
+    return { config: merged(({ config }) => config), programFiles: merged(({ programFiles }) => programFiles) };
+  };
+  const filterWritten = async (directory: string, folders: Omit<TokenFolders, 'instance'>, accounts: TokenProgram): Promise<void> => {
+    const { config, programFiles } = filterOf(directory, folders, accounts);
+    await mkdir(directory, { recursive: true });
+    for (const [file, text] of Object.entries(programFiles)) await write(file, text);
+    for (const [key, value] of Object.entries(config)) await git(instanceRoot, 'config', key, value);
   };
   const NO_FOLDERS = { game: undefined, downloads: undefined, committedOutsideInstance: [] };
-  const configHeld = async (): Promise<Undo> => {
-    const keys = Object.keys(configOf(covered, NO_FOLDERS, accountTokens('')));
+  const filterHeld = async (directory: string): Promise<Undo> => {
+    const { config, programFiles } = filterOf(directory, NO_FOLDERS, accountTokens(''));
+    const keys = Object.keys(config);
     const before = await Promise.all(keys.map(async (key) => unlessExit(1, () => git(instanceRoot, 'config', '--get', key))));
+    const files = Object.keys(programFiles);
+    const texts = await Promise.all(files.map(async (file) => ((await exists(file)) ? get(file) : undefined)));
     return async () => {
       for (const [at, key] of keys.entries()) {
         const value = before[at];
         if (value === undefined) await unlessExit(5, () => git(instanceRoot, 'config', '--unset-all', key));
         else await git(instanceRoot, 'config', key, value.replace(/\n$/, ''));
+      }
+      for (const [at, file] of files.entries()) {
+        const text = texts[at];
+        if (text === undefined) await remove(file);
+        else await write(file, text);
       }
     };
   };
@@ -231,11 +249,12 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
     takeBack.push(await attributesWritten(instanceRoot, covered));
     const files = (await filesGitHolds(instanceRoot, covered)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
     const accounts = accountTokens(await get(settingsFile(instanceRoot), ''));
-    takeBack.push(await configHeld());
-    await configWritten(NO_FOLDERS, accounts);
+    const directory = await programDirectory(instanceRoot);
+    takeBack.push(await filterHeld(directory));
+    await filterWritten(directory, NO_FOLDERS, accounts);
     await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     const game = await gameFolder();
-    await configWritten({ game: foundRoot(game), downloads: await downloadsFolder(context), committedOutsideInstance: await committedOutsideInstanceIn(instanceRoot, covered) }, accounts);
+    await filterWritten(directory, { game: foundRoot(game), downloads: await downloadsFolder(context), committedOutsideInstance: await committedOutsideInstanceIn(instanceRoot, covered) }, accounts);
     const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     await statsForgotten(instanceRoot, files);
     if (holding.length === 0) return undefined;

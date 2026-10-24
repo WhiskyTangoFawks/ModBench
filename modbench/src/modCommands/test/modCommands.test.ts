@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { unreadStatus } from '../../test/unreadStatus';
 import { modSyncOver, modCommands, type ModCommands } from '../modCommands';
+import { fileInFolder } from '../../instanceAdapter/instanceAdapter';
 import type {
   EntryRef, InstanceAdapter, InstanceReading, ModlistEntry, ModOrderChange, MovePlace, OriginFileMark, SeparatorsPlace,
 } from '../../instanceAdapter/instanceAdapter';
@@ -655,7 +656,7 @@ describe('changePublisherTag (publishing.md, Publisher tags, story 2)', () => {
     const result = await commands.changePublisherTag('add', 'Include', rows);
 
     expect(result).toEqual({ applied: true, outcome: { landed: rows, refused: [] } });
-    expect(fake.calls).toEqual([changeCall('add', 'Include', ['/mods/ENBoost', '/mods/Harder VATS/Textures/a.dds'])]);
+    expect(fake.calls).toEqual([changeCall('add', 'Include', ['/mods/ENBoost', fileInFolder('/mods/Harder VATS', 'Textures/a.dds')])]);
   });
 
   it('refuses a row the publisher refuses, by its row, and lands the rest', async () => {
