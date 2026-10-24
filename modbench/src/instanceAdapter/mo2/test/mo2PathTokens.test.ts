@@ -197,8 +197,8 @@ describe('the MO2 adapter\'s path tokens', () => {
 
     const left = await adapter.writePathTokens();
 
-    expect([left, await readFile(join(clone, 'ModOrganizer.ini'), 'utf8')])
-      .toEqual([undefined, SETTINGS(['[Settings]', `download_directory=${onWineDrive(join(clone, 'downloads'), '/')}`, `path=${onWineDrive(clone, '/')}/x`])]);
+    expect([left, await readFile(join(clone, 'ModOrganizer.ini'), 'utf8'), git(clone, 'status', '--porcelain')])
+      .toEqual([undefined, SETTINGS(['[Settings]', `download_directory=${onWineDrive(join(clone, 'downloads'), '/')}`, `path=${onWineDrive(clone, '/')}/x`]), '']);
   });
 
   it('answers no path in a downloads folder outside the instance folder', async () => {

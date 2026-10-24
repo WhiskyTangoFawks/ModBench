@@ -9,7 +9,7 @@ import { exists, get, isRepository, makeTempDir, putIfChanged, remove, undoAll, 
 import { git, gitFed, gitWritingInto } from '../git';
 import type { GameFolder, InstanceAdapter } from '../instanceAdapter';
 import {
-  folderTokens, holdsPathToken, sedLiteral, sedReplacement, sedSubstitution, tokenFilterConfig, type PathSpelling, type TokenFolders, type TokenProgram,
+  folderTokens, holdsPathToken, sedLiteral, sedReplacement, sedSubstitution, tokenFilterConfig, type FolderName, type PathSpelling, type TokenFolders, type TokenProgram,
 } from '../pathTokens';
 import { readDownloadDirectory } from './codecs/modOrganizerIni';
 import { defaultDownloadsDir, PROFILE_INIS_PATTERN, SETTINGS_FILE_PATTERN, settingsFile } from './layout';
@@ -187,17 +187,27 @@ async function downloadsFolder({ instanceRoot, resolveDownloadsFolder }: Mo2Cont
   return resolution.kind === 'resolved' ? resolution.downloadsDir : undefined;
 }
 
+// What the last commit holds. A repository with no commit holds none; a grep with no match is exit code 1.
+const committedOutsideIn = async (instanceRoot: string): Promise<FolderName[]> => {
+  if (await git(instanceRoot, 'rev-parse', '--verify', '--quiet', 'HEAD').then(() => false, () => true)) return [];
+  const held = await git(instanceRoot, 'grep', '-h', '-o', '-E', String.raw`\{(game|downloads) folder`, 'HEAD').catch((err: unknown) => {
+    if (typeof err !== 'object' || err === null || !('code' in err) || err.code !== 1) throw err;
+    return '';
+  });
+  return (['game folder', 'downloads folder'] as const).filter((name) => held.includes(`{${name}`));
+};
+
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
 export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): Mo2PathTokens {
   const { instanceRoot } = context;
   const covered = coveredFiles(publisherFile);
-  const configOf = (files: readonly CoveredFile[], { game, downloads }: Pick<TokenFolders, 'game' | 'downloads'>, accounts: TokenProgram): Readonly<Record<string, string>> =>
+  const configOf = (files: readonly CoveredFile[], { game, downloads, committedOutside }: Omit<TokenFolders, 'instance'>, accounts: TokenProgram): Readonly<Record<string, string>> =>
     Object.fromEntries(files.flatMap(({ driver, spelling, holdsAccounts, blanked }) => {
-      const folders = folderTokens({ instance: instanceRoot, game, downloads }, process.platform, spelling);
+      const folders = folderTokens({ instance: instanceRoot, game, downloads, committedOutside }, process.platform, spelling);
       return Object.entries(tokenFilterConfig(driver, folders, ...(holdsAccounts ? [accounts, RECENT_DIRECTORIES_DROPPED] : []), ...(blanked === undefined ? [] : [blanked])));
     }));
-  const configWritten = async (folders: Pick<TokenFolders, 'game' | 'downloads'>, accounts: TokenProgram): Promise<void> => {
+  const configWritten = async (folders: Omit<TokenFolders, 'instance'>, accounts: TokenProgram): Promise<void> => {
     for (const [key, value] of Object.entries(configOf(covered, folders, accounts))) await git(instanceRoot, 'config', key, value);
   };
   const NO_FOLDERS = { game: undefined, downloads: undefined };
@@ -226,7 +236,7 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
     await configWritten(NO_FOLDERS, accounts);
     await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     const game = await gameFolder();
-    await configWritten({ game: foundRoot(game), downloads: await downloadsFolder(context) }, accounts);
+    await configWritten({ game: foundRoot(game), downloads: await downloadsFolder(context), committedOutside: await committedOutsideIn(instanceRoot) }, accounts);
     const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     await statsForgotten(instanceRoot, files);
     if (holding.length === 0) return undefined;

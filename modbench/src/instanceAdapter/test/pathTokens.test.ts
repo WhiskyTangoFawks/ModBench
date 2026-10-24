@@ -80,6 +80,15 @@ describe('the token filter', () => {
   });
 
   it.each([
+    ['game', 'game folder', 'x=C:/Users/me/LitR/Stock Game/Data', 'x={game folder:/}/Data'],
+    ['downloads', 'downloads folder', 'x=C:/Users/me/LitR/downloads/a.7z', 'x={downloads folder:/}/a.7z'],
+  ] as const)('holds the %s folder inside the instance folder by its own token when a commit holds it so', async (_name, committed, written, held) => {
+    const inside: TokenFolders = { ...DRIVE, game: 'C:\\Users\\me\\LitR\\Stock Game', downloads: 'C:\\Users\\me\\LitR\\downloads', committedOutside: [committed] };
+
+    expect(await heldByGit(inside, 'win32', written)).toBe(held);
+  });
+
+  it.each([
     ['a network share, with forward slashes', SHARE, 'win32', 'x={instance folder:/}/tools', 'x=//nas/share/Modlists/LitR/tools'],
     ['a network share, with backslashes', SHARE, 'win32', 'x={instance folder:\\}\\tools', 'x=\\\\nas\\share\\Modlists\\LitR\\tools'],
     ['a network share, with escaped backslashes', SHARE, 'win32', 'x={instance folder:\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Modlists\\\\LitR\\\\tools'],
