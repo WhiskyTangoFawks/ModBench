@@ -268,7 +268,7 @@ describe('a row\'s context, which the publisher tag items of the menus read (mod
       overwriteFiles: [file('o.log', '/instance/overwrite/o.log'), file('p.log', '/instance/overwrite/p.log')],
       paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/instance/mods/M']]), sourceDirs: new Map() },
     });
-    const publisherConfiguration = { kind: 'read', covering: () => [], listed: (path: string) => (LISTED.has(path) ? [INCLUDE] : []) } as const;
+    const publisherConfiguration = { kind: 'read', covering: () => [], listed: (path: string) => (LISTED.has(path) ? [INCLUDE] : []), pathProblems: [] } as const;
     return new ModListProvider({ statuses: NO_MOD_STATUSES, instance: new FakeInstance({ ...value, publisherTags: [INCLUDE], publisherConfiguration }) });
   };
   const contextOf = async (provider: ModListProvider, parent: ModlistNode): Promise<Record<string, string | undefined>> =>

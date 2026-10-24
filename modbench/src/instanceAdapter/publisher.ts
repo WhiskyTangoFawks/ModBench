@@ -19,8 +19,7 @@ export interface ConfigurationFile {
   readonly blanked?: TokenProgram;
 }
 
-/** The files Modbench keeps in the instance, all absolute paths. */
-export interface KeptFiles {
+interface KeptFiles {
   readonly present: readonly string[];
   /** Whether a path is one of the shapes Modbench keeps a file at, there now or not. */
   readonly owns: (path: string) => boolean;
@@ -30,6 +29,8 @@ export interface Publisher {
   readonly tags: readonly PublisherTag[];
   readonly configurationFile: ConfigurationFile;
   configuration(): Promise<PublisherConfiguration>;
+  /** Why the configuration cannot be read, without checking the paths it names. */
+  refusal(): Promise<string | undefined>;
   changeTag: InstanceAdapter['changePublisherTag'];
   followFolders: InstanceAdapter['followModFolders'];
   /** Rejects, writing nothing, for a configuration it cannot read; does nothing when the instance holds none.
@@ -46,10 +47,7 @@ export function withPublisher(manager: ManagerAdapter, publisher: Publisher): In
     changePublisherTag: publisher.changeTag,
     followModFolders: publisher.followFolders,
     keepOutOfPublisher: async () => publisher.keepOut(await manager.filesKept()),
-    publisherConfigurationRefusal: async () => {
-      const configuration = await publisher.configuration();
-      return configuration.kind === 'unreadable' ? configuration.reason : undefined;
-    },
+    publisherConfigurationRefusal: () => publisher.refusal(),
     reading: async () => {
       const [reading, publisherConfiguration] = await Promise.all([manager.reading(), publisher.configuration()]);
       return { ...reading, publisherConfiguration };

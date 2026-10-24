@@ -3,9 +3,11 @@
 // Publisher tags, story 5).
 
 import { isAbsolute, join, relative, sep } from 'node:path';
+import { parse, parseTree, printParseErrorCode, type ParseError } from 'jsonc-parser';
+import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { get, putIfChanged, readOrAbsent } from '../files';
-import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange } from '../instanceAdapter';
+import { get, listDir, putIfChanged, readOrAbsent } from '../files';
+import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedSubstitution } from '../pathTokens';
 import { watchFiles } from '../watchFiles';
@@ -55,55 +57,16 @@ interface PathNode {
 
 const pathNode = (): PathNode => ({ tags: new Set(), below: new Map() });
 
-// Each index of `chars` outside every string, in order; `visit` answers the index to go on from.
-function outsideStrings(chars: readonly string[], visit: (at: number) => number): void {
-  let inString = false;
-  for (let at = 0; at < chars.length; at++) {
-    const char = chars[at];
-    if (inString) {
-      if (char === '\\') at++;
-      else if (char === '"') inString = false;
-    } else if (char === '"') {
-      inString = true;
-    } else {
-      at = visit(at);
-    }
-  }
-}
-
-const blank = (chars: string[], from: number, to: number): void => {
-  for (let at = from; at < to; at++) if (chars[at] !== '\n') chars[at] = ' ';
-};
-
-// What Wabbajack's serializer skips, blanked so each position stays where it was: comments, and a comma before a
-// closing bracket.
-function blankedSkips(text: string): string {
-  const chars = text.split('');
-  outsideStrings(chars, (at) => {
-    const opening = chars.slice(at, at + 2).join('');
-    if (opening !== '//' && opening !== '/*') return at;
-    const closing = opening === '//' ? '\n' : '*/';
-    const end = text.indexOf(closing, at + 2);
-    const to = end === -1 ? chars.length : end + (opening === '//' ? 0 : 2);
-    blank(chars, at, to);
-    return to - 1;
-  });
-  outsideStrings(chars, (at) => {
-    if (chars[at] !== ',') return at;
-    let next = at + 1;
-    while (chars[next]?.trim() === '') next++;
-    if (chars[next] === ']' || chars[next] === '}') chars[at] = ' ';
-    return at;
-  });
-  return chars.join('');
-}
+// As Wabbajack's serializer reads it: comments and a comma before a closing bracket are skipped.
+const READS = { allowTrailingComma: true };
 
 function settingsIn(text: string, file: string): object {
-  let settings: unknown;
-  try {
-    settings = JSON.parse(blankedSkips(text));
-  } catch (err) {
-    throw new Error(`${file} is not JSON: ${errorMessage(err)}`, { cause: err });
+  const errors: ParseError[] = [];
+  const settings: unknown = parse(text, errors, READS);
+  const [first] = errors;
+  if (first !== undefined) {
+    const before = text.slice(0, first.offset).split('\n');
+    throw new Error(`${file} is not JSON: ${printParseErrorCode(first.error)} at line ${before.length}, column ${(before.at(-1) ?? '').length + 1}`);
   }
   if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) throw new Error(`${file} holds no settings object`);
   return settings;
@@ -118,6 +81,63 @@ function valueOf<T>(settings: object, key: string, file: string, wanted: [(value
   if (value === undefined) return undefined;
   if (!isWanted(value)) throw new Error(`${file}: ${key} is not ${saying}`);
   return value;
+}
+
+// A key listed twice keeps its last, as the parse does.
+function entryLines(text: string): Map<string, number[]> {
+  const lines = new Map<string, number[]>();
+  for (const property of parseTree(text, [], READS)?.children ?? []) {
+    const [key, list] = property.children ?? [];
+    lines.set(String(key?.value), (list?.children ?? []).map((entry) => text.slice(0, entry.offset).split('\n').length));
+  }
+  return lines;
+}
+
+type Listings = Map<string, Promise<ReadonlyMap<string, string> | undefined>>;
+
+// Whether the instance holds a file or folder at `names`, each compared without case.
+async function holdsPath(instanceRoot: string, names: readonly string[], listings: Listings): Promise<boolean> {
+  let folder = instanceRoot;
+  for (const name of names) {
+    const listed = folder;
+    const listing = listings.get(listed) ?? listDir(listed).then(
+      (entries) => new Map(entries.map((entry) => [entry.name.toLowerCase(), entry.name])),
+      (err: unknown) => {
+        if (errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR') return undefined;
+        throw err;
+      },
+    );
+    listings.set(listed, listing);
+    const actual = (await listing)?.get(name);
+    if (actual === undefined) return false;
+    folder = join(folder, actual);
+  }
+  return true;
+}
+
+async function problemWith(instanceRoot: string, entry: string, listings: Listings): Promise<'namesNoPath' | { reason: string } | undefined> {
+  try {
+    return await holdsPath(instanceRoot, namesOf(entry), listings) ? undefined : 'namesNoPath';
+  } catch (err) {
+    return { reason: errorMessage(err) };
+  }
+}
+
+async function tagsWithPathProblems(instanceRoot: string, settings: object, text: string, file: string): Promise<TagPathProblem[]> {
+  const lines = entryLines(text);
+  const listings: Listings = new Map();
+  const problems: TagPathProblem[] = [];
+  for (const { listedUnder, tag } of TAGS) {
+    const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']) ?? [];
+    for (const [at, entry] of entries.entries()) {
+      const problem = await problemWith(instanceRoot, entry, listings);
+      const line = lines.get(listedUnder)?.[at];
+      if (line === undefined) throw new Error(`${file}: no line for ${listedUnder} entry ${at}`);
+      if (problem === 'namesNoPath') problems.push({ kind: 'namesNoPath', file, line, tag, entry });
+      else if (problem !== undefined) problems.push({ kind: 'notChecked', file, line, tag, entry, reason: problem.reason });
+    }
+  }
+  return problems;
 }
 
 function tagsByPath(settings: object, file: string): PathNode {
@@ -231,21 +251,32 @@ function followedEntries(entries: readonly string[], moves: readonly InstanceMov
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
   const file = join(instanceRoot, COMPILER_SETTINGS.name);
   const neverShipped = manager.neverShipped.map((folder) => namesOf(relative(instanceRoot, folder)));
-  const read = async (text: string): Promise<PublisherConfiguration> => {
+  const understood = async (text: string) => {
     const settings = settingsIn(text, file);
     const tags = tagsByPath(settings, file);
-    const covering = coveringIn(instanceRoot, tags, neverShipped, await shippedModsIn(settings, file, manager));
-    return { kind: 'read', covering, listed: listedIn(instanceRoot, tags) };
+    return { settings, tags, covering: coveringIn(instanceRoot, tags, neverShipped, await shippedModsIn(settings, file, manager)) };
   };
+  const settingsText = () => readOrAbsent(() => get(file), undefined);
   return {
     tags: TAGS.map(({ tag }) => tag),
     configurationFile: COMPILER_SETTINGS,
     configuration: async (): Promise<PublisherConfiguration> => {
       try {
-        const text = await readOrAbsent(() => get(file), undefined);
-        return text === undefined ? { kind: 'none' } : await read(text);
+        const text = await settingsText();
+        if (text === undefined) return { kind: 'none' };
+        const { settings, tags, covering } = await understood(text);
+        return { kind: 'read', covering, listed: listedIn(instanceRoot, tags), pathProblems: await tagsWithPathProblems(instanceRoot, settings, text, file) };
       } catch (err) {
         return { kind: 'unreadable', reason: errorMessage(err) };
+      }
+    },
+    refusal: async () => {
+      try {
+        const text = await settingsText();
+        if (text !== undefined) await understood(text);
+        return undefined;
+      } catch (err) {
+        return errorMessage(err);
       }
     },
     changeTag: async (change, tagName, paths) => {

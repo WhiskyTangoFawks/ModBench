@@ -46,7 +46,7 @@ const PATH_IMPORT = {
 };
 const PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$)',
-    message: 'Only the mEdit client, the Source language, the content digest (xxhash-wasm) and the FOMOD installer (its engine) import a package.',
+    message: 'Only the mEdit client, the Source language, the content digest (xxhash-wasm), the FOMOD installer (its engine) and the Wabbajack publisher (jsonc-parser) import a package.',
 };
 const DIGEST_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|xxhash-wasm$)',
@@ -55,6 +55,10 @@ const DIGEST_PACKAGE_IMPORT = {
 const FOMOD_ENGINE_PACKAGE_IMPORT = {
     regex: '^(?![.]|node:|vscode$|@nexusmods/fomod-installer-native$)',
     message: 'The FOMOD installer imports one package: the engine it hides.',
+};
+const JSONC_PACKAGE_IMPORT = {
+    regex: '^(?![.]|node:|vscode$|jsonc-parser$)',
+    message: 'The Wabbajack publisher imports one package: the parser that reads its settings as Wabbajack does.',
 };
 const adapterInternalsImport = (constructs) => ({
     regex: `^(\\.{1,2}/)+instanceAdapter(/(?!(instanceAdapter${constructs ? '|openInstance' : ''})$).*)?$`,
@@ -262,6 +266,15 @@ export default defineConfig(
         rules: {
             'no-restricted-imports': restrictedImports({
                 vscode: true, packages: false, path: false, inAdapter: true, extra: [FOMOD_ENGINE_PACKAGE_IMPORT],
+            }),
+        },
+    },
+    {
+        files: ['src/instanceAdapter/wabbajack/*.ts'],
+        ignores: NOT_PRODUCTION,
+        rules: {
+            'no-restricted-imports': restrictedImports({
+                vscode: true, packages: false, path: false, inAdapter: true, extra: [JSONC_PACKAGE_IMPORT],
             }),
         },
     },

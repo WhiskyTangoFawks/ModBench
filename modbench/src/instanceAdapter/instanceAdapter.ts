@@ -492,10 +492,22 @@ export interface PathRefusal {
   readonly reason: string;
 }
 
+interface TagEntryAt {
+  readonly file: string;
+  readonly line: number;
+  readonly tag: PublisherTag;
+  readonly entry: string;
+}
+
+/** What is wrong with the path a publisher tag's entry names. */
+export type TagPathProblem =
+  | (TagEntryAt & { readonly kind: 'namesNoPath' })
+  | (TagEntryAt & { readonly kind: 'notChecked'; readonly reason: string });
+
 /** The publisher's configuration: none while the instance holds no publisher's, or why it could not be read. */
 export type PublisherConfiguration =
   | { readonly kind: 'none' }
-  | { readonly kind: 'read'; readonly covering: Covering; readonly listed: Listed }
+  | { readonly kind: 'read'; readonly covering: Covering; readonly listed: Listed; readonly pathProblems: readonly TagPathProblem[] }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
 /** The instance as parsed facts, every one from the same read of its settings, and what the watch cannot hear. */
