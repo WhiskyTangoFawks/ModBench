@@ -91,7 +91,7 @@ internal sealed class Store : IDisposable
 
     /// <summary>Opens the file, or the in-memory database when no path was given. Another window
     /// holding the file answers its refusal, leaving the store unopened (ADR-0010). A missing instance root
-    /// throws, as the folder holding the file would otherwise be created beneath it.</summary>
+    /// throws rather than be created.</summary>
     public string? Open()
     {
         if (_databasePath == null)
