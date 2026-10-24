@@ -9,8 +9,6 @@ import { progressSteps as steps } from '../../test/recordedProgress';
 import { pausableProgress } from '../pausableProgress';
 import { runWritingGesture } from '../writingGesture';
 
-const settled = (): Promise<void> => new Promise((resolve) => { setImmediate(resolve); });
-
 beforeEach(() => {
   steps.length = 0;
 });
@@ -22,7 +20,7 @@ describe('a view\'s progress that pauses while a person is asked', () => {
     progress.working();
     progress.working();
     progress.waiting();
-    await settled();
+    await vi.waitFor(() => { expect(steps).toEqual(['progress opens on modbench.thing', 'progress closes']); });
     progress.working();
     await progress.done();
 
@@ -49,7 +47,7 @@ describe('a writing gesture that waits on a person', () => {
     await runWritingGesture('modbench.thing', instance, async (progress) => {
       steps.push('extracting');
       progress.waiting();
-      await settled();
+      await vi.waitFor(() => { expect(steps.at(-1)).toBe('progress closes'); });
       steps.push('person answered');
       progress.working();
       steps.push('landing');

@@ -1,19 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { queryInfoOver } from '../queryInfo';
 import { downloadedFilesOf, fakeInstanceAdapter, md5Of, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { GOOD_KEY, nexusAnswering } from '../../nexus/test/nexusDouble';
+import { json, nexusServing } from '../../nexus/test/nexusDouble';
 
 const search = (md5: string): string => `https://api.nexusmods.com/v1/games/fallout4/mods/md5_search/${md5}.json`;
 const hit = (file_name: string) => ({ mod: { mod_id: 7, name: 'Sleep or Save' }, file_details: { file_id: 78, file_name, version: '1.2', description: 'Main' } });
-const known = (...names: string[]) => (url: string): Response => {
-  const hits = names.filter((name) => url === search(md5Of(name))).map(hit);
-  return new Response(JSON.stringify(hits), { status: hits.length > 0 ? 200 : 404 });
-};
+const known = (...names: string[]): Record<string, Response> =>
+  Object.fromEntries(names.map((name) => [search(md5Of(name)), json([hit(name)])]));
 
-async function querying(names: readonly string[], nexusSays: (url: string) => Response | Error, answers: InstanceAnswers = {}, loggedIn = true) {
+async function querying(names: readonly string[], nexusSays: Record<string, Response | Error>, answers: InstanceAnswers = {}, loggedIn = true) {
   const fake = fakeInstanceAdapter(readingFixture({ downloadedFiles: downloadedFilesOf('a.7z', 'b.7z') }), answers);
-  const { nexus, sent } = nexusAnswering((_key, url) => nexusSays(url));
-  if (loggedIn) await nexus.keep(GOOD_KEY);
+  const { nexus, sent } = await nexusServing(nexusSays, loggedIn);
   return { fake, sent, result: await queryInfoOver(fake.adapter, nexus)(names) };
 }
 
@@ -56,15 +53,14 @@ describe('query info', () => {
   describe('when the MD5 settles nothing', () => {
     const PAGE = 'https://api.nexusmods.com/v1/games/fallout4/mods/7.json';
     const LIST = 'https://api.nexusmods.com/v1/games/fallout4/mods/7/files.json';
-    const page = new Response(JSON.stringify({ name: 'Sleep or Save', category_id: 12 }), { status: 200 });
-    const list = new Response(JSON.stringify({ files: [{ file_id: 78, name: 'Main', version: '1.2', file_name: 'a.7z' }], file_updates: [] }), { status: 200 });
-    const byName = (url: string): Response => {
-      if (url === PAGE) return page.clone();
-      return url === LIST ? list.clone() : new Response('', { status: 404 });
-    };
+    const page = () => json({ name: 'Sleep or Save', category_id: 12 });
+    const byName = () => ({
+      [PAGE]: page(),
+      [LIST]: json({ files: [{ file_id: 78, name: 'Main', version: '1.2', file_name: 'a.7z' }], file_updates: [] }),
+    });
 
     it('asks by the mod ID the metadata or the name gives, and writes what the page and list say', async () => {
-      const { fake, result } = await querying(['a.7z'], byName, { queries: new Map([['a.7z', { modID: '7' }]]) });
+      const { fake, result } = await querying(['a.7z'], byName(), { queries: new Map([['a.7z', { modID: '7' }]]) });
 
       expect(result).toEqual({ applied: true, outcome: { landed: [{ name: 'a.7z' }], refused: [] } });
       expect(fake.calls).toEqual([{
@@ -73,21 +69,21 @@ describe('query info', () => {
     });
 
     it('asks the page alone when the metadata holds the file ID', async () => {
-      const { fake, sent } = await querying(['a.7z'], byName, { queries: new Map([['a.7z', { modID: '7', fileID: '78' }]]) });
+      const { fake, sent } = await querying(['a.7z'], byName(), { queries: new Map([['a.7z', { modID: '7', fileID: '78' }]]) });
 
       expect(sent.map(({ url }) => url)).not.toContain(LIST);
       expect(fake.calls).toMatchObject([{ info: { fileID: '78', modName: 'Sleep or Save' } }]);
     });
 
     it('refuses a file with no mod ID to ask by, saying what the MD5 said', async () => {
-      const { fake, result } = await querying(['a.7z'], byName);
+      const { fake, result } = await querying(['a.7z'], byName());
 
       expect(result).toEqual({ applied: true, outcome: { landed: [], refused: [{ item: { name: 'a.7z' }, reason: 'Nexus does not know this file.' }] } });
       expect(fake.calls).toEqual([]);
     });
 
     it('refuses a file whose mod is not on Nexus, saying what both said', async () => {
-      const { fake, result } = await querying(['a.7z'], () => new Response('', { status: 404 }), { queries: new Map([['a.7z', { modID: '7' }]]) });
+      const { fake, result } = await querying(['a.7z'], {}, { queries: new Map([['a.7z', { modID: '7' }]]) });
 
       expect(result).toEqual({
         applied: true,
@@ -97,7 +93,7 @@ describe('query info', () => {
     });
 
     it('writes what the page said and carries MO2\'s notice when the mod\'s file list cannot be had', async () => {
-      const { fake, result } = await querying(['a.7z'], (url) => (url === PAGE ? page.clone() : new Response('', { status: 503 })), { queries: new Map([['a.7z', { modID: '7' }]]) });
+      const { fake, result } = await querying(['a.7z'], { [PAGE]: page(), [LIST]: new Response('', { status: 503 }) }, { queries: new Map([['a.7z', { modID: '7' }]]) });
 
       const notice = 'Failed to request file info from Nexus: Nexus answered 503.';
       expect(result).toEqual({ applied: true, outcome: { landed: [{ name: 'a.7z', notice }], refused: [] } });

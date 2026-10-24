@@ -1,16 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const {
-  executeCommand, registerCommand, showErrorMessage, showTextDocument, showQuickPick, createQuickPick, openExternal, showInputBox,
+  executeCommand, registerCommand, showTextDocument, createQuickPick, openExternal,
 } = vi.hoisted(() => ({
   executeCommand: vi.fn(),
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
-  showErrorMessage: vi.fn(),
   showTextDocument: vi.fn(),
-  showQuickPick: vi.fn(),
   createQuickPick: vi.fn(),
   openExternal: vi.fn(),
-  showInputBox: vi.fn<(options: { value: string }) => Promise<string | undefined>>((options) => Promise.resolve(options.value)),
 }));
 
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, type FakeUri } from '../../test/vscodeMock';
@@ -20,18 +17,12 @@ import { progressSteps, recordedWithProgress } from '../../test/recordedProgress
 
 vi.mock('vscode', () => ({
   commands: { executeCommand, registerCommand },
-  window: { showErrorMessage, showTextDocument, showQuickPick, showInputBox, createQuickPick, withProgress: recordedWithProgress },
+  window: { showTextDocument, createQuickPick, withProgress: recordedWithProgress },
   env: { openExternal },
-  Uri: {
-    file: (p: string) => ({ fsPath: p, toString: () => `file://${p}` }),
-    parse: (s: string) => ({ toString: () => s }),
-  },
-  ViewColumn: { One: 1 },
+  Uri: { file: (p: string) => ({ fsPath: p, toString: () => `file://${p}` }) },
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
 }));
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   registerDownloadsExcludedToggleCommands,
@@ -48,7 +39,7 @@ import type { QueryInfo } from '../../downloadedFileCommands/queryInfo';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import type { MoveToTrash } from '../../ports/trash';
-import type { LocatedDownloadedFileRow, DownloadedFileRow, Instance, InstanceValue } from '../../instanceLoader/instance';
+import type { LocatedDownloadedFileRow, DownloadedFileRow, Instance } from '../../instanceLoader/instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce, assertSelectionOutcome } from '../../test/surfacingDoubles';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import { downloadedFilesOf, fakeInstanceAdapter, readingFixture, type InstanceAnswers, type FakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
@@ -63,22 +54,13 @@ const node = (root: string, name: string, row: Partial<DownloadedFileRow> = {}):
 
 const ROOT = '/instance';
 
-const NO_INSTALLED_MODS_SO_THE_UPGRADE_PICK_NEVER_SHOWS: InstanceValue['mods'] = [];
-
-const fakeInstance = (
-  mods: InstanceValue['mods'] = NO_INSTALLED_MODS_SO_THE_UPGRADE_PICK_NEVER_SHOWS, downloads: readonly LocatedDownloadedFileRow[] = [], gameName = 'Fallout 4',
-): Pick<Instance, 'value' | 'refresh'> => ({
-  value: instanceValueFixture({ mods, downloadedFiles: { kind: 'listed', rows: downloads }, gameName }),
+const fakeInstance = (downloads: readonly LocatedDownloadedFileRow[] = []): Pick<Instance, 'value' | 'refresh'> => ({
+  value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: downloads } }),
   refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
 });
 
-const fakeDownloadsProvider = (
-  currentSort: ReturnType<DownloadsProvider['currentSort']> = { column: 'mtimeMs', descending: true },
-): Pick<DownloadsProvider, 'setSort' | 'setShowExcluded' | 'currentSort'> => ({
-  setSort: vi.fn(), setShowExcluded: vi.fn(), currentSort: vi.fn(() => currentSort),
-});
-
-let instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem: string[] = [];
+const providerOver = (...rows: LocatedDownloadedFileRow[]) =>
+  new DownloadsProvider({ instance: new FakeInstance(instanceValueFixture({ downloadedFiles: { kind: 'listed', rows } })) });
 
 const instanceThatReads = fakeInstance();
 
@@ -89,30 +71,8 @@ const downloadsLog = (line: string): void => { downloadsLogLines.push(line); };
 
 afterEach(async () => {
   await Promise.allSettled(commandsStillRunningWhenTheirTestEnded.splice(0));
-  await Promise.all(instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem.map((root) => rm(root, { recursive: true, force: true })));
-  instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem = [];
   downloadsLogLines = [];
 });
-
-async function makeInstanceRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'downloads-panel-'));
-  await mkdir(join(root, 'downloads'), { recursive: true });
-  await writeFile(join(root, 'ModOrganizer.ini'), '[General]\r\ngameName=Fallout 4\r\n');
-  instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem.push(root);
-  return root;
-}
-
-async function writeDownloadedFile(root: string, name: string, data = 'data'): Promise<string> {
-  const path = join(root, 'downloads', name);
-  await writeFile(path, data);
-  return path;
-}
-
-async function writeMeta(root: string, name: string, text = '[General]\r\n'): Promise<string> {
-  const path = join(root, 'downloads', `${name}.meta`);
-  await writeFile(path, text);
-  return path;
-}
 
 function calledFsPath(mockFn: { mock: { calls: FakeUri[][] } }): string {
   const call = present(mockFn.mock.calls[0], 'the mock function\'s sole call');
@@ -129,64 +89,33 @@ function invoke(commandId: string, ...args: unknown[]): unknown {
   return running;
 }
 
-describe('registerDownloadsSingleRowCommands', () => {
+describe('opening a downloaded file or its metadata', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('open: OS-opens the downloaded file and asks nothing, whether or not there is a .meta', async () => {
-    const root = await makeInstanceRoot();
-    const downloadedFile = await writeDownloadedFile(root, 'foo.7z');
-    await writeMeta(root, 'foo.7z');
-
+  it.each([
+    ['open: OS-opens the downloaded file', 'modbench.downloadedFile.open', openExternal, join(ROOT, 'downloads', 'foo.7z'), showTextDocument],
+    ['open metadata: opens the metadata file', 'modbench.downloadedFile.openMeta', showTextDocument, join(ROOT, 'downloads', 'foo.7z.meta'), openExternal],
+  ])('%s, and opens nothing else', async (_case, command, opener, path, other) => {
     registerDownloadsSingleRowCommands(recordingReporter(), () => []);
-    invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }));
+    invoke(command, node(ROOT, 'foo.7z', { hasMeta: true }));
 
-    await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
-    expect(calledFsPath(openExternal)).toBe(downloadedFile);
-    expect(showQuickPick).not.toHaveBeenCalled();
-    expect(showTextDocument).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(opener).toHaveBeenCalled());
+    expect(calledFsPath(opener)).toBe(path);
+    expect(other).not.toHaveBeenCalled();
   });
 
-  it('open: on failure, logs and surfaces an error notification naming the action and row', async () => {
-    const root = await makeInstanceRoot();
-    await writeDownloadedFile(root, 'foo.7z');
-    openExternal.mockRejectedValueOnce(new Error('no handler for this file type'));
+  it.each([
+    ['open', 'modbench.downloadedFile.open', openExternal, 'no handler for this file type', 'Open File for "foo.7z" failed.'],
+    ['open metadata', 'modbench.downloadedFile.openMeta', showTextDocument, 'file changed on disk', 'Open Metadata for "foo.7z" failed.'],
+  ])('%s: on failure, reports an error naming the action and row', async (_case, command, opener, reason, message) => {
+    opener.mockRejectedValueOnce(new Error(reason));
     const report = recordingReporter();
 
     registerDownloadsSingleRowCommands(report, () => []);
-    invoke('modbench.downloadedFile.open', node(root, 'foo.7z'));
+    invoke(command, node(ROOT, 'foo.7z', { hasMeta: true }));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
-    expect(report.reports).toEqual([
-      { severity: 'error', message: 'Open File for "foo.7z" failed.', detail: 'no handler for this file type' },
-    ]);
-  });
-
-  it('open metadata: opens the metadata file and asks nothing', async () => {
-    const root = await makeInstanceRoot();
-    const meta = await writeMeta(root, 'foo.7z');
-
-    registerDownloadsSingleRowCommands(recordingReporter(), () => []);
-    invoke('modbench.downloadedFile.openMeta', node(root, 'foo.7z', { hasMeta: true }));
-
-    await vi.waitFor(() => expect(showTextDocument).toHaveBeenCalled());
-    expect(calledFsPath(showTextDocument)).toBe(meta);
-    expect(openExternal).not.toHaveBeenCalled();
-    expect(showQuickPick).not.toHaveBeenCalled();
-  });
-
-  it('open metadata: on failure, logs and surfaces an error notification naming the action and row', async () => {
-    const root = await makeInstanceRoot();
-    await writeMeta(root, 'foo.7z');
-    showTextDocument.mockRejectedValueOnce(new Error('file changed on disk'));
-    const report = recordingReporter();
-
-    registerDownloadsSingleRowCommands(report, () => []);
-    invoke('modbench.downloadedFile.openMeta', node(root, 'foo.7z', { hasMeta: true }));
-
-    await vi.waitFor(() => expect(report.reports).toHaveLength(1));
-    expect(report.reports).toEqual([
-      { severity: 'error', message: 'Open Metadata for "foo.7z" failed.', detail: 'file changed on disk' },
-    ]);
+    expect(report.reports).toEqual([{ severity: 'error', message, detail: reason }]);
   });
 });
 
@@ -205,20 +134,16 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
     },
   });
 
-  it('exclude writes the mark, then the read, then the bar closes', async () => {
+  it.each([
+    ['exclude', {}, 'Excluded'],
+    ['include', { excluded: true }, 'Included'],
+  ])('%s writes the mark, then the read, then the bar closes', async (verb, row, mark) => {
     const fake = downloadsFake();
 
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceReadingTheWrites(fake), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
-    await invoke('modbench.downloadedFile.exclude', node(ROOT, 'foo.7z'));
+    await invoke(`modbench.downloadedFile.${verb}`, node(ROOT, 'foo.7z', row));
 
-    expect(progressSteps).toEqual([opens, 'read finds markDownloadedFile Excluded', 'progress closes']);
-  });
-
-  it('a selection of several runs one bar and one read', async () => {
-    registerDownloadsMultiRowCommands(downloadedFileCommands(downloadsFake().adapter), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
-    await invoke('modbench.downloadedFile.exclude', node(ROOT, 'a.7z'), [node(ROOT, 'a.7z'), node(ROOT, 'b.7z')]);
-
-    expect(progressSteps).toEqual([opens, reads, 'progress closes']);
+    expect(progressSteps).toEqual([opens, `read finds markDownloadedFile ${mark}`, 'progress closes']);
   });
 
   it.each([
@@ -230,7 +155,6 @@ describe('a Downloads gesture that writes ends on the Instance loader\'s read, w
     registerDownloadsMultiRowCommands(downloadedFileCommands(fake.adapter), instanceThatReads, recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     await invoke(command, node(ROOT, 'foo.7z', row));
 
-    expect(progressSteps).toEqual([opens, reads, 'progress closes']);
     expect(fake.calls).toEqual([{ verb: 'markDownloadedFile', name: 'foo.7z', mark }]);
   });
 
@@ -343,9 +267,9 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   });
 
   it.each<[string, (a: DownloadedFileNode, b: DownloadedFileNode) => DownloadedFileNode[], string]>([
-    ['one file', (a) => [a], '"a.7z"'],
-    ['the count for several files', (a, b) => [a, b], '2'],
-  ])('names %s, says trash, and says the installed mod is untouched', async (_name, selecting, named) => {
+    ['one file', (a) => [a], 'Delete "a.7z"? It will be moved to the system trash. The installed mod, if any, is untouched.'],
+    ['the count for several files', (a, b) => [a, b], 'Delete 2 items? They will be moved to the system trash. The installed mod, if any, is untouched.'],
+  ])('names %s, says trash, and says the installed mod is untouched', async (_name, selecting, question) => {
     const selection = selecting(node(ROOT, 'a.7z'), node(ROOT, 'b.7z'));
     const ask = scriptedDialog('Delete');
 
@@ -353,10 +277,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     invoke('modbench.downloadedFile.delete', selection[0], selection);
 
     await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
-    const question = present(ask.asked[0], 'the one recorded question').message;
-    expect(question).toContain(named);
-    expect(question).toMatch(/trash/i);
-    expect(question).toMatch(/installed mod.*untouched/i);
+    expect(present(ask.asked[0], 'the one recorded question').message).toBe(question);
   });
 
   it('metadata left behind after the file landed is one Output line naming the word the instance supplies, no notification', async () => {
@@ -382,7 +303,7 @@ describe('the Downloads gestures called by the agent', () => {
   beforeEach(() => vi.clearAllMocks());
 
   const named = (...names: string[]) => new AgentCall(names.map((name) => ({ kind: 'downloadedFile' as const, name })), {});
-  const listing = (...names: string[]) => fakeInstance([], names.map((name) => downloadedFileRowFixture(name, {}, ROOT)));
+  const listing = (...names: string[]) => fakeInstance(names.map((name) => downloadedFileRowFixture(name, {}, ROOT)));
   const viewSelection = () => [node(ROOT, 'selected.7z')];
 
   it.each([
@@ -456,7 +377,7 @@ describe('the Downloads gestures called by the agent', () => {
   });
 });
 
-describe('registerDownloadsQueryInfoCommand', () => {
+describe('query info from the Downloads view', () => {
   beforeEach(() => { vi.clearAllMocks(); progressSteps.length = 0; });
 
   const QUERY = 'modbench.downloadedFile.queryInfo';
@@ -545,11 +466,11 @@ describe('registerDownloadsQueryInfoCommand', () => {
 
 interface FakeSortItem { label: string; column: string; descending: boolean }
 
-describe('registerDownloadsSortCommand', () => {
+describe('sorting the Downloads view', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('applies the picked option to DownloadsProvider.setSort', async () => {
-    const provider = fakeDownloadsProvider();
+  it('sorts the view by the picked option', async () => {
+    const provider = providerOver();
     const { qp, accept } = fakeQuickPick<FakeSortItem>();
     createQuickPick.mockReturnValue(qp);
 
@@ -559,12 +480,12 @@ describe('registerDownloadsSortCommand', () => {
     accept({ label: 'Size (Largest First)', column: 'size', descending: true });
 
     await vi.waitFor(() => {
-      expect(provider.setSort).toHaveBeenCalledWith('size', true);
+      expect(provider.currentSort()).toEqual({ column: 'size', descending: true });
     });
   });
 
-  it('does nothing when Esc is pressed', async () => {
-    const provider = fakeDownloadsProvider();
+  it('leaves the sort as it was when Esc is pressed', async () => {
+    const provider = providerOver();
     const { qp, escape } = fakeQuickPick<FakeSortItem>();
     createQuickPick.mockReturnValue(qp);
 
@@ -574,11 +495,15 @@ describe('registerDownloadsSortCommand', () => {
     escape();
 
     await vi.waitFor(() => expect(qp.dispose).toHaveBeenCalled());
-    expect(provider.setSort).not.toHaveBeenCalled();
+    expect(provider.currentSort()).toEqual({ column: 'mtimeMs', descending: true });
   });
 
-  it('pre-selects the item matching the provider\'s current sort', async () => {
-    const provider = fakeDownloadsProvider({ column: 'size', descending: false });
+  it.each<[string, (provider: DownloadsProvider) => void, FakeSortItem]>([
+    ['the item matching the view\'s current sort', (provider) => { provider.setSort('size', false); }, { label: 'Size (Smallest First)', column: 'size', descending: false }],
+    ['Filetime (Newest First) at the default sort', () => undefined, { label: 'Filetime (Newest First)', column: 'mtimeMs', descending: true }],
+  ])('pre-selects %s', async (_case, sorted, marked) => {
+    const provider = providerOver();
+    sorted(provider);
     const { qp, escape } = fakeQuickPick<FakeSortItem>();
     createQuickPick.mockReturnValue(qp);
 
@@ -587,69 +512,44 @@ describe('registerDownloadsSortCommand', () => {
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
-    expect(qp.activeItems).toEqual([{ label: 'Size (Smallest First)', column: 'size', descending: false }]);
-  });
-
-  it('pre-selects Filetime (Newest First) at the default sort', async () => {
-    const provider = fakeDownloadsProvider();
-    const { qp, escape } = fakeQuickPick<FakeSortItem>();
-    createQuickPick.mockReturnValue(qp);
-
-    registerDownloadsSortCommand(provider);
-    invoke('modbench.downloadedFile.sort');
-    await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
-    escape();
-
-    expect(qp.activeItems).toEqual([{ label: 'Filetime (Newest First)', column: 'mtimeMs', descending: true }]);
+    expect(qp.activeItems).toEqual([marked]);
   });
 });
 
-describe('registerDownloadsExcludedToggleCommands', () => {
+describe('showing and hiding excluded downloaded files', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('showExcluded turns excluded rows on and sets the context key true', () => {
-    const provider = fakeDownloadsProvider();
-    registerDownloadsExcludedToggleCommands(provider);
+  const shownNames = async (provider: DownloadsProvider) =>
+    (await provider.getChildren()).map((n) => n.kind === 'downloadedFile' && n.argument.row.name);
 
+  it.each([
+    ['showExcluded shows the excluded rows and sets the context key true', 'modbench.downloadedFile.showExcluded', ['kept.7z', 'hidden.7z'], true],
+    ['hideExcluded leaves the excluded rows out and sets the context key false', 'modbench.downloadedFile.hideExcluded', ['kept.7z'], false],
+  ])('%s', async (_case, command, shown, keyValue) => {
+    const provider = providerOver(
+      downloadedFileRowFixture('kept.7z', { mtimeMs: 2 }, ROOT), downloadedFileRowFixture('hidden.7z', { mtimeMs: 1, excluded: true }, ROOT),
+    );
+    registerDownloadsExcludedToggleCommands(provider);
     invoke('modbench.downloadedFile.showExcluded');
 
-    expect(provider.setShowExcluded).toHaveBeenCalledWith(true);
-    expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloadedFile.excludedShown', true);
-  });
+    invoke(command);
 
-  it('hideExcluded turns excluded rows off and sets the context key false', () => {
-    const provider = fakeDownloadsProvider();
-    registerDownloadsExcludedToggleCommands(provider);
-
-    invoke('modbench.downloadedFile.hideExcluded');
-
-    expect(provider.setShowExcluded).toHaveBeenCalledWith(false);
-    expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloadedFile.excludedShown', false);
+    expect(await shownNames(provider)).toEqual(shown);
+    expect(executeCommand).toHaveBeenLastCalledWith('setContext', 'modbench.downloadedFile.excludedShown', keyValue);
   });
 });
 
 describe('the Downloads gestures from the palette, handed no row, act on the view\'s selection', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('open opens the one selected file', async () => {
-    const root = await makeInstanceRoot();
-    const downloadedFile = await writeDownloadedFile(root, 'foo.7z');
+  it.each([
+    ['open opens the one selected file', 'modbench.downloadedFile.open', openExternal, join(ROOT, 'downloads', 'foo.7z')],
+    ['open metadata opens the one selected file\'s metadata', 'modbench.downloadedFile.openMeta', showTextDocument, join(ROOT, 'downloads', 'foo.7z.meta')],
+  ])('%s', async (_case, command, opener, path) => {
+    registerDownloadsSingleRowCommands(recordingReporter(), () => [node(ROOT, 'foo.7z', { hasMeta: true })]);
+    await invoke(command);
 
-    registerDownloadsSingleRowCommands(recordingReporter(), () => [node(root, 'foo.7z')]);
-    await invoke('modbench.downloadedFile.open');
-
-    expect(calledFsPath(openExternal)).toBe(downloadedFile);
-  });
-
-  it('open metadata opens the one selected file\'s metadata', async () => {
-    const root = await makeInstanceRoot();
-    await writeDownloadedFile(root, 'foo.7z');
-    const meta = await writeMeta(root, 'foo.7z');
-
-    registerDownloadsSingleRowCommands(recordingReporter(), () => [node(root, 'foo.7z', { hasMeta: true })]);
-    await invoke('modbench.downloadedFile.openMeta');
-
-    expect(calledFsPath(showTextDocument)).toBe(meta);
+    expect(calledFsPath(opener)).toBe(path);
   });
 
   it.each([

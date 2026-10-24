@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import type { CopyValueAdapter } from '../copyValue';
 import type { Reporter } from '../../ports/reporter';
 
-export const registerCommand = vi.fn((_id: string, _handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn() }));
+const registerCommand = vi.fn((_id: string, _handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn() }));
 export const writeText = vi.fn<(value: string) => unknown>();
 
 /** The `vscode` members copy value calls, for a test's `vi.mock('vscode', ...)` to spread in. This

@@ -8,101 +8,55 @@ const { showErrorMessage, showWarningMessage, showInformationMessage } = vi.hois
 vi.mock('vscode', () => ({ window: { showErrorMessage, showWarningMessage, showInformationMessage } }));
 
 import { makeReporter } from '../reporter';
-import type { SelectionOutcome } from '../../ports/selectionOutcome';
+import { leveledLog } from '../../test/leveledLog';
+import type { Reporter } from '../../ports/reporter';
 
-function fakeChannelOfEveryLevel() {
-  return {
-    trace: vi.fn(), debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(),
-    append: vi.fn(), appendLine: vi.fn(),
-  };
-}
+const downloadedFile = (name: string) => ({ name });
+const nameOf = (d: { name: string }) => d.name;
+const NO_TOAST = { error: [], warning: [], information: [] };
+const NO_LINE = { info: [], warn: [], error: [] };
 
-function channelWrites(channel: ReturnType<typeof fakeChannelOfEveryLevel>): unknown[][] {
-  return Object.values(channel).flatMap((spy) => spy.mock.calls);
-}
-
-describe('makeReporter', () => {
+describe('what the user sees of a word Modbench says', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it('logs an error severity to the channel\'s .error() and shows an error toast saying why', () => {
-    const channel = fakeChannelOfEveryLevel();
-    makeReporter(channel, 'deploy').report('error', 'Deploy failed.', 'disk full');
-    expect(channel.error).toHaveBeenCalledWith('[deploy] Deploy failed. — disk full');
-    expect(channel.warn).not.toHaveBeenCalled();
-    expect(showErrorMessage).toHaveBeenCalledWith('Deploy failed. — disk full');
-  });
-
-  it('shows a warning toast saying why when the warning carries a reason', () => {
-    const channel = fakeChannelOfEveryLevel();
-    makeReporter(channel, 'install').report('warning', 'Installed, but not recorded.', 'meta locked');
-    expect(channel.warn).toHaveBeenCalledWith('[install] Installed, but not recorded. — meta locked');
-    expect(showWarningMessage).toHaveBeenCalledWith('Installed, but not recorded. — meta locked');
-  });
-
-  it('logs a warning severity to the channel\'s .warn() and shows a warning toast', () => {
-    const channel = fakeChannelOfEveryLevel();
-    makeReporter(channel, 'modList').report('warning', 'Could not read the mod list.');
-    expect(channel.warn).toHaveBeenCalledWith('[modList] Could not read the mod list.');
-    expect(channel.error).not.toHaveBeenCalled();
-    expect(showWarningMessage).toHaveBeenCalledWith('Could not read the mod list.');
-  });
-
-  it('shows a landed gesture as an information toast and writes nothing to the log', () => {
-    const channel = fakeChannelOfEveryLevel();
-    makeReporter(channel, 'deploy').landed('Mods deployed.');
-    expect(showInformationMessage).toHaveBeenCalledWith('Mods deployed.');
-    expect(channelWrites(channel)).toEqual([]);
-    expect(showWarningMessage).not.toHaveBeenCalled();
-    expect(showErrorMessage).not.toHaveBeenCalled();
-  });
-
-  it('writes a failure inside a dialog to the Output, what and why, and shows no notification', () => {
-    const channel = fakeChannelOfEveryLevel();
-    makeReporter(channel, 'recordLifecycle').shownOnSurface('warning', 'Could not fetch a suggested FormKey.', 'backend down');
-    expect(channelWrites(channel)).toEqual([
-      ['[recordLifecycle] Could not fetch a suggested FormKey. — backend down'],
-    ]);
-    expect(showWarningMessage).not.toHaveBeenCalled();
-    expect(showErrorMessage).not.toHaveBeenCalled();
-    expect(showInformationMessage).not.toHaveBeenCalled();
-  });
-
-  describe('a selection\'s outcome', () => {
-    interface DownloadedFile { name: string; bytes: number }
-    const downloadedFile = (name: string): DownloadedFile => ({ name, bytes: 1 });
-    const nameOf = (d: DownloadedFile) => d.name;
-
-    it('reports two refusals among three landings as one error toast naming each and why, and one Output line', () => {
-      const channel = fakeChannelOfEveryLevel();
-      const outcome: SelectionOutcome<DownloadedFile> = {
-        landed: [downloadedFile('A.7z'), downloadedFile('B.7z'), downloadedFile('C.7z')],
-        refused: [
-          { item: downloadedFile('D.7z'), reason: 'in use' },
-          { item: downloadedFile('E.7z'), reason: 'gone from disk' },
-        ],
-      };
-
-      makeReporter(channel, 'downloadedFile.delete').selectionOutcome('Could not delete 2 downloaded files.', outcome, nameOf);
-
-      expect(showErrorMessage.mock.calls).toEqual([
-        ['Could not delete 2 downloaded files. — "D.7z" (in use), "E.7z" (gone from disk)'],
-      ]);
-      expect(channelWrites(channel)).toEqual([
-        ['[downloadedFile.delete] Could not delete 2 downloaded files. — "D.7z" (in use), "E.7z" (gone from disk)'],
-      ]);
-      expect(showWarningMessage).not.toHaveBeenCalled();
-      expect(showInformationMessage).not.toHaveBeenCalled();
-    });
-
-    it('raises no failure notification and writes nothing for a fully landed outcome', () => {
-      const channel = fakeChannelOfEveryLevel();
-
-      makeReporter(channel, 'downloadedFile.delete').selectionOutcome(
-        'Could not delete any downloaded file.', { landed: [downloadedFile('A.7z'), downloadedFile('B.7z')], refused: [] }, nameOf);
-
-      expect(showErrorMessage).not.toHaveBeenCalled();
-      expect(showWarningMessage).not.toHaveBeenCalled();
-      expect(channelWrites(channel)).toEqual([]);
-    });
+  it.each<[string, string, (reporter: Reporter) => void, object, object]>([
+    ['an error is an error toast and an error line, each saying what and why', 'deploy',
+      (r) => { r.report('error', 'Deploy failed.', 'disk full'); },
+      { ...NO_TOAST, error: ['Deploy failed. — disk full'] }, { ...NO_LINE, error: ['[deploy] Deploy failed. — disk full'] }],
+    ['a warning with a reason is a warning toast and a warning line, each saying what and why', 'install',
+      (r) => { r.report('warning', 'Installed, but not recorded.', 'meta locked'); },
+      { ...NO_TOAST, warning: ['Installed, but not recorded. — meta locked'] }, { ...NO_LINE, warn: ['[install] Installed, but not recorded. — meta locked'] }],
+    ['a warning with no reason says only what', 'modList',
+      (r) => { r.report('warning', 'Could not read the mod list.'); },
+      { ...NO_TOAST, warning: ['Could not read the mod list.'] }, { ...NO_LINE, warn: ['[modList] Could not read the mod list.'] }],
+    ['a landed gesture is an information toast and no line', 'deploy',
+      (r) => { r.landed('Mods deployed.'); },
+      { ...NO_TOAST, information: ['Mods deployed.'] }, NO_LINE],
+    ['a failure a dialog already shows is a line, what and why, and no toast', 'recordLifecycle',
+      (r) => { r.shownOnSurface('warning', 'Could not fetch a suggested FormKey.', 'backend down'); },
+      NO_TOAST, { ...NO_LINE, warn: ['[recordLifecycle] Could not fetch a suggested FormKey. — backend down'] }],
+    ['a selection with refusals among its landings is one error naming each refusal and why', 'downloadedFile.delete',
+      (r) => {
+        r.selectionOutcome('Could not delete 2 downloaded files.', {
+          landed: [downloadedFile('A.7z'), downloadedFile('B.7z'), downloadedFile('C.7z')],
+          refused: [{ item: downloadedFile('D.7z'), reason: 'in use' }, { item: downloadedFile('E.7z'), reason: 'gone from disk' }],
+        }, nameOf);
+      },
+      { ...NO_TOAST, error: ['Could not delete 2 downloaded files. — "D.7z" (in use), "E.7z" (gone from disk)'] },
+      { ...NO_LINE, error: ['[downloadedFile.delete] Could not delete 2 downloaded files. — "D.7z" (in use), "E.7z" (gone from disk)'] }],
+    ['a selection that fully landed says nothing', 'downloadedFile.delete',
+      (r) => { r.selectionOutcome('Could not delete any downloaded file.', { landed: [downloadedFile('A.7z')], refused: [] }, nameOf); },
+      NO_TOAST, NO_LINE],
+  ])('%s', (_case, tag, say, toasts, lines) => {
+    const channel = leveledLog();
+    say(makeReporter(channel, tag));
+    expect({
+      toasts: {
+        error: showErrorMessage.mock.calls.flat(),
+        warning: showWarningMessage.mock.calls.flat(),
+        information: showInformationMessage.mock.calls.flat(),
+      },
+      lines: channel.lines,
+    }).toEqual({ toasts, lines });
   });
 });

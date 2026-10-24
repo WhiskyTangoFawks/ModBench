@@ -1,17 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { OriginFile } from '../../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from '../pluginsOutsideLoadOrder';
+import { fileIn } from '../../test/fakeInstanceAdapter';
 
-function toFileMap(byMod: Record<string, string[]>): Map<string, OriginFile[]> {
-  return new Map(
-    Object.entries(byMod).map(([mod, paths]) => [
-      mod,
-      paths.map((relativePath) => ({ relativePath, path: `/mods/${mod}/${relativePath}`, sourcePath: `/mods/${mod}/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath })),
-    ]),
-  );
-}
+const toFileMap = (byMod: Record<string, string[]>): Map<string, OriginFile[]> =>
+  new Map(Object.entries(byMod).map(([mod, paths]) => [mod, paths.map((path) => fileIn(`/mods/${mod}`, path))]));
 
-describe('findPluginsOutsideLoadOrder — the plugin files the effective load order does not point at: an overridden plugin, or a file plugins.txt never names', () => {
+describe('the plugin files the effective load order does not point at: an overridden plugin, or a file plugins.txt never names', () => {
   it('finds the plugin a winning mod overrides', () => {
     const index = toFileMap({ Winner: ['Shared.esp'], Loser: ['Shared.esp'] });
 

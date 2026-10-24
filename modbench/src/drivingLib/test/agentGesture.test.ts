@@ -21,7 +21,7 @@ const mod: Argument = { kind: 'mod', name: 'Alpha' };
 const separator: Argument = { kind: 'separator', name: 'Sep' };
 const folder: Argument = { kind: 'folder', path: '/f' };
 
-describe('argumentOfKind', () => {
+describe('the Argument an agent call names, of the kind its gesture takes', () => {
   it.each([
     ['a mod for a mod gesture', mod, ['mod']],
     ['a separator for a mod-or-separator gesture', separator, ['mod', 'separator']],
@@ -104,7 +104,7 @@ describe('a gesture run as an agent call and as a view call', () => {
   });
 });
 
-describe('reportPartial', () => {
+describe('what a partly landed gesture tells the user', () => {
   const warning: PartialFailure = { message: 'Warned', detail: 'because', severity: 'warning' };
   const logged: PartialFailure = { message: 'Logged', detail: 'quietly', severity: 'log' };
 

@@ -1,97 +1,38 @@
 import { describe, it, expect } from 'vitest';
-import { downloadedFileContextValue, sortDownloadedFileRows } from '../downloadedFileRows';
+import { downloadedFileContextValue, sortDownloadedFileRows, type DownloadedFileSortColumn } from '../downloadedFileRows';
 import type { DownloadedFileRow } from '../../instanceLoader/instance';
+import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 
-const row = (name: string, mtimeMs: number, excluded = false): DownloadedFileRow => ({
-  name,
-  displayName: name,
-  status: 'Downloaded',
-  size: 0,
-  mtimeMs,
-  hasMeta: false,
-  excluded,
-  upgrades: [],
-});
+const row = (name: string, over: Partial<DownloadedFileRow> = {}): DownloadedFileRow => downloadedFileRowFixture(name, over);
 
-describe('sortDownloadedFileRows', () => {
-  it('sorts by mtimeMs descending (default sort)', () => {
-    const rows = [row('a', 100), row('b', 300), row('c', 200)];
-    expect(sortDownloadedFileRows(rows, 'mtimeMs', true).map((r) => r.name)).toEqual(['b', 'c', 'a']);
-  });
+describe('the order of the Downloads rows', () => {
+  const labelled = [row('z-file.zip', { displayName: 'Alpha' }), row('a-file.zip', { displayName: 'Zeta' })];
+  const sameLabel = [row('a.zip', { displayName: 'Same' }), row('b.zip', { displayName: 'Same' }), row('c.zip', { displayName: 'Other' })];
+  const sameStatus = [row('a', { status: 'Downloaded' }), row('b', { status: 'Downloaded' }), row('c', { status: 'Installed' })];
 
-  it('sorts by name ascending when descending=false', () => {
-    const rows = [row('banana', 1), row('apple', 2), row('cherry', 3)];
-    expect(sortDownloadedFileRows(rows, 'name', false).map((r) => r.name)).toEqual([
-      'apple',
-      'banana',
-      'cherry',
-    ]);
-  });
-
-  it('sorts by name using the label, not the raw filename, which sorts the opposite way', () => {
-    const rows: DownloadedFileRow[] = [
-      { ...row('z-file.zip', 1), displayName: 'Alpha' },
-      { ...row('a-file.zip', 2), displayName: 'Zeta' },
-    ];
-    expect(sortDownloadedFileRows(rows, 'name', false).map((r) => r.displayName)).toEqual(['Alpha', 'Zeta']);
-    expect(sortDownloadedFileRows(rows, 'name', true).map((r) => r.displayName)).toEqual(['Zeta', 'Alpha']);
-  });
-
-  it('is a stable sort by name (label) in both directions: ties keep their relative order', () => {
-    const rows: DownloadedFileRow[] = [
-      { ...row('a.zip', 1), displayName: 'Same' },
-      { ...row('b.zip', 2), displayName: 'Same' },
-      { ...row('c.zip', 3), displayName: 'Other' },
-    ];
-    expect(sortDownloadedFileRows(rows, 'name', false).map((r) => r.name)).toEqual(['c.zip', 'a.zip', 'b.zip']);
-    expect(sortDownloadedFileRows(rows, 'name', true).map((r) => r.name)).toEqual(['a.zip', 'b.zip', 'c.zip']);
-  });
-
-  it('is a stable sort: ties in the sorted column keep their relative order', () => {
-    const rows: DownloadedFileRow[] = [
-      { ...row('a', 1), status: 'Downloaded' },
-      { ...row('b', 2), status: 'Downloaded' },
-      { ...row('c', 3), status: 'Installed' },
-    ];
-    expect(sortDownloadedFileRows(rows, 'status', false).map((r) => r.name)).toEqual(['a', 'b', 'c']);
-  });
-
-  it('is a stable sort descending too: ties in the sorted column keep their relative order', () => {
-    const rows: DownloadedFileRow[] = [
-      { ...row('a', 1), status: 'Downloaded' },
-      { ...row('b', 2), status: 'Downloaded' },
-      { ...row('c', 3), status: 'Installed' },
-    ];
-    expect(sortDownloadedFileRows(rows, 'status', true).map((r) => r.name)).toEqual(['c', 'a', 'b']);
+  it.each<[string, DownloadedFileRow[], DownloadedFileSortColumn, boolean, string[]]>([
+    ['by filetime, newest first, the default', [row('a', { mtimeMs: 100 }), row('b', { mtimeMs: 300 }), row('c', { mtimeMs: 200 })], 'mtimeMs', true, ['b', 'c', 'a']],
+    ['by name, A to Z', [row('banana'), row('apple'), row('cherry')], 'name', false, ['apple', 'banana', 'cherry']],
+    ['by the label, A to Z, not the raw filename, which sorts the opposite way', labelled, 'name', false, ['z-file.zip', 'a-file.zip']],
+    ['by the label, Z to A', labelled, 'name', true, ['a-file.zip', 'z-file.zip']],
+    ['by the label, A to Z, ties keeping their relative order', sameLabel, 'name', false, ['c.zip', 'a.zip', 'b.zip']],
+    ['by the label, Z to A, ties keeping their relative order', sameLabel, 'name', true, ['a.zip', 'b.zip', 'c.zip']],
+    ['by status, A to Z, ties keeping their relative order', sameStatus, 'status', false, ['a', 'b', 'c']],
+    ['by status, Z to A, ties keeping their relative order', sameStatus, 'status', true, ['c', 'a', 'b']],
+  ])('is %s', (_case, rows, column, descending, names) => {
+    expect(sortDownloadedFileRows(rows, column, descending).map((r) => r.name)).toEqual(names);
   });
 });
 
-describe('downloadedFileContextValue, the space-separated flag string the view/item/context when clauses match', () => {
-  const plain: DownloadedFileRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, excluded: false, upgrades: [] };
-
-  it('is the base "downloadedFile" token alone when no optional flag applies', () => {
-    expect(downloadedFileContextValue(plain)).toBe('downloadedFile');
-  });
-
-  it('appends hasModID, hasMeta and excluded, in that order, when all three are set', () => {
-    const row: DownloadedFileRow = { ...plain, hasMeta: true, excluded: true, modID: '12345' };
-    expect(downloadedFileContextValue(row)).toBe('downloadedFile hasModID hasMeta excluded');
-  });
-
-  it('appends hasFileID, after hasModID, when the metadata holds a file ID', () => {
-    expect(downloadedFileContextValue({ ...plain, modID: '12345', fileID: '78' })).toBe('downloadedFile hasModID hasFileID');
-  });
-
-  it('appends only hasModID when just modID is present', () => {
-    expect(downloadedFileContextValue({ ...plain, modID: '12345' })).toBe('downloadedFile hasModID');
-  });
-
-  it('appends only hasMeta when just hasMeta is set — gates the openMeta menu entry', () => {
-    expect(downloadedFileContextValue({ ...plain, hasMeta: true })).toBe('downloadedFile hasMeta');
-  });
-
-  it('appends only excluded when just excluded is set', () => {
-    expect(downloadedFileContextValue({ ...plain, excluded: true })).toBe('downloadedFile excluded');
+describe('the flags of a downloaded file row the view/item/context when clauses match', () => {
+  it.each<[string, Partial<DownloadedFileRow>, string]>([
+    ['the base "downloadedFile" token alone when no optional flag applies', {}, 'downloadedFile'],
+    ['hasModID, hasMeta and excluded, in that order, when all three are set', { hasMeta: true, excluded: true, modID: '12345' }, 'downloadedFile hasModID hasMeta excluded'],
+    ['hasFileID, after hasModID, when the metadata holds a file ID', { modID: '12345', fileID: '78' }, 'downloadedFile hasModID hasFileID'],
+    ['only hasModID when just modID is present', { modID: '12345' }, 'downloadedFile hasModID'],
+    ['only hasMeta when just hasMeta is set, which gates the openMeta menu entry', { hasMeta: true }, 'downloadedFile hasMeta'],
+    ['only excluded when just excluded is set', { excluded: true }, 'downloadedFile excluded'],
+  ])('are %s', (_case, over, flags) => {
+    expect(downloadedFileContextValue(row('foo.zip', over))).toBe(flags);
   });
 });
-

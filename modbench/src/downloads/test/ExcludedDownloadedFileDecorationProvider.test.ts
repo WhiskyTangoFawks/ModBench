@@ -1,27 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
-import { EventEmitter } from '../../test/vscodeMock';
+import { EventEmitter, ThemeColor, uriFile } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({
-  ThemeColor: class { constructor(public id: string) {} },
-  EventEmitter,
-  Uri: {
-    file: (p: string) => {
-      const pathForwardSlashedOnEveryHostWhereTheRealOneIsOnWindowsOnly = p.replaceAll('\\', '/');
-      return {
-        fsPath: p,
-        path: pathForwardSlashedOnEveryHostWhereTheRealOneIsOnWindowsOnly,
-        toString: () => `file://${pathForwardSlashedOnEveryHostWhereTheRealOneIsOnWindowsOnly}`,
-      };
-    },
-  },
-}));
+vi.mock('vscode', () => ({ ThemeColor, EventEmitter, Uri: { file: uriFile } }));
 
 import * as vscode from 'vscode';
 import { ExcludedDownloadedFileDecorationProvider } from '../ExcludedDownloadedFileDecorationProvider';
 import { present } from '../../ports/present';
 
-describe('ExcludedDownloadedFileDecorationProvider', () => {
+describe('the dimming of an excluded downloaded file row', () => {
   const instanceRoot = '/instance';
   const downloadsDir = join(instanceRoot, 'downloads');
   const downloadedFileUri = (name: string) => vscode.Uri.file(join(downloadsDir, name));
@@ -34,21 +21,13 @@ describe('ExcludedDownloadedFileDecorationProvider', () => {
     expect(decoration.badge).toBeUndefined();
   });
 
-  it('returns undefined for an included downloaded file row', () => {
-    const provider = new ExcludedDownloadedFileDecorationProvider(() => downloadsDir, () => new Set(['excluded.zip']));
-    expect(provider.provideFileDecoration(downloadedFileUri('included.zip'))).toBeUndefined();
-  });
-
-  it('returns undefined for a URI outside downloads/', () => {
-    const provider = new ExcludedDownloadedFileDecorationProvider(() => downloadsDir, () => new Set(['excluded.zip']));
-    expect(provider.provideFileDecoration(vscode.Uri.file(join(instanceRoot, 'mods', 'SomeMod')))).toBeUndefined();
-  });
-
-  it('returns undefined for a sibling path that only shares the downloads/ string prefix, even when slicing it reproduces an excluded downloaded file\'s name', () => {
-    const downloadsDir = join(instanceRoot, 'downloads');
-    const provider = new ExcludedDownloadedFileDecorationProvider(() => downloadsDir, () => new Set(['evil.zip']));
-    const uri = vscode.Uri.file(`${downloadsDir}Xevil.zip`);
-
+  it.each<[string, string | undefined, vscode.Uri]>([
+    ['an included downloaded file row', downloadsDir, downloadedFileUri('included.zip')],
+    ['a URI outside downloads/', downloadsDir, vscode.Uri.file(join(instanceRoot, 'mods', 'SomeMod'))],
+    ['a sibling path that only shares the downloads/ string prefix, though slicing it reproduces an excluded file\'s name', downloadsDir, vscode.Uri.file(`${downloadsDir}Xexcluded.zip`)],
+    ['any row while the downloads folder is unresolved, not even a row under the default downloads/', undefined, downloadedFileUri('excluded.zip')],
+  ])('decorates nothing for %s', (_case, folder, uri) => {
+    const provider = new ExcludedDownloadedFileDecorationProvider(() => folder, () => new Set(['excluded.zip']));
     expect(provider.provideFileDecoration(uri)).toBeUndefined();
   });
 
@@ -62,12 +41,6 @@ describe('ExcludedDownloadedFileDecorationProvider', () => {
     expect(decoration.color).toEqual(new vscode.ThemeColor('disabledForeground'));
   });
 
-  it('decorates nothing while the downloads folder is unresolved, not even a row under the default downloads/', () => {
-    const provider = new ExcludedDownloadedFileDecorationProvider(() => undefined, () => new Set(['excluded.zip']));
-
-    expect(provider.provideFileDecoration(downloadedFileUri('excluded.zip'))).toBeUndefined();
-  });
-
   it('follows the downloads folder when download_directory moves while Modbench runs, reading it fresh rather than once at construction', () => {
     let dir = downloadsDir;
     const provider = new ExcludedDownloadedFileDecorationProvider(() => dir, () => new Set(['excluded.zip']));
@@ -79,15 +52,13 @@ describe('ExcludedDownloadedFileDecorationProvider', () => {
     expect(decoration?.color).toEqual(new vscode.ThemeColor('disabledForeground'));
   });
 
-  describe('onDidChangeFileDecorations', () => {
-    it('fires when refresh() is called, so the dim follows a rows change', () => {
-      const provider = new ExcludedDownloadedFileDecorationProvider(() => downloadsDir, () => new Set());
-      const listener = vi.fn();
-      provider.onDidChangeFileDecorations(listener);
+  it('tells VS Code the decorations changed on refresh, so the dim follows a rows change', () => {
+    const provider = new ExcludedDownloadedFileDecorationProvider(() => downloadsDir, () => new Set());
+    const listener = vi.fn();
+    provider.onDidChangeFileDecorations(listener);
 
-      provider.refresh();
+    provider.refresh();
 
-      expect(listener).toHaveBeenCalledTimes(1);
-    });
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 });

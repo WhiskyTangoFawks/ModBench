@@ -2,10 +2,11 @@ import { GAME_FOLDER_SETTING_ID } from '../../test/gameFolderSetting';
 import { join } from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type {
-  DataFolderArchives, DataFolderPlugins, DownloadedFile, DownloadedFiles, GameFolder, InstanceAdapter, InstanceReading, Mod,
+  DataFolderArchives, DataFolderPlugins, GameFolder, InstanceAdapter, InstanceReading, Mod,
   OriginFiles, Separator, PublisherTag, ProgramVersions,
 } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
+import { downloadedFilesOf, fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, sourceModsOf } from '../../test/fakeInstanceAdapter';
+import { leveledLog } from '../../test/leveledLog';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { Instance, instanceMessages, type InstanceValue } from '../instance';
 import { factsOf } from '../instanceFacts';
@@ -34,16 +35,9 @@ const GAME_FOUND: Partial<InstanceReading> = {
   dataFolderArchives: { kind: 'listed', archives: [], stringsFiles: [] } satisfies DataFolderArchives,
 };
 
-const downloadedFile = (name: string): DownloadedFile =>
-  ({ name, path: `/downloads/${name}`, metadataPath: `/downloads/${name}.meta`, size: 1, mtimeMs: 1, excluded: false, meta: undefined });
-const downloadedFilesOf = (...names: string[]): DownloadedFiles =>
-  ({ kind: 'listed', downloadsDir: '/downloads', files: names.map(downloadedFile) });
-
 function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: InstanceAdapter) => InstanceAdapter = (adapter) => adapter) {
   const fake = fakeInstanceAdapter(readingFixture(overrides));
-  const logs: string[] = [];
-  const warnings: string[] = [];
-  const errorLines: string[] = [];
+  const log = leveledLog();
   const windowListeners = new Set<(state: WindowState) => void>();
   const window = {
     state: { focused: true },
@@ -56,11 +50,11 @@ function loader(overrides: Partial<InstanceReading> = {}, wrap: (adapter: Instan
     adapter: wrap(fake.adapter),
     gameFolderSettingId: GAME_FOLDER_SETTING_ID,
     window,
-    log: { info: (msg) => logs.push(msg), warn: (msg) => warnings.push(msg), error: (line) => errorLines.push(line) },
+    log,
   });
   instances.push(instance);
   return {
-    instance, fake, logs, warnings, errorLines, windowListeners,
+    instance, fake, logs: log.lines.info, warnings: log.lines.warn, errorLines: log.lines.error, windowListeners,
     windowState: (state: WindowState) => {
       window.state = state;
       for (const listener of [...windowListeners]) listener(state);
@@ -682,9 +676,7 @@ describe('Instance — game folder and the archives the game loads', () => {
     await instance.refresh();
 
     const after = handedStringsFiles(instance.value.loadOrderSnapshot);
-    expect(after.map(({ path }) => path)).toEqual([stringsFile]);
-    expect(before.map(({ path }) => path)).toEqual([stringsFile]);
-    expect(after[0]?.stamp).not.toEqual(before[0]?.stamp);
+    expect([before, after]).toEqual([[{ path: stringsFile, stamp: '5/1/1' }], [{ path: stringsFile, stamp: '5/1/2' }]]);
   });
 
   it('lands a value carrying the game folder not found, rather than a failure, and back again when it is found', async () => {
@@ -855,9 +847,8 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
         provider: { kind: 'Mod', mod: 'Consumer', folder: '/mods/Consumer', sourceFolder: '/source/Consumer Source' },
       }],
       loadedWithNoLine: [{ name: 'DLCCoast.esm', origin: 'Consumer' }],
+      active: [{ name: 'DLCCoast.esm', origin: 'Consumer' }],
     });
-    const { loadOrderSnapshot } = instance.value;
-    expect(loadOrderSnapshot && 'active' in loadOrderSnapshot ? loadOrderSnapshot.active : []).toContainEqual({ name: 'DLCCoast.esm', origin: 'Consumer' });
   });
 
   it('carries no answer and no snapshot while the game folder is not found', async () => {

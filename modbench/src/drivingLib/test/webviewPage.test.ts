@@ -36,14 +36,13 @@ describe('a page of the webview build, loaded into a webview', () => {
     expect(shown(RECORD_PAGE).html).not.toContain('img-src');
   });
 
-  it('loads the page\'s own script and stylesheet', () => {
-    const { html } = shown(RECORD_PAGE);
-    expect(html).toContain('<script type="module" src="ext/out/webview/assets/main.js">');
+  it.each([
+    [WEBVIEW_SCRIPTS.RECORD_PANEL, '<script type="module" src="ext/out/webview/assets/main.js">'],
+    [WEBVIEW_SCRIPTS.CONFLICT_TABLE, '<script type="module" src="ext/out/webview/assets/conflicts.js">'],
+  ])('loads the page %s\'s own script and the build\'s one stylesheet', (script, scriptTag) => {
+    const { html } = shown({ script });
+    expect(html).toContain(scriptTag);
     expect(html).toContain('<link rel="stylesheet" href="ext/out/webview/assets/webview.css">');
-  });
-
-  it('links the build\'s one stylesheet on every page', () => {
-    expect(shown({ script: WEBVIEW_SCRIPTS.CONFLICT_TABLE }).html).toContain('<link rel="stylesheet" href="ext/out/webview/assets/webview.css">');
   });
 
   it('includes a nonce in the CSP script-src, and applies it to the inline script tag', () => {

@@ -14,7 +14,7 @@ function instanceThatReads() {
   };
 }
 
-describe('runWritingGesture', () => {
+describe('a gesture that writes, inside its view\'s progress bar', () => {
   it('runs the command once and then one refresh, inside the view\'s progress bar', async () => {
     steps.length = 0;
 

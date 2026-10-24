@@ -26,10 +26,6 @@ export interface FilterBoxState {
   boxes: FakeInputBox[];
 }
 
-export function makeFilterBoxState(): FilterBoxState {
-  return { commands: new Map(), boxes: [] };
-}
-
 /** `vscode.window`'s slice a per-view test's `vi.mock('vscode', ...)` spreads in, alongside
  *  whatever `createTreeView`/decoration stub that view's own registration needs. */
 export function filterBoxWindowMock(state: FilterBoxState) {
@@ -72,6 +68,7 @@ export async function waitForMessage(
 
 type Listener<E> = (event: E) => void;
 const noDisposable = () => ({ dispose: () => undefined });
+const NO_ROWS: vscode.TreeDataProvider<unknown> = { getTreeItem: () => ({}), getChildren: () => [] };
 
 /** The `vscode.TreeView` every name-filtered view's test shares: what the view reads (`selection`,
  *  `visible`, `reveal`) and sets (`description`, `message`), and the events the test fires at it. */
@@ -89,7 +86,7 @@ export class FakeTreeView {
     collapse: [] as Listener<{ element: unknown }>[],
   };
 
-  constructor(readonly treeDataProvider: vscode.TreeDataProvider<unknown>) {}
+  constructor(readonly treeDataProvider: vscode.TreeDataProvider<unknown> = NO_ROWS) {}
 
   onDidChangeSelection = (listener: Listener<{ selection: readonly unknown[] }>) => this.subscribe(this.listeners.selection, listener);
   onDidChangeVisibility = (listener: Listener<{ visible: boolean }>) => this.subscribe(this.listeners.visibility, listener);

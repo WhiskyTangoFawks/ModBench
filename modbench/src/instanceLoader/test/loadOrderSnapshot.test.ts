@@ -10,8 +10,8 @@ import {
 } from '../loadOrderSnapshot';
 
 type LoadOrderPluginRow = LoadOrderPlugin | LoadOrderPluginLine;
-import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { fileIn } from '../../test/fakeInstanceAdapter';
 
 type Provider = { winner: string; winnerMod: string; providers?: string[] };
 
@@ -32,20 +32,10 @@ const inDataFolder = (...names: string[]): DataFolderPlugins => ({ kind: 'listed
 const NO_DATA_PLUGINS = inDataFolder();
 const DATA_FOLDER = join('/game', 'Data');
 const GAME_FOLDER: GameFolder = { kind: 'found', root: '/game', dataFolder: DATA_FOLDER };
-const OVERWRITE = join('/instance', 'overwrite');
+const OVERWRITE = '/instance/overwrite';
 
 const lines = (order: string[], enabled: string[] = order): PluginEntry[] =>
   order.map((name) => ({ name, enabled: enabled.includes(name) }));
-
-const runtimeOutput = (relativePath: string): OriginFile => {
-  const path = join(OVERWRITE, ...relativePath.split('/'));
-  return { relativePath, path, sourcePath: path, excluded: false, markedExcluded: false, includedPath: relativePath };
-};
-
-const modFile = (mod: string, relativePath: string): OriginFile => {
-  const path = `/mods/${mod}/${relativePath}`;
-  return { relativePath, path, sourcePath: path, excluded: false, markedExcluded: false, includedPath: relativePath };
-};
 
 const builtIndex = (filesByMod: Record<string, OriginFile[]>, overwrite: readonly OriginFile[]): FileConflictIndex =>
   buildFileConflictIndex(
@@ -54,7 +44,7 @@ const builtIndex = (filesByMod: Record<string, OriginFile[]>, overwrite: readonl
     new Map(Object.entries(filesByMod).map(([name, files]) => [name, { origin: name, folder: undefined, files, folders: [], notes: [] }])),
   );
 
-describe('buildLoadOrderRows, its origins asserted as the literal reserved values of the wire contract rather than the constants the module produces them from', () => {
+describe('the load order rows, each origin the wire contract\'s literal reserved value', () => {
   it('a mod called Data and a mod called overwrite keep their own origin, apart from the game folder and Overwrite', () => {
     const fakeIndex = index({
       'D.esp': { winner: '/mods/Data/D.esp', winnerMod: 'Data' },
@@ -82,8 +72,8 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
     const fakeIndex = index(
       { 'Shared.esp': { winner: '/mods/A/Shared.esp', winnerMod: 'A', providers: ['A', 'B'] } },
       {
-        A: [{ relativePath: 'Shared.esp', path: '/mods/A/Shared.esp', sourcePath: '/mods/A/Shared.esp', excluded: false, markedExcluded: false, includedPath: 'Shared.esp' }],
-        B: [{ relativePath: 'Shared.esp', path: '/mods/B/Shared.esp', sourcePath: '/mods/B/Shared.esp', excluded: false, markedExcluded: false, includedPath: 'Shared.esp' }],
+        A: [fileIn('/mods/A', 'Shared.esp')],
+        B: [fileIn('/mods/B', 'Shared.esp')],
       },
     );
 
@@ -96,7 +86,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   it('a plugin file no plugins.txt line names is sent with no line, not enabled, winning if it is the sole provider', () => {
     const fakeIndex = index(
       { 'Stray.esp': { winner: '/mods/C/Stray.esp', winnerMod: 'C' } },
-      { C: [{ relativePath: 'Stray.esp', path: '/mods/C/Stray.esp', sourcePath: '/mods/C/Stray.esp', excluded: false, markedExcluded: false, includedPath: 'Stray.esp' }, { relativePath: 'textures/x.dds', path: '/mods/C/textures/x.dds', sourcePath: '/mods/C/textures/x.dds', excluded: false, markedExcluded: false, includedPath: 'Stray.esp' }] },
+      { C: [fileIn('/mods/C', 'Stray.esp'), fileIn('/mods/C', 'textures/x.dds')] },
     );
 
     const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER, inDataFolder('Listed.esp'));
@@ -108,18 +98,18 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   });
 
   it('a plugin resolved from overwrite/ wins path and origin over a mod-provided plugin, which is then sent as overridden', () => {
-    const overwrite = [runtimeOutput('Foo.esp')];
+    const overwrite = [fileIn(OVERWRITE, 'Foo.esp')];
 
-    const result = buildLoadOrderRows(lines(['Foo.esp']), builtIndex({ A: [modFile('A', 'Foo.esp')] }, overwrite), overwrite, GAME_FOLDER, NO_DATA_PLUGINS);
+    const result = buildLoadOrderRows(lines(['Foo.esp']), builtIndex({ A: [fileIn('/mods/A', 'Foo.esp')] }, overwrite), overwrite, GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
-      { name: 'Foo.esp', path: join(OVERWRITE, 'Foo.esp'), origin: 'overwrite/', line: 0, enabled: true, winning: true },
+      { name: 'Foo.esp', path: '/instance/overwrite/Foo.esp', origin: 'overwrite/', line: 0, enabled: true, winning: true },
       { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', line: 0, enabled: true, winning: false },
     ]);
   });
 
   it('an overwrite/ plugin the mod manager keeps from the game provides nothing, whatever its name carries', () => {
-    const excludedFile = { ...runtimeOutput('Foo.esp'), excluded: true };
+    const excludedFile = { ...fileIn(OVERWRITE, 'Foo.esp'), excluded: true };
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
     const listed = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [excludedFile], GAME_FOLDER, NO_DATA_PLUGINS);
@@ -130,12 +120,12 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   });
 
   it('an unlisted plugin sitting in overwrite/ is sent with no line, winning-most', () => {
-    const overwrite = [runtimeOutput('New.esp'), runtimeOutput('notes.txt')];
+    const overwrite = [fileIn(OVERWRITE, 'New.esp'), fileIn(OVERWRITE, 'notes.txt')];
 
     const result = buildLoadOrderRows(lines([]), builtIndex({}, overwrite), overwrite, GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
-      { name: 'New.esp', path: join(OVERWRITE, 'New.esp'), origin: 'overwrite/', line: null, enabled: false, winning: true },
+      { name: 'New.esp', path: '/instance/overwrite/New.esp', origin: 'overwrite/', line: null, enabled: false, winning: true },
     ]);
   });
 
@@ -143,7 +133,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
     const result = buildLoadOrderRows(
-      lines(['Foo.esp']), fakeIndex, [runtimeOutput('Sub/Foo.esp'), runtimeOutput('Sub/Stray.esp')], GAME_FOLDER, NO_DATA_PLUGINS,
+      lines(['Foo.esp']), fakeIndex, [fileIn(OVERWRITE, 'Sub/Foo.esp'), fileIn(OVERWRITE, 'Sub/Stray.esp')], GAME_FOLDER, NO_DATA_PLUGINS,
     );
 
     expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', line: 0, enabled: true, winning: true }]);
@@ -166,7 +156,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   });
 
   it('a disabled mod\'s own plugin is sent with no line, not enabled, not winning', () => {
-    const fakeIndex = index({}, { Disabled: [{ relativePath: 'Off.esp', path: '/mods/Disabled/Off.esp', sourcePath: '/mods/Disabled/Off.esp', excluded: false, markedExcluded: false, includedPath: 'Off.esp' }] });
+    const fakeIndex = index({}, { Disabled: [fileIn('/mods/Disabled', 'Off.esp')] });
 
     const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
 
@@ -176,9 +166,9 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   });
 });
 
-describe('buildLoadOrderRows, plugins whose names or origins differ only in case', () => {
+describe('the load order rows of plugins whose names or origins differ only in case', () => {
   it('sends both files of one mod, the line naming the one the Mod override order resolves the name to, at that file\'s spelling', () => {
-    const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } }, { A: [modFile('A', 'Foo.esp'), modFile('A', 'foo.esp')] });
+    const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } }, { A: [fileIn('/mods/A', 'Foo.esp'), fileIn('/mods/A', 'foo.esp')] });
 
     const result = buildLoadOrderRows(lines(['FOO.esp']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
 
@@ -191,7 +181,7 @@ describe('buildLoadOrderRows, plugins whose names or origins differ only in case
   it('sends the copy of a mod whose name differs only in case from the winning mod\'s, not winning', () => {
     const fakeIndex = index(
       { 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A', providers: ['A', 'a'] } },
-      { A: [modFile('A', 'Foo.esp')], a: [modFile('a', 'Foo.esp')] },
+      { A: [fileIn('/mods/A', 'Foo.esp')], a: [fileIn('/mods/a', 'Foo.esp')] },
     );
 
     const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [], GAME_FOLDER, NO_DATA_PLUGINS);
@@ -203,13 +193,13 @@ describe('buildLoadOrderRows, plugins whose names or origins differ only in case
   });
 
   it('sends both of overwrite/\'s files, the one the Mod override order resolves the name to winning', () => {
-    const files = [runtimeOutput('New.esp'), runtimeOutput('new.esp')];
+    const files = [fileIn(OVERWRITE, 'New.esp'), fileIn(OVERWRITE, 'new.esp')];
 
     const result = buildLoadOrderRows(lines([]), builtIndex({}, files), files, GAME_FOLDER, NO_DATA_PLUGINS);
 
     expect(result).toEqual([
-      { name: 'New.esp', path: join(OVERWRITE, 'New.esp'), origin: 'overwrite/', line: null, enabled: false, winning: true },
-      { name: 'new.esp', path: join(OVERWRITE, 'new.esp'), origin: 'overwrite/', line: null, enabled: false, winning: false },
+      { name: 'New.esp', path: '/instance/overwrite/New.esp', origin: 'overwrite/', line: null, enabled: false, winning: true },
+      { name: 'new.esp', path: '/instance/overwrite/new.esp', origin: 'overwrite/', line: null, enabled: false, winning: false },
     ]);
   });
 
@@ -232,7 +222,7 @@ describe('buildLoadOrderRows, plugins whose names or origins differ only in case
   });
 });
 
-describe('pluginsLoadedWithNoLineOf', () => {
+describe('the plugins the game loads with no line', () => {
   it('names a game master a line names in the game folder at that line\'s plugin\'s spelling', () => {
     const lined = { name: 'master.esm', path: join(DATA_FOLDER, 'master.esm'), origin: 'Data/', line: 0, enabled: true, winning: true };
 
@@ -265,7 +255,7 @@ describe('pluginsLoadedWithNoLineOf', () => {
   });
 });
 
-describe('buildLoadOrderRows, a name no mod winner provides and no game folder holds', () => {
+describe('the load order row of a name no mod winner provides and no game folder holds', () => {
   it.each([['not found', GAME_FOLDER_NOT_FOUND], ['found without it', GAME_FOLDER]])('has no path, the game folder %s', (_, gameFolder) => {
     const [row] = buildLoadOrderRows(lines(['Fallout4.esm']), index({}), [], gameFolder, NO_DATA_PLUGINS);
 
@@ -273,7 +263,7 @@ describe('buildLoadOrderRows, a name no mod winner provides and no game folder h
   });
 });
 
-describe('sourceFiles', () => {
+describe('the source files of an origin', () => {
   const SOURCE_FOLDER = join('/instance', 'source', 'TS Mod');
   const value = instanceValueFixture({
     gameFolder: GAME_FOLDER,
@@ -282,26 +272,20 @@ describe('sourceFiles', () => {
       sourceDirs: new Map([['TS Mod', SOURCE_FOLDER], ['Data', join('/instance', 'source', 'Data')], ['overwrite', join('/instance', 'source', 'overwrite')]]),
     },
   });
-  const fileOf = (origin: string) => present(sourceFiles(value, origin), `the ${origin} origin's source`).file('plugin-source/x.json');
 
-  it('names a file inside the source folder the Instance adapter answered for a mod origin, not its mod folder', () => {
-    expect(fileOf('TS Mod')).toBe(join(SOURCE_FOLDER, 'plugin-source', 'x.json'));
-  });
-
-  it.each(['Data', 'overwrite'])('names a file inside the source folder of a mod called %s, never a reserved origin of that word', (name) => {
-    expect(fileOf(name)).toBe(join('/instance', 'source', name, 'plugin-source', 'x.json'));
-  });
-
-  it('answers nothing for a mod with no source folder, nor for Overwrite and the game folder, which are no mod', () => {
-    expect(sourceFiles(value, 'Other Mod')).toBeUndefined();
-    expect(sourceFiles(value, 'overwrite/')).toBeUndefined();
-    expect(sourceFiles(value, 'Data/')).toBeUndefined();
+  it.each([
+    ['a file inside the source folder the Instance adapter answered for a mod origin, not its mod folder', 'TS Mod', join(SOURCE_FOLDER, 'plugin-source', 'x.json')],
+    ['a file inside the source folder of a mod called Data, never the game folder', 'Data', join('/instance', 'source', 'Data', 'plugin-source', 'x.json')],
+    ['a file inside the source folder of a mod called overwrite, never Overwrite', 'overwrite', join('/instance', 'source', 'overwrite', 'plugin-source', 'x.json')],
+    ['nothing for a mod with no source folder', 'Other Mod', undefined],
+    ['nothing for Overwrite, which is no mod', 'overwrite/', undefined],
+    ['nothing for the game folder, which is no mod', 'Data/', undefined],
+  ])('names %s', (_case, origin, expected) => {
+    expect(sourceFiles(value, origin)?.file('plugin-source/x.json')).toBe(expected);
   });
 });
 
-describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from the value rather than a fresh walk', () => {
-  const GAME_FOLDER = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
-  const NOT_FOUND = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameFolder' } as const;
+describe('the snapshot the sync PUTs, read straight from the value rather than a fresh walk', () => {
   const row = (name: string, origin: string, line: number | null, facts: Partial<LoadOrderPlugin> = {}): LoadOrderPlugin =>
     ({ name, path: `/mods/${origin}/${name}`, origin, line, enabled: true, winning: true, ...facts });
   const folderOf = (mod: string) => `/mo2/mod-folders/${mod}`;
@@ -312,10 +296,10 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
   const modFolders = modFoldersOf('ModA', 'ModS', 'ModF', 'ModD', 'ModO', 'ModU', 'ModM', 'ModOff');
   const sourceDirOf = (mod: string) => `/mo2/source/${mod}`;
   const sourceDirs = new Map(modFolders.all.map(({ name }) => [name, sourceDirOf(name)]));
-  const provider = (origin: string) => origin === 'Data/' ? { kind: 'Game' } : { kind: 'Mod', mod: origin, folder: folderOf(origin), sourceFolder: sourceDirOf(origin) };
-  const sent = ({ name, path, origin, line, winning }: LoadOrderPlugin) => ({
-    name, path, origin, provider: provider(origin), line, lineNamesIt: line !== null && winning, archives: [], stringsFiles: [],
-  });
+  const A_SENT = {
+    name: 'a.esp', path: '/mods/ModA/a.esp', origin: 'ModA', line: 0, lineNamesIt: true, archives: [], stringsFiles: [],
+    provider: { kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA', sourceFolder: '/mo2/source/ModA' },
+  };
   const address = ({ name, origin }: { name: string; origin: string }) => ({ name, origin });
   const NO_ARCHIVES: ArchiveSources = {
     gameRelease: 'Fallout4', listed: [], inData: { kind: 'listed', archives: [], stringsFiles: [] }, files: new FileConflictLookup(),
@@ -336,7 +320,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
 
   it.each<[string, Partial<Parameters<typeof loadOrderSnapshotOf>[0]>]>([
     ['the game folder\'s plugins cannot be listed, as a snapshot lacking the game\'s masters is not sent', { pluginsLoadedWithNoLine: undefined }],
-    ['the game folder is not found', { gameFolder: NOT_FOUND }],
+    ['the game folder is not found', { gameFolder: GAME_FOLDER_NOT_FOUND }],
     ['the game folder\'s archives cannot be listed, as a snapshot lacking the game\'s strings is not sent', { archives: { ...NO_ARCHIVES, inData: { kind: 'unreadable', reason: 'EACCES' } } }],
   ])('is undefined — no put at all — while %s', (_, withheld) => {
     expect(loadOrderSnapshotOf({
@@ -468,7 +452,10 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
     const a = row('a.esp', 'ModA', 0);
     const stray = row('stray.esp', 'ModS', null);
 
-    expect(snapshotOf([a, stray])).toMatchObject({ dataFolder: '/game/Data', plugins: [sent(a), sent(stray)] });
+    expect(snapshotOf([a, stray])).toMatchObject({ dataFolder: DATA_FOLDER, plugins: [A_SENT, {
+      name: 'stray.esp', path: '/mods/ModS/stray.esp', origin: 'ModS', line: null, lineNamesIt: false, archives: [], stringsFiles: [],
+      provider: { kind: 'Mod', mod: 'ModS', folder: '/mo2/mod-folders/ModS', sourceFolder: '/mo2/source/ModS' },
+    }] });
   });
 
   it('sends as active the winning plugin of each enabled line, in line order rather than the value\'s row order, with no disabled or overridden row slipping in', () => {
@@ -502,7 +489,10 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
 
     const snapshot = snapshotOf([a, disabledModPlugin]);
 
-    expect(snapshot?.plugins).toContainEqual(sent(disabledModPlugin));
+    expect(snapshot?.plugins).toContainEqual({
+      name: 'off.esp', path: '/mods/ModOff/off.esp', origin: 'ModOff', line: null, lineNamesIt: false, archives: [], stringsFiles: [],
+      provider: { kind: 'Mod', mod: 'ModOff', folder: '/mo2/mod-folders/ModOff', sourceFolder: '/mo2/source/ModOff' },
+    });
     expect(snapshot?.active).toEqual([address(a)]);
   });
 
@@ -525,7 +515,10 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
 
     expect(snapshot?.active).toEqual([address(provided)]);
     expect(snapshot?.loadedWithNoLine).toEqual([address(provided)]);
-    expect(snapshot?.plugins).toEqual([sent(provided)]);
+    expect(snapshot?.plugins).toEqual([{
+      name: 'Master.esm', path: '/mods/ModM/Master.esm', origin: 'ModM', line: null, lineNamesIt: false, archives: [], stringsFiles: [],
+      provider: { kind: 'Mod', mod: 'ModM', folder: '/mo2/mod-folders/ModM', sourceFolder: '/mo2/source/ModM' },
+    }]);
   });
 
   it('loads with no line the plugin the game\'s list names, not one whose name differs from it only in case', () => {
@@ -560,13 +553,13 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
       },
     });
 
-    expect(outcome !== undefined && 'mods' in outcome ? [outcome.mods, outcome.statCache] : []).toEqual([
-      [
+    expect(outcome).toMatchObject({
+      mods: [
         { name: 'ModA', folder: '/mo2/mod-folders/ModA', metadataFiles: ['meta.ini'] },
         { name: 'Weapons_separator', folder: '/mo2/mod-folders/Weapons_separator', metadataFiles: ['meta.ini'] },
       ],
-      '/mo2/stat-cache',
-    ]);
+      statCache: '/mo2/stat-cache',
+    });
   });
 
   it('carries the places it is handed', () => {
@@ -575,7 +568,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
       plugins: [], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, places: [place], modlist: NO_MODLIST, archives: NO_ARCHIVES,
     });
 
-    expect(outcome !== undefined && 'places' in outcome ? outcome.places : []).toEqual([place]);
+    expect(outcome).toMatchObject({ places: [place] });
   });
 
   it('names no source folder for a mod that is no source mod', () => {
@@ -583,8 +576,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
       plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs: new Map(), places: [], modlist: NO_MODLIST, archives: NO_ARCHIVES,
     });
 
-    expect(outcome !== undefined && 'plugins' in outcome ? outcome.plugins.map((p) => p.provider) : [])
-      .toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA' }]);
+    expect(outcome).toMatchObject({ plugins: [{ provider: { kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA' } }] });
   });
 
   it('is a refusal naming each plugin and its mod when no mod folder is the mod\'s, never a snapshot without them', () => {
@@ -602,7 +594,7 @@ describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from th
 
     const snapshot = snapshotOf([a, unresolved]);
 
-    expect(snapshot?.plugins).toEqual([sent(a)]);
+    expect(snapshot?.plugins).toEqual([A_SENT]);
     expect(snapshot?.active).toEqual([address(a)]);
   });
 });

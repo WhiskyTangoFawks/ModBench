@@ -15,7 +15,7 @@ function soleRow(rows: readonly LocatedDownloadedFileRow[]): LocatedDownloadedFi
   return row;
 }
 
-describe('buildDownloadedFileRows', () => {
+describe('the rows of the downloaded files', () => {
   const rowsClaimedByNoMod = (files: DownloadedFile[]) => buildDownloadedFileRows(files, new Map(), []);
 
   it('maps a file with no metadata to a Downloaded row carrying its two paths', () => {
@@ -58,7 +58,7 @@ describe('buildDownloadedFileRows', () => {
   });
 });
 
-describe('modsByInstallationFileName — which mods each downloaded file was installed into', () => {
+describe('which mods each downloaded file was installed into', () => {
   it('keys a mod under the downloaded file its meta names, case-folded', () => {
     expect(modsByInstallationFileName([{ name: 'UFO4P', installationFileName: 'UFO4P-4598.7z' }]))
       .toEqual(new Map([['ufo4p-4598.7z', ['UFO4P']]]));
@@ -76,7 +76,7 @@ describe('modsByInstallationFileName — which mods each downloaded file was ins
   });
 });
 
-describe('buildDownloadedFileRows — Installed follows the mods, not the metadata', () => {
+describe('a downloaded file\'s Installed follows the mods, not the metadata', () => {
   it('reads as Installed when a mod names it, whatever the metadata says', () => {
     const rows = buildDownloadedFileRows([file('Pack.7z', 1, metaOf({ modID: '1' }))], new Map([['pack.7z', ['Textures']]]), []);
 
