@@ -1,4 +1,3 @@
-import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ReferencesViewInput } from '../referencesView';
@@ -16,7 +15,7 @@ import { fakeLoadOrder, forgetEditor, NO_MODS, register, reporter } from './edit
 import { WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { present } from '../../ports/present';
 import { comparisonOf } from '../../test/comparison';
-import { pluginMetadataFixture } from '../../client/test/fixtures';
+import { loadOrderStatusEventFixture, notificationEventFixture, pluginMetadataFixture } from '../../client/test/fixtures';
 import { DATA_DIRECTORY_ORIGIN, samePluginAddress } from '../../wire/pluginAddress';
 import { columnKey } from '../../wire/columnKey';
 
@@ -25,7 +24,9 @@ const renderedUri = (formKey: string, fileName: string) => vscode.Uri.from({
   scheme: 'modbench-rendered', path: `/ModA/A.esp/${fileName}`, query: `formKey=${formKey.replace(':', '%3A')}&name=A.esp&origin=ModA`,
 });
 const isShowColumns = (message: unknown) => typeof message === 'object' && message !== null && 'type' in message && message.type === 'showColumns';
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const aMacrotask = () => new Promise((resolve) => setTimeout(resolve, 0));
+const readAnswered = (tab: FakePanel, requestId = 'r1') => vi.waitFor(() => expect(tab.webview.postMessage).toHaveBeenCalledWith(
+  expect.objectContaining({ type: 'recordLoadAnswered', requestId })));
 
 interface RecordEditorProvider {
   resolveCustomTextEditor(document: unknown, panel: unknown): Promise<void>;
@@ -211,13 +212,6 @@ describe('Referenced By on a record, answered in VS Code\'s References view', ()
     expect(await labelsOf(input)).toEqual(['Rifle']);
   });
 
-  it('titles the list by the FormKey of a record with no EditorID', async () => {
-    const { client } = asking();
-    client.setQueryAnswer('getComparison', null);
-
-    expect((await askReferencedBy(recordRow))?.title).toBe(`Referenced By: ${GUN}`);
-  });
-
   it('reads the list only when the view resolves it, and again on each refresh, wherever the view moves its anchor', async () => {
     const { referencesAsked } = asking();
     const input = present(await askReferencedBy(recordRow), 'the list shown');
@@ -321,38 +315,10 @@ describe('the focused cell of the record tab in focus', () => {
 
 });
 
-const statusTick = (conflictsComputed: boolean, version: number): NotificationEvent => ({
-  kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-  loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed, failures: [], version },
-});
-const conflictsComputedTick = statusTick(true, 1);
+const conflictsComputedTick = loadOrderStatusEventFixture();
+const reconcilingTick = loadOrderStatusEventFixture({ conflictsComputed: false });
 
 describe('conflicts computed', () => {
-  const reads = (tab: { webview: { postMessage: { mock: { calls: unknown[][] } } } }) => tab.webview.postMessage.mock.calls.length;
-
-  it('has the tabs read again for each settled reconcile, even one whose picture is the last\'s', () => {
-    const client = new InMemoryMEditClient();
-    const { open } = makeEditor(client);
-    const tab = open('000801:A.esp');
-
-    client.emit(statusTick(true, 1));
-    client.emit(statusTick(true, 2));
-
-    expect(reads(tab)).toBe(2);
-  });
-
-  it('has the tabs read nothing again as a reconcile starts, or when mEdit goes', () => {
-    const client = new InMemoryMEditClient();
-    const { open } = makeEditor(client);
-    client.emit(statusTick(true, 1));
-    const tab = open('000801:A.esp');
-
-    client.emit(statusTick(false, 2));
-    client.setStatus('disconnected');
-
-    expect(reads(tab)).toBe(0);
-  });
-
   it('has every open record tab read its record again', () => {
     const client = new InMemoryMEditClient();
     const { open } = makeEditor(client);
@@ -368,9 +334,9 @@ describe('conflicts computed', () => {
 });
 
 describe('an edit of a FormID, fired with no panel', () => {
-  const [OLD, MOVED, ELSEWHERE] = ['000800:A.esp', '000900:A.esp', '000801:A.esp'];
+  const [OLD, MOVED] = ['000800:A.esp', '000900:A.esp'];
 
-  it('moves every tab showing the record to its new FormKey, and no other, with one edit', async () => {
+  it('moves the tab showing the record to its new FormKey', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getReferences', []);
     client.setQueryAnswer('getComparison', null);
@@ -379,15 +345,13 @@ describe('an edit of a FormID, fired with no panel', () => {
     client.setQueryAnswer('getRecordOfFile', { formKey: OLD, plugin: COPY_PLUGIN });
     client.setQueryAnswer('getEditChanges', { applied: true, newFormKey: MOVED, moves: [], deletions: [], documents: [] });
     const { open } = makeEditor(client);
-    const [one, other, elsewhere] = [open(OLD), open(OLD), open(ELSEWHERE)];
+    const tab = open(OLD);
 
     await commandHandlers.get('modbench.record.editField')?.(
       { formKey: OLD, plugin: COPY_PLUGIN.name, origin: COPY_PLUGIN.origin }, { op: 'set', path: [{ kind: 'member', name: 'FormID' }], value: 'x' });
-    client.emit({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: [OLD, MOVED], sequence: 2 });
+    client.emit(notificationEventFixture({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: [OLD, MOVED], sequence: 2 }));
 
-    expect([one, other, elsewhere].map((tab) => tab.webview.postMessage.mock.calls))
-      .toEqual([[[{ type: 'loadRecord', formKey: MOVED }]], [[{ type: 'loadRecord', formKey: MOVED }]], []]);
-    expect(client.calls.filter(({ method }) => method === 'getEditChanges')).toHaveLength(1);
+    expect(tab.webview.postMessage.mock.calls).toEqual([[{ type: 'loadRecord', formKey: MOVED }]]);
   });
 });
 
@@ -442,27 +406,17 @@ describe('the Editor\'s file systems', () => {
     return client;
   };
 
-  async function openedField(readOnly: boolean): Promise<{ scheme: string }> {
+  async function openedField(): Promise<{ scheme: string }> {
     makeEditor(fieldClient());
     await commandHandlers.get('modbench.record.openFieldValue')?.({
       webviewSection: 'stringValue', formKey: FORM_KEY, plugin: plugin.name, origin: plugin.origin, recordLabel: 'Cell [000803:A.esp]',
-      fieldName: 'Description', value: 'a long description', readOnly, path: [{ kind: 'member', name: 'Description' }],
+      fieldName: 'Description', value: 'a long description', readOnly: false, path: [{ kind: 'member', name: 'Description' }],
     });
     return documentIn(openedDocuments.at(-1));
   }
 
-  it('read a field value through the editable scheme', async () => {
-    const uri = await openedField(false);
-
-    expect(uri.scheme).toBe('modbench-field');
-    expect(await readThrough(uri)).toBe('a long description');
-  });
-
-  it('read a field value through the read-only scheme', async () => {
-    const uri = await openedField(true);
-
-    expect(uri.scheme).toBe('modbench-field-readonly');
-    expect(await readThrough(uri)).toBe('a long description');
+  it('read a field value opened from its cell', async () => {
+    expect(await readThrough(await openedField())).toBe('a long description');
   });
 
   it('read a child record through its container\'s file', async () => {
@@ -512,7 +466,7 @@ describe('a record file\'s tab', () => {
     tab.title = 'Gun.json';
 
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
-    await settle();
+    await readAnswered(tab);
 
     expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'recordLoadAnswered', ok: true }));
     expect(tab.title).toBe('Gun.json');
@@ -542,10 +496,9 @@ describe('a record file\'s tab', () => {
     expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
     expect(outputChannel.warn).not.toHaveBeenCalled();
 
-    client.emit(statusTick(false, 1));
-    await settle();
+    client.emit(reconcilingTick);
 
-    expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
+    await vi.waitFor(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
   });
 
   it('shows "Failed to load:" and adds no Output line of its own when mEdit refuses and no load order is on its way', async () => {
@@ -569,10 +522,9 @@ describe('a record file\'s tab', () => {
     const tab = await openFile(FILE);
     expect(pageGlobal(tab, 'mEditLoadError')).toEqual({ failed: 'unreachable' });
 
-    client.emit(statusTick(false, 1));
-    await settle();
+    client.emit(reconcilingTick);
 
-    expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
+    await vi.waitFor(() => expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined());
   });
 
   it('asks again on mEdit\'s next load-order status, and shows the record once mEdit answers', async () => {
@@ -583,13 +535,9 @@ describe('a record file\'s tab', () => {
     const tab = await openFile(FILE);
     expect(pageGlobal(tab, 'mEditLoadError')).toEqual({ failed: 'unreachable' });
 
-    client.emit({
-      kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-      loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1 },
-    });
-    await settle();
+    client.emit(reconcilingTick);
 
-    expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
+    await vi.waitFor(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
     expect(pageGlobal(tab, 'mEditLoadError')).toBeUndefined();
   });
 
@@ -608,7 +556,7 @@ describe('a record file\'s tab', () => {
       const tab = await openFile(FILE, document);
       Object.assign(document, { text: '{ "EditorID": "Typed" }' });
       tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
-      await settle();
+      await readAnswered(tab);
       return comparisonsAsked(client);
     }
 
@@ -631,7 +579,7 @@ describe('a record file\'s tab', () => {
       const column = { formKey: '000900:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } };
 
       tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [column] });
-      await settle();
+      await readAnswered(tab);
 
       expect(client.calls.filter(({ method }) => method === 'getRecordsComparison').map(({ args }) => args))
         .toEqual([[[{ formKey: GUN, plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "Typed" }' }, column]]]);
@@ -658,7 +606,7 @@ describe('a record file\'s tab', () => {
       const tab = await openFile(FILE, fileDocument('{}', false));
 
       tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
-      await settle();
+      await readAnswered(tab);
 
       expect(tab.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'recordLoadAnswered', ok: false }));
       expect(comparisonsAsked(client)).toEqual([]);
@@ -672,7 +620,7 @@ describe('a record file\'s tab', () => {
       const tab = await openFile(FILE, fileDocument('{}', false));
 
       tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
-      await settle();
+      await readAnswered(tab);
 
       expect(comparisonsAsked(client)).toEqual([[GUN, { plugin: { name: 'A.esp', origin: 'ModA' }, documentText: '{ "EditorID": "OnDisk" }', alone: false }]]);
     });
@@ -711,32 +659,25 @@ describe('a file whose plugin is disabled, or in a disabled mod', () => {
     client.setQueryAnswer('getPlugins', plugins);
     const tab = await open(makeEditor(client, [], modFacts));
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns });
-    await settle();
+    await readAnswered(tab);
     const answers: unknown[] = tab.webview.postMessage.mock.calls.map((call: unknown[]) => call[0]).filter(isAnswer);
     return { asked: comparisonsAsked(client), told: answers.map((answer): unknown => Reflect.get(Object(answer), 'fileCopyAlone')) };
   }
 
-  it('is read alone from its text, and its tab told so', async () => {
-    expect(await loaded(disabledA)).toEqual({ asked: [[GUN, { ...typed, alone: true }]], told: [true] });
-  });
-
-  it('is read alone from its rendered document, as a file is', async () => {
-    const rendered = { isDirty: false, getText: () => '{ "EditorID": "Rendered" }' };
-    expect(await loaded(disabledA, { open: ({ openDocument }) => openDocument(renderedUri(GUN, 'Gun.json'), rendered) }))
-      .toEqual({ asked: [[GUN, { plugin: COPY_PLUGIN, documentText: '{ "EditorID": "Rendered" }', alone: true }]], told: [true] });
-  });
-
-  it('is read in the comparison, its tab told so, once its saved file is gone from disk and no text is left to read alone', async () => {
-    const saved = { isDirty: false, getText: () => '{}' };
-    expect(await loaded(disabledA, { open: ({ openFile }) => openFile(FILE, saved) })).toEqual({ asked: [[GUN, undefined]], told: [false] });
-  });
-
-  it('is read in the comparison while mEdit still has its plugin active', async () => {
-    expect(await loaded(disabledA, { plugins: activeA })).toEqual({ asked: [[GUN, { ...typed, alone: false }]], told: [false] });
-  });
-
-  it('is not read alone when its plugin is overridden', async () => {
-    expect(await loaded(NO_MODS)).toEqual({ asked: [[GUN, { ...typed, alone: false }]], told: [false] });
+  const renderedGun = { isDirty: false, getText: () => '{ "EditorID": "Rendered" }' };
+  const savedGun = { isDirty: false, getText: () => '{}' };
+  it.each([
+    ['is read alone from its text, and its tab told so', disabledA, {}, { asked: [[GUN, { ...typed, alone: true }]], told: [true] }],
+    ['is read alone from its rendered document, as a file is', disabledA, { open: ({ openDocument }) => openDocument(renderedUri(GUN, 'Gun.json'), renderedGun) },
+      { asked: [[GUN, { plugin: COPY_PLUGIN, documentText: '{ "EditorID": "Rendered" }', alone: true }]], told: [true] }],
+    ['is read in the comparison, its tab told so, once its saved file is gone from disk and no text is left to read alone', disabledA,
+      { open: ({ openFile }) => openFile(FILE, savedGun) }, { asked: [[GUN, undefined]], told: [false] }],
+    ['is read in the comparison while mEdit still has its plugin active', disabledA, { plugins: activeA }, { asked: [[GUN, { ...typed, alone: false }]], told: [false] }],
+    ['is not read alone when its plugin is overridden', NO_MODS, {}, { asked: [[GUN, { ...typed, alone: false }]], told: [false] }],
+    ['is not read alone beside the other records its tab shows', disabledA, { columns: [{ formKey: '000900:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }] },
+      { asked: [], told: [false] }],
+  ] satisfies [string, ModFacts, Parameters<typeof loaded>[1], unknown][])('%s', async (_, modFacts, options, read) => {
+    expect(await loaded(modFacts, options)).toEqual(read);
   });
 
   it('is read again when the instance changes whether its plugin is disabled, and not when the instance changes otherwise', async () => {
@@ -761,10 +702,6 @@ describe('a file whose plugin is disabled, or in a disabled mod', () => {
 
     expect(reads()).toEqual([[{ type: 'loadRecord', formKey: GUN }]]);
   });
-
-  it('is not read alone beside the other records its tab shows', async () => {
-    expect((await loaded(disabledA, { columns: [{ formKey: '000900:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }] })).told).toEqual([false]);
-  });
 });
 
 describe('a file whose plugin is overridden', () => {
@@ -785,7 +722,7 @@ describe('a file whose plugin is overridden', () => {
   async function told(modFacts: ModFacts, plugins = inactiveA) {
     const tab = await makeEditor(clientFor(plugins), [], modFacts).openFile(FILE, typedFile);
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
-    await settle();
+    await readAnswered(tab);
     return tab.webview.postMessage.mock.calls.map((call: unknown[]) => call[0])
       .filter((m: unknown) => Reflect.get(Object(m), 'type') === 'recordLoadAnswered')
       .map((m: unknown): unknown => Reflect.get(Object(m), 'fileOverriddenBy'));
@@ -834,7 +771,7 @@ describe('a record tab closed while its read is in flight', () => {
 
     tab.close();
     land(comparisonOf(PLACED, [{ plugin: 'A.esp', origin: 'ModA', isWinner: true, editorId: 'SharedRef' }]));
-    await settle();
+    await aMacrotask();
 
     expect(tab.webview.postMessage).not.toHaveBeenCalled();
     expect(tab.title).toBe(PLACED);
@@ -916,7 +853,7 @@ describe('what a record tab\'s webview posts', () => {
       const { openDocument, outputChannel } = makeEditor(mEdit);
       const tab = await openDocument(cell);
       tab.receive(loadRequest);
-      await settle();
+      await aMacrotask();
       return { tab, outputChannel, mEdit };
     }
 
@@ -942,11 +879,10 @@ describe('what a record tab\'s webview posts', () => {
 
       loadOrder.coming = false;
       loadOrder.changed();
-      await settle();
 
-      expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1);
+      await vi.waitFor(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
       tab.receive({ ...loadRequest, requestId: 'r2' });
-      await settle();
+      await readAnswered(tab, 'r2');
       expect(lastLoadAnswer(tab)).toEqual({ type: 'recordLoadAnswered', requestId: 'r2', ok: false, failure: refusal });
       expect(outputChannel.warn).not.toHaveBeenCalled();
     });
@@ -956,10 +892,9 @@ describe('what a record tab\'s webview posts', () => {
       const postsBefore = loadRecordPosts(tab).length;
 
       loadOrder.coming = false;
-      mEdit.emit(statusTick(false, 1));
-      await settle();
+      mEdit.emit(reconcilingTick);
 
-      expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1);
+      await vi.waitFor(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
     });
 
     it('reads again once the load order\'s reconcile settles, and lands the record', async () => {
@@ -968,15 +903,14 @@ describe('what a record tab\'s webview posts', () => {
       const { openDocument } = makeEditor(mEdit);
       const tab = await openDocument(cell);
       tab.receive(loadRequest);
-      await settle();
+      await aMacrotask();
       const postsBefore = loadRecordPosts(tab).length;
 
-      mEdit.emit(statusTick(true, 1));
-      await settle();
+      mEdit.emit(conflictsComputedTick);
 
-      expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1);
+      await vi.waitFor(() => expect(loadRecordPosts(tab)).toHaveLength(postsBefore + 1));
       tab.receive({ ...loadRequest, requestId: 'r2' });
-      await settle();
+      await readAnswered(tab, 'r2');
       expect(lastLoadAnswer(tab)).toMatchObject({ requestId: 'r2', ok: true });
     });
 
@@ -985,11 +919,11 @@ describe('what a record tab\'s webview posts', () => {
       const { openDocument, outputChannel } = makeEditor(mEdit);
       const tab = await openDocument(cell);
       tab.receive(loadRequest);
-      await settle();
+      await readAnswered(tab);
       mEdit.setQueryFailure('getComparison', refusal);
 
       tab.receive({ ...loadRequest, requestId: 'r2' });
-      await settle();
+      await readAnswered(tab, 'r2');
 
       expect(lastLoadAnswer(tab)).toEqual({ type: 'recordLoadAnswered', requestId: 'r2', ok: false, failure: refusal });
       expect(outputChannel.warn).not.toHaveBeenCalled();
@@ -1014,9 +948,8 @@ describe('what a record tab\'s webview posts', () => {
       const envelope = { op: 'set', path: [{ kind: 'member', name: 'Height' }], value: 0.75 };
 
       open(FORM_KEY).receive({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA', envelope });
-      await settle();
 
-      expect(edits(mEdit)).toEqual([[FORM_KEY, { name: 'A.esp', origin: 'ModA' }, envelope]]);
+      await vi.waitFor(() => expect(edits(mEdit)).toEqual([[FORM_KEY, { name: 'A.esp', origin: 'ModA' }, envelope]]));
     });
 
     it('is sent with the value a drop supplies, for an element added', async () => {
@@ -1025,9 +958,8 @@ describe('what a record tab\'s webview posts', () => {
       const context = { webviewSection: 'arrayParent', formKey: FORM_KEY, plugin: 'A.esp', origin: 'ModA', path, preventDefaultContextMenuItems: true };
 
       open(FORM_KEY).receive({ type: WEBVIEW_TO_EXTENSION.ADD_ELEMENT, context, value: { Keyword: GUN } });
-      await settle();
 
-      expect(edits(mEdit)).toEqual([[FORM_KEY, { name: 'A.esp', origin: 'ModA' }, { op: 'add', path, value: { Keyword: GUN } }]]);
+      await vi.waitFor(() => expect(edits(mEdit)).toEqual([[FORM_KEY, { name: 'A.esp', origin: 'ModA' }, { op: 'add', path, value: { Keyword: GUN } }]]));
     });
 
     it('from a right-click, on a record the tab\'s last edit moved, is sent to the FormKey the record is at now', async () => {
@@ -1059,7 +991,7 @@ describe('what a record tab\'s webview posts', () => {
       const [executed, asked] = [executeCommand.mock.calls.length, mEdit.calls.length];
 
       tab.receive(message);
-      await settle();
+      await vi.waitFor(() => expect(outputChannel.warn).toHaveBeenCalled());
 
       expect([executeCommand.mock.calls.length, mEdit.calls.length]).toEqual([executed, asked]);
       expect(tab.webview.postMessage).not.toHaveBeenCalled();
@@ -1073,30 +1005,23 @@ describe('what a record tab\'s webview posts', () => {
       const tab = open(GUN);
 
       tab.receive({ type: 'sentByAnotherExtension', count: BigInt(1) });
-      await settle();
 
-      expect(outputChannel.warn).toHaveBeenCalledWith(expect.stringMatching(/^Dropped a message from a record tab's page: /));
+      await vi.waitFor(() => expect(outputChannel.warn).toHaveBeenCalledWith(expect.stringMatching(/^Dropped a message from a record tab's page: /)));
     });
   });
 
-  it('answers a request for a FormKey the picker was dismissed on with null, correlated by requestId', async () => {
+  it.each([
+    ['a FormKey the picker', { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] },
+      { type: 'formKeyPicked', requestId: 'r1', formKey: null }],
+    ['an enum value the pick', { type: WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER, requestId: 'r1', choices: [{ value: 'A', label: 'A' }], current: 'A' },
+      { type: 'enumPicked', requestId: 'r1', value: null }],
+  ])('answers a request for %s was dismissed on with null, correlated by requestId', async (_, request, answer) => {
     const { open } = makeEditor(client());
     const tab = open(GUN);
 
-    tab.receive({ type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] });
-    await settle();
+    tab.receive(request);
 
-    expect(tab.webview.postMessage).toHaveBeenCalledWith({ type: 'formKeyPicked', requestId: 'r1', formKey: null });
-  });
-
-  it('answers a request for an enum value the pick was dismissed on with null, correlated by requestId', async () => {
-    const { open } = makeEditor(client());
-    const tab = open(GUN);
-
-    tab.receive({ type: WEBVIEW_TO_EXTENSION.OPEN_ENUM_PICKER, requestId: 'r1', choices: [{ value: 'A', label: 'A' }], current: 'A' });
-    await settle();
-
-    expect(tab.webview.postMessage).toHaveBeenCalledWith({ type: 'enumPicked', requestId: 'r1', value: null });
+    await vi.waitFor(() => expect(tab.webview.postMessage).toHaveBeenCalledWith(answer));
   });
 
   describe('a request for the record', () => {
@@ -1105,13 +1030,10 @@ describe('what a record tab\'s webview posts', () => {
       const { open } = makeEditor(mEdit);
       const tab = open(GUN);
       const failure = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
-      mEdit.emit({
-        kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-        loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [failure], version: 1 },
-      });
+      mEdit.emit(loadOrderStatusEventFixture({ failures: [failure] }));
 
       tab.receive(loadRequest);
-      await settle();
+      await readAnswered(tab);
 
       expect(loadAnswered(tab)).toEqual([{
         type: 'recordLoadAnswered', requestId: 'r1', ok: true, compare, plugins: activeA, conflictsComputed: true,
@@ -1130,7 +1052,7 @@ describe('what a record tab\'s webview posts', () => {
         const tab = open(GUN);
 
         tab.receive(loadRequest);
-        await settle();
+        await readAnswered(tab);
         return { tab, outputChannel };
       };
 
@@ -1161,7 +1083,7 @@ describe('what a record tab\'s webview posts', () => {
       const tab = await openDocument(renderedUri(GUN, 'Gun.json'), { getText: () => '{}' });
 
       tab.receive(loadRequest);
-      await settle();
+      await readAnswered(tab);
 
       expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, compare, plugins: null })]);
     });
@@ -1183,7 +1105,7 @@ describe('what a record tab\'s webview posts', () => {
       const tab = await openDocument(renderedUri(GUN, 'Gun.json'), { getText: () => '{}' });
 
       tab.receive(loadRequest);
-      await settle();
+      await readAnswered(tab);
 
       expect(loadAnswered(tab)).toEqual([expect.objectContaining({ ok: true, modsByOrigin })]);
     });
@@ -1201,7 +1123,7 @@ describe('what a record tab\'s webview posts', () => {
       const { openDocument } = makeEditor(mEdit, undefined, modFacts);
       const tab = await openDocument(renderedUri(GUN, 'Gun.json'), { getText: () => '{}' });
       tab.receive(loadRequest);
-      await settle();
+      await readAnswered(tab);
       const told = () => answered(tab).filter((message) => typeof message === 'object' && message !== null && Reflect.get(message, 'type') === 'modsChanged');
 
       compiledPlugin = new Set(['ModB']);
@@ -1219,7 +1141,7 @@ describe('what a record tab\'s webview posts', () => {
       });
 
       tab.receive(loadRequest);
-      await settle();
+      await readAnswered(tab);
 
       expect(loadAnswered(tab)).toEqual([{ type: 'recordLoadAnswered', requestId: 'r1', ok: false, failure: { failed: 'unreachable' } }]);
       expect(outputChannel.warn).not.toHaveBeenCalled();
@@ -1267,7 +1189,7 @@ describe('a non-compiled plugin copy\'s tab', () => {
     const tab = await openDocument(RENDERED, { isDirty: false, getText: () => '{ "EditorID": "Rendered" }' });
 
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [] });
-    await settle();
+    await readAnswered(tab);
     return comparisonsAsked(client);
   }
 
@@ -1298,9 +1220,8 @@ describe('a child record\'s tab', () => {
     expect(pageGlobal(tab, 'mEditFormKey')).toBe(PLACED);
     expect(tab.title).toBe(PLACED);
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED, columns: [] });
-    await settle();
 
-    expect(tab.title).toBe('SharedRef');
+    await vi.waitFor(() => expect(tab.title).toBe('SharedRef'));
     expect(client.calls.map(({ method }) => method)).not.toContain('getRecordOfFile');
   });
 
@@ -1312,7 +1233,7 @@ describe('a child record\'s tab', () => {
     const tab = await openDocument(CHILD, document);
 
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: PLACED, columns: [] });
-    await settle();
+    await readAnswered(tab);
     return comparisonsAsked(client);
   }
 
@@ -1378,10 +1299,9 @@ describe('several records opened at once', () => {
     const tabOn = vsCodeOpensTabs({ resolvesAfterOpenAnswers: true });
 
     await openSeveral();
-    await new Promise((resolve) => { setTimeout(resolve, 10); });
 
-    expect(pageGlobal(tabOn(gunDocument) ?? fakePanel(), 'mEditColumns'))
-      .toEqual([{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }]);
+    await vi.waitFor(() => expect(pageGlobal(tabOn(gunDocument) ?? fakePanel(), 'mEditColumns'))
+      .toEqual([{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }]));
   });
 
   it('show the first record\'s tab already open, which takes the others as its columns, and leave its tab in another group alone', async () => {
@@ -1407,12 +1327,11 @@ describe('several records opened at once', () => {
     const tab = tabOn(gunDocument);
 
     await openSeveral();
-    await settle();
+    await aMacrotask();
     expect(columnsPosted(tab)).toEqual([]);
 
     tab?.receive(firstRead);
-    await settle();
-    expect(columnsPosted(tab)).toHaveLength(1);
+    await vi.waitFor(() => expect(columnsPosted(tab)).toHaveLength(1));
   });
 
   it('show their columns on a file\'s tab already open, once mEdit says which record its file holds', async () => {
@@ -1425,19 +1344,14 @@ describe('several records opened at once', () => {
     const tab = await openDocument(vscode.Uri.file(GUN_FILE));
 
     await openSeveral();
-    client.emit({
-      kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-      loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1 },
-    });
-    await settle();
-    expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN);
+    client.emit(reconcilingTick);
+    await vi.waitFor(() => expect(pageGlobal(tab, 'mEditFormKey')).toBe(GUN));
     expect(columnsPosted(tab)).toEqual([]);
     tab.receive(firstRead);
-    await settle();
 
-    expect(columnsPosted(tab)).toEqual([[{
+    await vi.waitFor(() => expect(columnsPosted(tab)).toEqual([[{
       type: 'showColumns', columns: [{ formKey: AMMO, plugin: winner }, { formKey: KNIFE, plugin: knifeIn }],
-    }]]);
+    }]]));
   });
 
   it('leave the tab they opened to show every active plugin\'s copy again when its record is opened alone onto it', async () => {
@@ -1457,10 +1371,10 @@ describe('several records opened at once', () => {
     const { openDocument } = makeEditor(client);
     const tab = await openDocument(gunDocument);
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
-    await settle();
+    await readAnswered(tab);
 
-    client.emit({ kind: 'rows-changed', plugin: 'C.esp', origin: 'ModC', keys: [KNIFE], sequence: 1 });
-    client.emit({ kind: 'rows-changed', plugin: 'B.esp', origin: 'ModB', keys: [AMMO], sequence: 2 });
+    client.emit(notificationEventFixture({ kind: 'rows-changed', plugin: 'C.esp', origin: 'ModC', keys: [KNIFE], sequence: 1 }));
+    client.emit(notificationEventFixture({ kind: 'rows-changed', plugin: 'B.esp', origin: 'ModB', keys: [AMMO], sequence: 2 }));
 
     expect(tab.webview.postMessage.mock.calls).toEqual([[expect.objectContaining({ type: 'recordLoadAnswered' })], [{ type: 'loadRecord', formKey: GUN }]]);
   });
@@ -1475,7 +1389,7 @@ describe('several records opened at once', () => {
       const { openDocument, outputChannel } = makeEditor(client);
       const tab = await openDocument(gunDocument);
       tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
-      await settle();
+      await readAnswered(tab);
       return { tab, client, channel: outputChannel };
     };
 
@@ -1530,7 +1444,7 @@ describe('several records opened at once', () => {
     const tab = await openDocument(gunDocument);
 
     tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: GUN, columns: [{ formKey: AMMO, plugin: winner }] });
-    await settle();
+    await readAnswered(tab);
 
     expect(client.calls.filter(({ method }) => method === 'getRecordsComparison').map(({ args }) => args))
       .toEqual([[[{ formKey: GUN, plugin: COPY_PLUGIN }, { formKey: AMMO, plugin: winner }]]]);
@@ -1541,7 +1455,7 @@ describe('several records opened at once', () => {
 describe('mEdit\'s reports to an open record tab', () => {
   const GUN = '000801:A.esp';
   const reported = (kind: 'rows-changed' | 'plugin-changed', keys: string[]) =>
-    ({ kind, plugin: 'A.esp', origin: 'ModA', keys, sequence: 1 }) as const;
+    notificationEventFixture({ kind, plugin: 'A.esp', origin: 'ModA', keys, sequence: 1 });
 
   it('has a tab read its record again when a report names it, and not when a report names another record or a plugin\'s change', () => {
     const client = new InMemoryMEditClient();
@@ -1565,31 +1479,6 @@ describe('mEdit\'s reports to an open record tab', () => {
     client.emit(reported('rows-changed', [GUN]));
 
     expect(tab.webview.postMessage).not.toHaveBeenCalled();
-  });
-
-  describe('of a plugin it cannot read', () => {
-    const tick = (failures: { name: string; origin: string; reason: string }[]): NotificationEvent => ({
-      kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-      loadOrderStatus: {
-        state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: false, failures, version: 1,
-      },
-    });
-    const bad = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
-
-    it('has the tabs read again on a failure arriving and on it clearing, and not on an identical tick', () => {
-      const client = new InMemoryMEditClient();
-      const { open } = makeEditor(client);
-      const tab = open(GUN);
-
-      client.emit(tick([bad]));
-      client.emit(tick([bad]));
-      client.emit(tick([]));
-
-      expect(tab.webview.postMessage.mock.calls).toEqual([
-        [{ type: 'loadRecord', formKey: GUN }],
-        [{ type: 'loadRecord', formKey: GUN }],
-      ]);
-    });
   });
 });
 

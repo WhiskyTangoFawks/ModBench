@@ -6,9 +6,7 @@ describe('recordLabel', () => {
     expect(recordLabel('Sword', '000A:Fallout4.esm')).toBe('Sword [000A:Fallout4.esm]');
   });
 
-  it('is the bare FormKey when the record has no EditorID', () => {
-    expect(recordLabel(null, '000A:Fallout4.esm')).toBe('000A:Fallout4.esm');
-    expect(recordLabel(undefined, '000A:Fallout4.esm')).toBe('000A:Fallout4.esm');
-    expect(recordLabel('', '000A:Fallout4.esm')).toBe('000A:Fallout4.esm');
+  it.each([null, undefined, ''])('is the bare FormKey when the EditorID is %j', (editorId) => {
+    expect(recordLabel(editorId, '000A:Fallout4.esm')).toBe('000A:Fallout4.esm');
   });
 });

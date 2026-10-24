@@ -4,12 +4,11 @@ import { join } from 'node:path';
 import { bundledBackendPath, spawnPiped } from '../bundledBackend';
 
 describe('bundledBackendPath', () => {
-  it('names the .exe on win32', () => {
-    expect(bundledBackendPath('win32', join('x', 'out'))).toBe(join('x', 'backend', 'MEditService.Http.exe'));
-  });
-
-  it('names the bare binary on linux', () => {
-    expect(bundledBackendPath('linux', join('x', 'out'))).toBe(join('x', 'backend', 'MEditService.Http'));
+  it.each([
+    ['win32', 'MEditService.Http.exe'],
+    ['linux', 'MEditService.Http'],
+  ] as const)('names the backend on %s %s', (platform, file) => {
+    expect(bundledBackendPath(platform, join('x', 'out'))).toBe(join('x', 'backend', file));
   });
 });
 

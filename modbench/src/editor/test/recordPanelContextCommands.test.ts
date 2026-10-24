@@ -70,17 +70,29 @@ function elementContext(path: ArrayElementContext['path']): ArrayElementContext 
 }
 
 describe('right-click array ops write one envelope from the host', () => {
-  it('Add lands an add envelope at a nested array\'s own path', async () => {
+  const CONTAINER_ENTRIES = [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }] as const;
+  const THIRD_ENTRY = [...CONTAINER_ENTRIES, { kind: 'index', index: 2 }] as const;
+  const FIRST_VALUE = [{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }] as const;
+  const SECOND_SCRIPT = [{ kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 }] as const;
+
+  it.each([
+    ['Add lands an add envelope at a nested array\'s own path', 'addElement', parentContext([...CONTAINER_ENTRIES]),
+      { op: 'add', path: CONTAINER_ENTRIES }],
+    ['Remove lands a remove envelope at the element\'s own path', 'removeElement', elementContext([...SECOND_SCRIPT]),
+      { op: 'remove', path: SECOND_SCRIPT }],
+    ['Move Up lands a move envelope to the position before it', 'moveElementUp', elementContext([...THIRD_ENTRY]),
+      { op: 'move', path: THIRD_ENTRY, value: 1 }],
+    ['Move Down lands a move envelope to the position after it', 'moveElementDown', elementContext([...THIRD_ENTRY]),
+      { op: 'move', path: THIRD_ENTRY, value: 3 }],
+    ['Move Up on the first element still lands the move, to the position before it, since the webview posts what the user asked for',
+      'moveElementUp', elementContext([...FIRST_VALUE]), { op: 'move', path: FIRST_VALUE, value: -1 }],
+  ])('%s', async (_, command, context, envelope) => {
     const { deps, edit } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
-    await present(handlers.get('modbench.record.addElement'), "the handler registered for 'modbench.record.addElement'")(parentContext(
-      [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }],
-    ));
+    await present(handlers.get(`modbench.record.${command}`), command)(context);
 
-    expect(edit.mock.calls).toEqual([[
-      ADDRESS, { op: 'add', path: [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }] },
-    ]]);
+    expect(edit.mock.calls).toEqual([[ADDRESS, envelope]]);
   });
 
   it('Add lands the value a drop supplies in its add envelope', async () => {
@@ -91,51 +103,6 @@ describe('right-click array ops write one envelope from the host', () => {
       parentContext([{ kind: 'member', name: 'Values' }]), 6);
 
     expect(envelopesOf(edit)).toEqual([{ op: 'add', path: [{ kind: 'member', name: 'Values' }], value: 6 }]);
-  });
-
-  it('Remove lands a remove envelope at the element\'s own path', async () => {
-    const { deps, edit } = makeDeps();
-    registerRecordPanelContextCommands(deps);
-
-    await present(handlers.get('modbench.record.removeElement'), "the handler registered for 'modbench.record.removeElement'")(elementContext(
-      [{ kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 }],
-    ));
-
-    expect(edit.mock.calls).toEqual([[
-      ADDRESS, { op: 'remove', path: [{ kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 }] },
-    ]]);
-  });
-
-  it.each([
-    ['modbench.record.moveElementUp', 1],
-    ['modbench.record.moveElementDown', 3],
-  ] as const)('%s lands a move envelope carrying the neighbour position', async (command, destination) => {
-    const { deps, edit } = makeDeps();
-    registerRecordPanelContextCommands(deps);
-
-    await present(handlers.get(command), "the handler registered for the command under test")(elementContext(
-      [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }, { kind: 'index', index: 2 }],
-    ));
-
-    expect(edit.mock.calls).toEqual([[
-      ADDRESS,
-      {
-        op: 'move',
-        path: [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }, { kind: 'index', index: 2 }],
-        value: destination,
-      },
-    ]]);
-  });
-
-  it('Move Up on the first element still lands the move, to the position before it, since the webview posts what the user asked for', async () => {
-    const { deps, edit } = makeDeps();
-    registerRecordPanelContextCommands(deps);
-
-    await present(handlers.get('modbench.record.moveElementUp'), "the handler registered for 'modbench.record.moveElementUp'")(elementContext([{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }]));
-
-    expect(edit.mock.calls).toEqual([[
-      ADDRESS, { op: 'move', path: [{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }], value: -1 },
-    ]]);
   });
 
   it('does nothing when a command fires with no context', async () => {

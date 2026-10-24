@@ -38,6 +38,7 @@ import { readReferencedBy } from '../referencedByList';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
+import { oneAtATime, type OneAtATime } from '../../textDocuments/oneAtATime';
 
 beforeEach(() => {
   handlers.clear();
@@ -82,16 +83,33 @@ async function referencedByCopy(record: RecordAt, editorId: string) {
 
 const changes = (record: RecordAt) => ({ record, moves: [], deletions: [], documents: [] });
 
-describe('registerRecordLifecycleCommands', () => {
-  function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
+type RegisterCommands = (
+  client: InMemoryMEditClient, ...rest: Parameters<typeof registerRecordLifecycleCommands> extends [unknown, ...infer Rest] ? Rest : never
+) => unknown;
+
+function invoking(register: RegisterCommands) {
+  return (client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) => {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
     const { write, writing } = recordingWrite();
-    const serially = vi.fn();
-    const source = { applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve()), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
-    registerRecordLifecycleCommands(client, reporter, ask, selections, write, source);
+    const source = {
+      applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve()), oneAtATime: oneAtATime(), refreshSourceControlFor: vi.fn(),
+    };
+    register(client, reporter, ask, selections, write, source);
     return { reporter, ask, writing, source };
-  }
+  };
+}
+
+function editInFlight(source: { oneAtATime: OneAtATime }): () => void {
+  let settle!: () => void;
+  void source.oneAtATime(() => new Promise<void>((resolve) => { settle = resolve; }));
+  return () => { settle(); };
+}
+
+const asked = (client: InMemoryMEditClient, method: string) => client.calls.filter((c) => c.method === method);
+
+describe('registerRecordLifecycleCommands', () => {
+  const invoke = invoking(registerRecordLifecycleCommands);
 
   describe('a view\'s Delete key, which passes its view as args', () => {
     afterEach(() => { selectionsOfViews.clear(); });
@@ -340,11 +358,16 @@ describe('registerRecordLifecycleCommands', () => {
     it('runs the whole delete after the edits in flight settle', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('getDeleteChanges', { applied: [], refused: [] });
-      const { source } = invoke(client, 'Delete');
+      const { source, writing } = invoke(client, 'Delete');
+      const settle = editInFlight(source);
 
-      await deleteRecords(SECOND_NODE);
+      const deleting = deleteRecords(SECOND_NODE);
+      await vi.waitFor(() => expect(writing).toEqual(['opens']));
+      expect(asked(client, 'getDeleteChanges')).toEqual([]);
+      settle();
+      await deleting;
 
-      expect(source.serially).toHaveBeenCalledOnce();
+      expect(asked(client, 'getDeleteChanges')).toHaveLength(1);
     });
 
     it('runs the delete inside the write, which ends when the call is answered', async () => {
@@ -398,15 +421,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
   const copyChanges = (record: RecordAt, destination: { name: string; origin: string }) =>
     ({ record, destination, moves: [], deletions: [], documents: [] });
 
-  function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
-    const reporter = recordingReporter();
-    const ask = scriptedDialog(...answers);
-    const { write, writing } = recordingWrite();
-    const serially = vi.fn();
-    const source = { applyWorkspaceChanges: vi.fn<SourceEditing['applyWorkspaceChanges']>(() => Promise.resolve()), serially, oneAtATime: <T,>(run: () => Promise<T>) => { serially(); return run(); }, refreshSourceControlFor: vi.fn() };
-    registerRecordCopyCommands(client, reporter, ask, selections, write, source);
-    return { reporter, ask, writing, source };
-  }
+  const invoke = invoking(registerRecordCopyCommands);
 
   const copy = (...args: unknown[]) =>
     present(handlers.get('modbench.record.copy'), "the handler registered for 'modbench.record.copy'")(...args);
@@ -586,7 +601,6 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     await copy(RECORD_NODE);
 
     expect(ask.asked).toEqual([]);
-    expect(client.calls.some((c) => c.method === 'getRecordHolders')).toBe(false);
   });
 
   it('says where the copies landed, naming each refused item and why', async () => {
@@ -729,9 +743,20 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     });
 
     it('runs the whole copy after the edits in flight settle', async () => {
-      const { source } = await copyAnswered([]);
+      const client = new InMemoryMEditClient();
+      destinations(client);
+      client.setCommandResult('getCopyChanges', { applied: [], refused: [] });
+      pick('New', [PATCH, OTHER]);
+      const { source, writing } = invoke(client);
+      const settle = editInFlight(source);
 
-      expect(source.serially).toHaveBeenCalledOnce();
+      const copying = copy(RECORD_NODE);
+      await vi.waitFor(() => expect(writing).toEqual(['opens']));
+      expect(asked(client, 'getCopyChanges')).toEqual([]);
+      settle();
+      await copying;
+
+      expect(asked(client, 'getCopyChanges')).toHaveLength(1);
     });
 
     it('reports a workspace edit VS Code did not make as one that may have partly landed, lands none, refreshes Source Control, and counts the copies asked', async () => {

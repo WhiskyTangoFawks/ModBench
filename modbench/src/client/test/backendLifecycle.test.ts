@@ -95,15 +95,17 @@ describe('BackendLifecycle', () => {
       expect(logged.lines.error).toEqual([expect.stringMatching(/Timed out waiting for backend on port \d+: it did not answer in time/)]);
     });
 
-    it('logs once, at the deadline, why a refused connection did not answer, and not on each poll before it', async () => {
+    it('is disconnected when a refused connection does not answer, logging why once, at the deadline, and not on each poll before it', async () => {
       const closed = createServer();
       await new Promise<void>((resolve) => closed.listen(0, '127.0.0.1', resolve));
       const { port } = addressInfo(closed.address());
       await new Promise((resolve) => closed.close(resolve));
       const logged = leveledLog();
 
-      await new BackendLifecycle({ attachPort: port, pollIntervalMs: 1000, pollTimeoutMs: 1000, log: logged }).start();
+      const lifecycle = new BackendLifecycle({ attachPort: port, pollIntervalMs: 1000, pollTimeoutMs: 1000, log: logged });
+      await lifecycle.start();
 
+      expect(lifecycle.status).toBe('disconnected');
       expect(logged.lines.warn).toEqual([]);
       expect(logged.lines.error).toEqual([expect.stringMatching(/Timed out waiting for backend on port \d+: .*ECONNREFUSED/)]);
     });
@@ -150,16 +152,20 @@ describe('BackendLifecycle.start', () => {
   beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => vi.restoreAllMocks());
 
-  it('spawns the backend with --urls and attaches once healthy', async () => {
+  it.each([
+    ['no Serilog level asked', undefined, ['--urls', 'http://localhost:5172']],
+    ['a Serilog level asked, after --urls', () => ['--Serilog:MinimumLevel:Default', 'Debug'], ['--urls', 'http://localhost:5172', '--Serilog:MinimumLevel:Default', 'Debug']],
+    ['no Serilog override, as for a channel at Off', () => [], ['--urls', 'http://localhost:5172']],
+  ])('spawns the backend with %s, and attaches once healthy', async (_, serilogLevelArgs, argv) => {
     const state = { healthy: false };
     const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
 
     const lifecycle = new BackendLifecycle({
-      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x/backend', checkHealth: healthCheck(state),
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x/backend', checkHealth: healthCheck(state), serilogLevelArgs,
     });
     await lifecycle.start();
 
-    expect(spawn).toHaveBeenCalledWith('/x/backend', ['--urls', 'http://localhost:5172']);
+    expect(spawn.mock.calls).toEqual([['/x/backend', argv]]);
     expect(lifecycle.status).toBe('running');
   });
 
@@ -187,7 +193,6 @@ describe('BackendLifecycle.start', () => {
     });
     const statuses = record(lifecycle);
     await lifecycle.start();
-    await new Promise((r) => setTimeout(r, 50));
 
     expect(statuses).not.toContain('running');
   });
@@ -274,47 +279,7 @@ describe('BackendLifecycle.start', () => {
 
     expect(heard).toEqual([]);
   });
-
-  it('attaches to the developer port once it answers', async () => {
-    const lifecycle = new BackendLifecycle({ attachPort: 5172, checkHealth: () => Promise.resolve(answered(true)) });
-    await lifecycle.start();
-
-    expect(lifecycle.status).toBe('running');
-  });
-
-  it('appends the injected Serilog level args when spawning, on the same argv as --urls', async () => {
-    const state = { healthy: false };
-    const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
-
-    const lifecycle = new BackendLifecycle({
-      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x/backend', checkHealth: healthCheck(state),
-      serilogLevelArgs: () => ['--Serilog:MinimumLevel:Default', 'Debug'],
-    });
-    await lifecycle.start();
-
-    expect(spawn).toHaveBeenCalledWith(
-      '/x/backend',
-      ['--urls', 'http://localhost:5172', '--Serilog:MinimumLevel:Default', 'Debug'],
-    );
-  });
-
-  it('spawns with just --urls when serilogLevelArgs yields no override (e.g. channel at Off)', async () => {
-    const state = { healthy: false };
-    const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
-
-    const lifecycle = new BackendLifecycle({
-      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x/backend', checkHealth: healthCheck(state),
-      serilogLevelArgs: () => [],
-    });
-    await lifecycle.start();
-
-    expect(spawn).toHaveBeenCalledWith('/x/backend', ['--urls', 'http://localhost:5172']);
-  });
 });
-
-async function pollForLines(lines: string[], n: number) {
-  for (let i = 0; i < 50 && lines.length < n; i++) await new Promise((r) => setTimeout(r, 2));
-}
 
 async function startWithOutput() {
   const state = { healthy: false };
@@ -339,12 +304,11 @@ describe('BackendLifecycle output forwarding', () => {
 
     child.stdout.write('[08:30:45 INF] Indexed 500 records\n');
     child.stderr.write('Unhandled exception. boom\n');
-    await pollForLines(lines, 2);
 
-    expect(lines).toEqual([
+    await vi.waitFor(() => expect(lines).toEqual([
       '[08:30:45 INF] Indexed 500 records stdout',
       'Unhandled exception. boom stderr',
-    ]);
+    ]));
   });
 
   it('reassembles a line split across chunks and strips the CRLF a Windows backend writes', async () => {
@@ -352,9 +316,8 @@ describe('BackendLifecycle output forwarding', () => {
 
     child.stdout.write('[08:30:45 INF] Indexed ');
     child.stdout.write('500 records\r\n');
-    await pollForLines(lines, 1);
 
-    expect(lines).toEqual(['[08:30:45 INF] Indexed 500 records stdout']);
+    await vi.waitFor(() => expect(lines).toEqual(['[08:30:45 INF] Indexed 500 records stdout']));
   });
 
   it('drains the streams even with no onOutput — an unread pipe would block the backend', async () => {
@@ -591,20 +554,5 @@ describe('BackendLifecycle with no health check injected, asking a real local se
     await lifecycle.start();
 
     expect(lifecycle.status).toBe('running');
-  });
-
-  it('reports disconnected when the connection is refused, the status check not inverted (`!== 200`), which would report attached for a refused connection', async () => {
-    const portNothingAnswersOn = await new Promise<number>((resolve) => {
-      const probe = createServer();
-      probe.listen(0, '127.0.0.1', () => {
-        const claimed = addressInfo(probe.address()).port;
-        probe.close(() => resolve(claimed));
-      });
-    });
-
-    const lifecycle = new BackendLifecycle({ attachPort: portNothingAnswersOn, pollIntervalMs: 5, pollTimeoutMs: 30 });
-    await lifecycle.start();
-
-    expect(lifecycle.status).toBe('disconnected');
   });
 });

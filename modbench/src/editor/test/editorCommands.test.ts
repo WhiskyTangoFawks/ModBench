@@ -30,6 +30,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
       'vscode.openWith', 'modbench-rendered:/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record',
       { viewColumn: -1, preview: true },
     ]]);
+    expect(pickRecord).not.toHaveBeenCalled();
   });
 
   it('asks for a record when the focused view has none selected, and opens the one picked as a preview', async () => {
@@ -38,7 +39,6 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
     await open();
 
-    expect(pickRecord.mock.calls).toEqual([[{ meditClient: expect.any(InMemoryMEditClient) as unknown, reporter }, '', []]]);
     expect(executeCommand.mock.calls.map(([id, uri, ...rest]) => [id, String(uri), ...rest])).toContainEqual([
       'vscode.openWith', 'modbench-rendered:/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record',
       { viewColumn: -1, preview: true },
@@ -55,7 +55,6 @@ describe('modbench.record.open from the palette, with no Argument', () => {
   });
 
   it('refuses, saying why, when it is given something that names no record', async () => {
-    reporter.report.mockClear();
     register();
 
     await commandHandlers.get('modbench.record.open')?.({ kind: 'recordType' });
@@ -66,7 +65,6 @@ describe('modbench.record.open from the palette, with no Argument', () => {
   });
 
   it('reports a record VS Code could not open', async () => {
-    reporter.report.mockClear();
     register({ selection: () => [rowOf('000801:A.esp')], ...renderingTheWinner() });
     executeCommand.mockRejectedValueOnce(new Error('no editor'));
 
@@ -75,13 +73,6 @@ describe('modbench.record.open from the palette, with no Argument', () => {
     expect(reporter.report.mock.calls).toEqual([['error', 'Failed to open "000801:A.esp".', 'no editor']]);
   });
 
-  it('does not ask when the selection holds a record', async () => {
-    register({ selection: () => [rowOf('000801:A.esp')] });
-
-    await open();
-
-    expect(pickRecord).not.toHaveBeenCalled();
-  });
 });
 
 describe('modbench.record.open on a copy, a record and the plugin it is in', () => {
@@ -118,37 +109,21 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
       .toEqual([{ viewColumn: -1, preview: false }]);
   });
 
-  it('opens a non-compiled plugin copy, which has no file, as the document mEdit renders it as, in the record grid', async () => {
-    registerAnswering(rendered('Gun.json'));
+  it.each([
+    ['a non-compiled plugin copy, which has no file, as the document mEdit renders it as', rendered('Gun.json'), GUN,
+      'modbench-rendered:/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA'],
+    ['a non-compiled plugin\'s header as the document mEdit renders it as', rendered('A.esp.json'), '000000:A.esp',
+      'modbench-rendered:/ModA/A.esp/A.esp.json?formKey=000000%3AA.esp&name=A.esp&origin=ModA'],
+    ['a non-compiled plugin placed reference as its own rendered document, named by its own EditorID', rendered('SharedRef - 000803_A.esp.json'), '000803:A.esp',
+      'modbench-rendered:/ModA/A.esp/SharedRef - 000803_A.esp.json?formKey=000803%3AA.esp&name=A.esp&origin=ModA'],
+    ['a copy carried in another record\'s file, as a placed reference is in its cell\'s, in a tab of its own on that file', inFile(FILE, true), GUN,
+      `modbench-child-record:${FILE}?formKey=000801%3AA.esp&name=A.esp&origin=ModA`],
+  ])('opens %s, in the record grid', async (_, document, formKey, uri) => {
+    registerAnswering(document);
 
-    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
+    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey, plugin } });
 
-    expect(opened()).toEqual([['modbench-rendered:/ModA/A.esp/Gun.json?formKey=000801%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
-  });
-
-  it('opens a non-compiled plugin\'s header as the document mEdit renders it as', async () => {
-    registerAnswering(rendered('A.esp.json'));
-
-    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: '000000:A.esp', plugin } });
-
-    expect(opened()).toEqual([['modbench-rendered:/ModA/A.esp/A.esp.json?formKey=000000%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
-  });
-
-  it('opens a non-compiled plugin placed reference as its own rendered document, named by its own EditorID', async () => {
-    const PLACED = '000803:A.esp';
-    registerAnswering(rendered('SharedRef - 000803_A.esp.json'));
-
-    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', plugin, formKey: PLACED } });
-
-    expect(opened()).toEqual([['modbench-rendered:/ModA/A.esp/SharedRef - 000803_A.esp.json?formKey=000803%3AA.esp&name=A.esp&origin=ModA', 'modbench.record']]);
-  });
-
-  it('opens a copy carried in another record\'s file, as a placed reference is in its cell\'s, in a tab of its own on that file', async () => {
-    registerAnswering(inFile(FILE, true));
-
-    await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
-
-    expect(opened()).toEqual([[`modbench-child-record:${FILE}?formKey=000801%3AA.esp&name=A.esp&origin=ModA`, 'modbench.record']]);
+    expect(opened()).toEqual([[uri, 'modbench.record']]);
   });
 
   it('opens the winning copy\'s document for a record given without a plugin', async () => {
@@ -164,7 +139,6 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   });
 
   it('refuses a record given without a plugin that no active plugin holds, naming it, and opens nothing', async () => {
-    reporter.report.mockClear();
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getRecordOwner', undefined);
     register({ meditClient });
@@ -176,7 +150,6 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   });
 
   it('refuses several records when no active plugin holds one given without a plugin, naming it, and opens nothing', async () => {
-    reporter.report.mockClear();
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getRecordOwner', undefined);
     meditClient.setQueryAnswer('getCopyDocument', { kind: 'Rendered', location: 'Gun.json' });
@@ -189,7 +162,6 @@ describe('modbench.record.open on a copy, a record and the plugin it is in', () 
   });
 
   it('refuses a copy the plugin does not hold, naming it, and opens nothing', async () => {
-    reporter.report.mockClear();
     registerAnswering(null);
 
     await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin } });
@@ -214,7 +186,6 @@ describe('modbench.record.openPinned, the menus\' entry point', () => {
 
 describe('modbench.record.open on records two of which cannot open', () => {
   it('reports the first record\'s failure, not a later column\'s', async () => {
-    reporter.report.mockClear();
     const meditClient = new InMemoryMEditClient();
     meditClient.setQueryAnswer('getCopyDocument', null);
     meditClient.setQueryAnswer('getRecordOwner', undefined);
@@ -240,7 +211,6 @@ describe('modbench.record.open for the agent', () => {
   };
 
   it('opens the given records and answers the copies that landed, never asking the selection or a picker', async () => {
-    reporter.report.mockClear();
     register({ meditClient: openingAs({ kind: 'Rendered', location: 'Gun.json' }), selection: () => [{ argument: { kind: 'record', formKey: '0009:A.esp', plugin } }] });
 
     const answer = await call(['000801:A.esp', '000802:A.esp'], { pinned: true });
@@ -255,7 +225,6 @@ describe('modbench.record.open for the agent', () => {
   });
 
   it('answers a refusal naming the reason, and reports nothing to the user', async () => {
-    reporter.report.mockClear();
     register({ meditClient: openingAs(null) });
 
     const answer = await call(['000801:A.esp']);

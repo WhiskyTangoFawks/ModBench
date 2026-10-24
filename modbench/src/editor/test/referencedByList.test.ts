@@ -1,4 +1,3 @@
-import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
 import { describe, it, expect, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon } from '../../test/vscodeMock';
 
@@ -8,7 +7,7 @@ import {
   readReferencedBy,
   referencedByCopyValueText,
 } from '../referencedByList';
-import { pluginMetadataFixture } from '../../client/test/fixtures';
+import { loadOrderStatusEventFixture, pluginMetadataFixture } from '../../client/test/fixtures';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import type { ReferenceResult } from '../../client';
 import { present } from '../../ports/present';
@@ -26,20 +25,11 @@ function reference(overrides: Partial<ReferenceResult> & { formKey: string }): R
   };
 }
 
-function loadOrderStatus(conflictsComputed: boolean): NotificationEvent {
-  return {
-    kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-    loadOrderStatus: {
-      state: 'Ready', totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed, failures: [], version: 1,
-    },
-  };
-}
-
 function indexed(references: ReferenceResult[]): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getReferences', references);
   client.setQueryAnswer('getPlugins', []);
-  client.emit(loadOrderStatus(true));
+  client.emit(loadOrderStatusEventFixture());
   return client;
 }
 
@@ -253,10 +243,9 @@ describe('the Referenced By list — what a plugin copy offers', () => {
 describe('referencedByCopyValueText — the text of the selected rows', () => {
   const copiedFrom = (selected: readonly unknown[]) => referencedByCopyValueText(selected[0], selected);
 
-  it('copies a referrer as EditorID [FormKey], or its FormKey alone with no EditorID', async () => {
+  it('copies a referrer by its record label', async () => {
     expect(copiedFrom(await referrersOver([reference({ formKey: '000002:Fallout4.esm', editorId: 'TestNPC' })])))
       .toBe('TestNPC [000002:Fallout4.esm]');
-    expect(copiedFrom(await referrersOver([reference({ formKey: '000002:Fallout4.esm' })]))).toBe('000002:Fallout4.esm');
   });
 
   it('joins several selected rows one per line, in selection order', async () => {

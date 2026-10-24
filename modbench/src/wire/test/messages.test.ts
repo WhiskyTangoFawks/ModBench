@@ -19,10 +19,12 @@ describe('the messages that cross postMessage, checked by their type', () => {
 });
 
 describe('isPluginAddress', () => {
-  it('holds a name and an origin, both strings', () => {
-    expect(isPluginAddress({ name: 'A.esp', origin: 'Mod' })).toBe(true);
-    expect(isPluginAddress({ name: 'A.esp' })).toBe(false);
-    expect(isPluginAddress({ name: 'A.esp', origin: 1 })).toBe(false);
-    expect(isPluginAddress(null)).toBe(false);
+  it.each([
+    [true, 'a name and an origin, both strings', { name: 'A.esp', origin: 'Mod' }],
+    [false, 'a name with no origin', { name: 'A.esp' }],
+    [false, 'an origin that is not a string', { name: 'A.esp', origin: 1 }],
+    [false, 'null', null],
+  ])('is %s given %s', (isAddress, _, value) => {
+    expect(isPluginAddress(value)).toBe(isAddress);
   });
 });

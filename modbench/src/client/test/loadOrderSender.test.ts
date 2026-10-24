@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
 import type { LaunchOutcome, LoadOrderOutcome, LoadOrderProgress, LoadOrderSnapshot } from '../MEditClient';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
@@ -59,10 +59,6 @@ const resentOf = (client: InMemoryMEditClient) => {
     resent.push({ name: sent.plugins.map((p) => p.name).join(), outcome });
   });
   return resent;
-};
-
-const until = async (check: () => boolean): Promise<void> => {
-  while (!check()) await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
 describe('a snapshot while mEdit is not running', () => {
@@ -208,7 +204,7 @@ describe('a reconnect', () => {
     await client.sendLoadOrder(snapshot('A.esp'));
 
     client.reconnected();
-    await until(() => resent.length > 0);
+    await vi.waitFor(() => { expect(resent).not.toEqual([]); });
 
     expect(resent).toEqual([{ name: 'A.esp', outcome: APPLIED }]);
     expect(sentNames(client)).toEqual(['A.esp', 'A.esp']);
@@ -224,7 +220,7 @@ describe('a reconnect', () => {
     client.reconnected();
     client.answerPuts(() => Promise.resolve(APPLIED));
     released.resolve(APPLIED);
-    await until(() => resent.length > 0);
+    await vi.waitFor(() => { expect(resent).not.toEqual([]); });
 
     expect(await sent).toEqual(APPLIED);
     expect(sentNames(client)).toEqual(['A.esp', 'A.esp']);
@@ -239,11 +235,11 @@ describe('a reconnect', () => {
     client.answerPuts(() => Promise.resolve({ outcome: 'failed', message: 'no' }));
 
     client.reconnected();
-    await until(() => resent.length > 0);
+    await vi.waitFor(() => { expect(resent).not.toEqual([]); });
     client.answerPuts(() => Promise.resolve(APPLIED));
     await client.sendLoadOrder(snapshot('B.esp'));
 
-    await until(() => heard.length > 0);
+    await vi.waitFor(() => { expect(heard).not.toEqual([]); });
     expect(heard).toEqual(['B.esp']);
   });
 
@@ -254,7 +250,7 @@ describe('a reconnect', () => {
     const failed: LoadOrderOutcome = { outcome: 'failed', message: 'no' };
     client.answerPuts((sent) => (sent.plugins[0]?.name === 'A.esp' ? released.promise : Promise.resolve(failed)));
     const older = client.sendLoadOrder(snapshot('A.esp'));
-    await until(() => sentNames(client).length === 1);
+    await vi.waitFor(() => { expect(sentNames(client)).toHaveLength(1); });
     const newer = client.sendLoadOrder(snapshot('B.esp'));
 
     client.reconnected();
@@ -263,6 +259,25 @@ describe('a reconnect', () => {
     await expect(older).resolves.toEqual(APPLIED);
     await expect(newer).resolves.toEqual(failed);
     expect(resent).toEqual([]);
+  });
+
+  it('announces the newer snapshot once it applies, and not the older one in flight at the reopen, since a reopen finding one waiting resends nothing', async () => {
+    const client = running();
+    const released = pending<LoadOrderOutcome>();
+    client.answerPuts((sent) => (sent.plugins[0]?.name === 'A.esp' ? released.promise : Promise.resolve(APPLIED)));
+    const heard: string[] = [];
+    client.onNotification('plugin-changed', ({ plugin }) => heard.push(plugin.name));
+    const older = client.sendLoadOrder(snapshot('A.esp'));
+    await vi.waitFor(() => { expect(sentNames(client)).toHaveLength(1); });
+    const newer = client.sendLoadOrder(snapshot('B.esp'));
+
+    client.reconnected();
+    released.resolve(APPLIED);
+    await older;
+    await newer;
+
+    expect(sentNames(client)).toEqual(['A.esp', 'B.esp']);
+    expect(heard).toEqual(['B.esp']);
   });
 
   it('puts nothing before any snapshot was handed', async () => {
@@ -314,7 +329,7 @@ describe('a stop during a send', () => {
     client.answerStart(() => launched.promise);
     void client.start();
     const sent = client.sendLoadOrder(snapshot('A.esp'));
-    await until(() => methods(client).includes('start'));
+    await vi.waitFor(() => { expect(methods(client)).toContain('start'); });
 
     await client.stop();
     launched.resolve(undefined);
@@ -374,7 +389,7 @@ describe('each launch, announced as it begins', () => {
     client.answerStart(() => launched.promise);
     const launches = launchesOf(client);
     void client.start();
-    await until(() => methods(client).includes('start'));
+    await vi.waitFor(() => { expect(methods(client)).toContain('start'); });
 
     await client.stop();
     launched.resolve(undefined);

@@ -7,14 +7,14 @@ import { RecordTabs } from '../recordTabs';
 import type { RecordTab } from '../recordTab';
 import { announceConflictsComputed, subscribeRecordTabsToNotifications } from '../notificationWiring';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { notificationEventFixture } from '../../client/test/fixtures';
 import { fakePanel } from './editorVscode';
 
 const EDITED_MOD_ESP_FROM_MODA = { formKey: '000800:Mod.esp', plugin: { name: 'Mod.esp', origin: 'ModA' } };
 
-const rowsChanged = (keys: string[]) =>
-  ({ kind: 'rows-changed' as const, plugin: 'Mod.esp', origin: 'ModA', keys, sequence: 2 });
+const rowsChanged = (keys: string[]) => notificationEventFixture({ kind: 'rows-changed', plugin: 'Mod.esp', origin: 'ModA', keys, sequence: 2 });
 
-const PLUGIN_CHANGED = { kind: 'plugin-changed' as const, plugin: 'Mod.esp', origin: 'ModA', keys: [], sequence: 2 };
+const PLUGIN_CHANGED = notificationEventFixture({ kind: 'plugin-changed', plugin: 'Mod.esp', origin: 'ModA', sequence: 2 });
 
 const loadsOf = (panel: ReturnType<typeof fakePanel>) => (panel.webview.postMessage.mock.calls as unknown[][]).map(([m]) => m);
 
@@ -201,25 +201,15 @@ describe('a record tab going with the record to its new FormKey and reading it t
       return targets;
     };
 
-    it('in the moved plugin goes to the new FormKey, before the tab reads it', async () => {
+    it.each([
+      ['in the moved plugin goes to the new FormKey, before the tab reads it', EDITED_MOD_ESP_FROM_MODA, '000900:Mod.esp'],
+      ['in an override\'s column goes to its own old FormKey', { ...EDITED_MOD_ESP_FROM_MODA, plugin: { name: 'Other.esp', origin: 'ModB' } }, '000800:Mod.esp'],
+      ['in the other plugin of that filename is untouched', { ...EDITED_MOD_ESP_FROM_MODA, plugin: { name: 'Mod.esp', origin: 'ModB' } }, '000800:Mod.esp'],
+    ])('%s', async (_, address, target) => {
       const { tab } = openOn('000800:Mod.esp');
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
-      expect(await sentTo(tab, EDITED_MOD_ESP_FROM_MODA)).toEqual(['000900:Mod.esp']);
-    });
-
-    it('in an override\'s column goes to its own old FormKey', async () => {
-      const { tab } = openOn('000800:Mod.esp');
-      await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
-
-      expect(await sentTo(tab, { ...EDITED_MOD_ESP_FROM_MODA, plugin: { name: 'Other.esp', origin: 'ModB' } })).toEqual(['000800:Mod.esp']);
-    });
-
-    it('in the other plugin of that filename is untouched', async () => {
-      const { tab } = openOn('000800:Mod.esp');
-      await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
-
-      expect(await sentTo(tab, { ...EDITED_MOD_ESP_FROM_MODA, plugin: { name: 'Mod.esp', origin: 'ModB' } })).toEqual(['000800:Mod.esp']);
+      expect(await sentTo(tab, address)).toEqual([target]);
     });
 
     it('from a gate taken before the move goes to the new FormKey after the tab reads it (an extended editor keeps the address it was opened on), and one taken after does not', async () => {
@@ -260,9 +250,13 @@ describe('a record tab going with the record to its new FormKey and reading it t
       ]);
     });
 
-    it('keeps what it shows while the Index does not hold it yet, since a read before would clear the grid for an error, and reads it on the report', async () => {
+    it.each([
+      ['while the Index does not hold it yet, since a read before would clear the grid for an error,',
+        (client: InMemoryMEditClient) => { client.setQueryAnswer('getRecordOwner', undefined); }],
+      ['when mEdit cannot say,', (client: InMemoryMEditClient) => { client.setQueryFailure('getRecordOwner', { failed: 'refused', refusal: 'backend down' }); }],
+    ])('keeps what it shows %s and reads it on the report', async (_, answerOwner) => {
       const { client, panel, tab } = openOn('000800:Mod.esp');
-      client.setQueryAnswer('getRecordOwner', undefined);
+      answerOwner(client);
       await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
 
       client.emit(PLUGIN_CHANGED);
@@ -270,20 +264,6 @@ describe('a record tab going with the record to its new FormKey and reading it t
       await Promise.resolve();
       expect(loadsOf(panel)).toEqual([]);
       client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
-
-      expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]);
-    });
-
-    it('keeps what it shows when mEdit cannot say, and reads it on the report', async () => {
-      const { client, panel, tab } = openOn('000800:Mod.esp');
-      client.setQueryFailure('getRecordOwner', { failed: 'refused', refusal: 'backend down' });
-      await tab.gate()(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));
-
-      client.emit(PLUGIN_CHANGED);
-      await vi.waitFor(() => expect(client.calls.some(c => c.method === 'getRecordOwner')).toBe(true));
-      await Promise.resolve();
-      expect(loadsOf(panel)).toEqual([]);
-      client.emit(rowsChanged(['000900:Mod.esp']));
 
       expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]);
     });

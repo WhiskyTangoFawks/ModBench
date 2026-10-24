@@ -1,16 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { NotificationEvent } from '../apiClient';
 import type { PluginLoadFailure } from '../MEditClient';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
+import { loadOrderStatusEventFixture } from './fixtures';
 
-function tick(conflictsComputed: boolean, failures: PluginLoadFailure[] = [], version = 1): NotificationEvent {
-  return {
-    kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-    loadOrderStatus: {
-      state: 'Ready', totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed, failures, version,
-    },
-  };
-}
+const tick = (conflictsComputed: boolean, failures: PluginLoadFailure[] = [], version = 1) =>
+  loadOrderStatusEventFixture({ conflictsComputed, failures, version });
 
 const bad = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
 

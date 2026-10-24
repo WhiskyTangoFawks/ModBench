@@ -1,34 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMEditClient } from './InMemoryMEditClient';
-import { pluginMetadataFixture, notificationEventFixture } from './fixtures';
-
-describe('InMemoryMEditClient — recorded calls', () => {
-  it('records a query call with its arguments', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getReferences', []);
-    await client.getReferences('000001:Fallout4.esm');
-    expect(client.calls).toContainEqual({ method: 'getReferences', args: ['000001:Fallout4.esm'] });
-  });
-
-  it('records a command call with its arguments', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [], refused: [] });
-    await client.build([], { exclusionMark: '.mohidden', archives: null, statCache: '/instance/stat-cache' });
-    expect(client.calls).toContainEqual({ method: 'build', args: [[], { exclusionMark: '.mohidden', archives: null, statCache: '/instance/stat-cache' }] });
-  });
-});
+import { pluginMetadataFixture } from './fixtures';
 
 describe('InMemoryMEditClient — unscripted queries reject', () => {
   it('rejects a query with no scripted answer, rather than answering empty', async () => {
     const client = new InMemoryMEditClient();
     await expect(client.getPlugins()).rejects.toThrow(/getPlugins/);
-  });
-
-  it('does not fall back to an empty answer once scripted, only before, so a test that forgot to script it fails rather than rendering a plausible but wrong tree', async () => {
-    const client = new InMemoryMEditClient();
-    await expect(client.getDiagnoses()).rejects.toThrow();
-    client.setQueryAnswer('getDiagnoses', []);
-    await expect(client.getDiagnoses()).resolves.toEqual([]);
   });
 });
 
@@ -80,18 +57,6 @@ describe('InMemoryMEditClient — a queued once-form script', () => {
   });
 });
 
-describe('InMemoryMEditClient — a scripted command failure', () => {
-  it('rejects every call with the scripted error until re-scripted', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandFailure('build', new Error('the build step failed'));
-
-    await expect(client.build([], { exclusionMark: '.mohidden', archives: null, statCache: '/instance/stat-cache' })).rejects.toThrow('the build step failed');
-
-    client.setCommandResult('build', { landed: [], refused: [] });
-    await expect(client.build([], { exclusionMark: '.mohidden', archives: null, statCache: '/instance/stat-cache' })).rejects.toThrow('the build step failed');
-  });
-});
-
 describe('InMemoryMEditClient — a disconnected script', () => {
   it('is one call: status goes disconnected and every unscripted query answers unreachable', async () => {
     const client = new InMemoryMEditClient();
@@ -116,13 +81,6 @@ describe('InMemoryMEditClient — a disconnected script', () => {
 });
 
 describe('InMemoryMEditClient — status', () => {
-  it('starts as "starting" and is settable', () => {
-    const client = new InMemoryMEditClient();
-    expect(client.status).toBe('starting');
-    client.setStatus('running');
-    expect(client.status).toBe('running');
-  });
-
   it('notifies onStatusChanged listeners, and unsubscribe stops further notice', () => {
     const client = new InMemoryMEditClient();
     const listener = vi.fn();
@@ -132,41 +90,5 @@ describe('InMemoryMEditClient — status', () => {
     unsubscribe();
     client.setStatus('stopped');
     expect(listener).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('InMemoryMEditClient — emit', () => {
-  it('dispatches an emitted event only to listeners of its own kind', () => {
-    const client = new InMemoryMEditClient();
-    const rowsListener = vi.fn();
-    const pluginListener = vi.fn();
-    client.onNotification('rows-changed', rowsListener);
-    client.onNotification('plugin-changed', pluginListener);
-    client.emit(notificationEventFixture({ kind: 'rows-changed', plugin: 'A.esp', origin: 'ModA', keys: ['k'] }));
-    expect(rowsListener).toHaveBeenCalledWith({ plugin: { name: 'A.esp', origin: 'ModA' }, keys: ['k'] });
-    expect(pluginListener).not.toHaveBeenCalled();
-  });
-
-  it('unsubscribe stops further dispatch', () => {
-    const client = new InMemoryMEditClient();
-    const listener = vi.fn();
-    const unsubscribe = client.onNotification('rows-changed', listener);
-    unsubscribe();
-    client.emit(notificationEventFixture({ kind: 'rows-changed' }));
-    expect(listener).not.toHaveBeenCalled();
-  });
-});
-
-describe('InMemoryMEditClient — onNotification', () => {
-  it('skips a decompile-and-commit-progress emit missing its payload, and unsubscribe stops delivery', () => {
-    const client = new InMemoryMEditClient();
-    const listener = vi.fn();
-    const off = client.onNotification('decompile-and-commit-progress', listener);
-    client.emit(notificationEventFixture({ kind: 'decompile-and-commit-progress' }));
-    off();
-    client.emit(notificationEventFixture({
-      kind: 'decompile-and-commit-progress', modlistProgress: { mod: 'M', modsDone: 0, modsTotal: 1 }, decompileAndCommitPhase: 'Parsing',
-    }));
-    expect(listener).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,3 @@
-import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 interface FakeUri { scheme: string; path: string; query: string; toString(): string }
@@ -52,7 +51,8 @@ vi.mock('vscode', () => ({
 import { ExtendedFieldDocuments, type OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type CompareResult } from '../../client';
-import type { Reporter } from '../../ports/reporter';
+import { notificationEventFixture } from '../../client/test/fixtures';
+import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 
 type Diff = CompareResult['diffs'][number];
 
@@ -75,19 +75,16 @@ const deacon: OpenExtendedFieldEditorParams = {
   recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', readOnly: false,
 };
 
-const rowsChanged = (keys: string[]): NotificationEvent =>
-  ({ kind: 'rows-changed', plugin: 'Fallout4.esm', origin: 'Data/', keys, sequence: 1 });
-const pluginChanged = (plugin: string, origin: string): NotificationEvent =>
-  ({ kind: 'plugin-changed', plugin, origin, keys: [], sequence: 1 });
+const rowsChanged = (keys: string[]) => notificationEventFixture({ kind: 'rows-changed', plugin: 'Fallout4.esm', origin: 'Data/', keys });
+const pluginChanged = (plugin: string, origin: string) => notificationEventFixture({ kind: 'plugin-changed', plugin, origin });
 
 let client: InMemoryMEditClient;
-let report: ReturnType<typeof vi.fn<Reporter['report']>>;
+let reporter: RecordingReporter;
 let commit: ReturnType<typeof vi.fn<(field: unknown, value: string) => Promise<void>>>;
 
 function makeDocuments(): ExtendedFieldDocuments {
   return new ExtendedFieldDocuments({
-    client, commit,
-    reporter: { report, landed: vi.fn(), shownOnSurface: vi.fn(), selectionOutcome: vi.fn() },
+    client, commit, reporter,
   });
 }
 
@@ -120,7 +117,7 @@ beforeEach(() => {
   showTextDocument.mockResolvedValue(undefined);
   client = new InMemoryMEditClient();
   client.setQueryAnswer('getComparison', descriptionOf('a long description'));
-  report = vi.fn();
+  reporter = recordingReporter();
   commit = vi.fn(() => Promise.resolve());
   documents = makeDocuments();
 });
@@ -198,33 +195,20 @@ describe('the extended-field documents', () => {
     expect(changes).toEqual([]);
   });
 
-  it('a record mEdit does not hold reads as gone, naming it', async () => {
-    await documents.open(deacon);
-    client.setQueryAnswer('getComparison', null);
+  it.each([
+    ['a record mEdit does not hold, naming it', deacon, null, 'FileNotFound The record 000123:Fallout4.esm is gone.'],
+    ['a field the record lacks, naming the record and plugin', deacon, comparison([diff('Name', { 'Fallout4.esm': 'x' })]),
+      'FileNotFound The record 000123:Fallout4.esm has no such field in Fallout4.esm.'],
+    ['a plugin copy the record lacks', deacon, comparison([diff('Description', { 'Other.esp': 'x' })], [['Other.esp', 'Data/']]),
+      'FileNotFound The record 000123:Fallout4.esm has no such field in Fallout4.esm.'],
+    ['a plugin copy held only by a plugin of the same filename from another origin', { ...deacon, plugin: 'Shared.esp', origin: 'ModB' },
+      comparison([diff('Description', { 'Shared.esp|ModA': 'x' })], [['Shared.esp', 'ModA']]),
+      'FileNotFound The record 000123:Fallout4.esm has no such field in Shared.esp.'],
+  ])('reads as gone %s', async (_, params, answer, message) => {
+    await documents.open(params);
+    client.setQueryAnswer('getComparison', answer);
 
-    await expect(textOf(shownUri())).rejects.toThrow('FileNotFound The record 000123:Fallout4.esm is gone.');
-  });
-
-  it('a field the record lacks reads as gone, naming the record and plugin', async () => {
-    await documents.open(deacon);
-    client.setQueryAnswer('getComparison', comparison([diff('Name', { 'Fallout4.esm': 'x' })]));
-
-    await expect(textOf(shownUri())).rejects.toThrow('FileNotFound The record 000123:Fallout4.esm has no such field in Fallout4.esm.');
-  });
-
-  it('a plugin copy the record lacks reads as gone', async () => {
-    await documents.open(deacon);
-    client.setQueryAnswer('getComparison', comparison([diff('Description', { 'Other.esp': 'x' })], [['Other.esp', 'Data/']]));
-
-    await expect(textOf(shownUri())).rejects.toThrow('has no such field');
-  });
-
-  it('a plugin copy held only by a plugin of the same filename from another origin reads as gone', async () => {
-    client.setQueryAnswer('getComparison', comparison(
-      [diff('Description', { 'Shared.esp|ModA': 'x' })], [['Shared.esp', 'ModA']]));
-    await documents.open({ ...deacon, plugin: 'Shared.esp', origin: 'ModB' });
-
-    await expect(textOf(shownUri())).rejects.toThrow('has no such field');
+    await expect(textOf(shownUri())).rejects.toThrow(message);
   });
 
   it('reads a nested leaf at its own index in the column', async () => {
@@ -302,7 +286,7 @@ describe('the extended-field documents', () => {
 
     await documents.open(deacon);
 
-    expect(report).toHaveBeenCalledWith('error', 'Could not open the extended editor.', 'no window');
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not open the extended editor.', detail: 'no window' }]);
   });
 
   describe('in a column that cannot be edited', () => {
