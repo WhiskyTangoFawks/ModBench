@@ -3,8 +3,7 @@ import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from '../
 
 vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
-import type { InstanceValue } from '../../instanceLoader/instance';
-import type { ProgramVersion } from '../../instanceAdapter/gameFolder/programVersions';
+import type { InstanceValue, ProgramVersion } from '../../instanceLoader/instance';
 import { ToolboxProvider } from '../ToolboxProvider';
 import { present } from '../../ports/present';
 import { FakeInstance } from '../../test/mo2/fakeInstance';

@@ -15,10 +15,9 @@ import { buildDownloadedFileRows, modsByInstallationFileName, type LocatedDownlo
 import { loadedWithNoLineOf, nexusDomainForMetaGame } from '../tables/gamePaths';
 import {
   type DownloadedFiles, type InstanceReading, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
+  type ProgramVersions, type EntryRef, type ManagerNames, type ManagerRunning, type ModGroups, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type PublisherConfiguration,
   type PublisherTag, type SourceMods, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
-import type { ProgramVersions } from '../instanceAdapter/gameFolder/programVersions';
 import { pluginPlacesOf } from './pluginPlacesOf';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -28,7 +27,7 @@ export { sameEntry } from '../instanceAdapter/instanceAdapter';
 export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, UpgradeTier } from './downloadedFileRows';
 export type { Covering, DownloadedFileStatus, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter/instanceAdapter';
-export type { GameFolder } from '../instanceAdapter/instanceAdapter';
+export type { GameFolder, ProgramVersion, ProgramVersions } from '../instanceAdapter/instanceAdapter';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.
 const SETTLE_MS = 200;

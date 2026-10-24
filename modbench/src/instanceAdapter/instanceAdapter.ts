@@ -11,6 +11,8 @@ import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 import type { ProgramVersions } from './gameFolder/programVersions';
 
+export type { ProgramVersion, ProgramVersions } from './gameFolder/programVersions';
+
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { dataFolderFile } from './gameFolder/dataFolder';
 
