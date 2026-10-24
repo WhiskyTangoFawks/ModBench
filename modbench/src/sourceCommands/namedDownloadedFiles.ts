@@ -1,4 +1,4 @@
-import type { ManifestInstallationFile, NotFound, RestoreMod } from '../client';
+import type { ManifestInstallationFile, NotFound } from '../client';
 import type { FileRead, InstallationFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import type { Nexus } from '../nexus/nexus';
 import { errorMessage } from '../ports/errorMessage';
@@ -36,7 +36,7 @@ async function downloadedOrWhy({ adapter, nexus }: Deps, { name, hash, page }: M
 export async function namedDownloadedFiles(
   deps: Deps, notFound: readonly NotFound[], { onDownload, signal }: { onDownload?: (file: string) => void; signal?: AbortSignal },
 ): Promise<{
-  handed: (name: string | undefined) => RestoreMod['installationFile'];
+  handed: (name: string | undefined) => InstallationFile | undefined;
   unreadable: (name: string | undefined) => string | undefined;
   /** Why the installation file of `name`, which the downloads folder lacks, was not downloaded. */
   notDownloaded: (name: string | undefined) => string | undefined;
@@ -57,7 +57,7 @@ export async function namedDownloadedFiles(
   return {
     handed: (name) => {
       const read = readOf(name)?.read;
-      return read?.kind === 'read' && read.answer !== undefined ? wireFile(read.answer) : undefined;
+      return read?.kind === 'read' ? read.answer : undefined;
     },
     unreadable: (name) => {
       const read = readOf(name)?.read;
@@ -66,6 +66,3 @@ export async function namedDownloadedFiles(
     notDownloaded: (name) => readOf(name)?.notDownloaded,
   };
 }
-
-export const wireFile = ({ path, page, size, hash, entries }: InstallationFile): NonNullable<RestoreMod['installationFile']> =>
-  ({ path, page, size, hash, entries: [...entries] });

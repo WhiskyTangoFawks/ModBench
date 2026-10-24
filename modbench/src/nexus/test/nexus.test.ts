@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { acceptingGoodKey, answeringFrom, FILE_78, GOOD_KEY, nexusAnswering, servingFile78 } from './nexusDouble';
+import { acceptingGoodKey, FILE_78, GOOD_KEY, json, nexusAnswering, nexusServing, servingFile78 } from './nexusDouble';
 
 describe('checking a key', () => {
   it('asks Nexus to validate it, naming the application and sending the key', async () => {
@@ -67,7 +67,6 @@ describe('asking for a mod\'s newest version', () => {
   const REMOVED = 6;
   const file = (file_id: number, version: string, category_id: number, file_name = `f${file_id}.7z`) => ({ file_id, version, category_id, file_name });
   const update = (old_file_id: number, new_file_id: number) => ({ old_file_id, new_file_id });
-  const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
 
   const asking = async (answers: Record<string, Response>, installed: { fileId?: string; fileName?: string } = {}) => {
     const { nexus, sent } = nexusAnswering((_key, url) => answers[url] ?? new Response('', { status: 404 }));
@@ -190,7 +189,6 @@ describe('asking which file has an MD5', () => {
     },
     file_details: { file_id: 78, name: 'Main', version: '1.2', mod_version: '1.0', category_id, file_name, ...(description === null ? {} : { description }) },
   });
-  const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
   const asking = async (answer: Response | Error | Record<string, Response>, fileName = 'Sleep-7-1-2.7z', games = ['fallout4']) => {
     const { nexus, sent } = nexusAnswering((_key, url) => (answer instanceof Response || answer instanceof Error ? answer : answer[url] ?? new Response('', { status: 404 })));
     await nexus.keep(GOOD_KEY);
@@ -306,7 +304,6 @@ describe('asking which file of a mod bears a name', () => {
   const LIST = 'https://api.nexusmods.com/v1/games/fallout4/mods/7/files.json';
   const page = { name: '<b>Sleep</b> &amp; Save', category_id: 12, author: 'Someone', uploaded_by: 'Uploader', uploaded_users_profile_url: 'https://nexus/users/1' };
   const listed = { file_id: 78, name: 'Main', version: '1.2', category_id: 1, file_name: 'Sleep 7.7z', description: '[b]Main[/b]', uploaded_by: 'File uploader', uploaded_timestamp: 1455072761 };
-  const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
   const asking = async (answers: Record<string, Response>, file: { fileID?: string; fileName?: string } = {}) => {
     const { nexus, sent } = nexusAnswering((_key, url) => answers[url] ?? new Response('', { status: 404 }));
     await nexus.keep(GOOD_KEY);
@@ -360,10 +357,8 @@ describe('asking which file of a mod bears a name', () => {
 });
 
 describe('downloading a file', () => {
-  const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
   const downloading = async (answers: Record<string, Response | Error>, loggedIn = true) => {
-    const { nexus, sent } = nexusAnswering(answeringFrom(answers));
-    if (loggedIn) await nexus.keep(GOOD_KEY);
+    const { nexus, sent } = await nexusServing(answers, loggedIn);
     return { result: await nexus.download({ game: 'fallout4', modID: '7', fileID: '78' }), sent };
   };
 

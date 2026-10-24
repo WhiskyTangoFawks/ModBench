@@ -37,7 +37,7 @@ export const GOOD_KEY = 'good-key';
 /** Nexus accepts GOOD_KEY and refuses every other. */
 export const acceptingGoodKey = (key: string): Response => new Response('{"name":"someone"}', { status: key === GOOD_KEY ? 200 : 401 });
 
-const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
+export const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
 
 export const FILE_78 = {
   record: 'https://api.nexusmods.com/v1/games/fallout4/mods/7/files/78.json',
@@ -59,3 +59,10 @@ export const servingFile78 = (bytes: string): Record<string, Response | Error> =
 /** Answers each URL from `answers`, and 404 for any other. */
 export const answeringFrom = (answers: Record<string, Response | Error>) => (_key: string, url: string): Response | Error =>
   answers[url] ?? new Response('', { status: 404 });
+
+/** The real Nexus box over a network answering from `answers`, logged in unless told otherwise. */
+export async function nexusServing(answers: Record<string, Response | Error>, loggedIn = true): Promise<{ nexus: Nexus; sent: Sent[] }> {
+  const { nexus, sent } = nexusAnswering(answeringFrom(answers));
+  if (loggedIn) await nexus.keep(GOOD_KEY);
+  return { nexus, sent };
+}

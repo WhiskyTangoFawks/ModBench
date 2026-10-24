@@ -65,7 +65,9 @@ interface NexusDeps {
 export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): Nexus {
   const get = (key: string, path: string): Promise<Response> =>
     fetch(`${API}${path}`, { headers: { apikey: key, 'Application-Name': 'Modbench', 'Application-Version': applicationVersion } });
-  const read = async (key: string, path: string, notFound = 'Nexus does not hold this mod.', forbidden?: string): Promise<{ json: unknown } | { reason: string }> => {
+  const read = async (
+    key: string, path: string, { notFound = 'Nexus does not hold this mod.', forbidden }: { notFound?: string; forbidden?: string } = {},
+  ): Promise<{ json: unknown } | { reason: string }> => {
     try {
       const response = await get(key, path);
       if (response.status === 404) return { reason: notFound };
@@ -76,9 +78,9 @@ export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): 
       return { reason: `Could not reach Nexus: ${errorMessage(error)}` };
     }
   };
-  const withKey = async (lookup: (ask: Read) => Promise<FileFound>): Promise<FileFound> => {
+  const withKey = async <T>(use: (key: string, ask: Read) => Promise<T>): Promise<T | { found: false; reason: string }> => {
     const key = await secrets.get(KEY_NAME);
-    return key === undefined ? { found: false, reason: NOT_LOGGED_IN } : lookup((path, notFound) => read(key, path, notFound));
+    return key === undefined ? { found: false, reason: NOT_LOGGED_IN } : use(key, (path, notFound) => read(key, path, { notFound }));
   };
   return {
     check: async (key) => {
@@ -111,14 +113,12 @@ export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): 
       const version = typeof page.json === 'object' && page.json !== null && 'version' in page.json ? page.json.version : undefined;
       return typeof version === 'string' ? { found: true, version } : { found: false, reason: 'Nexus named no version.' };
     },
-    fileByMd5: (file) => withKey((ask) => lookupByMd5(ask, file)),
-    fileByName: (file) => withKey((ask) => lookupByName(ask, file)),
-    download: async (file) => {
-      const key = await secrets.get(KEY_NAME);
-      if (key === undefined) return { found: false, reason: NOT_LOGGED_IN };
-      const found = await lookupById((path, notFound) => read(key, path, notFound), file);
+    fileByMd5: (file) => withKey((_key, ask) => lookupByMd5(ask, file)),
+    fileByName: (file) => withKey((_key, ask) => lookupByName(ask, file)),
+    download: (file) => withKey(async (key, ask): Promise<Download> => {
+      const found = await lookupById(ask, file);
       if (!found.found) return found;
-      const links = await read(key, `/v1/games/${file.game}/mods/${file.modID}/files/${file.fileID}/download_link.json`, undefined, 'Nexus gives a download link to a Premium account alone.');
+      const links = await read(key, `/v1/games/${file.game}/mods/${file.modID}/files/${file.fileID}/download_link.json`, { forbidden: 'Nexus gives a download link to a Premium account alone.' });
       if ('reason' in links) return { found: false, ...links };
       const server = firstServerOf(links.json);
       if (server === undefined) return { found: false, reason: 'Nexus named no server to download the file from.' };
@@ -129,7 +129,7 @@ export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): 
       } catch (error) {
         return { found: false, reason: `Could not reach the server Nexus named: ${errorMessage(error)}` };
       }
-    },
+    }),
     onDidChangeLogin: (listener) => secrets.onDidChange(({ key }) => { if (key === KEY_NAME) listener(); }),
   };
 }

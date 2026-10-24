@@ -8,7 +8,7 @@ import { archiveVariants } from '../sourceCommands';
 import type { HostGit } from '../../ports/repository';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { restoredMod } from '../../test/restoredMod';
-import { answeringFrom, FILE_78, GOOD_KEY, nexusAnswering, servingFile78, type Sent } from '../../nexus/test/nexusDouble';
+import { answeringFrom, FILE_78, nexusAnswering, nexusServing, servingFile78 } from '../../nexus/test/nexusDouble';
 import type { Nexus } from '../../nexus/nexus';
 
 const hostGitMaking = (made: string[] = []): HostGit<string> => ({
@@ -591,11 +591,6 @@ describe('modlistRepositoryCommands restore from manifest', () => {
         ? { landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFile, gameFiles: [] }] }
         : RESTORED));
     };
-    const nexusServing = async (answers: Record<string, Response | Error>, loggedIn = true): Promise<{ nexus: Nexus; sent: Sent[] }> => {
-      const { nexus, sent } = nexusAnswering(answeringFrom(answers));
-      if (loggedIn) await nexus.keep(GOOD_KEY);
-      return { nexus, sent };
-    };
 
     it('is downloaded from the page on Nexus its manifest names, put with what Nexus knows of it, and handed in the second send', async () => {
       const { nexus } = await nexusServing(servingFile78('the bytes'));
@@ -612,12 +607,10 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     });
 
     it.each([
-      ['its manifest names no page', { ...LACKED, page: undefined }, servingFile78('the bytes'), ' Its manifest names no file on Nexus to download it from.'],
-      ['its page names no file', { ...LACKED, page: 'https://www.nexusmods.com/fallout4/mods/7' }, servingFile78('the bytes'), ' Its manifest names no file on Nexus to download it from.'],
-      ['Nexus sends another file', LACKED, servingFile78('other bytes'), ' It could not be downloaded from Nexus: the file Nexus sent is not the one its manifest names.'],
-      ['Nexus refuses it', LACKED, { ...servingFile78('the bytes'), [FILE_78.link]: new Response('', { status: 403 }) }, ' It could not be downloaded from Nexus: Nexus gives a download link to a Premium account alone.'],
-    ])('skips the mod when %s, naming why it was not downloaded', async (_name, installationFile, answers, why) => {
-      const { nexus } = await nexusServing(answers);
+      ['its manifest names no file on Nexus', { ...LACKED, page: undefined }, true, ' Its manifest names no file on Nexus to download it from.'],
+      ['Nexus does not send it, as while logged out', LACKED, false, ' It could not be downloaded from Nexus: You are not logged in to Nexus.'],
+    ])('skips the mod when %s, naming why it was not downloaded', async (_name, installationFile, loggedIn, why) => {
+      const { nexus } = await nexusServing(servingFile78('the bytes'), loggedIn);
       const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf(), nexus);
       lackedUntilHanded(client, installationFile);
 
@@ -626,14 +619,14 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       expect(outcome).toEqual({ applied: true, landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING + why }] });
     });
 
-    it('skips the mod while logged out of Nexus, saying so', async () => {
-      const { nexus } = await nexusServing(servingFile78('the bytes'), false);
+    it('skips the mod when Nexus sends another file than its manifest names, putting none', async () => {
+      const { nexus } = await nexusServing(servingFile78('other bytes'));
       const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf(), nexus);
       lackedUntilHanded(client);
 
       const outcome = await commands.restoreFromManifest(['ModA']);
 
-      expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: `${INSTALLATION_FILE_MISSING} It could not be downloaded from Nexus: You are not logged in to Nexus.` }] });
+      expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: `${INSTALLATION_FILE_MISSING} It could not be downloaded from Nexus: the file Nexus sent is not the one its manifest names.` }] });
     });
 
     it('names why the Instance adapter could not put it', async () => {
@@ -668,18 +661,21 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       expect(sent).toEqual([]);
     });
 
-    it('downloads no further file once its signal aborts, so a cancel stops after the file in hand', async () => {
+    it('downloads no further file and sends nothing again once its signal aborts, naming each mod it skipped as not finished', async () => {
       const cancel = new AbortController();
       const { nexus, sent } = await nexusServing({ ...servingFile78('the bytes'), [FILE_78.record]: new Response('', { status: 404 }) });
       const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf(), nexus);
       client.setCommandResult('restoreFromManifest', {
-        landed: [], refused: [],
+        landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }, { item: 'ModB', reason: "was skipped: installation file 'ModB.7z' is missing." }],
         notFound: [{ mod: 'ModA', installationFile: LACKED, gameFiles: [] }, { mod: 'ModB', installationFile: { ...LACKED, name: 'ModB.7z' }, gameFiles: [] }],
       });
 
-      await commands.restoreFromManifest(['ModA', 'ModB'], { onProgress: (status) => { if (status.phase === 'Downloading') cancel.abort(); }, signal: cancel.signal });
+      const outcome = await commands.restoreFromManifest(['ModA', 'ModB'], { onProgress: (status) => { if (status.phase === 'Downloading') cancel.abort(); }, signal: cancel.signal });
 
-      expect(sent.map(({ url }) => url)).toEqual([FILE_78.record]);
+      const notFinished = 'was not finished: the restore was cancelled. Restoring it again finishes it.';
+      expect([sent.map(({ url }) => url), client.calls.length, outcome]).toEqual([
+        [FILE_78.record], 1, { applied: true, landed: [], refused: [{ item: 'ModA', reason: notFinished }, { item: 'ModB', reason: notFinished }] },
+      ]);
     });
   });
 

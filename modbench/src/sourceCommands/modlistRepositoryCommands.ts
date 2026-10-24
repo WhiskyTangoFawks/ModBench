@@ -12,7 +12,7 @@ import type { MoveToTrash } from '../ports/trash';
 import { modWithMetadata, withMetadataRead } from '../wire/modByFolder';
 import { failureReason, isReadFailed, type ReadFailed } from '../wire/readFailed';
 import { initRepositoryIn } from './initRepositoryIn';
-import { namedDownloadedFiles, wireFile } from './namedDownloadedFiles';
+import { namedDownloadedFiles } from './namedDownloadedFiles';
 import type { Nexus } from '../nexus/nexus';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
@@ -100,6 +100,9 @@ async function byFolder(adapter: Adapter, mods: readonly string[]): Promise<ModB
   return asked;
 }
 
+const wireFile = (file: InstallationFile | undefined): UpdateManifestMod['installationFile'] =>
+  (file === undefined ? undefined : { path: file.path, page: file.page, size: file.size, hash: file.hash, entries: [...file.entries] });
+
 async function gameFilesOf(
   adapter: Adapter, mod: string, game: GameToHand | undefined,
 ): Promise<{ gameFiles: readonly GameFile[]; notes: readonly string[] } | { refusal: string }> {
@@ -119,7 +122,7 @@ async function readMod(
   const taken = installed.answer === undefined ? await gameFilesOf(adapter, mod, game) : { gameFiles: [], notes: [] };
   if ('refusal' in taken) return taken;
   return {
-    read: { name: mod, folder, installationFile: installed.answer === undefined ? undefined : wireFile(installed.answer), metadataFiles: [...adapter.metadataFilesInModFolder] },
+    read: { name: mod, folder, installationFile: wireFile(installed.answer), metadataFiles: [...adapter.metadataFilesInModFolder] },
     gameFiles: taken.gameFiles,
     notes: [
       ...taken.notes,
@@ -308,18 +311,18 @@ async function restoreFolders(
   const { cancelRefusal } = first;
   const retried = new Map(first.notFound.map((notFound) => [notFound.mod, notFound]));
   const firstRefused = first.refused.filter((refused) => !retried.has(refused.item));
-  if (retried.size === 0 || signal?.aborted) {
-    return { applied: true, landed: first.landed, refused: [...firstRefused, ...read.refused], ...cancelRefused(cancelRefusal) };
-  }
+  const notSentAgain = { applied: true, landed: first.landed, refused: [...firstRefused, ...read.refused], ...cancelRefused(cancelRefusal) } as const;
+  if (retried.size === 0 || signal?.aborted) return notSentAgain;
 
   const named = await namedGameFiles(adapter, folder, first.notFound);
   const downloaded = await namedDownloadedFiles({ adapter, nexus }, first.notFound, { onDownload: (file) => { onProgress?.({ phase: 'Downloading', file }); }, signal });
+  if (signal?.aborted) return notSentAgain;
   const submodules = await namedSubmodules(adapter, first.notFound);
   const again = sent.flatMap((mod) => {
     const notFound = retried.get(mod.name);
     return notFound === undefined
       ? [] : [{
-        ...mod, installationFile: downloaded.handed(notFound.installationFile?.name), submodule: submodules.handed(notFound.submodule),
+        ...mod, installationFile: wireFile(downloaded.handed(notFound.installationFile?.name)), submodule: submodules.handed(notFound.submodule),
         unreadableGameFiles: named.unreadable(mod.name), unreadableInstallationFile: downloaded.unreadable(notFound.installationFile?.name),
       }];
   });

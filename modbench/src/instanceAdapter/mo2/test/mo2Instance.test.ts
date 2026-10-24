@@ -1974,6 +1974,14 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.downloadedFile(name)).toEqual({ kind: 'read', answer: undefined });
       });
     });
+
+    it.each([
+      ['a file\'s page', 'https://www.nexusmods.com/fallout4/mods/7?tab=files&file_id=78', { game: 'fallout4', modId: '7', fileId: '78' }],
+      ['a mod\'s page, which names no file', 'https://www.nexusmods.com/fallout4/mods/7', { game: 'fallout4', modId: '7', fileId: undefined }],
+      ['a page on another host', 'https://example.com/fallout4/mods/7', undefined],
+    ])('reads the file on Nexus of %s', (_name, page, file) => {
+      expect(adapter.nexusFileAt(page)).toEqual(file);
+    });
   });
 
   describe('put and rename in mods/', () => {
@@ -2772,6 +2780,14 @@ describe('the MO2 Instance adapter', () => {
           expect(await readFile(join(downloadsFolder(), 'fetched.7z'), 'utf8')).toBe('the bytes');
           expect(await metaOf('fetched.7z')).toMatch(/^gameName=Fallout4\r\nmodID=4598\r\nfileID=78\r$/m);
           assertOnlyChanged(before, await snapshotTree(root), new Set(['downloads/fetched.7z', 'downloads/fetched.7z.meta']));
+        });
+
+        it('writes its metadata whole, so nothing an orphan metadata of that name held, as MO2\'s removed mark, survives', async () => {
+          await writeFile(join(downloadsFolder(), 'fetched.7z.meta'), '[General]\r\nremoved=true\r\ninstalled=true\r\n');
+
+          await adapter.putDownloadedFile('fetched.7z', theBytes(), { hash: HASH_OF_THE_BYTES, info });
+
+          expect(await metaOf('fetched.7z')).not.toMatch(/removed|installed/);
         });
 
         it('puts nothing when the bytes have another hash', async () => {

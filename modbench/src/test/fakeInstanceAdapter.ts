@@ -221,8 +221,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   let current = reading;
   let calls: AdapterCall[] = [];
   const hashed: string[] = [];
-  // The fake's hash of a downloaded file put is its bytes as text.
-  const put = new Map<string, FileRead<InstallationFile>>();
+  const putHashedAsTheirText = new Map<string, FileRead<InstallationFile>>();
   const listeners = new Set<() => void>();
   let readings = 0;
   let readingFailure: string | undefined;
@@ -285,7 +284,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     modFolderPath: (mod) => Promise.resolve(namesNoFolder(mod) ? undefined : foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod)),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
-    downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? put.get(name) ?? { kind: 'read', answer: undefined }),
+    downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? putHashedAsTheirText.get(name) ?? { kind: 'read', answer: undefined }),
     nexusFileAt: parseNexusPage,
     downloadedFileQuery: (name) => {
       const reason = answers.unreadableQueries?.get(name);
@@ -359,13 +358,13 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       }),
     putDownloadedFile: async (name, bytes, { hash, info }) => {
       await write({ verb: 'putDownloadedFile', name, info }, () => {
-        if (answers.downloadedFiles?.has(name) || put.has(name)) throw new Error(`'${name}' is already in the downloads folder`);
+        if (answers.downloadedFiles?.has(name) || putHashedAsTheirText.has(name)) throw new Error(`'${name}' is already in the downloads folder`);
       });
       const chunks: Uint8Array[] = [];
       for await (const chunk of bytes) chunks.push(chunk);
       const text = Buffer.concat(chunks).toString();
       if (text !== hash) return { put: false };
-      put.set(name, { kind: 'read', answer: { path: `/downloads/${name}`, size: text.length, hash, entries: [] } });
+      putHashedAsTheirText.set(name, { kind: 'read', answer: { path: `/downloads/${name}`, size: text.length, hash, entries: [] } });
       return { put: true };
     },
     writeNexusFileInfo: (name, info) =>

@@ -16,7 +16,7 @@ import { spliceDownloadedFileMeta, trashDownloadedFileMeta } from './downloadedF
 import { ensureDir, exists, putIfChanged, putStreamedIf, remove, withLock, write } from '../files';
 import { digestOf } from '../downloadedFileContents/contentDigest';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
-import { downloadedFilePath, pluginOrderFiles, settingsFile } from './layout';
+import { downloadedFileMetadataPath, downloadedFilePath, pluginOrderFiles, settingsFile } from './layout';
 import { sourceModsIn } from './sourceMods';
 import { currentDownloadsDir, entryKey, folderHolding, newModFolder, metaGameOfDomain, refuseFolderTaken, renameFolderWithManifest, type Mo2Context } from './mo2Context';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
@@ -77,7 +77,8 @@ async function putDownloadedFile(
     await ensureDir(downloadsDir);
     if (!(await putStreamedIf(file, bytes, async (temp) => (await digestOf(temp)) === hash))) return { put: false };
     try {
-      await spliceDownloadedFileMeta(downloadsDir, name, (text) => setNexusFileInfoInText(text, info, gameName));
+      const metadata = downloadedFileMetadataPath(downloadsDir, name);
+      await withLock(metadata, () => write(metadata, setNexusFileInfoInText('', info, gameName)));
     } catch (err) {
       await remove(file);
       throw err;
