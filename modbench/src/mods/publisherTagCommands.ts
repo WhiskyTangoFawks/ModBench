@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { originLabel } from '../instanceLoader/fileConflictIndex';
-import type { InstanceValue, Instance, PublisherTag } from '../instanceLoader/instance';
+import type { FileOrigin, InstanceValue, Instance, PublisherTag } from '../instanceLoader/instance';
 import type { ModCommands, PublisherTagRow } from '../modCommands/modCommands';
 import type { Reporter } from '../ports/reporter';
 import { argumentOfKind, registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
@@ -15,18 +15,15 @@ type Rows = Pick<InstanceValue, 'publisherConfiguration' | 'paths'>;
 /** The publisher tags that cover the row itself, a mod by its folder (publishing.md, Publisher tags, story 2: what remove offers). */
 export function publisherTagsHeld({ publisherConfiguration, paths }: Rows, row: ModlistNode): readonly PublisherTag[] {
   if (publisherConfiguration.kind !== 'read') return [];
-  switch (row.kind) {
-    case 'mod': {
-      const folder = paths.modDirs.get(row.mod.name);
-      return folder === undefined ? [] : publisherConfiguration.covering(folder, row.mod.name);
-    }
-    case 'file':
-      return publisherConfiguration.covering(row.file.path, row.origin.kind === 'mod' ? row.origin.name : undefined);
-    case 'folder':
-      return publisherConfiguration.covering(row.folder.path, row.origin.kind === 'mod' ? row.origin.name : undefined);
-    default:
-      return [];
+  const { covering } = publisherConfiguration;
+  if (row.kind === 'mod') {
+    const folder = paths.modDirs.get(row.mod.name);
+    return folder === undefined ? [] : covering(folder, row.mod.name);
   }
+  const modOf = (origin: FileOrigin): string | undefined => (origin.kind === 'mod' ? origin.name : undefined);
+  if (row.kind === 'file') return covering(row.file.path, modOf(row.origin));
+  if (row.kind === 'folder') return covering(row.folder.path, modOf(row.origin));
+  return [];
 }
 
 /** What the publisher tag items wait on, as `modbench.mod.<name>` keys. A publisher whose configuration is not read offers none. */
@@ -41,13 +38,11 @@ export function publisherKeyContext(
   };
 }
 
-const rowOf =(row: ModlistNode): PublisherTagRow | undefined => {
-  switch (row.kind) {
-    case 'mod': return { origin: { kind: 'mod', name: row.mod.name } };
-    case 'file': return row.ref;
-    case 'folder': return { origin: row.origin, relativePath: row.folder.relativePath };
-    default: return undefined;
-  }
+const rowOf = (row: ModlistNode): PublisherTagRow | undefined => {
+  if (row.kind === 'mod') return { origin: { kind: 'mod', name: row.mod.name } };
+  if (row.kind === 'file') return row.ref;
+  if (row.kind === 'folder') return { origin: row.origin, relativePath: row.folder.relativePath };
+  return undefined;
 };
 
 const selectedRows = (entry: GestureEntry<ModlistNode>): ModlistNode[] => {
@@ -66,7 +61,7 @@ interface Given {
 // modbench.mod.addPublisherTag / modbench.mod.removePublisherTag: the pick of the publisher tags the publisher declares for
 // the rows, and for remove those the selection holds.
 export function registerPublisherTagCommands(
-  commands: ModCommands, instance: Pick<Instance, 'value' | 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+  commands: Pick<ModCommands, 'changePublisherTag'>, instance: Pick<Instance, 'value' | 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   const gesture = (change: 'add' | 'remove'): AgentGesture<ModlistNode, Given, Awaited<ReturnType<ModCommands['changePublisherTag']>>, { tag: string }> => ({
     fromView: async (entry) => {

@@ -211,7 +211,7 @@ describe('compiler settings Modbench cannot read (Never silently wrong)', () => 
 
 describe('changing a publisher tag in the compiler settings (publishing.md, Publisher tags, stories 2 and 5)', () => {
   const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
-  const settings = async (): Promise<Record<string, unknown>> => JSON.parse(await settingsText()) as Record<string, unknown>;
+  const settings = async (): Promise<unknown> => JSON.parse(await settingsText());
 
   it('adds the path under the tag\'s list, relative to the instance and spelled as Wabbajack spells one, keeping every other setting', async () => {
     await writeSettings({ OutputFile: 'C:\\out\\list.wabbajack', Include: ['mods\\A'] });
@@ -236,7 +236,8 @@ describe('changing a publisher tag in the compiler settings (publishing.md, Publ
 
     const refused = await publisherOver().changeTag('remove', 'Include', [join(root, 'mods', 'A')]);
 
-    expect({ refused, include: (await settings()).Include }).toEqual({ refused: [], include: ['mods\\B'] });
+    expect(refused).toEqual([]);
+    expect(await settings()).toMatchObject({ Include: ['mods\\B'] });
   });
 
   it('refuses a path outside the instance, and one the tag covers only from a path above it, and lands the rest', async () => {
@@ -246,8 +247,8 @@ describe('changing a publisher tag in the compiler settings (publishing.md, Publ
 
     const refused = await publisherOver().changeTag('remove', 'Include', [outside, below, join(root, 'mods', 'A')]);
 
-    expect({ refused: refused.map(({ path }) => path), include: (await settings()).Include })
-      .toEqual({ refused: [outside, below], include: [] });
+    expect(refused.map(({ path }) => path)).toEqual([outside, below]);
+    expect(await settings()).toMatchObject({ Include: [] });
   });
 
   it('keeps the file\'s indentation, line ends and final newline', async () => {

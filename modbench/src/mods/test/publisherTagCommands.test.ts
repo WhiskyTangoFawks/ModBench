@@ -25,7 +25,6 @@ import { ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { InstanceValue, PublisherTag } from '../../instanceLoader/instance';
-import type { ModCommands } from '../../modCommands/modCommands';
 
 const INCLUDE: PublisherTag = { name: 'Include', badge: 'IN', marksPaths: true };
 const ALWAYS_ENABLED: PublisherTag = { name: 'Always Enabled', badge: 'AE', marksPaths: false };
@@ -45,7 +44,7 @@ const value: InstanceValue = {
 };
 
 const changePublisherTag = vi.fn();
-const commands = { changePublisherTag } as unknown as ModCommands;
+const commands = { changePublisherTag };
 const instance = { value, refresh: () => { progressSteps.push('read'); return Promise.resolve(); } };
 
 const origin = { kind: 'mod', name: 'M' } as const;
