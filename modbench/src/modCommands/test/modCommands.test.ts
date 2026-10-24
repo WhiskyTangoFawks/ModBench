@@ -846,37 +846,53 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
   const publisherOver = (answers: InstanceAnswers = {}, mEdit = new InMemoryMEditClient(), reading: Partial<InstanceReading> = {}) =>
     over(FIXTURE_ORDER, { publisherTags: [INCLUDE], ...answers }, mEdit, reading);
   const follow = (...moves: { from: string; to?: string }[]): AdapterCall => ({ verb: 'followModFolders', moves });
-  const unreadable = refusing('followModFolders', 'compiler_settings.json is not JSON');
+  const unreadable = { unreadablePublisher: 'compiler_settings.json is not JSON' };
 
-  it('rename moves them to the new folder before the folder moves, and back when the folder does not move', async () => {
-    const { fake, commands } = publisherOver({ refusals: refusing('renameModFolder', 'The folder is in the way') });
+  it('rename moves them to the new folder once the folder has moved', async () => {
+    const { fake, commands } = publisherOver();
 
     await commands.renameMod('Harder VATS', 'Harder VATS 2');
 
     expect(fake.calls).toEqual([
-      follow({ from: '/mods/Harder VATS', to: '/mods/Harder VATS 2' }),
       { verb: 'renameModFolder', from: 'Harder VATS', to: 'Harder VATS 2' },
-      follow({ from: '/mods/Harder VATS 2', to: '/mods/Harder VATS' }),
+      follow({ from: '/mods/Harder VATS', to: '/mods/Harder VATS 2' }),
+      expect.objectContaining({ verb: 'changeModOrder' }),
     ]);
   });
 
-  it('rename refuses, writing nothing, when the publisher\'s configuration cannot be read', async () => {
-    const { fake, commands } = publisherOver({ refusals: unreadable });
+  it('rename moves none when the folder does not move', async () => {
+    const { fake, commands } = publisherOver({ refusals: refusing('renameModFolder', 'The folder is in the way') });
 
-    const outcome = await commands.renameMod('Harder VATS', 'Harder VATS 2');
+    await commands.renameMod('Harder VATS', 'Harder VATS 2');
 
-    expect(outcome).toEqual({ applied: false, refusal: 'compiler_settings.json is not JSON' });
-    expect(verbs(fake.calls)).toEqual(['followModFolders']);
+    expect(verbs(fake.calls)).toEqual(['renameModFolder']);
   });
 
-  it('rename puts them back with the folder when mEdit refuses the build configuration', async () => {
+  it('rename moves none when mEdit refuses the build configuration', async () => {
     const mEdit = new InMemoryMEditClient();
     mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
     const { fake, commands } = publisherOver({}, mEdit, sourceMods(new Map([['Harder VATS', '/instance/source/Harder VATS']])));
 
     await commands.renameMod('Harder VATS', 'Harder VATS 2');
 
-    expect(verbs(fake.calls)).toEqual(['followModFolders', 'renameModFolder', 'renameModFolder', 'followModFolders']);
+    expect(verbs(fake.calls)).toEqual(['renameModFolder', 'renameModFolder']);
+  });
+
+  it('rename refuses, writing nothing, when the configuration cannot be read', async () => {
+    const { fake, commands } = publisherOver(unreadable);
+
+    const outcome = await commands.renameMod('Harder VATS', 'Harder VATS 2');
+
+    expect(outcome).toEqual({ applied: false, refusal: 'compiler_settings.json is not JSON' });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('rename lands with the failure when the tags cannot follow after the folder moved', async () => {
+    const { commands } = publisherOver({ refusals: refusing('followModFolders', 'compiler_settings.json is not JSON') });
+
+    const outcome = await commands.renameMod('Harder VATS', 'Harder VATS 2');
+
+    expect(outcome).toEqual({ applied: true, lineRefusals: [], tagRefusal: 'compiler_settings.json is not JSON' });
   });
 
   it('uninstall removes them for every mod it trashed, in one write after the trash', async () => {
@@ -884,21 +900,21 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
 
     await commands.uninstallMods(['Harder VATS', 'ENBoost', 'No Such Mod'], NO_TRASH);
 
-    expect(fake.calls.filter((call) => call.verb === 'followModFolders')).toEqual([follow(), follow({ from: '/mods/Harder VATS' }, { from: '/mods/ENBoost' })]);
-    expect(verbs(fake.calls).lastIndexOf('followModFolders')).toBeGreaterThan(verbs(fake.calls).lastIndexOf('trashEntryFolder'));
+    expect(fake.calls.filter((call) => call.verb === 'followModFolders')).toEqual([follow({ from: '/mods/Harder VATS' }, { from: '/mods/ENBoost' })]);
+    expect(verbs(fake.calls).indexOf('followModFolders')).toBeGreaterThan(verbs(fake.calls).lastIndexOf('trashEntryFolder'));
   });
 
   it('uninstall refuses the whole selection, trashing and unlisting nothing, when the configuration cannot be read', async () => {
-    const { fake, commands } = publisherOver({ refusals: unreadable });
+    const { fake, commands } = publisherOver(unreadable);
 
     const outcome = await commands.uninstallMods(['Harder VATS', 'ENBoost'], NO_TRASH);
 
     expect(outcome).toEqual({ applied: false, refusal: 'compiler_settings.json is not JSON' });
-    expect(fake.calls).toEqual([follow()]);
+    expect(fake.calls).toEqual([]);
   });
 
-  it('uninstall lands the mod carrying the failure when the configuration turns unreadable after the check', async () => {
-    const { commands } = publisherOver({ refusals: (call) => (call.verb === 'followModFolders' && call.moves.length > 0 ? 'compiler_settings.json is not JSON' : undefined) });
+  it('uninstall lands the mod carrying the failure when the write fails after the trash', async () => {
+    const { commands } = publisherOver({ refusals: refusing('followModFolders', 'compiler_settings.json is not JSON') });
 
     const outcome = await commands.uninstallMods(['Harder VATS'], NO_TRASH);
 
@@ -910,6 +926,6 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
 
     await commands.uninstallMods(['Harder VATS'], NO_TRASH);
 
-    expect(fake.calls.filter((call) => call.verb === 'followModFolders')).toEqual([follow()]);
+    expect(verbs(fake.calls)).not.toContain('followModFolders');
   });
 });

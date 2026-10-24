@@ -206,18 +206,24 @@ interface InstanceMove {
   readonly to: string | undefined;
 }
 
-// Each entry at or under a moved folder follows it, the rest of its path as it was written; an entry the new place
-// already lists is listed once.
 function followedEntries(entries: readonly string[], moves: readonly InstanceMove[]): readonly string[] {
-  const followed = entries.flatMap((entry) => {
-    const segments = entry.split(/[\\/]/).filter((name) => name !== '');
+  const moveOf = (entry: string): InstanceMove | undefined => {
     const names = namesOf(entry);
-    const move = moves.find(({ from }) => from.every((name, depth) => names[depth] === name));
+    return moves.find(({ from }) => from.every((name, depth) => names[depth] === name));
+  };
+  if (!entries.some((entry) => moveOf(entry) !== undefined)) return entries;
+  const listed = new Set(entries.filter((entry) => moveOf(entry) === undefined).map((entry) => namesOf(entry).join('/')));
+  return entries.flatMap((entry) => {
+    const move = moveOf(entry);
     if (move === undefined) return [entry];
-    return move.to === undefined ? [] : [[move.to, ...segments.slice(move.from.length)].join('\\')];
+    if (move.to === undefined) return [];
+    const rest = entry.split(/[\\/]/).filter((name) => name !== '').slice(move.from.length);
+    const followed = [move.to, ...rest].join('\\');
+    const key = namesOf(followed).join('/');
+    if (listed.has(key)) return [];
+    listed.add(key);
+    return [followed];
   });
-  const unique = followed.filter((entry, at) => followed.findIndex((other) => sameNames(namesOf(other), namesOf(entry))) === at);
-  return sameNames(unique, entries) ? entries : unique;
 }
 
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {

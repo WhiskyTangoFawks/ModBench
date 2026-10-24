@@ -219,10 +219,13 @@ export function registerModContextCommands(
       return {
         applied: true,
         outcome: { landed: [newName], refused: [] },
-        partial: result.lineRefusals.map(({ profile, refusal }) => ({
-          message: `"${oldName}" was renamed, but its ${commands.names.modOrderFile} line in profile "${profile}" could not be renamed.`,
-          detail: refusal, severity: 'warning',
-        })),
+        partial: [
+          ...(result.tagRefusal === undefined ? [] : [{ message: `"${oldName}" was renamed, but its publisher tags could not follow it.`, detail: result.tagRefusal, severity: 'warning' as const }]),
+          ...result.lineRefusals.map(({ profile, refusal }) => ({
+            message: `"${oldName}" was renamed, but its ${commands.names.modOrderFile} line in profile "${profile}" could not be renamed.`,
+            detail: refusal, severity: 'warning' as const,
+          })),
+        ],
       };
     }),
     report: (result) => {

@@ -481,6 +481,12 @@ export type Listed = (path: string) => readonly PublisherTag[];
 /** Adding a publisher tag, or removing it. */
 export type PublisherTagChange = 'add' | 'remove';
 
+/** A mod folder whose publisher tags move to `to`, or go with no `to`. */
+export interface FolderMove {
+  readonly from: string;
+  readonly to?: string;
+}
+
 /** A path a change to a publisher tag refused, and why. */
 export interface PathRefusal {
   readonly path: string;
@@ -569,9 +575,11 @@ export interface InstanceAdapter {
   /** Adds or removes the publisher tag named `tag` on each path; a path already so changes nothing. Answers the paths it
    *  refused; rejects, writing nothing, for an undeclared tag or a configuration it cannot read. */
   changePublisherTag(change: PublisherTagChange, tag: string, paths: readonly string[]): Promise<readonly PathRefusal[]>;
+  /** Why the publisher's configuration cannot be read, or undefined when it can or the instance holds none. */
+  publisherConfigurationRefusal(): Promise<string | undefined>;
   /** Moves each publisher tag on or under a mod folder `from` to the same place under `to`, or drops it with no `to`.
-   *  Rejects, writing nothing, for a configuration it cannot read, even given no moves. */
-  followModFolders(moves: readonly { readonly from: string; readonly to?: string }[]): Promise<void>;
+   *  Rejects, writing nothing, for a configuration it cannot read. */
+  followModFolders(moves: readonly FolderMove[]): Promise<void>;
 
   // Answers about a mod or a file.
   /** The folder a build of `mod` writes: the one that holds it, else the one its name gives it; undefined when its

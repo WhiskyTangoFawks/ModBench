@@ -3,7 +3,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
-  entryNotFound, fileInFolder, sameEntry, type DecideModOrder, type EntryRef, type FileOrigin, type FileRead, type InstanceAdapter,
+  entryNotFound, fileInFolder, sameEntry, type DecideModOrder, type EntryRef, type FileOrigin, type FileRead, type ModMetadata, type InstanceAdapter,
   type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type PublisherTag, type PublisherTagChange, type SeparatorsPlace, type SourceMods,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
@@ -425,49 +425,38 @@ async function uninstallMods(
   adapter: InstanceAdapter, mods: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<UninstalledMod>> {
   const installedFrom = new Map(await Promise.all(mods.map(async (mod) => [mod, await readOrRefuse(() => adapter.modMetadata(mod))] as const)));
-  const readable = await publisherTagsReadable(adapter);
-  if (!readable.applied) return readable;
-  const folders = await Promise.all(mods.map(async (mod) => [mod, await adapter.modFolderPath(mod).catch(() => undefined)] as const));
+  let folders: (readonly [string, string | undefined])[];
+  try {
+    const unreadable = await adapter.publisherConfigurationRefusal();
+    if (unreadable !== undefined) return { applied: false, refusal: unreadable };
+    folders = await Promise.all(mods.map(async (mod) => [mod, await adapter.modFolderPath(mod)] as const));
+  } catch (err) {
+    return refuse(err);
+  }
   const result = await trashThenUnlist(adapter, 'mod', mods, trash);
   if (!result.applied) return result;
   const tagRefusal = await removePublisherTags(adapter, result.outcome.landed.flatMap(({ name }) => folders.find(([mod]) => mod === name)?.[1] ?? []));
   const landed: UninstalledMod[] = [];
   for (const trashed of result.outcome.landed) {
-    const entry: UninstalledMod = tagRefusal === undefined ? trashed : { ...trashed, tagRefusal };
-    const read = installedFrom.get(entry.name);
-    const downloadedFile = read?.kind === 'read' ? read.answer.installationFile?.name : undefined;
-    if (read?.kind === 'unreadable') {
-      landed.push(entry.lineRefusal === undefined ? { ...entry, markRefusal: read.reason } : entry);
-      continue;
-    }
-    if (entry.lineRefusal !== undefined || downloadedFile === undefined) {
-      landed.push(entry);
-      continue;
-    }
-    try {
-      await adapter.markDownloadedFile(downloadedFile, 'Uninstalled');
-      landed.push(entry);
-    } catch (err) {
-      landed.push({ ...entry, markRefusal: errorMessage(err) });
-    }
+    landed.push(await markUninstalled(adapter, tagRefusal === undefined ? trashed : { ...trashed, tagRefusal }, installedFrom.get(trashed.name)));
   }
   return { applied: true, outcome: { landed, refused: result.outcome.refused } };
 }
 
-// Whether the publisher's configuration reads, before anything is written: a move of no folder reads it and writes none.
-async function publisherTagsReadable(adapter: InstanceAdapter): Promise<CommandResult> {
-  if (adapter.publisherTags.length === 0) return { applied: true, wrote: false };
+async function markUninstalled(adapter: InstanceAdapter, entry: UninstalledMod, read: FileRead<ModMetadata> | undefined): Promise<UninstalledMod> {
+  if (read?.kind === 'unreadable') return entry.lineRefusal === undefined ? { ...entry, markRefusal: read.reason } : entry;
+  const downloadedFile = read?.kind === 'read' ? read.answer.installationFile?.name : undefined;
+  if (entry.lineRefusal !== undefined || downloadedFile === undefined) return entry;
   try {
-    await adapter.followModFolders([]);
-    return { applied: true, wrote: false };
+    await adapter.markDownloadedFile(downloadedFile, 'Uninstalled');
+    return entry;
   } catch (err) {
-    return refuse(err);
+    return { ...entry, markRefusal: errorMessage(err) };
   }
 }
 
-// The publisher tags on the folders, removed in one write; why they could not be, or undefined.
 async function removePublisherTags(adapter: InstanceAdapter, folders: readonly string[]): Promise<string | undefined> {
-  if (adapter.publisherTags.length === 0 || folders.length === 0) return undefined;
+  if (folders.length === 0) return undefined;
   try {
     await adapter.followModFolders(folders.map((from) => ({ from })));
     return undefined;
@@ -500,22 +489,23 @@ async function createEmptyMod(adapter: InstanceAdapter, name: string): Promise<C
 }
 
 /** `lineRefusals` names each profile whose line could not be renamed: the folder is renamed, and
- *  that profile loses the mod's place until `mod sync` adopts the folder. */
+ *  that profile loses the mod's place until `mod sync` adopts the folder. `tagRefusal` is set when the
+ *  folder is renamed and its publisher tags could not follow it. */
 export type RenameModResult =
-  | { applied: true; lineRefusals: { profile: string; refusal: string }[]; unchanged?: true }
+  | { applied: true; lineRefusals: { profile: string; refusal: string }[]; unchanged?: true; tagRefusal?: string }
   | { applied: false; refusal: string };
 
-// The publisher tags on a mod's folder, moved to where the new name puts it: the folders moved, or undefined when the
-// instance has no publisher tags to move.
-async function moveTagsWithFolder(adapter: InstanceAdapter, from: string, to: string): Promise<{ from: string; to: string } | undefined> {
-  if (adapter.publisherTags.length === 0) return undefined;
-  const [fromFolder, toFolder] = await Promise.all([adapter.modFolderPath(from), adapter.modFolderPath(to)]);
-  if (fromFolder === undefined || toFolder === undefined) return undefined;
-  await adapter.followModFolders([{ from: fromFolder, to: toFolder }]);
-  return { from: fromFolder, to: toFolder };
+async function moveTagsAfterRename(adapter: InstanceAdapter, from: string | undefined, to: string): Promise<string | undefined> {
+  try {
+    const target = await adapter.modFolderPath(to);
+    if (from !== undefined && target !== undefined) await adapter.followModFolders([{ from, to: target }]);
+    return undefined;
+  } catch (err) {
+    return errorMessage(err);
+  }
 }
 
-// The publisher tags, then the folder, then a source mod's build configuration, then the line in each profile, the active one first. A
+// The folder, then a source mod's build configuration, then the line in each profile, the active one first. A
 // profile that does not list the mod is left as it was.
 async function renameMod({ adapter, mEdit }: SourceModWriters, from: string, to: string): Promise<RenameModResult> {
   if (to.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
@@ -525,43 +515,34 @@ async function renameMod({ adapter, mEdit }: SourceModWriters, from: string, to:
   let activeProfile: string;
   let profiles: readonly string[];
   let sourceFolder: string | undefined;
-  let tagsMoved: { from: string; to: string } | undefined;
+  let fromFolder: string | undefined;
   try {
-    [activeProfile, profiles, sourceFolder] = await Promise.all([
-      adapter.activeProfile(), adapter.profiles(), adapter.sourceMods().then((sourceMods) => sourceMods.folderOf(from)),
+    const unreadable = await adapter.publisherConfigurationRefusal();
+    if (unreadable !== undefined) return { applied: false, refusal: unreadable };
+    [activeProfile, profiles, sourceFolder, fromFolder] = await Promise.all([
+      adapter.activeProfile(), adapter.profiles(), adapter.sourceMods().then((sourceMods) => sourceMods.folderOf(from)), adapter.modFolderPath(from),
     ]);
-    tagsMoved = await moveTagsWithFolder(adapter, from, to);
+    await adapter.renameModFolder(from, to);
   } catch (err) {
     return refuse(err);
   }
-  const putBack = async (refusal: string, folderMoved: boolean): Promise<RenameModResult> => {
-    const failures: string[] = [];
-    try {
-      if (folderMoved) await adapter.renameModFolder(to, from);
-    } catch (err) {
-      failures.push(`The folder could not be renamed back to "${from}": ${errorMessage(err)}`);
-    }
-    try {
-      if (tagsMoved !== undefined) await adapter.followModFolders([{ from: tagsMoved.to, to: tagsMoved.from }]);
-    } catch (err) {
-      failures.push(`Its publisher tags could not be moved back: ${errorMessage(err)}`);
-    }
-    return { applied: false, refusal: [refusal, ...failures].join(' ') };
-  };
-  try {
-    await adapter.renameModFolder(from, to);
-  } catch (err) {
-    return putBack(errorMessage(err), false);
-  }
   const configured = sourceFolder === undefined ? undefined : await mEdit.changeBuildConfiguration(sourceFolder, { output: to });
-  if (configured !== undefined && isRefused(configured)) return putBack(configured.message, true);
+  if (configured !== undefined && isRefused(configured)) {
+    try {
+      await adapter.renameModFolder(to, from);
+    } catch (err) {
+      return { applied: false, refusal: `${configured.message} The folder could not be renamed back to "${from}": ${errorMessage(err)}` };
+    }
+    return { applied: false, refusal: configured.message };
+  }
+  const tagRefusal = await moveTagsAfterRename(adapter, fromFolder, to);
   const lineRefusals: { profile: string; refusal: string }[] = [];
   const ordered = [activeProfile, ...profiles.filter((profile) => profile !== activeProfile)];
   for (const profile of ordered) {
     const line = wrote(await landIn(adapter, profile, () => [{ kind: 'renameMod', from, to }]));
     if (!line.applied) lineRefusals.push({ profile, refusal: line.refusal });
   }
-  return { applied: true, lineRefusals };
+  return { applied: true, lineRefusals, ...(tagRefusal !== undefined && { tagRefusal }) };
 }
 
 type ModSyncResult =

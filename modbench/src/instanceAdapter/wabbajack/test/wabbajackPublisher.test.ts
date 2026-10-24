@@ -326,6 +326,14 @@ describe('publisher tags following a mod folder (publishing.md, Publisher tags, 
     expect(JSON.parse(await settingsText())).toEqual({ Include: ['mods\\AB'], Ignore: [] });
   });
 
+  it('leaves a duplicate the move does not touch beside the entries it moves', async () => {
+    await writeSettings({ Include: ['mods\\X', 'mods/x', 'mods\\A'] });
+
+    await publisherOver().followFolders([{ from: folder('A'), to: folder('C') }]);
+
+    expect(JSON.parse(await settingsText())).toEqual({ Include: ['mods\\X', 'mods/x', 'mods\\C'] });
+  });
+
   it('lists an entry once when the new folder already has it', async () => {
     await writeSettings({ Include: ['mods\\A', 'mods\\C'] });
 
@@ -349,14 +357,13 @@ describe('publisher tags following a mod folder (publishing.md, Publisher tags, 
     expect(await settingsText()).toBe('not json');
   });
 
-  it('reads the settings and writes nothing when it is given no folder', async () => {
-    const text = '{"Include":["mods\\\\A"]}';
+  it('writes nothing when the settings hold a duplicate the move does not touch', async () => {
+    const text = '{"Include":["mods\\\\X","mods/x","mods\\\\B"]}';
     await writeSettings(text);
-    await publisherOver().followFolders([]);
-    expect(await settingsText()).toBe(text);
 
-    await writeSettings('not json');
-    await expect(publisherOver().followFolders([])).rejects.toThrow(SETTINGS_FILE);
+    await publisherOver().followFolders([{ from: folder('A'), to: folder('C') }]);
+
+    expect(await settingsText()).toBe(text);
   });
 
   it('does nothing while the instance holds no compiler settings, creating none', async () => {
