@@ -248,6 +248,23 @@ describe('modbench.mod.install: an install the user cancelled on the FOMOD insta
   });
 });
 
+describe('modbench.mod.install: a FOMOD installed from the page', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('warns of what its installer said, and not of the missing files the user confirmed', async () => {
+    const reporter = recordingReporter();
+    installMod.mockResolvedValueOnce({ applied: true, fomod: { kind: 'installer', missing: ['gone.esp'], notes: ['Installer failed'] } });
+    showQuickPick.mockResolvedValueOnce({ packageKind: 'folder' });
+    showOpenDialog.mockResolvedValueOnce([uriFile('/somewhere/foo')]);
+    showInputBox.mockResolvedValueOnce('New Mod');
+
+    registerModInstallCommands(deps({ reporterFor: () => reporter, downloadedFileInstallReporting: { reporter, log: vi.fn(), progressViewId: 'modbench.downloads' } }));
+    await invoke('modbench.mod.install');
+
+    expect(reporter.reports).toEqual([{ severity: 'warning', message: '"New Mod": its FOMOD\'s installer says', detail: 'Installer failed' }]);
+  });
+});
+
 describe('modbench.mod.install: a failed install', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -410,7 +427,10 @@ describe('modbench.mod.install called by the agent', () => {
       message: '"Bar" is a FOMOD installed as a plain copy: its files need arranging by hand, because its installer\'s own steps did not run:',
       detail: 'its installer cannot be read: bad XML.', severity: 'warning',
     }]],
-    ['by Manual, with nothing to warn of', { kind: 'manual' } as const, []],
+    ['by Manual', { kind: 'plainCopy', why: 'Manual was asked for' } as const, [{
+      message: '"Bar" is a FOMOD installed as a plain copy: its files need arranging by hand, because its installer\'s own steps did not run:',
+      detail: 'Manual was asked for.', severity: 'warning',
+    }]],
     ['without files its archive lacks, and what else its installer said', { kind: 'installer', missing: ['gone.esp', 'gone'], notes: ['Installer failed'] } as const, [
       { message: '"Bar" lacks files its FOMOD names and its archive does not hold:', detail: 'gone.esp, gone', severity: 'warning' },
       { message: '"Bar": its FOMOD\'s installer says', detail: 'Installer failed', severity: 'warning' },

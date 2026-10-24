@@ -7,6 +7,7 @@ import type { FomodDialog, FomodLanded, FomodStepChoice } from '../../instanceAd
 import type { FomodMove, FomodState } from '../../../wire/fomodPage';
 import { present } from '../../../ports/present';
 import { engineProcessFrom, FOMOD_ENGINE } from '../../../test/fomodEngine';
+import { FOMOD_PAGE } from '../../../test/fomodDialogDouble';
 
 const SCHEMA = 'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd"';
 
@@ -69,7 +70,7 @@ describe('the FOMOD installer', () => {
 
   async function install(choices: readonly FomodStepChoice[], engine: FomodEngine = FOMOD_ENGINE): Promise<FomodLanded> {
     const landing = await fomodLanding(engine, { root, fomod: 'xml' }, { kind: 'choices', steps: choices }, () => Promise.resolve(KNOWN));
-    if ('cancelled' in landing) throw new Error('The installer was cancelled.');
+    if (landing.kind === 'cancelled') throw new Error('The installer was cancelled.');
     landedIn = landing.root;
     return landing.fomod;
   }
@@ -307,17 +308,26 @@ describe('the FOMOD installer', () => {
       closed: number;
     }
 
+    // Each state shown is answered by the next reply, and the last reply answers every state after.
+    type Reply = FomodMove | ((state: FomodState) => FomodMove);
+    const INSTALL: FomodMove = { kind: 'continue', forward: true, stepId: 0 };
+    const CANCEL: FomodMove = { kind: 'cancel' };
+
     async function answered(
-      react: (state: FomodState, move: (move: FomodMove) => void, seen: number) => void,
-      { engine = FOMOD_ENGINE, confirms = true }: { engine?: FomodEngine; confirms?: boolean } = {},
+      replies: readonly Reply[],
+      { engine = FOMOD_ENGINE, confirms = true, onShow = () => undefined }: { engine?: FomodEngine; confirms?: boolean; onShow?: () => void } = {},
     ): Promise<{ page: Page; landing: Awaited<ReturnType<typeof fomodLanding>> }> {
       const page: Page = { states: [], confirmed: [], asking: [], closed: 0 };
       let handler: ((move: FomodMove) => void) | undefined;
       const dialog: FomodDialog = {
+        ...FOMOD_PAGE,
         show: (state) => {
+          const reply = present(replies[Math.min(page.states.length, replies.length - 1)], 'the reply to this state');
           page.states.push(state);
-          const seen = page.states.length;
-          setImmediate(() => react(state, (move) => present(handler, 'the installer\'s listener')(move), seen));
+          setImmediate(() => {
+            onShow();
+            present(handler, 'the installer\'s listener')(typeof reply === 'function' ? reply(state) : reply);
+          });
         },
         onMove: (listener) => {
           handler = listener;
@@ -334,7 +344,7 @@ describe('the FOMOD installer', () => {
         },
       };
       const landing = await fomodLanding(engine, { root, fomod: 'xml' }, { kind: 'dialog', dialog }, () => Promise.resolve(KNOWN));
-      if ('root' in landing) landedIn = landing.root;
+      if (landing.kind === 'landing') landedIn = landing.root;
       return { page, landing };
     }
     const idOf = (state: FomodState, step: string, group: string, option: string): { stepId: number; groupId: number; optionId: number } => {
@@ -342,19 +352,16 @@ describe('the FOMOD installer', () => {
       const inGroup = present(found.optionalFileGroups?.group.find(({ name }) => name === group), `group ${group}`);
       return { stepId: found.id, groupId: inGroup.id, optionId: present(inGroup.options.find(({ name }) => name === option), option).id };
     };
-    const pick = (option: string) => (state: FomodState, move: (move: FomodMove) => void): void => {
+    const pick = (option: string) => (state: FomodState): FomodMove => {
       const { stepId, groupId, optionId } = idOf(state, 'Main', 'Pick', option);
-      move({ kind: 'select', stepId, groupId, optionIds: [optionId] });
+      return { kind: 'select', stepId, groupId, optionIds: [optionId] };
     };
 
     it('shows the installer as it stands after each click, then lands the files of the choices when Install is clicked', async () => {
       await release(TWO_STEPS, TWO_STEPS_FILES);
       const visibleSteps = (state: FomodState): string[] => state.steps.filter(({ visible }) => visible).map(({ name }) => name);
 
-      const { page, landing } = await answered((state, move, seen) => {
-        if (seen === 1) pick('Option A')(state, move);
-        else move({ kind: 'continue', forward: true, stepId: 0 });
-      });
+      const { page, landing } = await answered([pick('Option A'), INSTALL]);
 
       expect(page.states.map(visibleSteps)).toEqual([['Main', 'Only for B'], ['Main']]);
       expect(landing).toMatchObject({ fomod: { kind: 'installer', missing: [], notes: [] } });
@@ -365,7 +372,7 @@ describe('the FOMOD installer', () => {
     it('moves on to the next step visible, and reports the installer module on every state', async () => {
       await release(TWO_STEPS, TWO_STEPS_FILES);
 
-      const { page, landing } = await answered((_, move, seen) => move({ kind: 'continue', forward: true, stepId: seen - 1 }));
+      const { page, landing } = await answered([INSTALL, { kind: 'continue', forward: true, stepId: 1 }]);
 
       expect(page.states.map(({ module, current }) => [module, current])).toEqual([['Test', 0], ['Test', 1]]);
       expect(await filesLanded()).toEqual(['Core.esp', 'extra/A.esp', 'textures/B.esp']);
@@ -375,12 +382,7 @@ describe('the FOMOD installer', () => {
     it('keeps the choices when the user goes Back', async () => {
       await release(TWO_STEPS, TWO_STEPS_FILES);
 
-      const { page } = await answered((state, move, seen) => {
-        if (seen === 1) pick('Option B')(state, move);
-        else if (seen === 2) move({ kind: 'continue', forward: true, stepId: 0 });
-        else if (seen === 3) move({ kind: 'continue', forward: false, stepId: 1 });
-        else move({ kind: 'cancel' });
-      });
+      const { page } = await answered([pick('Option B'), INSTALL, { kind: 'continue', forward: false, stepId: 1 }, CANCEL]);
 
       const back = present(page.states[3], 'the state after Back');
       expect(back.current).toBe(0);
@@ -390,25 +392,25 @@ describe('the FOMOD installer', () => {
     it('installs nothing, and says so, when the user cancels', async () => {
       await release(TWO_STEPS, TWO_STEPS_FILES);
 
-      const { page, landing } = await answered((_, move) => move({ kind: 'cancel' }));
+      const { page, landing } = await answered([CANCEL]);
 
-      expect(landing).toEqual({ cancelled: true });
+      expect(landing).toEqual({ kind: 'cancelled' });
       expect(page.closed).toBe(1);
       await releaseLeftAsItWas(TWO_STEPS_FILES);
     });
 
-    it('lands the release as it is, with no reason to give, when the user picks Manual', async () => {
+    it('lands the release as a plain copy, saying Manual was asked for, when the user picks Manual', async () => {
       await release(TWO_STEPS, TWO_STEPS_FILES);
 
-      const { landing } = await answered((_, move) => move({ kind: 'manual' }));
+      const { landing } = await answered([{ kind: 'manual' }]);
 
-      expect(landing).toEqual({ root, fomod: { kind: 'manual' } });
+      expect(landing).toEqual({ kind: 'landing', root, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
     });
 
     it('shows the header and Install alone for a FOMOD with no step to see, and lands its files when Install is clicked', async () => {
       await release(config(`<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}</requiredInstallFiles>`), ['core/Core.esp']);
 
-      const { page, landing } = await answered((_, move) => move({ kind: 'continue', forward: true, stepId: 0 }));
+      const { page, landing } = await answered([INSTALL]);
 
       expect(page.states).toEqual([{ module: 'Test', steps: [], current: 0 }]);
       expect(landing).toMatchObject({ fomod: { kind: 'installer' } });
@@ -418,21 +420,18 @@ describe('the FOMOD installer', () => {
     it('installs nothing when the user cancels a FOMOD with no step to see', async () => {
       await release(config(`<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}</requiredInstallFiles>`), ['core/Core.esp']);
 
-      const { landing } = await answered((_, move) => move({ kind: 'cancel' }));
+      const { landing } = await answered([CANCEL]);
 
-      expect(landing).toEqual({ cancelled: true });
+      expect(landing).toEqual({ kind: 'cancelled' });
     });
 
     it('waits on the user for as long as the user takes, though the engine says nothing', async () => {
       await release(TWO_STEPS, TWO_STEPS_FILES);
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {
-        const { landing } = await answered((_, move) => {
-          vi.advanceTimersByTime(FOMOD_ENGINE.silence * 10);
-          move({ kind: 'cancel' });
-        });
+        const { landing } = await answered([CANCEL], { onShow: () => vi.advanceTimersByTime(FOMOD_ENGINE.silence * 10) });
 
-        expect(landing).toEqual({ cancelled: true });
+        expect(landing).toEqual({ kind: 'cancelled' });
       } finally {
         vi.useRealTimers();
       }
@@ -441,7 +440,7 @@ describe('the FOMOD installer', () => {
     it('says the user is being asked from the first state shown until the user\'s last move, and not while it lands', async () => {
       await release(TWO_STEPS, TWO_STEPS_FILES);
 
-      const { page } = await answered((_, move, seen) => move({ kind: 'continue', forward: true, stepId: seen - 1 }));
+      const { page } = await answered([INSTALL, { kind: 'continue', forward: true, stepId: 1 }]);
 
       expect(page.asking).toEqual([true, true, false]);
     });
@@ -449,7 +448,7 @@ describe('the FOMOD installer', () => {
     it('says the user is being asked while the missing files are confirmed, and not after', async () => {
       await release(config(`<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}${file('gone/Gone.esp', 'Gone.esp')}</requiredInstallFiles>`), ['core/Core.esp']);
 
-      const { page } = await answered((_, move) => move({ kind: 'continue', forward: true, stepId: 0 }));
+      const { page } = await answered([INSTALL]);
 
       expect(page.asking).toEqual([true, false, true, false]);
     });
@@ -460,7 +459,7 @@ describe('the FOMOD installer', () => {
       it('is named to the user, who may install without it', async () => {
         await release(LACKING, ['core/Core.esp']);
 
-        const { page, landing } = await answered((_, move) => move({ kind: 'continue', forward: true, stepId: 0 }));
+        const { page, landing } = await answered([INSTALL]);
 
         expect(page.confirmed).toEqual([['gone/Gone.esp']]);
         expect(landing).toMatchObject({ fomod: { kind: 'installer', missing: ['gone/Gone.esp'] } });
@@ -470,20 +469,20 @@ describe('the FOMOD installer', () => {
       it('installs nothing when the user cancels the confirmation', async () => {
         await release(LACKING, ['core/Core.esp']);
 
-        const { landing } = await answered((_, move) => move({ kind: 'continue', forward: true, stepId: 0 }), { confirms: false });
+        const { landing } = await answered([INSTALL], { confirms: false });
 
-        expect(landing).toEqual({ cancelled: true });
+        expect(landing).toEqual({ kind: 'cancelled' });
         await releaseLeftAsItWas(['core/Core.esp']);
       });
     });
 
     it('closes the page, and refuses, when the module dependencies do not hold', async () => {
       await release(config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'), ['core/Core.esp']);
-      const closed = { count: 0 };
-      const dialog: FomodDialog = { show: () => undefined, onMove: () => undefined, confirmMissing: () => Promise.resolve(true), asking: () => undefined, close: () => { closed.count += 1; } };
+      const close = vi.fn();
 
-      await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog }, () => Promise.resolve(KNOWN))).rejects.toThrow(/needed\.esm/i);
-      expect(closed.count).toBe(1);
+      await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog: { ...FOMOD_PAGE, close } }, () => Promise.resolve(KNOWN)))
+        .rejects.toThrow(/needed\.esm/i);
+      expect(close).toHaveBeenCalledTimes(1);
     });
   });
 });

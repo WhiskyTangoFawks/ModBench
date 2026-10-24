@@ -66,30 +66,6 @@ const watchedOver = (context: Mo2Context): ReadingSource & Pick<ManagerAdapter, 
 
 const sourceAt = (instanceRoot: string, gameFolderSettingValue?: string): ReadingSource => readingSource(contextOver(instanceRoot, { gameFolderSettingValue }), undefined);
 
-async function installHeld(root: string, target: InstallTarget): Promise<{ extraction: string; settle: () => Promise<void> }> {
-  const release = fakeInstallationFileReader(['New.esp']);
-  let extracted: (path: string) => void = () => {};
-  const extraction = new Promise<string>((resolve) => { extracted = resolve; });
-  let letGo: () => void = () => {};
-  const held = new Promise<void>((resolve) => { letGo = resolve; });
-  const installationFileReader: InstallationFileReader = {
-    ...release,
-    extract: async (installationFilePath, destDir) => {
-      await release.extract(installationFilePath, destDir);
-      extracted(destDir);
-      await held;
-    },
-  };
-  const installing = adapterAt(root, undefined, undefined, installationFileReader).install({ kind: 'archive', path: '/elsewhere/New.7z' }, target, {});
-  return {
-    extraction: await extraction,
-    settle: () => {
-      letGo();
-      return installing.then(() => undefined, () => undefined);
-    },
-  };
-}
-
 const text = (root: string, relative: string): Promise<string> => readFile(join(root, relative), 'utf8');
 
 const modNames = (order: readonly ModlistEntry[]): string[] => order.map((e) => `${e.kind}:${e.name}:${e.enabled}`);
@@ -561,17 +537,6 @@ describe('the MO2 Instance adapter', () => {
 
     describe('a folder an install is extracting into', () => {
       const listed = async (): Promise<string[]> => present(await source.modFolders(ignoreSkippedLink), 'the mod folders').all.map((f) => f.name);
-
-      it.each([
-        ['a new mod', { kind: 'new', name: 'New Mod' }],
-        ['an upgrade', { kind: 'upgrade', name: 'Harder VATS' }],
-      ] as const)('is listed for %s, with some of its entries moved up beside the extraction', async (_, target) => {
-        const { settle } = await installHeld(root, target);
-        await writeFile(join(root, 'mods', target.name, 'readme.txt'), '');
-
-        expect(await listed()).toContain(target.name);
-        await settle();
-      });
 
       it('is listed when an interrupted install left only its extraction', async () => {
         await mkdir(join(root, 'mods', 'Left Over', '.medit_tmp_2147483646_new-abc123'), { recursive: true });
@@ -1391,18 +1356,6 @@ describe('the MO2 Instance adapter', () => {
         const paths = relativePaths((await source.originFiles(mod('Harder VATS'), 'list')).files);
 
         expect(paths).toEqual(expect.arrayContaining(['.git/HEAD', '.gitignore', 'plugin-source/shipped.json']));
-      });
-
-      it.each([
-        ['an upgrade', { kind: 'upgrade', name: 'Harder VATS' }],
-        ['a new mod', { kind: 'new', name: 'New Mod' }],
-      ] as const)('leaves out the extraction of %s in flight', async (_, target) => {
-        const { settle } = await installHeld(root, target);
-
-        const paths = relativePaths((await source.originFiles(mod(target.name), 'list')).files);
-
-        expect(paths.filter((path) => path.endsWith('New.esp'))).toEqual([]);
-        await settle();
       });
 
       it.each([

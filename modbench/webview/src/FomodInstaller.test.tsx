@@ -99,6 +99,41 @@ describe('the FOMOD installer page', () => {
     expect(screen.getByRole('checkbox', { name: 'X' })).toBeChecked();
   });
 
+  it('shows a not usable option unticked though the engine selected it', () => {
+    show([step(0, 'One', true, group(0, 'Any', 'SelectAny', option(0, 'Nope', { type: 'NotUsable', selected: true })))]);
+
+    expect(screen.getByRole('checkbox', { name: 'Nope' })).not.toBeChecked();
+  });
+
+  it('disables every option of a one-pick group that holds a required option', () => {
+    show([step(0, 'One', true, group(0, 'Pick', 'SelectExactlyOne', option(0, 'Req', { type: 'Required' }), option(1, 'Other')))]);
+
+    expect(['Req', 'Other'].map((name) => screen.getByRole('radio', { name }).hasAttribute('disabled'))).toEqual([true, true]);
+  });
+
+  it('takes the lone option of a group that wants a pick as required', () => {
+    show([step(0, 'One', true, group(0, 'Pick', 'SelectExactlyOne', option(0, 'Only')))]);
+
+    expect(screen.getByRole('checkbox', { name: 'Only' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Only' })).toBeDisabled();
+  });
+
+  it('sends the selection without an option that is unticked', () => {
+    show([step(0, 'One', true, group(0, 'Extras', 'SelectAny', option(0, 'C', { selected: true }), option(1, 'D', { selected: true })))]);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'C' }));
+
+    expect(sent().at(-1)).toEqual({ type: FOMOD_MOVE, move: { kind: 'select', stepId: 0, groupId: 0, optionIds: [1] } });
+  });
+
+  it('offers Back only after a step it can see', () => {
+    show([step(0, 'Hidden', false), step(1, 'One', true), step(2, 'Two', true)], 1);
+    expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
+
+    show([step(0, 'Hidden', false), step(1, 'One', true), step(2, 'Two', true)], 2);
+    expect(screen.getByRole('button', { name: 'Back' })).toBeEnabled();
+  });
+
   it('adds None to a group that takes at most one, ticked while no option is, and sends an empty selection for it', () => {
     show([step(0, 'One', true, group(0, 'Pick', 'SelectAtMostOne', option(0, 'A'), option(1, 'B')))]);
 
@@ -114,11 +149,12 @@ describe('the FOMOD installer page', () => {
   });
 
   it('refuses Next, naming the group, while a group that needs a pick has none, and allows it once it has one', () => {
-    show([step(0, 'One', true, group(0, 'Needs one', 'SelectAtLeastOne', option(0, 'A'), option(1, 'B'))), step(1, 'Two', true)]);
+    show([step(0, 'One', true, group(0, 'Needs one', 'SelectAtLeastOne', option(0, 'A'), option(1, 'B')), group(1, 'Takes one', 'SelectExactlyOne', option(0, 'C'), option(1, 'D'))), step(1, 'Two', true)]);
 
     const next = screen.getByRole('button', { name: 'Next' });
     expect(next).toBeDisabled();
     expect(next).toHaveAttribute('title', expect.stringContaining('Needs one'));
+    expect(next).toHaveAttribute('title', expect.not.stringContaining('Takes one'));
 
     show([step(0, 'One', true, group(0, 'Needs one', 'SelectAtLeastOne', option(0, 'A', { selected: true }), option(1, 'B'))), step(1, 'Two', true)]);
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();

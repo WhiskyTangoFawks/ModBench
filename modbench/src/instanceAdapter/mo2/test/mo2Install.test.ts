@@ -21,6 +21,7 @@ import { SCRIPT_EXTENDER_FOLDERS } from '../../../tables/gamePaths';
 import { adapterOver } from '../../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../../test/mo2/corpusFixture';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
+import { FOMOD_PAGE } from '../../../test/fomodDialogDouble';
 
 const MOD = 'New Mod';
 const UPGRADED = 'Unofficial Fallout 4 Patch';
@@ -114,6 +115,15 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
 
+    it('lands the files by copying when a rename cannot cross volumes', async () => {
+      vi.mocked(fsRename).mockRejectedValueOnce(errnoError('EXDEV', 'cross-device link'));
+
+      const outcome = await holding(PAYLOAD).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS);
+
+      expect(outcome).toEqual({ landed: true });
+      expect(await filesIn(folder(MOD))).toEqual([...PAYLOAD, 'meta.ini'].sort());
+    });
+
     it('lands one of two installs of one name at once, and the other finds the folder there', async () => {
       const adapter = holding(PAYLOAD);
 
@@ -141,7 +151,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
 
-    it('writes nothing beside its own folder while it runs', async () => {
+    it('writes nothing to mods/ while it extracts, and nothing in the instance but its staging folder', async () => {
       const entries = async (): Promise<string[]> => [...await readdir(root), ...(await readdir(join(root, 'mods'))).map((name) => `mods/${name}`)];
       const before = new Set(await entries());
       const seen = new Set<string>();
@@ -155,7 +165,8 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
       await slowly.install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS);
 
-      expect([...seen].filter((path) => !before.has(path))).toEqual([`mods/${MOD}`]);
+      expect([...seen].filter((path) => !before.has(path) && !path.startsWith('.medit_tmp_'))).toEqual([]);
+      expect([...seen].some((path) => path.startsWith('.medit_tmp_'))).toBe(true);
       expect([...await entries()].filter((path) => !before.has(path))).toEqual([`mods/${MOD}`]);
     });
   });
@@ -241,16 +252,13 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     it('lands the release as it is for Manual', async () => {
       const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, { kind: 'manual' });
 
-      expect(outcome).toEqual({ landed: true, fomod: { kind: 'manual' } });
+      expect(outcome).toEqual({ landed: true, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
       expect(await filesIn(folder(MOD))).toEqual(['a/A.esp', 'b/B.esp', 'fomod/ModuleConfig.xml', 'meta.ini']);
     });
 
     it('writes nothing, and says it was cancelled, when the user cancels the installer', async () => {
       const before = await snapshotTree(root);
-      const dialog = {
-        show: () => undefined, close: () => undefined, asking: () => undefined, confirmMissing: () => Promise.resolve(true),
-        onMove: (handler: (move: { kind: 'cancel' }) => void) => { setImmediate(() => handler({ kind: 'cancel' })); },
-      };
+      const dialog = { ...FOMOD_PAGE, onMove: (handler: (move: FomodMove) => void) => { setImmediate(() => handler({ kind: 'cancel' })); } };
 
       const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, { kind: 'dialog', dialog });
 
@@ -269,10 +277,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         let shownNow: () => void = () => undefined;
         const shown = new Promise<void>((resolve) => { shownNow = resolve; });
         let handler: (move: FomodMove) => void = () => undefined;
-        const dialog: FomodDialog = {
-          show: () => shownNow(), onMove: (listener) => { handler = listener; }, confirmMissing: () => Promise.resolve(true),
-          asking: () => undefined, close: () => undefined,
-        };
+        const dialog: FomodDialog = { ...FOMOD_PAGE, show: () => shownNow(), onMove: (listener) => { handler = listener; } };
         return { answer: { kind: 'dialog', dialog }, shown, move: (move) => handler(move) };
       }
       const INSTALL: FomodMove = { kind: 'continue', forward: true, stepId: 0 };
@@ -288,6 +293,22 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         expect(other).toEqual({ landed: true });
         expect(await installing).toMatchObject({ landed: true });
         expect(await filesIn(folder('Other'))).toEqual(['meta.ini', 'x.esp']);
+      });
+
+      it.each([
+        ['a new mod', { kind: 'new', name: MOD }],
+        ['an upgrade', { kind: 'upgrade', name: UPGRADED }],
+      ] as const)('writes nothing to mods/ for %s', async (_, target) => {
+        const modsBefore = await readdir(join(root, 'mods'));
+        const upgradedBefore = await filesIn(folder(UPGRADED));
+        const page = heldPage();
+        const installing = holding([]).install(await fomod(PICK), target, KEYS, page.answer);
+        await page.shown;
+
+        expect(await readdir(join(root, 'mods'))).toEqual(modsBefore);
+        expect(await filesIn(folder(UPGRADED))).toEqual(upgradedBefore);
+        page.move({ kind: 'manual' });
+        await installing;
       });
 
       it('keeps the name of a new mod from a second install of it', async () => {

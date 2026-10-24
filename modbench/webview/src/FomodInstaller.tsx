@@ -3,10 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { fomodHost } from './vscode';
 import { listenToHost } from './nativeBridge';
-import {
-  FOMOD_MOVE, FOMOD_READY, effectiveGroupType, groupsNeedingPick, hasPrevious, isLastVisible, isOptionLocked, isPicked, optionsAfterClick, parseFomodShown,
-  type FomodGroup, type FomodMove, type FomodOption, type FomodState, type FomodStep,
-} from '../../src/wire/fomodPage';
+import { FOMOD_MOVE, FOMOD_READY, parseFomodShown, type FomodGroup, type FomodMove, type FomodOption, type FomodState, type FomodStep } from '../../src/wire/fomodPage';
+import { effectiveGroupType, groupsNeedingPick, hasPrevious, isLastVisible, isOptionLocked, isPicked, optionsAfterClick } from './fomodRules';
 
 const send = (move: FomodMove): void => fomodHost.postMessage({ type: FOMOD_MOVE, move });
 

@@ -29,10 +29,9 @@ interface FomodInstall {
   readonly driver: Driver;
 }
 
-type FomodInstalled =
-  | Extract<FomodLanded, { readonly kind: 'installer' | 'manual' }>
-  | { readonly kind: 'cancelled' }
-  | { readonly kind: 'unreadable'; readonly why: string };
+type Stopped = { readonly kind: 'manual' } | { readonly kind: 'cancelled' };
+
+type FomodInstalled = Extract<FomodLanded, { readonly kind: 'installer' }> | Stopped | { readonly kind: 'unreadable'; readonly why: string };
 
 type Step = types.IInstallStep;
 type Group = types.IGroup;
@@ -46,8 +45,7 @@ type StepReport = Extract<EngineReport, { readonly kind: 'step' }>;
 
 // Who answers the installer: the choices an agent gave, or the user on a page.
 interface Driver {
-  // Whether the installer may wait on the answer without being taken for stopped.
-  readonly patient: boolean;
+  readonly waitsOnUser: boolean;
   // Called before the installer runs; `send` carries answers that come when they come.
   readonly attach: (send: (request: EngineRequest) => void) => void;
   readonly opened: (module: string) => void;
@@ -56,7 +54,7 @@ interface Driver {
   // Resolves when the installer, which finished with no step shown, may install.
   readonly finish: () => Promise<void>;
   readonly confirmMissing: (missing: readonly string[]) => Promise<boolean>;
-  readonly ended: () => 'manual' | 'cancelled' | undefined;
+  readonly ended: () => Stopped | undefined;
   // The choices that no step the installer showed took.
   readonly untaken: () => readonly FomodStepChoice[];
 }
@@ -119,6 +117,15 @@ function answerFor(step: Step, choice: FomodStepChoice): EngineRequest[] {
   return [...selections.map((selection: Selection): EngineRequest => ({ kind: 'select', stepId: step.id, selection })), { kind: 'continue', forward: true, stepId: step.id }];
 }
 
+const UNATTENDED = {
+  waitsOnUser: false,
+  attach: () => undefined,
+  opened: () => undefined,
+  finish: () => Promise.resolve(),
+  confirmMissing: () => Promise.resolve(true),
+  ended: () => undefined,
+};
+
 // Each step shown takes the first untaken choice of its name. The engine reports a step once per move to it, so a
 // step reported again is one it would not leave.
 function choosing(choices: readonly FomodStepChoice[]): Driver {
@@ -136,10 +143,7 @@ function choosing(choices: readonly FomodStepChoice[]): Driver {
     taken.add(at);
     return answerFor(step, choice);
   };
-  return {
-    patient: false, attach: () => undefined, opened: () => undefined, step: answer, finish: () => Promise.resolve(),
-    confirmMissing: () => Promise.resolve(true), ended: () => undefined, untaken: () => choices.filter((_, i) => !taken.has(i)),
-  };
+  return { ...UNATTENDED, step: answer, untaken: () => choices.filter((_, i) => !taken.has(i)) };
 }
 
 // The user answers on a page. An installer with no step to show finishes at once, and the page then shows its header
@@ -147,13 +151,13 @@ function choosing(choices: readonly FomodStepChoice[]): Driver {
 function conversing(dialog: FomodDialog): Driver {
   let module = '';
   let shown = false;
-  let ended: 'manual' | 'cancelled' | undefined;
+  let ended: Stopped | undefined;
   let release: (() => void) | undefined;
   return {
-    patient: true,
+    waitsOnUser: true,
     attach: (send) => dialog.onMove((move) => {
       if (move.kind === 'manual' || move.kind === 'cancel') {
-        ended = move.kind === 'manual' ? 'manual' : 'cancelled';
+        ended = { kind: move.kind === 'manual' ? 'manual' : 'cancelled' };
         dialog.asking(false);
       }
       if (release !== undefined) {
@@ -247,7 +251,7 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
         case 'dialog': driver.opened(report.module); return;
         case 'step':
           if (refusal !== undefined) return;
-          if (driver.patient) clearTimeout(silence);
+          if (driver.waitsOnUser) clearTimeout(silence);
           try {
             for (const request of driver.step(report)) send(request);
           } catch (err) {
@@ -335,11 +339,7 @@ async function installFomod(engine: FomodEngine, { root, into, facts, driver }: 
   if (run.kind === 'unreadable') return run;
   if (run.refusal !== undefined) throw new Error(run.refusal);
   if (run.unanswered.length > 0) throw new Error(`The FOMOD's conditions read ${run.unanswered.join('; ')}.`);
-  const left = (): FomodInstalled | undefined => {
-    const ended = driver.ended();
-    return ended === 'manual' ? { kind: 'manual' } : ended === 'cancelled' ? { kind: 'cancelled' } : undefined;
-  };
-  const stopped = left();
+  const stopped = driver.ended();
   if (stopped !== undefined) return stopped;
   if (run.result === null) throw new Error('The FOMOD\'s installer stopped before it installed anything.');
   const untaken = driver.untaken().map(({ step }) => step);
@@ -350,7 +350,7 @@ async function installFomod(engine: FomodEngine, { root, into, facts, driver }: 
   await driver.finish();
   const errors = instructions.filter(({ type }) => type === 'error').map(({ source }) => ({ source, missing: MISSING_SOURCE.exec(source)?.[1] }));
   const missing = errors.flatMap(({ missing: each }) => each ?? []);
-  const finished = left() ?? (missing.length > 0 && !(await driver.confirmMissing(missing)) ? { kind: 'cancelled' as const } : undefined);
+  const finished = driver.ended() ?? (missing.length > 0 && !(await driver.confirmMissing(missing)) ? { kind: 'cancelled' as const } : undefined);
   if (finished !== undefined) return finished;
   await land(root, files, into, instructions);
   return { kind: 'installer', missing, notes: errors.flatMap(({ source, missing: each }) => (each === undefined ? [source] : [])) };
@@ -359,22 +359,26 @@ async function installFomod(engine: FomodEngine, { root, into, facts, driver }: 
 const driverFor = (answer: Extract<FomodAnswer, { readonly kind: 'choices' | 'dialog' }>): Driver =>
   (answer.kind === 'choices' ? choosing(answer.steps) : conversing(answer.dialog));
 
+const MANUAL_ASKED = 'Manual was asked for';
+
+export type FomodLanding = { readonly kind: 'landing'; readonly root: string; readonly fomod: FomodLanded } | { readonly kind: 'cancelled' };
+
 /** Where a release that holds a FOMOD lands its files from, and how: the folder its installer filled, or the release
  *  as it is; or none, because the user cancelled. */
 export async function fomodLanding(
   engine: FomodEngine, release: { readonly root: string; readonly fomod: FomodKind }, answer: FomodAnswer | undefined, facts: () => Promise<ConditionFacts>,
-): Promise<{ readonly root: string; readonly fomod: FomodLanded } | { readonly cancelled: true }> {
-  const asIs = (fomod: FomodLanded) => ({ root: release.root, fomod });
-  if (release.fomod === 'script') return asIs({ kind: 'plainCopy', why: 'its installer is a script, which Modbench does not run' });
-  if (answer === undefined) return asIs({ kind: 'plainCopy', why: 'no choices were given for its steps' });
-  if (answer.kind === 'manual') return asIs({ kind: 'manual' });
+): Promise<FomodLanding> {
+  const asIs = (why: string): FomodLanding => ({ kind: 'landing', root: release.root, fomod: { kind: 'plainCopy', why } });
+  if (release.fomod === 'script') return asIs('its installer is a script, which Modbench does not run');
+  if (answer === undefined) return asIs('no choices were given for its steps');
+  if (answer.kind === 'manual') return asIs(MANUAL_ASKED);
   const into = await makeTempDir(ownTempPrefix(release.root, 'fomod'));
   try {
     const installed = await installFomod(engine, { root: release.root, into, facts: await facts(), driver: driverFor(answer) });
-    if (installed.kind === 'installer') return { root: into, fomod: installed };
+    if (installed.kind === 'installer') return { kind: 'landing', root: into, fomod: installed };
     await remove(into);
-    if (installed.kind === 'cancelled') return { cancelled: true };
-    return installed.kind === 'manual' ? asIs(installed) : asIs({ kind: 'plainCopy', why: `its installer cannot be read: ${installed.why}` });
+    if (installed.kind === 'cancelled') return installed;
+    return installed.kind === 'manual' ? asIs(MANUAL_ASKED) : asIs(`its installer cannot be read: ${installed.why}`);
   } finally {
     if (answer.kind === 'dialog') answer.dialog.close();
   }
