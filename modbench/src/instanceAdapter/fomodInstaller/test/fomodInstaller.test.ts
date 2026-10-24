@@ -320,7 +320,9 @@ describe('the FOMOD installer', () => {
       const GAME_AT_INSTALL = config(`<conditionalFileInstalls><patterns>${conditional('<gameDependency version="1.10.163.0"/>', 'game.esp')}`
         + `${conditional('<gameDependency version="1.10.164.0"/>', 'newer.esp')}</patterns></conditionalFileInstalls>`);
       const GAME_IN_OPTION = config(steps(step('Start', group('Pick', 'SelectAny', gated('<gameDependency version="1.0"/>')))));
-      const PLUGIN_IN_OPTION = config(steps(step('Start', group('Pick', 'SelectAny', gated('<fileDependency file="Active.esp" state="Active"/>')))));
+      const GAME_AND_EXTENDER_IN_OPTION = config(steps(step('Start', group('Pick', 'SelectAny',
+        gated('<dependencies operator="And"><gameDependency version="1.0"/><foseDependency version="1.0.0.0"/></dependencies>')))));
+      const PLUGIN_IN_OPTION =config(steps(step('Start', group('Pick', 'SelectAny', gated('<fileDependency file="Active.esp" state="Active"/>')))));
       const UNSET = '<pattern><dependencies><flagDependency flag="picked" value=""/></dependencies><type name="Optional"/></pattern>';
       const AFTER_A_PICK = config(steps(step('Start',
         group('First', 'SelectAny', option('Sets flag', file('f/s.esp', 's.esp'), 'Optional', '<conditionFlags><flag name="picked">A</flag></conditionFlags>'))
@@ -332,7 +334,10 @@ describe('the FOMOD installer', () => {
         ['by an option\'s type, before any step is answered', GAME_IN_OPTION, KNOWN, [], GAME],
         ['by an option\'s type once a pick changes it, though more picks follow', AFTER_A_PICK, KNOWN,
           choose(['Start', { First: ['Sets flag'], Second: [] }]), GAME],
-        ['of the plugins', PLUGIN_IN_OPTION, { ...KNOWN, plugins: { unknown: 'no plugins in this test' } }, [],
+        ['of the game and of its script extender, naming both', GAME_AND_EXTENDER_IN_OPTION, KNOWN, [],
+          'The FOMOD\'s conditions read the game\'s version, which could not be read: no version in this test; '
+          + 'the script extender\'s version, which could not be read: no version in this test.'],
+        ['of the plugins',PLUGIN_IN_OPTION, { ...KNOWN, plugins: { unknown: 'no plugins in this test' } }, [],
           'The FOMOD\'s conditions read the plugins, which could not be read: no plugins in this test.'],
       ])('refuses what is read %s, naming why', async (_, moduleConfig, facts, choices, refusal) => {
         await release(moduleConfig, ['f/g.esp', 'f/s.esp', 'core/Core.esp']);

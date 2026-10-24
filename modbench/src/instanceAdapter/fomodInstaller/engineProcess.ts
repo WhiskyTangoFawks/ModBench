@@ -18,8 +18,7 @@ interface Dialog {
 let dialog: Dialog | undefined;
 // The engine reports a step inside each call that changes it.
 let cause: 'select' | 'move' = 'move';
-// Once a fact was unknown the session only ends: the answers still on their way are not given.
-let unknownFact = false;
+let answersWithheld = false;
 
 const report = (message: EngineReport, then?: () => void): void => {
   process.send?.(message, undefined, undefined, then);
@@ -34,7 +33,7 @@ const isEngine = (value: unknown): value is types.IExtension => typeof value ===
 
 function answer<T>(question: string, known: Known<T>, unanswered: T): T {
   if ('known' in known) return known.known;
-  unknownFact = true;
+  answersWithheld = true;
   report({ kind: 'unanswered', question, why: known.unknown });
   return unanswered;
 }
@@ -63,7 +62,7 @@ function install(engineFolder: string, root: string, files: readonly string[], f
     plugins,
     () => FOMM_VERSION,
     () => answer('the game\'s version', facts.gameVersion, ''),
-    () => answer('the script extender\'s version', facts.extenderVersion, ''),
+    () => answer('the script extender\'s version', facts.extenderVersion, '0.0.0.0'),
     (module, image, select, cont, cancel) => {
       dialog = { select, cont, cancel };
       report({ kind: 'dialog', module, image: headerImagePath(image) });
@@ -87,8 +86,8 @@ process.on('message', (request: unknown) => {
   if (!isRequest(request)) return;
   switch (request.kind) {
     case 'install': return install(request.engineFolder, request.root, request.files, request.facts);
-    case 'select': return unknownFact ? undefined : select(request.stepId, request.selection);
-    case 'continue': return unknownFact ? undefined : dialog?.cont(request.forward, request.stepId);
+    case 'select': return answersWithheld ? undefined : select(request.stepId, request.selection);
+    case 'continue': return answersWithheld ? undefined : dialog?.cont(request.forward, request.stepId);
     case 'cancel': return dialog?.cancel();
   }
 });
