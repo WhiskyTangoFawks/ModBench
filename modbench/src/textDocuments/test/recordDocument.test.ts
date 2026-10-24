@@ -1,10 +1,8 @@
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
 import { describe, it, expect, vi } from 'vitest';
-import { uriFrom, uriWith } from '../../test/vscodeMock';
+import { UriWith } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({
-  Uri: { from: uriFrom, file: (path: string) => uriWith('file', path) },
-}));
+vi.mock('vscode', () => ({ Uri: UriWith }));
 
 import * as vscode from 'vscode';
 import { copyDocument, copyOf, type RecordDocumentClient } from '../recordDocument';

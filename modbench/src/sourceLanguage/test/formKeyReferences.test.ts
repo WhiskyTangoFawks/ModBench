@@ -1,15 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { uriFrom, uriWith } from '../../test/vscodeMock';
+import { UriWith } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({
-  Uri: { from: uriFrom, file: (path: string) => uriWith('file', path) },
-}));
+vi.mock('vscode', () => ({ Uri: UriWith }));
 
 import type * as vscode from 'vscode';
 import { referencesOf } from '../formKeyReferences';
 import type { ReferenceResult } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { copyDocuments, copyKey as key, type Copy } from './copyDocuments';
+import { copyDocumentsOf, copyKey as key, type CopyOnDisk } from './copyDocuments';
 
 const GUN = '000900:A.esp';
 const STAND = '000700:A.esp';
@@ -25,8 +23,8 @@ const row = (formKey: string, plugin: typeof modA, fieldPath: string): Reference
 
 type ReferencesClient = Parameters<typeof referencesOf<{ getText(): string }>>[0]['client'];
 
-function references(rows: ReferenceResult[], copies: Record<string, Copy>, answering: Partial<ReferencesClient> = {}) {
-  const { getCopyDocument, textOnFile } = copyDocuments(copies);
+function references(rows: ReferenceResult[], copies: Record<string, CopyOnDisk>, answering: Partial<ReferencesClient> = {}) {
+  const { getCopyDocument, textOnFile } = copyDocumentsOf(copies);
   const client: ReferencesClient = {
     getReferencesInActiveOrCompiledPlugins: () => Promise.resolve(rows),
     getRecordOwner: () => Promise.reject(new Error('A referrer\'s copy names its plugin.')),

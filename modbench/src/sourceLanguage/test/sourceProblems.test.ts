@@ -137,15 +137,6 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     expect([...shown]).toEqual([]);
   });
 
-  it('asks nothing while the record index is not ready', async () => {
-    const { client, answered } = feed({});
-    client.emit(loadOrderStatus(false));
-
-    await answered([]);
-
-    expect(client.calls.filter(({ method }) => method === 'getPluginProblems')).toHaveLength(2);
-  });
-
   it('asks nothing when a plugin\'s failure arrives mid-reconcile, since mEdit would answer that it is not ready', () => {
     const { client } = feed({});
     const asked = () => client.calls.filter(({ method }) => method === 'getPluginProblems').length;

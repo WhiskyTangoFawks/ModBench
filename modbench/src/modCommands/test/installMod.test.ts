@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { modCommands, type ModPackage } from '../modCommands';
 import type { DownloadedFile, DownloadedFileMeta, InstallPackage, InstallTarget } from '../../instanceAdapter/instanceAdapter';
-import { fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { ModStatus } from '../../client';
 import type { ReadModStatus } from '../../client';
 import type { ReadFailed } from '../../wire/readFailed';
@@ -199,16 +199,16 @@ describe('installMod', () => {
     expect(calls[0]).toMatchObject({ verb: 'install', keys: { installationFileName: 'Freshly-1-0.7z', nexusId: undefined, installedFileKeys: undefined } });
   });
 
-  const MARKED = { verb: 'markDownloadedFile', name: DOWNLOADED_FILE.name, mark: 'Installed' };
+  const MARKED: AdapterCall = { verb: 'markDownloadedFile', name: DOWNLOADED_FILE.name, mark: 'Installed' };
 
-  it.each<[string, ModPackage, unknown[]]>([
-    ['marks a downloaded file installed once it landed', DOWNLOADED_FILE, [MARKED]],
-    ['marks a downloaded file installed for an archive at its path', { kind: 'archive', path: DOWNLOADED_FILE_PATH }, [MARKED]],
-    ['marks no file for an installation file elsewhere, though a downloaded file bears its name', INSTALLATION_FILE, []],
-  ])('%s', async (_case, installed, marks) => {
+  it.each<[string, ModPackage, AdapterCall['verb'][], AdapterCall | undefined]>([
+    ['marks a downloaded file installed once it landed', DOWNLOADED_FILE, ['install', 'changeModOrder', 'markDownloadedFile'], MARKED],
+    ['marks a downloaded file installed for an archive at its path', { kind: 'archive', path: DOWNLOADED_FILE_PATH }, ['install', 'changeModOrder', 'markDownloadedFile'], MARKED],
+    ['marks no file for an installation file elsewhere, though a downloaded file bears its name', INSTALLATION_FILE, ['install', 'changeModOrder'], undefined],
+  ])('%s', async (_case, installed, verbs, mark) => {
     const { calls } = await install(installed);
 
-    expect(calls.filter((call) => call.verb === 'markDownloadedFile')).toEqual(marks);
+    expect([calls.map((call) => call.verb), calls[2]]).toEqual([verbs, mark]);
   });
 
   it('refuses a downloaded file the downloads folder lacks, installing nothing', async () => {

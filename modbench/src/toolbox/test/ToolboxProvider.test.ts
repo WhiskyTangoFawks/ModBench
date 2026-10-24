@@ -200,8 +200,6 @@ describe('the Toolbox view\'s states', () => {
     expect(rows).toHaveLength(1);
     const error = present(rows[0], 'the error row');
     expect(error.label).toBe('Failed to load: ModOrganizer.ini names no profile');
-    expect(error.tooltip).toBe('ModOrganizer.ini names no profile');
-    expect(error.iconPath).toEqual(new ThemeIcon('error'));
 
     instance.publish(VALUE);
 

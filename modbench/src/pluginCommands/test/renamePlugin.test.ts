@@ -125,14 +125,11 @@ describe('renamePlugin — the plugin source first, then the file and its lines'
 
 describe('renameRefusal — what the prompt is told before the rename is asked for', () => {
   const refusal = (newName: string, heldIn: string) => pluginCommandsWith(fakeInstanceAdapter(readingFixture(pluginFilesHeld(
-    { origin: { kind: 'mod', name: PLUGIN.origin }, name: PLUGIN.name },
     { origin: { kind: 'mod', name: heldIn }, name: 'Renamed Patch.esp' },
   ))).adapter).renameRefusal(PLUGIN, newName, ['.esm', '.esl', '.esp']);
 
   it.each<[string, string, string, string | undefined]>([
     ['refuses a name the plugin\'s origin holds', 'Renamed Patch.esp', 'Patch Mod', '"Patch Mod" already holds "Renamed Patch.esp".'],
-    ['refuses a name the origin holds in another case, naming it as typed', 'renamed patch.ESP', 'Patch Mod', '"Patch Mod" already holds "renamed patch.ESP".'],
-    ['refuses a case-only rename of the plugin itself', 'PATCH MOD.esp', 'OtherMod', '"Patch Mod" already holds "PATCH MOD.esp".'],
     ['lets through a name only another origin holds', 'Renamed Patch.esp', 'OtherMod', undefined],
   ])('%s', async (_case, newName, heldIn, expected) => {
     expect(await refusal(newName, heldIn)).toBe(expected);

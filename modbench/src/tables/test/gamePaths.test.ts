@@ -86,7 +86,7 @@ describe('SCRIPT_EXTENDER_FOLDERS', () => {
 });
 
 describe('loadedWithNoLineOf', () => {
-  it.each<[string, string | undefined, string[]]>([
+  it.each<[string, string, string[]]>([
     ['Fallout4', 'Fallout4', [
       'Fallout4.esm', 'DLCRobot.esm', 'DLCworkshop01.esm', 'DLCCoast.esm', 'DLCworkshop02.esm', 'DLCworkshop03.esm',
       'DLCNukaWorld.esm',
@@ -97,10 +97,12 @@ describe('loadedWithNoLineOf', () => {
       'SFBGS006.esm', 'SFBGS007.esm', 'SFBGS003.esm', 'SFBGS008.esm', 'SFBGS004.esm', 'SFBGS00D.esm', 'SFBGS047.esm',
       'SFBGS050.esm', 'BlueprintShips-SFBGS050.esm',
     ]],
-    ['no release', undefined, []],
-    ['a release the table holds no row for', 'SomeRelease', []],
   ])('answers the masters of %s, as Mutagen\'s Implicits.Listings, in the order the game loads them', (_case, release, masters) => {
     expect(loadedWithNoLineOf(release, [])).toEqual(masters);
+  });
+
+  it.each([['no release', undefined], ['a release the table holds no row for', 'SomeRelease']])('answers no master for %s', (_case, release) => {
+    expect(loadedWithNoLineOf(release, [])).toEqual([]);
   });
 
   it('answers the game\'s masters, then the Creation Club plugins, in that order', () => {

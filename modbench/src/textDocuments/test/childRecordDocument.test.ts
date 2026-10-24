@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter, uriWith, type SchemedUri } from '../../test/vscodeMock';
+import { EventEmitter, UriWith, uriWith, type SchemedUri } from '../../test/vscodeMock';
 
 interface TestDocument { uri: SchemedUri; getText?(): string; isDirty?: boolean }
 interface Replacement { uri: SchemedUri; range: { start: number; end: number }; text: string }
@@ -16,7 +16,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock('vscode', () => ({
   EventEmitter,
-  Uri: { file: (path: string) => uriWith('file', path) },
+  Uri: UriWith,
   Disposable: class { constructor(public dispose: () => void) {} },
   FileChangeType: { Changed: 1 },
   FileSystemError: { NoPermissions: (uri: unknown) => new Error(`no permissions on ${String(uri)}`) },

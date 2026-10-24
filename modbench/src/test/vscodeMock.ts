@@ -68,7 +68,7 @@ export const uriFile = (p: string) => {
 export const uriFrom = (opts: { scheme: string; path: string; query?: string }) =>
   ({ scheme: opts.scheme, path: opts.path, query: opts.query ?? '' });
 
-/** A `vscode.Uri` of any scheme, whose `with` answers the changed URI as the real one does. */
+/** `with` answers the changed URI, as vscode.Uri's does. */
 export interface SchemedUri {
   scheme: string; path: string; fsPath: string; query: string;
   with(change: { scheme?: string; query?: string }): SchemedUri;
@@ -80,6 +80,11 @@ export const uriWith = (scheme: string, path: string, query = ''): SchemedUri =>
   with: (change) => uriWith(change.scheme ?? scheme, path, change.query ?? query),
   toString: () => `${scheme}:${path}?${query}`,
 });
+
+export const UriWith = {
+  from: ({ scheme, path, query }: { scheme: string; path: string; query?: string }) => uriWith(scheme, path, query),
+  file: (path: string) => uriWith('file', path),
+};
 
 class ParsedUri {
   constructor(readonly href: string) {}

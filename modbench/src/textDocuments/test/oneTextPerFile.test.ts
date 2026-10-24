@@ -132,12 +132,12 @@ describe('the documents over one file', () => {
     const [file, child] = [document('file', 'saved'), document('modbench-child-record', 'saved')];
     changed(file, 'taken', true);
     await vi.waitFor(() => { expect(child.text).toBe('taken'); });
-    void file.save();
+    await file.save();
     await vi.waitFor(() => { expect(child.isDirty).toBe(false); });
     h.documents.splice(h.documents.indexOf(child), 1);
     heard(h.closed, child);
     changed(file, 'saved again', true);
-    void file.save();
+    await file.save();
     await new Promise((resolve) => setTimeout(resolve, 0));
     Object.assign(child, { text: 'saved again', isDirty: false });
     h.documents.push(child);

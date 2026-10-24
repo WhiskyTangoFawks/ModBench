@@ -1,15 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { uriFrom, uriWith } from '../../test/vscodeMock';
+import { UriWith } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({
-  Uri: { from: uriFrom, file: (path: string) => uriWith('file', path) },
-}));
+vi.mock('vscode', () => ({ Uri: UriWith }));
 
 import type * as vscode from 'vscode';
 import { workspaceSymbolsOf } from '../workspaceSymbols';
 import type { PluginMetadata, RecordSummary } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { copyDocuments, copyKey as key, type Copy } from './copyDocuments';
+import { copyDocumentsOf, copyKey as key, type CopyOnDisk } from './copyDocuments';
 
 const modA = { name: 'A.esp', origin: 'ModA' };
 const modB = { name: 'B.esp', origin: 'ModB' };
@@ -30,8 +28,8 @@ const summary = (formKey: string, address: typeof modA, editorId?: string): Reco
 
 type Client = Parameters<typeof workspaceSymbolsOf<{ getText(): string }>>[0]['client'];
 
-function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Record<string, Copy>, answering: Partial<Client> = {}) {
-  const { getCopyDocument, textOnFile } = copyDocuments(files);
+function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Record<string, CopyOnDisk>, answering: Partial<Client> = {}) {
+  const { getCopyDocument, textOnFile } = copyDocumentsOf(files);
   const client: Client = {
     getPlugins: () => Promise.resolve(plugins),
     searchRecords: vi.fn((_query: string, _types: string[], scope?: typeof modA) => {

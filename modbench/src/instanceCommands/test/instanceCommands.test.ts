@@ -26,11 +26,12 @@ describe('refresh', () => {
     ['reports held-elsewhere by name, apart from the generic refusal every other failure gets', { rebuilt: false, heldElsewhere: true }, { applied: false, heldElsewhere: true }],
     ['returns the reason for every other refused rebuild', { rebuilt: false, heldElsewhere: false, detail: 'Failed to rebuild the store.' },
       { applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' }],
-  ])('%s', async (_case, answer, refused) => {
+  ])('%s, and sends nothing but the rebuild', async (_case, answer, refused) => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('rebuildIndex', answer);
 
     expect(await refreshOver(client)()).toEqual(refused);
+    expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
   });
 
   it('returns a refusal, not a throw, when the release cannot be read', async () => {

@@ -811,7 +811,8 @@ describe('the names a separator or mod may take', () => {
   it('refuses a name a mod folder holds, listed or not', async () => {
     const { commands } = over([], {}, undefined, { modFolders: modFoldersOf('Unlisted Mod') });
 
-    expect(await commands.newModNameRefusal('unlisted mod')).toMatch(/already exists/);
+    expect(await commands.newModNameRefusal('unlisted mod'))
+      .toBe('A mod named "unlisted mod" already exists. Install its next release from Downloads, or uninstall it to install anew.');
     expect(await commands.renameModNameRefusal('UNLISTED MOD', 'Mod B')).toBe('A mod with this name already exists');
   });
 
