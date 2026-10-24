@@ -67,6 +67,21 @@ const EMPTY_SNAPSHOT = {
   dataFolder: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4', stringsLanguage: 'English',
 };
 
+describe('HttpMEditClient — the process is the client\'s own', () => {
+  it('reports the backend\'s status changes to its listeners, until one unsubscribes', async () => {
+    const client = makeClient(neverFetch());
+    const kept: string[] = [];
+    const dropped: string[] = [];
+    client.onStatusChanged((s) => kept.push(s));
+    client.onStatusChanged((s) => dropped.push(s))();
+
+    await client.start();
+    await client.stop();
+
+    expect({ kept, dropped }).toEqual({ kept: ['running', 'stopped'], dropped: [] });
+  });
+});
+
 describe('HttpMEditClient — the load-order status', () => {
   it('is the latest tick the stream carried, and is gone once mEdit is stopped', async () => {
     const { response, push } = pushableStreamResponse();

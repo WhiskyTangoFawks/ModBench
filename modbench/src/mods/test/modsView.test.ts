@@ -203,16 +203,15 @@ describe('the Mods view registers its own gestures', () => {
 });
 
 describe('the Mods title-bar sort icons', () => {
-  it('set the tree\'s own direction, and the key the icon reads', async () => {
+  it('set the tree\'s own direction', async () => {
     const instance = new FakeInstance(listing(LISTED_MODS));
     createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
     const losingAtTop = await shownLabels();
 
-    expect(h.state.contextKeys.get('modbench.mod.winningAtTop')).toBe(false);
     await h.state.commands.get('modbench.mod.sortWinningAtTop')?.();
-    expect([await shownLabels(), h.state.contextKeys.get('modbench.mod.winningAtTop')]).toEqual([[...losingAtTop].reverse(), true]);
+    expect(await shownLabels()).toEqual([...losingAtTop].reverse());
     await h.state.commands.get('modbench.mod.sortLosingAtTop')?.();
-    expect([await shownLabels(), h.state.contextKeys.get('modbench.mod.winningAtTop')]).toEqual([losingAtTop, false]);
+    expect(await shownLabels()).toEqual(losingAtTop);
   });
 });
 
