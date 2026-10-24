@@ -480,7 +480,7 @@ describe('the FOMOD installer', () => {
     it('closes the page, and refuses, when the module dependencies do not hold', async () => {
       await release(config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'), ['core/Core.esp']);
       const closed = { count: 0 };
-      const dialog: FomodDialog = { show: () => undefined, onMove: () => undefined, confirmMissing: () => Promise.resolve(true), close: () => { closed.count += 1; } };
+      const dialog: FomodDialog = { show: () => undefined, onMove: () => undefined, confirmMissing: () => Promise.resolve(true), asking: () => undefined, close: () => { closed.count += 1; } };
 
       await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog }, () => Promise.resolve(KNOWN))).rejects.toThrow(/needed\.esm/i);
       expect(closed.count).toBe(1);

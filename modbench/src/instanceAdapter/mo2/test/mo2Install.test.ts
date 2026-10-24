@@ -300,7 +300,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         await installing;
       });
 
-      it('answers as a claim the mod\'s folder no longer meets when an upgrade\'s folder is gone by the time the user chooses Manual', async () => {
+      it('answers as a claim its folder fails to meet when an upgrade\'s folder is gone by the time the user chooses Manual', async () => {
         const page = heldPage();
         const installing = holding([]).install(await fomod(PICK), { kind: 'upgrade', name: UPGRADED }, KEYS, page.answer);
         await page.shown;
