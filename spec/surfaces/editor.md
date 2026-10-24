@@ -24,7 +24,7 @@ As a user, I want:
 4. Several records opened at once to open one grid: the first record's file, with the others as its columns. Cites: catalog `open`; xEdit Compare Selected
 5. The tab titled with the file's name, as any file is. The file is named by the record's EditorID, so the title carries it. A child record has no file of its own, so its tab, in a compiled plugin or not, is titled with its EditorID, or its FormKey when it has none. Cites: ADR-0001; ADR-0020; plugin-source.md, The tree, story 1; ruling
 6. Open from the palette, with no record given, to ask for one by EditorID, FormID or FormKey. Cites: catalog `open`
-7. A tab I leave and come back to to be as I left it: the rows I expanded, the columns I collapsed, the focused cell and the scroll. Cites: VS Code keeps a tab's place
+7. A tab I leave and come back to to be as I left it: the rows I expanded, the columns I collapsed, the runs of rows I restored, the focused cell and the scroll. Cites: VS Code keeps a tab's place
 8. A record given without a plugin, from the palette, Referenced By or Go to record, to open the winning copy's file. Cites: xEdit lands on the winning copy
 9. The copy of a plugin with no plugin source, or with an unreadable one, to open as a document mEdit renders from the plugin, read-only. It is not a file, so the file features above do not reach it. Cites: ADR-0007; ADR-0001
 10. A child record, such as a placed reference, to open in a tab of its own, though it shares its cell's file. A change in either tab shows in both. A container's tab shows its own fields, never its child lists. Cites: plugin-source.md, The tree, story 3; ruling
@@ -48,12 +48,13 @@ As a user, I want:
 
 1. One column for each active plugin that holds the record, in plugin order: the record's master on the left, the winning copy on the right. The file's column is marked as the one I edit. Cites: xEdit; ADR-0012
 2. A plugin that is not active not to be a column: an overridden plugin, a disabled plugin, or a plugin in a disabled mod. The file I opened is the exception. An overridden plugin's file is a column just before the plugin that overrides it. Any other file whose plugin is not active shows alone (States, story 7). Cites: ADR-0012; ADR-0001
-3. To collapse a column to a narrow strip from a control in its header, and to restore it the same way.
+3. To collapse a column to a narrow strip from a control in its header, and to restore it the same way. The strip's header keeps its arrow and its colour, and shows the load index as its label. Its tooltip holds the rest of the header. Its cells keep their colour (editor-conflicts.md, Cells, story 3).
 4. A cell in a column that cannot be edited, or that is not the file's, to open no editor, as in xEdit. Nothing marks its cells ahead of time. Its header says why, or opens its file. Cites: xEdit; ADR-0018
 5. Each column sized to fit, and its edge to drag to resize it.
 6. The grid to scroll sideways from a scrollbar that stays at the bottom of the panel at every vertical position.
 7. Opened on several records, one column for each, in the order I selected them, the first as the file. Cites: xEdit Compare Selected; editor-conflicts.md, What takes part, story 6
 8. A click on a column's header to open that column's file, or its rendered document when the plugin is not a compiled plugin or its plugin source is unreadable, with the same columns, as a click opens a file in VS Code's Explorer: in the preview tab. Cites: xEdit edits any column in one window; VS Code's preview editors
+9. Collapse No Conflict to collapse, as story 3 does, each column whose copy is identical to the master, except the master's and the file's. Opened on several records, no column collapses: a cell compares with the focused column, not with a master. Cites: catalog `collapse no conflict`; xedit.md, divergence 37
 
 ### A column's header
 
@@ -87,6 +88,7 @@ As a user, I want:
 3. Every row expanded when the record opens, as xEdit opens it. Cites: xEdit
 4. To expand and collapse a row from the arrow beside its label, by double clicking the label, or from the keys below. Cites: VS Code's trees; xEdit
 5. Opened on records of different record types, a field of one name to be one row across them: the first record's fields in its order, then each other record's own fields in the order they first appear. Cites: xedit.md, divergence 31
+6. Collapse No Conflict to collapse each run of rows where no cell is Override, ConflictWins or ConflictLoses into one row at the run's depth. That row says how many rows it holds, and a click restores them. The version stamps collapse too: they take part in no conflict. Opened on several records, a row collapses unless it is ConflictBenign. A struct or array row stays while any row beneath it stays. The row that holds a run takes the diff editor's unchanged-region colours. Cites: catalog `collapse no conflict`; xEdit; VS Code's diff editor; xedit.md, divergence 36
 
 ## The focused cell
 
@@ -121,7 +123,7 @@ As a user, I want:
 2. When the first read fails, in place of the grid, "Failed to load:" and the reason, and a line in the Output. No notification. The next good read replaces it. Cites: common, States, story 2; ADR-0019
 3. While mEdit is still indexing plugins, a message above the grid: "This record's comparison is not complete: the colours are not final." It goes by itself once they are, and the grid reads again. Cites: Never silently wrong
 4. When a record the tab showed is gone from every plugin, the panel to say the record is gone, naming it, in place of the grid.
-5. The file's column to follow its document, and the other columns to read again when mEdit reports the record changed, from an edit of mine or from any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the scroll stay. Cites: ADR-0015; ADR-0001
+5. The file's column to follow its document, and the other columns to read again when mEdit reports the record changed, from an edit of mine or from any other tool, and not before. The rows I expanded, the columns I collapsed, the runs of rows I restored, the focus and the scroll stay. Collapse No Conflict applies again to the rows and columns whose state changed, and leaves alone what I restored. Cites: ADR-0015; ADR-0001
 6. While mEdit cannot read a plugin the panel shows, the message above the grid saying "Showing the last good read:" and the reason. Cites: common, States, story 6
 7. A file whose plugin is disabled, or in a disabled mod, to show its own column alone, editable, with no conflict colour, and the message above the grid saying "This file's plugin is not active: no other copy is compared." Cites: ADR-0012; ADR-0001
 
@@ -133,6 +135,7 @@ The row menus follow VS Code's groups: open, change, source control, copy, then 
 |---|---|
 | Cell | go to record (on a FormLink that resolves) · open field value (on a text field) · add (on an array, or an element of one) · remove (on an element) · move up · move down (on an element) · copy value |
 | Column header | referenced by · decompile and commit (a mod with no source) · decompile (in a source mod) · build (in a source mod) · copy… · delete (a compiled plugin) |
+| The tab's title bar | collapse no conflict, or show no conflict, whichever applies |
 | Keys, on the focused cell | F2: edit. Ctrl+C: copy value. Ctrl+X: cut. Ctrl+V: paste. Delete: remove, or clear. Alt+Up, Alt+Down: move. |
 
 As a user, I want:
@@ -152,7 +155,7 @@ By [common.md](common.md#reporting). As a user, I want:
 
 ## Test seam
 
-- The panel, given mEdit's answer for a record: the header, the columns, their statuses and order, the rows and their nesting, and the states, with no VS Code UI.
+- The panel, given mEdit's answer for a record: the header, the columns, their statuses and order, the rows and their nesting, the collapsed runs of rows, and the states, with no VS Code UI.
 - A gesture's entry: given the focused cell and a click, key, drop or menu item, the command and Argument it fires, or nothing.
 - The tab: its title, a file already open shown and not opened twice, a column's header opening its file in the preview tab, its place kept when hidden, and the read again on mEdit's report of a change.
 - Menus and keys: the placement above, checked against the extension manifest.
