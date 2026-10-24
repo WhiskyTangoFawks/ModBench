@@ -160,7 +160,7 @@ function programVersionFailures(versions: ProgramVersions): string[] {
   return [...game, ...programVersionFailure('the script extender\'s version', versions.extender)];
 }
 
-function managerRunningMessage({ managerRunning, managerNames: { manager } }: InstanceValue): string | undefined {
+export function managerRunningMessage({ managerRunning, managerNames: { manager } }: InstanceValue): string | undefined {
   if (managerRunning.kind === 'unknown') return cannotTellRunning(manager, managerRunning.reason);
   return managerRunning.kind === 'running' ? `${manager} is running, and overwrites your changes when it launches a program or exits.` : undefined;
 }
