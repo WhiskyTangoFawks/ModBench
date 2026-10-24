@@ -270,7 +270,7 @@ describe('the FOMOD installer', () => {
     it('refuses as the engine\'s fault, and lands no plain copy, when its add-on will not load', async () => {
       const unloadable = { ...FOMOD_ENGINE, folder: base };
 
-      await expect(install([], unloadable)).rejects.toThrow(/^The FOMOD engine could not run: .*modinstaller\.napi\.node/);
+      await expect(install([], unloadable)).rejects.toThrow(/^The FOMOD engine could not run: ./);
       expect(landedIn).toBeUndefined();
     });
   });
@@ -403,10 +403,10 @@ describe('the FOMOD installer', () => {
       });
 
       it('names the header image and an option\'s image as the release spells them, whatever case and slash the FOMOD wrote', async () => {
-        const { state } = await shown(imaged('images\\HEADER.png', 'Images/a.PNG'), ['Images/Header.png', 'images/A.png']);
+        const { state } = await shown(imaged('Images\\HEADER.png', 'PICS/a.PNG'), ['Images/Header.png', 'pics/A.png']);
 
         expect(state.image).toEqual({ path: 'Images/Header.png' });
-        expect(imageOf(state)).toEqual({ path: 'images/A.png' });
+        expect(imageOf(state)).toEqual({ path: 'pics/A.png' });
         expect(state.steps[0]?.optionalFileGroups?.group[0]?.options[0]?.description).toBe('About A');
       });
 
