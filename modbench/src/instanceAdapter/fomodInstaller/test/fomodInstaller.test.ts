@@ -348,19 +348,19 @@ describe('the FOMOD installer', () => {
       if (landing.kind === 'landing') landedIn = landing.root;
       return { page, landing };
     }
-    const idOf = (state: FomodState, step: string, group: string, option: string): { stepId: number; groupId: number; optionId: number } => {
+    const idOf = (state: FomodState<ReleaseImage>, step: string, group: string, option: string): { stepId: number; groupId: number; optionId: number } => {
       const found = present(state.steps.find(({ name }) => name === step), `step ${step}`);
       const inGroup = present(found.optionalFileGroups?.group.find(({ name }) => name === group), `group ${group}`);
       return { stepId: found.id, groupId: inGroup.id, optionId: present(inGroup.options.find(({ name }) => name === option), option).id };
     };
-    const pick = (option: string) => (state: FomodState): FomodMove => {
+    const pick = (option: string) => (state: FomodState<ReleaseImage>): FomodMove => {
       const { stepId, groupId, optionId } = idOf(state, 'Main', 'Pick', option);
       return { kind: 'select', stepId, groupId, optionIds: [optionId] };
     };
 
     it('shows the installer as it stands after each click, then lands the files of the choices when Install is clicked', async () => {
       await release(TWO_STEPS, TWO_STEPS_FILES);
-      const visibleSteps = (state: FomodState): string[] => state.steps.filter(({ visible }) => visible).map(({ name }) => name);
+      const visibleSteps = (state: FomodState<ReleaseImage>): string[] => state.steps.filter(({ visible }) => visible).map(({ name }) => name);
 
       const { page, landing } = await answered([pick('Option A'), INSTALL]);
 
