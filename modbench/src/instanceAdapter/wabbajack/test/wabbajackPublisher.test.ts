@@ -349,6 +349,16 @@ describe('publisher tags following a mod folder (publishing.md, Publisher tags, 
     expect(await settingsText()).toBe('not json');
   });
 
+  it('reads the settings and writes nothing when it is given no folder', async () => {
+    const text = '{"Include":["mods\\\\A"]}';
+    await writeSettings(text);
+    await publisherOver().followFolders([]);
+    expect(await settingsText()).toBe(text);
+
+    await writeSettings('not json');
+    await expect(publisherOver().followFolders([])).rejects.toThrow(SETTINGS_FILE);
+  });
+
   it('does nothing while the instance holds no compiler settings, creating none', async () => {
     await publisherOver().followFolders([{ from: folder('A'), to: folder('C') }]);
     await expect(readFile(join(root, SETTINGS_FILE), 'utf8')).rejects.toThrow();

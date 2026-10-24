@@ -884,12 +884,21 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
 
     await commands.uninstallMods(['Harder VATS', 'ENBoost', 'No Such Mod'], NO_TRASH);
 
-    expect(fake.calls.filter((call) => call.verb === 'followModFolders')).toEqual([follow({ from: '/mods/Harder VATS' }, { from: '/mods/ENBoost' })]);
-    expect(verbs(fake.calls).indexOf('followModFolders')).toBeGreaterThan(verbs(fake.calls).lastIndexOf('trashEntryFolder'));
+    expect(fake.calls.filter((call) => call.verb === 'followModFolders')).toEqual([follow(), follow({ from: '/mods/Harder VATS' }, { from: '/mods/ENBoost' })]);
+    expect(verbs(fake.calls).lastIndexOf('followModFolders')).toBeGreaterThan(verbs(fake.calls).lastIndexOf('trashEntryFolder'));
   });
 
-  it('uninstall lands the mod carrying the publisher\'s failure when the configuration cannot be read', async () => {
-    const { commands } = publisherOver({ refusals: unreadable });
+  it('uninstall refuses the whole selection, trashing and unlisting nothing, when the configuration cannot be read', async () => {
+    const { fake, commands } = publisherOver({ refusals: unreadable });
+
+    const outcome = await commands.uninstallMods(['Harder VATS', 'ENBoost'], NO_TRASH);
+
+    expect(outcome).toEqual({ applied: false, refusal: 'compiler_settings.json is not JSON' });
+    expect(fake.calls).toEqual([follow()]);
+  });
+
+  it('uninstall lands the mod carrying the failure when the configuration turns unreadable after the check', async () => {
+    const { commands } = publisherOver({ refusals: (call) => (call.verb === 'followModFolders' && call.moves.length > 0 ? 'compiler_settings.json is not JSON' : undefined) });
 
     const outcome = await commands.uninstallMods(['Harder VATS'], NO_TRASH);
 
@@ -901,6 +910,6 @@ describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)',
 
     await commands.uninstallMods(['Harder VATS'], NO_TRASH);
 
-    expect(verbs(fake.calls)).not.toContain('followModFolders');
+    expect(fake.calls.filter((call) => call.verb === 'followModFolders')).toEqual([follow()]);
   });
 });

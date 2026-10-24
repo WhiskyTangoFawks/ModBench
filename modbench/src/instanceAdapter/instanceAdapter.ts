@@ -571,7 +571,7 @@ export interface InstanceAdapter {
   changePublisherTag(change: PublisherTagChange, tag: string, paths: readonly string[]): Promise<readonly PathRefusal[]>;
   /** Moves every publisher tag on or under each mod folder `from` to the same place under its `to`, or drops it when there is none, so
    *  no publisher tag names a folder that is gone. Rejects, writing nothing, for a configuration it cannot read; changes
-   *  nothing while the instance holds none. */
+   *  nothing while the instance holds none. No moves reads the configuration and writes nothing. */
   followModFolders(moves: readonly { readonly from: string; readonly to?: string }[]): Promise<void>;
 
   // Answers about a mod or a file.

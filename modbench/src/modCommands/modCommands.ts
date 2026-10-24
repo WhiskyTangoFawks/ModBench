@@ -425,6 +425,8 @@ async function uninstallMods(
   adapter: InstanceAdapter, mods: readonly string[], trash: MoveToTrash,
 ): Promise<SelectionResult<UninstalledMod>> {
   const installedFrom = new Map(await Promise.all(mods.map(async (mod) => [mod, await readOrRefuse(() => adapter.modMetadata(mod))] as const)));
+  const readable = await publisherTagsReadable(adapter);
+  if (!readable.applied) return readable;
   const folders = await Promise.all(mods.map(async (mod) => [mod, await adapter.modFolderPath(mod).catch(() => undefined)] as const));
   const result = await trashThenUnlist(adapter, 'mod', mods, trash);
   if (!result.applied) return result;
@@ -450,6 +452,17 @@ async function uninstallMods(
     }
   }
   return { applied: true, outcome: { landed, refused: result.outcome.refused } };
+}
+
+// Whether the publisher's configuration reads, before anything is written: a move of no folder reads it and writes none.
+async function publisherTagsReadable(adapter: InstanceAdapter): Promise<CommandResult> {
+  if (adapter.publisherTags.length === 0) return { applied: true, wrote: false };
+  try {
+    await adapter.followModFolders([]);
+    return { applied: true, wrote: false };
+  } catch (err) {
+    return refuse(err);
+  }
 }
 
 // The publisher tags on the folders, removed in one write; why they could not be, or undefined.
