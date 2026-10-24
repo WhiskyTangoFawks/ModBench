@@ -54,10 +54,11 @@ Modbench is an early alpha. It supports Fallout 4, Skyrim Special Edition and St
 
 What works today:
 
-- Mods: install from a file or a folder, separators, order, enable, and the downloads folder.
+- Mods: install from a file or a folder, FOMOD installers with their choices, separators, order, enable, and the downloads folder.
 - Plugins: plugin order and checkboxes, and each active plugin's records in a tree.
 - Records: an xEdit-style record panel across the active plugins, with conflict colours, field editing, copy as override, new record, and Referenced By.
 - Version control: the modlist repository, source mods and build.
+- Publishing: Wabbajack's publisher tags on mods, folders and files, and none of Modbench's own files in what it ships.
 
 Planned:
 
@@ -65,7 +66,6 @@ Planned:
 - Downloads: there is no automation of downloads yet, this waits on me asking for a Nexus API key.
 - Repair of a malformed plugin, so it decompiles. Mutagen is stricter than xEdit about what it accepts, so not every plugin decompiles today.
 - Compatibility with Vortex instances.
-- FOMOD installer compatibility.
 - Creating a new instance. Today Modbench only opens an existing one.
 - LOOT integration.
 - Including Deltas for changed manually changed files in a comitted modlist, as wabbajack does. In order to fit in a git repo, all files must match the hash of their providing package. This may eventually be implemented through providing the delta as an external download.
