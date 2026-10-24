@@ -586,7 +586,7 @@ public sealed class FailedReadStateTests : IDisposable
         public HeldAtFirstRead() : base(TestAdapters.Mutagen()) { }
 
         public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
-            ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings? strings = null) =>
+            ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
             Interlocked.Increment(ref _read) == 1
                 ? PluginFailures.Inaccessible()
                 : base.ReadContent(modPath, loadOrder, strings);
@@ -601,7 +601,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
             ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-            PluginStrings? strings = null)
+            PluginStrings strings)
         {
             if (!atOpen(Interlocked.Increment(ref _opened))) return base.OpenDocuments(modPath, loadOrder, schemas, strings);
             beforeFailing?.Invoke();

@@ -61,7 +61,7 @@ public sealed class WarmReconcileTests
         public OpenedIndex? Index { get; set; }
 
         public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
-            ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings? strings = null)
+            ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings)
         {
             var index = Index
                 ?? throw new InvalidOperationException("Expected the adapter's Index to be set before any open.");

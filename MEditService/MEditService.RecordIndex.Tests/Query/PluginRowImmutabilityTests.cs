@@ -34,5 +34,5 @@ public sealed class PluginRowImmutabilityTests
 
     [Fact]
     public void GetPlugins_APluginNoModProvides_IsEditable() =>
-        Assert.False(IsImmutable(PluginOrigin.Overwrite, enabled: true, gameProvided: false));
+        Assert.False(IsImmutable(LoadOrderEntry.OverwriteOrigin, enabled: true, gameProvided: false));
 }

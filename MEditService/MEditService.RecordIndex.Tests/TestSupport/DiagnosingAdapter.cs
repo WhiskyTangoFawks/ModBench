@@ -16,7 +16,7 @@ internal sealed class DiagnosingAdapter() : DelegatingPluginAdapter(TestAdapters
 
     public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null) =>
+        PluginStrings strings) =>
         base.OpenDocuments(modPath, loadOrder, schemas, strings).Map<IPluginDocuments, IPluginDocuments>(
             documents => new Diagnosed(documents, Unreadable));
 }

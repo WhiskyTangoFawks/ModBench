@@ -9,33 +9,6 @@ namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
 public sealed class MalformedRecordDiagnosisTests
 {
-    [Fact]
-    public void EntryPointShape_AVanillaShapedFunction14_ReportsNothing()
-    {
-        var record = Record("PERK", 0x00000009,
-            Subrecord("EDID", "CleanPerk\0"u8.ToArray()),
-            Subrecord("PRKE", [2, 0, 0]),
-            Subrecord("DATA", [0, 14, 0]),
-            Subrecord("EPFT", [8]),
-            Subrecord("EPFD", new byte[8]),
-            Subrecord("PRKF", []));
-
-        Assert.Empty(Scan(record));
-    }
-
-    [Fact]
-    public void EntryPointShape_AFunctionVanillaNeverExercises_MakesNoClaim_Function4NeverOccursInTheShippedGameSoNoCanonicalShapeIsProvableAndTheTableStaysSilentRatherThanTrustingAReferencesComments()
-    {
-        var record = Record("PERK", 0x0000000A,
-            Subrecord("PRKE", [2, 0, 0]),
-            Subrecord("DATA", [0, 4, 0]),
-            Subrecord("EPFT", [1]),
-            Subrecord("EPFD", new byte[4]),
-            Subrecord("PRKF", []));
-
-        Assert.Empty(Scan(record));
-    }
-
     [Theory]
     [InlineData(GameRelease.Fallout4, 8, false)]
     [InlineData(GameRelease.Fallout4, 2, true)]
@@ -84,14 +57,6 @@ public sealed class MalformedRecordDiagnosisTests
         Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - allocatedBefore, 0, HalfAGigabyte / 8);
     }
 
-    [Fact]
-    public void FixedSize_AnExactLengthSubrecord_ReportsNothing()
-    {
-        var record = Record("REGN", 0x00000001, Subrecord("EDID", "CleanRegion\0"u8.ToArray()), Subrecord("RDAT", new byte[8]));
-
-        Assert.Empty(Scan(record));
-    }
-
     [Theory]
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
@@ -119,24 +84,6 @@ public sealed class MalformedRecordDiagnosisTests
     }
 
     [Fact]
-    public void FixedCount_ARaceWithAllThirtyTwoNames_ReportsNothing()
-    {
-        var names = Enumerable.Range(0, 32).Select(_ => Subrecord("NAME", "Slot\0"u8.ToArray())).ToArray();
-        var record = Record("RACE", 0x00000003, [Subrecord("EDID", "CleanRace\0"u8.ToArray()), .. names]);
-
-        Assert.Empty(Scan(record));
-    }
-
-    [Fact]
-    public void CounterEntries_AnAgreeingPair_ReportsNothing()
-    {
-        var record = Record("REFR", 0x00000005,
-            Subrecord("XWPG", U32(2)), Subrecord("XWPN", new byte[12]), Subrecord("XWPN", new byte[12]));
-
-        Assert.Empty(Scan(record));
-    }
-
-    [Fact]
     public void CkOrder_TwoCombinationsEndingInADanglingObtfAndFull_IsDiagnosedWithNoRepair_SinceTheDanglingPairCouldBeEitherCombinations()
     {
         var record = Record("WEAP", 0x00000006,
@@ -150,23 +97,44 @@ public sealed class MalformedRecordDiagnosisTests
         Assert.Null(d.Tail);
     }
 
-    [Fact]
-    public void CkOrder_ALeadingBareObtsFollowedByClosedCombinations_ReportsNothing_BecauseItIsVanillaGaussRiflesShapeTheDefaultCombinationAndCanonicalCkOutputProvenByTheMeditSmokeVanillaScan()
+    public static TheoryData<string, byte[]> CleanShapes => new()
     {
-        var record = Record("WEAP", 0x00000007,
-            Subrecord("OBTE", U32(2)),
-            Subrecord("OBTS", new byte[8]),
-            Subrecord("OBTF", []), Subrecord("FULL", "A\0"u8.ToArray()), Subrecord("OBTS", new byte[8]),
-            Subrecord("STOP", []));
+        {
+            "a vanilla-shaped entry point function 14",
+            Record("PERK", 0x00000009,
+                Subrecord("EDID", "CleanPerk\0"u8.ToArray()), Subrecord("PRKE", [2, 0, 0]), Subrecord("DATA", [0, 14, 0]),
+                Subrecord("EPFT", [8]), Subrecord("EPFD", new byte[8]), Subrecord("PRKF", []))
+        },
+        {
+            "an entry point function the shipped game never exercises, so no canonical shape is provable and the table makes no claim",
+            Record("PERK", 0x0000000A,
+                Subrecord("PRKE", [2, 0, 0]), Subrecord("DATA", [0, 4, 0]), Subrecord("EPFT", [1]), Subrecord("EPFD", new byte[4]), Subrecord("PRKF", []))
+        },
+        {
+            "a fixed-size subrecord of its exact length",
+            Record("REGN", 0x00000001, Subrecord("EDID", "CleanRegion\0"u8.ToArray()), Subrecord("RDAT", new byte[8]))
+        },
+        {
+            "a race with all thirty-two names",
+            Record("RACE", 0x00000003, [Subrecord("EDID", "CleanRace\0"u8.ToArray()), .. Enumerable.Repeat(Subrecord("NAME", "Slot\0"u8.ToArray()), 32)])
+        },
+        {
+            "a counter and the entries it counts agreeing",
+            Record("REFR", 0x00000005, Subrecord("XWPG", U32(2)), Subrecord("XWPN", new byte[12]), Subrecord("XWPN", new byte[12]))
+        },
+        {
+            "a leading bare OBTS before closed combinations, the vanilla Gauss rifle's shape, proven canonical by the vanilla scan",
+            Record("WEAP", 0x00000007,
+                Subrecord("OBTE", U32(2)), Subrecord("OBTS", new byte[8]),
+                Subrecord("OBTF", []), Subrecord("FULL", "A\0"u8.ToArray()), Subrecord("OBTS", new byte[8]), Subrecord("STOP", []))
+        },
+        { "a record of a type no table names", Record("MISC", 0x00000008, Subrecord("EDID", "Junk\0"u8.ToArray()), Subrecord("DATA", new byte[8])) },
+    };
 
-        Assert.Empty(Scan(record));
-    }
-
-    [Fact]
-    public void ACleanRecordOfAnUntabledType_IsNotDiagnosed()
+    [Theory]
+    [MemberData(nameof(CleanShapes))]
+    public void ACleanShape_ReportsNothing(string _, byte[] record)
     {
-        var record = Record("MISC", 0x00000008, Subrecord("EDID", "Junk\0"u8.ToArray()), Subrecord("DATA", new byte[8]));
-
         Assert.Empty(Scan(record));
     }
 }

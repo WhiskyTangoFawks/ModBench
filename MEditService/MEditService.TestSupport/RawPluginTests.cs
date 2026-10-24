@@ -131,23 +131,16 @@ public class RawPluginTests
         Assert.Equal(new byte[] { 0x78, 0x01 }, RawPlugin.FirstMiscZlibHeader(plugin));
     }
 
-    [Fact]
-    public void FirstMiscZlibHeader_WhenTheFirstGroupIsNotMisc_Fails()
+    public static TheoryData<string, byte[]> PluginsWithNoCompressedMiscFirst => new()
     {
-        var plugin = RawPlugin.Plugin(
-            RawPlugin.Tes4(),
-            RawPlugin.Group("WRLD", RawPlugin.DeflatedRecord("WRLD", 1, CompressionLevel.Fastest, Edid("A"))));
+        { "the first group is not MISC", RawPlugin.Plugin(RawPlugin.Tes4(), RawPlugin.Group("WRLD", RawPlugin.DeflatedRecord("WRLD", 1, CompressionLevel.Fastest, Edid("A")))) },
+        { "the MISC is not compressed", RawPlugin.Plugin(RawPlugin.Tes4(), RawPlugin.Group("MISC", RawPlugin.Misc(1, "A"))) },
+    };
 
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => RawPlugin.FirstMiscZlibHeader(plugin));
-    }
-
-    [Fact]
-    public void FirstMiscZlibHeader_WhenTheMiscIsNotCompressed_Fails()
+    [Theory]
+    [MemberData(nameof(PluginsWithNoCompressedMiscFirst))]
+    public void FirstMiscZlibHeader_OfAPluginWhoseFirstGroupIsNoCompressedMisc_Fails(string _, byte[] plugin)
     {
-        var plugin = RawPlugin.Plugin(
-            RawPlugin.Tes4(),
-            RawPlugin.Group("MISC", RawPlugin.Misc(1, "A")));
-
         Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => RawPlugin.FirstMiscZlibHeader(plugin));
     }
 }

@@ -4,31 +4,36 @@ public sealed class ManifestLineBytesTests
 {
     private static readonly Manifest Installed = new(new ManifestPackage.InstallationFile("First.7z", 1, "H1"), []);
 
-    private static FileBytes BytesOf(Manifest manifest, ManifestFile file) => manifest.BytesOf(file);
-
     private static ManifestFile Line(PackageEntry entry) => new("a.nif", entry);
 
-    [Fact]
-    public void ALineHeldAtItsOwnPath_NamesThatPathInTheInstallationFile() =>
-        Assert.Equal(new FileBytes.InInstallationFile("First.7z", "a.nif"), BytesOf(Installed, Line(new PackageEntry.Held())));
+    public static TheoryData<string, Manifest, ManifestFile, FileBytes> NamingBytes => new()
+    {
+        { "a line held at its own path, in the installation file", Installed, Line(new PackageEntry.Held()), new FileBytes.InInstallationFile("First.7z", "a.nif") },
+        {
+            "a line held at another path, in the installation file", Installed,
+            ManifestFile.At("a.nif", new FileBytes.InInstallationFile("First.7z", "x/a.nif")), new FileBytes.InInstallationFile("First.7z", "x/a.nif")
+        },
+        {
+            "a line of a source mod, as its build writes it", new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), []),
+            Line(new PackageEntry.Held()), new FileBytes.Built("a.nif")
+        },
+    };
 
-    [Fact]
-    public void ALineHeldAtAnotherPath_NamesThatPathInTheInstallationFile() =>
-        Assert.Equal(new FileBytes.InInstallationFile("First.7z", "x/a.nif"), BytesOf(Installed, ManifestFile.At("a.nif", new FileBytes.InInstallationFile("First.7z", "x/a.nif"))));
+    [Theory]
+    [MemberData(nameof(NamingBytes))]
+    public void ALine_NamesWhereItsBytesAre(string _, Manifest manifest, ManifestFile line, FileBytes bytes) =>
+        Assert.Equal(bytes, manifest.BytesOf(line));
 
-    [Fact]
-    public void ALineOfASourceMod_NamesItsPathAsItsBuildWritesIt() =>
-        Assert.Equal(
-            new FileBytes.Built("a.nif"),
-            BytesOf(new Manifest(new ManifestPackage.SourceRepository("Mod", IsSubmodule: true), []), Line(new PackageEntry.Held())));
+    public static TheoryData<string, Manifest, PackageEntry, Type> NamingNoBytes => new()
+    {
+        { "a line its package does not hold", Installed, new PackageEntry.NotHeld(), typeof(FileBytes.NotHeld) },
+        { "a line held by a manifest with no package", new Manifest(null, []), new PackageEntry.Held(), typeof(FileBytes.NoInstallationFile) },
+    };
 
-    [Fact]
-    public void ALineItsPackageDoesNotHold_NamesNoBytes() =>
-        Assert.IsType<FileBytes.NotHeld>(BytesOf(Installed, Line(new PackageEntry.NotHeld())));
-
-    [Fact]
-    public void ALineHeldByAManifestWithNoPackage_NamesNoInstallationFile() =>
-        Assert.IsType<FileBytes.NoInstallationFile>(BytesOf(new Manifest(null, []), Line(new PackageEntry.Held())));
+    [Theory]
+    [MemberData(nameof(NamingNoBytes))]
+    public void ALine_NamesWhyItHasNoBytes(string _, Manifest manifest, PackageEntry entry, Type why) =>
+        Assert.IsType(why, manifest.BytesOf(Line(entry)));
 
     [Theory]
     [InlineData("A.nif", true)]

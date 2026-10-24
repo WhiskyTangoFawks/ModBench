@@ -13,15 +13,10 @@ public sealed class MasterStylesTests
     public void APluginWhoseMasterIsLight_ReadsItsOverrideAsTheMastersRecord_TheStyleReadOffTheMastersOwnHeader()
     {
         using var scratch = new ScratchDirectory("master-styles");
-        var (masterPath, childPath) = LightMasterAndChild.Write(scratch.Path);
-        var loadOrder = SnapshotPlugins.Snapshot(scratch.Path, null, GameRelease.Starfield,
-        [
-            new LoadOrderEntry(LightMasterAndChild.Master.FileName, masterPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
-            new LoadOrderEntry(LightMasterAndChild.Child.FileName, childPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
-        ]);
+        var loadOrder = LightMasterAndChild.LoadOrderIn(scratch.Path);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(LightMasterAndChild.Child, childPath), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Answered();
+            new ModPath(LightMasterAndChild.Child, LightMasterAndChild.ChildIn(loadOrder).Path), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield), PluginStrings.None).Answered();
 
         Assert.Equal([LightMasterAndChild.Weapon.ToString()], documents.Records.Select(r => r.FormKey));
     }
@@ -34,27 +29,25 @@ public sealed class MasterStylesTests
 
         var failure = Adapter.OpenDocuments(
             new ModPath(LightMasterAndChild.Child, childPath), EmptyLoadOrder.Of(GameRelease.Starfield),
-            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Failure();
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield), PluginStrings.None).Failure();
 
         Assert.IsType<PluginFailure.MasterNotInLoadOrder>(failure);
         Assert.Contains(LightMasterAndChild.Master.FileName.String, failure.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void APluginWhoseMasterDoesNotRead_FailsNamingThatMaster()
+    public void APluginWhoseMasterDoesNotRead_FailsNamingThatMaster_AndWhyItDoesNotRead()
     {
         using var scratch = new ScratchDirectory("master-styles-unreadable");
-        var (masterPath, childPath) = LightMasterAndChild.Write(scratch.Path);
-        File.WriteAllText(masterPath, "not a plugin");
-        var loadOrder = SnapshotPlugins.Snapshot(scratch.Path, null, GameRelease.Starfield,
-        [
-            new LoadOrderEntry(LightMasterAndChild.Master.FileName, masterPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
-            new LoadOrderEntry(LightMasterAndChild.Child.FileName, childPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
-        ]);
+        var loadOrder = LightMasterAndChild.LoadOrderIn(scratch.Path);
+        File.WriteAllBytes(Path.Combine(scratch.Path, LightMasterAndChild.Master.FileName), "not a plugin"u8.ToArray());
 
         var failure = Adapter.OpenDocuments(
-            new ModPath(LightMasterAndChild.Child, childPath), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Failure();
+            new ModPath(LightMasterAndChild.Child, LightMasterAndChild.ChildIn(loadOrder).Path), loadOrder,
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield), PluginStrings.None).Failure();
 
-        Assert.Contains(LightMasterAndChild.Master.FileName.String, failure.Reason, StringComparison.Ordinal);
+        Assert.Equal(
+            "its master Light.esm could not be read: the plugin — unknown: Could not read enough data to parse a Mod Header from stream.  Position: 0.  12 remaining < 24 expected.",
+            failure.Reason);
     }
 }

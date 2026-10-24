@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -18,27 +19,7 @@ public sealed class PluginDocumentReadTests
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     private static IPluginDocuments OpenDocuments(string fileName, string path) =>
-        Adapter.OpenDocuments(new ModPath(ModKey.FromFileName(fileName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
-
-    [Fact]
-    public void OpenDocuments_YieldsEachRecordAsTheCodecsOwnText_UnderItsSchemaTableName()
-    {
-        using var data = new PluginFixtureBuilder("documents-read")
-            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("DocumentNpc"))
-            .Build();
-        var path = Path.Combine(data.DataFolder, PluginName);
-
-        using var documents = OpenDocuments(PluginName, path);
-        var npc = documents.Records.Single(d => d.RecordType == "npc_");
-
-        using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName(PluginName), path), Fallout4Release.Fallout4);
-        var expected = RecordTextCodec.SerializeToText(loaded.EnumerateMajorRecords().Single(), GameRelease.Fallout4);
-
-        Assert.Equal(expected, npc.Text);
-        Assert.Equal(loaded.EnumerateMajorRecords().Single().FormKey.ToString(), npc.FormKey);
-        Assert.Null(npc.ParseDiagnosis);
-    }
+        Adapter.OpenDocuments(new ModPath(ModKey.FromFileName(fileName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas, PluginStrings.None).Answered();
 
     [Theory]
     [InlineData("weap")]

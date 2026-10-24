@@ -30,35 +30,29 @@ public sealed class DeletedRecordDocumentTests
         write(path);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+            new ModPath(ModKey.FromFileName(PluginName), path), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas, PluginStrings.None).Answered();
         return documents.Records.Single(d => d.FormKey == npc.ToString());
     }
 
-    [Fact]
-    public void OpenDocuments_YieldsADeletedRecordWithNoSubrecordAsItsHeader()
+    [Theory]
+    [InlineData("000800:DeletedNpc.esp")]
+    [InlineData("000801:Master.esm", "Master.esm")]
+    public void OpenDocuments_YieldsADeletedRecordWithNoSubrecordAsItsHeader_ItsOwnOrAnOverrideOfAMasters(string formKey, params string[] masters)
     {
-        var document = NpcDocumentOf(path => DeletedNpcPlugin.WriteEmpty(path, Npc));
+        var npc = FormKey.Factory(formKey);
+
+        var document = DocumentOf(npc, path => DeletedNpcPlugin.WriteEmpty(path, npc, [.. masters.Select(master => ModKey.FromFileName(master))]));
 
         Assert.Null(document.ParseDiagnosis);
     }
 
     [Fact]
-    public void OpenDocuments_YieldsADeletedOverrideOfAMastersRecordWithNoSubrecordAsItsHeader()
-    {
-        var master = ModKey.FromFileName("Master.esm");
-        var overridden = new FormKey(master, 0x801);
-
-        var document = DocumentOf(overridden, path => DeletedNpcPlugin.WriteEmpty(path, overridden, master));
-
-        Assert.Null(document.ParseDiagnosis);
-    }
-
-    [Fact]
-    public void OpenDocuments_YieldsADeletedRecordThatStillHoldsFieldsAsItsDiagnosis()
+    public void OpenDocuments_YieldsADeletedRecordThatStillHoldsFields_AsItsKeyAndEditorId_WithADiagnosisNamingIt()
     {
         var document = NpcDocumentOf(path => DeletedNpcPlugin.WriteHoldingFields(path, Npc));
 
-        Assert.NotNull(document.ParseDiagnosis);
+        Assert.StartsWith("Npc 000800:DeletedNpc.esp (Guy) — ", document.ParseDiagnosis, StringComparison.Ordinal);
+        Assert.Equal("{\n  \"FormKey\": \"000800:DeletedNpc.esp\",\n  \"EditorID\": \"Guy\"\n}", document.Text);
     }
 
     [Fact]
@@ -88,7 +82,7 @@ public sealed class DeletedRecordDocumentTests
         ]);
 
         using var documents = Adapter.OpenDocuments(
-            new ModPath(plugin.ModKey, path), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Answered();
+            new ModPath(plugin.ModKey, path), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield), PluginStrings.None).Answered();
 
         Assert.Null(documents.Records.Single(d => d.FormKey == overridden.ToString()).ParseDiagnosis);
     }

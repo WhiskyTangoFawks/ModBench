@@ -21,13 +21,6 @@ public static class RawPlugin
         return bytes;
     }
 
-    public static byte[] U16(ushort value)
-    {
-        var bytes = new byte[2];
-        BinaryPrimitives.WriteUInt16LittleEndian(bytes, value);
-        return bytes;
-    }
-
     public static byte[] U32(uint value)
     {
         var bytes = new byte[4];
