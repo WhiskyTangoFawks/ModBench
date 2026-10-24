@@ -42,7 +42,7 @@ type Group = types.IGroup;
 type Option = types.IPlugin;
 
 type EngineRun =
-  | { readonly kind: 'done'; readonly result: types.InstallResult | null; readonly refusal?: string; readonly unanswered: readonly string[] }
+  | { readonly kind: 'done'; readonly result: types.InstallResult | null; readonly refusal?: string }
   | { readonly kind: 'unreadable'; readonly why: string };
 
 type StepReport = Extract<EngineReport, { readonly kind: 'step' }>;
@@ -239,6 +239,8 @@ const unreadableWhy = (message: string): string => {
 
 const engineFault = (why: string): Error => new Error(`The FOMOD engine could not run: ${why}`);
 
+const conditionsRead = (unanswered: ReadonlySet<string>): string => `The FOMOD's conditions read ${[...unanswered].join('; ')}.`;
+
 function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver): Promise<EngineRun> {
   const child = fork(engine.process, [], {
     execArgv: [],
@@ -283,6 +285,11 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
         case 'dialog': driver.opened(report.module, report.image); return;
         case 'step':
           if (refusal !== undefined) return;
+          if (unanswered.size > 0) {
+            refusal = conditionsRead(unanswered);
+            send({ kind: 'cancel' });
+            return;
+          }
           if (driver.waitsOnUser) clearTimeout(silence);
           try {
             for (const request of driver.step(report)) send(request);
@@ -292,7 +299,9 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
           }
           return;
         case 'unanswered': unanswered.add(`${report.question}, which could not be read: ${report.why}`); return;
-        case 'done': settle(() => resolve({ kind: 'done', result: report.result, refusal, unanswered: [...unanswered] })); return;
+        case 'done':
+          settle(() => resolve({ kind: 'done', result: report.result, refusal: refusal ?? (unanswered.size > 0 ? conditionsRead(unanswered) : undefined) }));
+          return;
         case 'failed': settle(() => resolve({ kind: 'unreadable', why: unreadableWhy(report.message) })); return;
         case 'broken': fail(report.message); return;
       }
@@ -368,7 +377,6 @@ async function installFomod(engine: FomodEngine, { root, into, facts, driver }: 
     .finally(() => script.dispose());
   if (run.kind === 'unreadable') return run;
   if (run.refusal !== undefined) throw new Error(run.refusal);
-  if (run.unanswered.length > 0) throw new Error(`The FOMOD's conditions read ${run.unanswered.join('; ')}.`);
   const stopped = driver.ended();
   if (stopped !== undefined) return stopped;
   if (run.result === null) throw new Error('The FOMOD\'s installer stopped before it installed anything.');
