@@ -7,8 +7,11 @@ import { delimiter, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import type { types } from '@nexusmods/fomod-installer-native';
 import { copyTree, ensureDir, makeTempDir, ownTempPrefix, remove, textIfUtf8, write } from '../files';
 import { moduleConfigForEngine } from './moduleConfig';
+import { aboutIn, NO_ABOUT, type About } from './releaseAbout';
+import { keyOf, resolverIn } from './releasePaths';
 import { errorMessage } from '../../ports/errorMessage';
 import type { FomodKind } from '../gameFolder/releaseRoot';
+import { withImages, type FomodState, type ReleaseImage } from '../../wire/fomodPage';
 import type { FomodAnswer, FomodDialog, FomodGroupChoice, FomodLanded, FomodStepChoice } from '../instanceAdapter';
 import { isReport, type ConditionFacts, type EngineReport, type EngineRequest, type Selection } from './engineProtocol';
 
@@ -48,7 +51,9 @@ interface Driver {
   readonly waitsOnUser: boolean;
   // Called before the installer runs; `send` carries answers that come when they come.
   readonly attach: (send: (request: EngineRequest) => void) => void;
-  readonly opened: (module: string) => void;
+  readonly opened: (module: string, image: string) => void;
+  // Called once the release's files are listed, before the installer runs.
+  readonly released: (release: { readonly root: string; readonly files: readonly string[] }) => Promise<void>;
   // The requests that answer the installer as it stands. Throws when the installer cannot be left.
   readonly step: (report: StepReport) => readonly EngineRequest[];
   // Resolves when the installer, which finished with no step shown, may install.
@@ -121,6 +126,7 @@ const UNATTENDED = {
   waitsOnUser: false,
   attach: () => undefined,
   opened: () => undefined,
+  released: () => Promise.resolve(),
   finish: () => Promise.resolve(),
   confirmMissing: () => Promise.resolve(true),
   ended: () => undefined,
@@ -150,9 +156,18 @@ function choosing(choices: readonly FomodStepChoice[]): Driver {
 // and Install alone.
 function conversing(dialog: FomodDialog): Driver {
   let module = '';
+  let headerImage = '';
+  let about: About = NO_ABOUT;
+  let folder = '';
+  let imageIn = resolverIn([]);
   let shown = false;
   let ended: Stopped | undefined;
   let release: (() => void) | undefined;
+  const stateOf = (steps: readonly Step[], current: number): FomodState<ReleaseImage> =>
+    withImages({ module, ...about, image: headerImage, steps, current }, (image) => {
+      const path = imageIn(image);
+      return path === undefined ? undefined : { path };
+    });
   return {
     waitsOnUser: true,
     attach: (send) => dialog.onMove((move) => {
@@ -172,12 +187,18 @@ function conversing(dialog: FomodDialog): Driver {
         case 'cancel': send({ kind: 'cancel' }); return;
       }
     }),
-    opened: (name) => {
+    opened: (name, image) => {
       module = name;
+      headerImage = image;
+    },
+    released: async ({ root, files }) => {
+      folder = root;
+      imageIn = resolverIn(files);
+      about = await aboutIn(root, files);
     },
     step: ({ steps, current }) => {
       shown = true;
-      dialog.show({ module, steps, current });
+      dialog.show(stateOf(steps, current), folder);
       dialog.asking(true);
       return [];
     },
@@ -186,7 +207,7 @@ function conversing(dialog: FomodDialog): Driver {
         dialog.asking(false);
         return Promise.resolve();
       }
-      dialog.show({ module, steps: [], current: 0 });
+      dialog.show(stateOf([], 0), folder);
       dialog.asking(true);
       return new Promise<void>((resolve) => {
         release = resolve;
@@ -248,7 +269,7 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
       heard();
       if (!isReport(report)) return;
       switch (report.kind) {
-        case 'dialog': driver.opened(report.module); return;
+        case 'dialog': driver.opened(report.module, report.image); return;
         case 'step':
           if (refusal !== undefined) return;
           if (driver.waitsOnUser) clearTimeout(silence);
@@ -275,11 +296,8 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
 
 async function filesUnder(root: string): Promise<string[]> {
   const entries = await readdir(root, { recursive: true, withFileTypes: true });
-  return entries.filter((entry) => entry.isFile()).map((entry) => relative(root, join(entry.parentPath, entry.name)));
+  return entries.filter((entry) => entry.isFile()).map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/'));
 }
-
-// A path compared as Windows compares it, so a FOMOD written there finds its files and merges its folders.
-const keyOf = (path: string): string => path.replaceAll('\\', '/').toLowerCase();
 
 // The engine reads the config from a folder of its own, so the release keeps its own. A config that is not UTF-8 it
 // reads as the release holds it.
@@ -333,6 +351,7 @@ async function land(root: string, files: readonly string[], into: string, instru
 // fact its conditions read is unknown, or it installs outside the mod's folder.
 async function installFomod(engine: FomodEngine, { root, into, facts, driver }: FomodInstall): Promise<FomodInstalled> {
   const files = await filesUnder(root);
+  await driver.released({ root, files });
   const script = await scriptFolder(root, files);
   const run = await runEngine(engine, { kind: 'install', engineFolder: engine.folder, root: script.root, files, facts }, driver)
     .finally(() => script.dispose());

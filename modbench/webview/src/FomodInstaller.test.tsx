@@ -17,8 +17,10 @@ const group = (id: number, name: string, type: FomodGroup['type'], ...options: F
 const step = (id: number, name: string, visible: boolean, ...groups: FomodGroup[]): FomodStep =>
   ({ id, name, visible, optionalFileGroups: { group: groups } });
 
-const show = (steps: FomodStep[], current = 0): void => {
-  const state: FomodState = { module: 'My Module', steps, current };
+const HEADER = { module: 'My Module', author: '', version: '', website: '', image: '' };
+
+const show = (steps: FomodStep[], current = 0, header: Partial<FomodState> = {}): void => {
+  const state: FomodState = { ...HEADER, ...header, steps, current };
   act(() => { window.dispatchEvent(new MessageEvent('message', { data: { type: FOMOD_STATE, state } })); });
 };
 
@@ -170,5 +172,90 @@ describe('the FOMOD installer page', () => {
     act_();
 
     expect(sent().at(-1)).toEqual({ type: FOMOD_MOVE, move });
+  });
+
+  describe('the header', () => {
+    it('shows the author, the version and the header image the FOMOD gives', () => {
+      show([], 0, { author: 'Ada', version: '1.2', image: 'img://header.png' });
+
+      expect(screen.getByText(/Ada/)).toBeInTheDocument();
+      expect(screen.getByText(/1\.2/)).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'My Module' })).toHaveAttribute('src', 'img://header.png');
+    });
+
+    it('shows a website as a link named Link, with the address as its tooltip, and a website that is no web address as text', () => {
+      show([], 0, { website: 'https://example.com/mod' });
+      expect(screen.getByRole('link', { name: 'Link' })).toHaveAttribute('href', 'https://example.com/mod');
+      expect(screen.getByRole('link', { name: 'Link' })).toHaveAttribute('title', 'https://example.com/mod');
+
+      show([], 0, { website: 'javascript:alert(1)' });
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
+      expect(screen.getByText(/javascript:alert\(1\)/)).toBeInTheDocument();
+    });
+
+    it('shows no image and no field the FOMOD leaves out', () => {
+      show([]);
+
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Author|Version|Website/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('an option\'s description and image', () => {
+    const described = () => show([step(0, 'One', true, group(0, 'Pick', 'SelectAny',
+      option(0, 'A', { description: 'About A', image: 'img://a.png' }), option(1, 'B', { description: 'About B' })))]);
+
+    it('shows the first option\'s description and image when a step opens, and the first of the next step when it opens', () => {
+      described();
+      expect(screen.getByText('About A')).toBeInTheDocument();
+
+      fireEvent.focus(screen.getByRole('checkbox', { name: 'B' }));
+      show([step(1, 'Two', true, group(0, 'Pick', 'SelectAny', option(0, 'C', { description: 'About C' })))], 0);
+
+      expect(screen.getByText('About C')).toBeInTheDocument();
+    });
+
+    it('shows the first option again when the user comes back to a step', () => {
+      const steps = [
+        step(0, 'One', true, group(0, 'Pick', 'SelectAny', option(0, 'A', { description: 'About A' }), option(1, 'B', { description: 'About B' }))),
+        step(1, 'Two', true),
+      ];
+      show(steps, 0);
+      fireEvent.focus(screen.getByRole('checkbox', { name: 'B' }));
+
+      show(steps, 1);
+      show(steps, 0);
+
+      expect(screen.getByText('About A')).toBeInTheDocument();
+    });
+
+    it('shows the description and image of the option under the pointer, and then of the one with focus', () => {
+      described();
+
+      fireEvent.mouseEnter(screen.getByText('A'));
+      expect(screen.getByText('About A')).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'A' })).toHaveAttribute('src', 'img://a.png');
+
+      fireEvent.focus(screen.getByRole('checkbox', { name: 'B' }));
+      expect(screen.getByText('About B')).toBeInTheDocument();
+      expect(screen.queryByText('About A')).not.toBeInTheDocument();
+      expect(screen.queryByRole('img', { name: 'A' })).not.toBeInTheDocument();
+    });
+
+    it('opens the image larger on a click, and closes it on a click or Esc, which then does not cancel', () => {
+      described();
+      fireEvent.focus(screen.getByRole('checkbox', { name: 'A' }));
+
+      fireEvent.click(screen.getByRole('img', { name: 'A' }));
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(sent()).toEqual([{ type: FOMOD_READY }]);
+
+      fireEvent.click(screen.getByRole('img', { name: 'A' }));
+      fireEvent.click(screen.getByRole('dialog'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 });

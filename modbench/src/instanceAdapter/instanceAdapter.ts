@@ -7,7 +7,7 @@ import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
-import type { FomodMove, FomodState } from '../wire/fomodPage';
+import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { dataFolderFile } from './gameFolder/dataFolder';
@@ -216,10 +216,10 @@ export interface FomodStepChoice {
   readonly groups: readonly FomodGroupChoice[];
 }
 
-/** The page a user answers a FOMOD's installer on: it shows the installer, sends the user's moves, and asks whether to
- *  install without files the archive lacks. `close` ends it. */
+/** The page a user answers a FOMOD's installer on. A state's images are paths in `release`, the extracted FOMOD's
+ *  folder. */
 export interface FomodDialog {
-  readonly show: (state: FomodState) => void;
+  readonly show: (state: FomodState<ReleaseImage>, release: string) => void;
   readonly onMove: (handler: (move: FomodMove) => void) => void;
   readonly confirmMissing: (missing: readonly string[]) => Promise<boolean>;
   /** Whether the install now waits on the user, and not on itself. */

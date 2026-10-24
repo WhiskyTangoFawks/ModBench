@@ -4,27 +4,27 @@
 export type FomodGroupType = 'SelectAtLeastOne' | 'SelectAtMostOne' | 'SelectExactlyOne' | 'SelectAll' | 'SelectAny';
 type FomodOptionType = 'Required' | 'Optional' | 'Recommended' | 'NotUsable' | 'CouldBeUsable';
 
-export interface FomodOption {
+export interface FomodOption<Image = string> {
   readonly id: number;
   readonly selected: boolean;
   readonly name: string;
   readonly description: string;
-  readonly image: string;
+  readonly image: Image;
   readonly type: FomodOptionType;
 }
 
-export interface FomodGroup {
+export interface FomodGroup<Image = string> {
   readonly id: number;
   readonly name: string;
   readonly type: FomodGroupType;
-  readonly options: readonly FomodOption[];
+  readonly options: readonly FomodOption<Image>[];
 }
 
-export interface FomodStep {
+export interface FomodStep<Image = string> {
   readonly id: number;
   readonly name: string;
   readonly visible: boolean;
-  readonly optionalFileGroups?: { readonly group: readonly FomodGroup[] };
+  readonly optionalFileGroups?: { readonly group: readonly FomodGroup<Image>[] };
 }
 
 /** What the user did on the page. A selection names every option picked in the group, as the engine takes it. */
@@ -34,12 +34,32 @@ export type FomodMove =
   | { readonly kind: 'manual' }
   | { readonly kind: 'cancel' };
 
-/** The installer as it stands: every step with its visibility now, and the one the user is on. */
-export interface FomodState {
+/** A file of the extracted FOMOD, by its `/` path in it; none for an image the FOMOD omits or names outside itself. */
+export type ReleaseImage = { readonly path: string } | undefined;
+
+/** The installer as it stands: its header, every step with its visibility now, and the one the user is on. A header
+ *  field the FOMOD does not give is empty. */
+export interface FomodState<Image = string> {
   readonly module: string;
-  readonly steps: readonly FomodStep[];
+  readonly author: string;
+  readonly version: string;
+  readonly website: string;
+  readonly image: Image;
+  readonly steps: readonly FomodStep<Image>[];
   readonly current: number;
 }
+
+/** The state with each image, the header's and every option's, replaced by what `to` makes of it. */
+export const withImages = <From, To>(state: FomodState<From>, to: (image: From) => To): FomodState<To> => ({
+  ...state,
+  image: to(state.image),
+  steps: state.steps.map((step) => ({
+    ...step,
+    optionalFileGroups: step.optionalFileGroups && {
+      group: step.optionalFileGroups.group.map((group) => ({ ...group, options: group.options.map((option) => ({ ...option, image: to(option.image) })) })),
+    },
+  })),
+});
 
 export const FOMOD_STATE = 'fomodState';
 // The page's listener exists only once its script has run, so the host answers this rather than posting into a page

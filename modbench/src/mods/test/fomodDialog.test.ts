@@ -5,7 +5,7 @@ interface FakePanel {
   disposed: boolean;
   dispose: () => void;
   onDidDispose: (listener: () => void) => void;
-  webview: { postMessage: ReturnType<typeof vi.fn<(message: unknown) => Promise<boolean>>>; onDidReceiveMessage: (listener: (message: unknown) => void) => void; options: object; html: string; cspSource: string; asWebviewUri: (uri: unknown) => unknown };
+  webview: { postMessage: ReturnType<typeof vi.fn<(message: unknown) => Promise<boolean>>>; onDidReceiveMessage: (listener: (message: unknown) => void) => void; options: { localResourceRoots?: unknown[] }; html: string; cspSource: string; asWebviewUri: (uri: unknown) => unknown };
   receive: (message: unknown) => void;
 }
 
@@ -22,7 +22,7 @@ const { createWebviewPanel, panels } = vi.hoisted(() => {
         onDidDispose: (listener) => { disposeListener = listener; },
         webview: {
           postMessage: vi.fn((_message: unknown) => Promise.resolve(true)), onDidReceiveMessage: (listener) => { messageListener = listener; },
-          options: {}, html: '', cspSource: 'csp:', asWebviewUri: (uri) => uri,
+          options: {}, html: '', cspSource: 'csp:', asWebviewUri: (uri) => ({ toString: () => `webview:${String(uri)}` }),
         },
         receive: (message) => messageListener(message),
       };
@@ -35,17 +35,19 @@ const { createWebviewPanel, panels } = vi.hoisted(() => {
 vi.mock('vscode', () => ({
   window: { createWebviewPanel },
   ViewColumn: { Active: -1 },
-  Uri: { file: (path: string) => ({ fsPath: path, path }), joinPath: (base: unknown, ...parts: string[]) => [String(base), ...parts].join('/') },
+  Uri: { file: (path: string) => ({ fsPath: path, path }), joinPath: (base: { fsPath: string } | string, ...parts: string[]) => [typeof base === 'string' ? base : base.fsPath, ...parts].join('/') },
 }));
 
 import { fomodDialog } from '../fomodDialog';
 import type { AskQuestion } from '../../ports/dialog';
 import * as vscode from 'vscode';
-import { FOMOD_MOVE, FOMOD_READY, FOMOD_STATE, type FomodMove, type FomodState } from '../../wire/fomodPage';
+import { FOMOD_MOVE, FOMOD_READY, FOMOD_STATE, type FomodMove, type FomodState, type ReleaseImage } from '../../wire/fomodPage';
 
 const EXTENSION = vscode.Uri.file('/ext');
 const PROGRESS = { working: vi.fn(), waiting: vi.fn() };
-const STATE: FomodState = { module: 'My Module', steps: [], current: 0 };
+const STATE: FomodState<ReleaseImage> = { module: 'My Module', author: '', version: '', website: '', image: undefined, steps: [], current: 0 };
+const SHOWN: FomodState = { ...STATE, image: '', steps: [] };
+const RELEASE = '/staging/release';
 const page = () => {
   const [only] = panels;
   if (only === undefined) throw new Error('no page was opened');
@@ -64,21 +66,44 @@ describe('the FOMOD installer\'s page, in a tab', () => {
     const dialog = fomodDialog(EXTENSION, vi.fn(), PROGRESS);
     expect(createWebviewPanel).not.toHaveBeenCalled();
 
-    dialog.show(STATE);
+    dialog.show(STATE, RELEASE);
 
     expect(page().title).toBe('FOMOD: My Module');
     expect(createWebviewPanel).toHaveBeenCalledTimes(1);
   });
 
-  it('sends the latest state once the page says it is ready, and each state after that as it comes', () => {
+  it('lets the page load images from the release\'s folder and no other', () => {
+    fomodDialog(EXTENSION, vi.fn(), PROGRESS).show(STATE, RELEASE);
+
+    expect(page().webview.options.localResourceRoots).toEqual(['/ext/out/webview', { fsPath: RELEASE, path: RELEASE }]);
+  });
+
+  it('sends each image of the state as a URI the page can load, and no URI for an image the state lacks', () => {
     const dialog = fomodDialog(EXTENSION, vi.fn(), PROGRESS);
-    dialog.show(STATE);
+    const option = { id: 0, selected: false, name: 'A', description: '', type: 'Optional' as const };
+    const step = (image: ReleaseImage) => ({
+      id: 0, name: 'Main', visible: true,
+      optionalFileGroups: { group: [{ id: 0, name: 'Pick', type: 'SelectAny' as const, options: [{ ...option, image }] }] },
+    });
+    dialog.show({ ...STATE, image: { path: 'Images/Header.png' }, steps: [step({ path: 'img/a.png' }), step(undefined)] }, RELEASE);
 
     page().receive({ type: FOMOD_READY });
-    dialog.show({ ...STATE, current: 1 });
+
+    const [posted] = page().webview.postMessage.mock.calls.at(-1) ?? [];
+    expect(JSON.stringify(posted)).toContain('"image":"webview:/staging/release/Images/Header.png"');
+    expect(JSON.stringify(posted)).toContain('"image":"webview:/staging/release/img/a.png"');
+    expect(JSON.stringify(posted).match(/"image":""/g)).toHaveLength(1);
+  });
+
+  it('sends the latest state once the page says it is ready, and each state after that as it comes', () => {
+    const dialog = fomodDialog(EXTENSION, vi.fn(), PROGRESS);
+    dialog.show(STATE, RELEASE);
+
+    page().receive({ type: FOMOD_READY });
+    dialog.show({ ...STATE, current: 1 }, RELEASE);
 
     expect(page().webview.postMessage.mock.calls.map(([message]) => message)).toEqual([
-      { type: FOMOD_STATE, state: STATE }, { type: FOMOD_STATE, state: STATE }, { type: FOMOD_STATE, state: { ...STATE, current: 1 } },
+      { type: FOMOD_STATE, state: SHOWN }, { type: FOMOD_STATE, state: SHOWN }, { type: FOMOD_STATE, state: { ...SHOWN, current: 1 } },
     ]);
   });
 
@@ -86,7 +111,7 @@ describe('the FOMOD installer\'s page, in a tab', () => {
     const moves: FomodMove[] = [];
     const dialog = fomodDialog(EXTENSION, vi.fn(), PROGRESS);
     dialog.onMove((move) => moves.push(move));
-    dialog.show(STATE);
+    dialog.show(STATE, RELEASE);
 
     page().receive({ type: FOMOD_MOVE, move: { kind: 'manual' } });
     page().receive({ type: 'other' });
@@ -98,14 +123,14 @@ describe('the FOMOD installer\'s page, in a tab', () => {
     const moves: FomodMove[] = [];
     const closedByUser = fomodDialog(EXTENSION, vi.fn(), PROGRESS);
     closedByUser.onMove((move) => moves.push(move));
-    closedByUser.show(STATE);
+    closedByUser.show(STATE, RELEASE);
     page().dispose();
 
     expect(moves).toEqual([{ kind: 'cancel' }]);
 
     const closedByInstaller = fomodDialog(EXTENSION, vi.fn(), PROGRESS);
     closedByInstaller.onMove((move) => moves.push(move));
-    closedByInstaller.show(STATE);
+    closedByInstaller.show(STATE, RELEASE);
     closedByInstaller.close();
 
     expect(moves).toEqual([{ kind: 'cancel' }]);

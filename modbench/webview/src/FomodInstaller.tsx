@@ -19,10 +19,17 @@ const TYPE_TOOLTIPS: Partial<Record<FomodOption['type'], string>> = {
 const tooltipOf = (group: FomodGroup, option: FomodOption): string =>
   (effectiveGroupType(group) === 'SelectAll' ? 'All components in this group are required' : TYPE_TOOLTIPS[option.type] ?? '');
 
-function OptionControl({ step, group, option }: { step: FomodStep; group: FomodGroup; option: FomodOption }) {
+const keyOf = (step: FomodStep, group: FomodGroup, option: FomodOption): string => `${step.id}/${group.id}/${option.id}`;
+
+type Look = (key: string) => void;
+
+function OptionControl({ step, group, option, look }: { step: FomodStep; group: FomodGroup; option: FomodOption; look: Look }) {
   const oneOnly = effectiveGroupType(group) === 'SelectExactlyOne' || effectiveGroupType(group) === 'SelectAtMostOne';
   return (
-    <label title={tooltipOf(group, option)} style={{ display: 'block' }}>
+    <label
+      title={tooltipOf(group, option)} style={{ display: 'block' }}
+      onMouseEnter={() => look(keyOf(step, group, option))} onFocus={() => look(keyOf(step, group, option))}
+    >
       <input
         type={oneOnly ? 'radio' : 'checkbox'}
         name={`${step.id}/${group.id}`}
@@ -36,12 +43,12 @@ function OptionControl({ step, group, option }: { step: FomodStep; group: FomodG
   );
 }
 
-function GroupControls({ step, group }: { step: FomodStep; group: FomodGroup }) {
+function GroupControls({ step, group, look }: { step: FomodStep; group: FomodGroup; look: Look }) {
   const picked = group.options.some((option) => isPicked(group, option));
   return (
     <fieldset>
       <legend>{group.name}</legend>
-      {group.options.map((option) => <OptionControl key={option.id} step={step} group={group} option={option} />)}
+      {group.options.map((option) => <OptionControl key={option.id} step={step} group={group} option={option} look={look} />)}
       {effectiveGroupType(group) === 'SelectAtMostOne' && (
         <label style={{ display: 'block' }}>
           <input
@@ -55,15 +62,31 @@ function GroupControls({ step, group }: { step: FomodStep; group: FomodGroup }) 
   );
 }
 
-function Steps({ state }: { state: FomodState }) {
+function Description({ option, enlarge }: { option: FomodOption | undefined; enlarge: (image: Enlarged) => void }) {
+  if (option === undefined) return null;
+  return (
+    <aside>
+      {option.image !== '' && <img src={option.image} alt={option.name} style={{ maxWidth: '100%', cursor: 'zoom-in' }} onClick={() => enlarge({ src: option.image, name: option.name })} />}
+      <p>{option.description}</p>
+    </aside>
+  );
+}
+
+function Steps({ state, enlarge }: { state: FomodState; enlarge: (image: Enlarged) => void }) {
+  const [looked, look] = useState<string | undefined>(undefined);
   const step = state.steps[state.current];
+  const options = step?.optionalFileGroups?.group.flatMap((group) => group.options.map((option) => ({ key: keyOf(step, group, option), option }))) ?? [];
+  const described = (options.find(({ key }) => key === looked) ?? options[0])?.option;
   const waiting = step === undefined ? [] : groupsNeedingPick(step);
   const stepId = step?.id ?? 0;
   const last = isLastVisible(state.steps, state.current);
   return (
     <>
-      <div>
-        {step?.optionalFileGroups?.group.map((group) => <GroupControls key={group.id} step={step} group={group} />)}
+      <div style={{ display: 'flex', gap: 16 }}>
+        <div>
+          {step?.optionalFileGroups?.group.map((group) => <GroupControls key={group.id} step={step} group={group} look={look} />)}
+        </div>
+        <Description option={described} enlarge={enlarge} />
       </div>
       <footer style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button disabled={!hasPrevious(state.steps, state.current)} onClick={() => send({ kind: 'continue', forward: false, stepId })}>Back</button>
@@ -81,30 +104,68 @@ function Steps({ state }: { state: FomodState }) {
   );
 }
 
+interface Enlarged {
+  readonly src: string;
+  readonly name: string;
+}
+
+const isWebAddress = (text: string): boolean => /^https?:\/\//i.test(text);
+
+function Header({ state }: { state: FomodState }) {
+  const about = [
+    state.author !== '' && <span key="author">Author: {state.author}</span>,
+    state.version !== '' && <span key="version">Version: {state.version}</span>,
+    state.website !== '' && (
+      <span key="website">
+        Website: {isWebAddress(state.website) ? <a href={state.website} title={state.website}>Link</a> : state.website}
+      </span>
+    ),
+  ].filter((field) => field !== false);
+  return (
+    <header>
+      {state.image !== '' && <img src={state.image} alt={state.module} style={{ maxWidth: '100%' }} />}
+      <h1>{state.module}</h1>
+      {about.length > 0 && <div style={{ display: 'flex', gap: 16 }}>{about}</div>}
+    </header>
+  );
+}
+
 export function FomodInstallerView() {
   const [state, setState] = useState<FomodState | undefined>(undefined);
+  const [enlarged, setEnlarged] = useState<Enlarged | undefined>(undefined);
 
   useEffect(() => {
     const stopListening = listenToHost((data) => {
       const shown = parseFomodShown(data);
       if (shown) setState(shown.state);
     });
+    fomodHost.postMessage({ type: FOMOD_READY });
+    return stopListening;
+  }, []);
+
+  useEffect(() => {
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') send({ kind: 'cancel' });
+      if (event.key !== 'Escape') return;
+      if (enlarged === undefined) send({ kind: 'cancel' });
+      else setEnlarged(undefined);
     };
     window.addEventListener('keydown', escape);
-    fomodHost.postMessage({ type: FOMOD_READY });
-    return () => {
-      stopListening();
-      window.removeEventListener('keydown', escape);
-    };
-  }, []);
+    return () => window.removeEventListener('keydown', escape);
+  }, [enlarged]);
 
   if (state === undefined) return null;
   return (
     <>
-      <header><h1>{state.module}</h1></header>
-      <Steps state={state} />
+      <Header state={state} />
+      <Steps key={state.steps[state.current]?.id} state={state} enlarge={setEnlarged} />
+      {enlarged !== undefined && (
+        <div
+          role="dialog" aria-label={enlarged.name} onClick={() => setEnlarged(undefined)}
+          style={{ position: 'fixed', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(0, 0, 0, 0.8)', cursor: 'zoom-out' }}
+        >
+          <img src={enlarged.src} alt={enlarged.name} style={{ maxWidth: '95%', maxHeight: '95%' }} />
+        </div>
+      )}
     </>
   );
 }
