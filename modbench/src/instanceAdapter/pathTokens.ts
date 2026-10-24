@@ -5,6 +5,7 @@
 export interface TokenFolders {
   readonly instance: string;
   readonly game: string | undefined;
+  readonly downloads: string | undefined;
 }
 
 interface Separator {
@@ -106,12 +107,14 @@ const patternOf = ({ text, caseless }: Spelling): string =>
 const firstOfEach = (spellings: readonly Spelling[], key: (spelling: Spelling) => string): Spelling[] =>
   spellings.filter((spelling, at) => spellings.findIndex((other) => key(other) === key(spelling)) === at);
 
-/** The folders' tokens in `spelling`. A game folder inside the instance folder takes the instance folder's token, so a
- *  clone finds its own. */
-export function folderTokens({ instance, game }: TokenFolders, platform: NodeJS.Platform, spelling: PathSpelling): TokenProgram {
+/** The folders' tokens in `spelling`. A game or downloads folder inside the instance folder takes the instance folder's
+ *  token, so a clone finds its own. */
+export function folderTokens({ instance, game, downloads }: TokenFolders, platform: NodeJS.Platform, spelling: PathSpelling): TokenProgram {
   const instanceSpellings = spellingsOf('instance folder', instance, platform, spelling);
-  const gameSpellings = spellingsOf('game folder', game, platform, spelling);
-  const cleaned = firstOfEach([...instanceSpellings, ...(game !== undefined && isInside(game, instance, platform) ? [] : gameSpellings)], ({ text }) => text)
+  const others = ([['game folder', game], ['downloads folder', downloads]] as const)
+    .map(([name, folder]) => ({ folder, spellings: spellingsOf(name, folder, platform, spelling) }));
+  const outside = others.flatMap(({ folder, spellings }) => (folder !== undefined && isInside(folder, instance, platform) ? [] : spellings));
+  const cleaned = firstOfEach([...instanceSpellings, ...outside], ({ text }) => text)
     .sort((a, b) => b.text.length - a.text.length);
   const boundary = `[/\\\\${spelling.ends}[:cntrl:]]`;
   return {
@@ -119,7 +122,7 @@ export function folderTokens({ instance, game }: TokenFolders, platform: NodeJS.
       const [start, pattern, token] = [spelt.start, patternOf(spelt), sedReplacement(spelt.token)];
       return [sedSubstitution(`${start}${pattern}\\(${boundary}\\)`, `\\1${token}\\2`, 'g'), sedSubstitution(`${start}${pattern}$`, `\\1${token}`)];
     }),
-    smudge: firstOfEach([...instanceSpellings, ...gameSpellings], ({ token }) => token)
+    smudge: firstOfEach([...instanceSpellings, ...others.flatMap(({ spellings }) => spellings)], ({ token }) => token)
       .map(({ token, text }) => sedSubstitution(sedLiteral(token), sedReplacement(text), 'g')),
   };
 }
@@ -142,4 +145,4 @@ export function tokenFilterConfig(driver: string, ...programs: readonly TokenPro
 }
 
 /** Whether `text` holds a token in place of a folder's path. */
-export const holdsPathToken = (text: string): boolean => /\{(?:instance|game) folder[:}]/.test(text);
+export const holdsPathToken = (text: string): boolean => /\{(?:instance|game|downloads) folder[:}]/.test(text);

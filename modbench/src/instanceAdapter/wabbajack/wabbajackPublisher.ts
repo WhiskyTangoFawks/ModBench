@@ -7,6 +7,7 @@ import { errorMessage } from '../../ports/errorMessage';
 import { get, readOrAbsent } from '../files';
 import type { Covering, PublisherConfiguration, PublisherTag } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
+import { sedSubstitution } from '../pathTokens';
 import { watchFiles } from '../watchFiles';
 
 // Wabbajack's configuration, at the instance root. Wabbajack writes this machine's own paths, or on Wine a Windows
@@ -14,6 +15,8 @@ import { watchFiles } from '../watchFiles';
 const COMPILER_SETTINGS: ConfigurationFile = {
   name: 'compiler_settings.json',
   spelling: { separators: [{ first: '\\\\', rest: '\\\\' }], ends: '"', nativeStarts: ['"'] },
+  // The compiler's output is chosen at each compile, and Wabbajack's GUI asks for one when it is empty.
+  blanked: { clean: [sedSubstitution(String.raw`\("OutputFile" *: *\)"\(\\.\|[^"\\]\)*"`, '\\1""')], smudge: [] },
 };
 
 /** What Wabbajack's compiler asks of the mod manager. */

@@ -44,9 +44,9 @@ async function checkedOutByGit(folders: TokenFolders, platform: NodeJS.Platform,
   return execFileSync('git', ['cat-file', '--filters', '--path=file.ini', blob], { cwd: root, encoding: 'utf8' });
 }
 
-const SHARE: TokenFolders = { instance: '\\\\nas\\share\\Modlists\\LitR', game: '//nas/share/Games/Fallout 4' };
-const DRIVE: TokenFolders = { instance: 'C:\\Users\\me\\LitR', game: 'D:\\Games\\Fallout 4' };
-const PROTON: TokenFolders = { instance: '/home/me/LitR', game: '/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4' };
+const SHARE: TokenFolders = { instance: '\\\\nas\\share\\Modlists\\LitR', game: '//nas/share/Games/Fallout 4', downloads: '//nas/share/Downloads' };
+const DRIVE: TokenFolders = { instance: 'C:\\Users\\me\\LitR', game: 'D:\\Games\\Fallout 4', downloads: 'E:\\Downloads' };
+const PROTON: TokenFolders = { instance: '/home/me/LitR', game: '/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4', downloads: '/mnt/data/Downloads' };
 
 describe('the token filter', () => {
   it.each([
@@ -59,6 +59,24 @@ describe('the token filter', () => {
     ['a Wine prefix through drive Z', PROTON, 'linux', 'x=Z:/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4/x.exe', 'x={game folder:/}/x.exe'],
   ] as const)('holds a folder on %s by its token', async (_place, folders, platform, written, held) => {
     expect(await heldByGit(folders, platform, written)).toBe(held);
+  });
+
+  it.each([
+    ['a network share', SHARE, 'win32', 'x=\\\\nas\\share\\Downloads\\a.7z', 'x={downloads folder:\\}\\a.7z'],
+    ['a drive, in another case', DRIVE, 'win32', 'x=e:/downloads/a.7z', 'x={downloads folder:/}/a.7z'],
+    ['Linux, through a Wine prefix\'s drive Z', PROTON, 'linux', 'x=Z:/mnt/data/Downloads', 'x={downloads folder:/}'],
+  ] as const)('holds a downloads folder on %s by its token', async (_place, folders, platform, written, held) => {
+    expect(await heldByGit(folders, platform, written)).toBe(held);
+  });
+
+  it('puts the downloads folder\'s path in place of its token', async () => {
+    expect(await checkedOutByGit(DRIVE, 'win32', 'x={downloads folder:/}/a.7z')).toBe('x=E:/Downloads/a.7z');
+  });
+
+  it('holds a downloads folder inside the instance folder by the instance folder\'s token', async () => {
+    const inside: TokenFolders = { ...DRIVE, downloads: 'C:\\Users\\me\\LitR\\downloads' };
+
+    expect(await heldByGit(inside, 'win32', 'x=C:/Users/me/LitR/downloads/a.7z')).toBe('x={instance folder:/}/downloads/a.7z');
   });
 
   it.each([

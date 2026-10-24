@@ -9,9 +9,10 @@ import { exists, get, isRepository, makeTempDir, putIfChanged, remove, undoAll, 
 import { git, gitFed, gitWritingInto } from '../git';
 import type { GameFolder, InstanceAdapter } from '../instanceAdapter';
 import {
-  folderTokens, holdsPathToken, sedLiteral, sedReplacement, sedSubstitution, tokenFilterConfig, type PathSpelling, type TokenProgram,
+  folderTokens, holdsPathToken, sedLiteral, sedReplacement, sedSubstitution, tokenFilterConfig, type PathSpelling, type TokenFolders, type TokenProgram,
 } from '../pathTokens';
-import { PROFILE_INIS_PATTERN, SETTINGS_FILE_PATTERN, settingsFile } from './layout';
+import { readDownloadDirectory } from './codecs/modOrganizerIni';
+import { defaultDownloadsDir, PROFILE_INIS_PATTERN, SETTINGS_FILE_PATTERN, settingsFile } from './layout';
 import type { ConfigurationFile } from '../publisher';
 import type { Mo2Context } from './mo2Context';
 
@@ -37,6 +38,7 @@ interface CoveredFile {
   readonly driver: string;
   readonly spelling: PathSpelling;
   readonly holdsAccounts: boolean;
+  readonly blanked?: TokenProgram;
 }
 
 // The mod manager's configuration holds the accounts, so its filter is a driver of its own.
@@ -44,9 +46,12 @@ const coveredFiles = (publisherFile: ConfigurationFile | undefined): CoveredFile
   { pattern: SETTINGS_FILE_PATTERN, driver: 'modbench-settings-tokens', spelling: SPELLING, holdsAccounts: true },
   { pattern: PROFILE_INIS_PATTERN, driver: 'modbench-tokens', spelling: SPELLING, holdsAccounts: false },
   ...(publisherFile === undefined ? [] : [
-    { pattern: `/${publisherFile.name}`, driver: 'modbench-publisher-tokens', spelling: publisherFile.spelling, holdsAccounts: false },
+    { pattern: `/${publisherFile.name}`, driver: 'modbench-publisher-tokens', spelling: publisherFile.spelling, holdsAccounts: false, blanked: publisherFile.blanked },
   ]),
 ];
+
+// MO2 fills this section with whatever folder a file dialog last browsed. The range runs to the next section's header.
+const RECENT_DIRECTORIES_DROPPED: TokenProgram = { clean: [String.raw`/^\[recentDirectories\]/,/^\[/{/^\[recentDirectories\]/d;/^\[/!d}`], smudge: [] };
 
 // A clone holds no account, so its value is empty.
 function accountTokens(settings: string): TokenProgram {
@@ -173,37 +178,55 @@ const filesNotWritten = async (instanceRoot: string, covered: readonly CoveredFi
 export const pathTokensWritten = async (instanceRoot: string, publisherFile: ConfigurationFile | undefined): Promise<boolean> =>
   (await filesNotWritten(instanceRoot, coveredFiles(publisherFile))).length === 0;
 
+// The folder a clone has none named for is the default one.
+async function downloadsFolder({ instanceRoot, resolveDownloadsFolder }: Mo2Context): Promise<string | undefined> {
+  const settings = await get(settingsFile(instanceRoot), '');
+  const named = readDownloadDirectory(settings);
+  if (named !== undefined && holdsPathToken(named)) return defaultDownloadsDir(instanceRoot);
+  const resolution = await resolveDownloadsFolder(instanceRoot, settings);
+  return resolution.kind === 'resolved' ? resolution.downloadsDir : undefined;
+}
+
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
-export function mo2PathTokens({ instanceRoot }: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): Mo2PathTokens {
+export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): Mo2PathTokens {
+  const { instanceRoot } = context;
   const covered = coveredFiles(publisherFile);
-  const configOf = (files: readonly CoveredFile[], game: string | undefined, accounts: TokenProgram): Readonly<Record<string, string>> =>
-    Object.fromEntries(files.flatMap(({ driver, spelling, holdsAccounts }) => {
-      const folders = folderTokens({ instance: instanceRoot, game }, process.platform, spelling);
-      return Object.entries(tokenFilterConfig(driver, folders, ...(holdsAccounts ? [accounts] : [])));
+  const configOf = (files: readonly CoveredFile[], { game, downloads }: Pick<TokenFolders, 'game' | 'downloads'>, accounts: TokenProgram): Readonly<Record<string, string>> =>
+    Object.fromEntries(files.flatMap(({ driver, spelling, holdsAccounts, blanked }) => {
+      const folders = folderTokens({ instance: instanceRoot, game, downloads }, process.platform, spelling);
+      return Object.entries(tokenFilterConfig(driver, folders, ...(holdsAccounts ? [accounts, RECENT_DIRECTORIES_DROPPED] : []), ...(blanked === undefined ? [] : [blanked])));
     }));
-  const configWritten = async (game: string | undefined, accounts: TokenProgram): Promise<void> => {
-    for (const [key, value] of Object.entries(configOf(covered, game, accounts))) await git(instanceRoot, 'config', key, value);
+  const configWritten = async (folders: Pick<TokenFolders, 'game' | 'downloads'>, accounts: TokenProgram): Promise<void> => {
+    for (const [key, value] of Object.entries(configOf(covered, folders, accounts))) await git(instanceRoot, 'config', key, value);
   };
-  // An unset key is exit code 5.
-  const configTakenBack = (files: readonly CoveredFile[]): Undo => async () => {
-    for (const key of Object.keys(configOf(files, undefined, accountTokens('')))) {
-      await git(instanceRoot, 'config', '--unset-all', key).catch((err: unknown) => {
-        if (typeof err !== 'object' || err === null || !('code' in err) || err.code !== 5) throw err;
-      });
-    }
+  const NO_FOLDERS = { game: undefined, downloads: undefined };
+  // A key not set is exit code 1 to read and 5 to unset.
+  const unlessExit = async (code: number, run: () => Promise<string>): Promise<string | undefined> =>
+    (await run().catch((err: unknown) => {
+      if (typeof err !== 'object' || err === null || !('code' in err) || err.code !== code) throw err;
+    })) ?? undefined;
+  const configHeld = async (): Promise<Undo> => {
+    const keys = Object.keys(configOf(covered, NO_FOLDERS, accountTokens('')));
+    const before = await Promise.all(keys.map(async (key) => unlessExit(1, () => git(instanceRoot, 'config', '--get', key))));
+    return async () => {
+      for (const [at, key] of keys.entries()) {
+        const value = before[at];
+        if (value === undefined) await unlessExit(5, () => git(instanceRoot, 'config', '--unset-all', key));
+        else await git(instanceRoot, 'config', key, value.replace(/\n$/, ''));
+      }
+    };
   };
 
   const written = async (takeBack: Undo[]): Promise<string | undefined> => {
-    const added = await filesNotWritten(instanceRoot, covered);
     takeBack.push(await attributesWritten(instanceRoot, covered));
     const files = (await filesGitHolds(instanceRoot, covered)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
     const accounts = accountTokens(await get(settingsFile(instanceRoot), ''));
-    takeBack.push(configTakenBack(added));
-    await configWritten(undefined, accounts);
+    takeBack.push(await configHeld());
+    await configWritten(NO_FOLDERS, accounts);
     await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     const game = await gameFolder();
-    await configWritten(foundRoot(game), accounts);
+    await configWritten({ game: foundRoot(game), downloads: await downloadsFolder(context) }, accounts);
     const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     await statsForgotten(instanceRoot, files);
     if (holding.length === 0) return undefined;
@@ -212,7 +235,7 @@ export function mo2PathTokens({ instanceRoot }: Mo2Context, gameFolder: () => Pr
   };
 
   return {
-    // A failed write takes back what it added: its attribute lines, and each filter the repository did not hold.
+    // A failed write takes back what it changed: its attribute lines, and each filter as the repository held it.
     async writePathTokens() {
       if (!(await isRepository(instanceRoot))) return undefined;
       const takeBack: Undo[] = [];
