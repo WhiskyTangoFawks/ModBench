@@ -313,11 +313,43 @@ describe('the FOMOD installer', () => {
       expect(await filesLanded()).toEqual(['active.esp', 'fomm.esp', 'inactive.esp', 'missing.esp', 'not-a-plugin.esp']);
     });
 
-    it('refuses a FOMOD whose conditions read what could not be read, naming each once and why', async () => {
-      await release(config(`<conditionalFileInstalls><patterns>${conditional('<gameDependency version="1.10.163.0"/>', 'game.esp')}`
-        + `${conditional('<gameDependency version="1.10.164.0"/>', 'newer.esp')}</patterns></conditionalFileInstalls>`), ['core/Core.esp']);
+    describe('a condition that reads what could not be read', () => {
+      const gated = (dependency: string, otherwise = 'NotUsable', before = ''): string =>
+        `<plugin name="Gated"><description/><files>${file('f/g.esp', 'g.esp')}</files><typeDescriptor><dependencyType><defaultType name="${otherwise}"/>`
+        + `<patterns>${before}<pattern><dependencies>${dependency}</dependencies><type name="Optional"/></pattern></patterns></dependencyType></typeDescriptor></plugin>`;
+      const GAME_AT_INSTALL = config(`<conditionalFileInstalls><patterns>${conditional('<gameDependency version="1.10.163.0"/>', 'game.esp')}`
+        + `${conditional('<gameDependency version="1.10.164.0"/>', 'newer.esp')}</patterns></conditionalFileInstalls>`);
+      const GAME_IN_OPTION = config(steps(step('Start', group('Pick', 'SelectAny', gated('<gameDependency version="1.0"/>')))));
+      const PLUGIN_IN_OPTION = config(steps(step('Start', group('Pick', 'SelectAny', gated('<fileDependency file="Active.esp" state="Active"/>')))));
+      const UNSET = '<pattern><dependencies><flagDependency flag="picked" value=""/></dependencies><type name="Optional"/></pattern>';
+      const AFTER_A_PICK = config(steps(step('Start',
+        group('First', 'SelectAny', option('Sets flag', file('f/s.esp', 's.esp'), 'Optional', '<conditionFlags><flag name="picked">A</flag></conditionFlags>'))
+        + group('Second', 'SelectAny', gated('<gameDependency version="1.0"/>', 'NotUsable', UNSET)))));
+      const GAME = 'The FOMOD\'s conditions read the game\'s version, which could not be read: no version in this test.';
 
-      await expect(install([])).rejects.toThrow(new Error('The FOMOD\'s conditions read the game\'s version, which could not be read: no version in this test.'));
+      it.each([
+        ['at Install', GAME_AT_INSTALL, KNOWN, [], GAME],
+        ['by an option\'s type, before any step is answered', GAME_IN_OPTION, KNOWN, [], GAME],
+        ['by an option\'s type once a pick changes it, though more picks follow', AFTER_A_PICK, KNOWN,
+          choose(['Start', { First: ['Sets flag'], Second: [] }]), GAME],
+        ['of the plugins', PLUGIN_IN_OPTION, { ...KNOWN, plugins: { unknown: 'no plugins in this test' } }, [],
+          'The FOMOD\'s conditions read the plugins, which could not be read: no plugins in this test.'],
+      ])('refuses what is read %s, naming why', async (_, moduleConfig, facts, choices, refusal) => {
+        await release(moduleConfig, ['f/g.esp', 'f/s.esp', 'core/Core.esp']);
+
+        await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'choices', steps: choices }, () => Promise.resolve(facts)))
+          .rejects.toThrow(new Error(refusal));
+      });
+
+      it('shows the page no step', async () => {
+        await release(GAME_IN_OPTION, ['f/g.esp']);
+        const show = vi.fn();
+        const dialog: FomodDialog = { ...FOMOD_PAGE, show };
+
+        await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog }, () => Promise.resolve(KNOWN)))
+          .rejects.toThrow(new Error(GAME));
+        expect(show).not.toHaveBeenCalled();
+      });
     });
   });
 
