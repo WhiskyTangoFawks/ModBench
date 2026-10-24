@@ -300,6 +300,18 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         await installing;
       });
 
+      it('keeps a second install into an upgraded mod out while the page is open, and takes one after', async () => {
+        const page = heldPage();
+        const installing = holding([]).install(await fomod(PICK), { kind: 'upgrade', name: UPGRADED }, KEYS, page.answer);
+        await page.shown;
+
+        expect(await holding(['x.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS)).toEqual({ landed: false });
+        page.move(INSTALL);
+        await installing;
+
+        expect(await holding(['x.esp']).install(INSTALLATION_FILE, { kind: 'upgrade', name: UPGRADED }, KEYS)).toEqual({ landed: true });
+      });
+
       it('answers as a claim its folder fails to meet when an upgrade\'s folder is gone by the time the user chooses Manual', async () => {
         const page = heldPage();
         const installing = holding([]).install(await fomod(PICK), { kind: 'upgrade', name: UPGRADED }, KEYS, page.answer);

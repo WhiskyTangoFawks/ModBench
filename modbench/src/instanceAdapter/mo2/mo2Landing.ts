@@ -91,19 +91,33 @@ async function abandonAfter(extraction: Extraction, failure: unknown): Promise<n
   throw failure;
 }
 
+const claimedModsByInstance = new Map<string, Set<string>>();
+
+function claimedModsOf(instanceRoot: string): Set<string> {
+  const known = claimedModsByInstance.get(instanceRoot);
+  if (known !== undefined) return known;
+  const made = new Set<string>();
+  claimedModsByInstance.set(instanceRoot, made);
+  return made;
+}
+
 export function mo2Landing(
   context: Mo2Context, installationFileReader: InstallationFileReader, source: ReadingSource, fomodEngine: FomodEngine,
 ): Pick<InstanceAdapter, 'install'> {
   const fill = (installed: InstallPackage, path: string): Promise<void> =>
     (installed.kind === 'archive' ? installationFileReader.extract(installed.path, path) : copyTree(installed.path, path));
 
+  // A mod with an install in flight takes no second one, so one landing never clears another's extraction.
+  const claimedMods = claimedModsOf(context.instanceRoot);
+
   // The lock serializes the writes to the instance, so it is held to claim the target and to land, and not while the
   // release is extracted or a user answers the installer.
   const claim = (target: InstallTarget): Promise<{ extraction: Extraction; holding: ModFolder | undefined } | undefined> =>
     withLock(context.instanceRoot, async () => {
       const holding = await folderHolding(context, { kind: 'mod', name: target.name });
-      if ((target.kind === 'new') !== (holding === undefined)) return undefined;
+      if ((target.kind === 'new') !== (holding === undefined) || claimedMods.has(target.name.toLowerCase())) return undefined;
       const extraction = holding === undefined ? await extractNewMod(context, target.name) : await extractUpgrade(target.name, holding.path, manifestFileIn(holding.path, holding.modName));
+      claimedMods.add(target.name.toLowerCase());
       return { extraction, holding };
     });
 
@@ -136,6 +150,8 @@ export function mo2Landing(
         });
       } catch (err) {
         return abandonAfter(extraction, err);
+      } finally {
+        claimedMods.delete(target.name.toLowerCase());
       }
     },
   };
