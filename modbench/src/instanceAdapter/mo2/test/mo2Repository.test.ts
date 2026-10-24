@@ -135,25 +135,31 @@ describe('the MO2 adapter\'s repository', () => {
   });
 
   describe('the files Modbench keeps in the instance', () => {
-    it('are its record index, hash index, stat cache and repository files, and every manifest a mod folder holds', async () => {
+    it('are its record index, hash index, stat cache, source folder and repository files, and every manifest a mod folder holds', async () => {
       const adapter = await instance();
       await put('mods/A/A.manifest.json');
       await put('mods/A/meta.ini');
-      await put('mods/B/B.manifest.json');
+      await put('mods/B/Renamed.manifest.json');
       await mkdir(join(root, 'mods', 'C'));
 
       expect((await adapter.filesKept()).present.map((path) => relative(root, path).replaceAll('\\', '/')).sort()).toEqual([
-        '.git', '.gitignore', '.gitmodules', 'hash-index', 'modbench', 'mods/A/A.manifest.json', 'mods/B/B.manifest.json', 'stat-cache',
+        '.git', '.gitignore', '.gitmodules', 'hash-index', 'modbench', 'mods/A/A.manifest.json', 'mods/B/Renamed.manifest.json', 'source', 'stat-cache',
       ].sort());
     });
   });
 
-  it('owns a manifest path of any mod, there or gone, and no other path', async () => {
+  it.each([
+    ['a manifest of the mod\'s name, however it is cased', ['MODS', 'Gone', 'gone.MANIFEST.json'], true],
+    ['a manifest a rename left in the folder of another mod', ['mods', 'Y', 'X.manifest.json'], true],
+    ['a mod folder', ['mods', 'Gone'], false],
+    ['another file in a mod folder', ['mods', 'Gone', 'notes.txt'], false],
+    ['a path below a manifest', ['mods', 'A', 'A.manifest.json', 'x'], false],
+    ['a manifest in a folder of a mod', ['mods', 'A', 'sub', 'A.manifest.json'], false],
+    ['a manifest outside the mods folder', ['source', 'A', 'A.manifest.json'], false],
+  ])('owns %s: %s', async (_name, segments, owned) => {
     const { owns } = await (await instance()).filesKept();
-    const at = (...names: string[]) => join(root, ...names);
 
-    expect([owns(at('mods', 'Gone', 'gone.MANIFEST.json')), owns(at('mods', 'Gone')), owns(at('mods', 'Gone', 'notes.txt')), owns(at('mods', 'A', 'B.manifest.json')), owns(at('mods', 'A', 'A.manifest.json', 'x')), owns(at('mods'))])
-      .toEqual([true, false, false, false, false, false]);
+    expect(owns(join(root, ...segments))).toBe(owned);
   });
 
   describe('whether git init has set the repository up', () => {

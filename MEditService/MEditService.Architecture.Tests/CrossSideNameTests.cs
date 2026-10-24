@@ -40,6 +40,12 @@ public sealed class CrossSideNameTests
             @"(?:export )?const BUILD_OUTPUT_KEY = '([^']+)';",
             "private const string OutputKey = \"output\";",
             "export const BUILD_OUTPUT_KEY = 'outputFolder';"),
+        new(Path.Combine("MEditService.RecordIndex", "Store", "IndexFile.cs"),
+            @"private const string FolderName = ""([^""]+)"";",
+            Path.Combine("instanceAdapter", "mo2", "layout.ts"),
+            @"(?:export )?const RECORD_INDEX = '([^']+)';",
+            "private const string FolderName = \"modbench\";",
+            "const RECORD_INDEX = 'medit';"),
     ];
 
     [Theory]

@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
@@ -17,6 +17,7 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     watchers.length = 0;
     await rm(join(root, SETTINGS_FILE), { force: true });
     await rm(join(root, '.git'), { recursive: true, force: true });
+    for (const mod of ['X', 'Y']) await rm(join(root, 'mods', mod), { recursive: true, force: true });
   });
 
   afterAll(() => rm(root, { recursive: true, force: true }));
@@ -55,12 +56,40 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     expect(publisherConfiguration.kind === 'read' && publisherConfiguration.covering(join(root, 'overwrite', 'x.ini'), undefined)).toEqual([]);
   });
 
-  it('lists the files the mod manager\'s side keeps in the publisher\'s ignore list, leaving the entries already there', async () => {
+  it('lists the files the mod manager\'s side keeps in the publisher\'s ignore list', async () => {
     await writeFile(join(root, SETTINGS_FILE), JSON.stringify({ Ignore: ['mine'] }));
 
     await adapterOver(root).keepOutOfPublisher();
 
-    expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Ignore: expect.arrayContaining(['mine', 'modbench', '.gitignore']) as unknown });
+    expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Ignore: expect.arrayContaining(['modbench', '.gitignore', 'source']) as unknown });
+  });
+
+  it('hands back a call that leaves the publisher\'s configuration byte for byte as it was', async () => {
+    const text = JSON.stringify({ Ignore: ['mine'] }, undefined, 2);
+    await writeFile(join(root, SETTINGS_FILE), text);
+
+    const takeBack = await adapterOver(root).keepOutOfPublisher();
+    await takeBack();
+
+    expect(await readFile(join(root, SETTINGS_FILE), 'utf8')).toBe(text);
+  });
+
+  it('drops the entry of a manifest a rename left behind once update manifest keeps the files out again', async () => {
+    const adapter = adapterOver(root);
+    await writeFile(join(root, SETTINGS_FILE), '{}');
+    await mkdir(join(root, 'mods', 'X'), { recursive: true });
+    await writeFile(join(root, 'mods', 'X', 'X.manifest.json'), '{}');
+    await adapter.keepOutOfPublisher();
+    await rename(join(root, 'mods', 'X'), join(root, 'mods', 'Y'));
+    await adapter.followModFolders([{ from: join(root, 'mods', 'X'), to: join(root, 'mods', 'Y') }]);
+    await rm(join(root, 'mods', 'Y', 'X.manifest.json'));
+    await writeFile(join(root, 'mods', 'Y', 'Y.manifest.json'), '{}');
+
+    await adapter.keepOutOfPublisher();
+
+    const entries: unknown = Reflect.get(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8')), 'Ignore');
+    expect(entries).toEqual(expect.arrayContaining(['mods\\Y\\Y.manifest.json']));
+    expect(entries).not.toContain('mods\\Y\\X.manifest.json');
   });
 
   it('hears a change to the publisher\'s configuration and to the mod manager\'s files alike, and neither once the listener leaves', () => {

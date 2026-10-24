@@ -401,6 +401,20 @@ describe('keeping Modbench\'s files out of what Wabbajack ships (publishing.md, 
     expect(JSON.parse(await settingsText())).toEqual({ Ignore: ['mods\\Here\\Here.manifest.json', 'mods\\Gone', 'mods\\Gone\\notes.txt', 'mine'], Include: ['mods\\Gone\\Gone.manifest.json'] });
   });
 
+  it('hands back what takes the entries it wrote away, leaving settings another program changed since', async () => {
+    const text = '{\n  "Ignore": [\n    "mine"\n  ]\n}\n';
+    await writeSettings(text);
+    const takeBack = await publisherOver().keepOut(kept(join(root, 'x')));
+    const written = await settingsText();
+    await takeBack();
+    const restored = await settingsText();
+    await publisherOver().keepOut(kept(join(root, 'x')));
+    await writeSettings('{"Ignore":["theirs"]}');
+    await takeBack();
+
+    expect([written === text, restored, await settingsText()]).toEqual([false, text, '{"Ignore":["theirs"]}']);
+  });
+
   it('skips a file outside the instance', async () => {
     const text = '{"Ignore":[]}';
     await writeSettings(text);

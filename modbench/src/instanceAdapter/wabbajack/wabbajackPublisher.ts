@@ -191,6 +191,8 @@ function serialized(settings: object, form: string): string {
   return JSON.stringify(settings, undefined, indent).replaceAll('\n', eol) + (form.endsWith('\n') ? eol : '');
 }
 
+const isUnder = (names: readonly string[], folder: readonly string[]): boolean => folder.every((name, depth) => names[depth] === name);
+
 const sameNames = (first: readonly string[], second: readonly string[]): boolean =>
   first.length === second.length && first.every((name, at) => name === second[at]);
 
@@ -209,7 +211,7 @@ interface InstanceMove {
 function followedEntries(entries: readonly string[], moves: readonly InstanceMove[]): readonly string[] {
   const moveOf = (entry: string): InstanceMove | undefined => {
     const names = namesOf(entry);
-    return moves.find(({ from }) => from.every((name, depth) => names[depth] === name));
+    return moves.find(({ from }) => isUnder(names, from));
   };
   if (!entries.some((entry) => moveOf(entry) !== undefined)) return entries;
   const listed = new Set(entries.filter((entry) => moveOf(entry) === undefined).map((entry) => namesOf(entry).join('/')));
@@ -225,8 +227,6 @@ function followedEntries(entries: readonly string[], moves: readonly InstanceMov
     return [followed];
   });
 }
-
-const isUnder = (names: readonly string[], folder: readonly string[]): boolean => folder.every((name, depth) => names[depth] === name);
 
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
   const file = join(instanceRoot, COMPILER_SETTINGS.name);
@@ -287,17 +287,25 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       }, { ifMissing: '{}' });
     },
     keepOut: async ({ present, owns }) => {
-      if (await readOrAbsent(() => get(file), undefined) === undefined) return;
+      if (await readOrAbsent(() => get(file), undefined) === undefined) return () => Promise.resolve();
       const insides = present.flatMap((path) => inInstance(instanceRoot, path) ?? []);
-      const isGone = (entry: string): boolean => owns(join(instanceRoot, ...entry.split(/[\\/]/))) && !insides.some((inside) => sameNames(namesOf(inside), namesOf(entry)));
+      const isGone = (entry: string): boolean => owns(join(instanceRoot, ...namesOf(entry))) && !insides.some((inside) => sameNames(namesOf(inside), namesOf(entry)));
+      let written: { before: string; after: string } | undefined;
       await putIfChanged(file, (before) => {
         const settings: Record<string, unknown> = { ...settingsIn(before, file) };
         const entries = valueOf(settings, 'Ignore', file, [isNames, 'a list of paths']) ?? [];
         const remaining = entries.filter((entry) => !isGone(entry));
         const missing = insides.filter((inside) => !remaining.some((entry) => isUnder(namesOf(inside), namesOf(entry))));
         if (missing.length === 0 && remaining.length === entries.length) return before;
-        return serialized({ ...settings, Ignore: [...remaining, ...missing.map((inside) => inside.split(sep).join('\\'))] }, before);
+        const after = serialized({ ...settings, Ignore: [...remaining, ...missing.map((inside) => inside.split(sep).join('\\'))] }, before);
+        written = { before, after };
+        return after;
       });
+      return async () => {
+        if (written === undefined) return;
+        const { before, after } = written;
+        await putIfChanged(file, (text) => (text === after ? before : text));
+      };
     },
     subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, () => listener()),
   };

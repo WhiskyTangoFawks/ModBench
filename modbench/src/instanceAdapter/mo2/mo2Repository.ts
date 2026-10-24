@@ -1,12 +1,12 @@
 // What MO2's implementation lets the instance repository hold, and which game files a mod's files take.
 
-import { join, relative, sep } from 'node:path';
+import { join } from 'node:path';
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, GIT_DIR, ignoreSkippedLink, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
 import type { FileRead, GameFile, InstanceAdapter } from '../instanceAdapter';
-import { hashIndexDir, ignoreListFile, manifestFileIn, manifestFileName, modsDir, recordIndexDir, statCacheDir, submodulesFile, whitelistIgnoreList, withSourceModLines } from './layout';
+import { hashIndexDir, ignoreListFile, isManifestPath, modsDir, recordIndexDir, sourceRootDir, statCacheDir, submodulesFile, whitelistIgnoreList, withSourceModLines } from './layout';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import type { Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
@@ -94,17 +94,16 @@ export function mo2Repository(
 
     async filesKept() {
       const mods = await readOrAbsent(() => listFolders(modsDir(instanceRoot), ignoreSkippedLink), []);
-      const manifests = mods.map((mod) => manifestFileIn(join(modsDir(instanceRoot), mod), mod));
-      const present = await Promise.all(manifests.map((manifest) => exists(manifest)));
+      const inFolders = await Promise.all(mods.map(async (mod) => {
+        const folder = join(modsDir(instanceRoot), mod);
+        return (await listEntries(folder, ignoreSkippedLink)).map(({ name }) => join(folder, name)).filter((path) => isManifestPath(instanceRoot, path));
+      }));
       return {
         present: [
           join(instanceRoot, GIT_DIR), ignoreListFile(instanceRoot), submodulesFile(instanceRoot), recordIndexDir(instanceRoot),
-          hashIndexDir(instanceRoot), statCacheDir(instanceRoot), ...manifests.filter((_, at) => present[at]),
+          hashIndexDir(instanceRoot), statCacheDir(instanceRoot), sourceRootDir(instanceRoot), ...inFolders.flat(),
         ],
-        owns: (path) => {
-          const [mod, file, ...deeper] = relative(modsDir(instanceRoot), path).split(sep);
-          return mod !== undefined && file !== undefined && deeper.length === 0 && file.toLowerCase() === manifestFileName(mod).toLowerCase();
-        },
+        owns: (path) => isManifestPath(instanceRoot, path),
       };
     },
 

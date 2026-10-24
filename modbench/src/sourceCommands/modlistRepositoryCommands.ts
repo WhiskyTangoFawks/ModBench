@@ -4,8 +4,8 @@ import {
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModMetadata, SourceMods } from '../instanceAdapter/instanceAdapter';
-import { refuse } from '../coreLib/refuse';
 import { errorMessage } from '../ports/errorMessage';
+import { refuse } from '../coreLib/refuse';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { HostGit } from '../ports/repository';
 import type { MoveToTrash } from '../ports/trash';
@@ -359,7 +359,7 @@ async function refusalTakenBack(failure: unknown, undone: readonly TakenBack[]):
   return refusal;
 }
 
-// publishing.md, What ships, story 1: update manifest writes manifests, and each one stays out of what the publisher ships.
+// publishing.md, What ships, story 1
 async function keptOutOfPublisher(adapter: Adapter): Promise<readonly string[]> {
   try {
     await adapter.keepOutOfPublisher();
@@ -426,12 +426,8 @@ async function gitInit({ adapter, instanceRoot, hostGit }: ModlistRepositoryComm
   }
   let pathTokensNotWritten: string | undefined;
   try {
+    takenBack = [{ what: 'the publisher\'s ignore list entries it wrote', undo: await adapter.keepOutOfPublisher() }, ...takenBack];
     pathTokensNotWritten = await adapter.writePathTokens();
-  } catch (err) {
-    return { applied: false, refusal: await refusalTakenBack(err, takenBack) };
-  }
-  try {
-    await adapter.keepOutOfPublisher();
   } catch (err) {
     return { applied: false, refusal: await refusalTakenBack(err, takenBack) };
   }

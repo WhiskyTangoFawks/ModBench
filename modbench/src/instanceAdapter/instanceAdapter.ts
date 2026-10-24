@@ -581,7 +581,7 @@ export interface InstanceAdapter {
   followModFolders(moves: readonly FolderMove[]): Promise<void>;
   /** Lists each file Modbench keeps in the instance in the publisher's ignore list, leaving every other entry as written.
    *  Rejects, writing nothing, for a configuration it cannot read; does nothing when the instance holds none. */
-  keepOutOfPublisher(): Promise<void>;
+  keepOutOfPublisher(): Promise<() => Promise<void>>;
 
   // Answers about a mod or a file.
   /** The folder a build of `mod` writes: the one that holds it, else the one its name gives it; undefined when its

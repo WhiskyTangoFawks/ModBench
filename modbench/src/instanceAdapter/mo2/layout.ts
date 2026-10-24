@@ -2,7 +2,7 @@
 // built from them, and the adapter's watch globs. Each file's own name is its codec's, and
 // `formatLiteralScan.test.ts` refuses a second speller.
 
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { METADATA_FILE_SUFFIX } from './codecs/downloads';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
@@ -17,7 +17,6 @@ import { BUILD_CONFIGURATION_FILE } from '../../wire/sourceMod';
 const PROFILES = 'profiles';
 const MODS = 'mods';
 const DOWNLOADS = 'downloads';
-// Where mEdit keeps the record index (ADR-0010).
 const RECORD_INDEX = 'modbench';
 const HASH_INDEX = 'hash-index';
 const STAT_CACHE = 'stat-cache';
@@ -142,6 +141,12 @@ export const statCacheDir = (instanceRoot: string): string => join(instanceRoot,
 
 /** The folder at the instance root where mEdit keeps the record index. */
 export const recordIndexDir = (instanceRoot: string): string => join(instanceRoot, RECORD_INDEX);
+
+/** Whether `path` is where git's whitelist holds a manifest: a file of that name directly in a folder of `mods/`. */
+export function isManifestPath(instanceRoot: string, path: string): boolean {
+  const [mods, , file, ...deeper] = relative(instanceRoot, path).split(sep);
+  return mods?.toLowerCase() === MODS && file?.toLowerCase().endsWith(MANIFEST_GLOB.slice(1)) === true && deeper.length === 0;
+}
 
 /** The instance repository's ignore list file. */
 export const ignoreListFile = (instanceRoot: string): string => join(instanceRoot, IGNORE_LIST_FILE);

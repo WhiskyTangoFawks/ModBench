@@ -8,7 +8,6 @@ export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
 export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag' | 'followModFolders' | 'publisherConfigurationRefusal' | 'keepOutOfPublisher'> & {
   reading(): Promise<ManagerReading>;
-  /** Each file (absolute) Modbench keeps in the instance. */
   filesKept(): Promise<KeptFiles>;
 };
 
@@ -33,8 +32,9 @@ export interface Publisher {
   configuration(): Promise<PublisherConfiguration>;
   changeTag: InstanceAdapter['changePublisherTag'];
   followFolders: InstanceAdapter['followModFolders'];
-  /** Rejects, writing nothing, for a configuration it cannot read; does nothing when the instance holds none. */
-  keepOut(kept: KeptFiles): Promise<void>;
+  /** Rejects, writing nothing, for a configuration it cannot read; does nothing when the instance holds none.
+   *  Answers the call that takes back what it wrote. */
+  keepOut(kept: KeptFiles): Promise<() => Promise<void>>;
   /** Hears that the publisher's configuration changed. */
   subscribe(listener: () => void): Subscription;
 }
