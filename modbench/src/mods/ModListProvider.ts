@@ -211,7 +211,7 @@ export class ModListProvider
   setFilter(text: string, grouping: boolean): void {
     this.filterText = text;
     this.filterLower = text.toLowerCase();
-    this.groupingOn = text === '' ? true : grouping;
+    this.groupingOn = grouping;
     this.render();
   }
 

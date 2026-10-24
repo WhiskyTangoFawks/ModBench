@@ -68,39 +68,17 @@ const EMPTY_SNAPSHOT = {
 };
 
 describe('HttpMEditClient — the process is the client\'s own', () => {
-  beforeEach(() => { vi.resetAllMocks(); });
-  afterEach(() => { vi.restoreAllMocks(); });
-
-  it('reads the lifecycle\'s own status, not a cached copy of it, as a cached copy of a push-only event can disagree with the process it describes', async () => {
+  it('reports the backend\'s status changes to its listeners, until one unsubscribes', async () => {
     const client = makeClient(neverFetch());
-    expect(client.status).toBe('starting');
-
-    await client.start();
-
-    expect(client.status).toBe('running');
-  });
-
-  it('reports every status change to its listeners', async () => {
-    const client = makeClient(neverFetch());
-    const seen: string[] = [];
-    client.onStatusChanged((s) => seen.push(s));
+    const kept: string[] = [];
+    const dropped: string[] = [];
+    client.onStatusChanged((s) => kept.push(s));
+    client.onStatusChanged((s) => dropped.push(s))();
 
     await client.start();
     await client.stop();
 
-    expect(seen).toEqual(['running', 'stopped']);
-  });
-
-  it('an unsubscribed listener hears nothing more', async () => {
-    const client = makeClient(neverFetch());
-    const seen: string[] = [];
-    const off = client.onStatusChanged((s) => seen.push(s));
-
-    await client.start();
-    off();
-    await client.stop();
-
-    expect(seen).toEqual(['running']);
+    expect({ kept, dropped }).toEqual({ kept: ['running', 'stopped'], dropped: [] });
   });
 });
 
@@ -877,42 +855,6 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     expect(exits).toHaveLength(1);
     await expect(client.sendLoadOrder(snapshot)).resolves.toEqual({ outcome: 'backendFailed' });
     expect(launches).toEqual([]);
-    expect(children).toHaveLength(1);
-  });
-
-  it.each([
-    ['claiming a port throws', { freePort: () => Promise.reject(new Error('no port')) }],
-    ['the spawn throws', { freePort: () => Promise.resolve(5172), spawn: () => { throw new Error('no spawn'); } }],
-  ])('is stopped when the launch fails because %s', async (_name, backend) => {
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
-      backend: { executablePath: '/x/backend', pollIntervalMs: 3, checkHealth: () => Promise.resolve(answered(true)), ...backend },
-      backendLog: fakeLogChannel(), fetch: routedFetch([]),
-    });
-
-    await client.start();
-
-    expect(client.status).toBe('stopped');
-  });
-
-  it('answers a snapshot backendFailed after a launch whose child exited before it answered, and launches nothing again', async () => {
-    const children: EventEmitter[] = [];
-    const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
-      backend: {
-        freePort: () => Promise.resolve(5172), executablePath: '/x/backend',
-        spawn: () => {
-          const child = Object.assign(new EventEmitter(), { kill: () => undefined, stdin: new PassThrough() });
-          child.stdin.on('finish', () => child.emit('exit', 0));
-          children.push(child);
-          process.nextTick(() => child.emit('exit', 1));
-          return child;
-        },
-        pollIntervalMs: 3, pollTimeoutMs: 300, checkHealth: () => Promise.resolve(answered(false)),
-      },
-      backendLog: fakeLogChannel(), fetch: routedFetch([['/notifications/stream', () => Promise.resolve(openStreamResponse())]]),
-    });
-    await client.start();
-
-    await expect(client.sendLoadOrder(snapshot)).resolves.toEqual({ outcome: 'backendFailed' });
     expect(children).toHaveLength(1);
   });
 

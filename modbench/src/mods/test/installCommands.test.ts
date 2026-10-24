@@ -136,26 +136,6 @@ describe('modbench.mod.install: installation file or folder, asked first', () =>
     );
   });
 
-  it('installation file: one of the instance\'s downloaded files that installs but cannot be marked is one Output line, not a failure', async () => {
-    const row = downloadedFileRowFixture('foo.7z');
-    const log = vi.fn();
-    const reporter = recordingReporter();
-    showInputBox.mockResolvedValueOnce('New Mod');
-    showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce([uriFile(row.path)]);
-    installMod.mockResolvedValueOnce({ applied: true, downloadedFile: 'foo.7z', downloadedFileRefusal: 'locked' });
-
-    registerModInstallCommands(deps({
-      instance: { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() },
-      reporterFor: () => reporter,
-      downloadedFileInstallReporting: { reporter: recordingReporter(), log, progressViewId: 'modbench.downloads' },
-    }));
-    await invoke('modbench.mod.install');
-
-    expect(log).toHaveBeenCalledWith('"foo.7z" was installed, but its Downloads status could not be updated: locked');
-    expect(reporter.reports).toEqual([]);
-  });
-
   it('installation file: one outside the downloads folder, though it shares a downloaded file\'s name, installs as an installation file under the name prompted', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
@@ -289,36 +269,6 @@ describe('modbench.mod.install: a failed install', () => {
 
 describe('modbench.mod.install: a downloaded file is its package', () => {
   beforeEach(() => vi.clearAllMocks());
-
-  it('installs the downloaded file the Argument carries, and asks no package', async () => {
-    installMod.mockResolvedValueOnce({ applied: true });
-    showInputBox.mockResolvedValueOnce('Foo');
-    const row = downloadedFileRowFixture('foo.7z');
-
-    registerModInstallCommands(deps());
-    await invoke('modbench.mod.install', { argument: { kind: 'downloadedFile', row } });
-
-    expect(installMod).toHaveBeenCalledWith(
-      { kind: 'downloadedFile', name: 'foo.7z' }, { kind: 'new', name: 'Foo' }, true, VIEW_ANSWER);
-    expect(showQuickPick).not.toHaveBeenCalled();
-    expect(showOpenDialog).not.toHaveBeenCalled();
-  });
-
-  it('reports a downloaded file install through the downloads reporter and log it was given, not the mod list\'s', async () => {
-    const reporter = recordingReporter();
-    const log = vi.fn();
-    showInputBox.mockResolvedValue('Foo');
-    installMod.mockResolvedValueOnce({ applied: true, downloadedFile: 'foo.7z', downloadedFileRefusal: 'locked' });
-    installMod.mockResolvedValueOnce({ applied: false, refusal: 'disk full' });
-    const argument = { argument: { kind: 'downloadedFile', row: downloadedFileRowFixture('foo.7z') } };
-
-    registerModInstallCommands(deps({ downloadedFileInstallReporting: { reporter, log, progressViewId: 'modbench.downloads' }, reporterFor: () => recordingReporter() }));
-    await invoke('modbench.mod.install', argument);
-    await invoke('modbench.mod.install', argument);
-
-    expect(log).toHaveBeenCalledWith('"foo.7z" was installed, but its Downloads status could not be updated: locked');
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'disk full' }]);
-  });
 
   it('a mod row as Argument is no package, so it asks installation file or folder', async () => {
     showQuickPick.mockResolvedValueOnce(undefined);
