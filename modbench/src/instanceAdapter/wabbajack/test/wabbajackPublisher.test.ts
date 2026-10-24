@@ -374,11 +374,12 @@ describe('publisher tags following a mod folder (publishing.md, Publisher tags, 
 
 describe('keeping Modbench\'s files out of what Wabbajack ships (publishing.md, What ships, story 1)', () => {
   const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
+  const kept = (...present: string[]) => ({ present, owns: (path: string) => path.toLowerCase().endsWith('.manifest.json') });
 
   it('lists each file in Ignore, after the entries already there, in every other list left as written', async () => {
     await writeSettings({ Include: ['mods\\A'], Ignore: ['mine'] });
 
-    await publisherOver().keepOut([join(root, '.gitignore'), join(root, 'mods', 'A', 'A.manifest.json')]);
+    await publisherOver().keepOut(kept(join(root, '.gitignore'), join(root, 'mods', 'A', 'A.manifest.json')));
 
     expect(JSON.parse(await settingsText())).toEqual({ Include: ['mods\\A'], Ignore: ['mine', '.gitignore', 'mods\\A\\A.manifest.json'] });
   });
@@ -387,28 +388,36 @@ describe('keeping Modbench\'s files out of what Wabbajack ships (publishing.md, 
     const text = '{"Ignore":["HASH-INDEX/","mods/a/A.MANIFEST.json"]}';
     await writeSettings(text);
 
-    await publisherOver().keepOut([join(root, 'hash-index'), join(root, 'mods', 'A', 'A.manifest.json'), join(root, 'hash-index', 'x', 'y')]);
+    await publisherOver().keepOut(kept(join(root, 'hash-index'), join(root, 'mods', 'A', 'A.manifest.json'), join(root, 'hash-index', 'x', 'y')));
 
     expect(await settingsText()).toBe(text);
+  });
+
+  it('drops an entry for a file of Modbench\'s that is gone, however it is spelled, and keeps every other entry as written', async () => {
+    await writeSettings({ Ignore: ['MODS/Gone/gone.MANIFEST.json', 'mods\\Here\\Here.manifest.json', 'mods\\Gone', 'mods\\Gone\\notes.txt', 'mine'], Include: ['mods\\Gone\\Gone.manifest.json'] });
+
+    await publisherOver().keepOut(kept(join(root, 'mods', 'Here', 'Here.manifest.json')));
+
+    expect(JSON.parse(await settingsText())).toEqual({ Ignore: ['mods\\Here\\Here.manifest.json', 'mods\\Gone', 'mods\\Gone\\notes.txt', 'mine'], Include: ['mods\\Gone\\Gone.manifest.json'] });
   });
 
   it('skips a file outside the instance', async () => {
     const text = '{"Ignore":[]}';
     await writeSettings(text);
 
-    await publisherOver().keepOut([join(root, '..', 'elsewhere')]);
+    await publisherOver().keepOut(kept(join(root, '..', 'elsewhere')));
 
     expect(await settingsText()).toBe(text);
   });
 
   it('rejects, writing nothing, for settings it cannot read', async () => {
     await writeSettings('not json');
-    await expect(publisherOver().keepOut([join(root, 'x')])).rejects.toThrow(SETTINGS_FILE);
+    await expect(publisherOver().keepOut(kept(join(root, 'x')))).rejects.toThrow(SETTINGS_FILE);
     expect(await settingsText()).toBe('not json');
   });
 
   it('does nothing while the instance holds no compiler settings, creating none', async () => {
-    await publisherOver().keepOut([join(root, 'x')]);
+    await publisherOver().keepOut(kept(join(root, 'x')));
     await expect(settingsText()).rejects.toThrow();
   });
 });

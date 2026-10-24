@@ -286,14 +286,17 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         return changed ? serialized(settings, before) : before;
       }, { ifMissing: '{}' });
     },
-    keepOut: async (paths) => {
+    keepOut: async ({ present, owns }) => {
       if (await readOrAbsent(() => get(file), undefined) === undefined) return;
-      const insides = paths.flatMap((path) => inInstance(instanceRoot, path) ?? []);
+      const insides = present.flatMap((path) => inInstance(instanceRoot, path) ?? []);
+      const isGone = (entry: string): boolean => owns(join(instanceRoot, ...entry.split(/[\\/]/))) && !insides.some((inside) => sameNames(namesOf(inside), namesOf(entry)));
       await putIfChanged(file, (before) => {
         const settings: Record<string, unknown> = { ...settingsIn(before, file) };
         const entries = valueOf(settings, 'Ignore', file, [isNames, 'a list of paths']) ?? [];
-        const missing = insides.filter((inside) => !entries.some((entry) => isUnder(namesOf(inside), namesOf(entry))));
-        return missing.length === 0 ? before : serialized({ ...settings, Ignore: [...entries, ...missing.map((inside) => inside.split(sep).join('\\'))] }, before);
+        const remaining = entries.filter((entry) => !isGone(entry));
+        const missing = insides.filter((inside) => !remaining.some((entry) => isUnder(namesOf(inside), namesOf(entry))));
+        if (missing.length === 0 && remaining.length === entries.length) return before;
+        return serialized({ ...settings, Ignore: [...remaining, ...missing.map((inside) => inside.split(sep).join('\\'))] }, before);
       });
     },
     subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, () => listener()),

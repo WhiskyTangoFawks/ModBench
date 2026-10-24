@@ -1,12 +1,12 @@
 // What MO2's implementation lets the instance repository hold, and which game files a mod's files take.
 
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { exists, get, GIT_DIR, ignoreSkippedLink, listFolders, readOrAbsent, listEntries, putIfChanged, remove, type ResolvedEntry } from '../files';
 import type { HashIndex } from '../downloadedFileContents/hashIndex';
 import type { FileRead, GameFile, InstanceAdapter } from '../instanceAdapter';
-import { hashIndexDir, ignoreListFile, manifestFileIn, modsDir, recordIndexDir, statCacheDir, submodulesFile, whitelistIgnoreList, withSourceModLines } from './layout';
+import { hashIndexDir, ignoreListFile, manifestFileIn, manifestFileName, modsDir, recordIndexDir, statCacheDir, submodulesFile, whitelistIgnoreList, withSourceModLines } from './layout';
 import type { ConfigurationFile, ManagerAdapter } from '../publisher';
 import type { Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
@@ -96,10 +96,16 @@ export function mo2Repository(
       const mods = await readOrAbsent(() => listFolders(modsDir(instanceRoot), ignoreSkippedLink), []);
       const manifests = mods.map((mod) => manifestFileIn(join(modsDir(instanceRoot), mod), mod));
       const present = await Promise.all(manifests.map((manifest) => exists(manifest)));
-      return [
-        join(instanceRoot, GIT_DIR), ignoreListFile(instanceRoot), submodulesFile(instanceRoot), recordIndexDir(instanceRoot),
-        hashIndexDir(instanceRoot), statCacheDir(instanceRoot), ...manifests.filter((_, at) => present[at]),
-      ];
+      return {
+        present: [
+          join(instanceRoot, GIT_DIR), ignoreListFile(instanceRoot), submodulesFile(instanceRoot), recordIndexDir(instanceRoot),
+          hashIndexDir(instanceRoot), statCacheDir(instanceRoot), ...manifests.filter((_, at) => present[at]),
+        ],
+        owns: (path) => {
+          const [mod, file, ...deeper] = relative(modsDir(instanceRoot), path).split(sep);
+          return mod !== undefined && file !== undefined && deeper.length === 0 && file.toLowerCase() === manifestFileName(mod).toLowerCase();
+        },
+      };
     },
 
     gameFiles,

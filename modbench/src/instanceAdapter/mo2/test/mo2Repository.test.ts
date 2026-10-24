@@ -142,10 +142,18 @@ describe('the MO2 adapter\'s repository', () => {
       await put('mods/B/B.manifest.json');
       await mkdir(join(root, 'mods', 'C'));
 
-      expect((await adapter.filesKept()).map((path) => relative(root, path).replaceAll('\\', '/')).sort()).toEqual([
+      expect((await adapter.filesKept()).present.map((path) => relative(root, path).replaceAll('\\', '/')).sort()).toEqual([
         '.git', '.gitignore', '.gitmodules', 'hash-index', 'modbench', 'mods/A/A.manifest.json', 'mods/B/B.manifest.json', 'stat-cache',
       ].sort());
     });
+  });
+
+  it('owns a manifest path of any mod, there or gone, and no other path', async () => {
+    const { owns } = await (await instance()).filesKept();
+    const at = (...names: string[]) => join(root, ...names);
+
+    expect([owns(at('mods', 'Gone', 'gone.MANIFEST.json')), owns(at('mods', 'Gone')), owns(at('mods', 'Gone', 'notes.txt')), owns(at('mods', 'A', 'B.manifest.json')), owns(at('mods', 'A', 'A.manifest.json', 'x')), owns(at('mods'))])
+      .toEqual([true, false, false, false, false, false]);
   });
 
   describe('whether git init has set the repository up', () => {

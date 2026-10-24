@@ -9,7 +9,7 @@ export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags' | 'changePublisherTag' | 'followModFolders' | 'publisherConfigurationRefusal' | 'keepOutOfPublisher'> & {
   reading(): Promise<ManagerReading>;
   /** Each file (absolute) Modbench keeps in the instance. */
-  filesKept(): Promise<readonly string[]>;
+  filesKept(): Promise<KeptFiles>;
 };
 
 /** A configuration file, from the instance root, and how it spells a path. */
@@ -20,15 +20,23 @@ export interface ConfigurationFile {
   readonly blanked?: TokenProgram;
 }
 
+/** The files Modbench keeps in the instance, all absolute paths. */
+export interface KeptFiles {
+  readonly present: readonly string[];
+  /** Whether a path is one of the shapes Modbench keeps a file at, there now or not. */
+  readonly owns: (path: string) => boolean;
+}
+
 export interface Publisher {
   readonly tags: readonly PublisherTag[];
   readonly configurationFile: ConfigurationFile;
   configuration(): Promise<PublisherConfiguration>;
   changeTag: InstanceAdapter['changePublisherTag'];
   followFolders: InstanceAdapter['followModFolders'];
-  /** Lists each path (absolute) in the publisher's ignore list unless an entry already covers it, leaving every other
-   *  entry as written. Rejects, writing nothing, for a configuration it cannot read; does nothing when the instance holds none. */
-  keepOut(paths: readonly string[]): Promise<void>;
+  /** Lists each present file in the publisher's ignore list unless an entry already covers it, and drops an entry that
+   *  names an owned path no present file has, leaving every other entry as written. Rejects, writing nothing, for a
+   *  configuration it cannot read; does nothing when the instance holds none. */
+  keepOut(kept: KeptFiles): Promise<void>;
   /** Hears that the publisher's configuration changed. */
   subscribe(listener: () => void): Subscription;
 }

@@ -54,7 +54,7 @@ describe('modlistRepositoryCommands git init', () => {
     const result = await commands.gitInit();
 
     expect([result.applied, adapter.calls, repositories]).toEqual([
-      true, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'keepOutOfPublisher' }, { verb: 'refuseUnpublishedPins' }, { verb: 'writePathTokens' }], ['made'],
+      true, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }, { verb: 'writePathTokens' }, { verb: 'keepOutOfPublisher' }], ['made'],
     ]);
   });
 
@@ -69,7 +69,7 @@ describe('modlistRepositoryCommands git init', () => {
 
     expect([await commands.gitInit(), adapter.calls.map(({ verb }) => verb)]).toEqual([
       { applied: false, refusal: 'could not lock config file .git/config' },
-      ['checkPushRefusalFree', 'writeIgnoreList', 'keepOutOfPublisher', 'refuseUnpublishedPins', 'writePathTokens', 'takeBackPushRefusal', 'removeRepository', 'takeBackIgnoreList'],
+      ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'takeBackPushRefusal', 'removeRepository', 'takeBackIgnoreList'],
     ]);
   });
 
@@ -80,7 +80,7 @@ describe('modlistRepositoryCommands git init', () => {
       const result = await commands.gitInit();
 
       expect([result, repositories, adapter.calls]).toEqual([
-        { applied: true }, [], [{ verb: 'writeIgnoreList' }, { verb: 'keepOutOfPublisher' }, { verb: 'refuseUnpublishedPins' }, { verb: 'writePathTokens' }],
+        { applied: true }, [], [{ verb: 'writeIgnoreList' }, { verb: 'refuseUnpublishedPins' }, { verb: 'writePathTokens' }, { verb: 'keepOutOfPublisher' }],
       ]);
     });
 
@@ -91,7 +91,7 @@ describe('modlistRepositoryCommands git init', () => {
 
       expect([await commands.gitInit(), adapter.calls.map(({ verb }) => verb)]).toEqual([
         { applied: true, pushRefusalNotWritten: '/instance/.git/hooks/pre-push already exists' },
-        ['writeIgnoreList', 'keepOutOfPublisher', 'refuseUnpublishedPins', 'writePathTokens'],
+        ['writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'keepOutOfPublisher'],
       ]);
     });
 
@@ -99,17 +99,24 @@ describe('modlistRepositoryCommands git init', () => {
       const { commands, adapter, repositories } = commandsOver({ repositoryOnDisk: true, refusals: refusing('writePathTokens', 'could not lock config file') });
 
       expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
-        { applied: false, refusal: 'could not lock config file' }, [], ['writeIgnoreList', 'keepOutOfPublisher', 'refuseUnpublishedPins', 'writePathTokens', 'takeBackPushRefusal', 'takeBackIgnoreList'],
+        { applied: false, refusal: 'could not lock config file' }, [], ['writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'takeBackPushRefusal', 'takeBackIgnoreList'],
       ]);
     });
   });
 
-  it('makes no repository and takes back the ignore list when the publisher\'s ignore list could not be written, saying why', async () => {
-    const { commands, repositories, adapter } = commandsOver({ refusals: refusing('keepOutOfPublisher', 'compiler_settings.json is not JSON') });
+  it('writes the publisher\'s ignore list last, and takes back everything before it when it could not be written', async () => {
+    const { commands, repositories, adapter } = commandsOver({ refusals: refusing('keepOutOfPublisher', 'compiler_settings.json cannot be written') });
 
     expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
-      { applied: false, refusal: 'compiler_settings.json is not JSON' }, [], ['checkPushRefusalFree', 'writeIgnoreList', 'keepOutOfPublisher', 'takeBackIgnoreList'],
+      { applied: false, refusal: 'compiler_settings.json cannot be written' }, ['made'],
+      ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'writePathTokens', 'keepOutOfPublisher', 'takeBackPushRefusal', 'removeRepository', 'takeBackIgnoreList'],
     ]);
+  });
+
+  it('refuses before it writes anything when the publisher\'s configuration cannot be read, naming why', async () => {
+    const { commands, repositories, adapter } = commandsOver({ unreadablePublisher: 'compiler_settings.json is not JSON' });
+
+    expect([await commands.gitInit(), repositories, adapter.calls]).toEqual([{ applied: false, refusal: 'compiler_settings.json is not JSON' }, [], [{ verb: 'checkPushRefusalFree' }]]);
   });
 
   it('makes no repository when the ignore list could not be written, and says why', async () => {
@@ -131,7 +138,7 @@ describe('modlistRepositoryCommands git init', () => {
 
     expect([await commands.gitInit(), repositories, adapter.calls.map(({ verb }) => verb)]).toEqual([
       { applied: false, refusal: '/instance/.git/hooks/pre-push already exists' },
-      ['made'], ['checkPushRefusalFree', 'writeIgnoreList', 'keepOutOfPublisher', 'refuseUnpublishedPins', 'removeRepository', 'takeBackIgnoreList'],
+      ['made'], ['checkPushRefusalFree', 'writeIgnoreList', 'refuseUnpublishedPins', 'removeRepository', 'takeBackIgnoreList'],
     ]);
   });
 
@@ -155,7 +162,7 @@ describe('modlistRepositoryCommands git init', () => {
     const result = await commands.gitInit();
 
     expect([result, adapter.calls]).toEqual([
-      { applied: false, refusal: 'git is not available' }, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'keepOutOfPublisher' }, { verb: 'takeBackIgnoreList' }],
+      { applied: false, refusal: 'git is not available' }, [{ verb: 'checkPushRefusalFree' }, { verb: 'writeIgnoreList' }, { verb: 'takeBackIgnoreList' }],
     ]);
   });
 

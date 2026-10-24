@@ -4,6 +4,7 @@ import {
 } from '../client';
 import type { CommandResult } from '../coreLib/commandResult';
 import type { FileRead, GameFile, InstallationFile, InstanceAdapter, ModMetadata, SourceMods } from '../instanceAdapter/instanceAdapter';
+import { refuse } from '../coreLib/refuse';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { HostGit } from '../ports/repository';
@@ -16,7 +17,7 @@ import type { Nexus } from '../nexus/nexus';
 import { archiveVariants, metadataUnreadable } from './sourceCommands';
 
 type Adapter = Pick<InstanceAdapter,
-  'gameFolder' | 'gameRelease' | 'modOrder' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
+  'gameFolder' | 'gameRelease' | 'modOrder' | 'sourceMods' | 'installationFile' | 'downloadedFile' | 'gameFiles' | 'gameFilesTakenBy' | 'modMetadata' | 'unwritableMetadata' | 'writeModMetadata' | 'metadataFilesInModFolder' | 'modFolderPath' | 'writeIgnoreList' | 'keepOutOfPublisher' | 'publisherConfigurationRefusal' | 'writeSubmodules' | 'refuseUnpublishedPins' | 'checkPushRefusalFree' | 'removeRepository' | 'repositoryOnDisk'
   | 'writePathTokens' | 'pathsOutsideFolders'
   | 'statCacheFolder' | 'trashModFile' | 'exclusionMark' | 'submodule' | 'nexusFileAt' | 'putDownloadedFile'>;
 
@@ -402,10 +403,11 @@ async function gitInit({ adapter, instanceRoot, hostGit }: ModlistRepositoryComm
   let takenBack: TakenBack[] = [];
   try {
     if (!adopting) await adapter.checkPushRefusalFree();
+    const unreadable = await adapter.publisherConfigurationRefusal();
+    if (unreadable !== undefined) return { applied: false, refusal: unreadable };
     takenBack = [{ what: 'the ignore list it wrote', undo: await adapter.writeIgnoreList() }];
-    await adapter.keepOutOfPublisher();
   } catch (err) {
-    return { applied: false, refusal: await refusalTakenBack(err, takenBack) };
+    return refuse(err);
   }
   if (!adopting) {
     try {
@@ -425,6 +427,11 @@ async function gitInit({ adapter, instanceRoot, hostGit }: ModlistRepositoryComm
   let pathTokensNotWritten: string | undefined;
   try {
     pathTokensNotWritten = await adapter.writePathTokens();
+  } catch (err) {
+    return { applied: false, refusal: await refusalTakenBack(err, takenBack) };
+  }
+  try {
+    await adapter.keepOutOfPublisher();
   } catch (err) {
     return { applied: false, refusal: await refusalTakenBack(err, takenBack) };
   }
