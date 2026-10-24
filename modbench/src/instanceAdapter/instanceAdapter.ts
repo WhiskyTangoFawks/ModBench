@@ -653,8 +653,8 @@ export interface InstanceAdapter {
   trashModFile(mod: string, relativePath: string, trash: MoveToTrash): Promise<void>;
   /** Moves the source folder that builds the mod into the trash; false when none does. */
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
-  /** Puts the package's files in a new folder, or in place of the mod's own, a FOMOD's as `fomod` answers it. Rejects
-   *  with why; a new mod's folder goes, and an upgrade that failed part way is not rolled back. */
+  /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own. Rejects with why; a
+   *  new mod's folder goes, and an upgrade that failed part way is not rolled back. */
   install(installed: InstallPackage, target: InstallTarget, keys: InstallKeys, fomod?: FomodAnswer): Promise<InstallOutcome>;
 
   // Subscribe: the instance changed.
