@@ -48,7 +48,7 @@ public sealed class SourceRepositoryTreeOfTests : IDisposable
     private string NpcFullPath => Path.Combine(_modFolder, NpcRelativePath);
 
     [Fact]
-    public void TreeOf_AnswersEveryFileUnderThePluginsSourceRoot_AsTheDoorNamesIt_WithItsOwnBytes()
+    public void ThePluginsTree_IsEveryFileUnderItsSourceRoot_AsTheDoorNamesIt_WithItsOwnBytes()
     {
         var files = Repository.TreeOf(Plugin).Value().Files;
 
@@ -58,7 +58,7 @@ public sealed class SourceRepositoryTreeOfTests : IDisposable
     }
 
     [Fact]
-    public void TreeOf_AfterAPutThroughTheSameSession_AnswersTheTreeAsItNowStands_NotFromAMemoOfBeforeTheWrite()
+    public void ThePluginsTree_AfterAPutThroughTheSameSession_IsTheTreeAsItNowStands_NotAMemoOfBeforeTheWrite()
     {
         var session = TestAdapters.Source().WriteSessionOver(TestMod.In(_modFolder), GameRelease.Fallout4, []);
         var repository = session.Repository;
@@ -74,7 +74,7 @@ public sealed class SourceRepositoryTreeOfTests : IDisposable
     }
 
     [Fact]
-    public void TreeOf_WhenAFileCannotBeRead_NamesThatFile_AndAnswersNoFiles_NotHalfATreeACallerTakesForASmallerOne()
+    public void ATreeWithAFileThatCannotBeRead_IsRefusedNamingThatFile_NotHalfATreeACallerTakesForASmallerOne()
     {
         var npcRelativePath = NpcRelativePath;
         using var held = new FileStream(NpcFullPath, FileMode.Open, FileAccess.Read, FileShare.None);
@@ -86,7 +86,7 @@ public sealed class SourceRepositoryTreeOfTests : IDisposable
     }
 
     [Fact]
-    public void TreeOf_ForAPluginTheTreeHoldsNoSourceFor_IsEmpty()
+    public void ThePluginsTree_ForAPluginTheTreeHoldsNoSourceFor_IsEmpty()
     {
         var stranger = new PluginAddress("Stranger.esp", Plugin.Origin);
 

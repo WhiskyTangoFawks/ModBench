@@ -1,10 +1,11 @@
 using System.Text;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 
 namespace MEditService.SourceAdapter;
 
 /// <summary>A plugin whose source init writes, and the hash of the binary it was decompiled from.</summary>
-public sealed record DecompiledPlugin(string Plugin, string? BinarySha256);
+public sealed record DecompiledPlugin(PluginAddress Address, string? BinarySha256);
 
 /// <summary>A file of the mod no installation file yields, by its forward-slash path in the mod folder.</summary>
 public sealed record Asset(string Path, Func<Stream> Open);
@@ -15,7 +16,7 @@ internal static class GitInit
 {
     internal static void Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, (string Plugin, TreeCommit Commit)? repair)
+        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair)
     {
         if (SourceRepositoryGit.HoldsRepository(sourceFolder) || SourceRepositoryGit.HoldsAnotherRepository(sourceFolder))
             throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
@@ -36,13 +37,13 @@ internal static class GitInit
             git.Run("commit", "-q", "-m", $"Init {SourceRepositoryLayout.ModNameIn(sourceFolder)}");
             if (repair is var (repaired, commit))
             {
-                SourceRepositoryWrites.ReplaceTree(journal, sourceFolder, repaired, SourceRepositoryLayout.PristineFilesOf(repaired, commit.Tree));
+                SourceRepositoryWrites.ReplaceTree(journal, sourceFolder, repaired.Name, SourceRepositoryLayout.PristineFilesOf(repaired.Name, commit.Tree));
                 git.Run("add", "-A");
                 git.Run("commit", "-q", "-m", commit.Message);
             }
             foreach (var (_, plugin) in plugins)
             {
-                if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Plugin, binarySha256);
+                if (plugin.BinarySha256 is { } binarySha256) git.ParkDecompiled(plugin.Address.Name, binarySha256);
             }
         }
         catch (Exception ex)
@@ -59,11 +60,11 @@ internal static class GitInit
         {
             try
             {
-                journal.WriteAll(tree.Select(file => SourceRepositoryLayout.PlacedFileOf(plugin.Plugin, file)), workTree);
+                journal.WriteAll(tree.Select(file => SourceRepositoryLayout.PlacedFileOf(plugin.Address.Name, file)), workTree);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
-                throw new IOException($"{plugin.Plugin}'s source could not be written: {ex.Message}", ex);
+                throw new IOException($"{plugin.Address.Name}'s source could not be written: {ex.Message}", ex);
             }
         }
     }

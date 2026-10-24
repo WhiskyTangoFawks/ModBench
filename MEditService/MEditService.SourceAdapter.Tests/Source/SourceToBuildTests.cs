@@ -1,5 +1,5 @@
 using System.Text;
-using MEditService.Codec.Serialization;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -17,7 +17,7 @@ public sealed class SourceToBuildTests : IDisposable
     public void AnInitializedSource_BuildsItsOutputFromItsAssetsAndItsPlugins()
     {
         Assert.Null(TestAdapters.Source().Init(
-            _sourceFolder, "The Output", [DoorTreeOf("B.esp"), DoorTreeOf("A.esp")],
+            _sourceFolder, "The Output", [PluginBaselines.OneRecordOf("B.esp"), PluginBaselines.OneRecordOf("A.esp")],
             [new Asset("textures/Sub Folder/a.dds", () => new MemoryStream("texture"u8.ToArray()))]));
 
         var source = Built();
@@ -153,7 +153,4 @@ public sealed class SourceToBuildTests : IDisposable
 
     private void WriteBuildJson(string text) =>
         File.WriteAllText(Path.Combine(_sourceFolder, "build.json"), text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-
-    private static (IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin) DoorTreeOf(string plugin) =>
-        ([new TreeFile($"npc_/{plugin}/000001.json", "{}"u8.ToArray())], new DecompiledPlugin(plugin, null));
 }

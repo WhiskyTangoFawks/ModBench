@@ -137,7 +137,7 @@ internal sealed class ModInit(
         }
 
         return source.Init(sourceFolder, modFolders.FolderName(mod.Folder),
-            [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Name, v.Source.BinarySha256)))], assets,
-            repair is { } repaired ? (repaired.Plugin.Name, repaired.Repaired) : null);
+            [.. verified.Select(v => (v.Source.Files, new DecompiledPlugin(v.Plugin.Key, v.Source.BinarySha256)))], assets,
+            repair is { } repaired ? (repaired.Plugin.Key, repaired.Repaired) : null);
     }
 }

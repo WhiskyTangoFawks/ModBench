@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 
@@ -7,32 +6,25 @@ namespace MEditService.SourceAdapter.Tests.Source;
 [Collection(ProcessEnvironmentCollection.Name)]
 public sealed class SourceRepositoryInitConfigTests
 {
-    private static void Init(string modFolder) =>
-        PluginBaselines.Init(
-            modFolder,
-            [new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())]);
+    private static void Init(string modFolder) => Assert.Null(TestAdapters.Source().Init(modFolder, [PluginBaselines.OneRecordOf("Test.esp")]));
 
-    private static string RepoLocalConfigAfterInit(string key)
+    [Theory]
+    [InlineData("core.autocrlf", "false")]
+    [InlineData("core.longpaths", "true")]
+    [InlineData("core.quotePath", "false")]
+    [InlineData("commit.gpgsign", "false")]
+    [InlineData("gc.autoDetach", "false")]
+    public void AnInit_IsSetAsEveryRepositoryModbenchMakes(string key, string value)
     {
         using var modFolder = new ScratchDirectory("medit-init-config-");
+
         Init(modFolder);
-        return GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "config", "--local", "--get", key).Trim();
+
+        Assert.Equal(value, GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "config", "--local", "--get", key).Trim());
     }
 
     [Fact]
-    public void Init_PinsAutocrlfFalse_SoDirtDetectionKeepsByteEquality() =>
-        Assert.Equal("false", RepoLocalConfigAfterInit("core.autocrlf"));
-
-    [Fact]
-    public void Init_PinsGpgsignFalse_SoASigningConfigCannotHangACommit() =>
-        Assert.Equal("false", RepoLocalConfigAfterInit("commit.gpgsign"));
-
-    [Fact]
-    public void Init_PinsGcAutoDetachFalse_SoARepackStaysInsideTheCommandThatTriggeredIt() =>
-        Assert.Equal("false", RepoLocalConfigAfterInit("gc.autoDetach"));
-
-    [Fact]
-    public void Init_WithNoGlobalIdentityConfigured_StillCommits_WithARepoLocalFallbackIdentity()
+    public void AnInitWithNoGlobalIdentityConfigured_StillCommits_WithARepoLocalFallbackIdentity()
     {
         using var modFolder = new ScratchDirectory("medit-init-config-");
         using var emptyHome = new ScratchDirectory("medit-init-config-home-");

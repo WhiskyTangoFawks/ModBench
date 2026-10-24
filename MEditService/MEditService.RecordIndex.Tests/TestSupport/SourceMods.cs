@@ -12,7 +12,14 @@ namespace MEditService.RecordIndex.Tests.TestSupport;
 /// binary.</summary>
 internal static class SourceMods
 {
-    internal static void Init(string pluginPath, GameRelease release = GameRelease.Fallout4)
+    /// <summary>The source mod of the plugin at <paramref name="pluginPath"/>, a mod named for its folder.</summary>
+    internal static void Init(string pluginPath, GameRelease release = GameRelease.Fallout4) =>
+        Init(pluginPath, Path.GetFileName(Path.GetDirectoryName(pluginPath)).Require(), release);
+
+    internal static void Init(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
+        Init(entry.Path, entry.Origin, release);
+
+    private static void Init(string pluginPath, string origin, GameRelease release)
     {
         var modFolder = Path.GetDirectoryName(pluginPath)
             ?? throw new ArgumentException("A plugin path names a file inside a mod folder.", nameof(pluginPath));
@@ -24,11 +31,8 @@ internal static class SourceMods
             .GetAwaiter().GetResult();
         var source = read.Answered();
 
-        TestAdapters.Source().Init(modFolder, [(source.Files, new DecompiledPlugin(pluginName, source.BinarySha256))]);
+        TestAdapters.Source().Init(modFolder, [(source.Files, new DecompiledPlugin(new PluginAddress(pluginName, origin), source.BinarySha256))]);
     }
-
-    internal static void Init(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
-        Init(entry.Path, release);
 
     /// <summary>Every plugin of the fixture source mod, so the Index reads each from its tree.</summary>
     internal static ScatteredFixtureData CompiledPlugin(this ScatteredFixtureData fixture)

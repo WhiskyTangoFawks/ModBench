@@ -95,7 +95,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     }
 
     [Fact]
-    public void FormKeysUsed_AKeyTheWorkingTreeDeleted_IsNotUsed_ThoughTheLastCommitHoldsIt()
+    public void AKeyTheWorkingTreeDeleted_IsNotUsed_ThoughTheLastCommitHoldsIt()
     {
         var repository = SourceMod();
         repository.Remove(Plugin, new RecordIdentity(NpcFormKey, "npc_", NpcEditorId)).Wrote();
@@ -104,7 +104,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     }
 
     [Fact]
-    public void FormKeysUsed_AKeyCreatedSinceTheLastCommit_IsUsed()
+    public void AKeyCreatedSinceTheLastCommit_IsUsed()
     {
         var repository = SourceMod();
         repository.Put(Plugin, new SourceDocument("000900:Fixture.esp", "weap", "Later", LaterBody)).Wrote();
@@ -115,13 +115,13 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     }
 
     [Fact]
-    public void FormKeysUsed_APluginWithNoSourceOfItsOwn_IsEmpty()
+    public void APluginWithNoSourceOfItsOwn_UsesNoKey()
     {
         Assert.Empty(SourceMod().FormKeysUsed(new PluginAddress("Other.esp", TestMod.Name)).Value());
     }
 
     [Fact]
-    public void FormKeysUsed_SkipsGroupMetadataAndAStrayFileDeclaringNoFormKey_ForADocumentIsWhatDeclaresAFormKeyNotWhereItSits()
+    public void GroupMetadataAndAStrayFileDeclaringNoFormKey_UseNoKey_ForADocumentIsWhatDeclaresAFormKeyNotWhereItSits()
     {
         var repository = SourceMod();
         var npcsFolder = Path.Combine(PluginSourceRoot.In(_modFolder, PluginName), "Npcs");
@@ -161,7 +161,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     }
 
     [Fact]
-    public void FormKeysUsed_RefusesADocumentWhoseFormKeyMutagenCannotParse_RatherThanLoseIt()
+    public void ADocumentWhoseFormKeyMutagenCannotParse_RefusesTheKeysUsed_RatherThanLoseIt()
     {
         var repository = SourceModWithNpcDeclaring("not-a-formkey");
 
@@ -175,7 +175,13 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
     {
         var repository = SourceModWithNpcDeclaring("000800:fixture.esp");
 
-        Assert.NotNull(repository.RecordByFormKey(Plugin, NpcFormKey).Value());
+        AssertIsTheNpc(repository.RecordByFormKey(Plugin, NpcFormKey).Value());
+    }
+
+    private static void AssertIsTheNpc(SourceDocument? found)
+    {
+        Assert.Equal(NpcFormKey, found?.FormKey, ignoreCase: true);
+        Assert.Equal(("npc_", NpcEditorId), (found?.RecordType, found?.EditorId));
     }
 
     [Fact]
@@ -185,7 +191,7 @@ public sealed class SourceRepositoryTreeDocumentsTests : IDisposable
 
         var found = repository.RecordFromText(Plugin, NpcFormKey, NpcBody.Replace(NpcFormKey, "000800:fixture.esp")).Value();
 
-        Assert.NotNull(found);
+        AssertIsTheNpc(found);
     }
 
     [Fact]

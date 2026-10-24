@@ -89,18 +89,17 @@ public sealed class BuildConfigurationChangeTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Sub/Name", null, null)]
-    [InlineData("..", null, null)]
-    [InlineData(null, "../outside.dds", null)]
-    [InlineData(null, "textures\\a.dds", null)]
-    [InlineData(null, null, "/rooted.esp")]
-    public void AChangeOutsideTheMod_RefusesAsOutsideTheMod_AndLeavesTheConfigurationAsItWas(string? output, string? exclude, string? include)
+    [InlineData("Sub/Name", new string[0], new string[0])]
+    [InlineData("..", new string[0], new string[0])]
+    [InlineData(null, new[] { "../outside.dds" }, new string[0])]
+    [InlineData(null, new[] { "textures\\a.dds" }, new string[0])]
+    [InlineData(null, new string[0], new[] { "/rooted.esp" })]
+    public void AChangeOutsideTheMod_RefusesAsOutsideTheMod_AndLeavesTheConfigurationAsItWas(string? output, string[] exclude, string[] include)
     {
         const string before = "{\"output\": \"Mod\"}";
         WriteBuildJson(before);
 
-        var failure = TestAdapters.Source().ChangeBuildConfiguration(
-            _sourceFolder, new BuildConfigurationChange(output, exclude is null ? [] : [exclude], include is null ? [] : [include]));
+        var failure = TestAdapters.Source().ChangeBuildConfiguration(_sourceFolder, new BuildConfigurationChange(output, exclude, include));
 
         Assert.IsType<SourceFailure.OutsideTheMod>(failure);
         Assert.Equal(before, BuildJson());

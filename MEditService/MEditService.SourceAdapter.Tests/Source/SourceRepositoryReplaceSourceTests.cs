@@ -14,12 +14,12 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     private readonly ScratchDirectory _modFolder = new("medit-replace-source-");
 
     public SourceRepositoryReplaceSourceTests() =>
-        TestAdapters.Source().Init(_modFolder, [([File("npc_/A.esp/000001.json", "{\"was\":1}")], new DecompiledPlugin(Plugin, null))]);
+        TestAdapters.Source().Init(_modFolder, [([File("npc_/A.esp/000001.json", "{\"was\":1}")], PluginBaselines.Decompiled(Plugin))]);
 
     public void Dispose() => _modFolder.Dispose();
 
     [Fact]
-    public void ReplaceSourceFrom_LeavesExactlyTheNewFiles_AndParksTheBinaryAlone()
+    public void AReplacedSource_IsExactlyTheNewFiles_AndTheBinaryAloneIsLastWritten()
     {
         Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha).Wrote();
 
@@ -29,7 +29,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_TakesTheDoorsTree_SoItsRootDocumentLandsAsTheHeader()
+    public void AReplacedSource_IsTheDoorsTree_SoItsRootDocumentLandsAsTheHeader()
     {
         Repository.ReplaceSourceFrom(Address, [new TreeFile("RecordData.json", "{}"u8.ToArray())], Sha).Wrote();
 
@@ -37,7 +37,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_WritesOnlyWhatDiffers_SoAnUnchangedFileKeepsItsStamp_AndAnEmptiedDirectoryGoes()
+    public void ReplacingTheSource_WritesOnlyWhatDiffers_SoAnUnchangedFileKeepsItsStamp_AndAnEmptiedDirectoryGoes()
     {
         Repository.ReplaceSourceFrom(
             Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("armo/A.esp/000003.json", "{\"a\":3}"), File("weap/A.esp/000004.json", "{}")], Sha).Wrote();
@@ -56,7 +56,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_WhenItFails_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
+    public void AFailedReplace_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
     {
         var theirs = Path.Combine(Root, "armo", "theirs.txt");
 
@@ -68,7 +68,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_WhenItFails_LeavesAFileAnotherProgramChangedAfterItReplacedIt_AndNamesIt()
+    public void AFailedReplace_LeavesAFileAnotherProgramChangedAfterItReplacedIt_AndNamesIt()
     {
         var replaced = Path.Combine(Root, "npc_", "A.esp", "000001.json");
 
@@ -79,7 +79,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_WhenItFails_DoesNotPutBackAFileAnotherProgramRemovedAfterItReplacedIt()
+    public void AFailedReplace_DoesNotPutBackAFileAnotherProgramRemovedAfterItReplacedIt()
     {
         var replaced = Path.Combine(Root, "npc_", "A.esp", "000001.json");
 
@@ -90,7 +90,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_WhenItFails_LeavesAFileAnotherProgramWroteWhereItRemovedOne_AndNamesIt()
+    public void AFailedReplace_LeavesAFileAnotherProgramWroteWhereItRemovedOne_AndNamesIt()
     {
         var removed = Path.Combine(Root, "npc_", "A.esp", "000001.json");
 
@@ -101,7 +101,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_WhenItFails_PutsBackADirectoryItEmptiedAndAnotherProgramThenFilled_NamingNothing()
+    public void AFailedReplace_PutsBackADirectoryItEmptiedAndAnotherProgramThenFilled_NamingNothing()
     {
         var theirs = Path.Combine(Root, "npc_", "A.esp", "theirs.txt");
 
@@ -113,7 +113,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_WhenOneRollbackStepFails_StillPutsBackTheRest_AndKeepsTheCause()
+    public void AFailedReplaceWhoseRollbackStepFails_StillPutsBackTheRest_AndKeepsTheCause()
     {
         Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000001.json", "{\"was\":1}"), File("npc_/A.esp/000002.json", "{\"was\":2}")], Sha).Wrote();
         var first = Path.Combine(Root, "npc_", "A.esp", "000001.json");
@@ -137,7 +137,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_AFileThatCannotBeWritten_LeavesTheSourceAndTheRefAsTheyWere()
+    public void AReplaceWithAFileThatCannotBeWritten_LeavesTheSourceAndTheLastWrittenAsTheyWere()
     {
         var lastWrittenBefore = Repository.LastWrittenBinarySha256s(Address).Value();
 
@@ -152,17 +152,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_ParksTheBinaryItWasMadeFrom_NamedForDecompile()
-    {
-        Repository.ReplaceSourceFrom(Address, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha).Wrote();
-
-        var parked = LastWriteRecord.RefOfTheOnlyPlugin(_modFolder);
-        Assert.Equal([Sha], Repository.LastWrittenBinarySha256s(Address).Value());
-        Assert.Equal("Decompile: A.esp", Git("log", "-1", "--format=%s", parked).Trim());
-    }
-
-    [Fact]
-    public void ReplaceSourceFrom_OnABranchWithNoCommitYetWhereGitRefusesToParkAfterEveryFileIsWritten_LeavesTheSourceAndTheRefAsTheyWere()
+    public void AReplaceOnABranchWithNoCommitYetWhereGitRefusesToParkAfterEveryFileIsWritten_LeavesTheSourceAndTheLastWrittenAsTheyWere()
     {
         var lastWrittenBefore = Repository.LastWrittenBinarySha256s(Address).Value();
         Git("checkout", "-q", "--orphan", "unborn");
@@ -175,7 +165,7 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_IntoAModFolderAnotherToolRemoved_NamesTheMissingRepository_AndRecreatesNothing()
+    public void AReplaceIntoAModFolderAnotherToolRemoved_NamesTheMissingRepository_AndRecreatesNothing()
     {
         var repository = Repository;
         AnotherTool.Delete(_modFolder);
@@ -226,21 +216,14 @@ public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
     public void Dispose() => _modFolder.Dispose();
 
     [Fact]
-    public void ReplaceSourceFrom_WithGitGoneFromPathAfterTheUpFrontCheck_AnswersGitUnavailable_AndLeavesTheSourceAsItWas()
+    public void AReplaceWithGitGoneFromPathAfterTheUpFrontCheck_IsGitUnavailable_AndLeavesTheSourceAsItWas()
     {
         var repository = TestAdapters.OpenSourceMod(_modFolder, GameRelease.Fallout4);
-        var path = Environment.GetEnvironmentVariable("PATH");
-        Environment.SetEnvironmentVariable("PATH", string.Empty);
-        try
-        {
-            Assert.IsType<SourceFailure.GitUnavailable>(repository.ReplaceSourceFrom(
-                new PluginAddress("A.esp", "TestMod"), [new TreeFile("npc_/A.esp/000002.json", "{}"u8.ToArray())], "ABCDEF0123").Failed());
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PATH", path);
-        }
 
+        var failure = GitOffPath.While(() => repository.ReplaceSourceFrom(
+            new PluginAddress("A.esp", "TestMod"), [new TreeFile("npc_/A.esp/000002.json", "{}"u8.ToArray())], "ABCDEF0123"));
+
+        Assert.IsType<SourceFailure.GitUnavailable>(failure.Failed());
         var root = PluginSourceRoot.In(_modFolder, "A.esp");
         Assert.Equal(
             [Path.Combine(root, "npc_", "A.esp", "000001.json")],

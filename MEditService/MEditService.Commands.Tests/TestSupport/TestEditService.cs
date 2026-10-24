@@ -31,7 +31,7 @@ internal static class TestEditService
             .AddLogging(logging ?? (_ => { }))
             .AddSingleton(holder)
             .AddSingleton(documents)
-            .AddSingleton(source ?? new GitSourceAdapter(documents))
+            .AddSingleton(source ?? new GitSourceAdapter(documents, TimeProvider.System))
             .AddSingleton(TimeProvider.System)
             .AddSingleton(modFolders ?? new ModFolderRepository(TimeProvider.System))
             .AddSingleton(notifications ?? new InMemoryNotificationPublisher())

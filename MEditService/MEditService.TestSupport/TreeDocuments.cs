@@ -2,36 +2,25 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
-using MEditService.TestSupport;
 
-namespace MEditService.Commands.Tests.TestSupport;
+namespace MEditService.TestSupport;
 
 /// <summary>Every document a plugin's tree holds, asked of the repository: the header's and each
 /// record's own, an embedded child belonging to the document that carries it.</summary>
-internal static class TreeDocuments
+public static class TreeDocuments
 {
-
-    internal static IReadOnlyList<SourceDocument> Of(ISourceRepository repository, PluginAddress plugin) =>
+    public static IReadOnlyList<SourceDocument> Of(ISourceRepository repository, PluginAddress plugin) =>
         repository.ReadDocuments(plugin, RootsOf).Value();
 
     private static IReadOnlyList<SourceDocument> RootsOf(IPluginDocuments documents)
     {
-        var roots = new List<PluginDocument>();
-        try
-        {
-            roots.Add(documents.Header);
-        }
-        catch (FileNotFoundException)
-        {
-            // A plugin whose tree holds no root document holds no header.
-        }
-
+        var roots = HeaderOfATreeHoldingOne(documents);
         var embedded = new HashSet<string>(StringComparer.Ordinal);
         foreach (var document in documents.Records)
         {
             if (roots.Count > 0 && embedded.Contains(document.FormKey) && document.FormKey != roots[^1].FormKey) continue;
             roots.Add(document);
-            embedded = FormKeysBelowTheRoot(document.Text);
+            embedded = FormKeysOfTheChildrenItEmbeds(document.Text);
         }
 
         return
@@ -41,9 +30,19 @@ internal static class TreeDocuments
         ];
     }
 
-    // An embedded child follows the document that carries it, and that document holds an object of the
-    // child's own FormKey below its root.
-    private static HashSet<string> FormKeysBelowTheRoot(string text)
+    private static List<PluginDocument> HeaderOfATreeHoldingOne(IPluginDocuments documents)
+    {
+        try
+        {
+            return [documents.Header];
+        }
+        catch (FileNotFoundException)
+        {
+            return [];
+        }
+    }
+
+    private static HashSet<string> FormKeysOfTheChildrenItEmbeds(string text)
     {
         using var json = JsonDocument.Parse(text);
         var found = new HashSet<string>(StringComparer.Ordinal);

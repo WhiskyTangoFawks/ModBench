@@ -46,7 +46,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [PosixFact]
-    public async Task Put_OfARecordNoDocumentHolds_ReadsNoOtherDocument()
+    public async Task PuttingARecordNoDocumentHolds_ReadsNoOtherDocument()
     {
         Opened();
         var pipeWhoseOpenForReadingNeverReturnsUntilSomethingWritesToIt = Path.Combine(NpcGroupFolder, "Unnamed.json");
@@ -55,16 +55,23 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         var put = Task.Run(() => RequireOpened().Put(
             Plugin, new SourceDocument("000A00:Fixture.esp", "npc_", "Created", "{\"FormKey\": \"000A00:Fixture.esp\"}")));
 
+        Assert.True(
+            await FinishesUnblocked(put, pipeWhoseOpenForReadingNeverReturnsUntilSomethingWritesToIt),
+            "Put opened another document to place a record no document holds.");
+    }
+
+    private static async Task<bool> FinishesUnblocked(Task put, string pipe)
+    {
         try
         {
             await put.WaitAsync(TimeSpan.FromSeconds(10));
+            return true;
         }
         catch (TimeoutException)
         {
-            await UnblockEveryReaderByOpeningThePipeReadWriteAndClosingItToGiveEndOfFile(
-                pipeWhoseOpenForReadingNeverReturnsUntilSomethingWritesToIt, put);
+            await UnblockEveryReaderByOpeningThePipeReadWriteAndClosingItToGiveEndOfFile(pipe, put);
             await put;
-            Assert.Fail("Put opened another document to place a record no document holds.");
+            return false;
         }
     }
 
@@ -90,21 +97,13 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Open_OnANonSourceModFolder_IsNull()
+    public void AFolderThatIsNoSourceMod_OpensNoRepository()
     {
         Assert.Null(TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4));
     }
 
     [Fact]
-    public void Open_OnASourceModFolder_IsARepository()
-    {
-        PluginBaselines.InitWithNoRecords(_modFolder);
-
-        Assert.NotNull(TestAdapters.Source().Open(TestMod.In(_modFolder), GameRelease.Fallout4));
-    }
-
-    [Fact]
-    public void Get_OfAFlatRecordTheTreeHolds_IsItsOwnText()
+    public void AFlatRecordTheTreeHolds_IsItsOwnText()
     {
         var document = Opened().RecordOf(Plugin, Npc).Value();
 
@@ -115,13 +114,13 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Get_OfARecordNoFileHolds_IsNull()
+    public void ARecordNoFileHolds_HasNoText()
     {
         Assert.Null(Opened().RecordOf(Plugin, new RecordIdentity("000801:Fixture.esp", "npc_", "Absent")).Value());
     }
 
     [Fact]
-    public void Put_OfARecordTheTreeHasNeverHeld_ThenGet_RoundTripsItsText()
+    public void ARecordTheTreeHasNeverHeld_ReadsBackAsTheTextPut()
     {
         var repository = Opened();
         var weapon = new SourceDocument("000900:Fixture.esp", "weap", "FixtureWeapon", "{\"EditorID\": \"FixtureWeapon\"}");
@@ -132,7 +131,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Put_OverARecordTheTreeAlreadyHolds_ReplacesItsText()
+    public void PuttingARecordTheTreeAlreadyHolds_ReplacesItsText()
     {
         var repository = Opened();
 
@@ -142,7 +141,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void ChangesToRemove_OfARecordTheTreeHolds_DeletesItsFile_AndRemovesNothing()
+    public void RemovingARecordTheTreeHolds_DeletesItsFile_AndWritesNothing()
     {
         var repository = Opened();
         var file = Directory.EnumerateFiles(NpcGroupFolder).Single();
@@ -156,7 +155,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [PosixFact]
-    public void Remove_OfAFlatRecordWhoseFileCannotBeRead_StillDeletesIt()
+    public void RemovingAFlatRecordWhoseFileCannotBeRead_StillDeletesIt()
     {
         var repository = Opened();
         var file = Directory.EnumerateFiles(NpcGroupFolder).Single();
@@ -168,7 +167,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Remove_OfARecordNoFileHolds_IsTheStateItAsksFor_NotAThrow_ThoughNotEvenItsGroupFolderExists()
+    public void RemovingAFlatRecordNoFileHolds_DeletesNothing_ThoughNotEvenItsGroupFolderExists()
     {
         var repository = Opened();
 
@@ -186,7 +185,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 
     [Fact]
-    public void Put_WithANewEditorId_MovesTheFileToTheNameItComputes_AndGetStillFindsItByFormKey()
+    public void ANewEditorId_MovesTheFileToTheNameTheLayoutComputes_WhereTheRecordIsStillFound()
     {
         var repository = Opened();
 
@@ -199,7 +198,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Put_WithAnEditorIdTooLongForAPath_NamesTheFileByACappedEditorId()
+    public void AnEditorIdTooLongForAPath_NamesTheFileByACappedEditorId()
     {
         var repository = Opened();
         var longId = new string('A', 300);
@@ -211,7 +210,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Put_WithANewEditorId_LeavesOneStampAtTheFormKey_ForTheNewBody()
+    public void ANewEditorId_LeavesOneStampAtTheFormKey_ForTheNewBody()
     {
         var repository = Opened();
 
@@ -224,7 +223,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Get_AfterAnotherToolOrTheAuthorRenamedTheFile_StillFindsItByFormKey_ForTheIdentityNamesTheRecordInsideIt()
+    public void AFileAnotherToolOrTheAuthorRenamed_IsStillFoundByFormKey_ForTheIdentityNamesTheRecordInsideIt()
     {
         var repository = Opened();
         File.Move(
@@ -234,32 +233,24 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         Assert.Equal(NpcBody, repository.RecordOf(Plugin, Npc).Value()?.Body);
     }
 
-    [Fact]
-    public void Put_WithANewEditorIdOnACell_MovesItsDirectoryAndKeepsItsBlockFolders()
-    {
-        const string cellKey = "000A00:Fixture.esp";
-        PluginBaselines.InitWithNoRecords(_modFolder);
-        var repository = RequireOpened();
-        static string CellBody(string editorId) => $"{{\n  \"FormKey\": \"{cellKey}\",\n  \"EditorID\": \"{editorId}\"\n}}";
-        repository.Put(Plugin, new SourceDocument(cellKey, "cell", "OldCell", CellBody("OldCell"))).Wrote();
-        var cells = Path.Combine(_modFolder, "plugin-source", PluginName, "Cells");
-        var oldLeaf = Directory.GetDirectories(cells, "OldCell*", SearchOption.AllDirectories).Single();
-        var blockFolder = Path.GetDirectoryName(oldLeaf) ?? throw new InvalidOperationException(oldLeaf);
-
-        repository.Put(Plugin, new SourceDocument(cellKey, "cell", "NewCell", CellBody("NewCell"))).Wrote();
-
-        Assert.Equal(
-            [Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}")],
-            Directory.GetDirectories(blockFolder));
-        Assert.Equal(
-            CellBody("NewCell"),
-            File.ReadAllText(PluginSourceRoot.ContainerDocument(Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}"))));
-        Assert.Single(Directory.GetFiles(Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}")));
-    }
-
     private const string CellKey = "000A00:Fixture.esp";
 
-    private static readonly string CellBody = $"{{\n  \"FormKey\": \"{CellKey}\",\n  \"EditorID\": \"Cell\"\n}}";
+    private static readonly string CellBody = CellBodyNamed("Cell");
+
+    private static string CellBodyNamed(string editorId) => $"{{\n  \"FormKey\": \"{CellKey}\",\n  \"EditorID\": \"{editorId}\"\n}}";
+
+    [Fact]
+    public void ANewEditorIdOnACell_MovesItsDirectory_AndKeepsItsBlockFolders()
+    {
+        var (repository, _, blockFolder) = AContainerPutInItsOwnDirectory();
+        var renamed = Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}");
+
+        repository.Put(Plugin, new SourceDocument(CellKey, "cell", "NewCell", CellBodyNamed("NewCell"))).Wrote();
+
+        Assert.Equal([renamed], Directory.GetDirectories(blockFolder));
+        Assert.Equal([PluginSourceRoot.ContainerDocument(renamed)], Directory.GetFiles(renamed));
+        Assert.Equal(CellBodyNamed("NewCell"), File.ReadAllText(PluginSourceRoot.ContainerDocument(renamed)));
+    }
 
     private (ISourceRepository Repository, string Directory, string BlockFolder) AContainerPutInItsOwnDirectory(
         string recordType = "cell", string groupFolder = "Cells")
@@ -277,7 +268,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     [Theory]
     [InlineData("cell", "Cells")]
     [InlineData("wrld", "Worldspaces")]
-    public void Put_OfAContainerDirectorySomethingElseRenamed_MovesItToTheNameTheLayoutComputes(string recordType, string groupFolder)
+    public void AContainerDirectorySomethingElseRenamed_IsMovedByAPutToTheNameTheLayoutComputes(string recordType, string groupFolder)
     {
         var (repository, held, parent) = AContainerPutInItsOwnDirectory(recordType, groupFolder);
         Directory.Move(held, Path.Combine(parent, $"RenamedOutside - 000A00_{PluginName}"));
@@ -291,7 +282,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     [InlineData("HandName.json")]
     [InlineData("HandName.JSON")]
     [InlineData("RecordData.json")]
-    public void Put_OfACellWhoseDocumentIsNamedOtherwiseInItsOwnDirectory_MovesTheDocumentToTheLeafName(string heldAs)
+    public void ACellDocumentNamedOtherwiseInItsOwnDirectory_IsMovedByAPutToTheLeafName(string heldAs)
     {
         var (repository, directory, _) = AContainerPutInItsOwnDirectory();
         File.Move(PluginSourceRoot.ContainerDocument(directory), Path.Combine(directory, heldAs));
@@ -302,7 +293,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Put_OfACellWhoseDirectoryHoldsTwoDocumentsAndNoneNamedForIt_RefusesAsAmbiguous()
+    public void PuttingACellWhoseDirectoryHoldsTwoDocumentsAndNoneNamedForIt_IsRefusedAsAmbiguous()
     {
         var (repository, directory, _) = AContainerPutInItsOwnDirectory();
         File.Move(PluginSourceRoot.ContainerDocument(directory), Path.Combine(directory, "One.json"));
@@ -312,7 +303,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void ChangesToRewrite_OfAFileTheGivenTextWasFoundCarryingUnderANameCarryingNoFormKey_MovesItToTheNameTheLayoutComputes()
+    public void RewritingAFileTheGivenTextWasFoundCarryingUnderANameCarryingNoFormKey_MovesItToTheNameTheLayoutComputes()
     {
         var repository = Opened();
         var handName = Path.Combine(NpcGroupFolder, "HandName.json");
@@ -326,7 +317,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Put_OfAFileRenamedByHandWhileAnotherHoldsTheLayoutsName_RefusesAndLeavesBothFiles()
+    public void PuttingAFileRenamedByHandWhileAnotherHoldsTheLayoutsName_IsRefusedAndLeavesBothFiles()
     {
         var repository = Opened();
         var atLayoutName = Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json");
@@ -343,7 +334,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     [Theory]
     [InlineData(NpcFormKey, "npc_", NpcEditorId)]
     [InlineData("000900:Fixture.esp", "cell", "FreshCell")]
-    public void ChangesToRewrite_OfARecordNoDocumentHolds_RefusesNamingIt(string formKey, string recordType, string editorId)
+    public void RewritingARecordNoDocumentHolds_IsRefusedNamingIt(string formKey, string recordType, string editorId)
     {
         var repository = Opened();
         File.Delete(Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json"));
@@ -356,7 +347,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Put_OverADocumentThatIsNotJson_RefusesWithAReason_AndLeavesTheFileAsItWas()
+    public void PuttingOverADocumentThatIsNotJson_IsRefusedWithAReason_AndLeavesTheFileAsItWas()
     {
         var repository = Opened();
         var file = Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json");
@@ -370,7 +361,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Put_OfAFileSomethingElseRenamed_MovesItToTheNameTheLayoutComputes()
+    public void AFileSomethingElseRenamed_IsMovedByAPutToTheNameTheLayoutComputes()
     {
         var repository = Opened();
         var renamed = Path.Combine(NpcGroupFolder, $"RenamedOutside - 000800_{PluginName}.json");
@@ -382,7 +373,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Get_WhenTwoFilesInTheGroupFolderClaimOneFormKey_Refuses_ForAFormKeyIsUniqueInAModSoEitherAnswerIsAGuess()
+    public void ARecordTwoFilesInItsGroupFolderClaim_IsRefused_ForAFormKeyIsUniqueInAModSoEitherAnswerIsAGuess()
     {
         var repository = Opened();
         File.WriteAllText(Path.Combine(NpcGroupFolder, $"AnImpostor - 000800_{PluginName}.json"), NpcBody);
@@ -393,7 +384,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Get_OfTheHeader_IsTheRootRecordDocument()
+    public void TheHeadersText_IsTheRootRecordDocument()
     {
         Init(
             new TreeFile(
@@ -410,24 +401,33 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
 
     public enum Verb
     {
-        Get,
+        RecordByFormKey,
         Put,
         Remove,
+        WriteBinary,
+        LastWrittenBinarySha256s,
+        ReplaceSourceFrom,
     }
 
     private static Action OnTheOtherModsPlugin(ISourceRepository repository, Verb verb) =>
         verb switch
         {
-            Verb.Get => () => repository.RecordByFormKey(TheSameNameFromAnotherMod, NpcFormKey),
+            Verb.RecordByFormKey => () => repository.RecordByFormKey(TheSameNameFromAnotherMod, NpcFormKey),
             Verb.Put => () => repository.Put(TheSameNameFromAnotherMod, new SourceDocument(NpcFormKey, "npc_", "Theirs", NpcBody)),
             Verb.Remove => () => repository.Remove(TheSameNameFromAnotherMod, Npc),
+            Verb.WriteBinary => () => repository.WriteBinary(TheSameNameFromAnotherMod, "ABC", () => { }),
+            Verb.LastWrittenBinarySha256s => () => repository.LastWrittenBinarySha256s(TheSameNameFromAnotherMod),
+            Verb.ReplaceSourceFrom => () => repository.ReplaceSourceFrom(TheSameNameFromAnotherMod, [], "ABC"),
             _ => throw new ArgumentOutOfRangeException(nameof(verb), verb, null),
         };
 
     [Theory]
-    [InlineData(Verb.Get)]
+    [InlineData(Verb.RecordByFormKey)]
     [InlineData(Verb.Put)]
     [InlineData(Verb.Remove)]
+    [InlineData(Verb.WriteBinary)]
+    [InlineData(Verb.LastWrittenBinarySha256s)]
+    [InlineData(Verb.ReplaceSourceFrom)]
     public void AVerbOnAPluginAnotherModProvides_IsRefusedAndWritesNothing(Verb verb)
     {
         var repository = Opened();
@@ -436,10 +436,11 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         Assert.Throws<ArgumentException>(OnTheOtherModsPlugin(repository, verb));
 
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
+        Assert.Empty(repository.LastWrittenBinarySha256s(Plugin).Value());
     }
 
     [Fact]
-    public void WhyUnreadable_OfTextThatIsNoDocument_SaysTheRecordsSourceIsNoReadableDocument()
+    public void TextThatIsNoDocument_IsUnreadable_AsTheRecordsSource()
     {
         var repository = Opened();
 
@@ -449,7 +450,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void WhyUnreadable_OfTheRecordsOwnReadableText_IsNothing()
+    public void TheRecordsOwnReadableText_IsReadable()
     {
         Assert.Null(Opened().WhyUnreadable(Plugin, Npc, NpcBody));
     }

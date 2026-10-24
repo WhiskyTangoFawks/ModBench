@@ -64,10 +64,10 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         SnapshotPlugins.Snapshot(_modFolder, null, Release, plugins.Length == 0 ? [Entry(_modFolder, Origin)] : plugins);
 
     private RecordAt RecordOf(string path, LoadOrderSnapshot? loadOrder = null) =>
-        Assert.IsType<RecordOfFileAnswer.Holds>(new GitSourceAdapter(new UnsavedDocuments()).RecordOfFile(loadOrder ?? LoadOrder(), path)).Record;
+        Assert.IsType<RecordOfFileAnswer.Holds>(TestAdapters.Source().RecordOfFile(loadOrder ?? LoadOrder(), path)).Record;
 
     private string WhyRefused(string path, LoadOrderSnapshot? loadOrder = null) =>
-        Assert.IsType<RecordOfFileAnswer.Refused>(new GitSourceAdapter(new UnsavedDocuments()).RecordOfFile(loadOrder ?? LoadOrder(), path)).Why;
+        Assert.IsType<RecordOfFileAnswer.Refused>(TestAdapters.Source().RecordOfFile(loadOrder ?? LoadOrder(), path)).Why;
 
     private string RenameNpcFileByHand()
     {
@@ -76,42 +76,34 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         return renamed;
     }
 
-    [Fact]
-    public void ARecord_IsInItsOwnDocument()
+    public enum Filed
     {
-        Assert.Equal(NpcFile, Repository.DocumentOf(Plugin, Npc).Value()?.Path);
+        Npc,
+        Header,
+        Room,
+        Placed,
     }
 
-    [Fact]
-    public void ThePluginHeaderRecord_IsInTheRootHeaderDocument()
-    {
-        Assert.Equal(HeaderFile, Repository.DocumentOf(Plugin, Header).Value()?.Path);
-    }
+    private (RecordIdentity Record, string File, bool IsContainersDocument) FilingOf(Filed filed) =>
+        filed switch
+        {
+            Filed.Npc => (Npc, NpcFile, false),
+            Filed.Header => (Header, HeaderFile, false),
+            Filed.Room => (Room, RoomFile, false),
+            Filed.Placed => (Placed, RoomFile, true),
+            _ => throw new ArgumentOutOfRangeException(nameof(filed), filed, null),
+        };
 
-    [Fact]
-    public void AContainerRecord_IsInItsOwnDocument()
+    [Theory]
+    [InlineData(Filed.Npc)]
+    [InlineData(Filed.Header)]
+    [InlineData(Filed.Room)]
+    [InlineData(Filed.Placed)]
+    public void ARecord_IsInItsOwnDocument_OrInTheDocumentOfTheRecordCarryingIt(Filed filed)
     {
-        Assert.Equal(RoomFile, Repository.DocumentOf(Plugin, Room).Value()?.Path);
-    }
+        var (record, file, isContainersDocument) = FilingOf(filed);
 
-    [Fact]
-    public void AChildRecord_IsInTheDocumentOfTheRecordCarryingIt()
-    {
-        Assert.Equal(RoomFile, Repository.DocumentOf(Plugin, Placed).Value()?.Path);
-    }
-
-    [Fact]
-    public void AChildRecordsDocument_IsItsContainers()
-    {
-        Assert.True(Repository.DocumentOf(Plugin, Placed).Value()?.IsContainersDocument);
-    }
-
-    [Fact]
-    public void ARecordsOwnDocument_IsNotItsContainers()
-    {
-        Assert.False(Repository.DocumentOf(Plugin, Npc).Value()?.IsContainersDocument);
-        Assert.False(Repository.DocumentOf(Plugin, Room).Value()?.IsContainersDocument);
-        Assert.False(Repository.DocumentOf(Plugin, Header).Value()?.IsContainersDocument);
+        Assert.Equal(new DocumentFile(file, isContainersDocument), Repository.DocumentOf(Plugin, record).Value());
     }
 
     [Fact]
@@ -131,9 +123,30 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     }
 
     [Fact]
-    public void ARecordsOwnDocument_HoldsThatRecord()
+    public void RemovingTheHeader_TakesItsDocumentAlone()
     {
-        Assert.Equal(new RecordAt(Plugin, Npc.FormKey), RecordOf(NpcFile));
+        Repository.Remove(Plugin, Header).Wrote();
+
+        Assert.False(File.Exists(HeaderFile));
+        Assert.True(File.Exists(NpcFile));
+        Assert.True(File.Exists(RoomFile));
+    }
+
+    [Fact]
+    public void AnEmbeddedRecordNoDocumentCarries_IsInNoFile_ForAnEmbeddedTypeHasNoFileOfItsOwn()
+    {
+        Assert.Null(Repository.RelativePathOf(Plugin, new RecordIdentity($"FFFFFF:{PluginName}", "PlacedObject", EditorId: null)).Value());
+    }
+
+    [Theory]
+    [InlineData(Filed.Npc)]
+    [InlineData(Filed.Header)]
+    [InlineData(Filed.Room)]
+    public void ARecordsOwnDocument_HoldsThatRecord_NotAChildItCarries(Filed filed)
+    {
+        var (record, file, _) = FilingOf(filed);
+
+        Assert.Equal(new RecordAt(Plugin, record.FormKey), RecordOf(file));
     }
 
     [Fact]
@@ -142,7 +155,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         var unsaved = new UnsavedDocuments();
         unsaved.Apply([new DocumentChange(NpcFile, "{\"FormKey\": \"000900:Filed.esp\", \"EditorID\": \"FiledNpc\"}")]);
 
-        var answer = new GitSourceAdapter(unsaved).RecordOfFile(LoadOrder(), NpcFile);
+        var answer = new GitSourceAdapter(unsaved, TimeProvider.System).RecordOfFile(LoadOrder(), NpcFile);
 
         Assert.Equal(new RecordAt(Plugin, "000900:Filed.esp"), Assert.IsType<RecordOfFileAnswer.Holds>(answer).Record);
     }
@@ -154,21 +167,9 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         unsaved.Apply([new DocumentChange(NpcFile, "{\"FormKey\": \"000900:Filed.esp\", \"EditorID\": \"FiledNpc\"}")]);
         File.Delete(NpcFile);
 
-        var answer = new GitSourceAdapter(unsaved).RecordOfFile(LoadOrder(), NpcFile);
+        var answer = new GitSourceAdapter(unsaved, TimeProvider.System).RecordOfFile(LoadOrder(), NpcFile);
 
         Assert.IsType<RecordOfFileAnswer.Refused>(answer);
-    }
-
-    [Fact]
-    public void TheRootHeaderDocument_HoldsThePluginHeaderRecord()
-    {
-        Assert.Equal(new RecordAt(Plugin, Header.FormKey), RecordOf(HeaderFile));
-    }
-
-    [Fact]
-    public void AContainersDocument_HoldsTheContainer_NotAChildItCarries()
-    {
-        Assert.Equal(new RecordAt(Plugin, Room.FormKey), RecordOf(RoomFile));
     }
 
     [Fact]
@@ -225,7 +226,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
     [Fact]
     public void AGroupsMetadataFile_HoldsNoRecord()
     {
-        Assert.IsType<RecordOfFileAnswer.HoldsNone>(new GitSourceAdapter(new UnsavedDocuments()).RecordOfFile(LoadOrder(), Path.Combine(_modFolder, GroupMetadata)));
+        Assert.IsType<RecordOfFileAnswer.HoldsNone>(TestAdapters.Source().RecordOfFile(LoadOrder(), Path.Combine(_modFolder, GroupMetadata)));
     }
 
     [Fact]
@@ -234,7 +235,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         using var other = new ScratchDirectory("medit-file-of-a-record-unlisted-");
         InitFiledIn(other);
 
-        Assert.IsType<RecordOfFileAnswer.HoldsNone>(new GitSourceAdapter(new UnsavedDocuments()).RecordOfFile(LoadOrder(), Path.Combine(other, GroupMetadata)));
+        Assert.IsType<RecordOfFileAnswer.HoldsNone>(TestAdapters.Source().RecordOfFile(LoadOrder(), Path.Combine(other, GroupMetadata)));
     }
 
     [Fact]
@@ -243,7 +244,7 @@ public sealed class SourceRepositoryFileOfARecordTests : IDisposable
         var notes = Path.Combine(PluginSourceRoot.For(PluginName), "Npcs", "notes.txt");
         File.WriteAllText(Path.Combine(_modFolder, notes), "{\"FormKey\": \"000900:Filed.esp\"}");
 
-        Assert.IsType<RecordOfFileAnswer.HoldsNone>(new GitSourceAdapter(new UnsavedDocuments()).RecordOfFile(LoadOrder(), Path.Combine(_modFolder, notes)));
+        Assert.IsType<RecordOfFileAnswer.HoldsNone>(TestAdapters.Source().RecordOfFile(LoadOrder(), Path.Combine(_modFolder, notes)));
     }
 
     [Fact]

@@ -88,7 +88,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void Get_OfAnEmbeddedChild_CarriesAMemberOfTheChildTheCodecWouldDrop()
+    public void AnEmbeddedChildsText_CarriesAMemberOfTheChildTheCodecWouldDrop()
     {
         HandEditDroppedMemberBeside(CellPath, "\"PersistRef\"");
 
@@ -100,7 +100,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void Put_OfAnEmbeddedChild_KeepsAMemberOfTheOwnerTheCodecWouldDrop()
+    public void PuttingAnEmbeddedChild_KeepsAMemberOfTheOwnerTheCodecWouldDrop()
     {
         HandEditDroppedMemberBeside(CellPath, "\"WaterHeight\"");
 
@@ -113,7 +113,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void Put_OfAnEmbeddedChild_SpellsItInlineSoTheCodecStillReadsTheOwner()
+    public void PuttingAnEmbeddedChild_SpellsItInlineSoTheCodecStillReadsTheOwner()
     {
         PutRenamedPersistentRef();
 
@@ -151,7 +151,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void Remove_OfTheOnlyChildOfAListSlot_TakesTheSlotWithIt()
+    public void RemovingTheOnlyChildOfAListSlot_TakesTheSlotWithIt()
     {
         Repository.Remove(Plugin, Identity(_persistentRef, "refr")).Wrote();
 
@@ -163,7 +163,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void Remove_OfAChildInASingleValueSlot_TakesTheSlotWithIt()
+    public void RemovingAChildInASingleValueSlot_TakesTheSlotWithIt()
     {
         Repository.Remove(Plugin, Identity(_landscape, "land")).Wrote();
 
@@ -173,7 +173,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void Remove_OfAnEmbeddedChild_LeavesTheOwnerReadableByTheCodec()
+    public void RemovingAnEmbeddedChild_LeavesTheOwnerReadableByTheCodec()
     {
         Repository.Remove(Plugin, Identity(_persistentRef, "refr")).Wrote();
 
@@ -185,7 +185,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void Remove_OfAnEmbeddedChild_KeepsAMemberOfTheOwnerTheCodecWouldDrop()
+    public void RemovingAnEmbeddedChild_KeepsAMemberOfTheOwnerTheCodecWouldDrop()
     {
         HandEditDroppedMemberBeside(CellPath, "\"WaterHeight\"");
 
@@ -195,7 +195,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void Remove_OfTheFirstChildOfAListSlot_LeavesTheOwnerSpelledAsTheCodecWould()
+    public void RemovingTheFirstChildOfAListSlot_LeavesTheOwnerSpelledAsTheCodecWould()
     {
         Repository.Remove(Plugin, Identity(_response, "info")).Wrote();
 
@@ -203,7 +203,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void Put_OfAnEmbeddedChild_LeavesTheOwnerSpelledAsTheCodecWould()
+    public void PuttingAnEmbeddedChild_LeavesTheOwnerSpelledAsTheCodecWould()
     {
         PutRenamedPersistentRef();
 
@@ -211,7 +211,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void Put_OfAnEmbeddedChild_AnswersEvenWhereTheCodecCannotReadASiblingChild()
+    public void PuttingAnEmbeddedChild_AnswersEvenWhereTheCodecCannotReadASiblingChild()
     {
         var unreadable = File.ReadAllText(FullPath(CellPath))
             .Replace("\"PlacedObject\"", "\"NoSuchPlacedType\"", StringComparison.Ordinal);
