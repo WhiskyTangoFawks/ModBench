@@ -202,12 +202,15 @@ describe('the FOMOD installer', () => {
     expect(await readFile(join(root, 'fomod', 'ModuleConfig.xml'), 'utf8')).toBe(unnamed);
   });
 
-  it('lands a FOMOD whose installer cannot be read as a plain copy, saying why', async () => {
-    await release('<config><moduleName>Never closed</moduleName>', ['core/Core.esp']);
+  it.each([
+    ['never closed', '<config><moduleName>Never closed</moduleName>', 'line 1, column 175'],
+    ['not XML', 'not xml', 'line 1, column 1'],
+  ])('lands a FOMOD whose module config is %s as a plain copy, saying the config is not well-formed XML and where', async (_, config, where) => {
+    await release(config, ['core/Core.esp']);
 
     const answered = await install([]);
 
-    expect(answered.kind === 'plainCopy' && answered.why).toMatch(/^its installer cannot be read: \S/);
+    expect(answered).toEqual({ kind: 'plainCopy', why: `its installer cannot be read: fomod/ModuleConfig.xml is not well-formed XML, at ${where}` });
     expect(landedIn).toBe(root);
     await releaseLeftAsItWas(['core/Core.esp']);
   });

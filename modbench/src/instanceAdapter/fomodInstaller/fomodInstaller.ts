@@ -226,6 +226,14 @@ function conversing(dialog: FomodDialog): Driver {
   };
 }
 
+const XML_FAULT = /\(Xml_MessageWithErrorPosition, \w+, (\d+), (\d+)\)/;
+
+// The native build strips .NET's message text, so a malformed config arrives as resource keys and a position.
+const unreadableWhy = (message: string): string => {
+  const at = XML_FAULT.exec(message);
+  return at === null ? message.split('\n')[0] ?? '' : `fomod/ModuleConfig.xml is not well-formed XML, at line ${at[1]}, column ${at[2]}`;
+};
+
 const engineFault = (why: string): Error => new Error(`The FOMOD engine could not run: ${why}`);
 
 function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver): Promise<EngineRun> {
@@ -282,7 +290,7 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
           return;
         case 'unanswered': unanswered.push(`${report.question}, which could not be read: ${report.why}`); return;
         case 'done': settle(() => resolve({ kind: 'done', result: report.result, refusal, unanswered })); return;
-        case 'failed': settle(() => resolve({ kind: 'unreadable', why: report.message.split('\n')[0] ?? '' })); return;
+        case 'failed': settle(() => resolve({ kind: 'unreadable', why: unreadableWhy(report.message) })); return;
         case 'broken': fail(report.message); return;
       }
     });
