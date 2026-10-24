@@ -254,6 +254,17 @@ describe('BackendLifecycle.start', () => {
     expect(heard).toEqual([41000]);
   });
 
+  it('tells no status listener once it has unsubscribed', async () => {
+    const lifecycle = new BackendLifecycle({ attachPort: 5172, checkHealth: () => Promise.resolve(answered(true)) });
+    const heard: BackendStatus[] = [];
+    lifecycle.onStatusChanged((status) => heard.push(status))();
+
+    await lifecycle.start();
+    await lifecycle.stop();
+
+    expect(heard).toEqual([]);
+  });
+
   it('tells no port listener once it has unsubscribed', async () => {
     const lifecycle = new BackendLifecycle({ freePort: () => Promise.resolve(41000), pollIntervalMs: 5, pollTimeoutMs: 5, checkHealth: () => Promise.resolve(answered(false)) });
     const heard: number[] = [];

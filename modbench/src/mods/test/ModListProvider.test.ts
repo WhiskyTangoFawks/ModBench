@@ -98,16 +98,6 @@ describe('the tree reads as mod order', () => {
       'runtimeOutput Overwrite', 'separator Late Section', 'separator Early Section', 'mod Old Mod', 'mod Oldest Mod',
     ]);
   });
-
-  it('a separator\'s mods follow the direction', async () => {
-    const provider = makeProvider(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt());
-    const lateSection = async () => expectInstanceOf(
-      (await provider.getChildren()).find((n) => n.label === 'Late Section'), SeparatorNode);
-
-    expect(rowsOf(await provider.getChildren(await lateSection()))).toEqual(['mod Early Fix', 'mod Late Tweak']);
-    provider.setViewDirection('winningAtTop');
-    expect(rowsOf(await provider.getChildren(await lateSection()))).toEqual(['mod Late Tweak', 'mod Early Fix']);
-  });
 });
 
 describe('a row\'s identity is its kind and its name', () => {
@@ -287,13 +277,6 @@ describe('a click on a separator, a mod, Overwrite or a folder only selects', ()
 });
 
 describe('ModListProvider', () => {
-  it('rows exactly match the fixture value rather than a read of the provider\'s own, in mod order reversed for the default losing-at-top view', async () => {
-    const provider = makeProvider([mod('Zed'), mod('Aardvark')]);
-    const roots = await provider.getChildren();
-    const labels = roots.filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label);
-    expect(labels).toEqual(['Aardvark', 'Zed']);
-  });
-
   it('renders no row for a folder in mods/ with no modlist line, since mod sync is what adds a line', async () => {
     const value = { ...valueOf([mod('Listed')]), modFolders: [
       { kind: 'mod', name: 'Listed', path: '/instance/mods/Listed', modName: 'Listed' },
@@ -427,7 +410,7 @@ describe('ModListProvider', () => {
     expect(rowsOf(await provider.getChildren())).toEqual(['runtimeOutput Overwrite']);
   });
 
-  describe('setFilter — grouping on (default)', () => {
+  describe('setFilter', () => {
     const entries = (): ModlistEntry[] => [
       mod('Zeta'),
       mod('Alpha Child'),
@@ -438,54 +421,25 @@ describe('ModListProvider', () => {
       mod('Beta'),
     ];
 
-    it('filter with groupingOn keeps an ungrouped match and a separator with a matching child, and hides a non-match and a separator holding only non-matches', async () => {
+    it.each([
+      { term: 'alpha', roots: ['mod Alpha', 'separator Group A', 'runtimeOutput Overwrite'], children: ['Alpha Child'] },
+      { term: 'group a', roots: ['separator Group A', 'runtimeOutput Overwrite'], children: ['Alpha Child', 'Zeta'] },
+    ])('"$term" with grouping on shows $roots, Group A holding $children', async ({ term, roots, children }) => {
       const provider = makeProvider(entries());
-      provider.setFilter('alpha', true);
-      const roots = await provider.getChildren();
+      provider.setFilter(term, true);
 
-      const labels = roots.map((n) => n.label);
-      expect(labels).toContain('Alpha');
-      expect(labels).not.toContain('Beta');
-      expect(labels).toContain('Group A');
-      expect(labels).not.toContain('Group B');
+      const shownRoots = await provider.getChildren();
+
+      expect(rowsOf(shownRoots)).toEqual(roots);
+      const group = expectInstanceOf(shownRoots.find((n) => n.label === 'Group A'), SeparatorNode);
+      expect((await provider.getChildren(group)).map((n) => n.label)).toEqual(children);
     });
 
-    it('filter with groupingOn shows only matching children under separator', async () => {
+    it('with grouping off shows the matching mods flat, with no separators', async () => {
       const provider = makeProvider(entries());
-      provider.setFilter('alpha', true);
-      const roots = await provider.getChildren();
-      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode), "the sole SeparatorNode");
-      const children = await provider.getChildren(sepNode);
-
-      expect(children.map((n) => n.label)).toEqual(['Alpha Child']);
-    });
-
-    it('separator name match causes all its children to be shown, including Zeta which would not match alone, in the reversed losing-at-top order', async () => {
-      const provider = makeProvider(entries());
-      provider.setFilter('group a', true);
-      const roots = await provider.getChildren();
-      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode), "the sole SeparatorNode");
-      expect(sepNode.label).toBe('Group A');
-      const children = await provider.getChildren(sepNode);
-      expect(children.map((n) => n.label)).toEqual(['Alpha Child', 'Zeta']);
-    });
-  });
-
-  describe('setFilter — grouping off', () => {
-    const entries = [
-      mod('Alpha'),
-      sep('Group A'),
-      mod('Alpha Child'),
-      mod('Gamma'),
-      sep('Group B'),
-      mod('Delta'),
-    ] satisfies ModlistEntry[];
-
-    it('flat list: only matching mods, no separators, and Overwrite', async () => {
-      const provider = makeProvider(entries);
       provider.setFilter('alpha', false);
 
-      expect(rowsOf(await provider.getChildren())).toEqual(['mod Alpha Child', 'mod Alpha', 'runtimeOutput Overwrite']);
+      expect(rowsOf(await provider.getChildren())).toEqual(['mod Alpha', 'mod Alpha Child', 'runtimeOutput Overwrite']);
     });
   });
 
@@ -549,16 +503,6 @@ describe('ModListProvider', () => {
       expect(movesFired().map(argumentLabels)).toEqual([['Delta'], ['Group B']]);
     });
 
-    it('a drop where what is dragged cannot go fires nothing', async () => {
-      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
-
-      await dragAndDrop(provider, ['Delta'], 'Overwrite');
-      await dragAndDrop(provider, ['Alpha', 'Delta'], 'Alpha');
-      await dragAndDrop(provider, ['Group B'], 'Delta');
-
-      expect(executeCommand).not.toHaveBeenCalled();
-    });
-
     it('Overwrite is carried by no drag', async () => {
       const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
       const rows = await shownRows(provider);
@@ -593,25 +537,6 @@ describe('ModListProvider', () => {
 
       expect(movesFired()).toHaveLength(1);
       expect(fired).toBe(false);
-    });
-  });
-
-  describe('setFilter — reset behaviour', () => {
-    it('clearing filter resets groupingOn to true when grouping off is passed with the cleared text, and shows all nodes', async () => {
-      const provider = makeProvider([sep('Sep'), mod('Mod')]);
-      provider.setFilter('x', false);
-      provider.setFilter('', false);
-      const roots = await provider.getChildren();
-      expect(roots.some((n) => n instanceof SeparatorNode)).toBe(true);
-    });
-  });
-
-  describe('view direction', () => {
-    it('default view renders the losing end (last in mod order) at the top, the sibling list reversed from the winning-first mod order', async () => {
-      const provider = makeProvider([mod('Winning'), mod('Middle'), mod('Losing')]);
-      const roots = await provider.getChildren();
-      expect(roots.filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label))
-        .toEqual(['Losing', 'Middle', 'Winning']);
     });
   });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { Mod, OriginFile, OriginFolder } from '../../instanceLoader/instance';
+import type { OriginFile, OriginFolder } from '../../instanceLoader/instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
@@ -22,8 +22,8 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
+import { mod } from './indexedValue';
 
-const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
 const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath, excluded: false, markedExcluded: false, includedPath: relativePath });
 
 function foldersHoldingFiles(files: readonly OriginFile[]): OriginFolder[] {
@@ -422,12 +422,16 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
     expect(shown(await provider.getChildren(present(boots, 'Boots')))).toEqual(['file boots.esp']);
   });
 
-  it('with no separators, a mod is listed for the files that match, and opens to them only', async () => {
-    const provider = filtered('icon', false);
+  it.each([
+    { term: 'icon', roots: ['mod Armour', 'runtimeOutput Overwrite'], children: ['folder textures'], state: Expanded },
+    { term: 'armour', roots: ['mod Armour', 'runtimeOutput Overwrite'], children: ['folder meshes', 'folder textures', 'file readme.txt'], state: Collapsed },
+  ])('with no separators, "$term" lists the mod for its files or its name, and opens it to what matches', async ({ term, roots, children, state }) => {
+    const provider = filtered(term, false);
     const row = await rootOf(provider, ModNode, 'Armour');
 
-    expect(shown(await provider.getChildren())).toEqual(['mod Armour', 'runtimeOutput Overwrite']);
-    expect(shown(await provider.getChildren(row))).toEqual(['folder textures']);
+    expect(shown(await provider.getChildren())).toEqual(roots);
+    expect(row.collapsibleState).toBe(state);
+    expect(shown(await provider.getChildren(row))).toEqual(children);
   });
 
   it('a mod with no file or name that matches is not shown, with or without a separator', async () => {
@@ -448,14 +452,6 @@ describe('the name filter finds a file at every level (mods.md, Order and view s
     expect(shown(await found.getChildren(row))).toEqual(['folder F4SE']);
     expect((await rootOf(named, OverwriteNode, 'Overwrite')).collapsibleState).toBe(None);
     expect(shown(await named.getChildren(await rootOf(named, OverwriteNode, 'Overwrite')))).toEqual([]);
-  });
-
-  it('with no separators, a mod whose name matches opens to all its files, collapsed', async () => {
-    const provider = filtered('armour', false);
-    const row = await rootOf(provider, ModNode, 'Armour');
-
-    expect(row.collapsibleState).toBe(Collapsed);
-    expect(shown(await provider.getChildren(row))).toEqual(['folder meshes', 'folder textures', 'file readme.txt']);
   });
 
   it('Overwrite counts and tints all its files, whatever the filter lists under it', async () => {
