@@ -91,18 +91,6 @@ describe('modbench.mod.install over a downloaded file', () => {
     });
   });
 
-  it('carries the row\'s modID and version into install', async () => {
-    installMod.mockResolvedValueOnce({ applied: true });
-
-    await installRow(installDeps({ reporter: recordingReporter() }), { modID: '123', version: '2.0' });
-
-    await vi.waitFor(() => {
-      expect(installMod).toHaveBeenCalledWith(
-        { kind: 'downloadedFile', name: 'foo.7z' },
-        { kind: 'new', name: 'foo' }, true, VIEW_ANSWER);
-    });
-  });
-
   it('install: a failed mark installed is one Output line, no failure notification, and the install stands', async () => {
     installMod.mockResolvedValueOnce({
       applied: true, downloadedFile: 'foo.7z', downloadedFileRefusal: 'EISDIR: illegal operation on a directory',

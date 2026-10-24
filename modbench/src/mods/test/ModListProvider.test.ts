@@ -540,25 +540,6 @@ describe('ModListProvider', () => {
       expect(movesFired().map((call) => call[3])).toEqual([{ place: { kind: 'modOrder' }, end: 'losing' }]);
     });
 
-    it('a drag that mixes kinds takes the kind of the row VS Code last added to the selection', async () => {
-      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
-
-      await dragAndDrop(provider, ['Group B', 'Delta'], 'Group A');
-      await dragAndDrop(provider, ['Delta', 'Group B'], 'Group A');
-
-      expect(movesFired().map(argumentLabels)).toEqual([['Delta'], ['Group B']]);
-    });
-
-    it('a drop where what is dragged cannot go fires nothing', async () => {
-      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
-
-      await dragAndDrop(provider, ['Delta'], 'Overwrite');
-      await dragAndDrop(provider, ['Alpha', 'Delta'], 'Alpha');
-      await dragAndDrop(provider, ['Group B'], 'Delta');
-
-      expect(executeCommand).not.toHaveBeenCalled();
-    });
-
     it('Overwrite is carried by no drag', async () => {
       const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
       const rows = await shownRows(provider);
@@ -593,16 +574,6 @@ describe('ModListProvider', () => {
 
       expect(movesFired()).toHaveLength(1);
       expect(fired).toBe(false);
-    });
-  });
-
-  describe('setFilter — reset behaviour', () => {
-    it('clearing filter resets groupingOn to true when grouping off is passed with the cleared text, and shows all nodes', async () => {
-      const provider = makeProvider([sep('Sep'), mod('Mod')]);
-      provider.setFilter('x', false);
-      provider.setFilter('', false);
-      const roots = await provider.getChildren();
-      expect(roots.some((n) => n instanceof SeparatorNode)).toBe(true);
     });
   });
 

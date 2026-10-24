@@ -14,6 +14,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { TerminalEnvironment } from '../scriptEnvironment';
 import { serveAgent, type AgentServer } from '../agentServer';
+import type { Argument } from '../../wire/argument';
+import type { InstanceValue } from '../../instanceLoader/instance';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
 import { FileConflictLookup, modOrigin, RUNTIME_OUTPUT, type ConflictEntry } from '../../instanceLoader/fileConflictIndex';
@@ -722,7 +724,7 @@ describe('the agent server, reading a record through mEdit', () => {
 describe('the agent server, running a gesture', () => {
   beforeEach(() => { fired.calls = []; fired.outcome = undefined; fired.failure = undefined; });
 
-  async function served(value = CONFLICTED) {
+  async function served(value: InstanceValue = CONFLICTED) {
     const { bound, lines, warned, errored, reporter } = await serve(new FakeInstance(value));
     const client = new Client({ name: 'test', version: '0' });
     await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${present(bound, 'a bound port')}/mcp`)));
@@ -771,32 +773,107 @@ describe('the agent server, running a gesture', () => {
     expect(lines.join('\n')).toContain('ENOENT: modlist.txt');
   });
 
+  const plugin = (name: string, origin: string, line: number) => ({ name, origin, path: `/m/${origin}/${name}`, line, enabled: true, winning: true });
+  const PLUGGED = instanceValueFixture({
+    mods: [{ kind: 'mod', name: 'ModA', enabled: true }],
+    plugins: [plugin('Solo.esp', 'ModA', 0), plugin('Same.esp', 'ModA', 1), { ...plugin('Same.esp', 'ModB', 2), winning: false }],
+  });
+  const SOLO = { kind: 'plugin' as const, plugin: { name: 'Solo.esp', origin: 'ModA' } };
+
+
+  const mod = (name: string) => ({ kind: 'mod' as const, name });
+  const separator = (name: string) => ({ kind: 'separator' as const, name });
+  const rocks = { kind: 'downloadedFile' as const, name: 'rocks.7z' };
+  const outside = { kind: 'archive' as const, path: '/elsewhere/a.7z' };
+  const GESTURES: readonly (readonly [string, InstanceValue, string, Record<string, unknown>, string, readonly Argument[], Record<string, unknown>])[] = [
+    ['plugin_enable names each plugin as its address, origin left out when the file name is one plugin', PLUGGED, 'plugin_enable',
+      { argument: [{ name: 'solo.ESP' }, { name: 'Same.esp', origin: 'ModA' }] }, 'modbench.plugin.enable',
+      [SOLO, { kind: 'plugin', plugin: { name: 'Same.esp', origin: 'ModA' } }], {}],
+    ['plugin_enable names an origin as the mod manager matches names', PLUGGED, 'plugin_enable',
+      { argument: [{ name: 'Same.esp', origin: 'moda' }] }, 'modbench.plugin.enable',
+      [{ kind: 'plugin', plugin: { name: 'Same.esp', origin: 'ModA' } }], {}],
+    ['plugin_decompile fires on an overridden copy, which has a file though no line', PLUGGED, 'plugin_decompile',
+      { argument: [{ name: 'Same.esp', origin: 'ModB' }] }, 'modbench.plugin.decompile',
+      [{ kind: 'plugin', plugin: { name: 'Same.esp', origin: 'ModB' } }], {}],
+    ['plugin_decompile carries force as an Option', PLUGGED, 'plugin_decompile',
+      { argument: [{ name: 'Solo.esp' }], options: { force: true } }, 'modbench.plugin.decompile', [SOLO], { force: true }],
+    ['plugin_move carries the drop as an Option', PLUGGED, 'plugin_move',
+      { argument: [{ name: 'Solo.esp' }], options: { drop: { kind: 'before', name: 'Same.esp' } } }, 'modbench.plugin.move',
+      [SOLO], { drop: { kind: 'before', name: 'Same.esp' } }],
+    ['plugin_create carries the name and place as Options and no Argument', PLUGGED, 'plugin_create',
+      { options: { name: 'New.esp', place: 'ModA' } }, 'modbench.plugin.create', [], { name: 'New.esp', place: 'ModA' }],
+    ['plugin_rename carries the one plugin as its Argument and the new name as an Option', PLUGGED, 'plugin_rename',
+      { argument: { name: 'Solo.esp' }, options: { name: 'Lone.esp' } }, 'modbench.plugin.rename', [SOLO], { name: 'Lone.esp' }],
+    ['separator_add anchors on a mod', CONFLICTED, 'separator_add',
+      { argument: [{ name: 'B' }], options: { name: 'New' } }, 'modbench.separator.add', [mod('B')], { name: 'New' }],
+    ['separator_add anchors on a separator', CONFLICTED, 'separator_add',
+      { argument: [{ name: 'Textures', kind: 'separator' }], options: { name: 'New' } }, 'modbench.separator.add',
+      [separator('Textures')], { name: 'New' }],
+    ['separator_rename carries the one separator as its Argument and the new name as an Option', CONFLICTED, 'separator_rename',
+      { argument: [{ name: 'Textures' }], options: { name: 'Skins' } }, 'modbench.separator.rename', [separator('Textures')], { name: 'Skins' }],
+    ['separator_delete carries the separators named', CONFLICTED, 'separator_delete',
+      { argument: [{ name: 'Textures' }] }, 'modbench.separator.delete', [separator('Textures')], {}],
+    ['mod_move carries the place and end as Options', CONFLICTED, 'mod_move',
+      { argument: [{ name: 'B' }], options: { place: { kind: 'separator', name: 'Textures' }, end: 'winning' } }, 'modbench.mod.move',
+      [mod('B')], { place: { kind: 'separator', name: 'Textures' }, end: 'winning' }],
+    ['mod_move names a mod as the mod manager matches names, firing it as the value spells it', CONFLICTED, 'mod_move',
+      { argument: [{ name: 'b' }], options: { place: { kind: 'separator', name: 'textures' }, end: 'winning' } }, 'modbench.mod.move',
+      [mod('B')], { place: { kind: 'separator', name: 'Textures' }, end: 'winning' }],
+    ['mod_move takes a separator named as a separator, not the mod of that name', CONFLICTED, 'mod_move',
+      { argument: [{ name: 'Textures', kind: 'separator' }], options: { place: { kind: 'modOrder' }, end: 'winning' } }, 'modbench.mod.move',
+      [separator('Textures')], { place: { kind: 'modOrder' }, end: 'winning' }],
+    ['mod_uninstall carries the mods named', CONFLICTED, 'mod_uninstall',
+      { argument: [{ name: 'B' }, { name: 'C' }] }, 'modbench.mod.uninstall', [mod('B'), mod('C')], {}],
+    ['mod_rename carries the one mod as its Argument and the new name as an Option', CONFLICTED, 'mod_rename',
+      { argument: [{ name: 'B' }], options: { name: 'Bee' } }, 'modbench.mod.rename', [mod('B')], { name: 'Bee' }],
+    ['mod_create_empty carries the name as an Option and no Argument', CONFLICTED, 'mod_create_empty',
+      { options: { name: 'New' } }, 'modbench.mod.createEmpty', [], { name: 'New' }],
+    ...(['exclude', 'include'] as const).map((verb) => [
+      `mod_${verb}_file carries each file by its path in its mod, in the mod's own casing`, CONFLICTED, `mod_${verb}_file`,
+      { argument: [{ mod: { name: 'C' }, path: 'meshes/X.NIF' }, { mod: { name: 'B' }, path: 'textures/rock.dds' }] },
+      `modbench.mod.${verb}File`,
+      [{ kind: 'file', origin: mod('C'), relativePath: 'MESHES/x.nif' }, { kind: 'file', origin: mod('B'), relativePath: 'Textures/Rock.DDS' }], {},
+    ] as const),
+    ['modlist_git_init carries nothing', CONFLICTED, 'modlist_git_init', {}, 'modbench.modlist.gitInit', [], {}],
+    ...(['updateManifest', 'restoreFromManifest'] as const).flatMap((command) => {
+      const tool = command === 'updateManifest' ? 'mod_update_manifest' : 'mod_restore_from_manifest';
+      return [
+        [`${tool} carries the mods and separators named`, CONFLICTED, tool,
+          { argument: [{ name: 'B' }, { name: 'Textures', kind: 'separator' }] }, `modbench.mod.${command}`, [mod('B'), separator('Textures')], {}],
+        [`${tool} carries no Argument for every mod`, CONFLICTED, tool, {}, `modbench.mod.${command}`, [], {}],
+      ] as const;
+    }),
+    ['mod_restore_from_manifest carries force as an Option', CONFLICTED, 'mod_restore_from_manifest',
+      { argument: [{ name: 'B' }], options: { force: true } }, 'modbench.mod.restoreFromManifest', [mod('B')], { force: true }],
+    ...(['exclude', 'include', 'delete'] as const).map((verb) => [
+      `downloaded_file_${verb} carries the downloaded files named`, CONFLICTED_WITH_DOWNLOADED_FILES, `downloaded_file_${verb}`,
+      { argument: [{ name: 'rocks.7z' }] }, `modbench.downloadedFile.${verb}`, [rocks], {},
+    ] as const),
+    ['mod_install takes a downloaded file as the source', CONFLICTED_WITH_DOWNLOADED_FILES, 'mod_install',
+      { argument: [rocks], options: { name: 'New' } }, 'modbench.mod.install', [rocks], { name: 'New' }],
+    ['mod_install takes an installation file outside the downloaded files as the source', CONFLICTED_WITH_DOWNLOADED_FILES, 'mod_install',
+      { argument: [outside], options: { name: 'New' } }, 'modbench.mod.install', [outside], { name: 'New' }],
+    ['mod_install takes a folder outside the downloads as the source', CONFLICTED_WITH_DOWNLOADED_FILES, 'mod_install',
+      { argument: [{ kind: 'folder', path: '/elsewhere/a' }], options: { name: 'New' } }, 'modbench.mod.install',
+      [{ kind: 'folder', path: '/elsewhere/a' }], { name: 'New' }],
+    ['mod_install carries the target mod named as list_mods names it, to upgrade it', CONFLICTED_WITH_DOWNLOADED_FILES, 'mod_install',
+      { argument: [outside], options: { target: 'B' } }, 'modbench.mod.install', [outside], { target: 'B' }],
+    ['mod_install carries no Options when the call leaves out options, for the command to refuse naming them', CONFLICTED_WITH_DOWNLOADED_FILES, 'mod_install',
+      { argument: [outside] }, 'modbench.mod.install', [outside], {}],
+    ['mod_install carries force as an Option', CONFLICTED_WITH_DOWNLOADED_FILES, 'mod_install',
+      { argument: [outside], options: { target: 'B', force: true } }, 'modbench.mod.install', [outside], { target: 'B', force: true }],
+  ];
+
+  it.each(GESTURES)('%s', async (_case, value, tool, args, command, argument, options) => {
+    fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
+    const { client } = await served(value);
+
+    await call(client, tool, args);
+
+    expect(fired.calls).toEqual([[command, new AgentCall(argument, options)]]);
+  });
+
   describe('the plugin gestures', () => {
-    const plugin = (name: string, origin: string, line: number) => ({ name, origin, path: `/m/${origin}/${name}`, line, enabled: true, winning: true });
-    const PLUGGED = instanceValueFixture({
-      mods: [{ kind: 'mod', name: 'ModA', enabled: true }],
-      plugins: [plugin('Solo.esp', 'ModA', 0), plugin('Same.esp', 'ModA', 1), { ...plugin('Same.esp', 'ModB', 2), winning: false }],
-    });
-    const SOLO = { kind: 'plugin' as const, plugin: { name: 'Solo.esp', origin: 'ModA' } };
-
-    it('fires enable with each plugin named as its address, the origin left out when the file name is one plugin', async () => {
-      fired.outcome = { applied: true, outcome: { landed: ['Solo.esp'], refused: [] } };
-      const { client } = await served(PLUGGED);
-
-      await call(client, 'plugin_enable', { argument: [{ name: 'solo.ESP' }, { name: 'Same.esp', origin: 'ModA' }] });
-
-      expect(fired.calls).toEqual([['modbench.plugin.enable', new AgentCall([SOLO, { kind: 'plugin' as const, plugin: { name: 'Same.esp', origin: 'ModA' } }], {})]]);
-    });
-
-    it('names an origin as the mod manager matches names, firing the plugin as the load order holds it', async () => {
-      fired.outcome = { applied: true, outcome: { landed: ['Same.esp'], refused: [] } };
-      const { client } = await served(PLUGGED);
-
-      await call(client, 'plugin_enable', { argument: [{ name: 'Same.esp', origin: 'moda' }] });
-
-      expect(fired.calls).toEqual([['modbench.plugin.enable', new AgentCall([{ kind: 'plugin' as const, plugin: { name: 'Same.esp', origin: 'ModA' } }], {})]]);
-    });
-
     it('refuses a file name two plugins share, listing both, and a plugin nothing holds', async () => {
       const { client } = await served(PLUGGED);
 
@@ -823,24 +900,6 @@ describe('the agent server, running a gesture', () => {
       expect(fired.calls).toEqual([]);
     });
 
-    it('fires decompile on an overridden copy, which has a file though no line', async () => {
-      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
-      const { client } = await served(PLUGGED);
-
-      await call(client, 'plugin_decompile', { argument: [{ name: 'Same.esp', origin: 'ModB' }] });
-
-      expect(fired.calls).toEqual([['modbench.plugin.decompile', new AgentCall([{ kind: 'plugin', plugin: { name: 'Same.esp', origin: 'ModB' } }], {})]]);
-    });
-
-    it('fires decompile with force as an Option', async () => {
-      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
-      const { client } = await served(PLUGGED);
-
-      await call(client, 'plugin_decompile', { argument: [{ name: 'Solo.esp' }], options: { force: true } });
-
-      expect(fired.calls).toEqual([['modbench.plugin.decompile', new AgentCall([SOLO], { force: true })]]);
-    });
-
     it('logs a refusal with its detail joined on', async () => {
       fired.outcome = { applied: false, refusal: 'Could not move plugins.', detail: 'A.esp is a master.' };
       const { client, lines } = await served(PLUGGED);
@@ -849,33 +908,6 @@ describe('the agent server, running a gesture', () => {
 
       expect(answer).toEqual({ isError: true, text: JSON.stringify({ refusal: 'Could not move plugins.', detail: 'A.esp is a master.' }) });
       expect(lines.join('\n')).toContain('Could not move plugins. A.esp is a master.');
-    });
-
-    it('fires move with the drop as an Option', async () => {
-      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
-      const { client } = await served(PLUGGED);
-
-      await call(client, 'plugin_move', { argument: [{ name: 'Solo.esp' }], options: { drop: { kind: 'before', name: 'Same.esp' } } });
-
-      expect(fired.calls).toEqual([['modbench.plugin.move', new AgentCall([SOLO], { drop: { kind: 'before', name: 'Same.esp' } })]]);
-    });
-
-    it('fires create with the name and place as Options and no Argument', async () => {
-      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
-      const { client } = await served(PLUGGED);
-
-      await call(client, 'plugin_create', { options: { name: 'New.esp', place: 'ModA' } });
-
-      expect(fired.calls).toEqual([['modbench.plugin.create', new AgentCall([], { name: 'New.esp', place: 'ModA' })]]);
-    });
-
-    it('fires rename with the one plugin as its Argument and the new name as an Option', async () => {
-      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
-      const { client } = await served(PLUGGED);
-
-      await call(client, 'plugin_rename', { argument: { name: 'Solo.esp' }, options: { name: 'Lone.esp' } });
-
-      expect(fired.calls).toEqual([['modbench.plugin.rename', new AgentCall([SOLO], { name: 'Lone.esp' })]]);
     });
 
     it('refuses a create that leaves out its place, naming it', async () => {
@@ -889,33 +921,11 @@ describe('the agent server, running a gesture', () => {
   });
 
   describe('the separator gestures', () => {
-    const textures = { kind: 'separator' as const, name: 'Textures' };
     const fire = async (tool: string, args: Record<string, unknown> = {}) => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served();
       return call(client, tool, args);
     };
-
-    it.each([
-      ['a mod', { name: 'B' }, { kind: 'mod', name: 'B' }],
-      ['a separator', { name: 'Textures', kind: 'separator' }, textures],
-    ] as const)('fires add with %s as the anchor Argument and the name as an Option', async (_, anchor, argument) => {
-      await fire('separator_add', { argument: [anchor], options: { name: 'New' } });
-
-      expect(fired.calls).toEqual([['modbench.separator.add', new AgentCall([argument], { name: 'New' })]]);
-    });
-
-    it('fires rename with the one separator as its Argument and the new name as an Option', async () => {
-      await fire('separator_rename', { argument: [{ name: 'Textures' }], options: { name: 'Skins' } });
-
-      expect(fired.calls).toEqual([['modbench.separator.rename', new AgentCall([textures], { name: 'Skins' })]]);
-    });
-
-    it('fires delete with the separators named as its Argument', async () => {
-      await fire('separator_delete', { argument: [{ name: 'Textures' }] });
-
-      expect(fired.calls).toEqual([['modbench.separator.delete', new AgentCall([textures], {})]]);
-    });
 
     it('refuses a name that is a mod, not a separator, firing nothing', async () => {
       const answer = await fire('separator_delete', { argument: [{ name: 'B' }] });
@@ -926,28 +936,11 @@ describe('the agent server, running a gesture', () => {
   });
 
   describe('the mod gestures', () => {
-    const B = { kind: 'mod' as const, name: 'B' };
     const fire = async (tool: string, args: Record<string, unknown> = {}) => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served();
       return call(client, tool, args);
     };
-
-    it('fires move with the mods named as its Argument and the place and end as Options', async () => {
-      const options = { place: { kind: 'separator', name: 'Textures' }, end: 'winning' };
-
-      await fire('mod_move', { argument: [{ name: 'B' }], options });
-
-      expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([B], options)]]);
-    });
-
-    it('names a mod as the mod manager matches names, firing the mod as the value spells it', async () => {
-      const options = { place: { kind: 'separator', name: 'textures' }, end: 'winning' };
-
-      await fire('mod_move', { argument: [{ name: 'b' }], options });
-
-      expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([B], { ...options, place: { kind: 'separator', name: 'Textures' } })]]);
-    });
 
     it('refuses a place nothing is named, firing nothing', async () => {
       const answer = await fire('mod_move', { argument: [{ name: 'B' }], options: { place: { kind: 'mod', name: 'Gone' }, end: 'winning' } });
@@ -973,134 +966,20 @@ describe('the agent server, running a gesture', () => {
       expect(fired.calls).toEqual([]);
     });
 
-    it('fires uninstall with the mods named as its Argument', async () => {
-      await fire('mod_uninstall', { argument: [{ name: 'B' }, { name: 'C' }] });
-
-      expect(fired.calls).toEqual([['modbench.mod.uninstall', new AgentCall([B, { kind: 'mod', name: 'C' }], {})]]);
-    });
-
-    it('fires rename with the one mod as its Argument and the new name as an Option', async () => {
-      await fire('mod_rename', { argument: [{ name: 'B' }], options: { name: 'Bee' } });
-
-      expect(fired.calls).toEqual([['modbench.mod.rename', new AgentCall([B], { name: 'Bee' })]]);
-    });
-
-    it('fires create empty mod with the name as an Option and no Argument', async () => {
-      await fire('mod_create_empty', { options: { name: 'New' } });
-
-      expect(fired.calls).toEqual([['modbench.mod.createEmpty', new AgentCall([], { name: 'New' })]]);
-    });
-
-    it('fires move with separators named as separators, so they are not taken for the mods of that name', async () => {
-      const options = { place: { kind: 'modOrder' }, end: 'winning' };
-
-      await fire('mod_move', { argument: [{ name: 'Textures', kind: 'separator' }], options });
-
-      expect(fired.calls).toEqual([['modbench.mod.move', new AgentCall([{ kind: 'separator', name: 'Textures' }], options)]]);
-    });
-
-    it.each([
-      ['mod_exclude_file', 'modbench.mod.excludeFile'],
-      ['mod_include_file', 'modbench.mod.includeFile'],
-    ])('%s fires %s with each file by its path in its mod, in the mod\'s own casing', async (tool, command) => {
-      await fire(tool, { argument: [{ mod: { name: 'C' }, path: 'meshes/X.NIF' }, { mod: { name: 'B' }, path: 'textures/rock.dds' }] });
-
-      expect(fired.calls).toEqual([[command, new AgentCall([
-        { kind: 'file', origin: { kind: 'mod', name: 'C' }, relativePath: 'MESHES/x.nif' },
-        { kind: 'file', origin: { kind: 'mod', name: 'B' }, relativePath: 'Textures/Rock.DDS' },
-      ], {})]]);
-    });
-  });
-
-  describe('the modlist gestures', () => {
-    const fire = async (tool: string, args: Record<string, unknown> = {}) => {
-      fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
-      const { client } = await served();
-      return call(client, tool, args);
-    };
-
-    it('fires git init with nothing', async () => {
-      await fire('modlist_git_init');
-
-      expect(fired.calls).toEqual([['modbench.modlist.gitInit', new AgentCall([], {})]]);
-    });
-
-    const MANIFEST_GESTURES = [['mod_update_manifest', 'modbench.mod.updateManifest'], ['mod_restore_from_manifest', 'modbench.mod.restoreFromManifest']];
-
-    it.each(MANIFEST_GESTURES)(
-      '%s fires %s with the mods and the separators named as its Argument', async (tool, command) => {
-        await fire(tool, { argument: [{ name: 'B' }, { name: 'Textures', kind: 'separator' }] });
-
-        expect(fired.calls).toEqual([[command, new AgentCall([{ kind: 'mod', name: 'B' }, { kind: 'separator', name: 'Textures' }], {})]]);
-      });
-
-    it.each(MANIFEST_GESTURES)(
-      '%s fires %s with no Argument for every mod', async (tool, command) => {
-        await fire(tool);
-
-        expect(fired.calls).toEqual([[command, new AgentCall([], {})]]);
-      });
-
-    it('fires restore from manifest with force as an Option', async () => {
-      await fire('mod_restore_from_manifest', { argument: [{ name: 'B' }], options: { force: true } });
-
-      expect(fired.calls).toEqual([['modbench.mod.restoreFromManifest', new AgentCall([{ kind: 'mod', name: 'B' }], { force: true })]]);
-    });
   });
 
   describe('the downloaded file gestures and install', () => {
-    const rocks = { kind: 'downloadedFile' as const, name: 'rocks.7z' };
-    const outside = { kind: 'archive' as const, path: '/elsewhere/a.7z' };
     const fire = async (tool: string, args: Record<string, unknown> = {}) => {
       fired.outcome = { applied: true, outcome: { landed: [], refused: [] } };
       const { client } = await served(CONFLICTED_WITH_DOWNLOADED_FILES);
       return call(client, tool, args);
     };
 
-    it.each([
-      ['downloaded_file_exclude', 'modbench.downloadedFile.exclude'],
-      ['downloaded_file_include', 'modbench.downloadedFile.include'],
-      ['downloaded_file_delete', 'modbench.downloadedFile.delete'],
-    ])(
-      '%s fires %s with the downloaded files named as its Argument', async (tool, command) => {
-        await fire(tool, { argument: [{ name: 'rocks.7z' }] });
-
-        expect(fired.calls).toEqual([[command, new AgentCall([rocks], {})]]);
-      });
-
     it('refuses a downloaded file nothing is named, firing nothing', async () => {
       const answer = await fire('downloaded_file_delete', { argument: [{ name: 'gone.7z' }] });
 
       expect(answer.text).toContain('Nothing is named "gone.7z" among the downloaded files.');
       expect(fired.calls).toEqual([]);
-    });
-
-    it.each([
-      ['a downloaded file', rocks],
-      ['an installation file outside the downloaded files', outside],
-      ['a folder outside the downloads', { kind: 'folder' as const, path: '/elsewhere/a' }],
-    ])('fires install with %s as the source and the new mod\'s name as an Option', async (_, source) => {
-      await fire('mod_install', { argument: [source], options: { name: 'New' } });
-
-      expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([source], { name: 'New' })]]);
-    });
-
-    it('fires install with the target mod named as list_mods names it, to upgrade it', async () => {
-      await fire('mod_install', { argument: [outside], options: { target: 'B' } });
-
-      expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], { target: 'B' })]]);
-    });
-
-    it('fires install with no Options when the call leaves out options, for the command to refuse naming them', async () => {
-      await fire('mod_install', { argument: [outside] });
-
-      expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], {})]]);
-    });
-
-    it('fires install with force as an Option', async () => {
-      await fire('mod_install', { argument: [outside], options: { target: 'B', force: true } });
-
-      expect(fired.calls).toEqual([['modbench.mod.install', new AgentCall([outside], { target: 'B', force: true })]]);
     });
 
     it('refuses an install over a mod nothing is named, firing nothing', async () => {
