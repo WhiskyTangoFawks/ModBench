@@ -5,7 +5,8 @@ import { fork } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
 import { delimiter, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import type { types } from '@nexusmods/fomod-installer-native';
-import { copyTree, ensureDir, makeTempDir, ownTempPrefix, remove, textIfUtf8, write } from '../files';
+import { copyTree, ensureDir, makeTempDir, ownTempPrefix, remove, write } from '../files';
+import { utfText } from './releaseXml';
 import { moduleConfigForEngine } from './moduleConfig';
 import { aboutIn, NO_ABOUT, type About } from './releaseAbout';
 import { keyOf, resolverIn } from './releasePaths';
@@ -252,7 +253,7 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
   child.stderr?.on('data', (chunk: Buffer) => {
     stderr += chunk.toString();
   });
-  const unanswered: string[] = [];
+  const unanswered = new Set<string>();
   let refusal: string | undefined;
   return new Promise((resolve, reject) => {
     let silence: NodeJS.Timeout | undefined;
@@ -290,8 +291,8 @@ function runEngine(engine: FomodEngine, install: EngineRequest, driver: Driver):
             send({ kind: 'cancel' });
           }
           return;
-        case 'unanswered': unanswered.push(`${report.question}, which could not be read: ${report.why}`); return;
-        case 'done': settle(() => resolve({ kind: 'done', result: report.result, refusal, unanswered })); return;
+        case 'unanswered': unanswered.add(`${report.question}, which could not be read: ${report.why}`); return;
+        case 'done': settle(() => resolve({ kind: 'done', result: report.result, refusal, unanswered: [...unanswered] })); return;
         case 'failed': settle(() => resolve({ kind: 'unreadable', why: unreadableWhy(report.message) })); return;
         case 'broken': fail(report.message); return;
       }
@@ -309,11 +310,11 @@ async function filesUnder(root: string): Promise<string[]> {
   return entries.filter((entry) => entry.isFile()).map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/'));
 }
 
-// The engine reads the config from a folder of its own, so the release keeps its own. A config that is not UTF-8 it
-// reads as the release holds it.
+// The engine reads the config from a folder of its own, so the release keeps its own. It reads a UTF-8 copy whatever
+// encoding its declaration names, and a config of another encoding as the release holds it.
 async function scriptFolder(root: string, files: readonly string[]): Promise<{ readonly root: string; dispose(): Promise<void> }> {
   const config = files.find((file) => keyOf(file) === MODULE_CONFIG);
-  const text = config === undefined ? undefined : await textIfUtf8(join(root, config));
+  const text = config === undefined ? undefined : await utfText(join(root, config));
   if (text === undefined) return { root, dispose: () => Promise.resolve() };
   const keys = files.map(keyOf);
   const holds = (folder: string): boolean => {

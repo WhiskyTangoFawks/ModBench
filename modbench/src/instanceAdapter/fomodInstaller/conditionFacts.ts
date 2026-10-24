@@ -1,9 +1,11 @@
 import { pluginKey } from '../../loadOrderFileCodec/pluginsText';
 import type { PluginEntry, PluginsProvided } from '../instanceAdapter';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
-import type { ConditionFacts } from './engineProtocol';
+import { programVersions, type ProgramVersion } from '../gameFolder/programVersions';
+import type { ConditionFacts, Known } from './engineProtocol';
 
-const UNREAD_VERSION = { unknown: 'Modbench reads no program\'s version' };
+// The reference installer reads the version of a script extender it does not find as no version at all: each part 0.
+const NO_VERSION = '0.0.0.0';
 
 // A plugin is active as the mod manager's plugin list has it: present, and enabled by its line or loaded with no line.
 function pluginStates(provided: PluginsProvided, order: readonly PluginEntry[]): ConditionFacts['plugins'] {
@@ -14,9 +16,24 @@ function pluginStates(provided: PluginsProvided, order: readonly PluginEntry[]):
   return { known: { present, active: present.filter((name) => enabled.has(pluginKey(name))) } };
 }
 
+function versionFact(version: ProgramVersion, notFound: (program: string) => Known<string>): Known<string> {
+  switch (version.kind) {
+    case 'read': return { known: version.version };
+    case 'notFound': return notFound(version.program);
+    case 'unreadable': return { unknown: version.why };
+  }
+}
+
 /** What a FOMOD's conditions read of the instance, read now. */
 export async function conditionFacts(source: ReadingSource): Promise<ConditionFacts> {
-  const { profile } = await source.settings();
-  const [provided, order] = await Promise.all([readPluginsProvided(source, profile), source.pluginOrder(profile)]);
-  return { plugins: pluginStates(provided, order), gameVersion: UNREAD_VERSION, extenderVersion: UNREAD_VERSION };
+  const settings = await source.settings();
+  const [provided, order, versions] = await Promise.all([
+    readPluginsProvided(source, settings.profile), source.pluginOrder(settings.profile),
+    settings.gameFolder().then((gameFolder) => programVersions(gameFolder, settings.gameRelease)),
+  ]);
+  return {
+    plugins: pluginStates(provided, order),
+    gameVersion: versionFact(versions.game, (program) => ({ unknown: `${program} is not in the game folder` })),
+    extenderVersion: versionFact(versions.extender, () => ({ known: NO_VERSION })),
+  };
 }

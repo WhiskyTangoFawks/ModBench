@@ -41,6 +41,9 @@ const KNOWN: ConditionFacts = {
   extenderVersion: { unknown: 'no version in this test' },
 };
 
+const utf16le = (text: string): Buffer => Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+const utf16be = (text: string): Buffer => Buffer.concat([Buffer.from([0xfe, 0xff]), Buffer.from(text, 'utf16le').swap16()]);
+
 const choose = (...each: [string, Record<string, string[]>][]): FomodStepChoice[] =>
   each.map(([name, groups]) => ({ step: name, groups: Object.entries(groups).map(([named, options]) => ({ group: named, options })) }));
 
@@ -61,7 +64,7 @@ describe('the FOMOD installer', () => {
   });
   afterEach(() => rm(base, { recursive: true, force: true }));
 
-  async function release(moduleConfig: string, files: readonly string[]): Promise<void> {
+  async function release(moduleConfig: string | Buffer, files: readonly string[]): Promise<void> {
     for (const path of [...files, 'fomod/ModuleConfig.xml']) {
       await mkdir(dirname(join(root, path)), { recursive: true });
       await writeFile(join(root, path), path === 'fomod/ModuleConfig.xml' ? moduleConfig : `bytes of ${path}`);
@@ -203,6 +206,19 @@ describe('the FOMOD installer', () => {
   });
 
   it.each([
+    ['little-endian', utf16le],
+    ['big-endian', utf16be],
+  ])('reads a module config in UTF-16 %s by its byte order mark, as MO2 reads it, though it names no schema and a folder its archive lacks', async (_, encoded) => {
+    const unnamed = encoded('<?xml version="1.0" encoding="UTF-16"?><config><moduleName>No schema</moduleName><requiredInstallFiles>'
+      + `${file('core/Core.esp', 'Core.esp')}<folder source="gone" destination=""/></requiredInstallFiles></config>`);
+    await release(unnamed, ['core/Core.esp']);
+
+    expect(await install([])).toEqual({ kind: 'installer', missing: ['gone'], notes: [] });
+    expect(await filesLanded()).toEqual(['Core.esp']);
+    expect(await readFile(join(root, 'fomod', 'ModuleConfig.xml'))).toEqual(unnamed);
+  });
+
+  it.each([
     ['never closed', '<config><moduleName>Never closed</moduleName>', 'line 1, column 175'],
     ['not XML', 'not xml', 'line 1, column 1'],
   ])('lands a FOMOD whose module config is %s as a plain copy, saying the config is not well-formed XML and where', async (_, config, where) => {
@@ -295,11 +311,11 @@ describe('the FOMOD installer', () => {
       expect(await filesLanded()).toEqual(['active.esp', 'fomm.esp', 'inactive.esp', 'missing.esp', 'not-a-plugin.esp']);
     });
 
-    it('refuses a FOMOD whose conditions read what could not be read, naming it and why', async () => {
-      await release(config(`<conditionalFileInstalls><patterns>${conditional('<gameDependency version="1.10.163.0"/>', 'game.esp')}</patterns></conditionalFileInstalls>`),
-        ['core/Core.esp']);
+    it('refuses a FOMOD whose conditions read what could not be read, naming each once and why', async () => {
+      await release(config(`<conditionalFileInstalls><patterns>${conditional('<gameDependency version="1.10.163.0"/>', 'game.esp')}`
+        + `${conditional('<gameDependency version="1.10.164.0"/>', 'newer.esp')}</patterns></conditionalFileInstalls>`), ['core/Core.esp']);
 
-      await expect(install([])).rejects.toThrow('The FOMOD\'s conditions read the game\'s version, which could not be read: no version in this test.');
+      await expect(install([])).rejects.toThrow(new Error('The FOMOD\'s conditions read the game\'s version, which could not be read: no version in this test.'));
     });
   });
 
@@ -394,6 +410,20 @@ describe('the FOMOD installer', () => {
         const { page } = await answered([INSTALL]);
 
         expect(page.states[0]).toMatchObject({ module: 'Test', author: 'Ada & <Bo>', version: '1.2', website: 'https://example.com/m' });
+      });
+
+      it.each([
+        ['UTF-8 with a byte order mark', (text: string): Buffer => Buffer.from(`\uFEFF${text}`)],
+        ['UTF-16 little-endian, by its byte order mark', utf16le],
+        ['UTF-16 big-endian, by its byte order mark', utf16be],
+        ['neither, as Windows-1252, where MO2 falls back to Latin-1', (text: string): Buffer => Buffer.from(text, 'latin1')],
+      ])('reads an info file in %s', async (_, encoded) => {
+        await release(imaged('', ''), ['a/A.esp']);
+        await writeFile(join(root, 'fomod', 'info.xml'), encoded(INFO.replace('Ada', 'Adé')));
+
+        const { page } = await answered([INSTALL]);
+
+        expect(page.states[0]).toMatchObject({ author: 'Adé & <Bo>', version: '1.2', website: 'https://example.com/m' });
       });
 
       it('leaves a header field empty when the FOMOD gives no info file', async () => {

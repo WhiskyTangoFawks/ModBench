@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { join, basename, relative } from 'node:path';
+import { join, basename, relative, sep } from 'node:path';
 import ts from 'typescript';
 import { present } from '../ports/present';
 import { isTestSupport, SRC } from './scanSource';
@@ -8,12 +8,17 @@ import { tsFiles } from './tsFiles';
 
 const DECODING_READS = new Set(['readFile', 'readFileSync']);
 
-const TEXT_ENCODINGS = new Set(['utf8', 'utf-8']);
+const TEXT_ENCODINGS: ReadonlySet<string> = new Set(['utf8', 'utf-8']);
+
+const FOMOD_XML_ENCODINGS: ReadonlySet<string> = new Set([...TEXT_ENCODINGS, 'utf-16le', 'utf-16be', 'windows-1252']);
+const FOMOD_INSTALLER = join(SRC, 'instanceAdapter', 'fomodInstaller');
+const decoderEncodingsOf = (path: string): ReadonlySet<string> => (path.startsWith(`${FOMOD_INSTALLER}${sep}`) ? FOMOD_XML_ENCODINGS : TEXT_ENCODINGS);
 
 const THIS_FILE_QUOTING_THE_PATTERNS = 'pluginBinaryScan.test.ts';
 
-const isTextEncoding = (node: ts.Node): boolean =>
-  ts.isStringLiteralLike(node) && TEXT_ENCODINGS.has(node.text.toLowerCase());
+const isEncoding = (node: ts.Node, encodings: ReadonlySet<string>): boolean => ts.isStringLiteralLike(node) && encodings.has(node.text.toLowerCase());
+
+const isTextEncoding = (node: ts.Node): boolean => isEncoding(node, TEXT_ENCODINGS);
 
 function statesATextEncoding(argument: ts.Expression | undefined): boolean {
   if (argument === undefined) return false;
@@ -44,23 +49,23 @@ const setsEachTrue = (node: ts.Expression | undefined, names: readonly string[])
   && names.every((name) => node.properties.some((p) =>
     ts.isPropertyAssignment(p) && p.name.getText() === name && p.initializer.kind === ts.SyntaxKind.TrueKeyword));
 
-const isLosslessUtf8Decoder = (node: ts.Expression): boolean => {
+const isLosslessDecoder = (node: ts.Expression, encodings: ReadonlySet<string>): boolean => {
   if (!ts.isNewExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== 'TextDecoder') return false;
   const [label, options, ...rest] = node.arguments ?? [];
-  return rest.length === 0 && label !== undefined && isTextEncoding(label) && setsEachTrue(options, LOSSLESS_DECODER_OPTIONS);
+  return rest.length === 0 && label !== undefined && isEncoding(label, encodings) && setsEachTrue(options, LOSSLESS_DECODER_OPTIONS);
 };
 
-function decodedOnArrival(read: ts.CallExpression): boolean {
+function decodedOnArrival(read: ts.CallExpression, encodings: ReadonlySet<string>): boolean {
   let current: ts.Node = read;
   while (ts.isParenthesizedExpression(current.parent) || ts.isAwaitExpression(current.parent)) current = current.parent;
   const { parent } = current;
   return ts.isCallExpression(parent) && parent.arguments[0] === current && ts.isPropertyAccessExpression(parent.expression)
-    && parent.expression.name.text === 'decode' && isLosslessUtf8Decoder(unwrap(parent.expression.expression));
+    && parent.expression.name.text === 'decode' && isLosslessDecoder(unwrap(parent.expression.expression), encodings);
 }
 
 const MAY_READ_FILES = new RegExp([...DECODING_READS].join('|'));
 
-function undecodedReadsIn(sourceText: string, fileName: string): string[] {
+function undecodedReadsIn(sourceText: string, fileName: string, decoderEncodings = TEXT_ENCODINGS): string[] {
   if (!MAY_READ_FILES.test(sourceText)) return [];
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
   const undecodedReads: string[] = [];
@@ -68,29 +73,38 @@ function undecodedReadsIn(sourceText: string, fileName: string): string[] {
     if (!ts.isCallExpression(node)) return;
     const callee = ts.isPropertyAccessExpression(node.expression) ? node.expression.name.text
       : ts.isIdentifier(node.expression) ? node.expression.text : undefined;
-    if (callee !== undefined && DECODING_READS.has(callee) && !statesATextEncoding(node.arguments[1]) && !decodedOnArrival(node)) {
+    if (callee !== undefined && DECODING_READS.has(callee) && !statesATextEncoding(node.arguments[1]) && !decodedOnArrival(node, decoderEncodings)) {
       undecodedReads.push(callee);
     }
   });
   return undecodedReads;
 }
 
-const DIGEST_IMPORTS: Readonly<Record<string, ReadonlySet<string>>> = {
-  'node:fs': new Set(['createReadStream']),
-  'node:crypto': new Set(['createHash']),
-  'xxhash-wasm': new Set(['default']),
+interface ByteReader {
+  readonly imports: Readonly<Record<string, ReadonlySet<string>>>;
+  readonly exports: ReadonlySet<string>;
+}
+
+const RETURNS = 'Promise<string>';
+
+const DIGEST: ByteReader = {
+  imports: { 'node:fs': new Set(['createReadStream']), 'node:crypto': new Set(['createHash']), 'xxhash-wasm': new Set(['default']) },
+  exports: new Set(['digestOf', 'md5Of']),
 };
-const DIGEST_EXPORTS: ReadonlySet<string> = new Set(['digestOf', 'md5Of']);
-const DIGEST_RETURNS = 'Promise<string>';
+
+const VERSION_READ: ByteReader = {
+  imports: { 'node:fs/promises': new Set(['open']) },
+  exports: new Set(['fileVersionOf', 'productVersionOf']),
+};
 
 const isExported = (node: ts.Node): boolean =>
   ts.canHaveModifiers(node) && (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
 
 const firstLine = (node: ts.Node): string => present(node.getText().split('\n')[0], 'a statement\'s first line');
 
-function importOffences(statement: ts.ImportDeclaration): string[] {
+function importOffences(statement: ts.ImportDeclaration, imports: ByteReader['imports']): string[] {
   const from = ts.isStringLiteralLike(statement.moduleSpecifier) ? statement.moduleSpecifier.text : firstLine(statement);
-  const allowed = DIGEST_IMPORTS[from];
+  const allowed = imports[from];
   if (allowed === undefined) return [`imports ${from}`];
   const clause = statement.importClause;
   const bindings = clause?.namedBindings;
@@ -99,15 +113,15 @@ function importOffences(statement: ts.ImportDeclaration): string[] {
   return names.filter((name) => !allowed.has(name)).map((name) => `imports ${name} from ${from}`);
 }
 
-function digestModuleOffences(sourceText: string, fileName: string): string[] {
+function byteReaderOffences(reader: ByteReader, sourceText: string, fileName: string): string[] {
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
   const offences: string[] = [];
   for (const statement of source.statements) {
     if (ts.isImportDeclaration(statement)) {
-      offences.push(...importOffences(statement));
-    } else if (ts.isFunctionDeclaration(statement) && DIGEST_EXPORTS.has(statement.name?.text ?? '') && isExported(statement)) {
+      offences.push(...importOffences(statement, reader.imports));
+    } else if (ts.isFunctionDeclaration(statement) && reader.exports.has(statement.name?.text ?? '') && isExported(statement)) {
       const returns = statement.type?.getText() ?? 'nothing declared';
-      if (returns !== DIGEST_RETURNS) offences.push(`${statement.name?.text} returns ${returns}, not ${DIGEST_RETURNS}`);
+      if (returns !== RETURNS) offences.push(`${statement.name?.text} returns ${returns}, not ${RETURNS}`);
     } else if (ts.isExportAssignment(statement) || ts.isExportDeclaration(statement) || isExported(statement)) {
       offences.push(firstLine(statement));
     }
@@ -121,9 +135,12 @@ function digestModuleOffences(sourceText: string, fileName: string): string[] {
   return offences;
 }
 
-const THE_DIGEST = join(SRC, 'instanceAdapter', 'downloadedFileContents', 'contentDigest.ts');
+const digestModuleOffences = (sourceText: string, fileName: string): string[] => byteReaderOffences(DIGEST, sourceText, fileName);
 
-describe('the extension interprets no plugin binary (ADR-0004): its byte-level reads, in the digest module, feed a hash and nothing else', () => {
+const THE_DIGEST = join(SRC, 'instanceAdapter', 'downloadedFileContents', 'contentDigest.ts');
+const THE_VERSION_READ = join(SRC, 'instanceAdapter', 'gameFolder', 'versionResource.ts');
+
+describe('the extension interprets no plugin binary (ADR-0004): its byte-level reads, in the digest module and the Game folder\'s version read, feed a hash or a program\'s version and nothing else', () => {
   it('covers the whole extension source tree', () => {
     expect(tsFiles(SRC, { exclude: ['generated'] }).length).toBeGreaterThan(100);
   });
@@ -132,7 +149,7 @@ describe('the extension interprets no plugin binary (ADR-0004): its byte-level r
     const offenders: Record<string, string[]> = {};
     for (const path of tsFiles(SRC, { exclude: ['generated'] })) {
       if (basename(path) === THIS_FILE_QUOTING_THE_PATTERNS || isTestSupport(relative(SRC, path))) continue;
-      const undecodedReads = undecodedReadsIn(readFileSync(path, 'utf8'), path);
+      const undecodedReads = undecodedReadsIn(readFileSync(path, 'utf8'), path, decoderEncodingsOf(path));
       if (undecodedReads.length > 0) offenders[path] = undecodedReads;
     }
     expect(offenders).toEqual({});
@@ -140,6 +157,19 @@ describe('the extension interprets no plugin binary (ADR-0004): its byte-level r
 
   it('holds the digest module to node:fs, node:crypto, xxhash-wasm and its two exported hashes, so its bytes reach only a hash', () => {
     expect(digestModuleOffences(readFileSync(THE_DIGEST, 'utf8'), THE_DIGEST)).toEqual([]);
+  });
+
+  it('holds the Game folder\'s version read to open from node:fs/promises and its two exported versions, so its bytes reach only a version', () => {
+    expect(byteReaderOffences(VERSION_READ, readFileSync(THE_VERSION_READ, 'utf8'), THE_VERSION_READ)).toEqual([]);
+  });
+
+  it('flags a version read that reads a whole file, imports another module, or exports anything but its two versions', () => {
+    const planted = "import { open, readFile } from 'node:fs/promises';\nimport { keep } from './layout';\n"
+      + 'export async function fileVersionOf(p): Promise<string> {}\nexport async function productVersionOf(p): Promise<Buffer> {}\nexport const bytesOf = (p) => readFile(p);\n';
+    expect(byteReaderOffences(VERSION_READ, planted, 'versionResource.ts')).toEqual([
+      'imports readFile from node:fs/promises', 'imports ./layout', 'productVersionOf returns Promise<Buffer>, not Promise<string>',
+      'export const bytesOf = (p) => readFile(p);',
+    ]);
   });
 
   it('flags a digest module that imports anything but createReadStream, createHash and the xxHash package, which could carry the bytes elsewhere', () => {
@@ -200,6 +230,13 @@ describe('the extension interprets no plugin binary (ADR-0004): its byte-level r
     const decoded = "new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await vscode.workspace.fs.readFile(u));\n"
       + "new TextDecoder('utf8', { ignoreBOM: true, fatal: true }).decode(await fs.readFile(u));\n";
     expect(undecodedReadsIn(decoded, 'x.ts')).toEqual([]);
+  });
+
+  it('does not flag a read the FOMOD installer decodes as UTF-16 or Windows-1252, where MO2 reads a FOMOD\'s XML so, and flags it anywhere else', () => {
+    const decoded = ['utf-16le', 'utf-16be', 'windows-1252']
+      .map((label) => `new TextDecoder('${label}', { fatal: true, ignoreBOM: true }).decode(await readFile(p));`).join('\n');
+    expect(undecodedReadsIn(decoded, 'releaseXml.ts', decoderEncodingsOf(join(FOMOD_INSTALLER, 'releaseXml.ts')))).toEqual([]);
+    expect(undecodedReadsIn(decoded, 'masterReader.ts', decoderEncodingsOf(join(SRC, 'instanceAdapter', 'masterReader.ts')))).toEqual(Array(3).fill('readFile'));
   });
 
   it('flags a read whose bytes are kept, or decoded by a TextDecoder that replaces what is not text, preserves bytes or drops a byte order mark, or by any other decoder', () => {

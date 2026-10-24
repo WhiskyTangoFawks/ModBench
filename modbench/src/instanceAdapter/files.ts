@@ -142,16 +142,6 @@ export function get(path: string, ifMissing?: string): Promise<string> {
   return readOr(path, ifMissing);
 }
 
-/** `path`'s text, byte order mark included, or `undefined` when it is not UTF-8. */
-export async function textIfUtf8(path: string): Promise<string | undefined> {
-  try {
-    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await readFile(path));
-  } catch (err) {
-    if (err instanceof TypeError) return undefined;
-    throw err;
-  }
-}
-
 /** `path` with every symlink along it resolved, or `undefined` when nothing is there. */
 export async function realPathIfThere(path: string): Promise<string | undefined> {
   try {

@@ -20,6 +20,8 @@ function knownGameNameLiterals(): string[] {
       literals.add(info.gameName);
       literals.add(info.nexusSlug);
       literals.add(info.scriptExtenderFolder);
+      literals.add(info.programs.game);
+      literals.add(info.programs.extenderLoader);
       if (info.steamAppId) literals.add(info.steamAppId);
       if (info.steamFolderName) literals.add(info.steamFolderName);
       for (const master of info.masters) literals.add(master);
