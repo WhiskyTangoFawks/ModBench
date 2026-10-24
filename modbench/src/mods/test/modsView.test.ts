@@ -128,7 +128,7 @@ beforeEach(() => {
 describe('the Mods view\'s problems (publishing.md, Publisher tags, story 4)', () => {
   it('publishes a publisher tag that names no path to the Problems panel', () => {
     const file = '/instance/compiler_settings.json';
-    const publisherConfiguration = { kind: 'read', covering: () => [], listed: () => [], namesNoPath: [{ file, line: 2, message: 'gone' }] } as const;
+    const publisherConfiguration = { kind: 'read', covering: () => [], listed: () => [], pathProblems: [{ kind: 'namesNoPath', file, line: 2, tag: { name: 'Ignore', badge: 'IG', marksPaths: true }, entry: 'gone' }] } as const;
     const instance = new FakeInstance(instanceValueFixture({ publisherConfiguration }));
 
     createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });

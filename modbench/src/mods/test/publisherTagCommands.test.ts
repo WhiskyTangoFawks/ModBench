@@ -40,7 +40,7 @@ const value: InstanceValue = {
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/instance/mods/M'], ['N', '/instance/mods/N']]), sourceDirs: new Map() },
   }),
   publisherTags: [INCLUDE, IGNORE, ALWAYS_ENABLED],
-  publisherConfiguration: { kind: 'read', covering: () => [], listed: (path) => LISTED[path] ?? [], namesNoPath: [] },
+  publisherConfiguration: { kind: 'read', covering: () => [], listed: (path) => LISTED[path] ?? [], pathProblems: [] },
 };
 
 const changePublisherTag = vi.fn();

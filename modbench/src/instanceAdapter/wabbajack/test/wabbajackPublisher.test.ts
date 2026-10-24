@@ -458,7 +458,7 @@ describe('the watch on the compiler settings (ADR-0003)', () => {
 
 describe('the publisher tags that name no path in the instance (publishing.md, Publisher tags, story 4)', () => {
   const naming = () => publisherOver().configuration();
-  const reads = (namesNoPath: unknown) => ({ kind: 'read', namesNoPath });
+  const reads = (pathProblems: unknown) => ({ kind: 'read', pathProblems });
 
   it('lists an entry naming no file or folder, with its line, as comments and trailing commas leave it', async () => {
     await mkdir(join(root, 'mods', 'A', 'textures'), { recursive: true });
@@ -478,17 +478,17 @@ describe('the publisher tags that name no path in the instance (publishing.md, P
     const file = join(root, SETTINGS_FILE);
 
     expect(await naming()).toMatchObject(reads([
-      { file, line: 3, message: 'Include: "mods\\Gone" names no path in the instance.' },
-      { file, line: 6, message: 'Ignore: "mods/A/meta.ini/inside" names no path in the instance.' },
-      { file, line: 7, message: 'Ignore: "mods\\A\\Gone.txt" names no path in the instance.' },
-      { file, line: 9, message: 'Always Enabled: "mods\\Missing" names no path in the instance.' },
+      { kind: 'namesNoPath', file, line: 3, tag: { name: 'Include' }, entry: 'mods\\Gone' },
+      { kind: 'namesNoPath', file, line: 6, tag: { name: 'Ignore' }, entry: 'mods/A/meta.ini/inside' },
+      { kind: 'namesNoPath', file, line: 7, tag: { name: 'Ignore' }, entry: 'mods\\A\\Gone.txt' },
+      { kind: 'namesNoPath', file, line: 9, tag: { name: 'Always Enabled' }, entry: 'mods\\Missing' },
     ]));
   });
 
   it('takes a key listed twice at its last, as the parse does', async () => {
     await writeSettings('{\n  "Include": ["first"],\n  "Include": [\n    "second"\n  ]\n}');
 
-    expect(await naming()).toMatchObject(reads([{ line: 4, message: 'Include: "second" names no path in the instance.' }]));
+    expect(await naming()).toMatchObject(reads([{ kind: 'namesNoPath', line: 4, entry: 'second' }]));
   });
 
   it('matches a path without case, at either separator', async () => {
@@ -504,8 +504,8 @@ describe('the publisher tags that name no path in the instance (publishing.md, P
     await writeSettings({ Include: ['mods\\loop\\x', 'mods\\A', 'mods\\Gone'] });
 
     expect(await naming()).toMatchObject(reads([
-      { message: expect.stringMatching(/^Include: "mods\\loop\\x" could not be checked: .+/) as unknown },
-      { message: 'Include: "mods\\Gone" names no path in the instance.' },
+      { kind: 'notChecked', entry: 'mods\\loop\\x', reason: expect.stringMatching(/ELOOP/) as unknown },
+      { kind: 'namesNoPath', entry: 'mods\\Gone' },
     ]));
     expect(await covering('mods', 'A')).toEqual(['Include']);
   });
@@ -513,6 +513,12 @@ describe('the publisher tags that name no path in the instance (publishing.md, P
   it('refuses an unreadable configuration without walking the instance', async () => {
     await writeSettings('{ not json');
 
-    expect(await publisherOver().refusal()).toContain('is not JSON');
+    expect(await publisherOver().refusal()).toContain('is not JSON: ');
+  });
+
+  it('says where the configuration broke', async () => {
+    await writeSettings('{\n  "Include": [\n    "a" "b"\n  ]\n}');
+
+    expect(await publisherOver().configuration()).toMatchObject({ kind: 'unreadable', reason: expect.stringMatching(/ at line 3, column 9$/) as unknown });
   });
 });

@@ -7,7 +7,7 @@ import { parse, parseTree, printParseErrorCode, type ParseError } from 'jsonc-pa
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { get, listDir, putIfChanged, readOrAbsent } from '../files';
-import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagNamingNoPath } from '../instanceAdapter';
+import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagPathProblem } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedSubstitution } from '../pathTokens';
 import { watchFiles } from '../watchFiles';
@@ -64,7 +64,10 @@ function settingsIn(text: string, file: string): object {
   const errors: ParseError[] = [];
   const settings: unknown = parse(text, errors, READS);
   const [first] = errors;
-  if (first !== undefined) throw new Error(`${file} is not JSON: ${printParseErrorCode(first.error)}`);
+  if (first !== undefined) {
+    const before = text.slice(0, first.offset).split('\n');
+    throw new Error(`${file} is not JSON: ${printParseErrorCode(first.error)} at line ${before.length}, column ${(before.at(-1) ?? '').length + 1}`);
+  }
   if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) throw new Error(`${file} holds no settings object`);
   return settings;
 }
@@ -80,7 +83,7 @@ function valueOf<T>(settings: object, key: string, file: string, wanted: [(value
   return value;
 }
 
-// The line (1-based) of each entry in each list the settings hold. A key listed twice keeps its last, as the parse does.
+// A key listed twice keeps its last, as the parse does.
 function entryLines(text: string): Map<string, number[]> {
   const lines = new Map<string, number[]>();
   for (const property of parseTree(text, [], READS)?.children ?? []) {
@@ -112,28 +115,29 @@ async function holdsPath(instanceRoot: string, names: readonly string[], listing
   return true;
 }
 
-async function problemWith(instanceRoot: string, entry: string, listings: Listings): Promise<string | undefined> {
+async function problemWith(instanceRoot: string, entry: string, listings: Listings): Promise<'namesNoPath' | { reason: string } | undefined> {
   try {
-    return await holdsPath(instanceRoot, namesOf(entry), listings) ? undefined : `"${entry}" names no path in the instance.`;
+    return await holdsPath(instanceRoot, namesOf(entry), listings) ? undefined : 'namesNoPath';
   } catch (err) {
-    return `"${entry}" could not be checked: ${errorMessage(err)}`;
+    return { reason: errorMessage(err) };
   }
 }
 
-async function tagsNamingNoPath(instanceRoot: string, settings: object, text: string, file: string): Promise<TagNamingNoPath[]> {
+async function tagsWithPathProblems(instanceRoot: string, settings: object, text: string, file: string): Promise<TagPathProblem[]> {
   const lines = entryLines(text);
   const listings: Listings = new Map();
-  const naming: TagNamingNoPath[] = [];
+  const problems: TagPathProblem[] = [];
   for (const { listedUnder, tag } of TAGS) {
     const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']) ?? [];
     for (const [at, entry] of entries.entries()) {
       const problem = await problemWith(instanceRoot, entry, listings);
       const line = lines.get(listedUnder)?.[at];
       if (line === undefined) throw new Error(`${file}: no line for ${listedUnder} entry ${at}`);
-      if (problem !== undefined) naming.push({ file, line, message: `${tag.name}: ${problem}` });
+      if (problem === 'namesNoPath') problems.push({ kind: 'namesNoPath', file, line, tag, entry });
+      else if (problem !== undefined) problems.push({ kind: 'notChecked', file, line, tag, entry, reason: problem.reason });
     }
   }
-  return naming;
+  return problems;
 }
 
 function tagsByPath(settings: object, file: string): PathNode {
@@ -261,7 +265,7 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         const text = await settingsText();
         if (text === undefined) return { kind: 'none' };
         const { settings, tags, covering } = await understood(text);
-        return { kind: 'read', covering, listed: listedIn(instanceRoot, tags), namesNoPath: await tagsNamingNoPath(instanceRoot, settings, text, file) };
+        return { kind: 'read', covering, listed: listedIn(instanceRoot, tags), pathProblems: await tagsWithPathProblems(instanceRoot, settings, text, file) };
       } catch (err) {
         return { kind: 'unreadable', reason: errorMessage(err) };
       }
