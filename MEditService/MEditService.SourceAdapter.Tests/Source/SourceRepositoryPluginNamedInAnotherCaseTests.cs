@@ -40,13 +40,13 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
         new(plugin.Name, plugin.Origin, "", TestMod.In(_modFolder), Line: null, PluginStrings.None);
 
     [Fact]
-    public void SourceReads_ATreeItsFolderSpellsInAnotherCase_IsTrue()
+    public void ATreeItsFolderSpellsInAnotherCase_Reads()
     {
         Assert.True(TestAdapters.Source().SourceReads(Registered(Recased)));
     }
 
     [PosixFact]
-    public void SourceReads_APluginSourceThatCannotBeListed_IsFalseNotAThrow()
+    public void APluginSourceThatCannotBeListed_DoesNotRead_NotAThrow()
     {
         var sources = Path.Combine(_modFolder, "plugin-source");
         FileModes.Set(sources, "000");
@@ -61,7 +61,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [Fact]
-    public void SourceReads_APluginSourceThatIsAFile_IsFalseNotAThrow()
+    public void APluginSourceThatIsAFile_DoesNotRead_NotAThrow()
     {
         var sources = Path.Combine(_modFolder, "plugin-source");
         Directory.Delete(sources, recursive: true);
@@ -71,13 +71,13 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [Fact]
-    public void ReadDocuments_ForThePluginNamedInAnotherCase_ReadsEachDocumentOfItsTree()
+    public void EachDocumentOfTheTree_IsReadForThePluginNamedInAnotherCase()
     {
         Assert.Equal([HeaderBody, NpcBody], TreeDocuments.Of(Repository, Recased).Select(document => document.Body));
     }
 
     [Fact]
-    public void StampsOf_ForThePluginNamedInAnotherCase_StampsEachDocumentAndFindsNoneUnreadable()
+    public void EachDocumentOfTheTree_IsStampedForThePluginNamedInAnotherCase_NoneUnreadable()
     {
         var stamps = Repository.StampsOf(Recased);
 
@@ -86,15 +86,15 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [Fact]
-    public void RecordOfFile_ADocumentOfTheTree_IsHeldByThePluginAsTheLoadOrderNamesIt()
+    public void ADocumentOfTheTree_IsHeldByThePluginAsTheLoadOrderNamesIt()
     {
-        var answer = new GitSourceAdapter(new UnsavedDocuments()).RecordOfFile(LoadOrderNaming(Recased), Path.Combine(_modFolder, NpcDocument));
+        var answer = TestAdapters.Source().RecordOfFile(LoadOrderNaming(Recased), Path.Combine(_modFolder, NpcDocument));
 
         Assert.Equal(new RecordAt(Recased, NpcFormKey), Assert.IsType<RecordOfFileAnswer.Holds>(answer).Record);
     }
 
     [Fact]
-    public void Put_ForThePluginNamedInAnotherCase_WritesIntoItsTree()
+    public void APutForThePluginNamedInAnotherCase_WritesIntoItsTree()
     {
         const string weaponBody = "{\n  \"FormKey\": \"000900:Fixture.esp\",\n  \"EditorID\": \"FixtureWeapon\"\n}";
 
@@ -104,7 +104,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceSourceFrom_ForThePluginNamedInAnotherCase_ReplacesItsTree()
+    public void ReplacingTheSourceOfThePluginNamedInAnotherCase_ReplacesItsTree()
     {
         const string decompiledHeader = "{\n  \"ModKey\": \"FIXTURE.ESP\"\n}";
 
@@ -114,7 +114,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [Fact]
-    public void ChangesToRenameSource_ForThePluginNamedInAnotherCase_MoveItsTree()
+    public void RenamingTheSourceOfThePluginNamedInAnotherCase_MovesItsTree()
     {
         var renamed = new PluginAddress("Renamed.esp", TestMod.Name);
 
@@ -126,7 +126,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [Fact]
-    public void ChangedSinceLastCommit_ForThePluginNamedInAnotherCase_NamesAnEditToItsTree()
+    public void AnEditToTheTreeOfThePluginNamedInAnotherCase_IsAChangeSinceTheLastCommit()
     {
         File.WriteAllText(Path.Combine(_modFolder, NpcDocument), NpcBody.Replace("FixtureNpc", "Edited", StringComparison.Ordinal));
 
@@ -134,7 +134,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [Fact]
-    public void LastWrittenBinarySha256s_ForThePluginNamedInAnotherCase_IsWhatWasWrittenForItsTree()
+    public void TheBinaryLastWrittenForThePluginNamedInAnotherCase_IsWhatWasWrittenForItsTree()
     {
         const string sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         Repository.WriteBinary(AsTreeNamesIt, sha256, () => { }).Value();
@@ -143,7 +143,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [Fact]
-    public void MoveLastWrittenTo_TheTreeNameTheRenameAnswered_MovesWhatWasWrittenUnderTheTreesSpelling()
+    public void MovingTheLastWrittenToTheTreeNameTheRenameAnswered_MovesWhatWasWrittenUnderTheTreesSpelling()
     {
         const string sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         Repository.WriteBinary(AsTreeNamesIt, sha256, () => { }).Value();
@@ -160,7 +160,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [PosixFact]
-    public void ReadDocuments_ForAPluginWithTwinTreesOneSpelledAsTheLoadOrderNamesIt_ReadsThatOne()
+    public void APluginWithTwinTreesOneSpelledAsTheLoadOrderNamesIt_ReadsThatOne()
     {
         MakeTwinOfTheTreeIn(Recased.Name);
 
@@ -169,7 +169,7 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [PosixFact]
-    public void SourceReads_ForAPluginWithTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_IsFalse()
+    public void APluginWithTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_DoesNotRead()
     {
         MakeTwinOfTheTreeIn(Recased.Name);
 
@@ -177,21 +177,21 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [PosixFact]
-    public void WhySourceDoesNotRead_ForTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_NamesBothFolders()
+    public void WhyTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_DoNotRead_NamesBothFolders()
     {
         MakeTwinOfTheTreeIn(Recased.Name);
 
         var why = Assert.IsType<SourceFailure.TwinFolders>(
-            new GitSourceAdapter(new UnsavedDocuments()).WhySourceDoesNotRead(Registered(new PluginAddress("fixture.esp", TestMod.Name))));
+            TestAdapters.Source().WhySourceDoesNotRead(Registered(new PluginAddress("fixture.esp", TestMod.Name))));
 
         Assert.Contains(TreeName, why.Reason, StringComparison.Ordinal);
         Assert.Contains(Recased.Name, why.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void WhySourceDoesNotRead_ForAPluginWithNoFolder_SaysSo()
+    public void WhyAPluginWithNoFolder_DoesNotRead_SaysSo()
     {
-        var why = new GitSourceAdapter(new UnsavedDocuments()).WhySourceDoesNotRead(Registered(new PluginAddress("Other.esp", TestMod.Name)));
+        var why = TestAdapters.Source().WhySourceDoesNotRead(Registered(new PluginAddress("Other.esp", TestMod.Name)));
 
         var missing = Assert.IsType<SourceFailure.NotCarried>(why);
         Assert.Contains("Other.esp", missing.Reason, StringComparison.Ordinal);
@@ -199,13 +199,13 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [PosixFact]
-    public void WhySourceDoesNotRead_ForAPluginSourceThatCannotBeListed_SaysWhyTheSystemGave()
+    public void WhyAPluginSourceThatCannotBeListed_DoesNotRead_SaysWhyTheSystemGave()
     {
         var sources = Path.Combine(_modFolder, "plugin-source");
         FileModes.Set(sources, "000");
         try
         {
-            var why = Assert.IsType<SourceFailure.Inaccessible>(new GitSourceAdapter(new UnsavedDocuments()).WhySourceDoesNotRead(Registered(AsTreeNamesIt)));
+            var why = Assert.IsType<SourceFailure.Inaccessible>(TestAdapters.Source().WhySourceDoesNotRead(Registered(AsTreeNamesIt)));
             Assert.Contains("plugin-source", why.Reason, StringComparison.Ordinal);
             Assert.False(why.DecompileRepairs);
         }
@@ -216,13 +216,13 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [Fact]
-    public void WhySourceDoesNotRead_ForATreeThatReads_IsNull()
+    public void ATreeThatReads_HasNoReasonNotTo()
     {
-        Assert.Null(new GitSourceAdapter(new UnsavedDocuments()).WhySourceDoesNotRead(Registered(Recased)));
+        Assert.Null(TestAdapters.Source().WhySourceDoesNotRead(Registered(Recased)));
     }
 
     [PosixFact]
-    public void ReplaceSourceFrom_ForTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_AnswersAmbiguousNamingBoth_AndWritesNoThirdFolder()
+    public void ReplacingTheSourceOfTwinTreesNeitherSpelledAsTheLoadOrderNamesIt_IsAmbiguousNamingBoth_AndWritesNoThirdFolder()
     {
         MakeTwinOfTheTreeIn(Recased.Name);
         var lowered = new PluginAddress("fixture.esp", TestMod.Name);
@@ -239,11 +239,11 @@ public sealed class SourceRepositoryPluginNamedInAnotherCaseTests : IDisposable
     }
 
     [PosixFact]
-    public void RecordOfFile_ADocumentOfATwinTreeThePluginDoesNotRead_IsRefused()
+    public void ADocumentOfATwinTreeThePluginDoesNotRead_IsRefused()
     {
         MakeTwinOfTheTreeIn(Recased.Name);
 
-        var answer = new GitSourceAdapter(new UnsavedDocuments()).RecordOfFile(LoadOrderNaming(AsTreeNamesIt), TwinNpcDocument(Recased.Name));
+        var answer = TestAdapters.Source().RecordOfFile(LoadOrderNaming(AsTreeNamesIt), TwinNpcDocument(Recased.Name));
 
         Assert.IsType<RecordOfFileAnswer.Refused>(answer);
     }

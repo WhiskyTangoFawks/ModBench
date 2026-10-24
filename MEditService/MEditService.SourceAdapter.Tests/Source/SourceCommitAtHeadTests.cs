@@ -26,16 +26,25 @@ public sealed class SourceCommitAtHeadTests : IDisposable
     private string SourceFolder => _submodule.Folder;
 
     [Theory]
-    [InlineData("first", false)]
-    [InlineData("second", true)]
-    public void AnAbsentSubmodule_IsCheckedOutByGitAtItsPin_AsASourceMod(string at, bool leftEmptyByAClone)
+    [InlineData("first")]
+    [InlineData("second")]
+    public void AnAbsentSubmodule_IsCheckedOutByGitAtItsPin_AsASourceMod(string at)
     {
-        if (leftEmptyByAClone) Directory.CreateDirectory(SourceFolder);
-
         Assert.Equal(new SubmoduleHead(_commits[at]), CommitAtHead(_commits[at]).Value());
 
         Assert.Equal(_commits[at], Git(SourceFolder, "rev-parse", "HEAD").Trim());
         Assert.Equal(at, File.ReadAllText(Path.Combine(SourceFolder, "build.json")));
+        Assert.True(TestAdapters.Source().IsSourceMod(SourceFolder));
+    }
+
+    [Fact]
+    public void ASubmoduleFolderACloneLeftEmpty_IsCheckedOutByGitAtItsPin_AsASourceMod()
+    {
+        Directory.CreateDirectory(SourceFolder);
+
+        Assert.Equal(new SubmoduleHead(_commits["first"]), CommitAtHead(_commits["first"]).Value());
+
+        Assert.Equal(_commits["first"], Git(SourceFolder, "rev-parse", "HEAD").Trim());
         Assert.True(TestAdapters.Source().IsSourceMod(SourceFolder));
     }
 

@@ -22,7 +22,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     private IReadOnlyList<string> TreeAfterPutting(string recordType, string? editorId, string formKey = FormKey)
     {
         RepositoryOverATreeWithNoGit
-            .Put(Key, new SourceDocument(formKey, recordType, editorId, Body(formKey, editorId)));
+            .Put(Key, new SourceDocument(formKey, recordType, editorId, Body(formKey, editorId))).Wrote();
 
         return Documents();
     }
@@ -40,28 +40,35 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
             ? $"{{\n  \"FormKey\": \"{formKey}\"\n}}"
             : $"{{\n  \"FormKey\": \"{formKey}\",\n  \"EditorID\": \"{editorId}\"\n}}";
 
-    [Fact]
-    public void AFlatRecord_LandsAsAFileInItsGroupFolder()
+    public enum Placed
     {
-        Assert.Equal(
-            [SpelledOutPathUnder("Npcs", "SomeNpc - 000800_Vendor.esp.json")],
-            TreeAfterPutting("npc_", "SomeNpc"));
+        FlatRecord,
+        Quest,
+        DirectoryPerRecordContainer,
+        RecordWithNoEditorId,
     }
 
-    [Fact]
-    public void AQuest_LandsAsAFileInItsGroupFolder()
-    {
-        Assert.Equal(
-            [SpelledOutPathUnder("Quests", "SomeQuest - 000800_Vendor.esp.json")],
-            TreeAfterPutting("Quest", "SomeQuest"));
-    }
+    private static (string RecordType, string? EditorId, string Path) PlacementOf(Placed placed) =>
+        placed switch
+        {
+            Placed.FlatRecord => ("npc_", "SomeNpc", SpelledOutPathUnder("Npcs", "SomeNpc - 000800_Vendor.esp.json")),
+            Placed.Quest => ("Quest", "SomeQuest", SpelledOutPathUnder("Quests", "SomeQuest - 000800_Vendor.esp.json")),
+            Placed.DirectoryPerRecordContainer => (
+                "wrld", "SomeWorld", PluginSourceRoot.ContainerDocument(SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp"))),
+            Placed.RecordWithNoEditorId => ("npc_", null, SpelledOutPathUnder("Npcs", "000800_Vendor.esp.json")),
+            _ => throw new ArgumentOutOfRangeException(nameof(placed), placed, null),
+        };
 
-    [Fact]
-    public void ADirectoryPerRecordContainer_LandsAsADirectoryInItsGroupFolder()
+    [Theory]
+    [InlineData(Placed.FlatRecord)]
+    [InlineData(Placed.Quest)]
+    [InlineData(Placed.DirectoryPerRecordContainer)]
+    [InlineData(Placed.RecordWithNoEditorId)]
+    public void ARecord_LandsInItsGroupFolder_NamedByItsEditorIdAndFormKey(Placed placed)
     {
-        Assert.Equal(
-            [PluginSourceRoot.ContainerDocument(SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp"))],
-            TreeAfterPutting("wrld", "SomeWorld"));
+        var (recordType, editorId, path) = PlacementOf(placed);
+
+        Assert.Equal([path], TreeAfterPutting(recordType, editorId));
     }
 
     [Fact]
@@ -106,14 +113,6 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
             PluginSourceRoot.ContainerDocument(SpelledOutPathUnder("Cells", "8", "5", "OtherCell - 00080A_Vendor.esp")), tree);
         Assert.Contains("\"BlockNumber\": 5", Text(SpelledOutPathUnder("Cells", "8", "5", "GroupRecordData.json")));
         Assert.Equal(standing, Text(SpelledOutPathUnder("Cells", "8", "GroupRecordData.json")));
-    }
-
-    [Fact]
-    public void ARecordWithNoEditorId_IsNamedByItsFormKeyAlone()
-    {
-        Assert.Equal(
-            [SpelledOutPathUnder("Npcs", "000800_Vendor.esp.json")],
-            TreeAfterPutting("npc_", editorId: null));
     }
 
     private const string WorldspaceFormKey = FormKey;

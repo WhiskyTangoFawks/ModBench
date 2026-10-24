@@ -247,29 +247,6 @@ public sealed class WriteSessionTests : IDisposable
     }
 
     [Fact]
-    public void SavingTheRemovalOfAnEmbeddedChild_LeavesItGoneAndItsSiblingHeld()
-    {
-        var repository = Repository;
-
-        repository.SaveChanges(repository.ChangesToRemove(Plugin, Identity(_response, "info"))).Wrote();
-
-        Assert.Null(repository.RecordOf(Plugin, Identity(_response, "info")).Value());
-        Assert.NotNull(repository.RecordOf(Plugin, Identity(_response2, "info")).Value());
-    }
-
-    [Fact]
-    public void SavingTheRemovalOfAContainerWithADirectoryOfItsOwn_TakesTheDirectoryAndLeavesTheWorldspace()
-    {
-        var repository = Repository;
-
-        repository.SaveChanges(repository.ChangesToRemove(Plugin, Identity(_exteriorCell, "cell"))).Wrote();
-
-        Assert.False(Directory.Exists(Path.GetDirectoryName(FullPath(ExteriorCellPath))));
-        Assert.Null(repository.RecordOf(Plugin, Identity(_exteriorCell, "cell")).Value());
-        Assert.NotNull(repository.RecordOf(Plugin, Identity(_worldspace, "wrld")).Value());
-    }
-
-    [Fact]
     public void AnUnsavedTextNoWriteChanged_IsNoChange()
     {
         var session = Session(new DocumentChange(FullPath(QuestPath), UnsavedQuest()));
@@ -563,19 +540,30 @@ public sealed class WriteSessionTests : IDisposable
         Assert.Equal(before, TreeSnapshot.Of(_modFolder));
     }
 
-    private static Action VerbOn(ISourceRepository repository, string verb, Action onWrite) =>
+    public enum DiskVerb
+    {
+        ReplaceSourceFrom,
+        CommitRepair,
+        MoveLastWrittenTo,
+        WriteBinary,
+    }
+
+    private static Action VerbOn(ISourceRepository repository, DiskVerb verb, Action onWrite) =>
         verb switch
         {
-            "replace" => () => repository.ReplaceSourceFrom(Plugin, [], "ABCDEF0123"),
-            "moveLast" => () => repository.MoveLastWrittenTo(Plugin.Name, "Renamed.esp"),
-            _ => () => repository.WriteBinary(Plugin, "ABCDEF0123", onWrite),
+            DiskVerb.ReplaceSourceFrom => () => repository.ReplaceSourceFrom(Plugin, [], "ABCDEF0123"),
+            DiskVerb.CommitRepair => () => repository.CommitRepair(Plugin, new TreeCommit([], "Flagged"), new TreeCommit([], "Repaired"), "ABCDEF0123"),
+            DiskVerb.MoveLastWrittenTo => () => repository.MoveLastWrittenTo(Plugin.Name, "Renamed.esp"),
+            DiskVerb.WriteBinary => () => repository.WriteBinary(Plugin, "ABCDEF0123", onWrite),
+            _ => throw new ArgumentOutOfRangeException(nameof(verb), verb, null),
         };
 
     [Theory]
-    [InlineData("replace")]
-    [InlineData("moveLast")]
-    [InlineData("binary")]
-    public void AVerbThatWritesTheDiskItself_RefusesOnASessionsRepository_AndWritesNothing(string verb)
+    [InlineData(DiskVerb.ReplaceSourceFrom)]
+    [InlineData(DiskVerb.CommitRepair)]
+    [InlineData(DiskVerb.MoveLastWrittenTo)]
+    [InlineData(DiskVerb.WriteBinary)]
+    public void AVerbThatWritesTheDiskItself_RefusesOnASessionsRepository_AndWritesNothing(DiskVerb verb)
     {
         var before = TreeSnapshot.Of(_modFolder);
         var session = Session();

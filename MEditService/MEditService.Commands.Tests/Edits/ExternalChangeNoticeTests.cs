@@ -47,7 +47,7 @@ public sealed class ExternalChangeNoticeTests : IDisposable
     private void Init(params (string Plugin, byte[] Bytes)[] plugins) =>
         TestAdapters.Source().Init(ModFolder, [.. plugins.Select(p => (
             (IReadOnlyList<TreeFile>)[new TreeFile(TreeTampering.HeaderDocumentOf(p.Plugin), "{}"u8.ToArray())],
-            new DecompiledPlugin(p.Plugin, TrailerHash(p.Bytes))))]);
+            new DecompiledPlugin(new PluginAddress(p.Plugin, Origin), TrailerHash(p.Bytes))))]);
 
     private ExternalChangeNotification TheExternalChange() =>
         Assert.Single(_notifications.Notifications.OfType<ExternalChangeNotification>());

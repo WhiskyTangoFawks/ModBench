@@ -2,6 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -18,9 +19,12 @@ public sealed class UnsavedTextTests : IDisposable
 
     private readonly ScratchDirectory _modFolder = new("medit-unsaved-");
     private readonly UnsavedDocuments _unsaved = new();
+    private readonly FakeTimeProvider _clock = new(TimeProvider.System.GetUtcNow());
+    private readonly GitSourceAdapter _adapter;
 
     public UnsavedTextTests()
     {
+        _adapter = new GitSourceAdapter(_unsaved, _clock);
         PluginBaselines.InitWithNoRecords(_modFolder);
         Repository.Put(Plugin, new SourceDocument(Npc, "npc_", "VendorNpc", NpcBody("VendorNpc"))).Wrote();
     }
@@ -30,8 +34,8 @@ public sealed class UnsavedTextTests : IDisposable
     private ISourceRepository Repository => TestAdapters.Source().OverFolder(TestMod.In(_modFolder), Release);
 
     private ISourceRepositoryReads Reads =>
-        new GitSourceAdapter(_unsaved).Over(new RegisteredPlugin(PluginName, TestMod.Name, Path.Combine(_modFolder, PluginName), TestMod.In(_modFolder), Line: null, PluginStrings.None), Release)
-        ?? throw new InvalidOperationException("Expected a mod to provide the plugin.");
+        _adapter.Over(new RegisteredPlugin(PluginName, TestMod.Name, Path.Combine(_modFolder, PluginName), TestMod.In(_modFolder), Line: null, PluginStrings.None), Release)
+            .Require();
 
     private static string NpcBody(string editorId) => $"{{\n  \"FormKey\": \"{Npc}\",\n  \"EditorID\": \"{editorId}\"\n}}";
 
@@ -42,9 +46,9 @@ public sealed class UnsavedTextTests : IDisposable
         ?? throw new InvalidOperationException($"Expected a file to hold {formKey}.");
 
     [Fact]
-    public async Task StampsOf_ASettledFile_IsTheTextHeldInItsPlace_AndItsBytesOnceDropped()
+    public void ASettledFile_IsStampedAsTheTextHeldInItsPlace_AndAsItsBytesOnceDropped()
     {
-        await Task.Delay(TimeSpan.FromSeconds(2.2));
+        _clock.SetUtcNow(TimeProvider.System.GetUtcNow().AddSeconds(3));
         Reads.StampsOf(Plugin);
 
         _unsaved.Apply([new DocumentChange(FileOf(Npc, "npc_"), NpcBody("TypedNpc"))]);
@@ -57,7 +61,7 @@ public sealed class UnsavedTextTests : IDisposable
     }
 
     [Fact]
-    public void GetCellAt_InASession_IsTheCellWhoseUnsavedTextNamesTheGrid()
+    public void TheCellAtAGrid_InASession_IsTheOneWhoseUnsavedTextNamesTheGrid()
     {
         Repository.Put(Plugin, new SourceDocument(Worldspace, "wrld", null, $"{{\n  \"FormKey\": \"{Worldspace}\"\n}}")).Wrote();
         Repository.PutInWorldspace(Plugin, new SourceDocument(Cell, "cell", null, CellBody("9, -9")), Worldspace);

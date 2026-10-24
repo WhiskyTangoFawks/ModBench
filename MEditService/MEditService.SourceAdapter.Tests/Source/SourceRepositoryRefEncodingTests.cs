@@ -8,23 +8,12 @@ namespace MEditService.SourceAdapter.Tests.Source;
 
 public sealed class SourceRepositoryRefEncodingTests
 {
-    [Fact]
-    public void Init_Succeeds_ForAPluginNameWithSpacesWhichGitRefNamesForbid()
-    {
-        using var modFolder = new ScratchDirectory("medit-refencoding-");
-        const string plugin = "Invented Plugin With Spaces.esp";
-        PluginBaselines.Init(
-            modFolder, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
-
-        Assert.Equal("Init " + Path.GetFileName(modFolder), GitProbeSubject(modFolder));
-    }
-
     [Theory]
     [InlineData("Invented Plugin With Spaces.esp")]
     [InlineData("[ARRETH] FGEP-DE.esp")]
     [InlineData("SomePlugin.lock")]
     [InlineData(".hidden..esp")]
-    public void WriteBinary_ThenLastWrittenBinarySha256s_RoundTrips_ForANameWhichGitRefNamesForbid(string plugin)
+    public void TheBinaryLastWritten_IsAnsweredForAPluginWhoseNameGitRefNamesForbid(string plugin)
     {
         using var modFolder = new ScratchDirectory("medit-refencoding-");
         var repository = SourceModOver(modFolder, plugin);
@@ -52,7 +41,7 @@ public sealed class SourceRepositoryRefEncodingTests
     }
 
     [Fact]
-    public void WriteBinary_Throws_ForAnEmptyPluginName()
+    public void AnEmptyPluginName_IsADefect()
     {
         using var modFolder = new ScratchDirectory("medit-refencoding-");
         var repository = SourceModOver(modFolder, "Test.esp");
@@ -68,7 +57,4 @@ public sealed class SourceRepositoryRefEncodingTests
         PluginBaselines.Init(modFolder, FilesOf(plugin));
         return TestAdapters.Source().OverFolder(TestMod.In(modFolder), GameRelease.Fallout4);
     }
-
-    private static string GitProbeSubject(string modFolder) =>
-        GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "log", "-1", "--format=%s", "main").Trim();
 }

@@ -1,5 +1,5 @@
 using MEditService.Codec.Serialization;
-
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.TestSupport;
@@ -24,8 +24,17 @@ internal static class PluginBaselines
         .. files.Select(file => (Plugin: PluginRootOf(file.RelativePath), File: file))
             .GroupBy(placed => placed.Plugin, StringComparer.Ordinal)
             .Select(plugin => ((IReadOnlyList<TreeFile>)[.. plugin.Select(placed => UnderRoot(placed.File))],
-                new DecompiledPlugin(plugin.Key, null))),
+                Decompiled(plugin.Key))),
     ];
+
+    /// <summary>The test mod's <paramref name="plugin"/>, decompiled from the binary hashing to
+    /// <paramref name="binarySha256"/> when one is given.</summary>
+    internal static DecompiledPlugin Decompiled(string plugin, string? binarySha256 = null) =>
+        new(new PluginAddress(plugin, TestMod.Name), binarySha256);
+
+    /// <summary>The test mod's <paramref name="plugin"/>, whose whole-mod door's tree is one empty NPC document.</summary>
+    internal static (IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin) OneRecordOf(string plugin, string? binarySha256 = null) =>
+        ([new TreeFile($"npc_/{plugin}/000001.json", "{}"u8.ToArray())], Decompiled(plugin, binarySha256));
 
     private static TreeFile UnderRoot(TreeFile placed) =>
         placed with { RelativePath = Path.Combine(Segments(placed.RelativePath)[2..]) };

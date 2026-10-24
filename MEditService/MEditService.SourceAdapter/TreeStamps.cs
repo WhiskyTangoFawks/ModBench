@@ -65,18 +65,17 @@ public sealed record RecordStamps(
 }
 
 /// <summary>A record's content stamp: what the record index remembers of a document, and what the tree is
-/// asked against (ADR-0003).</summary>
-internal static class TreeStamps
+/// asked against (ADR-0003). A file is remembered once <paramref name="time"/> settles its stamp.</summary>
+internal sealed class TreeStamps(TimeProvider time)
 {
-    private static readonly ConcurrentDictionary<string, StampGatedMemo<KnownDocument>> Known =
-        new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, StampGatedMemo<KnownDocument>> _known = new(StringComparer.Ordinal);
 
     private sealed record KnownDocument(
         string? FormKey, string Content, IReadOnlyList<string> FormKeys, string? Refusal, FormIdLimit? Limit, string? BelongsAt);
 
     internal static string ContentStamp(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
-    internal static RecordStamps StampsOf(string sourceFolder, PluginAddress plugin, GameRelease release, ISourceFiles files)
+    internal RecordStamps StampsOf(string sourceFolder, PluginAddress plugin, GameRelease release, ISourceFiles files)
     {
         var unreadable = new List<UnreadableFile>();
         var holders = new OneDocumentPerFormKey(sourceFolder);
@@ -84,8 +83,8 @@ internal static class TreeStamps
         var unsaved = new HashSet<string>(StringComparer.Ordinal);
 
         var root = SourceRepositoryLayout.RootIn(sourceFolder, plugin.Name);
-        foreach (var gone in Known.Keys.Where(tree => !Directory.Exists(tree))) Known.TryRemove(gone, out _);
-        var known = Known.GetOrAdd(root, _ => new StampGatedMemo<KnownDocument>(TimeProvider.System));
+        foreach (var gone in _known.Keys.Where(tree => !Directory.Exists(tree))) _known.TryRemove(gone, out _);
+        var known = _known.GetOrAdd(root, _ => new StampGatedMemo<KnownDocument>(time));
         var listed = new HashSet<string>(StringComparer.Ordinal);
         var problems = new List<FileProblem>();
         var misplaced = new List<FileProblem>();

@@ -1,3 +1,4 @@
+using System.Globalization;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
@@ -10,30 +11,14 @@ public sealed class SourceRepositoryLayoutTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    [Fact]
-    public void Put_ThenGet_RoundTripsPluginAndRecordType_ForARoutineRecord() =>
-        AssertPutThenGetRoundTrips("Vendor.esp", "npc_", "000800:Vendor.esp", "SomeNpc");
-
-    [Fact]
-    public void Put_ThenGet_RoundTripsPluginAndRecordType_ForARecordWithNoEditorId() =>
-        AssertPutThenGetRoundTrips("Vendor.esp", "npc_", "000800:Vendor.esp", null);
-
-    [Fact]
-    public void Put_ThenGet_RoundTripsPluginAndRecordType_ForAPluginNameWithItsOwnInternalDotKeptAsOneWholeSegment() =>
-        AssertPutThenGetRoundTrips("Vendor.patch.esp", "Keyword", "0012AB:Vendor.patch.esp", "SomeKeyword");
-
-    [Fact]
-    public void Put_ThenGet_RoundTripsPluginAndRecordType_ForAnOverrideWhoseOriginModKeyDiffersFromThePluginHoldingIt() =>
-        AssertPutThenGetRoundTrips("Vendor.esp", "npc_", "000800:Master1.esm", "AnOverride");
-
     [Theory]
+    [InlineData("Vendor.esp", "npc_", "000800:Vendor.esp", "SomeNpc")]
+    [InlineData("Vendor.esp", "npc_", "000800:Vendor.esp", null)]
+    [InlineData("Vendor.patch.esp", "Keyword", "0012AB:Vendor.patch.esp", "SomeKeyword")]
+    [InlineData("Vendor.esp", "npc_", "000800:Master1.esm", "AnOverride")]
     [InlineData("Café.esp", "npc_", "000800:Café.esp", "Né")]
     [InlineData("Плагин.esp", "npc_", "0012AB:Плагин.esp", "Имя")]
-    public void Put_ThenGet_RoundTripsPluginAndRecordType_ForNonAsciiPluginNamesAndEditorIds(
-        string pluginFileName, string recordType, string formKeyString, string? editorId) =>
-        AssertPutThenGetRoundTrips(pluginFileName, recordType, formKeyString, editorId);
-
-    private static void AssertPutThenGetRoundTrips(
+    public void ARecordPut_ReadsBackUnderItsPluginAndRecordType(
         string pluginFileName, string recordType, string formKeyString, string? editorId)
     {
         using var modFolder = new ScratchDirectory("medit-layout-roundtrip-");
@@ -59,7 +44,7 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     [Fact]
-    public void Init_PutsTheDoorsTree_UnderTheRootTheNameSpellsVerbatim_NotAModKeysLowercaseExtension()
+    public void TheDoorsTree_IsPutUnderTheRootTheNameSpellsVerbatim_NotAModKeysLowercaseExtension()
     {
         using var modFolder = new ScratchDirectory("medit-layout-init-");
 
@@ -75,7 +60,7 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     [Fact]
-    public void Init_NamesAContainersDocument_ForTheContainersOwnLeaf()
+    public void AContainersDocument_IsNamedForTheContainersOwnLeaf()
     {
         using var modFolder = new ScratchDirectory("medit-layout-init-");
         var directory = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP");
@@ -91,25 +76,42 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     private static void InitMixed(string modFolder, params TreeFile[] tree) =>
-        TestAdapters.Source().Init(modFolder, [(tree, new DecompiledPlugin("Mixed.ESP", null))]);
+        TestAdapters.Source().Init(modFolder, [(tree, PluginBaselines.Decompiled("Mixed.ESP"))]);
 
     private static List<string> SourceFilesIn(string modFolder) =>
         [.. Directory.EnumerateFiles(Path.Combine(modFolder, "plugin-source"), "*", SearchOption.AllDirectories)
             .Select(file => Path.GetRelativePath(modFolder, file))
             .Order(StringComparer.Ordinal)];
 
-    [Fact]
-    public void TreeOf_GivesAContainerTheDoorsName()
+    public enum Handed
+    {
+        AContainer,
+        AFlatRecord,
+    }
+
+    private static string DoorPathOf(Handed handed) =>
+        handed switch
+        {
+            Handed.AContainer => Path.Combine("Worldspaces", "W - 000800_Mixed.ESP", "RecordData.json"),
+            Handed.AFlatRecord => Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json"),
+            _ => throw new ArgumentOutOfRangeException(nameof(handed), handed, null),
+        };
+
+    [Theory]
+    [InlineData(Handed.AContainer)]
+    [InlineData(Handed.AFlatRecord)]
+    public void TheTreeInitWasHanded_IsTheTree_ItsHeaderAndEachDocumentByTheDoorsName(Handed handed)
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
-        var door = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP", "RecordData.json");
+        var door = DoorPathOf(handed);
+
         InitMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(door, [1]));
 
         Assert.Equal(["RecordData.json", door], TreePathsOf(modFolder));
     }
 
     [Fact]
-    public void TreeOf_GivesAContainerTheDoorsName_WhateverItsDirectoryOrFileIsCalled()
+    public void AContainer_HasTheDoorsName_WhateverItsDirectoryOrFileIsCalled()
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
         InitMixed(modFolder, new TreeFile("RecordData.json", [0]));
@@ -119,7 +121,7 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     [Fact]
-    public void InSourceNames_NamesAContainerByTheFileHeld_NotByTheLeafItWouldBear()
+    public void ADiagnosisOfAContainer_NamesTheFileHeld_NotTheLeafItWouldBear()
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
         InitMixed(modFolder, new TreeFile("RecordData.json", [0]));
@@ -132,7 +134,7 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     [Fact]
-    public void InSourceNames_NamesAFileTheLayoutDoesNotRename_UnderItsSourceRoot()
+    public void ADiagnosisOfAFileTheLayoutDoesNotRename_NamesItUnderItsSourceRoot()
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
         var flat = Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json");
@@ -144,41 +146,30 @@ public sealed class SourceRepositoryLayoutTests
         Assert.Equal(Path.Combine("plugin-source", "Mixed.ESP", flat), named.Value().Anchor);
     }
 
-    [Fact]
-    public void InSourceNames_NamesEachFileItsMessageCarries_AsTheLayoutSpellsIt_NeverAPathInsideAnother()
+    [Theory]
+    [InlineData("from path: RecordData.json, then {0}", "from path: {2}, then {1}")]
+    [InlineData("Could not read {0}.", "Could not read {1}.")]
+    public void ADiagnosisMessage_NamesEachFileItCarries_AsTheLayoutSpellsIt_NeverAPathInsideAnotherNorASentencesPeriod(
+        string message, string named)
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
         var container = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP");
         InitMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(Path.Combine(container, "RecordData.json"), [1]));
-        var read = new PluginDiagnosis(
-            null, PluginDiagnosis.UnknownClass, null, $"from path: RecordData.json, then {Path.Combine(container, "RecordData.json")}");
+        string[] paths =
+        [
+            Path.Combine(container, "RecordData.json"),
+            Path.Combine("plugin-source", "Mixed.ESP", container, "W - 000800_Mixed.ESP.json"),
+            Path.Combine("plugin-source", "Mixed.ESP", "000000_Mixed.esp.json"),
+        ];
+        var read = new PluginDiagnosis(null, PluginDiagnosis.UnknownClass, null, string.Format(CultureInfo.InvariantCulture, message, paths));
 
-        var named = RepositoryOver(modFolder).InSourceNames(Mixed, read);
+        var answered = RepositoryOver(modFolder).InSourceNames(Mixed, read);
 
-        Assert.Equal(
-            $"from path: {Path.Combine("plugin-source", "Mixed.ESP", "000000_Mixed.esp.json")}, " +
-            $"then {Path.Combine("plugin-source", "Mixed.ESP", container, "W - 000800_Mixed.ESP.json")}",
-            named.Value().Message);
+        Assert.Equal(string.Format(CultureInfo.InvariantCulture, named, paths), answered.Value().Message);
     }
 
     [Fact]
-    public void InSourceNames_NamesAFileThatEndsASentence_LeavingThePeriodOutOfThePath()
-    {
-        using var modFolder = new ScratchDirectory("medit-layout-tree-");
-        var container = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP");
-        InitMixed(modFolder, new TreeFile("RecordData.json", [0]), new TreeFile(Path.Combine(container, "RecordData.json"), [1]));
-        var read = new PluginDiagnosis(
-            null, PluginDiagnosis.UnknownClass, null, $"Could not read {Path.Combine(container, "RecordData.json")}.");
-
-        var named = RepositoryOver(modFolder).InSourceNames(Mixed, read);
-
-        Assert.Equal(
-            $"Could not read {Path.Combine("plugin-source", "Mixed.ESP", container, "W - 000800_Mixed.ESP.json")}.",
-            named.Value().Message);
-    }
-
-    [Fact]
-    public void TreeOf_RefusesADirectoryHoldingTwoDocumentsAndNoneNamedForIt()
+    public void ADirectoryHoldingTwoDocumentsAndNoneNamedForIt_RefusesTheTree()
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
         InitMixed(modFolder, new TreeFile("RecordData.json", [0]));
@@ -189,7 +180,7 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     [Fact]
-    public void TreeOf_LeavesAFlatRecordTheDoorReadsAsItIs()
+    public void AFlatRecordTheDoorReads_StaysInTheTreeAsItIs()
     {
         using var modFolder = new ScratchDirectory("medit-layout-tree-");
         InitMixed(modFolder, new TreeFile("RecordData.json", [0]));
@@ -200,18 +191,7 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     [Fact]
-    public void TreeOf_AnswersTheTreeInitWasHanded_ItsHeaderByTheDoorsName_AndNoOtherFileANewOne()
-    {
-        using var modFolder = new ScratchDirectory("medit-layout-tree-");
-        var npc = Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json");
-
-        InitMixed(modFolder, new TreeFile("RecordData.json", [1]), new TreeFile(npc, [2]));
-
-        Assert.Equal(["RecordData.json", npc], TreePathsOf(modFolder));
-    }
-
-    [Fact]
-    public void ReadBackOf_TheDoorsTree_IsThatTree_SoAGateCompilingItCompilesWhatInitWrites()
+    public void TheDoorsTreeReadBack_IsThatTree_SoAGateCompilingItCompilesWhatInitWrites()
     {
         var container = Path.Combine("Worldspaces", "W - 000800_Mixed.ESP");
         TreeFile[] tree =

@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -16,12 +17,12 @@ public sealed class SourceRepositoryCommitRepairTests : IDisposable
     private readonly ScratchDirectory _modFolder = new("medit-commit-repair-");
 
     public SourceRepositoryCommitRepairTests() =>
-        TestAdapters.Source().Init(_modFolder, [([File("npc_/A.esp/000001.json", "{\"was\":1}")], new DecompiledPlugin(Plugin, null))]);
+        TestAdapters.Source().Init(_modFolder, [([File("npc_/A.esp/000001.json", "{\"was\":1}")], PluginBaselines.Decompiled(Plugin))]);
 
     public void Dispose() => _modFolder.Dispose();
 
     [Fact]
-    public void CommitRepair_CommitsTheFlaggedTree_ThenTheRepairedTree_OnTheCheckedOutBranch_AndParksTheBinary()
+    public void ARepair_CommitsTheFlaggedTree_ThenTheRepairedTree_OnTheCheckedOutBranch_AndParksTheBinary()
     {
         var before = Head();
 
@@ -36,7 +37,7 @@ public sealed class SourceRepositoryCommitRepairTests : IDisposable
     }
 
     [Fact]
-    public void CommitRepair_LeavesWhatIsStagedOutsideThePluginsSource_StagedAndUncommitted()
+    public void ARepair_LeavesWhatIsStagedOutsideThePluginsSource_StagedAndUncommitted()
     {
         var other = Path.Combine(Directory.CreateDirectory(Path.Combine(_modFolder, "plugin-source", "B.esp")).FullName, "b.json");
         System.IO.File.WriteAllText(other, "{}");
@@ -48,7 +49,7 @@ public sealed class SourceRepositoryCommitRepairTests : IDisposable
     }
 
     [Fact]
-    public void CommitRepair_WhoseSecondCommitFails_LeavesTheBranchTheIndexAndTheSourceAsTheyWere()
+    public void ARepairWhoseSecondCommitFails_LeavesTheBranchTheIndexAndTheSourceAsTheyWere()
     {
         var before = Head();
         GitHooks.Write(_modFolder, "commit-msg", "grep -q Repair \"$1\" && exit 1\nexit 0");

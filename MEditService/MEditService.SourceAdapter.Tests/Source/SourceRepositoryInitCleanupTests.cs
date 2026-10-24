@@ -16,10 +16,10 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     public void Dispose() => _root.Dispose();
 
     [Fact]
-    public void Init_APluginWhoseFilesCannotAllBeWritten_IsRefused_LeavingNoRepositoryAndNoSourceOfThePluginsAroundIt()
+    public void APluginWhoseFilesCannotAllBeWritten_RefusesTheInit_LeavingNoRepositoryAndNoSourceOfThePluginsAroundIt()
     {
         var failure = TestAdapters.Source().Init(
-            _modFolder, [Baseline("A.esp"), BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp"), Baseline("C.esp")]);
+            _modFolder, [PluginBaselines.OneRecordOf("A.esp"), BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp"), PluginBaselines.OneRecordOf("C.esp")]);
 
         Assert.StartsWith("Bad.esp's source could not be written: ", failure.Require().Reason, StringComparison.Ordinal);
         Assert.False(TestAdapters.Source().IsSourceMod(_modFolder));
@@ -29,9 +29,9 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [Fact]
-    public void Init_AnAssetThatCannotBeRead_IsRefusedNamingIt_LeavingNoRepositoryNoAssetsAndNoSource()
+    public void AnAssetThatCannotBeRead_RefusesTheInitNamingIt_LeavingNoRepositoryNoAssetsAndNoSource()
     {
-        var failure = TestAdapters.Source().Init(_modFolder, ModName, [Baseline("A.esp")],
+        var failure = TestAdapters.Source().Init(_modFolder, ModName, [PluginBaselines.OneRecordOf("A.esp")],
         [
             new Asset("textures/a.dds", () => new MemoryStream("a"u8.ToArray())),
             new Asset("textures/held.dds", () => throw new IOException("textures/held.dds is held by another process")),
@@ -43,13 +43,13 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [Fact]
-    public void Init_TakesBackAnAssetItReplaced_WhenALaterAssetFails()
+    public void AnInit_TakesBackAnAssetItReplaced_WhenALaterAssetFails()
     {
         var existing = Path.Combine(_modFolder, "assets", "a.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(existing).Require());
         File.WriteAllText(existing, "theirs");
 
-        TestAdapters.Source().Init(_modFolder, ModName, [Baseline("A.esp")],
+        TestAdapters.Source().Init(_modFolder, ModName, [PluginBaselines.OneRecordOf("A.esp")],
         [
             new Asset("a.txt", () => new MemoryStream("ours"u8.ToArray())),
             new Asset("b.txt", () => throw new IOException("b.txt is held by another process")),
@@ -59,7 +59,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [PosixFact]
-    public void Init_APluginWhoseFilesCannotBeWritten_LeavesTheHalfMadeRepositoryAsItWas()
+    public void APluginWhoseFilesCannotBeWritten_LeavesTheHalfMadeRepositoryAsItWas()
     {
         CrashAnInitAfterItMadeTheRepository();
         var before = GitDirContents();
@@ -71,7 +71,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [PosixFact]
-    public void Init_WhenTheCommitFails_LeavesTheHalfMadeRepositoryAsItWas()
+    public void AnInitWhoseCommitFails_LeavesTheHalfMadeRepositoryAsItWas()
     {
         CrashAnInitAfterItMadeTheRepository();
         var before = GitDirContents();
@@ -90,7 +90,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [PosixFact]
-    public void Init_WhenTheCommitFails_RestoresTheSourceFileItReplaced()
+    public void AnInitWhoseCommitFails_RestoresTheSourceFileItReplaced()
     {
         var existing = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
         Directory.CreateDirectory(Path.GetDirectoryName(existing).Require());
@@ -110,19 +110,19 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [Fact]
-    public void Init_WhenAPluginsWriteThrowsAnythingElse_TakesBackEveryPluginsFiles_AndThrows()
+    public void AnInitWhosePluginWriteThrowsAnythingElse_TakesBackEveryPluginsFiles_AndThrows()
     {
         var nulInPath = new TreeFile("npc_/\0.json", "{}"u8.ToArray());
 
         Assert.ThrowsAny<ArgumentException>(
-            () => TestAdapters.Source().Init(_modFolder, [Baseline("A.esp"), ([nulInPath], new DecompiledPlugin("Bad.esp", null))]));
+            () => TestAdapters.Source().Init(_modFolder, [PluginBaselines.OneRecordOf("A.esp"), ([nulInPath], PluginBaselines.Decompiled("Bad.esp"))]));
 
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
         Assert.False(Directory.Exists(Path.Combine(_modFolder, ".git")));
     }
 
     [PosixFact]
-    public void Init_WhenTheCommitFails_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
+    public void AnInitWhoseCommitFails_LeavesAFileAnotherProgramPutInADirectoryItMade_AndNamesTheDirectory()
     {
         var theirs = Path.Combine(_modFolder, "plugin-source", "A.esp", "theirs.txt");
 
@@ -134,7 +134,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [PosixFact]
-    public void Init_WhenTheCommitFails_LeavesAFileAnotherProgramChanged_AndNamesIt()
+    public void AnInitWhoseCommitFails_LeavesAFileAnotherProgramChanged_AndNamesIt()
     {
         var changed = Path.Combine(_modFolder, "plugin-source", "A.esp", "npc_", "A.esp", "000001.json");
 
@@ -145,7 +145,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [PosixFact]
-    public void Init_WhenTheCommitFails_LeavesAGitignoreAnotherProgramChanged_AndNamesIt()
+    public void AnInitWhoseCommitFails_LeavesAGitignoreAnotherProgramChanged_AndNamesIt()
     {
         var gitignore = Path.Combine(_modFolder, ".gitignore");
 
@@ -162,10 +162,10 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         return InitRefused("A.esp");
     }
 
-    private string InitRefused(string plugin) => TestAdapters.Source().Init(_modFolder, [Baseline(plugin)]).Require().Reason;
+    private string InitRefused(string plugin) => TestAdapters.Source().Init(_modFolder, [PluginBaselines.OneRecordOf(plugin)]).Require().Reason;
 
     [PosixFact]
-    public void Init_WhenTheCommitFails_TakesBackWhatItMade_AndAnInitAgainCreatesTheRepository()
+    public void AnInitWhoseCommitFails_TakesBackWhatItMade_AndAnInitAgainCreatesTheRepository()
     {
         var asset = UnreadableFileTheCommitCannotAdd();
         FileModes.Set(asset, "000");
@@ -182,7 +182,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         Assert.Equal([asset], Directory.GetFiles(Path.Combine(_modFolder, "plugin-source"), "*", SearchOption.AllDirectories));
         File.Delete(asset);
 
-        Assert.Null(TestAdapters.Source().Init(_modFolder, [Baseline("A.esp")]));
+        Assert.Null(TestAdapters.Source().Init(_modFolder, [PluginBaselines.OneRecordOf("A.esp")]));
 
         Assert.Equal(["Init SomeMod"], SubjectsOnMain());
         Assert.True(TestAdapters.Source().IsSourceMod(_modFolder));
@@ -190,7 +190,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [Fact]
-    public void Init_IntoARepositoryWithHistoryButNoMain_ThrowsAndChangesNothingOfIt()
+    public void AnInitIntoARepositoryWithHistoryButNoMain_IsADefect_AndChangesNothingOfIt()
     {
         Git("init", "-q", "-b", "master");
         File.WriteAllText(Path.Combine(_modFolder, ".gitignore"), "theirs\n");
@@ -201,7 +201,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
 
         Assert.True(TestAdapters.Source().HoldsAnotherRepository(_modFolder));
         Assert.Throws<InvalidOperationException>(
-            () => TestAdapters.Source().Init(_modFolder, [Baseline("A.esp")]));
+            () => TestAdapters.Source().Init(_modFolder, [PluginBaselines.OneRecordOf("A.esp")]));
 
         Assert.Equal(logBefore, Git("log", "--all", "--format=%H %s"));
         Assert.Equal("theirs\n", File.ReadAllText(Path.Combine(_modFolder, ".gitignore")));
@@ -210,21 +210,21 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [Fact]
-    public void Init_IntoABranchlessRepositoryTheUserMade_ThrowsAndChangesNothingOfIt()
+    public void AnInitIntoABranchlessRepositoryTheUserMade_IsADefect_AndChangesNothingOfIt()
     {
         Git("init", "-q", "-b", "main");
         var before = GitDirContents();
 
         Assert.True(TestAdapters.Source().HoldsAnotherRepository(_modFolder));
         Assert.Throws<InvalidOperationException>(
-            () => TestAdapters.Source().Init(_modFolder, [Baseline("A.esp")]));
+            () => TestAdapters.Source().Init(_modFolder, [PluginBaselines.OneRecordOf("A.esp")]));
 
         Assert.Equal(before, GitDirContents());
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
     }
 
     [Fact]
-    public void Init_WhenADefectStopsAPluginsWrite_NamesWhatAnotherProgramPutInADirectoryItMade_AndIsNotARefusal()
+    public void AnInitWhosePluginWriteADefectStops_NamesWhatAnotherProgramPutInADirectoryItMade_AndIsNotARefusal()
     {
         var theirs = Path.Combine(_modFolder, "plugin-source", "A.esp", "theirs.txt");
         var files = new FilesThatFailMidway(
@@ -232,7 +232,7 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
             () => File.WriteAllText(theirs, "theirs"));
 
         var failure = Assert.Throws<AggregateException>(
-            () => TestAdapters.Source().Init(_modFolder, [(files, new DecompiledPlugin("A.esp", null))]));
+            () => TestAdapters.Source().Init(_modFolder, [(files, PluginBaselines.Decompiled("A.esp"))]));
 
         Assert.IsType<InvalidCastException>(failure.InnerException);
         Assert.Contains("plugin-source/A.esp \u2014 holds something this change did not write", failure.Message.Replace('\\', '/'));
@@ -256,12 +256,12 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
     }
 
     [PosixFact]
-    public void Init_IntoTheHalfMadeRepositoryOfACrashedInit_Recovers()
+    public void AnInitIntoTheHalfMadeRepositoryOfACrashedInit_Recovers()
     {
         CrashAnInitAfterItMadeTheRepository();
 
         Assert.False(TestAdapters.Source().HoldsAnotherRepository(_modFolder));
-        Assert.Null(TestAdapters.Source().Init(_modFolder, [Baseline("A.esp")]));
+        Assert.Null(TestAdapters.Source().Init(_modFolder, [PluginBaselines.OneRecordOf("A.esp")]));
 
         Assert.Equal(["Init SomeMod"], SubjectsOnMain());
     }
@@ -299,14 +299,11 @@ public sealed class SourceRepositoryInitCleanupTests : IDisposable
         return path;
     }
 
-    private static (IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin) Baseline(string plugin) =>
-        ([new TreeFile($"npc_/{plugin}/000001.json", "{}"u8.ToArray())], new DecompiledPlugin(plugin, null));
-
     private static (IReadOnlyList<TreeFile> Files, DecompiledPlugin Plugin) BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies(string plugin) =>
         ([
             new TreeFile("npc_", "{}"u8.ToArray()),
             new TreeFile($"npc_/{plugin}/000001.json", "{}"u8.ToArray()),
-        ], new DecompiledPlugin(plugin, null));
+        ], PluginBaselines.Decompiled(plugin));
 
     private string[] SubjectsOnMain() =>
         Git("log", "--reverse", "--format=%s", "refs/heads/main").Split('\n', StringSplitOptions.RemoveEmptyEntries);
