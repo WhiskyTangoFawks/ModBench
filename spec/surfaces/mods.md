@@ -76,7 +76,7 @@ Overwrite is always a row, even when it holds nothing. It is not a mod: it has n
 
 ## Indicators
 
-A mod row carries an indicator for each status that holds, and a folder or file row one for each publisher tag that covers it. A disabled mod carries none but a publisher tag whose publisher ships a disabled mod. Each indicator has a badge and a colour, and my settings switch each on or off. Each colour is a theme colour Modbench contributes. Cites: MO2's Conflicts and Flags columns; editor-conflicts, The colours, story 1
+A mod row carries an indicator for each status that holds, and a folder or file row one for each publisher tag that covers it. A disabled mod carries none but a publisher tag that covers it (publishing.md, Publisher tags, story 1). Each indicator has a badge and a colour, and my settings switch each on or off. Each colour is a theme colour Modbench contributes. Cites: MO2's Conflicts and Flags columns; editor-conflicts, The colours, story 1
 
 | Indicator | Holds when | Badge | Colour |
 |---|---|---|---|
