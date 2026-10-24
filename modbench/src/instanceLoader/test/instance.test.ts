@@ -789,7 +789,7 @@ describe('Instance — the mod folders, the game folder\'s plugins and the load 
   it('carries the publisher tags the adapter declares before any read, and the publisher\'s configuration once read', async () => {
     const tag: PublisherTag = { name: 'Include', badge: 'IN', marksPaths: true };
     const covering = (): readonly PublisherTag[] => [tag];
-    const { instance } = loader({ publisherConfiguration: { kind: 'read', covering } }, (adapter) => ({ ...adapter, publisherTags: [tag] }));
+    const { instance } = loader({ publisherConfiguration: { kind: 'read', covering, listed: () => [] } }, (adapter) => ({ ...adapter, publisherTags: [tag] }));
     const before = { tags: instance.value.publisherTags, configuration: instance.value.publisherConfiguration };
 
     await instance.refresh();
