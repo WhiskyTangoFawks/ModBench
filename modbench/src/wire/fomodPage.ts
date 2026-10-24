@@ -1,11 +1,31 @@
 // mods-fomod.md: what the FOMOD installer sends its page, what the page sends back, and the rules the page
 // shows and enforces as the reference installer does.
 
-import type { types } from '@nexusmods/fomod-installer-native';
+export type FomodGroupType = 'SelectAtLeastOne' | 'SelectAtMostOne' | 'SelectExactlyOne' | 'SelectAll' | 'SelectAny';
+export type FomodOptionType = 'Required' | 'Optional' | 'Recommended' | 'NotUsable' | 'CouldBeUsable';
 
-export type FomodStep = types.IInstallStep;
-export type FomodGroup = types.IGroup;
-export type FomodOption = types.IPlugin;
+export interface FomodOption {
+  readonly id: number;
+  readonly selected: boolean;
+  readonly name: string;
+  readonly description: string;
+  readonly image: string;
+  readonly type: FomodOptionType;
+}
+
+export interface FomodGroup {
+  readonly id: number;
+  readonly name: string;
+  readonly type: FomodGroupType;
+  readonly options: readonly FomodOption[];
+}
+
+export interface FomodStep {
+  readonly id: number;
+  readonly name: string;
+  readonly visible: boolean;
+  readonly optionalFileGroups?: { readonly group: readonly FomodGroup[] };
+}
 
 /** What the user did on the page. A selection names every option picked in the group, as the engine takes it. */
 export type FomodMove =
@@ -38,10 +58,13 @@ const isObject = (value: unknown): value is object => typeof value === 'object' 
 
 const isMove = (value: unknown): value is FomodMove => isObject(value) && ['select', 'continue', 'manual', 'cancel'].includes(String(Reflect.get(value, 'kind')));
 
+// Shallow: the state is the host's own build, trusted once the envelope checks out.
+const isState = (value: unknown): value is FomodState => isObject(value) && Array.isArray(Reflect.get(value, 'steps'));
+
 export function parseFomodShown(value: unknown): FomodShown | undefined {
   if (!isObject(value) || Reflect.get(value, 'type') !== FOMOD_STATE) return undefined;
   const state: unknown = Reflect.get(value, 'state');
-  return isObject(state) && Array.isArray(Reflect.get(state, 'steps')) ? { type: FOMOD_STATE, state: state as FomodState } : undefined;
+  return isState(state) ? { type: FOMOD_STATE, state } : undefined;
 }
 
 export const isFomodReady = (value: unknown): boolean => isObject(value) && Reflect.get(value, 'type') === FOMOD_READY;
@@ -53,13 +76,14 @@ export function parseFomodMove(value: unknown): FomodMove | undefined {
 }
 
 /** The group's type as the reference installer takes it: a lone option cannot be a choice between several. */
-export function effectiveGroupType(group: FomodGroup): types.GroupType {
+export function effectiveGroupType(group: FomodGroup): FomodGroupType {
   if (group.options.length !== 1) return group.type;
   switch (group.type) {
     case 'SelectAtLeastOne':
     case 'SelectExactlyOne': return 'SelectAll';
     case 'SelectAtMostOne': return 'SelectAny';
-    default: return group.type;
+    case 'SelectAll':
+    case 'SelectAny': return group.type;
   }
 }
 

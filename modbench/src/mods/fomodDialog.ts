@@ -1,7 +1,7 @@
 // mods-fomod.md, Opening: the FOMOD installer's page, a tab that opens when the installer first has a state to show.
 
 import * as vscode from 'vscode';
-import type { FomodDialog } from '../instanceAdapter/instanceAdapter';
+import type { FomodDialog } from '../modCommands/modCommands';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import type { AskQuestion } from '../ports/dialog';
 import { FOMOD_STATE, isFomodReady, parseFomodMove, type FomodMove, type FomodState } from '../wire/fomodPage';

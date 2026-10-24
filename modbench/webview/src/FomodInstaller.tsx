@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { fomodHost } from './vscode';
+import { listenToHost } from './nativeBridge';
 import {
   FOMOD_MOVE, FOMOD_READY, effectiveGroupType, groupsNeedingPick, hasPrevious, isLastVisible, isOptionLocked, isPicked, optionsAfterClick, parseFomodShown,
   type FomodGroup, type FomodMove, type FomodOption, type FomodState, type FomodStep,
@@ -86,18 +87,17 @@ export function FomodInstallerView() {
   const [state, setState] = useState<FomodState | undefined>(undefined);
 
   useEffect(() => {
-    const listener = (event: MessageEvent<unknown>) => {
-      const shown = parseFomodShown(event.data);
+    const stopListening = listenToHost((data) => {
+      const shown = parseFomodShown(data);
       if (shown) setState(shown.state);
-    };
+    });
     const escape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') send({ kind: 'cancel' });
     };
-    window.addEventListener('message', listener);
     window.addEventListener('keydown', escape);
     fomodHost.postMessage({ type: FOMOD_READY });
     return () => {
-      window.removeEventListener('message', listener);
+      stopListening();
       window.removeEventListener('keydown', escape);
     };
   }, []);

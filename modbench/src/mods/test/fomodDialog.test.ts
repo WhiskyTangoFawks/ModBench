@@ -5,7 +5,7 @@ interface FakePanel {
   disposed: boolean;
   dispose: () => void;
   onDidDispose: (listener: () => void) => void;
-  webview: { postMessage: ReturnType<typeof vi.fn>; onDidReceiveMessage: (listener: (message: unknown) => void) => void; options: object; html: string; cspSource: string; asWebviewUri: (uri: unknown) => unknown };
+  webview: { postMessage: ReturnType<typeof vi.fn<(message: unknown) => Promise<boolean>>>; onDidReceiveMessage: (listener: (message: unknown) => void) => void; options: object; html: string; cspSource: string; asWebviewUri: (uri: unknown) => unknown };
   receive: (message: unknown) => void;
 }
 
@@ -21,7 +21,7 @@ const { createWebviewPanel, panels } = vi.hoisted(() => {
         dispose: () => { panel.disposed = true; disposeListener(); },
         onDidDispose: (listener) => { disposeListener = listener; },
         webview: {
-          postMessage: vi.fn(() => Promise.resolve(true)), onDidReceiveMessage: (listener) => { messageListener = listener; },
+          postMessage: vi.fn((_message: unknown) => Promise.resolve(true)), onDidReceiveMessage: (listener) => { messageListener = listener; },
           options: {}, html: '', cspSource: 'csp:', asWebviewUri: (uri) => uri,
         },
         receive: (message) => messageListener(message),
@@ -39,8 +39,11 @@ vi.mock('vscode', () => ({
 }));
 
 import { fomodDialog } from '../fomodDialog';
+import type { AskQuestion } from '../../ports/dialog';
+import { uriFile } from '../../test/vscodeMock';
 import { FOMOD_MOVE, FOMOD_READY, FOMOD_STATE, type FomodMove, type FomodState } from '../../wire/fomodPage';
 
+const EXTENSION = uriFile('/ext');
 const STATE: FomodState = { module: 'My Module', steps: [], current: 0 };
 const page = () => {
   const [only] = panels;
@@ -55,7 +58,7 @@ beforeEach(() => {
 
 describe('the FOMOD installer\'s page, in a tab', () => {
   it('opens nothing until the installer has a state to show, then titles the tab by the module', () => {
-    const dialog = fomodDialog('ext' as never, vi.fn());
+    const dialog = fomodDialog(EXTENSION, vi.fn());
     expect(createWebviewPanel).not.toHaveBeenCalled();
 
     dialog.show(STATE);
@@ -65,7 +68,7 @@ describe('the FOMOD installer\'s page, in a tab', () => {
   });
 
   it('sends the latest state once the page says it is ready, and each state after that as it comes', () => {
-    const dialog = fomodDialog('ext' as never, vi.fn());
+    const dialog = fomodDialog(EXTENSION, vi.fn());
     dialog.show(STATE);
 
     page().receive({ type: FOMOD_READY });
@@ -78,7 +81,7 @@ describe('the FOMOD installer\'s page, in a tab', () => {
 
   it('hands on the moves the page sends, and nothing else it says', () => {
     const moves: FomodMove[] = [];
-    const dialog = fomodDialog('ext' as never, vi.fn());
+    const dialog = fomodDialog(EXTENSION, vi.fn());
     dialog.onMove((move) => moves.push(move));
     dialog.show(STATE);
 
@@ -90,14 +93,14 @@ describe('the FOMOD installer\'s page, in a tab', () => {
 
   it('takes closing the tab as Cancel, but not the close the installer asks for itself', () => {
     const moves: FomodMove[] = [];
-    const closedByUser = fomodDialog('ext' as never, vi.fn());
+    const closedByUser = fomodDialog(EXTENSION, vi.fn());
     closedByUser.onMove((move) => moves.push(move));
     closedByUser.show(STATE);
     page().dispose();
 
     expect(moves).toEqual([{ kind: 'cancel' }]);
 
-    const closedByInstaller = fomodDialog('ext' as never, vi.fn());
+    const closedByInstaller = fomodDialog(EXTENSION, vi.fn());
     closedByInstaller.onMove((move) => moves.push(move));
     closedByInstaller.show(STATE);
     closedByInstaller.close();
@@ -107,8 +110,8 @@ describe('the FOMOD installer\'s page, in a tab', () => {
   });
 
   it('names the missing files in a modal confirmation, and installs without them only on Install anyway', async () => {
-    const ask = vi.fn<(...args: unknown[]) => Promise<string | undefined>>().mockResolvedValueOnce('Install anyway').mockResolvedValueOnce(undefined);
-    const dialog = fomodDialog('ext' as never, ask);
+    const ask = vi.fn<AskQuestion>().mockResolvedValueOnce('Install anyway').mockResolvedValueOnce(undefined);
+    const dialog = fomodDialog(EXTENSION, ask);
 
     expect(await dialog.confirmMissing(['a.esp', 'b/c.esp'])).toBe(true);
     expect(await dialog.confirmMissing(['a.esp'])).toBe(false);

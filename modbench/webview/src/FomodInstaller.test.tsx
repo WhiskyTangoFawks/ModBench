@@ -10,12 +10,12 @@ import { fomodHost } from './vscode';
 import { FOMOD_MOVE, FOMOD_READY, FOMOD_STATE, type FomodGroup, type FomodOption, type FomodState, type FomodStep } from '../../src/wire/fomodPage';
 
 const option = (id: number, name: string, over: Partial<FomodOption> = {}): FomodOption =>
-  ({ id, selected: false, preset: false, name, description: '', image: '', type: 'Optional', ...over });
+  ({ id, selected: false, name, description: '', image: '', type: 'Optional', ...over });
 
 const group = (id: number, name: string, type: FomodGroup['type'], ...options: FomodOption[]): FomodGroup => ({ id, name, type, options });
 
 const step = (id: number, name: string, visible: boolean, ...groups: FomodGroup[]): FomodStep =>
-  ({ id, name, visible, optionalFileGroups: { order: 'Explicit', group: groups } });
+  ({ id, name, visible, optionalFileGroups: { group: groups } });
 
 const show = (steps: FomodStep[], current = 0): void => {
   const state: FomodState = { module: 'My Module', steps, current };
@@ -94,7 +94,7 @@ describe('the FOMOD installer page', () => {
       group(0, 'Mixed', 'SelectAny', option(0, 'Req', { type: 'Required' }), option(1, 'Nope', { type: 'NotUsable' }), option(2, 'Free')),
       group(1, 'All', 'SelectAll', option(0, 'X'), option(1, 'Y')))]);
 
-    expect(['Req', 'Nope', 'X', 'Y', 'Free'].map((name) => (screen.getByRole('checkbox', { name }) as HTMLInputElement).disabled)).toEqual([true, true, true, true, false]);
+    expect(['Req', 'Nope', 'X', 'Y', 'Free'].map((name) => screen.getByRole('checkbox', { name }).hasAttribute('disabled'))).toEqual([true, true, true, true, false]);
     expect(screen.getByRole('checkbox', { name: 'Req' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'X' })).toBeChecked();
   });

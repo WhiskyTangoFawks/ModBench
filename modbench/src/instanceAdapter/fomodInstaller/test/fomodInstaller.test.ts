@@ -69,6 +69,7 @@ describe('the FOMOD installer', () => {
 
   async function install(choices: readonly FomodStepChoice[], engine: FomodEngine = FOMOD_ENGINE): Promise<FomodLanded> {
     const landing = await fomodLanding(engine, { root, fomod: 'xml' }, { kind: 'choices', steps: choices }, () => Promise.resolve(KNOWN));
+    if ('cancelled' in landing) throw new Error('The installer was cancelled.');
     landedIn = landing.root;
     return landing.fomod;
   }

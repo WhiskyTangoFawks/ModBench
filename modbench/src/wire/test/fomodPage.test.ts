@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import type { types } from '@nexusmods/fomod-installer-native';
+import { present } from '../../ports/present';
 import {
   groupsNeedingPick, hasPrevious, isLastVisible, isOptionLocked, isPicked, optionsAfterClick, parseFomodMove, parseFomodShown,
-  type FomodGroup, type FomodOption, type FomodStep,
+  type FomodGroup, type FomodGroupType, type FomodOption, type FomodStep,
 } from '../fomodPage';
 
 const option = (id: number, over: Partial<FomodOption> = {}): FomodOption =>
-  ({ id, selected: false, preset: false, name: `O${id}`, description: '', image: '', type: 'Optional', ...over });
+  ({ id, selected: false, name: `O${id}`, description: '', image: '', type: 'Optional', ...over });
 
-const group = (type: types.GroupType, ...options: FomodOption[]): FomodGroup => ({ id: 0, name: 'G', type, options });
+const group = (type: FomodGroupType, ...options: FomodOption[]): FomodGroup => ({ id: 0, name: 'G', type, options });
+
+const at = (from: FomodGroup, index: number): FomodOption => present(from.options[index], 'the option');
 
 const step = (id: number, visible: boolean, ...groups: FomodGroup[]): FomodStep =>
-  ({ id, name: `S${id}`, visible, optionalFileGroups: { order: 'Explicit', group: groups } });
+  ({ id, name: `S${id}`, visible, optionalFileGroups: { group: groups } });
 
 describe('a FOMOD group, as the reference installer shows it', () => {
   it('ticks what the engine selected, each required option, and every option of a group that takes all', () => {
@@ -30,16 +32,16 @@ describe('a FOMOD group, as the reference installer shows it', () => {
 
   it('takes a lone option of a group that wants a pick as required, as the reference installer does', () => {
     const lone = group('SelectExactlyOne', option(0));
-    expect(isPicked(lone, lone.options[0] as FomodOption)).toBe(true);
-    expect(isOptionLocked(lone, lone.options[0] as FomodOption)).toBe(true);
+    expect(isPicked(lone, at(lone, 0))).toBe(true);
+    expect(isOptionLocked(lone, at(lone, 0))).toBe(true);
   });
 
   it('replaces the pick of a one-pick group by a click, and toggles an option of a many-pick group', () => {
     const exactlyOne = group('SelectExactlyOne', option(0, { selected: true }), option(1));
-    expect(optionsAfterClick(exactlyOne, exactlyOne.options[1] as FomodOption)).toEqual([1]);
+    expect(optionsAfterClick(exactlyOne, at(exactlyOne, 1))).toEqual([1]);
     const any = group('SelectAny', option(0, { selected: true }), option(1));
-    expect(optionsAfterClick(any, any.options[1] as FomodOption)).toEqual([0, 1]);
-    expect(optionsAfterClick(any, any.options[0] as FomodOption)).toEqual([]);
+    expect(optionsAfterClick(any, at(any, 1))).toEqual([0, 1]);
+    expect(optionsAfterClick(any, at(any, 0))).toEqual([]);
   });
 
   it('refuses Next while a group that needs a pick has none, and no other group', () => {
