@@ -388,6 +388,7 @@ describe('renameMod', () => {
     expect(outcome).toEqual({ applied: true, lineRefusals: [] });
     expect(fake.calls).toEqual([
       { verb: 'renameModFolder', from: 'Harder VATS', to: 'Harder VATS 2' },
+      { verb: 'keepOutOfPublisher' },
       orderWrite([line], 'Default'),
       orderWrite([line], 'Secondary'),
     ]);
@@ -401,7 +402,7 @@ describe('renameMod', () => {
     const outcome = await rename(commands);
 
     expect(outcome).toEqual({ applied: true, lineRefusals: [{ profile: 'Secondary', refusal: 'disk full' }] });
-    expect(verbs(fake.calls)).toEqual(['renameModFolder', 'changeModOrder', 'changeModOrder']);
+    expect(verbs(fake.calls)).toEqual(['renameModFolder', 'keepOutOfPublisher', 'changeModOrder', 'changeModOrder']);
   });
 
   it('writes nothing for the name it already has, saying nothing changed', async () => {
@@ -447,7 +448,7 @@ describe('renameMod', () => {
 
       expect(outcome).toEqual({ applied: true, lineRefusals: [] });
       expect(configuredBy(mEdit)).toEqual([[SOURCE, { output: 'Harder VATS 2' }]]);
-      expect(verbs(fake.calls)).toEqual(['renameModFolder', 'changeModOrder', 'changeModOrder']);
+      expect(verbs(fake.calls)).toEqual(['renameModFolder', 'keepOutOfPublisher', 'changeModOrder', 'changeModOrder']);
     });
 
     it('puts the folder back and writes no line when mEdit refuses the build configuration', async () => {

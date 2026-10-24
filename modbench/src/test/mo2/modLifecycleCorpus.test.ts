@@ -71,6 +71,20 @@ describe('mod lifecycle corpus (uninstall)', () => {
     assertOnlyChanged(before, after, new Set([...moved, ...moved.map((p) => p.replace('/Harder VATS/', '/Harder VATS 2/')), MODLIST, 'profiles/Secondary/modlist.txt']));
     expect((await readModlistEntries(dir)).find((e) => e.name === 'Harder VATS 2')).toEqual({ kind: 'mod', name: 'Harder VATS 2', enabled: false });
   });
+
+  it('renameMod ends with the publisher ignoring the manifest under its new name, and no entry for the old one', async () => {
+    const adapter = adapterOver(dir);
+    await writeFile(join(dir, 'compiler_settings.json'), '{}');
+    await mkdir(join(dir, 'mods', 'X'));
+    await writeFile(join(dir, 'mods', 'X', 'X.manifest.json'), '{}');
+    await adapter.keepOutOfPublisher();
+
+    await modCommands(adapter, unscriptedMEdit, unreadStatus).renameMod('X', 'Y');
+
+    const entries: unknown = Reflect.get(JSON.parse(await readFile(join(dir, 'compiler_settings.json'), 'utf8')), 'Ignore');
+    expect(entries).toEqual(expect.arrayContaining(['mods\\Y\\Y.manifest.json']));
+    expect(entries).not.toContain('mods\\Y\\X.manifest.json');
+  });
 });
 
 describe('mod lifecycle corpus (install)', () => {
