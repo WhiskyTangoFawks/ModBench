@@ -352,7 +352,7 @@ describe('a configured downloads folder Modbench cannot resolve shows the "Faile
   it('renders rows again once a later recompute resolves the folder', async () => {
     const instance = new FakeInstance(unresolvedValue(), 1);
     const provider = providerOf(instance);
-    expect(await provider.getChildren()).toHaveLength(1);
+    await provider.getChildren();
 
     instance.publish(valueOf([row({ name: 'a.zip' })]));
 

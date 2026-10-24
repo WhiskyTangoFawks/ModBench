@@ -62,15 +62,17 @@ describe('a sync: outcome handling', () => {
   });
 
   it.each([
-    ['the command\'s own refusal', refused('the folder is gone'), 'the folder is gone'],
-    ['a thrown sync error', () => Promise.reject(new Error('disk unplugged')), 'disk unplugged'],
-  ])('says %s in the Output and the message line', async (_case, answer, reason) => {
+    ['the command\'s own refusal', refused('the folder is gone'),
+      '[pluginCommands] plugin sync failed: the folder is gone', 'plugins.txt is not synced: the folder is gone.'],
+    ['a thrown sync error', () => Promise.reject(new Error('disk unplugged')),
+      '[pluginCommands] plugin sync failed: disk unplugged', 'plugins.txt is not synced: disk unplugged.'],
+  ])('says %s in the Output and the message line', async (_case, answer, line, message) => {
     const { lines, messagesShown, run } = syncAnswering(answer);
     await run();
 
     expect({ lines, messagesShown }).toEqual({
-      lines: { info: [], warn: [], error: [`[pluginCommands] plugin sync failed: ${reason}`] },
-      messagesShown: [`plugins.txt is not synced: ${reason}.`],
+      lines: { info: [], warn: [], error: [line] },
+      messagesShown: [message],
     });
   });
 

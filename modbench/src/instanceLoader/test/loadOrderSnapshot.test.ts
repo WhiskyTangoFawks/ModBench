@@ -11,6 +11,7 @@ import {
 
 type LoadOrderPluginRow = LoadOrderPlugin | LoadOrderPluginLine;
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { present } from '../../ports/present';
 import { fileIn } from '../../test/fakeInstanceAdapter';
 
 type Provider = { winner: string; winnerMod: string; providers?: string[] };
@@ -312,6 +313,8 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
     const outcome = loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine, modFolders, sourceDirs, places: [], modlist: NO_MODLIST, archives });
     return outcome !== undefined && 'refusal' in outcome ? undefined : outcome;
   };
+  const landed = (outcome: ReturnType<typeof loadOrderSnapshotOf>) =>
+    present(outcome !== undefined && 'refusal' in outcome ? undefined : outcome, 'a snapshot, not a refusal');
   const inGameFolder = (name: string): PluginWithNoLine => ({ name, origin: 'Data/', path: join('/game/Data', name) });
 
   it('carries the release of the reading it was built from', () => {
@@ -553,7 +556,8 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
       },
     });
 
-    expect(outcome).toMatchObject({
+    const { mods, statCache } = landed(outcome);
+    expect({ mods, statCache }).toEqual({
       mods: [
         { name: 'ModA', folder: '/mo2/mod-folders/ModA', metadataFiles: ['meta.ini'] },
         { name: 'Weapons_separator', folder: '/mo2/mod-folders/Weapons_separator', metadataFiles: ['meta.ini'] },
@@ -568,7 +572,7 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
       plugins: [], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs, places: [place], modlist: NO_MODLIST, archives: NO_ARCHIVES,
     });
 
-    expect(outcome).toMatchObject({ places: [place] });
+    expect(landed(outcome).places).toEqual([place]);
   });
 
   it('names no source folder for a mod that is no source mod', () => {
@@ -576,7 +580,7 @@ describe('the snapshot the sync PUTs, read straight from the value rather than a
       plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: [], modFolders, sourceDirs: new Map(), places: [], modlist: NO_MODLIST, archives: NO_ARCHIVES,
     });
 
-    expect(outcome).toMatchObject({ plugins: [{ provider: { kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA' } }] });
+    expect(landed(outcome).plugins.map((p) => p.provider)).toEqual([{ kind: 'Mod', mod: 'ModA', folder: '/mo2/mod-folders/ModA' }]);
   });
 
   it('is a refusal naming each plugin and its mod when no mod folder is the mod\'s, never a snapshot without them', () => {

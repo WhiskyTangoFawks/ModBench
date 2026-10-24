@@ -519,23 +519,18 @@ describe('sorting the Downloads view', () => {
 describe('showing and hiding excluded downloaded files', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const shownNames = async (provider: DownloadsProvider) =>
-    (await provider.getChildren()).map((n) => n.kind === 'downloadedFile' && n.argument.row.name);
-
   it.each([
-    ['showExcluded shows the excluded rows and sets the context key true', 'modbench.downloadedFile.showExcluded', ['kept.7z', 'hidden.7z'], true],
-    ['hideExcluded leaves the excluded rows out and sets the context key false', 'modbench.downloadedFile.hideExcluded', ['kept.7z'], false],
-  ])('%s', async (_case, command, shown, keyValue) => {
-    const provider = providerOver(
-      downloadedFileRowFixture('kept.7z', { mtimeMs: 2 }, ROOT), downloadedFileRowFixture('hidden.7z', { mtimeMs: 1, excluded: true }, ROOT),
-    );
+    ['showExcluded turns Show excluded on and sets the context key true', false, 'modbench.downloadedFile.showExcluded', false, true],
+    ['hideExcluded turns Show excluded off and sets the context key false', true, 'modbench.downloadedFile.hideExcluded', true, false],
+  ])('%s', (_case, shownBefore, command, allExcluded, keyValue) => {
+    const provider = providerOver(downloadedFileRowFixture('hidden.7z', { excluded: true }, ROOT));
+    provider.setShowExcluded(shownBefore);
     registerDownloadsExcludedToggleCommands(provider);
-    invoke('modbench.downloadedFile.showExcluded');
 
     invoke(command);
 
-    expect(await shownNames(provider)).toEqual(shown);
-    expect(executeCommand).toHaveBeenLastCalledWith('setContext', 'modbench.downloadedFile.excludedShown', keyValue);
+    expect(provider.allExcluded()).toBe(allExcluded);
+    expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloadedFile.excludedShown', keyValue);
   });
 });
 

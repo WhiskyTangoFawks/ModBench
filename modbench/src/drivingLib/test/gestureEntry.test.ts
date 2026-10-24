@@ -60,18 +60,30 @@ describe('what VS Code hands a gesture becomes its entry', () => {
   });
 });
 
-describe('the rows of the kinds a gesture takes', () => {
-  it.each<[string, () => unknown, unknown]>([
-    ['a plural gesture narrows a mixed selection to the right-clicked row\'s kind', () => pluralArgument({ clicked: alpha, selection: [alpha, other] }, 'a', 'b'), [alpha]],
-    ['a plural gesture narrows a mixed selection to the focused row\'s kind', () => pluralArgument({ focused: other, selection: [alpha, other] }, 'a', 'b'), [other]],
-    ['a plural gesture drops a selected row of a kind it does not take', () => pluralArgument({ clicked: alpha, selection: [other, alpha] }, 'a'), [alpha]],
-    ['a plural gesture takes nothing when the right-clicked row is of a kind it does not take', () => pluralArgument({ clicked: other, selection: [alpha, other] }, 'a'), []],
-    ['the whole selection keeps every kind given, whatever the right-clicked row\'s kind', () => selectionArgument({ clicked: alpha, selection: [alpha, other] }, 'a', 'b'), [alpha, other]],
-    ['the whole selection keeps every kind given from the palette', () => selectionArgument({ selection: [alpha, other] }, 'a', 'b'), [alpha, other]],
-    ['the whole selection still excludes a kind not requested', () => selectionArgument({ clicked: alpha, selection: [alpha, other] }, 'a'), [alpha]],
-    ['a singular gesture takes nothing when the right-clicked row is of a kind it does not take', () => singularArgument({ clicked: other, selection: [alpha] }, 'a'), undefined],
-  ])('%s', (_case, take, expected) => {
-    expect(take()).toEqual(expected);
+describe('a plural gesture\'s Argument, of the kinds it takes', () => {
+  it.each<[string, GestureEntry<Row>, ('a' | 'b')[], Row[]]>([
+    ['narrows a mixed selection to the right-clicked row\'s kind', { clicked: alpha, selection: [alpha, other] }, ['a', 'b'], [alpha]],
+    ['narrows a mixed selection to the focused row\'s kind', { focused: other, selection: [alpha, other] }, ['a', 'b'], [other]],
+    ['drops a selected row of a kind it does not take', { clicked: alpha, selection: [other, alpha] }, ['a'], [alpha]],
+    ['is nothing when the right-clicked row is of a kind it does not take', { clicked: other, selection: [alpha, other] }, ['a'], []],
+  ])('%s', (_case, entry, kinds, expected) => {
+    expect(pluralArgument(entry, ...kinds)).toEqual(expected);
+  });
+});
+
+describe('the catalog\'s whole-selection Argument, of the kinds given', () => {
+  it.each<[string, GestureEntry<Row>, ('a' | 'b')[], Row[]]>([
+    ['keeps every kind given, whatever the right-clicked row\'s kind', { clicked: alpha, selection: [alpha, other] }, ['a', 'b'], [alpha, other]],
+    ['keeps every kind given from the palette', { selection: [alpha, other] }, ['a', 'b'], [alpha, other]],
+    ['still excludes a kind not requested', { clicked: alpha, selection: [alpha, other] }, ['a'], [alpha]],
+  ])('%s', (_case, entry, kinds, expected) => {
+    expect(selectionArgument(entry, ...kinds)).toEqual(expected);
+  });
+});
+
+describe('a singular gesture\'s Argument, of the kinds it takes', () => {
+  it('is nothing when the right-clicked row is of a kind it does not take', () => {
+    expect(singularArgument({ clicked: other, selection: [alpha] }, 'a')).toBeUndefined();
   });
 });
 
