@@ -30,7 +30,7 @@ const INCLUDE: PublisherTag = { name: 'Include', badge: 'IN', marksPaths: true }
 const ALWAYS_ENABLED: PublisherTag = { name: 'Always Enabled', badge: 'AE', marksPaths: false };
 const IGNORE: PublisherTag = { name: 'Ignore', badge: 'IG', marksPaths: true };
 
-const COVERED: Record<string, readonly PublisherTag[]> = {
+const LISTED: Record<string, readonly PublisherTag[]> = {
   '/instance/mods/M': [INCLUDE, ALWAYS_ENABLED],
   '/instance/mods/M/a.dds': [INCLUDE],
   '/instance/mods/M/textures': [IGNORE],
@@ -40,7 +40,7 @@ const value: InstanceValue = {
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/instance/mods/M'], ['N', '/instance/mods/N']]), sourceDirs: new Map() },
   }),
   publisherTags: [INCLUDE, IGNORE, ALWAYS_ENABLED],
-  publisherConfiguration: { kind: 'read', covering: (path) => COVERED[path] ?? [] },
+  publisherConfiguration: { kind: 'read', covering: () => [], listed: (path) => LISTED[path] ?? [] },
 };
 
 const changePublisherTag = vi.fn();
@@ -86,6 +86,8 @@ describe('the keys the publisher tag items of the menus wait on (mods.md, Menus 
   it('say whether the instance has a publisher, one whose tags mark paths, and whether the selection holds a tag', () => {
     expect(publisherKeyContext(value, [modM, fileB])).toEqual({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: true });
     expect(publisherKeyContext(value, [fileB, modN])).toEqual({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: false });
+    expect(publisherKeyContext(value, [modN, fileA])).toEqual({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: true });
+    expect(publisherKeyContext(value, [modN, folderTextures])).toEqual({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: true });
     expect(publisherKeyContext({ ...value, publisherTags: [ALWAYS_ENABLED] }, [])).toEqual({ hasPublisher: true, hasPathPublisher: false, holdsPublisherTag: false });
   });
 
@@ -175,11 +177,11 @@ describe('modbench.mod.removePublisherTag (publishing.md, Publisher tags, story 
     pickByLabel('Include');
     register();
 
-    await invoke('modbench.mod.removePublisherTag', fileA, [fileA, folderTextures, fileB]);
+    await invoke('modbench.mod.removePublisherTag', folderTextures, [folderTextures, fileA, fileB]);
 
     expect(offered).toEqual(['Include', 'Ignore']);
     expect(changePublisherTag).toHaveBeenCalledWith('remove', 'Include', [
-      { origin, relativePath: 'a.dds' }, { origin, relativePath: 'textures' }, { origin, relativePath: 'b.dds' },
+      { origin, relativePath: 'textures' }, { origin, relativePath: 'a.dds' }, { origin, relativePath: 'b.dds' },
     ]);
   });
 

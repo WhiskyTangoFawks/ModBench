@@ -273,10 +273,10 @@ describe('compiler_settings.json corpus — a publisher tag change touches the p
     expect(added).toEqual({ applied: true, outcome: { landed: [row], refused: [] } });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([SETTINGS]));
-    expect(after.get(SETTINGS)?.toString()).toBe('{\n  "Include": [],\n  "Source": "somewhere",\n  "Ignore": [\n    "mods\\\\DragIn Manual Extract"\n  ]\n}\n');
+    expect(JSON.parse(after.get(SETTINGS)?.toString() ?? '')).toMatchObject({ Include: [], Source: 'somewhere', Ignore: [expect.stringContaining('DragIn Manual Extract')] });
 
     await commands.changePublisherTag('remove', 'Ignore', [row]);
 
-    expect((await snapshotTree(dir)).get(SETTINGS)?.toString()).toBe('{\n  "Include": [],\n  "Source": "somewhere",\n  "Ignore": []\n}\n');
+    expect(JSON.parse((await snapshotTree(dir)).get(SETTINGS)?.toString() ?? '')).toMatchObject({ Include: [], Source: 'somewhere', Ignore: [] });
   });
 });

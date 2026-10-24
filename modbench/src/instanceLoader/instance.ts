@@ -26,7 +26,7 @@ import { errorMessage } from '../ports/errorMessage';
 export { sameEntry } from '../instanceAdapter/instanceAdapter';
 export type { EntryRef, FileOrigin, Mod, ModGroup, ModGroups, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { LocatedDownloadedFileRow, DownloadedFileRow, UpgradeCandidate, UpgradeTier } from './downloadedFileRows';
-export type { Covering, DownloadedFileStatus, PublisherTag } from '../instanceAdapter/instanceAdapter';
+export type { Covering, DownloadedFileStatus, Listed, PublisherTag, PublisherTagChange } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder } from '../instanceAdapter/instanceAdapter';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on.

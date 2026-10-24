@@ -1,40 +1,35 @@
 import * as vscode from 'vscode';
 import { originLabel } from '../instanceLoader/fileConflictIndex';
-import type { FileOrigin, InstanceValue, Instance, PublisherTag } from '../instanceLoader/instance';
+import type { InstanceValue, Instance, PublisherTag, PublisherTagChange } from '../instanceLoader/instance';
 import type { ModCommands, PublisherTagRow } from '../modCommands/modCommands';
 import type { Reporter } from '../ports/reporter';
 import { argumentOfKind, registerAgentGesture, type AgentGesture } from '../drivingLib/agentGesture';
 import { pluralArgument, selectionArgument, type GestureEntry } from '../drivingLib/gestureEntry';
 import { pickWithMarked } from '../drivingLib/pickWithMarked';
 import { fileLabel } from './modFiles';
+import { tagsHeldAt } from './tagsHeldAt';
 import { runModsWriting } from './gestureEntry';
 import type { ModlistNode } from './ModListProvider';
 
-type Rows = Pick<InstanceValue, 'publisherConfiguration' | 'paths'>;
+type PublisherState = Pick<InstanceValue, 'publisherConfiguration' | 'paths'>;
 
-// The publisher tags that cover the row itself, a mod by its folder: what remove offers (publishing.md, Publisher tags, story 2).
-function publisherTagsHeld({ publisherConfiguration, paths }: Rows, row: ModlistNode): readonly PublisherTag[] {
-  if (publisherConfiguration.kind !== 'read') return [];
-  const { covering } = publisherConfiguration;
-  if (row.kind === 'mod') {
-    const folder = paths.modDirs.get(row.mod.name);
-    return folder === undefined ? [] : covering(folder, row.mod.name);
-  }
-  const modOf = (origin: FileOrigin): string | undefined => (origin.kind === 'mod' ? origin.name : undefined);
-  if (row.kind === 'file') return covering(row.file.path, modOf(row.origin));
-  if (row.kind === 'folder') return covering(row.folder.path, modOf(row.origin));
-  return [];
+function pathOf({ paths }: Pick<InstanceValue, 'paths'>, row: ModlistNode): string | undefined {
+  if (row.kind === 'mod') return paths.modDirs.get(row.mod.name);
+  if (row.kind === 'file') return row.file.path;
+  return row.kind === 'folder' ? row.folder.path : undefined;
 }
+
+const tagsHeldBy = (value: PublisherState, row: ModlistNode): readonly PublisherTag[] => tagsHeldAt(value, pathOf(value, row));
 
 /** What the publisher tag items wait on, as `modbench.mod.<name>` keys. A publisher whose configuration is not read offers none. */
 export function publisherKeyContext(
-  value: Rows & Pick<InstanceValue, 'publisherTags'>, selection: readonly ModlistNode[],
+  value: PublisherState & Pick<InstanceValue, 'publisherTags'>, selection: readonly ModlistNode[],
 ): { hasPublisher: boolean; hasPathPublisher: boolean; holdsPublisherTag: boolean } {
   const read = value.publisherConfiguration.kind === 'read';
   return {
     hasPublisher: read,
     hasPathPublisher: read && value.publisherTags.some(({ marksPaths }) => marksPaths),
-    holdsPublisherTag: selection.some((row) => publisherTagsHeld(value, row).length > 0),
+    holdsPublisherTag: selection.some((row) => tagsHeldBy(value, row).length > 0),
   };
 }
 
@@ -58,19 +53,17 @@ interface Given {
   readonly rows: readonly PublisherTagRow[];
 }
 
-// modbench.mod.addPublisherTag / modbench.mod.removePublisherTag: the pick of the publisher tags the publisher declares for
-// the rows, and for remove those the selection holds.
 export function registerPublisherTagCommands(
   commands: Pick<ModCommands, 'changePublisherTag'>, instance: Pick<Instance, 'value' | 'refresh'>, viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
-  const gesture = (change: 'add' | 'remove'): AgentGesture<ModlistNode, Given, Awaited<ReturnType<ModCommands['changePublisherTag']>>, { tag: string }> => ({
+  const gesture = (change: PublisherTagChange): AgentGesture<ModlistNode, Given, Awaited<ReturnType<ModCommands['changePublisherTag']>>, { tag: string }> => ({
     fromView: async (entry) => {
       const selected = selectedRows(entry);
       const rows = selected.flatMap((row) => rowOf(row) ?? []);
       const { value } = instance;
       const offered = value.publisherTags.filter((tag) => (change === 'add'
         ? tag.marksPaths || selected.every(({ kind }) => kind === 'mod')
-        : selected.some((row) => publisherTagsHeld(value, row).includes(tag))));
+        : selected.some((row) => tagsHeldBy(value, row).includes(tag))));
       if (rows.length === 0 || offered.length === 0) return undefined;
       const picked = await pickWithMarked(offered.map(({ name, badge }) => ({ label: name, description: badge })), undefined, `${change === 'add' ? 'Add' : 'Remove'} publisher tag…`);
       return picked && { tag: picked.label, rows };

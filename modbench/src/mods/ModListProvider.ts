@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { EntryRef, FileOrigin, Mod, OriginFile, OriginFolder, Separator } from '../instanceLoader/instance';
+import { tagsHeldAt } from './tagsHeldAt';
 import { modNameOf } from '../instanceLoader/modName';
 import { fileOrderConflictOf, modOrigin, OVERWRITE_LABEL, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { instanceMessages, type InstanceValue, type InstanceView, type ModGroup, type ModGroups } from '../instanceLoader/instance';
@@ -46,6 +47,7 @@ function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>, facts: ModFacts 
   const flags = [
     mod.nexusId !== undefined && 'hasNexus', mod.enabled ? 'enabled' : 'disabled',
     facts?.holdsPlugin === true && 'holdsPlugin', facts !== undefined && (facts.sourceMod ? 'sourceMod' : 'nonSourceMod'),
+    facts?.holdsPublisherTag === true && 'holdsPublisherTag',
   ];
   return ['mod', ...flags.filter((f): f is string => f !== false)].join(' ');
 }
@@ -53,6 +55,7 @@ function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>, facts: ModFacts 
 interface ModFacts {
   readonly holdsPlugin: boolean;
   readonly sourceMod: boolean;
+  readonly holdsPublisherTag?: boolean;
   readonly sourceFolder?: string;
   /** Shown only while the instance holds a repository (modlist-repository.md, Status, story 1). */
   readonly status?: ModStatus;
@@ -363,7 +366,7 @@ export class ModListProvider
     return new ModNode(m, {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), sourceMod,
       sourceFolder: sourceMod ? this.instanceValue.paths.sourceDirs.get(m.name) : undefined,
-      status: this.statusOf(m),
+      status: this.statusOf(m), holdsPublisherTag: tagsHeldAt(this.instanceValue, this.instanceValue.paths.modDirs.get(m.name)).length > 0,
     }, found.files, found.folders, shown);
   }
 
@@ -374,7 +377,8 @@ export class ModListProvider
       const status = origin.kind === 'mod' ? this.statusOf(origin) : undefined;
       return status !== undefined && [...differingFiles(status)].some((path) => path === relativePath || path.startsWith(`${relativePath}/`));
     };
-    return { shown: row.shown, matches: this.matches, conflict, differs };
+    const holdsPublisherTag = (path: string) => tagsHeldAt(this.instanceValue, path).length > 0;
+    return { shown: row.shown, matches: this.matches, conflict, differs, holdsPublisherTag };
   }
 
   getParent(element: ModlistNode): ModlistNode | undefined {

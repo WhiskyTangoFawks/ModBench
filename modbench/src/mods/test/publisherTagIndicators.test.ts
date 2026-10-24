@@ -40,6 +40,7 @@ const COVERED_AS_THE_PUBLISHER_APPLIES_THEM_BY_MOD_AND_PATH: Record<string, read
 const READ: PublisherConfiguration = {
   kind: 'read',
   covering: (path, mod) => COVERED_AS_THE_PUBLISHER_APPLIES_THEM_BY_MOD_AND_PATH[`${mod ?? 'outside every mod'} ${path}`] ?? [],
+  listed: () => [],
 };
 
 const separator = (name: string): ModlistEntry => ({ kind: 'separator', name, enabled: true });

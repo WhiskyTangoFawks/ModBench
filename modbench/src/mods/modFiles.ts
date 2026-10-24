@@ -62,6 +62,10 @@ function sayingWhetherItDiffers<T extends vscode.TreeItem>(row: T, differs: bool
   return row;
 }
 
+// What the publisher tag items read: none is offered in Overwrite, and remove is offered on a row that holds one.
+const publisherFlags = (origin: FileOrigin, holdsPublisherTag: boolean): string[] =>
+  [origin.kind === 'runtimeOutput' && 'inOverwrite', holdsPublisherTag && 'holdsPublisherTag'].filter((flag) => flag !== false);
+
 /** A folder in a mod or Overwrite, and the files and folders under it. */
 export class FolderNode extends vscode.TreeItem {
   readonly kind = 'folder' as const;
@@ -73,10 +77,11 @@ export class FolderNode extends vscode.TreeItem {
     public readonly folders: readonly OriginFolder[],
     name: string,
     public readonly shown: ChildrenShown = 'all',
+    holdsPublisherTag = false,
   ) {
     super(name, expanderOver([...files, ...folders], shown));
     fileRow(this, parent, origin, name, folder.relativePath);
-    this.contextValue = 'folder';
+    this.contextValue = ['folder', ...publisherFlags(origin, holdsPublisherTag)].join(' ');
   }
 }
 
@@ -100,11 +105,12 @@ export class FileNode extends vscode.TreeItem {
     public readonly file: OriginFile,
     name: string,
     public readonly conflict: FileOrderConflict = 'none',
+    holdsPublisherTag = false,
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
     fileRow(this, parent, origin, name, file.relativePath);
     this.exclusion = FILE_MARKS[file.markedExcluded ? 'Excluded' : 'Included'].state;
-    this.contextValue = ['file', conflict !== 'none' && 'conflict', conflict === 'loses' && 'losing', this.exclusion].filter(Boolean).join(' ');
+    this.contextValue = ['file', conflict !== 'none' && 'conflict', conflict === 'loses' && 'losing', this.exclusion, ...publisherFlags(origin, holdsPublisherTag)].filter(Boolean).join(' ');
     this.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file.path), { preview: true }] };
   }
 
@@ -120,6 +126,7 @@ export function filesIn(
   filter?: {
     shown: ChildrenShown; matches: NameMatch; conflict: (origin: FileOrigin, file: OriginFile) => FileOrderConflict;
     differs: (origin: FileOrigin, relativePath: string) => boolean;
+    holdsPublisherTag: (path: string) => boolean;
   },
 ): (FolderNode | FileNode)[] {
   const prefix = path === undefined ? '' : `${path}/`;
@@ -128,9 +135,9 @@ export function filesIn(
   return [
     ...[...ownFolders.here].sort(byName).map(([name, folder]) => sayingWhetherItDiffers(new FolderNode(
       parent, origin, folder, ownFiles.below.get(name) ?? [], ownFolders.below.get(name) ?? [], name,
-      filter ? shownUnder(filter.shown, filter.matches, name) : 'all',
+      filter ? shownUnder(filter.shown, filter.matches, name) : 'all', filter?.holdsPublisherTag(folder.path),
     ), filter?.differs(origin, folder.relativePath))),
     ...[...ownFiles.here].sort(byName).map(([name, file]) =>
-      sayingWhetherItDiffers(new FileNode(parent, origin, file, name, filter?.conflict(origin, file)), filter?.differs(origin, file.relativePath))),
+      sayingWhetherItDiffers(new FileNode(parent, origin, file, name, filter?.conflict(origin, file), filter?.holdsPublisherTag(file.path)), filter?.differs(origin, file.relativePath))),
   ];
 }

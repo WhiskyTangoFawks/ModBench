@@ -5,7 +5,7 @@
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { errorMessage } from '../../ports/errorMessage';
 import { get, putIfChanged, readOrAbsent } from '../files';
-import type { Covering, PathRefusal, PublisherConfiguration, PublisherTag } from '../instanceAdapter';
+import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedSubstitution } from '../pathTokens';
 import { watchFiles } from '../watchFiles';
@@ -146,14 +146,30 @@ async function shippedModsIn(settings: object, file: string, manager: ManagerAns
   return new Set(enabled.flat().map((mod) => mod.toLowerCase()));
 }
 
+function inInstance(instanceRoot: string, path: string): string | undefined {
+  const inside = relative(instanceRoot, path);
+  return isAbsolute(inside) || inside.split(sep)[0] === '..' ? undefined : inside;
+}
+
+function listedIn(instanceRoot: string, root: PathNode): Listed {
+  return (path) => {
+    const inside = inInstance(instanceRoot, path);
+    if (inside === undefined) return [];
+    let at: PathNode | undefined = root;
+    for (const name of namesOf(inside)) at = at?.below.get(name);
+    const found = at?.tags ?? new Set<PublisherTag>();
+    return TAGS.filter(({ tag }) => found.has(tag)).map(({ tag }) => tag);
+  };
+}
+
 // A publisher tag covers the path it names and every path in it.
 function coveringIn(instanceRoot: string, root: PathNode, neverShipped: readonly (readonly string[])[], shippedMods: ReadonlySet<string> | 'every'): Covering {
   const isShipped = (mod: string | undefined, covers: readonly WabbajackTag[]): boolean =>
     mod === undefined || shippedMods === 'every' || shippedMods.has(mod.toLowerCase()) || covers.some(({ enablesMod }) => enablesMod);
   return (path, mod) => {
-    const inInstance = relative(instanceRoot, path);
-    if (inInstance.split(sep)[0] === '..') return [];
-    const names = namesOf(inInstance);
+    const inside = inInstance(instanceRoot, path);
+    if (inside === undefined) return [];
+    const names = namesOf(inside);
     const found = new Set(root.tags);
     let at: PathNode | undefined = root;
     for (const name of names) {
@@ -178,13 +194,21 @@ function serialized(settings: object, form: string): string {
 const sameNames = (first: readonly string[], second: readonly string[]): boolean =>
   first.length === second.length && first.every((name, at) => name === second[at]);
 
+function changedEntries(entries: readonly string[], change: PublisherTagChange, inside: string): readonly string[] {
+  const names = namesOf(inside);
+  const others = entries.filter((entry) => !sameNames(namesOf(entry), names));
+  if (change === 'remove') return others.length === entries.length ? entries : others;
+  return others.length === entries.length ? [...entries, inside.split(sep).join('\\')] : entries;
+}
+
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
   const file = join(instanceRoot, COMPILER_SETTINGS.name);
   const neverShipped = manager.neverShipped.map((folder) => namesOf(relative(instanceRoot, folder)));
   const read = async (text: string): Promise<PublisherConfiguration> => {
     const settings = settingsIn(text, file);
     const tags = tagsByPath(settings, file);
-    return { kind: 'read', covering: coveringIn(instanceRoot, tags, neverShipped, await shippedModsIn(settings, file, manager)) };
+    const covering = coveringIn(instanceRoot, tags, neverShipped, await shippedModsIn(settings, file, manager));
+    return { kind: 'read', covering, listed: listedIn(instanceRoot, tags) };
   };
   return {
     tags: TAGS.map(({ tag }) => tag),
@@ -202,22 +226,15 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       if (wabbajackTag === undefined) throw new Error(`Wabbajack declares no publisher tag "${tagName}"`);
       const { listedUnder } = wabbajackTag;
       const refused: PathRefusal[] = [];
+      const insides = paths.flatMap((path) => {
+        const inside = inInstance(instanceRoot, path);
+        if (inside === undefined) refused.push({ path, reason: 'It is outside the instance.' });
+        return inside === undefined ? [] : [inside];
+      });
       await putIfChanged(file, (before) => {
         const settings: Record<string, unknown> = { ...settingsIn(before, file) };
         const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']) ?? [];
-        let changed = entries;
-        for (const path of paths) {
-          const inInstance = relative(instanceRoot, path);
-          if (inInstance === '' || isAbsolute(inInstance) || inInstance.split(sep)[0] === '..') {
-            refused.push({ path, reason: 'It is outside the instance.' });
-            continue;
-          }
-          const names = namesOf(inInstance);
-          const listed = changed.some((entry) => sameNames(namesOf(entry), names));
-          if (change === 'add' && !listed) changed = [...changed, inInstance.split(sep).join('\\')];
-          else if (change === 'remove' && listed) changed = changed.filter((entry) => !sameNames(namesOf(entry), names));
-          else if (change === 'remove') refused.push({ path, reason: `${tagName} does not list it. It covers the path from a path above it, or not at all.` });
-        }
+        const changed = insides.reduce<readonly string[]>((now, inside) => changedEntries(now, change, inside), entries);
         return changed === entries ? before : serialized({ ...settings, [listedUnder]: changed }, before);
       });
       return refused;

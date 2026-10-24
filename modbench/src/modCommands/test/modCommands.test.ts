@@ -683,7 +683,7 @@ describe('changePublisherTag (publishing.md, Publisher tags, story 2)', () => {
   it('refuses the whole selection, naming it, for a tag the publisher does not declare, and when the publisher rejects', async () => {
     const { fake, commands } = publisherOver({ refusals: refusing('changePublisherTag', 'compiler_settings.json is not JSON') });
 
-    expect(await commands.changePublisherTag('add', 'Nope', [modRow('ENBoost')])).toEqual({ applied: false, refusal: 'The publisher declares no publisher tag "Nope".' });
+    expect(await commands.changePublisherTag('add', 'Nope', [modRow('ENBoost')])).toEqual({ applied: false, refusal: 'The publisher declares no publisher tag "Nope". It declares Include, Always Enabled.' });
     expect(await commands.changePublisherTag('add', 'Include', [modRow('ENBoost')])).toEqual({ applied: false, refusal: 'compiler_settings.json is not JSON' });
     expect(verbs(fake.calls)).toEqual(['changePublisherTag']);
   });

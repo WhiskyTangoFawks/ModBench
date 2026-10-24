@@ -4,7 +4,7 @@ import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
   entryNotFound, fileInFolder, sameEntry, type DecideModOrder, type EntryRef, type FileOrigin, type FileRead, type InstanceAdapter,
-  type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type PublisherTag, type SeparatorsPlace, type SourceMods,
+  type ModOrderChange, type MovePlace, type OrderEnd, type OriginFileMark, type PublisherTag, type PublisherTagChange, type SeparatorsPlace, type SourceMods,
 } from '../instanceAdapter/instanceAdapter';
 import { goneFromDisk } from '../coreLib/commandRefusals';
 import { EMPTY_MOD_NAME, entryNameRefusal, newModNameRefusal, type EntryKey } from './nameRefusals';
@@ -255,7 +255,6 @@ export interface PublisherTagRow {
   readonly relativePath?: string;
 }
 
-// The path a publisher keeps a tag by, or why the row has none.
 async function publisherTagPath(adapter: InstanceAdapter, tag: PublisherTag, row: PublisherTagRow): Promise<string | ItemRefusal<PublisherTagRow>> {
   const { origin, relativePath } = row;
   if (origin.kind === 'runtimeOutput') return { item: row, reason: 'Overwrite is not a mod.' };
@@ -265,12 +264,11 @@ async function publisherTagPath(adapter: InstanceAdapter, tag: PublisherTag, row
   return relativePath === undefined ? folder : fileInFolder(folder, relativePath);
 }
 
-// `modbench.mod.addPublisherTag` / `modbench.mod.removePublisherTag`, the publisher's own refusals by row.
 async function changePublisherTag(
-  adapter: InstanceAdapter, change: 'add' | 'remove', tagName: string, rows: readonly PublisherTagRow[],
+  adapter: InstanceAdapter, change: PublisherTagChange, tagName: string, rows: readonly PublisherTagRow[],
 ): Promise<SelectionResult<PublisherTagRow>> {
   const tag = adapter.publisherTags.find(({ name }) => name === tagName);
-  if (tag === undefined) return { applied: false, refusal: `The publisher declares no publisher tag "${tagName}".` };
+  if (tag === undefined) return { applied: false, refusal: `The publisher declares no publisher tag "${tagName}". It declares ${adapter.publisherTags.map(({ name }) => name).join(', ')}.` };
   try {
     const resolved = await Promise.all(rows.map(async (row) => ({ row, path: await publisherTagPath(adapter, tag, row) })));
     const asked = resolved.flatMap(({ row, path }) => (typeof path === 'string' ? [{ row, path }] : []));
