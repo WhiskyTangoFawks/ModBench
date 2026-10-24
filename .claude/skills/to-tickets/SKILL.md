@@ -89,7 +89,7 @@ A prefactor or wide-refactor ticket replaces this section with **Change**: the m
 
 ## Notes
 
-What planning found in the code: a known defect, where to look, a parked branch and its SHA. Facts about the code, never what the user sees. Omit the section when there are none.
+What planning found in the code: a known defect, where to look, a parked branch and its SHA. Each tactical decision the conversation's handoff lands in this ticket, as a default the executor may override with its reason in the commit message. Never what the user sees. Omit the section when there are none.
 
 </issue-template>
 

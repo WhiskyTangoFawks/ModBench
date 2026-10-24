@@ -4,7 +4,7 @@ description: Turn the current conversation into an epic — the bounded scope of
 disable-model-invocation: true
 ---
 
-This skill takes the current conversation and the repo's specs and produces an epic: the scope of one batch of work. The specification in `spec/` holds the behaviour. The epic says which of it this batch makes true, and nothing more. Do NOT interview the user — just synthesize what you already know.
+This skill takes the current conversation and the repo's specs and produces an epic: the scope of one batch of work. The specification in `spec/` holds the behaviour. When the conversation changed the specification, `/to-spec` commits that change first. The epic's pointers then cite what is on `main`. The epic says which of it this batch makes true, and nothing more. Do NOT interview the user — just synthesize what you already know.
 
 The issue tracker's conventions are in `docs/agents/issue-tracker.md`, and the triage labels in `docs/agents/triage-labels.md`.
 
@@ -12,7 +12,7 @@ The issue tracker's conventions are in `docs/agents/issue-tracker.md`, and the t
 
 1. Read the specs the conversation touched: the surfaces and the `commands.md` rows. For each behaviour the conversation settled, find the spec line that draws it.
 
-   A settled behaviour with no spec line is a gap in the spec, and the spec is the user's. Name each gap to the user and leave it out of the epic until the spec draws it.
+   A settled behaviour with no spec line is a gap in the spec, and the spec is the user's. Name each gap to the user and leave it out of the epic until `/to-spec` draws it.
 
    Done when every behaviour in scope has its spec line, or is named to the user as a gap.
 
@@ -20,7 +20,7 @@ The issue tracker's conventions are in `docs/agents/issue-tracker.md`, and the t
 
    Check the scope with the user.
 
-3. Write the epic using the template below, then publish it to the project issue tracker with the epic label and a goal or a lane milestone, as `docs/agents/issue-tracker.md` names them.
+3. Write the epic using the template below, then publish it to the project issue tracker with the epic label and a goal or a lane milestone, as `docs/agents/issue-tracker.md` names them. Close by prompting `/to-tickets` on the new epic.
 
 <epic-template>
 

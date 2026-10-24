@@ -45,6 +45,7 @@ principle > ADR > architecture and surfaces > code. Together they are the specif
   - It needs a reference that `layers.d2` forbids.
   - It moves a responsibility from one box to another.
   - It meets two documents at one level that disagree.
+  - It needs a sentence in `spec/` changed to fit the code. Report the sentence as too tactical.
 - A copy of another box's code is never the way around a stop; ADR-0014 rejects it.
 - Report every break: two documents in the chain that disagree about the work. Build to the higher one. A break report and a stop quote the texts at stake, name their levels and say what you built; the maintainer decides every change to their documents.
 - The maintainer's documents are `spec/` and every `CLAUDE.md`.
