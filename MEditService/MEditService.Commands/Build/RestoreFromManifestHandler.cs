@@ -153,7 +153,7 @@ public sealed class RestoreFromManifestHandler
         var why = string.Join("; ", lacks.Select(lack => lack.Text));
         if (lacks.Any(lack => lack is PackageContents.Lack.NoHost)) return Skipped(RestoreRefusal.NoHost, why);
         var gameFiles = lacks.OfType<PackageContents.Lack.GameFileMissing>().Select(lack => lack.Path).ToList();
-        var installationFile = lacks.OfType<PackageContents.Lack.InstallationFileMissing>().Select(lack => lack.Name).FirstOrDefault();
+        var installationFile = lacks.OfType<PackageContents.Lack.InstallationFileMissing>().Select(lack => lack.Named).FirstOrDefault();
         var submodule = lacks.OfType<PackageContents.Lack.SubmoduleMissing>().Select(lack => lack.Name).FirstOrDefault();
         if (gameFiles.Count == 0 && installationFile is null && submodule is null) return Skipped(RestoreRefusal.Lacking, why);
         return Skipped(

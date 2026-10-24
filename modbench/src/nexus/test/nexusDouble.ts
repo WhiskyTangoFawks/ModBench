@@ -36,3 +36,33 @@ export const GOOD_KEY = 'good-key';
 
 /** Nexus accepts GOOD_KEY and refuses every other. */
 export const acceptingGoodKey = (key: string): Response => new Response('{"name":"someone"}', { status: key === GOOD_KEY ? 200 : 401 });
+
+export const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
+
+export const FILE_78 = {
+  record: 'https://api.nexusmods.com/v1/games/fallout4/mods/7/files/78.json',
+  modPage: 'https://api.nexusmods.com/v1/games/fallout4/mods/7.json',
+  link: 'https://api.nexusmods.com/v1/games/fallout4/mods/7/files/78/download_link.json',
+  server: 'https://cdn.example/Sleep-7-1-2.7z?md5=x&expires=1',
+  /** Its page on Nexus as the Instance adapter formats it. */
+  page: 'https://www.nexusmods.com/fallout4/mods/7?tab=files&file_id=78',
+};
+
+/** What Nexus answers, by URL, of file 78 of mod 7, whose first server sends `bytes`. */
+export const servingFile78 = (bytes: string): Record<string, Response | Error> => ({
+  [FILE_78.record]: json({ file_id: 78, name: 'Main', version: '1.2', mod_version: '1.0', category_id: 1, uploaded_timestamp: 1700000000, description: 'Main file', file_name: 'Sleep-7-1-2.7z' }),
+  [FILE_78.modPage]: json({ name: 'Sleep &amp; Save', category_id: 12, author: 'Someone', uploaded_by: 'Uploader', uploaded_users_profile_url: 'https://nexus/users/1' }),
+  [FILE_78.link]: json([{ name: 'Nexus CDN', short_name: 'Nexus CDN', URI: FILE_78.server }, { name: 'Paris', short_name: 'Paris', URI: 'https://paris.example/f' }]),
+  [FILE_78.server]: new Response(bytes, { status: 200 }),
+});
+
+/** Answers each URL from `answers`, and 404 for any other. */
+export const answeringFrom = (answers: Record<string, Response | Error>) => (_key: string, url: string): Response | Error =>
+  answers[url] ?? new Response('', { status: 404 });
+
+/** The real Nexus box over a network answering from `answers`, logged in unless told otherwise. */
+export async function nexusServing(answers: Record<string, Response | Error>, loggedIn = true): Promise<{ nexus: Nexus; sent: Sent[] }> {
+  const { nexus, sent } = nexusAnswering(answeringFrom(answers));
+  if (loggedIn) await nexus.keep(GOOD_KEY);
+  return { nexus, sent };
+}

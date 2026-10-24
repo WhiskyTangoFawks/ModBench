@@ -449,6 +449,7 @@ describe('Restore from manifest', () => {
     restoreFromManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'ReadingFiles', mod: 'ModA' });
       options?.onProgress?.({ phase: 'Restoring', mod: 'ModA', modsDone: 0, modsTotal: 2 });
+      options?.onProgress?.({ phase: 'Downloading', file: 'ModB.7z' });
       return Promise.resolve({ applied: true, landed: [], refused: [] });
     });
     const { said, run } = register();
@@ -457,7 +458,8 @@ describe('Restore from manifest', () => {
 
     expect(said).toEqual([
       'Restore from manifest — reading what it would destroy…', undefined,
-      'Restore from manifest — reading the files of "ModA"…', 'Restore from manifest — "ModA", 0 of 2 mods done…', undefined,
+      'Restore from manifest — reading the files of "ModA"…', 'Restore from manifest — "ModA", 0 of 2 mods done…',
+      'Restore from manifest — downloading "ModB.7z" from Nexus…', undefined,
     ]);
   });
 

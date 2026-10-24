@@ -10,7 +10,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
 
     internal record Lack(string Text)
     {
-        internal sealed record InstallationFileMissing(string Name) : Lack($"installation file '{Name}' is missing");
+        internal sealed record InstallationFileMissing(ManifestPackage.InstallationFile Named) : Lack($"installation file '{Named.Name}' is missing");
 
         internal sealed record GameFileMissing(string Path) : Lack($"game file '{Path}' is missing");
 
@@ -96,7 +96,7 @@ internal sealed class PackageContents(IModFolderRepository repository, Manifest 
         var handed = installationFile is not null && repository.InstallationFileName(installationFile.Path) == named.Name ? installationFile : null;
         if (handed is null)
         {
-            return (null, unreadableInstallationFile is { } why ? new Lack.InstallationFileUnreadable(named.Name, why) : new Lack.InstallationFileMissing(named.Name));
+            return (null, unreadableInstallationFile is { } why ? new Lack.InstallationFileUnreadable(named.Name, why) : new Lack.InstallationFileMissing(named));
         }
         if (!repository.InstallationFileExists(handed.Path)) return (null, new Lack($"installation file '{named.Name}' is not in the downloads folder"));
         if (named.Hash != handed.Hash) return (null, new Lack($"installation file '{named.Name}' has other bytes"));

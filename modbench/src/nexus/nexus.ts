@@ -1,5 +1,6 @@
 import { errorMessage } from '../ports/errorMessage';
-import { lookupByMd5, lookupByName, type FileFound, type Read } from './fileLookup';
+import type { NexusFileInfo } from '../ports/nexusFileInfo';
+import { lookupById, lookupByMd5, lookupByName, type FileFound, type Read } from './fileLookup';
 import { fileListOf, newestVersionOf, type InstalledFile } from './updateChain';
 
 const API = 'https://api.nexusmods.com';
@@ -29,6 +30,13 @@ const MISCELLANEOUS_FILE = 5;
 
 type NewestVersion = { found: true; version: string } | { found: false; reason: string };
 
+type Download = { found: true; info: NexusFileInfo; bytes: ReadableStream<Uint8Array> } | { found: false; reason: string };
+
+const firstServerOf = (links: unknown): string | undefined => {
+  const first: unknown = Array.isArray(links) ? links.at(0) : undefined;
+  return typeof first === 'object' && first !== null && 'URI' in first && typeof first.URI === 'string' ? first.URI : undefined;
+};
+
 
 export interface Nexus {
   /** Asks Nexus whether `key` works. Keeps nothing. */
@@ -42,6 +50,8 @@ export interface Nexus {
   fileByMd5: (file: { games: readonly string[]; md5: string; fileName: string }) => Promise<FileFound>;
   /** What Nexus knows of the file `fileName` of mod `modID`, from the mod's page and file list; from its page alone when `fileID` is known. */
   fileByName: (file: { game: string; modID: string; fileID?: string; fileName: string }) => Promise<FileFound>;
+  /** The file `fileID` of mod `modID` from the first server Nexus names, which it names to a Premium account alone, and what Nexus knows of it. */
+  download: (file: { game: string; modID: string; fileID: string }) => Promise<Download>;
   /** Fires when a key is kept or forgotten, from any window. */
   onDidChangeLogin: (listener: () => void) => Disposable;
 }
@@ -55,19 +65,22 @@ interface NexusDeps {
 export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): Nexus {
   const get = (key: string, path: string): Promise<Response> =>
     fetch(`${API}${path}`, { headers: { apikey: key, 'Application-Name': 'Modbench', 'Application-Version': applicationVersion } });
-  const read = async (key: string, path: string, notFound = 'Nexus does not hold this mod.'): Promise<{ json: unknown } | { reason: string }> => {
+  const read = async (
+    key: string, path: string, { notFound = 'Nexus does not hold this mod.', forbidden }: { notFound?: string; forbidden?: string } = {},
+  ): Promise<{ json: unknown } | { reason: string }> => {
     try {
       const response = await get(key, path);
       if (response.status === 404) return { reason: notFound };
+      if (response.status === 403 && forbidden !== undefined) return { reason: forbidden };
       if (!response.ok) return { reason: `Nexus answered ${response.status}.` };
       return { json: await response.json().catch(() => undefined) };
     } catch (error) {
       return { reason: `Could not reach Nexus: ${errorMessage(error)}` };
     }
   };
-  const withKey = async (lookup: (ask: Read) => Promise<FileFound>): Promise<FileFound> => {
+  const withKey = async <T>(use: (key: string, ask: Read) => Promise<T>): Promise<T | { found: false; reason: string }> => {
     const key = await secrets.get(KEY_NAME);
-    return key === undefined ? { found: false, reason: NOT_LOGGED_IN } : lookup((path, notFound) => read(key, path, notFound));
+    return key === undefined ? { found: false, reason: NOT_LOGGED_IN } : use(key, (path, notFound) => read(key, path, { notFound }));
   };
   return {
     check: async (key) => {
@@ -100,8 +113,23 @@ export function createNexus({ secrets, applicationVersion, fetch }: NexusDeps): 
       const version = typeof page.json === 'object' && page.json !== null && 'version' in page.json ? page.json.version : undefined;
       return typeof version === 'string' ? { found: true, version } : { found: false, reason: 'Nexus named no version.' };
     },
-    fileByMd5: (file) => withKey((ask) => lookupByMd5(ask, file)),
-    fileByName: (file) => withKey((ask) => lookupByName(ask, file)),
+    fileByMd5: (file) => withKey((_key, ask) => lookupByMd5(ask, file)),
+    fileByName: (file) => withKey((_key, ask) => lookupByName(ask, file)),
+    download: (file) => withKey(async (key, ask): Promise<Download> => {
+      const found = await lookupById(ask, file);
+      if (!found.found) return found;
+      const links = await read(key, `/v1/games/${file.game}/mods/${file.modID}/files/${file.fileID}/download_link.json`, { forbidden: 'Nexus gives a download link to a Premium account alone.' });
+      if ('reason' in links) return { found: false, ...links };
+      const server = firstServerOf(links.json);
+      if (server === undefined) return { found: false, reason: 'Nexus named no server to download the file from.' };
+      try {
+        const response = await fetch(server, { headers: {} });
+        if (!response.ok || response.body === null) return { found: false, reason: `The server Nexus named answered ${response.status}.` };
+        return { found: true, info: found.info, bytes: response.body };
+      } catch (error) {
+        return { found: false, reason: `Could not reach the server Nexus named: ${errorMessage(error)}` };
+      }
+    }),
     onDidChangeLogin: (listener) => secrets.onDidChange(({ key }) => { if (key === KEY_NAME) listener(); }),
   };
 }

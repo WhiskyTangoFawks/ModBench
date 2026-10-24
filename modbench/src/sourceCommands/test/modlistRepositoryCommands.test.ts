@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import type { ManifestInstallationFile } from '../../client';
 import type { FileRead, GameFolder, InstallationFile, InstanceAdapter, InstanceReading, ModFolders, OriginFile, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, refusing, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { modlistRepositoryCommands } from '../modlistRepositoryCommands';
@@ -7,6 +8,8 @@ import { archiveVariants } from '../sourceCommands';
 import type { HostGit } from '../../ports/repository';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { restoredMod } from '../../test/restoredMod';
+import { answeringFrom, FILE_78, nexusAnswering, nexusServing, servingFile78 } from '../../nexus/test/nexusDouble';
+import type { Nexus } from '../../nexus/nexus';
 
 const hostGitMaking = (made: string[] = []): HostGit<string> => ({
   extension: () => ({ activate: () => Promise.resolve({ getAPI: () => ({ init: () => { made.push('made'); return Promise.resolve({}); } }) }) }),
@@ -27,15 +30,18 @@ const GAME_FOLDER = { name: 'Fallout4', dataFolder: '/game/Data', files: [] };
 const filesIn = (filesByMod: Record<string, readonly OriginFile[]>): ReadonlyMap<string, OriginFiles> =>
   new Map(Object.entries(filesByMod).map(([mod, files]) => [mod, { origin: mod, folder: `/mods/${mod}`, files, folders: [], notes: [] }]));
 
+const loggedOutOfNexus = (): Nexus => nexusAnswering(answeringFrom({})).nexus;
+
 const sentNamesOf = (mods: unknown): string[] => (Array.isArray(mods) ? mods.map((mod: { name: string }) => mod.name) : []);
 
 function commandsOver(
   answers: InstanceAnswers = {}, client = new InMemoryMEditClient(), filesByMod: Record<string, readonly OriginFile[]> = {}, instance: Partial<InstanceReading> = readingOf(),
+  nexus: Nexus = loggedOutOfNexus(),
 ) {
   const adapter = fakeInstanceAdapter(readingFixture({ modFiles: filesIn(filesByMod), ...instance }), answers);
   const repositories: string[] = [];
   const commands = modlistRepositoryCommands({
-    client, adapter: adapter.adapter, instanceRoot: '/instance',
+    client, adapter: adapter.adapter, nexus, instanceRoot: '/instance',
     hostGit: hostGitMaking(repositories), trash: () => Promise.resolve(),
   });
   return { commands, client, adapter, repositories };
@@ -134,7 +140,7 @@ describe('modlistRepositoryCommands git init', () => {
   it('takes back the ignore list it wrote when the repository could not be made, leaving nothing behind', async () => {
     const adapter = fakeInstanceAdapter();
     const commands = modlistRepositoryCommands({
-      client: new InMemoryMEditClient(), adapter: adapter.adapter, instanceRoot: '/instance',
+      client: new InMemoryMEditClient(), adapter: adapter.adapter, nexus: loggedOutOfNexus(), instanceRoot: '/instance',
       hostGit: hostGitFailing('git is not available'), trash: () => Promise.resolve(),
     });
 
@@ -148,7 +154,7 @@ describe('modlistRepositoryCommands git init', () => {
   it('names the ignore list that remains when it could not be taken back', async () => {
     const adapter = fakeInstanceAdapter(readingFixture(), { refusals: refusing('takeBackIgnoreList', 'read-only folder') });
     const commands = modlistRepositoryCommands({
-      client: new InMemoryMEditClient(), adapter: adapter.adapter, instanceRoot: '/instance',
+      client: new InMemoryMEditClient(), adapter: adapter.adapter, nexus: loggedOutOfNexus(), instanceRoot: '/instance',
       hostGit: hostGitFailing('git is not available'), trash: () => Promise.resolve(),
     });
 
@@ -347,7 +353,7 @@ describe('modlistRepositoryCommands update manifest', () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('updateManifest', UPDATED);
       const commands = modlistRepositoryCommands({
-        client, adapter: { ...adapterOf, ...override }, instanceRoot: '/instance', hostGit: hostGitMaking(), trash: () => Promise.resolve(),
+        client, adapter: { ...adapterOf, ...override }, nexus: loggedOutOfNexus(), instanceRoot: '/instance', hostGit: hostGitMaking(), trash: () => Promise.resolve(),
       });
 
       const outcome = await commands.updateManifest(['ModA', 'ModB']);
@@ -558,7 +564,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('sends a mod skipped for an installation file the call did not hand again, with the downloaded file of that name, and answers both sends as one', async () => {
     const { commands, client } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods[0]?.installationFile === undefined
-      ? { landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFile: 'ModA-1.0.7z', gameFiles: [] }] }
+      ? { landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFile: { name: 'ModA-1.0.7z', hash: 'H' }, gameFiles: [] }] }
       : RESTORED));
 
     const outcome = await commands.restoreFromManifest(['ModA']);
@@ -570,7 +576,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('hands mEdit why an installation file the Instance adapter could not read could not be read', async () => {
     const { commands, client } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'unreadable', reason: 'EACCES' }]]) });
     client.setCommandResult('restoreFromManifest', {
-      landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFile: 'ModA-1.0.7z', gameFiles: [] }],
+      landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFile: { name: 'ModA-1.0.7z', hash: 'H' }, gameFiles: [] }],
     });
 
     await commands.restoreFromManifest(['ModA']);
@@ -578,12 +584,107 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     expect(client.calls[1]?.args[0]).toMatchObject([{ name: 'ModA', unreadableInstallationFile: 'EACCES' }]);
   });
 
+  describe('an installation file the downloads folder lacks', () => {
+    const LACKED: ManifestInstallationFile = { name: 'ModA-1.0.7z', hash: 'the bytes', page: FILE_78.page };
+    const lackedUntilHanded = (client: InMemoryMEditClient, installationFile = LACKED): void => {
+      client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods[0]?.installationFile === undefined
+        ? { landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }], notFound: [{ mod: 'ModA', installationFile, gameFiles: [] }] }
+        : RESTORED));
+    };
+
+    it('is downloaded from the page on Nexus its manifest names, put with what Nexus knows of it, and handed in the second send', async () => {
+      const { nexus } = await nexusServing(servingFile78('the bytes'));
+      const { commands, client, adapter } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf(), nexus);
+      lackedUntilHanded(client);
+      const heard: unknown[] = [];
+
+      const outcome = await commands.restoreFromManifest(['ModA'], { onProgress: (status) => { heard.push(status); } });
+
+      expect(adapter.calls).toContainEqual({ verb: 'putDownloadedFile', name: 'ModA-1.0.7z', info: expect.objectContaining({ game: 'fallout4', modID: '7', fileID: '78', name: 'Main' }) as unknown });
+      expect(client.calls[1]?.args[0]).toMatchObject([{ installationFile: { path: '/downloads/ModA-1.0.7z', hash: 'the bytes' } }]);
+      expect(heard).toContainEqual({ phase: 'Downloading', file: 'ModA-1.0.7z' });
+      expect(outcome).toEqual({ applied: true, landed: RESTORED.landed, refused: [] });
+    });
+
+    it.each([
+      ['its manifest names no file on Nexus', { ...LACKED, page: undefined }, true, ' Its manifest names no file on Nexus to download it from.'],
+      ['Nexus does not send it, as while logged out', LACKED, false, ' It could not be downloaded from Nexus: You are not logged in to Nexus.'],
+    ])('skips the mod when %s, naming why it was not downloaded', async (_name, installationFile, loggedIn, why) => {
+      const { nexus } = await nexusServing(servingFile78('the bytes'), loggedIn);
+      const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf(), nexus);
+      lackedUntilHanded(client, installationFile);
+
+      const outcome = await commands.restoreFromManifest(['ModA']);
+
+      expect(outcome).toEqual({ applied: true, landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING + why }] });
+    });
+
+    it('skips the mod when Nexus sends another file than its manifest names, putting none', async () => {
+      const { nexus } = await nexusServing(servingFile78('other bytes'));
+      const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf(), nexus);
+      lackedUntilHanded(client);
+
+      const outcome = await commands.restoreFromManifest(['ModA']);
+
+      expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: `${INSTALLATION_FILE_MISSING} It could not be downloaded from Nexus: the file Nexus sent is not the one its manifest names.` }] });
+    });
+
+    it('names why the Instance adapter could not put it', async () => {
+      const { nexus } = await nexusServing(servingFile78('the bytes'));
+      const { commands, client } = commandsOver({ refusals: refusing('putDownloadedFile', 'ENOSPC') }, new InMemoryMEditClient(), {}, readingOf(), nexus);
+      lackedUntilHanded(client);
+
+      const outcome = await commands.restoreFromManifest(['ModA']);
+
+      expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: `${INSTALLATION_FILE_MISSING} It could not be downloaded from Nexus: ENOSPC.` }] });
+    });
+
+    it('lets the server\'s connection go when the Instance adapter refuses the file before it reads it', async () => {
+      let cancelled = false;
+      const body = new ReadableStream<Uint8Array>({ cancel: () => { cancelled = true; } });
+      const { nexus } = await nexusServing({ ...servingFile78('the bytes'), [FILE_78.server]: new Response(body) });
+      const { commands, client } = commandsOver({ refusals: refusing('putDownloadedFile', 'ENOSPC') }, new InMemoryMEditClient(), {}, readingOf(), nexus);
+      lackedUntilHanded(client);
+
+      await commands.restoreFromManifest(['ModA']);
+
+      expect(cancelled).toBe(true);
+    });
+
+    it('asks Nexus nothing for an installation file the downloads folder holds', async () => {
+      const { nexus, sent } = await nexusServing(servingFile78('the bytes'));
+      const { commands, client } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) }, new InMemoryMEditClient(), {}, readingOf(), nexus);
+      lackedUntilHanded(client);
+
+      await commands.restoreFromManifest(['ModA']);
+
+      expect(sent).toEqual([]);
+    });
+
+    it('downloads no further file and sends nothing again once its signal aborts, naming each mod it skipped as not finished', async () => {
+      const cancel = new AbortController();
+      const { nexus, sent } = await nexusServing({ ...servingFile78('the bytes'), [FILE_78.record]: new Response('', { status: 404 }) });
+      const { commands, client } = commandsOver({}, new InMemoryMEditClient(), {}, readingOf(), nexus);
+      client.setCommandResult('restoreFromManifest', {
+        landed: [], refused: [{ item: 'ModA', reason: INSTALLATION_FILE_MISSING }, { item: 'ModB', reason: "was skipped: installation file 'ModB.7z' is missing." }],
+        notFound: [{ mod: 'ModA', installationFile: LACKED, gameFiles: [] }, { mod: 'ModB', installationFile: { ...LACKED, name: 'ModB.7z' }, gameFiles: [] }],
+      });
+
+      const outcome = await commands.restoreFromManifest(['ModA', 'ModB'], { onProgress: (status) => { if (status.phase === 'Downloading') cancel.abort(); }, signal: cancel.signal });
+
+      const notFinished = 'was not finished: the restore was cancelled. Restoring it again finishes it.';
+      expect([sent.map(({ url }) => url), client.calls.length, outcome]).toEqual([
+        [FILE_78.record], 1, { applied: true, landed: [], refused: [{ item: 'ModA', reason: notFinished }, { item: 'ModB', reason: notFinished }] },
+      ]);
+    });
+  });
+
   it('sends no skipped mod again once its signal aborts, handing mEdit the signal, so a cancel stops after the mod in hand', async () => {
     const cancel = new AbortController();
     const { commands, client } = commandsOver();
     client.setCommandHandler('restoreFromManifest', () => {
       cancel.abort();
-      return Promise.resolve({ landed: [], refused: [], notFound: [{ mod: 'ModA', installationFile: 'ModA-1.0.7z', gameFiles: [] }] });
+      return Promise.resolve({ landed: [], refused: [], notFound: [{ mod: 'ModA', installationFile: { name: 'ModA-1.0.7z', hash: 'H' }, gameFiles: [] }] });
     });
 
     await commands.restoreFromManifest(['ModA'], { signal: cancel.signal });
@@ -598,7 +699,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
       cancel.abort();
       return Promise.resolve({
         landed: RESTORED.landed, refused: [{ item: 'ModB', reason: "was skipped: installation file 'ModB.7z' is missing." }],
-        notFound: [{ mod: 'ModB', installationFile: 'ModB.7z', gameFiles: [] }],
+        notFound: [{ mod: 'ModB', installationFile: { name: 'ModB.7z', hash: 'H' }, gameFiles: [] }],
       });
     });
 
@@ -631,7 +732,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('answers the refusal of a cancel during the second send beside what both sends restored', async () => {
     const { commands, client } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods[0]?.installationFile === undefined
-      ? { landed: [], refused: [], notFound: [{ mod: 'ModA', installationFile: 'ModA-1.0.7z', gameFiles: [] }] }
+      ? { landed: [], refused: [], notFound: [{ mod: 'ModA', installationFile: { name: 'ModA-1.0.7z', hash: 'H' }, gameFiles: [] }] }
       : { landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], notFound: [], cancelRefusal: 'Could not cancel — not running.' }));
 
     expect(await commands.restoreFromManifest(['ModA'])).toMatchObject({ cancelRefusal: 'Could not cancel — not running.' });
@@ -642,7 +743,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const client = new InMemoryMEditClient();
     const commands = modlistRepositoryCommands({
       client, adapter: { ...adapter, modFolderPath: (mod) => Promise.resolve(mod === 'ModA' ? undefined : `/mods/${mod}`) },
-      instanceRoot: '/instance', hostGit: hostGitMaking(), trash: () => Promise.resolve(),
+      nexus: loggedOutOfNexus(), instanceRoot: '/instance', hostGit: hostGitMaking(), trash: () => Promise.resolve(),
     });
     client.setCommandResult('restoreFromManifest', { landed: [restoredMod({ mod: 'ModB' })], refused: [], notFound: [] });
 
@@ -669,7 +770,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
   it('trashes the files no line names of each mod the first call landed when the second call fails, and names the second call\'s mods', async () => {
     const { commands, client, adapter } = commandsOver({ downloadedFiles: new Map([['ModB.7z', { kind: 'read', answer: INSTALLED }]]) });
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods.length === 2
-      ? { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'] })], refused: [], notFound: [{ mod: 'ModB', installationFile: 'ModB.7z', gameFiles: [] }] }
+      ? { landed: [restoredMod({ mod: 'ModA', namedByNoLine: ['mine.txt'] })], refused: [], notFound: [{ mod: 'ModB', installationFile: { name: 'ModB.7z', hash: 'H' }, gameFiles: [] }] }
       : { refused: true as const, message: 'Could not restore 1 mod — mEdit stopped.' }));
 
     const outcome = await commands.restoreFromManifest(['ModA', 'ModB']);
@@ -717,7 +818,7 @@ describe('modlistRepositoryCommands restore from manifest', () => {
     const { commands, client, adapter } = commandsOver({ downloadedFiles: new Map([['ModA-1.0.7z', { kind: 'read', answer: INSTALLED }]]) });
     const metadata = { version: '2.0' };
     client.setCommandHandler('restoreFromManifest', (mods) => Promise.resolve(mods.length === 2
-      ? { landed: [], refused: [{ item: 'ModA', reason: 'missing' }, { item: 'ModB', reason: "its package does not hold 'b.nif'" }], notFound: [{ mod: 'ModA', installationFile: 'ModA-1.0.7z', gameFiles: [] }] }
+      ? { landed: [], refused: [{ item: 'ModA', reason: 'missing' }, { item: 'ModB', reason: "its package does not hold 'b.nif'" }], notFound: [{ mod: 'ModA', installationFile: { name: 'ModA-1.0.7z', hash: 'H' }, gameFiles: [] }] }
       : { landed: [restoredMod({ mod: 'ModA', metadata })], refused: [], notFound: [] }));
 
     await commands.restoreFromManifest(['ModA', 'ModB']);
@@ -770,7 +871,7 @@ describe('modlistRepositoryCommands what restore destroys', () => {
   it('asks nothing of a mod whose name gives it no folder, which restore refuses', async () => {
     const client = new InMemoryMEditClient();
     const commands = modlistRepositoryCommands({
-      client, adapter: { ...fakeInstanceAdapter().adapter, modFolderPath: () => Promise.resolve(undefined) }, instanceRoot: '/instance',
+      client, adapter: { ...fakeInstanceAdapter().adapter, modFolderPath: () => Promise.resolve(undefined) }, nexus: loggedOutOfNexus(), instanceRoot: '/instance',
       hostGit: hostGitMaking(), trash: () => Promise.resolve(),
     });
 

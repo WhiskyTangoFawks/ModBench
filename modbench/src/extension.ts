@@ -147,7 +147,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   own(markFirstReadLanded(instance));
   own(reportSubscriberThrows(instance, toastOncePerFailure(reporterFor('instance'))));
   const commands = instanceCommands({ adapter, client, instanceRoot });
-  const modlist = modlistRepositoryCommands({ client, adapter, instanceRoot, hostGit, trash });
+  const modlist = modlistRepositoryCommands({ client, adapter, nexus: deps.nexus, instanceRoot, hostGit, trash });
   const readStatus: ReadModStatus = (names) => modlist.modStatus(names);
   const modStatuses = own(new ModStatuses(client, readStatus, (line) => outputChannel.warn(`[modList] ${line}`)));
   const { modSync, pluginSync } = own(instanceSyncs({

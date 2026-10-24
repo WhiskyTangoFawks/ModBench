@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { acceptingGoodKey, GOOD_KEY, nexusAnswering } from './nexusDouble';
+import { acceptingGoodKey, FILE_78, GOOD_KEY, json, nexusAnswering, nexusServing, servingFile78 } from './nexusDouble';
 
 describe('checking a key', () => {
   it('asks Nexus to validate it, naming the application and sending the key', async () => {
@@ -67,7 +67,6 @@ describe('asking for a mod\'s newest version', () => {
   const REMOVED = 6;
   const file = (file_id: number, version: string, category_id: number, file_name = `f${file_id}.7z`) => ({ file_id, version, category_id, file_name });
   const update = (old_file_id: number, new_file_id: number) => ({ old_file_id, new_file_id });
-  const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
 
   const asking = async (answers: Record<string, Response>, installed: { fileId?: string; fileName?: string } = {}) => {
     const { nexus, sent } = nexusAnswering((_key, url) => answers[url] ?? new Response('', { status: 404 }));
@@ -190,7 +189,6 @@ describe('asking which file has an MD5', () => {
     },
     file_details: { file_id: 78, name: 'Main', version: '1.2', mod_version: '1.0', category_id, file_name, ...(description === null ? {} : { description }) },
   });
-  const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
   const asking = async (answer: Response | Error | Record<string, Response>, fileName = 'Sleep-7-1-2.7z', games = ['fallout4']) => {
     const { nexus, sent } = nexusAnswering((_key, url) => (answer instanceof Response || answer instanceof Error ? answer : answer[url] ?? new Response('', { status: 404 })));
     await nexus.keep(GOOD_KEY);
@@ -306,7 +304,6 @@ describe('asking which file of a mod bears a name', () => {
   const LIST = 'https://api.nexusmods.com/v1/games/fallout4/mods/7/files.json';
   const page = { name: '<b>Sleep</b> &amp; Save', category_id: 12, author: 'Someone', uploaded_by: 'Uploader', uploaded_users_profile_url: 'https://nexus/users/1' };
   const listed = { file_id: 78, name: 'Main', version: '1.2', category_id: 1, file_name: 'Sleep 7.7z', description: '[b]Main[/b]', uploaded_by: 'File uploader', uploaded_timestamp: 1455072761 };
-  const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
   const asking = async (answers: Record<string, Response>, file: { fileID?: string; fileName?: string } = {}) => {
     const { nexus, sent } = nexusAnswering((_key, url) => answers[url] ?? new Response('', { status: 404 }));
     await nexus.keep(GOOD_KEY);
@@ -356,5 +353,42 @@ describe('asking which file of a mod bears a name', () => {
 
     expect(await nexus.fileByName({ game: 'fallout4', modID: '7', fileName: 'a.7z' })).toEqual({ found: false, reason: 'You are not logged in to Nexus.' });
     expect(sent).toEqual([]);
+  });
+});
+
+describe('downloading a file', () => {
+  const downloading = async (answers: Record<string, Response | Error>, loggedIn = true) => {
+    const { nexus, sent } = await nexusServing(answers, loggedIn);
+    return { result: await nexus.download({ game: 'fallout4', modID: '7', fileID: '78' }), sent };
+  };
+
+  it('downloads the file from the first server Nexus names, sending that server no key, with what Nexus knows of the file and its mod', async () => {
+    const { result, sent } = await downloading(servingFile78('the bytes'));
+
+    expect(result.found && await new Response(result.bytes).text()).toBe('the bytes');
+    expect(result.found && result.info).toEqual({
+      game: 'fallout4', modID: '7', fileID: '78', name: 'Main', version: '1.2', modVersion: '1.0', versionFromNewest: true, fileCategory: 1, fileTime: 1700000000,
+      description: 'Main file', modName: 'Sleep & Save', category: 12, author: 'Someone', uploader: 'Uploader', uploaderUrl: 'https://nexus/users/1',
+    });
+    expect(sent.map(({ url }) => url)).toEqual([FILE_78.record, FILE_78.modPage, FILE_78.link, FILE_78.server]);
+    expect(sent.map(({ headers }) => headers.get('apikey'))).toEqual([GOOD_KEY, GOOD_KEY, GOOD_KEY, null]);
+  });
+
+  it.each([
+    ['says Nexus does not hold a file it answers 404 for', { [FILE_78.record]: new Response('', { status: 404 }) }, 'Nexus does not hold this file.'],
+    ['says only a Premium account gets a download link when Nexus forbids one', { [FILE_78.link]: new Response('', { status: 403 }) }, 'Nexus gives a download link to a Premium account alone.'],
+    ['says Nexus named no server when its list is empty', { [FILE_78.link]: json([]) }, 'Nexus named no server to download the file from.'],
+    ['names the status the server answers', { [FILE_78.server]: new Response('', { status: 410 }) }, 'The server Nexus named answered 410.'],
+    ['says why the server cannot be reached', { [FILE_78.server]: new Error('ECONNRESET') }, 'Could not reach the server Nexus named: ECONNRESET'],
+  ])('%s', async (_name, answers, reason) => {
+    const { result } = await downloading({ ...servingFile78('the bytes'), ...answers });
+
+    expect(result).toEqual({ found: false, reason });
+  });
+
+  it('asks nothing while logged out', async () => {
+    const { result, sent } = await downloading(servingFile78('the bytes'), false);
+
+    expect([result, sent]).toEqual([{ found: false, reason: 'You are not logged in to Nexus.' }, []]);
   });
 });

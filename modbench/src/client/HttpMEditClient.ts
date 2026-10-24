@@ -16,7 +16,7 @@ import { createUnsavedHandOver, type UnsavedHandOver } from './unsavedHandOver';
 import { keepLoadOrderStatus, type LoadOrderStatusKeeper } from './loadOrderStatusKeeper';
 import {
   type BackendStatus, type BuildConfigurationChange, type CellChildRecords, type BuildFacts, type BuildMod, type BuildOutcome,
-  type UpdateManifestFacts, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome, type ModByFolder, type ModStatus, type WhatRestoreDestroys,
+  type ManifestInstallationFile, type UpdateManifestFacts, type UpdateManifestMod, type UpdateManifestOutcome, type ModlistCallOptions, type RestoreFacts, type RestoreMod, type RestoreOutcome, type ModByFolder, type ModStatus, type WhatRestoreDestroys,
   type ContainerChildSummary, type InteriorCellBlock, type LaunchOutcome, type LoadOrderOutcome,
   type LoadOrderSnapshot, type LoadOrderProgress, type MEditClient, type NotificationKind, type NotificationPayloads,
   type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type PluginDependants, type PluginProblems, type RecordTypeChoice, type RenderedDocument, type CopyDocument,
@@ -63,6 +63,10 @@ function selectionOutcome<L, R>(
   answer: { applied: L[]; refused: { item: R; message: string }[] },
 ): { landed: readonly L[]; refused: readonly ItemRefusal<R>[] } {
   return { landed: answer.applied, refused: itemRefusals(answer.refused) };
+}
+
+function manifestInstallationFile(file: components['schemas']['InstallationFile'] | null | undefined): ManifestInstallationFile | undefined {
+  return file ? { name: file.name, hash: file.hash, ...(file.page ? { page: file.page } : {}) } : undefined;
 }
 
 function appliedWithRefusals<A, R>(
@@ -584,7 +588,7 @@ class HttpMEditClient implements MEditClient {
         ...selectionOutcome(answer),
         notFound: answer.refused.filter((refused) => refused.refusal === 'NotFound')
           .map((refused) => ({
-            mod: refused.item, installationFile: refused.installationFileNotFound ?? undefined, gameFiles: refused.gameFilesNotFound,
+            mod: refused.item, installationFile: manifestInstallationFile(refused.installationFileNotFound), gameFiles: refused.gameFilesNotFound,
             submodule: refused.submoduleNotFound ?? undefined,
           })),
       }),
