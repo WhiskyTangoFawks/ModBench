@@ -152,7 +152,10 @@ function conversing(dialog: FomodDialog): Driver {
   return {
     patient: true,
     attach: (send) => dialog.onMove((move) => {
-      if (move.kind === 'manual' || move.kind === 'cancel') ended = move.kind === 'manual' ? 'manual' : 'cancelled';
+      if (move.kind === 'manual' || move.kind === 'cancel') {
+        ended = move.kind === 'manual' ? 'manual' : 'cancelled';
+        dialog.asking(false);
+      }
       if (release !== undefined) {
         release();
         release = undefined;
@@ -171,16 +174,28 @@ function conversing(dialog: FomodDialog): Driver {
     step: ({ steps, current }) => {
       shown = true;
       dialog.show({ module, steps, current });
+      dialog.asking(true);
       return [];
     },
     finish: () => {
-      if (shown) return Promise.resolve();
+      if (shown) {
+        dialog.asking(false);
+        return Promise.resolve();
+      }
       dialog.show({ module, steps: [], current: 0 });
-      return new Promise((resolve) => {
+      dialog.asking(true);
+      return new Promise<void>((resolve) => {
         release = resolve;
-      });
+      }).then(() => dialog.asking(false));
     },
-    confirmMissing: dialog.confirmMissing,
+    confirmMissing: async (missing) => {
+      dialog.asking(true);
+      try {
+        return await dialog.confirmMissing(missing);
+      } finally {
+        dialog.asking(false);
+      }
+    },
     ended: () => ended,
     untaken: () => [],
   };

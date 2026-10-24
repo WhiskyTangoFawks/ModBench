@@ -5,7 +5,7 @@ import { effectiveModId } from './codecs/nexusFileName';
 import { type MetaIni, metaIniOf, type OwnedMetaKeys, parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
 import type { InstallationFileReader } from '../downloadedFileContents/installationFileReader';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, withLock, write } from '../files';
-import { fileInFolder, type InstallPackage, InstanceAdapter } from '../instanceAdapter';
+import { fileInFolder, type InstallPackage, type InstallTarget, InstanceAdapter, type ModFolder } from '../instanceAdapter';
 import { manifestFileIn, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix } from './layout';
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
@@ -97,29 +97,46 @@ export function mo2Landing(
   const fill = (installed: InstallPackage, path: string): Promise<void> =>
     (installed.kind === 'archive' ? installationFileReader.extract(installed.path, path) : copyTree(installed.path, path));
 
-  return {
-    // One lock per instance: two installs of one name must not both pass the name check.
-    install: (installed, target, keys, answer) => withLock(context.instanceRoot, async () => {
-      const { gameName } = await source.settings();
+  // The lock serializes the writes to the instance, so it is held to claim the target and to land, and not while the
+  // release is extracted or a user answers the installer.
+  const claim = (target: InstallTarget): Promise<{ extraction: Extraction; holding: ModFolder | undefined } | undefined> =>
+    withLock(context.instanceRoot, async () => {
       const holding = await folderHolding(context, { kind: 'mod', name: target.name });
-      if ((target.kind === 'new') !== (holding === undefined)) return { landed: false };
+      if ((target.kind === 'new') !== (holding === undefined)) return undefined;
       const extraction = holding === undefined ? await extractNewMod(context, target.name) : await extractUpgrade(target.name, holding.path, manifestFileIn(holding.path, holding.modName));
+      return { extraction, holding };
+    });
+
+  // The folder the claim was made on is still there, as the claim found it.
+  const claimHolds = async (target: InstallTarget, claimed: ModFolder | undefined): Promise<boolean> => {
+    const now = await folderHolding(context, { kind: 'mod', name: target.name });
+    return target.kind === 'new' ? now !== undefined : now?.path === claimed?.path;
+  };
+
+  return {
+    install: async (installed, target, keys, answer) => {
+      const { gameName } = await source.settings();
+      const claimed = await claim(target);
+      if (claimed === undefined) return { landed: false };
+      const { extraction, holding } = claimed;
       try {
         await fill(installed, extraction.path);
         const release = await releaseRoot(extraction.path);
         const landing = release.fomod === undefined
           ? { root: release.root, fomod: undefined }
           : await fomodLanding(fomodEngine, { root: release.root, fomod: release.fomod }, answer, () => conditionFacts(source));
-        if ('cancelled' in landing) {
-          await extraction.abandon();
-          return { landed: false, cancelled: true };
-        }
-        const { root, fomod } = landing;
-        await extraction.land(root, { ...metaIniOf(keys), nexusId: effectiveModId(keys.nexusId, keys.installationFileName), gameName });
-        return fomod === undefined ? { landed: true } : { landed: true, fomod };
+        return await withLock(context.instanceRoot, async () => {
+          if ('cancelled' in landing || !(await claimHolds(target, holding))) {
+            await extraction.abandon();
+            return 'cancelled' in landing ? { landed: false, cancelled: true } : { landed: false };
+          }
+          const { root, fomod } = landing;
+          await extraction.land(root, { ...metaIniOf(keys), nexusId: effectiveModId(keys.nexusId, keys.installationFileName), gameName });
+          return fomod === undefined ? { landed: true } : { landed: true, fomod };
+        });
       } catch (err) {
         return abandonAfter(extraction, err);
       }
-    }),
+    },
   };
 }

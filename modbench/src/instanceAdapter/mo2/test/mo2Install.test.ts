@@ -15,7 +15,8 @@ const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(re
 import { mkdir, mkdtemp, readdir, readFile, rename as fsRename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { InstallationFileReader, InstanceAdapter, InstallPackage } from '../../instanceAdapter';
+import type { FomodDialog, InstallationFileReader, InstanceAdapter, InstallPackage } from '../../instanceAdapter';
+import type { FomodMove } from '../../../wire/fomodPage';
 import { SCRIPT_EXTENDER_FOLDERS } from '../../../tables/gamePaths';
 import { adapterOver } from '../../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../../test/mo2/corpusFixture';
@@ -247,7 +248,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     it('writes nothing, and says it was cancelled, when the user cancels the installer', async () => {
       const before = await snapshotTree(root);
       const dialog = {
-        show: () => undefined, close: () => undefined, confirmMissing: () => Promise.resolve(true),
+        show: () => undefined, close: () => undefined, asking: () => undefined, confirmMissing: () => Promise.resolve(true),
         onMove: (handler: (move: { kind: 'cancel' }) => void) => { setImmediate(() => handler({ kind: 'cancel' })); },
       };
 
@@ -255,6 +256,61 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
       expect(outcome).toEqual({ landed: false, cancelled: true });
       assertOnlyChanged(before, await snapshotTree(root), new Set());
+    });
+
+    describe('while its page waits on the user', () => {
+      interface HeldPage {
+        readonly answer: { kind: 'dialog'; dialog: FomodDialog };
+        readonly shown: Promise<void>;
+        readonly move: (move: FomodMove) => void;
+      }
+
+      function heldPage(): HeldPage {
+        let shownNow: () => void = () => undefined;
+        const shown = new Promise<void>((resolve) => { shownNow = resolve; });
+        let handler: (move: FomodMove) => void = () => undefined;
+        const dialog: FomodDialog = {
+          show: () => shownNow(), onMove: (listener) => { handler = listener; }, confirmMissing: () => Promise.resolve(true),
+          asking: () => undefined, close: () => undefined,
+        };
+        return { answer: { kind: 'dialog', dialog }, shown, move: (move) => handler(move) };
+      }
+      const INSTALL: FomodMove = { kind: 'continue', forward: true, stepId: 0 };
+
+      it('installs another mod, as the page is no write', async () => {
+        const page = heldPage();
+        const installing = holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, page.answer);
+        await page.shown;
+
+        const other = await holding(['x.esp']).install(INSTALLATION_FILE, { kind: 'new', name: 'Other' }, KEYS);
+        page.move(INSTALL);
+
+        expect(other).toEqual({ landed: true });
+        expect(await installing).toMatchObject({ landed: true });
+        expect(await filesIn(folder('Other'))).toEqual(['meta.ini', 'x.esp']);
+      });
+
+      it('keeps the name of a new mod from a second install of it', async () => {
+        const page = heldPage();
+        const installing = holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, page.answer);
+        await page.shown;
+
+        expect(await holding(['x.esp']).install(INSTALLATION_FILE, { kind: 'new', name: MOD }, KEYS)).toEqual({ landed: false });
+        page.move(INSTALL);
+        await installing;
+      });
+
+      it('answers as a claim the mod\'s folder no longer meets when an upgrade\'s folder is gone by the time the user chooses Manual', async () => {
+        const page = heldPage();
+        const installing = holding([]).install(await fomod(PICK), { kind: 'upgrade', name: UPGRADED }, KEYS, page.answer);
+        await page.shown;
+
+        await rm(folder(UPGRADED), { recursive: true });
+        page.move({ kind: 'manual' });
+
+        expect(await installing).toEqual({ landed: false });
+        expect(await readdir(join(root, 'mods'))).not.toContain(UPGRADED);
+      });
     });
 
     it('writes nothing when its installer refuses the choices', async () => {

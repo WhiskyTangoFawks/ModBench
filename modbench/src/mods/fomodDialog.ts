@@ -4,13 +4,14 @@ import * as vscode from 'vscode';
 import type { FomodDialog } from '../modCommands/modCommands';
 import { showWebviewPage } from '../drivingLib/webviewPage';
 import type { AskQuestion } from '../ports/dialog';
+import type { Progress } from '../drivingLib/pausableProgress';
 import { FOMOD_STATE, isFomodReady, parseFomodMove, type FomodMove, type FomodState } from '../wire/fomodPage';
 import { WEBVIEW_SCRIPTS } from '../wire/webviewPages';
 
 const INSTALL_ANYWAY = 'Install anyway';
 
 /** A page for one install. Closing its tab is Cancel. */
-export function fomodDialog(extensionUri: vscode.Uri, ask: AskQuestion): FomodDialog {
+export function fomodDialog(extensionUri: vscode.Uri, ask: AskQuestion, progress: Progress): FomodDialog {
   let panel: vscode.WebviewPanel | undefined;
   let moved: (move: FomodMove) => void = () => undefined;
   let latest: FomodState | undefined;
@@ -45,6 +46,10 @@ export function fomodDialog(extensionUri: vscode.Uri, ask: AskQuestion): FomodDi
     },
     confirmMissing: async (missing) => await ask(
       'This FOMOD names files its archive does not hold.', { modal: true, detail: missing.join('\n') }, INSTALL_ANYWAY) === INSTALL_ANYWAY,
+    asking: (asking) => {
+      if (asking) progress.waiting();
+      else progress.working();
+    },
     close: () => {
       closing = true;
       panel?.dispose();

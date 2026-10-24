@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -303,6 +303,7 @@ describe('the FOMOD installer', () => {
     interface Page {
       readonly states: FomodState[];
       readonly confirmed: (string[])[];
+      readonly asking: boolean[];
       closed: number;
     }
 
@@ -310,7 +311,7 @@ describe('the FOMOD installer', () => {
       react: (state: FomodState, move: (move: FomodMove) => void, seen: number) => void,
       { engine = FOMOD_ENGINE, confirms = true }: { engine?: FomodEngine; confirms?: boolean } = {},
     ): Promise<{ page: Page; landing: Awaited<ReturnType<typeof fomodLanding>> }> {
-      const page: Page = { states: [], confirmed: [], closed: 0 };
+      const page: Page = { states: [], confirmed: [], asking: [], closed: 0 };
       let handler: ((move: FomodMove) => void) | undefined;
       const dialog: FomodDialog = {
         show: (state) => {
@@ -324,6 +325,9 @@ describe('the FOMOD installer', () => {
         confirmMissing: (missing) => {
           page.confirmed.push([...missing]);
           return Promise.resolve(confirms);
+        },
+        asking: (asking) => {
+          page.asking.push(asking);
         },
         close: () => {
           page.closed += 1;
@@ -421,13 +425,33 @@ describe('the FOMOD installer', () => {
 
     it('waits on the user for as long as the user takes, though the engine says nothing', async () => {
       await release(TWO_STEPS, TWO_STEPS_FILES);
-      const patient = { ...FOMOD_ENGINE, silence: 500 };
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const { landing } = await answered((_, move) => {
+          vi.advanceTimersByTime(FOMOD_ENGINE.silence * 10);
+          move({ kind: 'cancel' });
+        });
 
-      const { landing } = await answered((_, move) => {
-        setTimeout(() => move({ kind: 'cancel' }), 800);
-      }, { engine: patient });
+        expect(landing).toEqual({ cancelled: true });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
 
-      expect(landing).toEqual({ cancelled: true });
+    it('says the user is being asked from the first state shown until the user\'s last move, and not while it lands', async () => {
+      await release(TWO_STEPS, TWO_STEPS_FILES);
+
+      const { page } = await answered((_, move, seen) => move({ kind: 'continue', forward: true, stepId: seen - 1 }));
+
+      expect(page.asking).toEqual([true, true, false]);
+    });
+
+    it('says the user is being asked while the missing files are confirmed, and not after', async () => {
+      await release(config(`<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}${file('gone/Gone.esp', 'Gone.esp')}</requiredInstallFiles>`), ['core/Core.esp']);
+
+      const { page } = await answered((_, move) => move({ kind: 'continue', forward: true, stepId: 0 }));
+
+      expect(page.asking).toEqual([true, false, true, false]);
     });
 
     describe('a file the FOMOD names and its archive lacks', () => {

@@ -15,6 +15,7 @@ import { chooseInstallTarget, defaultModName } from './installTarget';
 import { promptModName } from './promptModName';
 import { promptRefusal, refuseAgentName } from './nameRefusals';
 import { runWritingGesture } from '../drivingLib/writingGesture';
+import type { Progress } from '../drivingLib/pausableProgress';
 import type { Reporter } from '../ports/reporter';
 import { MODS_KEY_ARGS } from './gestureEntry';
 
@@ -33,6 +34,8 @@ interface Install {
   readonly via: InstallVia;
   readonly force: boolean;
   readonly fomod?: FomodAnswer;
+  /** Answer a FOMOD's installer on a page: a view install does, an agent's does not. */
+  readonly page?: true;
 }
 
 interface InstallOptions {
@@ -49,7 +52,7 @@ interface ModInstallDeps {
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
   /** The page one view install answers a FOMOD's installer on. */
-  fomodDialog: () => FomodDialog;
+  fomodDialog: (progress: Progress) => FomodDialog;
   downloadedFileInstallReporting: { reporter: Reporter; log: (line: string) => void; progressViewId: string };
 }
 
@@ -136,9 +139,10 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
   const failedMessage = ({ package: installed, target, via }: Install): string =>
     `Failed to install "${installed.kind === 'downloadedFile' && via === 'downloadedFile' ? installed.name : target.name}".`;
 
-  const installedMod = async (install: Install): Promise<InstallResult> => {
+  const installedMod = async (install: Install, progress: Progress): Promise<InstallResult> => {
     try {
-      const outcome = await commands.installMod(install.package, install.target, install.force, install.fomod);
+      const fomod: FomodAnswer | undefined = install.page === true ? { kind: 'dialog', dialog: fomodDialog(progress) } : install.fomod;
+      const outcome = await commands.installMod(install.package, install.target, install.force, fomod);
       if (!outcome.applied) return { applied: false, refusal: failedMessage(install), detail: outcome.refusal };
       if (outcome.cancelled === true) return { applied: true, outcome: { landed: [], refused: [] } };
       return {
@@ -157,7 +161,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
 
   const newMod = async (installed: ModPackage, defaultName: string, via: InstallVia): Promise<Install | undefined> => {
     const name = await promptModName(defaultName, newModNameRefusal);
-    return name ? { package: installed, target: { kind: 'new', name }, via, force: true, fomod: { kind: 'dialog', dialog: fomodDialog() } } : undefined;
+    return name ? { package: installed, target: { kind: 'new', name }, via, force: true, page: true } : undefined;
   };
 
   const pickedPackage = async (): Promise<Install | undefined> => {
@@ -177,7 +181,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     const row = downloadedFileNamed(instance.value.downloadedFiles, name);
     const target = await chooseInstallTarget(row, (defaultName) => promptModName(defaultName, newModNameRefusal));
     if (!target || !(await upgradeConfirmed(target))) return undefined;
-    return { package: downloadedFilePackage(row), target, via: 'downloadedFile', force: true, fomod: { kind: 'dialog', dialog: fomodDialog() } };
+    return { package: downloadedFilePackage(row), target, via: 'downloadedFile', force: true, page: true };
   };
 
   const gesture: AgentGesture<KindedRow, Install, InstallResult, InstallOptions> = {
@@ -196,7 +200,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
       fomod: fomodAnswerOf(options),
     }),
     run: (install) => runWritingGesture(
-      install.via === 'downloadedFile' ? downloadedFileInstallReporting.progressViewId : MODS_KEY_ARGS.view, instance, () => installedMod(install)),
+      install.via === 'downloadedFile' ? downloadedFileInstallReporting.progressViewId : MODS_KEY_ARGS.view, instance, (progress) => installedMod(install, progress)),
     report: (result, install) => {
       if (!result.applied) {
         reporterOf(install.via).report('error', result.refusal, result.detail);

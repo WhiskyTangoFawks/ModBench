@@ -222,6 +222,8 @@ export interface FomodDialog {
   readonly show: (state: FomodState) => void;
   readonly onMove: (handler: (move: FomodMove) => void) => void;
   readonly confirmMissing: (missing: readonly string[]) => Promise<boolean>;
+  /** Whether the install now waits on the user, and not on itself. */
+  readonly asking: (asking: boolean) => void;
   readonly close: () => void;
 }
 

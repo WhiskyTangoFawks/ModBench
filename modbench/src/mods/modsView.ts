@@ -151,7 +151,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
     ...registerConflictTable(instance, (files) => sameCopies(deps.copyReads, files), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     ...registerModInstallCommands({
-      commands, instance, reporterFor, ask, fomodDialog: () => fomodDialog(deps.extensionUri, ask), downloadedFileInstallReporting: deps.downloadedFileInstallReporting,
+      commands, instance, reporterFor, ask, fomodDialog: (progress) => fomodDialog(deps.extensionUri, ask, progress), downloadedFileInstallReporting: deps.downloadedFileInstallReporting,
     }),
     registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), deps.nexusRow),
     ...registerSortDirectionToggle('mod', provider),
