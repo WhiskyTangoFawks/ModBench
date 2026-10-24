@@ -6,7 +6,7 @@ import { readdir } from 'node:fs/promises';
 import { delimiter, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import type { types } from '@nexusmods/fomod-installer-native';
 import { copyTree, ensureDir, makeTempDir, ownTempPrefix, remove, write } from '../files';
-import { utfText } from './releaseXml';
+import { releaseXmlText } from './releaseXml';
 import { moduleConfigForEngine } from './moduleConfig';
 import { aboutIn, NO_ABOUT, type About } from './releaseAbout';
 import { keyOf, resolverIn } from './releasePaths';
@@ -311,10 +311,10 @@ async function filesUnder(root: string): Promise<string[]> {
 }
 
 // The engine reads the config from a folder of its own, so the release keeps its own. It reads a UTF-8 copy whatever
-// encoding its declaration names, and a config of another encoding as the release holds it.
+// encoding its declaration names.
 async function scriptFolder(root: string, files: readonly string[]): Promise<{ readonly root: string; dispose(): Promise<void> }> {
   const config = files.find((file) => keyOf(file) === MODULE_CONFIG);
-  const text = config === undefined ? undefined : await utfText(join(root, config));
+  const text = config === undefined ? undefined : await releaseXmlText(join(root, config));
   if (text === undefined) return { root, dispose: () => Promise.resolve() };
   const keys = files.map(keyOf);
   const holds = (folder: string): boolean => {

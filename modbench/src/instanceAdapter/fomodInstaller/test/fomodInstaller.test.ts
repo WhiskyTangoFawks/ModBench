@@ -218,6 +218,16 @@ describe('the FOMOD installer', () => {
     expect(await readFile(join(root, 'fomod', 'ModuleConfig.xml'))).toEqual(unnamed);
   });
 
+  it('reads a module config in neither UTF-8 nor UTF-16 as Windows-1252, where MO2 falls back to Latin-1, though it names no schema and a folder its archive lacks', async () => {
+    const unnamed = Buffer.from('<?xml version="1.0" encoding="windows-1252"?><config><moduleName>No schema</moduleName><requiredInstallFiles>'
+      + `${file('core/Core.esp', 'Café.esp')}<folder source="gone" destination=""/></requiredInstallFiles></config>`, 'latin1');
+    await release(unnamed, ['core/Core.esp']);
+
+    expect(await install([])).toEqual({ kind: 'installer', missing: ['gone'], notes: [] });
+    expect(await filesLanded()).toEqual(['Café.esp']);
+    expect(await readFile(join(root, 'fomod', 'ModuleConfig.xml'))).toEqual(unnamed);
+  });
+
   it.each([
     ['never closed', '<config><moduleName>Never closed</moduleName>', 'line 1, column 175'],
     ['not XML', 'not xml', 'line 1, column 1'],
