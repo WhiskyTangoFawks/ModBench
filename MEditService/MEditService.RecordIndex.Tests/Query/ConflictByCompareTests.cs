@@ -89,7 +89,7 @@ public class ConflictByCompareTests
     [Theory]
     [InlineData("ModA", "Shared.esp|ModA", "ModB", "Shared.esp|ModB")]
     [InlineData(PluginOrigin.DataDirectory, "Shared.esp", "Data", "Shared.esp|Data")]
-    [InlineData(PluginOrigin.Overwrite, "Shared.esp|overwrite/", "overwrite", "Shared.esp|overwrite")]
+    [InlineData(LoadOrderEntry.OverwriteOrigin, "Shared.esp|overwrite/", "overwrite", "Shared.esp|overwrite")]
     public void TwoPluginsOfOneFilename_AreTwoColumns_EachHoldingItsOwnValue_WhereBarePluginKeysWouldCollide(
         string losingOrigin, string losingColumn, string winningOrigin, string winningColumn)
     {

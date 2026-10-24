@@ -33,7 +33,7 @@ public static class TreeSaves
 
         var tree = (await adapter.ReadTreeAsync(edited, EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
         var masters = loadOrder
-            ?? adapter.ReadContent(new ModPath(ModKey.FromFileName(name), pluginPath), EmptyLoadOrder.Of(GameRelease.Fallout4)).Answered().Content.Masters;
+            ?? adapter.ReadContent(new ModPath(ModKey.FromFileName(name), pluginPath), EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None).Answered().Content.Masters;
         return (await tree.SaveAsync(pluginPath, masters, masters, land)).Answered();
     }
 }

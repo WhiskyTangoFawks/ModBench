@@ -264,7 +264,7 @@ public sealed class LoadOrderLocalizedTests
         }
 
         public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
-            ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas, PluginStrings? strings = null)
+            ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas, PluginStrings strings)
         {
             Watch();
             return base.OpenDocuments(modPath, loadOrder, schemas, strings);

@@ -1,9 +1,8 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
-using MEditService.TestSupport;
 
-namespace MEditService.Commands.Tests.TestSupport;
+namespace MEditService.TestSupport;
 
 public sealed record StaleHeaderPlugin(string FileName, byte[] Bytes, uint StoredNextObjectId, uint StoredNumRecords)
     : GeneratedPlugin(FileName, Bytes);

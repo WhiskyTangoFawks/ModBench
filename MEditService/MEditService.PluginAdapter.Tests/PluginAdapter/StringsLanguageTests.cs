@@ -24,7 +24,7 @@ public sealed class StringsLanguageTests : IDisposable
 
     private ModPath Mod => new(ModKey.FromFileName(PluginName), _pluginPath);
 
-    private static MutagenPluginAdapter Adapter => new(TimeProvider.System);
+    private static IPluginAdapter Adapter => TestAdapters.Mutagen();
 
     private LoadOrderSnapshot LoadOrderIn(Language language)
     {

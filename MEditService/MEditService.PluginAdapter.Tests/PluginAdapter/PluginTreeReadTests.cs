@@ -115,7 +115,7 @@ public sealed class PluginTreeReadTests
         (await Adapter.WriteFromTreeAsync(files, recompiledPath, reversed, EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
         var written = Adapter.ReadContent(
-            new ModPath(ModKey.FromFileName("Patch.esp"), recompiledPath), EmptyLoadOrder.Of(GameRelease.Fallout4)).Answered();
+            new ModPath(ModKey.FromFileName("Patch.esp"), recompiledPath), EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None).Answered();
         Assert.Equal(reversed, written.Content.Masters);
     }
 
@@ -139,7 +139,7 @@ public sealed class PluginTreeReadTests
         (await Adapter.WriteFromTreeAsync(files, recompiledPath, ["AlphaBase.esm"], EmptyLoadOrder.Of(GameRelease.Fallout4))).Answered();
 
         var written = Adapter.ReadContent(
-            new ModPath(ModKey.FromFileName("Lower.esp"), recompiledPath), EmptyLoadOrder.Of(GameRelease.Fallout4)).Answered();
+            new ModPath(ModKey.FromFileName("Lower.esp"), recompiledPath), EmptyLoadOrder.Of(GameRelease.Fallout4), PluginStrings.None).Answered();
         Assert.Equal(["AlphaBase.esm"], written.Content.Masters);
     }
 
@@ -224,12 +224,12 @@ public sealed class PluginTreeReadTests
         (await Adapter.WriteFromTreeAsync(source.Files, recompiledPath, source.Masters, loadOrder)).Answered();
 
         using var written = Adapter.OpenDocuments(
-            new ModPath(LightMasterAndChild.Child, recompiledPath), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Answered();
+            new ModPath(LightMasterAndChild.Child, recompiledPath), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield), PluginStrings.None).Answered();
         Assert.Equal([LightMasterAndChild.Weapon.ToString()], written.Records.Select(record => record.FormKey));
     }
 
     [Fact]
-    public async Task WriteFromTree_OfAStarfieldTree_WhoseMasterHeaderDoesNotRead_FailsNamingTheMaster()
+    public async Task WriteFromTree_OfAStarfieldTree_WhoseMasterHeaderDoesNotRead_Fails_AndWritesNothing()
     {
         using var scratch = new ScratchDirectory("writetree-unreadable-master");
         var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
@@ -239,8 +239,7 @@ public sealed class PluginTreeReadTests
 
         var written = await Adapter.WriteFromTreeAsync(source.Files, recompiledPath, source.Masters, loadOrder);
 
-        Assert.Equal(
-            "its master Light.esm could not be read: the plugin — unknown: Could not read enough data to parse a Mod Header from stream.  Position: 0.  12 remaining < 24 expected.",
-            written.Failure().Reason);
+        Assert.Equal(LightMasterAndChild.Master.FileName, Assert.IsType<PluginFailure.MasterUnreadable>(written.Failure()).Master);
+        Assert.False(File.Exists(recompiledPath));
     }
 }

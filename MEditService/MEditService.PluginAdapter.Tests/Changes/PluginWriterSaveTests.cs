@@ -18,20 +18,33 @@ public sealed class PluginWriterSaveTests
         });
     }
 
-    [Fact]
-    public async Task Commit_OriginalPathHoldsValidPlugin()
+    public static TheoryData<string, uint> GeneratedPluginsWithAStaleHeader => new()
     {
-        using var data = new PluginFixtureBuilder("pw-save-original")
-            .WithPlugin("TestPlugin.esp")
-            .Build();
+        { StaleHeaderPlugins.SettingsFileName, 5 },
+        { StaleHeaderPlugins.LightFileName, 4 },
+        { StaleHeaderPlugins.FullFileName, 11 },
+    };
 
-        var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
+    [Theory]
+    [MemberData(nameof(GeneratedPluginsWithAStaleHeader))]
+    public async Task Save_OfAGeneratedPluginWithAStaleHeader_KeepsItsNextObjectId_AndDerivesNumRecordsFromContent(
+        string fileName, uint derivedNumRecords)
+    {
+        using var folder = new ScratchDirectory("pw-save-stale-header");
+        var stale = StaleHeaderPlugins.Named(fileName);
+        stale.WriteInto(folder);
+        var pluginPath = Path.Combine(folder, fileName);
+        Assert.Equal((stale.StoredNextObjectId, stale.StoredNumRecords), HeaderStatsOf(pluginPath));
 
         await RewriteAsync(pluginPath);
 
-        var reloaded = Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName("TestPlugin.esp"), pluginPath), Fallout4Release.Fallout4);
-        Assert.Equal("TestPlugin.esp", reloaded.ModKey.FileName);
+        Assert.Equal((stale.StoredNextObjectId, derivedNumRecords), HeaderStatsOf(pluginPath));
+    }
+
+    private static (uint NextObjectId, uint NumRecords) HeaderStatsOf(string pluginPath)
+    {
+        using var plugin = Fallout4Mod.CreateFromBinaryOverlay(new ModPath(ModKey.FromFileName(Path.GetFileName(pluginPath)), pluginPath), Fallout4Release.Fallout4);
+        return (plugin.ModHeader.Stats.NextFormID, plugin.ModHeader.Stats.NumRecords);
     }
 
     [Fact]
@@ -129,12 +142,12 @@ public sealed class PluginWriterSaveTests
 
         Assert.Empty(drops);
         using var written = adapter.OpenDocuments(
-            new ModPath(LightMasterAndChild.Child, child.Path), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield)).Answered();
+            new ModPath(LightMasterAndChild.Child, child.Path), loadOrder, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield), PluginStrings.None).Answered();
         Assert.Equal([LightMasterAndChild.Weapon.ToString()], written.Records.Select(record => record.FormKey));
     }
 
     [Fact]
-    public async Task Save_OfAStarfieldTree_WhoseMasterHeaderDoesNotRead_FailsNamingTheMaster_AndLeavesTheBinary()
+    public async Task Save_OfAStarfieldTree_WhoseMasterHeaderDoesNotRead_Fails_AndLeavesTheBinary()
     {
         using var scratch = new ScratchDirectory("pw-save-unreadable-master");
         var loadOrder = LightMasterAndChild.LoadOrderIn(scratch);
@@ -151,9 +164,7 @@ public sealed class PluginWriterSaveTests
             return true;
         });
 
-        Assert.Equal(
-            "its master Light.esm could not be read: the plugin — unknown: Could not read enough data to parse a Mod Header from stream.  Position: 0.  12 remaining < 24 expected.",
-            saved.Failure().Reason);
+        Assert.Equal(LightMasterAndChild.Master.FileName, Assert.IsType<PluginFailure.MasterUnreadable>(saved.Failure()).Master);
         Assert.Equal(before, File.ReadAllBytes(child.Path));
     }
 

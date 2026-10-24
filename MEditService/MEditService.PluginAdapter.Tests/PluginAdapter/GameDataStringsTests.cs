@@ -84,13 +84,16 @@ public sealed class GameDataStringsTests : IDisposable
     private bool IsLocalized(string pluginPath) =>
         Adapter.ReadContent(new ModPath(ModKey.FromFileName(PluginName), pluginPath), LoadOrder, HandedStrings.Of(pluginPath)).Answered().Content.IsLocalized;
 
-    [Fact]
-    public void AnArchiveRewrittenUnderAnUnchangedHandedStampKeepsItsListing() =>
-        Assert.Equal([[UpdateArchive], [UpdateArchive]], PlacesBeforeAndAfterAnotherPluginsStringsReplaceTheArchives(stampAfter: "1"));
+    [Theory]
+    [InlineData("1", 1)]
+    [InlineData("2", 0)]
+    public void AnArchiveRewrittenWithAnotherPluginsStrings_KeepsItsListingOnlyWhileItsHandedStampIsUnchanged(string stampAfter, int placesAfter)
+    {
+        var places = PlacesBeforeAndAfterAnotherPluginsStringsReplaceTheArchives(stampAfter);
 
-    [Fact]
-    public void AnArchiveWhoseHandedStampChangedLosesItsOldListing() =>
-        Assert.Equal([[UpdateArchive], []], PlacesBeforeAndAfterAnotherPluginsStringsReplaceTheArchives(stampAfter: "2"));
+        Assert.Equal([1, placesAfter], places.Select(listed => listed.Count));
+        Assert.All(places.SelectMany(listed => listed), place => Assert.Equal(UpdateArchive, place));
+    }
 
     private string UpdateArchive => Path.Combine(_dataFolder, "Update.bsa");
 

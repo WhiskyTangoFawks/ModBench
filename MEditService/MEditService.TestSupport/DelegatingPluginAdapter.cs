@@ -15,7 +15,7 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
 {
     public virtual Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null) =>
+        PluginStrings strings) =>
         inner.OpenDocuments(modPath, loadOrder, schemas, strings);
 
     public virtual Answer<IPluginRecords, PluginFailure> OpenRecordLookup(
@@ -23,7 +23,7 @@ public abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginAda
         inner.OpenRecordLookup(plugin, loadOrder, schemas);
 
     public virtual Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
-        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings? strings = null) =>
+        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         inner.ReadContent(modPath, loadOrder, strings);
 
     public virtual bool Exists(string pluginPath) => inner.Exists(pluginPath);

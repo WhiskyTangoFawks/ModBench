@@ -14,12 +14,12 @@ namespace MEditService.PluginAdapter;
 public interface IPluginAdapter
 {
     /// <summary>The plugin as the documents its source tree would hold (ADR-0007), owning the open until
-    /// disposed; omitting <paramref name="strings"/> is not neutral for a localized plugin.</summary>
+    /// disposed.</summary>
     Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath,
         LoadOrderSnapshot loadOrder,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null);
+        PluginStrings strings);
 
     /// <summary>The same plugin for a caller asking about a handful of records by key rather than
     /// streaming all of them. Owns the open until the result is disposed.</summary>
@@ -72,7 +72,7 @@ public interface IPluginAdapter
     /// <summary>What a plugin's own binary says about itself, which is what the Index holds for it.
     /// <c>Unreachable</c> stopped a full walk: the count is a readout, not a gate.</summary>
     Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
-        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings? strings = null);
+        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings);
 
     /// <summary>What each of <paramref name="formKeys"/> names in the files the game loads (ADR-0013), or in every
     /// plugin when it does not load <paramref name="compiled"/>, beside the unreadable files (ADR-0005).</summary>
