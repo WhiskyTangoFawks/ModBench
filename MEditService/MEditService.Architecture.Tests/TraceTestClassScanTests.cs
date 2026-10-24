@@ -62,7 +62,7 @@ public sealed class TraceTestClassScanTests
 
         Assert.True(
             orphans.Count == 0,
-            $"{orphans.Count} class(es) end in TraceTests but name no file under docs/architecture/traces/. "
+            $"{orphans.Count} class(es) end in TraceTests but name no file under docs/traces/. "
             + "Rename the class to the trace it now covers, or drop the suffix (to *ApiTests) once its flow "
             + "is folded into a trace another class already covers:\n"
             + string.Join("\n", orphans));
@@ -70,7 +70,7 @@ public sealed class TraceTestClassScanTests
 
     private static List<string> TracesWithAnMEditActor(string solution) =>
         [.. Directory
-            .EnumerateFiles(Path.Combine(ServiceProjects.DocsArchitecture(solution), "traces"), "*.d2")
+            .EnumerateFiles(ServiceProjects.Traces(solution), "*.d2")
             .Where(trace => Regex.IsMatch(
                 File.ReadAllText(trace), @"@[\w./]*target-architecture\.medit_(?!data\.)"))
             .Order(StringComparer.Ordinal)];
@@ -87,7 +87,7 @@ public sealed class TraceTestClassScanTests
 
     private static HashSet<string> TraceFileStems(string solution) =>
         [.. Directory
-            .EnumerateFiles(Path.Combine(ServiceProjects.DocsArchitecture(solution), "traces"), "*.d2")
+            .EnumerateFiles(ServiceProjects.Traces(solution), "*.d2")
             .Select(trace => Path.GetFileNameWithoutExtension(trace))];
 
     private static List<string> TraceSuffixedClasses(string solution) =>

@@ -5,7 +5,7 @@ description: A throwaway Modbench instance, headless, driven through its MCP ser
 
 # Acceptance
 
-An acceptance run meets Modbench as the user's agent does: a real Extension Development Host, the backend it spawns, and an instance the run may wreck. The run acts and reads through the MCP server ([agent.md](../../../docs/architecture/surfaces/agent.md)) and checks the files on disk. Its evidence is what a call returned or what a file holds, quoted.
+An acceptance run meets Modbench as the user's agent does: a real Extension Development Host, the backend it spawns, and an instance the run may wreck. The run acts and reads through the MCP server ([agent.md](../../../spec/surfaces/agent.md)) and checks the files on disk. Its evidence is what a call returned or what a file holds, quoted.
 
 ## A run
 
@@ -21,7 +21,7 @@ One run is up at a time: a host and its index hold gigabytes of memory, and `up`
 
 ## The index seed
 
-A cold index takes minutes: about 8 for Fallout 4, 3 for Skyrim, under 15 for Starfield. A run that copies its game's seed is ready in 40 to 100 seconds after `up` starts it. Starfield's seed is 23 GB, so its `up` returns about 5 minutes after the command, because the copy comes first. `accept.sh seed <game>` makes that game's seed with one cold run, kept in `~/.local/share/modbench-accept/seed/<game>`. Make a game's seed before its first run. A stale seed costs time and never correctness, because Modbench revalidates derived state by content ([ADR-0003](../../../docs/adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)). Seed again when the game updates or the index format changes.
+A cold index takes minutes: about 8 for Fallout 4, 3 for Skyrim, under 15 for Starfield. A run that copies its game's seed is ready in 40 to 100 seconds after `up` starts it. Starfield's seed is 23 GB, so its `up` returns about 5 minutes after the command, because the copy comes first. `accept.sh seed <game>` makes that game's seed with one cold run, kept in `~/.local/share/modbench-accept/seed/<game>`. Make a game's seed before its first run. A stale seed costs time and never correctness, because Modbench revalidates derived state by content ([ADR-0003](../../../spec/adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file-used-by-another-program.md)). Seed again when the game updates or the index format changes.
 
 ## Outside a run's reach
 

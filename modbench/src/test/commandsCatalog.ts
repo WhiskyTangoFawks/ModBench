@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { present } from '../ports/present';
 
-export const COMMANDS_MARKDOWN = readFileSync(path.join(__dirname, '..', '..', '..', 'docs', 'architecture', 'commands.md'), 'utf8');
+export const COMMANDS_MARKDOWN = readFileSync(path.join(__dirname, '..', '..', '..', 'spec', 'surfaces', 'commands.md'), 'utf8');
 
 const SYSTEM_COMMANDS = COMMANDS_MARKDOWN.indexOf('## System commands');
 export const GESTURES_MARKDOWN = COMMANDS_MARKDOWN.slice(0, SYSTEM_COMMANDS);

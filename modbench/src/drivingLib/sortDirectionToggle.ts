@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-/** CONTEXT.md, Sort direction: whether the view lists winning at the top or at the bottom. */
+/** GLOSSARY.md, Sort direction: whether the view lists winning at the top or at the bottom. */
 export type SortDirection = 'losingAtTop' | 'winningAtTop';
 
 /** The title-bar toggle for a view whose direction writes no file. The view starts losing at the

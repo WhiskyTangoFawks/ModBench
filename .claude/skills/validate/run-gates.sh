@@ -87,7 +87,8 @@ D2_BUILD="$ROOT/tools/d2-build"
 rm -rf "$D2_BUILD" && mkdir -p "$D2_BUILD"
 while IFS= read -r f; do
   [[ -n "$f" ]] || continue
-  rel="${f#docs/architecture/}"
+  rel="${f#spec/architecture/}"
+  rel="${rel#docs/}"
   out="$D2_BUILD/${rel%.d2}.svg"
   mkdir -p "$(dirname "$out")"
   (cd "$ROOT" && "$D2" "$f" "$out") || DIAGRAM_OK=false
@@ -130,7 +131,7 @@ if $BACKEND; then
   || { echo "--- BACKEND GATES FAILED ---"; FAILED=true; }
 fi
 
-# The tests that read docs/ and CONTEXT.md: the backend's architecture scans, and the frontend's
+# The tests that read docs/ and spec/: the backend's architecture scans, and the frontend's
 # check of every Command ID against commands.md. The backend and frontend runs already hold them.
 if $DOCS; then
   echo "=== Gate 3: Docs scans ==="

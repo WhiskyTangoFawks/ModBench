@@ -1,0 +1,40 @@
+# Install, both targets.
+...@../../spec/architecture/styles
+shape: sequence_diagram
+downloads: "Downloads · Mods" {class: driving}
+instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+modcommands: @../../spec/architecture/target-architecture.modbench_core.modcommands
+modcommands.label: mod commands
+client: @../../spec/architecture/target-architecture.modbench_repositories.client
+client.label: mEdit client
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instance: @../../spec/architecture/target-architecture.modbench_data.instance
+instance.label: "Instance\nthe mod's folder and meta · the downloaded file's metadata"
+views: "every view" {class: driving}
+
+instanceloader -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
+downloads."the target pick"
+downloads -> modcommands: "the downloaded file, and the target" {class: loadorder}
+upgrade: "an upgrade" {
+  modcommands -> client: "the mod's status" {class: query}
+  client -> modcommands: "the mod's status: differs, no manifest, a file its package does not hold, or none" {class: query}
+  modcommands."refused on any of the three, unless the target pick forces it"
+}
+modcommands -> instanceadapter: "install: the file, folder or downloaded file, the target, the mod's metadata" {class: loadorder}
+instanceadapter."a new folder, or the release into the mod's own; the root chosen inside"
+from download: "from a downloaded file" {
+  modcommands -> instanceadapter: "the downloaded file: installed" {class: loadorder}
+}
+instanceadapter -> instance: "the folder · the metadata" {class: loadorder}
+modcommands -> downloads: applied or refusal {class: loadorder}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> views: value {class: loadorder}
+instanceloader."mod sync: update-load-order-file"
+instanceloader."the next snapshot: index-load-order; in a source mod, detect-external-change"
+
+refused: "refused, before any write" {
+  modcommands -> downloads: "the refusal" {class: loadorder}
+}

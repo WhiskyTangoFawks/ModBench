@@ -1,11 +1,11 @@
-// The Modbench column of the zoom-out, docs/architecture/target-architecture.d2, and each band's
+// The Modbench column of the zoom-out, spec/architecture/target-architecture.d2, and each band's
 // lib, which it does not draw, joined to the box folders on disk; a box's references are its tsconfig's.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import ts from 'typescript';
 import { SRC } from './scanSource';
 
-const ZOOM_OUT = join(SRC, '..', '..', 'docs', 'architecture', 'target-architecture.d2');
+const ZOOM_OUT = join(SRC, '..', '..', 'spec', 'architecture', 'target-architecture.d2');
 
 function boxIdsByBand(): Record<string, string[]> {
   const bands: Record<string, string[]> = {};

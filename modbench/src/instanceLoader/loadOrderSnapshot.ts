@@ -18,7 +18,7 @@ import type { ModByFolder } from '../wire/modByFolder';
 
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
 
-/** One plugin file in the snapshot — the boundary object (CONTEXT.md): a plugin file
+/** One plugin file in the snapshot — the boundary object (GLOSSARY.md): a plugin file
  *  at a physical path, the origin that provides it, and the three registration facts. */
 export interface LoadOrderPlugin {
   name: string;

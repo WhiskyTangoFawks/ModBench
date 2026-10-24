@@ -177,7 +177,7 @@ internal static class RecordTextEdit
     internal static RecordEditResult ReadOnlyRefusal(string path, string name, string reason) =>
         RecordEditResult.RefusedAt(RecordEditRefusal.FieldReadOnly, path, $"'{name}' is read-only: {reason}.");
 
-    // A Partial Form record's own fields are never seen by the game (CONTEXT.md). Its EditorID and
+    // A Partial Form record's own fields are never seen by the game (GLOSSARY.md). Its EditorID and
     // record header edit (editor-fields.md § Partial Form), as does the flag itself.
     private static RecordEditResult? RefuseIfPartialForm(Document record, RecordTableSchema schema, ColumnSpec column, string spelled)
     {

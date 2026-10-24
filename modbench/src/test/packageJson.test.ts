@@ -1327,7 +1327,7 @@ describe('package.json registers every command under its catalog Command ID', ()
     const offenders = registered.filter((id) => !catalog.has(id) && !ENTRY_POINTS.includes(id) && !RETIRED_AHEAD_OF_CODE.includes(id));
     expect(
       offenders,
-      offenders.map((id) => `${id} is not a Command ID in docs/architecture/commands.md. The catalog is the `
+      offenders.map((id) => `${id} is not a Command ID in spec/surfaces/commands.md. The catalog is the `
         + 'source: register the gesture under the ID its row gives it.').join('\n'),
     ).toEqual([]);
   });

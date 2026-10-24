@@ -1,6 +1,6 @@
 # Contributing
 
-[CLAUDE.md](CLAUDE.md) is the entry point, for people and coding agents alike. [docs/architecture/](docs/architecture/) is the specification the code is built against.
+[CLAUDE.md](CLAUDE.md) is the entry point, for people and coding agents alike. [spec/](spec/) is the specification the code is built against.
 
 ## Prerequisites
 

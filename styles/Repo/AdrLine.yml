@@ -1,5 +1,5 @@
 extends: existence
-message: "Cite the ADR, never a line inside it: '%s'. Its decision is the authority (docs/adr/CLAUDE.md)."
+message: "Cite the ADR, never a line inside it: '%s'. Its decision is the authority (spec/adr/CLAUDE.md)."
 level: error
 ignorecase: true
 nonword: true

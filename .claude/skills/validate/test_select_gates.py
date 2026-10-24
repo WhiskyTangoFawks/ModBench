@@ -32,12 +32,12 @@ class SelectGates(unittest.TestCase):
     def test_frontend_source_selects_frontend(self):
         self.assertEqual(selected('modbench/src/extension.ts'), ['--frontend modbench/src/extension.ts'])
 
-    def test_docs_and_context_select_docs(self):
-        self.assertEqual(selected('docs/architecture/target-architecture.d2'),
-                         ['--docs docs/architecture/target-architecture.d2'])
-        self.assertEqual(selected('CONTEXT.md'), ['--docs CONTEXT.md'])
+    def test_docs_and_spec_select_docs(self):
+        self.assertEqual(selected('spec/architecture/target-architecture.d2'),
+                         ['--docs spec/architecture/target-architecture.d2'])
+        self.assertEqual(selected('spec/GLOSSARY.md'), ['--docs spec/GLOSSARY.md'])
 
-    def test_markdown_outside_docs_selects_nothing(self):
+    def test_markdown_outside_docs_and_spec_selects_nothing(self):
         self.assertEqual(selected('MEditService/CLAUDE.md', 'modbench/CLAUDE.md', 'README.md'), [])
 
     def test_tooling_selects_nothing(self):

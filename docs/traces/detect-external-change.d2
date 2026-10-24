@@ -1,0 +1,44 @@
+# Detect an external change.
+...@../../spec/architecture/styles
+shape: sequence_diagram
+tools: "the mod manager · another tool · the user" {class: other}
+instance: @../../spec/architecture/target-architecture.modbench_data.instance
+instance.label: "the mod's folder"
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+activation: @../../spec/architecture/target-architecture.modbench_drivers.activation
+activation.label: Activation
+instancecommands: @../../spec/architecture/target-architecture.modbench_core.instancecommands
+instancecommands.label: instance commands
+client: @../../spec/architecture/target-architecture.modbench_repositories.client
+client.label: mEdit client
+http: @../../spec/architecture/target-architecture.medit_driving.http
+http.label: HTTP endpoints
+commands: @../../spec/architecture/target-architecture.medit_core.commands
+commands.label: Commands
+pluginadapter: @../../spec/architecture/target-architecture.medit_repositories.pluginadapter
+pluginadapter.label: Plugin adapter
+sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
+sourceadapter.label: Source adapter
+port: @../../spec/architecture/target-architecture.medit_kernel.ports
+port.label: Ports
+plugins: @../../spec/architecture/target-architecture.modbench_driving.plugins
+plugins.label: Plugins
+
+tools -> instance: bytes, at any time {class: outside}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> activation: value {class: loadorder}
+activation -> instancecommands: "put load order: the snapshot" {class: loadorder}
+instancecommands -> client: snapshot {class: loadorder}
+client -> http: snapshot {class: loadorder}
+http -> commands: put load order {class: loadorder}
+pluginadapter -> commands: "each compiled plugin's hash" {class: query}
+sourceadapter -> commands: "what Modbench last wrote · which plugins hold plugin source" {class: query}
+commands."each compiled plugin's hash against what Modbench last wrote"
+commands -> port: "external change: the mod, its changed plugins · plugins whose plugin source is unreadable" {class: push}
+port -> http: publish {class: push}
+http -> client: stream {class: push}
+client -> plugins: "external change · plugins whose plugin source is unreadable" {class: push}

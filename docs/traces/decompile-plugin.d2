@@ -1,0 +1,40 @@
+# Decompile plugin, green.
+...@../../spec/architecture/styles
+shape: sequence_diagram
+plugins: @../../spec/architecture/target-architecture.modbench_driving.plugins
+plugins.label: Plugins
+client: @../../spec/architecture/target-architecture.modbench_repositories.client
+client.label: mEdit client
+http: @../../spec/architecture/target-architecture.medit_driving.http
+http.label: HTTP endpoints
+commands: @../../spec/architecture/target-architecture.medit_core.commands
+commands.label: Commands
+plugin: @../../spec/architecture/target-architecture.medit_data.plugin
+pluginadapter: @../../spec/architecture/target-architecture.medit_repositories.pluginadapter
+pluginadapter.label: Plugin adapter
+sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
+sourceadapter.label: Source adapter
+source: @../../spec/architecture/target-architecture.medit_data.source
+indexer: @../../spec/architecture/target-architecture.medit_readmodel.recordindex.indexer
+indexer.label: Indexer
+
+plugins -> client: "decompile plugin: the plugins" {class: edit}
+client -> http: envelope {class: edit}
+http -> commands: envelope {class: edit}
+plugin -> pluginadapter: bytes {class: track}
+pluginadapter -> commands: bytes {class: track}
+commands."the round-trip gate, per plugin"
+commands -> sourceadapter: documents, per plugin {class: track}
+sourceadapter -> source: documents {class: track}
+
+commands -> http: "applied or refusal, per item" {class: edit}
+http -> client: "applied or refusal, per item" {class: edit}
+client -> plugins: the outcome {class: edit}
+indexer."the next snapshot: index-load-order"
+
+
+refused: "refused: nothing of that plugin written" {
+  commands -> http: "the refusal" {class: edit}
+  http -> client: the refusal {class: edit}
+  client -> plugins: the refusal {class: edit}
+}

@@ -1,4 +1,4 @@
-"""Pins check_layers.py: every project reference on both sides against docs/architecture/layers.d2,
+"""Pins check_layers.py: every project reference on both sides against spec/architecture/layers.d2,
 and every trace message against the same rule."""
 import pathlib
 import sys
@@ -145,10 +145,10 @@ def csproj(root: pathlib.Path, name: str, references):
 
 
 def fixture(tmp: pathlib.Path, traces=None):
-    write(tmp, 'docs/architecture/layers.d2', LAYERS_D2)
-    write(tmp, 'docs/architecture/target-architecture.d2', ZOOM_OUT_D2)
+    write(tmp, 'spec/architecture/layers.d2', LAYERS_D2)
+    write(tmp, 'spec/architecture/target-architecture.d2', ZOOM_OUT_D2)
     for name, body in (traces or {}).items():
-        write(tmp, f'docs/architecture/traces/{name}.d2', body)
+        write(tmp, f'docs/traces/{name}.d2', body)
     return tmp
 
 
@@ -287,10 +287,10 @@ class MEditProjectReferencesAgainstLayers(unittest.TestCase):
 
 class TraceMessagesAgainstLayers(unittest.TestCase):
     def actor(self, alias, full_id):
-        return f"{alias}: @../target-architecture.{full_id}\n"
+        return f"{alias}: @../../spec/architecture/target-architecture.{full_id}\n"
 
     def trace(self, *lines):
-        return "...@../styles\nshape: sequence_diagram\n" + "".join(lines)
+        return "...@../../spec/architecture/styles\nshape: sequence_diagram\n" + "".join(lines)
 
     def test_a_message_the_rule_permits_passes_in_both_directions(self):
         with tempfile.TemporaryDirectory() as tmp:

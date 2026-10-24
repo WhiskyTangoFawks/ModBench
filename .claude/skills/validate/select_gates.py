@@ -6,7 +6,7 @@ import sys
 
 
 def gates(path):
-    if path == 'CONTEXT.md' or path.startswith('docs/'):
+    if path.startswith(('docs/', 'spec/')):
         return ['--docs']
     if path.endswith('.md'):
         return []

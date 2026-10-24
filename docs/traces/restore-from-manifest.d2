@@ -1,0 +1,84 @@
+# Restore from manifest, orange: each mod's folder made what its manifest says; a source mod rebuilt from its submodule at the commit the modlist pins.
+...@../../spec/architecture/styles
+shape: sequence_diagram
+driving: "Mods · Source Control · Toolbox" {class: driving}
+sourcecommands: @../../spec/architecture/target-architecture.modbench_core.sourcecommands
+sourcecommands.label: source commands
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instance: @../../spec/architecture/target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the repository"
+client: @../../spec/architecture/target-architecture.modbench_repositories.client
+client.label: mEdit client
+http: @../../spec/architecture/target-architecture.medit_driving.http
+http.label: HTTP endpoints
+modfolderadapter: @../../spec/architecture/target-architecture.medit_repositories.modfolderadapter
+modfolderadapter.label: Mod folder adapter
+modfolder: @../../spec/architecture/target-architecture.medit_data.modfolder
+modfolder.label: "Mod folders\nfiles · manifests · the stat cache"
+engine: @../../spec/architecture/target-architecture.medit_core.commands.engine
+engine.label: Build engine
+source: @../../spec/architecture/target-architecture.medit_data.source
+source.label: Mod source
+sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
+sourceadapter.label: Source adapter
+nexus: @../../spec/architecture/target-architecture.modbench_repositories.nexus
+nexus.label: Nexus
+nexushost: @../../spec/architecture/target-architecture.modbench_data.nexus
+nexushost.label: "Nexus\nthe mods and files it hosts"
+instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+views: "every view" {class: driving}
+
+driving -> sourcecommands: "restore from manifest: the mods" {class: compile}
+sourcecommands -> instanceadapter: "get: each mod's folder and metadata" {class: compile}
+instance -> instanceadapter: "metadata" {class: compile}
+instanceadapter -> sourcecommands: "each mod's folder and metadata" {class: compile}
+sourcecommands -> client: "what restore destroys: each mod's folder and metadata" {class: query}
+client -> http: envelope {class: query}
+http -> modfolderadapter: "what restore destroys: each mod's folder and metadata" {class: query}
+modfolder -> modfolderadapter: "manifests · each mod's files" {class: query}
+modfolderadapter -> http: "the listing · each mod's package, by name" {class: query}
+http -> client: "the listing · each mod's package, by name" {class: query}
+client -> sourcecommands: "the listing · each mod's package, by name" {class: query}
+sourcecommands -> driving: "the listing" {class: compile}
+driving."the confirmation, when the listing holds anything"
+driving -> sourcecommands: "confirmed" {class: compile}
+sourcecommands -> instanceadapter: "find: each package by name, and each submodule's pin" {class: compile}
+instance -> instanceadapter: "downloaded files · submodules" {class: compile}
+instanceadapter -> sourcecommands: "each package, hashed · each submodule's pin" {class: compile}
+
+download: "an installation file the downloads folder lacks, whose page on Nexus the manifest names" {
+  sourcecommands -> nexus: "the file's page" {class: compile}
+  nexushost -> nexus: "the file · what Nexus knows of it" {class: compile}
+  nexus -> sourcecommands: "the file · what Nexus knows of it" {class: compile}
+  sourcecommands -> instanceadapter: "the downloaded file · its metadata" {class: compile}
+  instanceadapter -> instance: "the downloaded file · its metadata" {class: compile}
+  instanceadapter -> sourcecommands: "the package, hashed" {class: compile}
+}
+
+sourcecommands -> client: "restore: each mod's folder, package and pin" {class: compile}
+client -> http: envelope {class: compile}
+http -> engine: envelope {class: compile}
+modfolder -> modfolderadapter: "manifests · each mod's files · each package's files" {class: compile}
+modfolderadapter -> engine: "manifests and files" {class: compile}
+
+sourcemod: "a source mod with a remote" {
+  source -> sourceadapter: "the commit at HEAD, or absent" {class: compile}
+  sourceadapter -> engine: "the commit" {class: compile}
+  engine -> sourceadapter: "the pin" {class: compile}
+  sourceadapter -> source: "the clone, when absent · the followed branch, when at the pin" {class: compile}
+  engine."build-mod, or skipped when the submodule is at another commit"
+}
+
+engine -> modfolderadapter: "each file whose bytes differ" {class: compile}
+modfolderadapter -> modfolder: "the files" {class: compile}
+engine -> http: "the outcome, per mod · each file no line names · each mod's metadata" {class: compile}
+http -> client: "the outcome, per mod · each file no line names · each mod's metadata" {class: compile}
+client -> sourcecommands: the outcome {class: compile}
+sourcecommands -> instanceadapter: "each file no line names · each mod's metadata · the push check" {class: compile}
+instanceadapter -> instance: "the trash · metadata · the push check" {class: compile}
+sourcecommands -> driving: "the outcome" {class: compile}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> views: value {class: loadorder}

@@ -1,0 +1,31 @@
+# Git init modlist, green: the repository and its ignore list; no manifest, nothing committed.
+...@../../spec/architecture/styles
+shape: sequence_diagram
+driving: "Toolbox · Source Control" {class: driving}
+sourcecommands: @../../spec/architecture/target-architecture.modbench_core.sourcecommands
+sourcecommands.label: source commands
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instance: @../../spec/architecture/target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the repository"
+git: "VS Code's git" {class: other}
+instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+views: "every view" {class: driving}
+
+driving -> sourcecommands: "git init" {class: track}
+sourcecommands -> instanceadapter: "get: the instance folder" {class: track}
+instanceadapter -> sourcecommands: "the instance folder" {class: track}
+sourcecommands."refused when the instance already holds a repository"
+sourcecommands -> instanceadapter: "the ignore list" {class: track}
+instanceadapter -> instance: "the ignore list" {class: track}
+sourcecommands -> git: "the instance folder, as a repository" {class: outside}
+sourcecommands -> driving: "landed, or the refusal" {class: track}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> views: value {class: loadorder}
+failed: "the repository could not be made" {
+  sourcecommands -> instanceadapter: "the ignore list, taken back" {class: track}
+  instanceadapter -> instance: "the ignore list, taken back" {class: track}
+  sourcecommands -> driving: "the refusal" {class: track}
+}

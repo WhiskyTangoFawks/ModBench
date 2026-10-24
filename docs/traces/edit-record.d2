@@ -1,0 +1,67 @@
+# Edit a record, blue.
+...@../../spec/architecture/styles
+shape: sequence_diagram
+editor: "Plugins · Editor" {class: driving}
+client: @../../spec/architecture/target-architecture.modbench_repositories.client
+client.label: mEdit client
+http: @../../spec/architecture/target-architecture.medit_driving.http
+http.label: HTTP endpoints
+recordindex: @../../spec/architecture/target-architecture.medit_readmodel.recordindex
+recordindex.label: Record index
+sourcelanguage: @../../spec/architecture/target-architecture.modbench_driving.sourcelanguage
+sourcelanguage.label: Source language
+textdocuments: @../../spec/architecture/target-architecture.modbench_repositories.textdocuments
+textdocuments.label: Text documents
+sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
+sourceadapter.label: Source adapter
+commands: @../../spec/architecture/target-architecture.medit_core.commands
+commands.label: Commands
+source: @../../spec/architecture/target-architecture.medit_data.source
+vscode: "VS Code" {class: other}
+instance: @../../spec/architecture/target-architecture.modbench_data.instance
+instance.label: "the mod's source folder, beside mods/"
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+
+create: "create: the type pick first" {
+  editor -> client: "on a plugin, the record types the game can create; on a container, the types it holds" {class: query}
+  client -> http: question {class: query}
+  http -> recordindex: question {class: query}
+  recordindex -> http: "answer: the record types" {class: query}
+  http -> client: answer {class: query}
+  client -> editor: the record types {class: query}
+}
+
+unsaved: "on each change to plugin source" {
+  textdocuments -> sourcelanguage: "the unsaved plugin-source documents, whole" {class: edit}
+  sourcelanguage -> client: "the unsaved plugin-source documents, whole" {class: edit}
+  client."hands them again on connect"
+  client -> http: "the unsaved documents" {class: edit}
+  http -> sourceadapter: "the unsaved documents, held" {class: edit}
+  sourceadapter -> recordindex: "the trees whose held text changed" {class: signal}
+}
+
+editor -> client: "the gesture and its Options" {class: edit}
+client -> http: envelope {class: edit}
+http -> commands: envelope {class: edit}
+source -> sourceadapter: documents {class: edit}
+sourceadapter -> commands: "the documents it reads, an unsaved one in place of its file" {class: edit}
+commands -> http: "each document's new text, each create, delete and move, per item" {class: edit}
+http -> client: "the changes, per item" {class: edit}
+client -> editor: "the changes, per item" {class: edit}
+editor -> textdocuments: "the changes, per item" {class: edit}
+textdocuments -> vscode: "the changes, as one workspace edit" {class: outside}
+vscode."apply, as a refactoring"
+vscode -> textdocuments: "the changed documents, handed as above" {class: outside}
+vscode -> source: "the files it saves, as after any refactoring" {class: outside}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader."the next snapshot: index-load-order"
+
+refused: "refused, nothing written for that record" {
+  commands -> http: "the refusal" {class: edit}
+  http -> client: the refusal {class: edit}
+  client -> editor: the refusal {class: edit}
+}

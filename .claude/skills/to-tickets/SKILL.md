@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Break an epic into a set of **tickets** — tracer-bullet vertical slices, each pointing at the spec lines it makes true and declaring the tickets that **block** it.
 
-The epic's scope is a list of **pointers** into the specs in `docs/architecture/`. The tickets divide those pointers between them. The specs hold the behaviour, so a ticket carries pointers and never the words they point at.
+The epic's scope is a list of **pointers** into the specification in `spec/`. The tickets divide those pointers between them. The specification holds the behaviour, so a ticket carries pointers and never the words they point at.
 
 The issue tracker's conventions are in `docs/agents/issue-tracker.md`, and the triage labels in `docs/agents/triage-labels.md`.
 

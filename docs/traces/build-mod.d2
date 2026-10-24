@@ -1,0 +1,53 @@
+# Build, orange: a source mod's folder written from its repository alone.
+...@../../spec/architecture/styles
+shape: sequence_diagram
+driving: "Toolbox · Mods · Source Control" {class: driving}
+sourcecommands: @../../spec/architecture/target-architecture.modbench_core.sourcecommands
+sourcecommands.label: source commands
+textdocuments: @../../spec/architecture/target-architecture.modbench_repositories.textdocuments
+textdocuments.label: Text documents
+instanceadapter: @../../spec/architecture/target-architecture.modbench_repositories.instanceadapter
+instanceadapter.label: Instance adapter
+client: @../../spec/architecture/target-architecture.modbench_repositories.client
+client.label: mEdit client
+http: @../../spec/architecture/target-architecture.medit_driving.http
+http.label: HTTP endpoints
+engine: @../../spec/architecture/target-architecture.medit_core.commands.engine
+engine.label: Build engine
+source: @../../spec/architecture/target-architecture.medit_data.source
+source.label: Mod source
+sourceadapter: @../../spec/architecture/target-architecture.medit_repositories.sourceadapter
+sourceadapter.label: Source adapter
+commands: @../../spec/architecture/target-architecture.medit_core.commands
+commands.label: Commands
+modfolderadapter: @../../spec/architecture/target-architecture.medit_repositories.modfolderadapter
+modfolderadapter.label: Mod folder adapter
+modfolder: @../../spec/architecture/target-architecture.medit_data.modfolder
+modfolder.label: "Mod folders\nfiles · manifests"
+instance: @../../spec/architecture/target-architecture.modbench_data.instance
+instance.label: "Instance\nmods · downloaded files · the repository"
+instanceloader: @../../spec/architecture/target-architecture.modbench_readmodel.instanceloader
+instanceloader.label: Instance loader
+views: "every view" {class: driving}
+
+driving -> sourcecommands: "build: the mods" {class: compile}
+sourcecommands -> textdocuments: "save: each mod's unsaved plugin source" {class: compile}
+textdocuments -> sourcecommands: "saved, or the file VS Code did not save" {class: compile}
+sourcecommands -> instanceadapter: "get: each mod's folder" {class: compile}
+instanceadapter -> sourcecommands: "each mod's folder" {class: compile}
+sourcecommands -> client: "build: each mod's folder" {class: compile}
+client -> http: envelope {class: compile}
+http -> engine: envelope {class: compile}
+source -> sourceadapter: "each mod's source at its commit" {class: compile}
+sourceadapter -> engine: "the source" {class: compile}
+engine."refused when the output folder is not the mod's"
+engine -> commands: "compile-plugin, per plugin" {class: compile}
+engine -> modfolderadapter: "the mod's files · the manifest" {class: compile}
+modfolderadapter -> modfolder: "the folder · the manifest" {class: compile}
+engine -> http: "the outcome, per mod" {class: compile}
+http -> client: "the outcome, per mod" {class: compile}
+client -> sourcecommands: the outcome {class: compile}
+sourcecommands -> driving: "the outcome" {class: compile}
+instance -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
+instanceloader -> views: value {class: loadorder}

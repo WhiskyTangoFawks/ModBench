@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reads docs/architecture/layers.d2 and the boxes docs/architecture/target-architecture.d2
+"""Reads spec/architecture/layers.d2 and the boxes spec/architecture/target-architecture.d2
 draws, then checks every project reference on both sides and every trace message against the
 layer rule. Prints the file and the pair for each mismatch. Exit 0 on a clean pass, 1 otherwise."""
 import re
@@ -14,14 +14,14 @@ CLASS_RE = re.compile(r'class:\s*(\w+)')
 BAND_RE = re.compile(r'^(?P<id>\w+):\s*"[^"]*"\s*\{class:\s*band\}')
 CONTAINER_RE = re.compile(r'^(?P<column>\w+)_(?P<band>\w+):\s*"')
 MEMBER_RE = re.compile(r'^(?P<indent> +)(?P<id>\w+):\s*"')
-IMPORT_RE = re.compile(r'^(?P<alias>\w+):\s*@\.\./target-architecture\.(?P<id>[\w.]+)$')
+IMPORT_RE = re.compile(r'^(?P<alias>\w+):\s*@\.\./\.\./spec/architecture/target-architecture\.(?P<id>[\w.]+)$')
 WILDCARD_RE = re.compile(r'^(?P<alias>\w+):\s*"[^"]*"\s*\{class:\s*(?P<band>\w+)\}$')
 TS_REFERENCE_RE = re.compile(r'"path":\s*"([^"]+)"')
 CS_REFERENCE_RE = re.compile(r'<ProjectReference\s+Include="([^"]+)"')
 
 ROOT_BOX = 'activation'
-LAYERS = 'docs/architecture/layers.d2'
-ZOOM_OUT = 'docs/architecture/target-architecture.d2'
+LAYERS = 'spec/architecture/layers.d2'
+ZOOM_OUT = 'spec/architecture/target-architecture.d2'
 
 
 class Arrow:
@@ -244,7 +244,7 @@ def run(root: Path):
     boxes = load_boxes(root / ZOOM_OUT)
     failures = check_projects(root, 'modbench', modbench_projects(root), boxes, rule)
     failures += check_projects(root, 'medit', medit_projects(root), boxes, rule)
-    traces_dir = root / 'docs' / 'architecture' / 'traces'
+    traces_dir = root / 'docs' / 'traces'
     if traces_dir.is_dir():
         failures += check_traces(traces_dir, rule)
     return failures
