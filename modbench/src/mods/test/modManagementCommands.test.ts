@@ -1505,16 +1505,17 @@ describe('the mod gestures, called by the agent', () => {
 
     it('answers each part of a landed mod that failed as a partial failure, the unmarked downloaded file as a log one', async () => {
       uninstallMods.mockResolvedValue({ applied: true, outcome: { refused: [], landed: [
-        { name: 'Mod A', sourceRefusal: 'in use', lineRefusal: 'disk full' }, { name: 'Mod B', markRefusal: 'gone' },
+        { name: 'Mod A', sourceRefusal: 'in use', lineRefusal: 'disk full' }, { name: 'Mod B', markRefusal: 'gone' }, { name: 'Mod C', tagRefusal: 'not JSON' },
       ] } });
       registerModContextCommands({ commands, instance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(), trash: vi.fn(), log: vi.fn() });
 
-      const answered = await invoke('modbench.mod.uninstall', ofMods('Mod A', 'Mod B'));
+      const answered = await invoke('modbench.mod.uninstall', ofMods('Mod A', 'Mod B', 'Mod C'));
 
       expect(answered).toMatchObject({ partial: [
         { message: '"Mod A" was uninstalled, but its source folder could not be moved to the trash.', detail: 'in use', severity: 'warning' },
         { message: '"Mod A" was uninstalled, but its modlist.txt line could not be removed.', detail: 'disk full', severity: 'warning' },
         { message: '"Mod B" was uninstalled, but its downloaded file could not be marked uninstalled', detail: 'gone', severity: 'log' },
+        { message: '"Mod C" was uninstalled, but its publisher tags could not be removed.', detail: 'not JSON', severity: 'warning' },
       ] });
     });
 

@@ -184,6 +184,9 @@ function partialsOfUninstall(item: Uninstalled, modOrderFile: string): PartialFa
   if (item.sourceRefusal !== undefined) {
     partial.push({ message: `"${item.name}" was uninstalled, but its source folder could not be moved to the trash.`, detail: item.sourceRefusal, severity: 'warning' });
   }
+  if (item.tagRefusal !== undefined) {
+    partial.push({ message: `"${item.name}" was uninstalled, but its publisher tags could not be removed.`, detail: item.tagRefusal, severity: 'warning' });
+  }
   if (item.lineRefusal !== undefined) {
     partial.push({ message: `"${item.name}" was uninstalled, but its ${modOrderFile} line could not be removed.`, detail: item.lineRefusal, severity: 'warning' });
   } else if (item.markRefusal !== undefined) {

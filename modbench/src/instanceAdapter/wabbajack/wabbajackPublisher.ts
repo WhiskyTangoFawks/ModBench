@@ -201,6 +201,25 @@ function changedEntries(entries: readonly string[], change: PublisherTagChange, 
   return others.length === entries.length ? [...entries, inside.split(sep).join('\\')] : entries;
 }
 
+interface InstanceMove {
+  readonly from: readonly string[];
+  readonly to: string | undefined;
+}
+
+// Each entry at or under a moved folder follows it, the rest of its path as it was written; an entry the new place
+// already lists is listed once.
+function followedEntries(entries: readonly string[], moves: readonly InstanceMove[]): readonly string[] {
+  const followed = entries.flatMap((entry) => {
+    const segments = entry.split(/[\\/]/).filter((name) => name !== '');
+    const names = namesOf(entry);
+    const move = moves.find(({ from }) => from.every((name, depth) => names[depth] === name));
+    if (move === undefined) return [entry];
+    return move.to === undefined ? [] : [[move.to, ...segments.slice(move.from.length)].join('\\')];
+  });
+  const unique = followed.filter((entry, at) => followed.findIndex((other) => sameNames(namesOf(other), namesOf(entry))) === at);
+  return sameNames(unique, entries) ? entries : unique;
+}
+
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
   const file = join(instanceRoot, COMPILER_SETTINGS.name);
   const neverShipped = manager.neverShipped.map((folder) => namesOf(relative(instanceRoot, folder)));
@@ -238,6 +257,26 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         return changed === entries ? before : serialized({ ...settings, [listedUnder]: changed }, before);
       });
       return refused;
+    },
+    followFolders: async (moves) => {
+      const inside = moves.flatMap(({ from, to }) => {
+        const fromInside = inInstance(instanceRoot, from);
+        const toInside = to === undefined ? undefined : inInstance(instanceRoot, to);
+        return fromInside === undefined ? [] : [{ from: namesOf(fromInside), to: toInside?.split(sep).join('\\') }];
+      });
+      await putIfChanged(file, (before) => {
+        const settings: Record<string, unknown> = { ...settingsIn(before, file) };
+        let changed = false;
+        for (const { listedUnder } of TAGS) {
+          const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']) ?? [];
+          const followed = followedEntries(entries, inside);
+          if (followed !== entries) {
+            settings[listedUnder] = followed;
+            changed = true;
+          }
+        }
+        return changed ? serialized(settings, before) : before;
+      }, { ifMissing: '{}' });
     },
     subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, () => listener()),
   };

@@ -840,3 +840,67 @@ describe('a name the mod order already holds', () => {
     expect(await commands.renameMod('Harder VATS', 'harder vats')).toMatchObject({ applied: true });
   });
 });
+
+describe('publisher tags follow a mod (publishing.md, Publisher tags, story 3)', () => {
+  const INCLUDE = { name: 'Include', badge: 'IN', marksPaths: true };
+  const publisherOver = (answers: InstanceAnswers = {}, mEdit = new InMemoryMEditClient(), reading: Partial<InstanceReading> = {}) =>
+    over(FIXTURE_ORDER, { publisherTags: [INCLUDE], ...answers }, mEdit, reading);
+  const follow = (...moves: { from: string; to?: string }[]): AdapterCall => ({ verb: 'followModFolders', moves });
+  const unreadable = refusing('followModFolders', 'compiler_settings.json is not JSON');
+
+  it('rename moves them to the new folder before the folder moves, and back when the folder does not move', async () => {
+    const { fake, commands } = publisherOver({ refusals: refusing('renameModFolder', 'The folder is in the way') });
+
+    await commands.renameMod('Harder VATS', 'Harder VATS 2');
+
+    expect(fake.calls).toEqual([
+      follow({ from: '/mods/Harder VATS', to: '/mods/Harder VATS 2' }),
+      { verb: 'renameModFolder', from: 'Harder VATS', to: 'Harder VATS 2' },
+      follow({ from: '/mods/Harder VATS 2', to: '/mods/Harder VATS' }),
+    ]);
+  });
+
+  it('rename refuses, writing nothing, when the publisher\'s configuration cannot be read', async () => {
+    const { fake, commands } = publisherOver({ refusals: unreadable });
+
+    const outcome = await commands.renameMod('Harder VATS', 'Harder VATS 2');
+
+    expect(outcome).toEqual({ applied: false, refusal: 'compiler_settings.json is not JSON' });
+    expect(verbs(fake.calls)).toEqual(['followModFolders']);
+  });
+
+  it('rename puts them back with the folder when mEdit refuses the build configuration', async () => {
+    const mEdit = new InMemoryMEditClient();
+    mEdit.setCommandResult('changeBuildConfiguration', { refused: true, message: 'it holds no build configuration' });
+    const { fake, commands } = publisherOver({}, mEdit, sourceMods(new Map([['Harder VATS', '/instance/source/Harder VATS']])));
+
+    await commands.renameMod('Harder VATS', 'Harder VATS 2');
+
+    expect(verbs(fake.calls)).toEqual(['followModFolders', 'renameModFolder', 'renameModFolder', 'followModFolders']);
+  });
+
+  it('uninstall removes them for every mod it trashed, in one write after the trash', async () => {
+    const { fake, commands } = publisherOver();
+
+    await commands.uninstallMods(['Harder VATS', 'ENBoost', 'No Such Mod'], NO_TRASH);
+
+    expect(fake.calls.filter((call) => call.verb === 'followModFolders')).toEqual([follow({ from: '/mods/Harder VATS' }, { from: '/mods/ENBoost' })]);
+    expect(verbs(fake.calls).indexOf('followModFolders')).toBeGreaterThan(verbs(fake.calls).lastIndexOf('trashEntryFolder'));
+  });
+
+  it('uninstall lands the mod carrying the publisher\'s failure when the configuration cannot be read', async () => {
+    const { commands } = publisherOver({ refusals: unreadable });
+
+    const outcome = await commands.uninstallMods(['Harder VATS'], NO_TRASH);
+
+    expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Harder VATS', tagRefusal: 'compiler_settings.json is not JSON' }], refused: [] } });
+  });
+
+  it('uninstall removes none for a mod whose folder the trash refuses', async () => {
+    const { fake, commands } = publisherOver({ refusals: refusing('trashEntryFolder', 'trash unavailable') });
+
+    await commands.uninstallMods(['Harder VATS'], NO_TRASH);
+
+    expect(verbs(fake.calls)).not.toContain('followModFolders');
+  });
+});

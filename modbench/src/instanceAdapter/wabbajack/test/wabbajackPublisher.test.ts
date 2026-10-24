@@ -304,6 +304,57 @@ describe('changing a publisher tag in the compiler settings (publishing.md, Publ
   });
 });
 
+describe('publisher tags following a mod folder (publishing.md, Publisher tags, story 3)', () => {
+  const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
+  const folder = (name: string) => join(root, 'mods', name);
+
+  it('moves every entry at or under the old folder to the new one, in every list, keeping the rest of each path and the other entries', async () => {
+    await writeSettings({ Include: ['MODS/a/', 'mods\\A\\Textures\\x.dds', 'mods\\B'], Ignore: ['mods\\a\\x.esp'], AlwaysEnabled: ['mods\\A'] });
+
+    await publisherOver().followFolders([{ from: folder('A'), to: folder('C') }]);
+
+    expect(JSON.parse(await settingsText())).toEqual({
+      Include: ['mods\\C', 'mods\\C\\Textures\\x.dds', 'mods\\B'], Ignore: ['mods\\C\\x.esp'], AlwaysEnabled: ['mods\\C'],
+    });
+  });
+
+  it('removes every entry at or under the folder when the mod has no new one', async () => {
+    await writeSettings({ Include: ['mods\\A', 'mods\\A\\x.esp', 'mods\\AB'], Ignore: ['mods\\B'] });
+
+    await publisherOver().followFolders([{ from: folder('A') }, { from: folder('B') }]);
+
+    expect(JSON.parse(await settingsText())).toEqual({ Include: ['mods\\AB'], Ignore: [] });
+  });
+
+  it('lists an entry once when the new folder already has it', async () => {
+    await writeSettings({ Include: ['mods\\A', 'mods\\C'] });
+
+    await publisherOver().followFolders([{ from: folder('A'), to: folder('C') }]);
+
+    expect(JSON.parse(await settingsText())).toEqual({ Include: ['mods\\C'] });
+  });
+
+  it('writes nothing when no entry is under the folder', async () => {
+    const text = '{"Include":["mods\\\\B"]}';
+    await writeSettings(text);
+
+    await publisherOver().followFolders([{ from: folder('A'), to: folder('C') }]);
+
+    expect(await settingsText()).toBe(text);
+  });
+
+  it('rejects, writing nothing, for settings it cannot read', async () => {
+    await writeSettings('not json');
+    await expect(publisherOver().followFolders([{ from: folder('A') }])).rejects.toThrow(SETTINGS_FILE);
+    expect(await settingsText()).toBe('not json');
+  });
+
+  it('does nothing while the instance holds no compiler settings, creating none', async () => {
+    await publisherOver().followFolders([{ from: folder('A'), to: folder('C') }]);
+    await expect(readFile(join(root, SETTINGS_FILE), 'utf8')).rejects.toThrow();
+  });
+});
+
 describe('the watch on the compiler settings (ADR-0003)', () => {
   const live = () => watchers.filter((watcher) => !watcher.disposed);
 

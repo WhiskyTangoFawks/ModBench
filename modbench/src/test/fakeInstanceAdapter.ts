@@ -75,6 +75,7 @@ export type AdapterCall =
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
   | { readonly verb: 'trashModFile'; readonly mod: string; readonly relativePath: string }
   | { readonly verb: 'trashSourceFolder'; readonly mod: string }
+  | { readonly verb: 'followModFolders'; readonly moves: Parameters<InstanceAdapter['followModFolders']>[0] }
   | { readonly verb: 'changePublisherTag'; readonly change: PublisherTagChange; readonly tag: string; readonly paths: readonly string[] }
   | { readonly verb: 'writeNewestVersion'; readonly mod: string; readonly version: string }
   | { readonly verb: 'writeModMetadata'; readonly mod: string; readonly metadata: ModMetadata }
@@ -288,6 +289,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     publisherTags: answers.publisherTags ?? [],
     changePublisherTag: (change, tag, paths) =>
       write({ verb: 'changePublisherTag', change, tag, paths }, () => paths.flatMap((path) => (answers.outsideInstance?.has(path) ? [{ path, reason: 'It is outside the instance.' }] : []))),
+    followModFolders: (moves) => write({ verb: 'followModFolders', moves }, () => undefined),
     modFolderPath: (mod) => Promise.resolve(namesNoFolder(mod) ? undefined : foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod)),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
