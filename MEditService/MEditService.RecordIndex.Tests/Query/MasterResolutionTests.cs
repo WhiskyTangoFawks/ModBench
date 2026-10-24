@@ -145,7 +145,7 @@ public class MasterResolutionTests
     private sealed class BlueprintPluginAdapter(IReadOnlySet<string> blueprints) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
-            ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings? strings = null) =>
+            ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
             base.ReadContent(modPath, loadOrder, strings).Then(read =>
                 (Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure>)
                 (read.Content with { IsBlueprint = blueprints.Contains(modPath.ModKey.FileName.ToString()) }, read.Unreachable));

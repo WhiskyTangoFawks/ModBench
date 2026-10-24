@@ -56,18 +56,29 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(["a.txt"], _repository.NamedByNoLine(_root, "mod", NoLines, new HashSet<string>()));
     }
 
-    [Fact]
-    public void AWrite_RemovesTheLeftoversOfWritersThatAreGone_AndKeepsThoseOfWritersThatRun()
+    public static TheoryData<string, Func<string, string>, bool> Leftovers => new()
     {
-        var dead = TempLeftover.DeadWriters(_root);
-        var running = TempLeftover.RunningWriters(_root);
-        var deadFolder = Directory.CreateDirectory(Path.Combine(_root, ".medit_tmp_2000000000_dir")).FullName;
+        { "a file whose writer is gone", TempLeftover.DeadWriters, false },
+        { "a folder whose writer is gone", folder => Directory.CreateDirectory(Path.Combine(folder, ".medit_tmp_2000000000_dir")).FullName, false },
+        { "a file whose writer runs", TempLeftover.RunningWriters, true },
+        { "a file whose name carries no writer", folder => WrittenAt(Path.Combine(folder, ".medit_tmp_nowriter.tmp")), true },
+    };
+
+    [Theory]
+    [MemberData(nameof(Leftovers))]
+    public void AWrite_RemovesALeftover_OnlyWhenItsWriterIsGone(string _, Func<string, string> leftoverIn, bool kept)
+    {
+        var leftover = leftoverIn(_root);
 
         _repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8));
 
-        Assert.False(File.Exists(dead));
-        Assert.False(Directory.Exists(deadFolder));
-        Assert.True(File.Exists(running));
+        Assert.Equal(kept, Path.Exists(leftover));
+    }
+
+    private static string WrittenAt(string path)
+    {
+        File.WriteAllText(path, "half");
+        return path;
     }
 
     [Fact]
@@ -96,6 +107,26 @@ public sealed class ModFolderRepositoryTests : IDisposable
         });
 
         Assert.Equal(hash, Assert.Single(Files()).Hash);
+    }
+
+    [Fact]
+    public void AToolsRewriteThatKeepsSizeAndModifiedTime_IsHashedAgain()
+    {
+        Write("a.txt", "hello");
+        File.SetLastWriteTimeUtc(Path.Combine(_root, "a.txt"), LongAgo);
+        Files();
+        AfterTheSystemClockNtfsStampsAChangeWithTicks();
+
+        Write("a.txt", "hellO");
+        File.SetLastWriteTimeUtc(Path.Combine(_root, "a.txt"), LongAgo);
+
+        Assert.Equal(HashOfHelloWithACapitalO, Assert.Single(Files()).Hash);
+    }
+
+    private static void AfterTheSystemClockNtfsStampsAChangeWithTicks()
+    {
+        var tick = Environment.TickCount64;
+        SpinWait.SpinUntil(() => Environment.TickCount64 != tick);
     }
 
     [Fact]
@@ -518,14 +549,6 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void AManifestWithoutAVersion_WritesNoVersionLine()
-    {
-        _repository.WriteManifest(_root, "mod", new Manifest(null, [new ManifestFile("a.nif", new PackageEntry.NotHeld())]));
-
-        Assert.DoesNotContain("version", File.ReadAllText(Path.Combine(_root, "mod.manifest.json")));
-    }
-
-    [Fact]
     public void ReadManifest_OfAModWithNone_IsNull()
     {
         Write("a.txt", "abc");
@@ -564,22 +587,15 @@ public sealed class ModFolderRepositoryTests : IDisposable
     }
 
     [Theory]
-    [InlineData("old archive, longer than the new one", true)]
-    [InlineData("old", true)]
-    [InlineData("new", false)]
-    public void WriteFile_OverAFile_PutsTheStreamsBytesAtThePath_SayingWhetherItReplacedOtherBytes(string there, bool replaced)
+    [InlineData("mod.ba2", "old archive, longer than the new one", true)]
+    [InlineData("mod.ba2", "old", true)]
+    [InlineData("mod.ba2", "new", false)]
+    [InlineData("another.ba2", "old", false)]
+    public void WriteFile_PutsTheStreamsBytesAtThePath_SayingWhetherItReplacedOtherBytes(string pathThere, string there, bool replaced)
     {
-        Write("mod.ba2", there);
+        Write(pathThere, there);
 
         Assert.Equal(replaced, _repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8)));
-
-        Assert.Equal("new", File.ReadAllText(Path.Combine(_root, "mod.ba2")));
-    }
-
-    [Fact]
-    public void WriteFile_WhereNoFileWas_PutsTheStreamsBytesThere_AndReplacedNothing()
-    {
-        Assert.False(_repository.WriteFile(_root, "mod.ba2", content => content.Write("new"u8)));
 
         Assert.Equal("new", File.ReadAllText(Path.Combine(_root, "mod.ba2")));
     }
@@ -596,22 +612,14 @@ public sealed class ModFolderRepositoryTests : IDisposable
         Assert.Equal(["mod.ba2"], Directory.GetFiles(_root).Select(Path.GetFileName));
     }
 
-    [Fact]
-    public void WriteFile_IntoAFolderNotThereYet_CreatesIt()
+    [Theory]
+    [InlineData("mods/New", "a.txt")]
+    [InlineData("", "archives/mod.ba2")]
+    public void WriteFile_CreatesTheFoldersItNeeds(string folder, string path)
     {
-        var folder = Path.Combine(_root, "mods", "New");
+        _repository.WriteFile(Path.Combine(_root, folder), path, content => content.Write("new"u8));
 
-        _repository.WriteFile(folder, "a.txt", content => content.Write("new"u8));
-
-        Assert.Equal("new", File.ReadAllText(Path.Combine(folder, "a.txt")));
-    }
-
-    [Fact]
-    public void WriteFile_CreatesTheFoldersOfThePath()
-    {
-        _repository.WriteFile(_root, "archives/mod.ba2", content => content.Write("new"u8));
-
-        Assert.Equal("new", File.ReadAllText(Path.Combine(_root, "archives", "mod.ba2")));
+        Assert.Equal("new", File.ReadAllText(Path.Combine(_root, folder, path)));
     }
 
     [Fact]

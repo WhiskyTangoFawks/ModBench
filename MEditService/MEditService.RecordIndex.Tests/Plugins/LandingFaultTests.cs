@@ -45,7 +45,7 @@ public sealed class LandingFaultTests : IDisposable
     {
         public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
             ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-            PluginStrings? strings = null) =>
+            PluginStrings strings) =>
             modPath.ModKey.FileName == Thrown
                 ? RequireExtensions.AnswerOf<IPluginDocuments>(() => new KeptNpcRenamedThenThrown(instanceRoot))
                 : base.OpenDocuments(modPath, loadOrder, schemas, strings);

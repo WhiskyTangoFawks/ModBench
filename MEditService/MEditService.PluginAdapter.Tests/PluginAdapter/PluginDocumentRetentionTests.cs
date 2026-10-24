@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -27,7 +28,7 @@ public sealed class PluginDocumentRetentionTests
             .WithPlugin(PluginName, mod => AddNpcsWithLongEditorIds(mod, RecordsPastABatchAndEveryRecordInFlightWhenItCloses))
             .Build();
         using var documents = TestAdapters.Mutagen().OpenDocuments(
-            new ModPath(ModKey.FromFileName(PluginName), Path.Combine(data.DataFolder, PluginName)), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas).Answered();
+            new ModPath(ModKey.FromFileName(PluginName), Path.Combine(data.DataFolder, PluginName)), EmptyLoadOrder.Of(GameRelease.Fallout4), Schemas, PluginStrings.None).Answered();
 
         Assert.False(FirstIsHeldWhenTheLastIsRead(documents.Records));
     }

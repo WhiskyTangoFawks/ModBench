@@ -67,11 +67,11 @@ public sealed class CreatePluginInModHandlerTests : IDisposable
     public async Task CreatePluginIn_Overwrite_WritesItInOverwritesFolder()
     {
         var overwrite = Directory.CreateDirectory(Path.Combine(_data.DataFolder, "overwrite")).FullName;
-        Place(new PluginPlace(PluginOrigin.Overwrite, overwrite, null));
+        Place(new PluginPlace(LoadOrderEntry.OverwriteOrigin, overwrite, null));
 
-        var result = await Handler.CreatePluginIn(PluginOrigin.Overwrite, "Patch.esp");
+        var result = await Handler.CreatePluginIn(LoadOrderEntry.OverwriteOrigin, "Patch.esp");
 
-        Assert.Equal(new PluginAddress("Patch.esp", PluginOrigin.Overwrite), result.Created());
+        Assert.Equal(new PluginAddress("Patch.esp", LoadOrderEntry.OverwriteOrigin), result.Created());
         Assert.True(File.Exists(Path.Combine(overwrite, "Patch.esp")));
     }
 

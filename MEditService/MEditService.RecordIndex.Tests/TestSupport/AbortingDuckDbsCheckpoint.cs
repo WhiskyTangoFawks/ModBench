@@ -16,7 +16,7 @@ internal sealed class AbortingDuckDbsCheckpoint(string instanceRoot, string plug
 
     public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null)
+        PluginStrings strings)
     {
         var opened = base.OpenDocuments(modPath, loadOrder, schemas, strings);
         return modPath.ModKey.FileName == plugin

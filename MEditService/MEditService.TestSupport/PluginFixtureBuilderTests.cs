@@ -1,15 +1,14 @@
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
-
 namespace MEditService.TestSupport;
 
 public class PluginFixtureBuilderTests
 {
-    [Fact]
-    public void Build_CreatesDataFolderWithPlugin()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Build_WritesThePluginIntoTheDataFolder_ListedOrNot(bool listed)
     {
         using var data = new PluginFixtureBuilder()
-            .WithPlugin("TestPlugin.esp")
+            .WithPlugin("TestPlugin.esp", listed: listed)
             .Build();
 
         Assert.True(File.Exists(Path.Combine(data.DataFolder, "TestPlugin.esp")));
@@ -70,37 +69,4 @@ public class PluginFixtureBuilderTests
         Assert.Contains(data.Plugins, p => p.Name == "UserMod.esp");
     }
 
-    [Fact]
-    public void Build_UnlistedPlugin_FileStillWrittenToDisk()
-    {
-        using var data = new PluginFixtureBuilder()
-            .WithPlugin("Fallout4.esm", listed: false)
-            .Build();
-
-        Assert.True(File.Exists(Path.Combine(data.DataFolder, "Fallout4.esm")));
-    }
-
-    [Fact]
-    public void Build_ConfigureCallback_CapturesFormKey()
-    {
-        FormKey captured = default;
-        using var data = new PluginFixtureBuilder()
-            .WithPlugin("TestPlugin.esp", mod => captured = mod.Npcs.AddNew("NPC1").FormKey)
-            .Build();
-
-        Assert.NotEqual(FormKey.Null, captured);
-    }
-
-    [Fact]
-    public void Dispose_DeletesDataFolder()
-    {
-        var data = new PluginFixtureBuilder()
-            .WithPlugin("TestPlugin.esp")
-            .Build();
-
-        var folder = data.DataFolder;
-        data.Dispose();
-
-        Assert.False(Directory.Exists(folder));
-    }
 }

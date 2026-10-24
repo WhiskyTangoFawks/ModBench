@@ -70,11 +70,7 @@ public sealed class CompiledTreeDropTests
             TemporaryTimestamp = 5,
             TemporaryUnknownGroupData = 6,
         };
-        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
+        mod.AddInteriorCells(cell);
 
         Assert.Empty(await DropsOf(mod));
     }

@@ -15,7 +15,7 @@ internal sealed class PartwayAdapter(int afterRecords, Action atRecord, TimeSpan
 {
     public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
         ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null) =>
+        PluginStrings strings) =>
         base.OpenDocuments(modPath, loadOrder, schemas, strings).Map<IPluginDocuments, IPluginDocuments>(
             documents => new Partway(documents, afterRecords, atRecord, thenEachRecordTakes));
 

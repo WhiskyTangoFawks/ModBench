@@ -10,8 +10,6 @@ public sealed class PluginFileHashesTests : IDisposable
 {
     private const string PluginName = "Stamped.esp";
 
-    private static readonly DateTime ModifiedOnAWholeDateTimeTick = new(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
     private readonly PluginFixtureData _data = new PluginFixtureBuilder("adapter-file-hashes")
         .WithPlugin(PluginName)
         .Build();
@@ -24,12 +22,6 @@ public sealed class PluginFileHashesTests : IDisposable
 
     private static MutagenPluginAdapter WithTheClockPastEveryWrite() =>
         new(new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1)));
-
-    private static void AfterTheSystemClockNtfsStampsAChangeWithTicks()
-    {
-        var tick = Environment.TickCount64;
-        SpinWait.SpinUntil(() => Environment.TickCount64 != tick);
-    }
 
     private static Answer<FileClaim, PluginFailure> ClaimOf(string path) => TestAdapters.Mutagen().ClaimOf(path, GameRelease.Fallout4);
 
@@ -86,46 +78,5 @@ public sealed class PluginFileHashesTests : IDisposable
         using var held = HeldAgainstReaders();
 
         Assert.Null(WithTheClockPastEveryWrite().HashOf(PluginPath));
-    }
-
-    [Fact]
-    public void AToolsRewriteThatKeepsSizeAndModificationTime_IsHashedAgain()
-    {
-        var hashes = WithTheClockPastEveryWrite();
-        var rewritten = File.ReadAllBytes(PluginPath);
-        rewritten[^1] ^= 0xFF;
-        File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
-        hashes.HashOf(PluginPath);
-        AfterTheSystemClockNtfsStampsAChangeWithTicks();
-
-        File.WriteAllBytes(PluginPath, rewritten);
-        File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
-
-        Assert.Equal(Sha256Hex(rewritten), hashes.HashOf(PluginPath));
-    }
-
-    [Fact]
-    public void AFileWhoseModificationTimeIsSetToItsOwnValue_IsReadAgain()
-    {
-        var hashes = WithTheClockPastEveryWrite();
-        File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
-        hashes.HashOf(PluginPath);
-        AfterTheSystemClockNtfsStampsAChangeWithTicks();
-
-        File.SetLastWriteTimeUtc(PluginPath, ModifiedOnAWholeDateTimeTick);
-        using var held = HeldAgainstReaders();
-
-        Assert.Null(hashes.HashOf(PluginPath));
-    }
-
-    [Fact]
-    public void AFileWhoseStampIsWithinTheClockTickOfItsHash_IsReadAgain()
-    {
-        var hashes = new MutagenPluginAdapter(TimeProvider.System);
-        hashes.HashOf(PluginPath);
-
-        using var held = HeldAgainstReaders();
-
-        Assert.Null(hashes.HashOf(PluginPath));
     }
 }

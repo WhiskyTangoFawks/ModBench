@@ -8,6 +8,9 @@ public record LoadOrderEntry(
     string Name, string Path, string Origin, int? Line, bool Enabled, bool Winning, bool LoadedWithNoLine = false,
     PluginProvider? NamedProvider = null, PluginStrings? NamedStrings = null)
 {
+    /// <summary>Modbench's origin for a plugin in Overwrite, the files outside every mod.</summary>
+    public const string OverwriteOrigin = "overwrite/";
+
     public PluginAddress Key => new(Name, Origin);
 
     /// <summary>The fixture's one provider rule: a mod's folder, and its source folder, is the plugin's
@@ -15,7 +18,7 @@ public record LoadOrderEntry(
     public PluginProvider Provider => NamedProvider ?? Origin switch
     {
         _ when Is(PluginOrigin.DataDirectory) => PluginProvider.Game,
-        _ when Is(PluginOrigin.Overwrite) => PluginProvider.NoMod,
+        _ when Is(OverwriteOrigin) => PluginProvider.NoMod,
         _ => System.IO.Path.GetDirectoryName(Path) is { } folder
             ? new PluginProvider.FromMod(Origin, folder, folder)
             : throw new InvalidOperationException($"'{Path}' has no folder."),

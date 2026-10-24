@@ -27,7 +27,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     private string ModFolder(string name) => Directory.CreateDirectory(Path.Combine(_data.DataFolder, name)).FullName;
 
     private Task<Answer<PluginAddress, PluginCreateRefused>> Create(string name, string folder, string origin) =>
-        Handler.CreatePlugin(new PluginAddress(name, origin), folder, origin == PluginOrigin.Overwrite ? null : folder);
+        Handler.CreatePlugin(new PluginAddress(name, origin), folder, origin == LoadOrderEntry.OverwriteOrigin ? null : folder);
 
     [Fact]
     public async Task CreatePlugin_WritesTheFileInTheFolder_AndAnswersNoRefusal()
@@ -128,7 +128,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     {
         var folder = await SourceModWith("HostMod", "First.esp");
 
-        var result = await Create("Second.esp", folder, PluginOrigin.Overwrite);
+        var result = await Create("Second.esp", folder, LoadOrderEntry.OverwriteOrigin);
 
         result.Created();
         Assert.True(File.Exists(Path.Combine(folder, "Second.esp")));

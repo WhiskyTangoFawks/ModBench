@@ -121,7 +121,7 @@ public sealed class DiagnosedContainerTests : IDisposable
     {
         public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(
             ModPath modPath, LoadOrderSnapshot loadOrder, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-            PluginStrings? strings = null) =>
+            PluginStrings strings) =>
             RequireExtensions.AnswerOf<IPluginDocuments>(() => new StubDocuments(cellDiagnosis));
     }
 

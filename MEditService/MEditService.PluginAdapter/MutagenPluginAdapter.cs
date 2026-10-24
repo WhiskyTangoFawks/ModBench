@@ -52,7 +52,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
         ModPath modPath,
         LoadOrderSnapshot loadOrder,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null) =>
+        PluginStrings strings) =>
         Opened<IPluginDocuments>(modPath, strings, loadOrder, loaded =>
         {
             var documents = new MutagenModDocuments(loaded.Getter, new PluginRecordBytes(modPath, loadOrder), schemas, loaded);
@@ -72,7 +72,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
 
     // The open passes to what its result holds; until it has, a failure disposes it here.
     private static Answer<T, PluginFailure> Opened<T>(
-        ModPath modPath, PluginStrings? strings, LoadOrderSnapshot loadOrder, Func<ILoadedMod, T> holding)
+        ModPath modPath, PluginStrings strings, LoadOrderSnapshot loadOrder, Func<ILoadedMod, T> holding)
     {
         ILoadedMod? loaded = null;
         try
@@ -170,7 +170,7 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
     }
 
     public Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure> ReadContent(
-        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings? strings = null) =>
+        ModPath modPath, LoadOrderSnapshot loadOrder, PluginStrings strings) =>
         Opened(modPath, strings, loadOrder, loaded =>
         {
             using (loaded)
@@ -182,9 +182,8 @@ public sealed class MutagenPluginAdapter(TimeProvider timeProvider) : IPluginAda
                 var isBlueprint = blueprintFlag != 0
                     && PluginFlagPredicates.IsBlueprint(loaded.Getter, name, ModHeaderFrame.FromPath(modPath, loadOrder.GameRelease).Flags, blueprintFlag);
                 var (content, unreachable) = OpenedPlugins.ContentIn(loaded.Getter, name, isBlueprint);
-                var missing = strings is { } named
-                    ? LocalizedStrings.FindMissingStringsFiles(loaded.Getter, modPath, named, loadOrder, loadOrder.GameRelease, loadOrder.StringsLanguage)
-                    : [];
+                var missing = LocalizedStrings.FindMissingStringsFiles(
+                    loaded.Getter, modPath, strings, loadOrder, loadOrder.GameRelease, loadOrder.StringsLanguage);
                 return (content with { MissingStringsFiles = missing }, unreachable);
             }
         });
