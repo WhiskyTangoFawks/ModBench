@@ -887,7 +887,7 @@
         },
         {
           "command": "modbench.mod.addPublisherTag",
-          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.hasPublisher"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.hasPublisher && modbench.mod.holdsTaggableRow"
         },
         {
           "command": "modbench.mod.removePublisherTag",

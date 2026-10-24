@@ -24,12 +24,14 @@ const tagsHeldBy = (value: PublisherState, row: ModlistNode): readonly Publisher
 /** What the publisher tag items wait on, as `modbench.mod.<name>` keys. A publisher whose configuration is not read offers none. */
 export function publisherKeyContext(
   value: PublisherState & Pick<InstanceValue, 'publisherTags'>, selection: readonly ModlistNode[],
-): { hasPublisher: boolean; hasPathPublisher: boolean; holdsPublisherTag: boolean } {
+): { hasPublisher: boolean; hasPathPublisher: boolean; holdsTaggableRow: boolean; holdsPublisherTag: boolean } {
   const read = value.publisherConfiguration.kind === 'read';
+  const taggable = selection.filter((row) => row.kind === 'mod' || ((row.kind === 'file' || row.kind === 'folder') && row.origin.kind === 'mod'));
   return {
     hasPublisher: read,
     hasPathPublisher: read && value.publisherTags.some(({ marksPaths }) => marksPaths),
-    holdsPublisherTag: selection.some((row) => tagsHeldBy(value, row).length > 0),
+    holdsTaggableRow: taggable.length > 0,
+    holdsPublisherTag: taggable.some((row) => tagsHeldBy(value, row).length > 0),
   };
 }
 

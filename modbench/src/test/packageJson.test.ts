@@ -1296,7 +1296,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.compareFile', { 'modbench.mod.singleCompareFileRow': true }],
     ['modbench.mod.excludeFile', { 'modbench.mod.holdsIncludedFile': true }],
     ['modbench.mod.includeFile', { 'modbench.mod.holdsExcludedFile': true }],
-    ['modbench.mod.addPublisherTag', { 'modbench.mod.hasPublisher': true }],
+    ['modbench.mod.addPublisherTag', { 'modbench.mod.hasPublisher': true, 'modbench.mod.holdsTaggableRow': true }],
     ['modbench.mod.removePublisherTag', { 'modbench.mod.holdsPublisherTag': true }],
   ]);
 

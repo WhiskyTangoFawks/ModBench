@@ -21,7 +21,7 @@ import { quickPickChoosing } from '../../drivingLib/test/quickPickDouble';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { registerPublisherTagCommands, publisherKeyContext } from '../publisherTagCommands';
 import { FileNode, FolderNode } from '../modFiles';
-import { ModNode, type ModlistNode } from '../ModListProvider';
+import { ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { InstanceValue, PublisherTag } from '../../instanceLoader/instance';
@@ -84,15 +84,25 @@ beforeEach(() => {
 
 describe('the keys the publisher tag items of the menus wait on (mods.md, Menus and keys)', () => {
   it('say whether the instance has a publisher, one whose tags mark paths, and whether the selection holds a tag', () => {
-    expect(publisherKeyContext(value, [modM, fileB])).toEqual({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: true });
-    expect(publisherKeyContext(value, [fileB, modN])).toEqual({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: false });
-    expect(publisherKeyContext(value, [modN, fileA])).toEqual({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: true });
-    expect(publisherKeyContext(value, [modN, folderTextures])).toEqual({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: true });
-    expect(publisherKeyContext({ ...value, publisherTags: [ALWAYS_ENABLED] }, [])).toEqual({ hasPublisher: true, hasPathPublisher: false, holdsPublisherTag: false });
+    expect(publisherKeyContext(value, [modM, fileB])).toMatchObject({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: true });
+    expect(publisherKeyContext(value, [fileB, modN])).toMatchObject({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: false });
+    expect(publisherKeyContext(value, [modN, fileA])).toMatchObject({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: true });
+    expect(publisherKeyContext(value, [modN, folderTextures])).toMatchObject({ hasPublisher: true, hasPathPublisher: true, holdsPublisherTag: true });
+    expect(publisherKeyContext({ ...value, publisherTags: [ALWAYS_ENABLED] }, [])).toMatchObject({ hasPublisher: true, hasPathPublisher: false, holdsPublisherTag: false });
+  });
+
+  it('count no Overwrite row as one a publisher tag can be added to or removed from, though the configuration lists a tag on its path', () => {
+    const inOverwrite = new FileNode(
+      new OverwriteNode([], 'MO2'), { kind: 'runtimeOutput' },
+      { relativePath: 'a.dds', path: '/instance/mods/M/a.dds', sourcePath: '', excluded: false, markedExcluded: false, includedPath: 'a.dds' }, 'a.dds');
+
+    expect(publisherKeyContext(value, [inOverwrite])).toMatchObject({ holdsTaggableRow: false, holdsPublisherTag: false });
+    expect(publisherKeyContext(value, [inOverwrite, modN])).toMatchObject({ holdsTaggableRow: true, holdsPublisherTag: false });
+    expect(publisherKeyContext(value, [inOverwrite, fileA])).toMatchObject({ holdsTaggableRow: true, holdsPublisherTag: true });
   });
 
   it.each([{ kind: 'none' }, { kind: 'unreadable', reason: 'x' }] as const)('say no publisher while its configuration is %j', (publisherConfiguration) => {
-    expect(publisherKeyContext({ ...value, publisherConfiguration }, [modM])).toEqual({ hasPublisher: false, hasPathPublisher: false, holdsPublisherTag: false });
+    expect(publisherKeyContext({ ...value, publisherConfiguration }, [modM])).toMatchObject({ hasPublisher: false, hasPathPublisher: false, holdsPublisherTag: false });
   });
 });
 
