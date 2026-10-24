@@ -1,15 +1,20 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { hoverAt } from '../formKeyHover';
 import type { CompareResult } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { comparisonOf, type Copy } from '../../test/comparison';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 
 const FORM_KEY = '000801:Mod.esp';
 
 const comparison = (copies: Copy[] = [{ plugin: 'Mod.esp', isWinner: true, editorId: 'Gun' }]): CompareResult =>
   comparisonOf(FORM_KEY, copies);
 
-const askingFor = (answer: CompareResult | null) => ({ getComparison: vi.fn(() => Promise.resolve(answer)) });
+const askingFor = (answer: CompareResult | null) => {
+  const client = new InMemoryMEditClient();
+  client.setQueryAnswer('getComparison', answer);
+  return client;
+};
 
 describe('hoverAt (plugin-source.md, In the text editor, story 3)', () => {
   const reporter = recordingReporter();
@@ -52,24 +57,12 @@ describe('hoverAt (plugin-source.md, In the text editor, story 3)', () => {
     expect(await hoverAt({ client: askingFor(null), reporter }, `"${FORM_KEY}"`, 3)).toBeUndefined();
   });
 
-  it('asks nothing for a string that is not a FormKey', async () => {
-    const client = askingFor(comparison());
-    const text = '{ "Name": "Rusty Gun" }';
-    expect(await hoverAt({ client, reporter }, text, text.indexOf('Rusty'))).toBeUndefined();
-    expect(client.getComparison).not.toHaveBeenCalled();
-  });
-
-  it('asks nothing for a FormKey spelled as a property name', async () => {
-    const client = askingFor(comparison());
-    const text = `{ "${FORM_KEY}": 1 }`;
-    expect(await hoverAt({ client, reporter }, text, text.indexOf('000801'))).toBeUndefined();
-    expect(client.getComparison).not.toHaveBeenCalled();
-  });
-
-  it('asks nothing outside a string', async () => {
-    const client = askingFor(comparison());
-    expect(await hoverAt({ client, reporter }, `{ "A": "${FORM_KEY}" }`, 1)).toBeUndefined();
-    expect(client.getComparison).not.toHaveBeenCalled();
+  it.each([
+    ['a string that is not a FormKey', '{ "Name": "Rusty Gun" }', 'Rusty'],
+    ['a FormKey spelled as a property name', `{ "${FORM_KEY}": 1 }`, '000801'],
+    ['a place outside a string', `{ "A": "${FORM_KEY}" }`, '{'],
+  ])('shows nothing for %s', async (_case, text, at) => {
+    expect(await hoverAt({ client: askingFor(comparison()), reporter }, text, text.indexOf(at))).toBeUndefined();
   });
 
   it('answers nothing, and writes why to the Output, when mEdit cannot answer', async () => {

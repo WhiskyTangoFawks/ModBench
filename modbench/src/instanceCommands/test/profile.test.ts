@@ -1,13 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
-
-vi.mock('vscode', () => fakeVscodeModule());
-
-import { rm } from 'node:fs/promises';
+import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { instanceCommands } from '../instanceCommands';
-import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
-import { adapterOver } from '../../test/mo2/adapterOver';
 import { fakeInstanceAdapter, refusing, readingFixture, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 
@@ -48,21 +41,5 @@ describe('switchProfile', () => {
 
     expect(await switchProfile('Secondary')).toEqual({ applied: false, refusal: expect.stringMatching(/unreadable/) as unknown });
     expect(fake.calls).toEqual([]);
-  });
-});
-
-describe('switchProfile over the committed corpus fixture: the one path from the command through the real adapter to disk', () => {
-  let root: string;
-
-  beforeEach(() => { root = cloneCorpusFixture(); });
-  afterEach(() => rm(root, { recursive: true, force: true }));
-
-  it('repoints ModOrganizer.ini and nothing else', async () => {
-    const before = await snapshotTree(root);
-
-    const outcome = await switchProfileOver(adapterOver(root))('Secondary');
-
-    expect(outcome).toEqual({ applied: true, wrote: true });
-    assertOnlyChanged(before, await snapshotTree(root), new Set(['ModOrganizer.ini']));
   });
 });

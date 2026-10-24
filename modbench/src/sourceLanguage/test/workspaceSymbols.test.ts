@@ -1,22 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { uriFrom } from '../../test/vscodeMock';
+import { UriWith } from '../../test/vscodeMock';
 
-interface TestUri { scheme: string; path: string; query: string; with(change: Partial<Pick<TestUri, 'scheme' | 'query'>>): TestUri }
-
-const h = vi.hoisted(() => {
-  const uri = (scheme: string, path: string, query = ''): TestUri =>
-    ({ scheme, path, query, with: (change) => uri(change.scheme ?? scheme, path, change.query ?? query) });
-  return { uri };
-});
-
-vi.mock('vscode', () => ({
-  Uri: { from: uriFrom, file: (path: string) => h.uri('file', path) },
-}));
+vi.mock('vscode', () => ({ Uri: UriWith }));
 
 import type * as vscode from 'vscode';
 import { workspaceSymbolsOf } from '../workspaceSymbols';
 import type { PluginMetadata, RecordSummary } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { copyDocumentsOf, copyKey as key, type CopyOnDisk } from './copyDocuments';
 
 const modA = { name: 'A.esp', origin: 'ModA' };
 const modB = { name: 'B.esp', origin: 'ModB' };
@@ -37,7 +28,8 @@ const summary = (formKey: string, address: typeof modA, editorId?: string): Reco
 
 type Client = Parameters<typeof workspaceSymbolsOf<{ getText(): string }>>[0]['client'];
 
-function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Record<string, { file: string; text: string }>, answering: Partial<Client> = {}) {
+function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Record<string, CopyOnDisk>, answering: Partial<Client> = {}) {
+  const { getCopyDocument, textOnFile } = copyDocumentsOf(files);
   const client: Client = {
     getPlugins: () => Promise.resolve(plugins),
     searchRecords: vi.fn((_query: string, _types: string[], scope?: typeof modA) => {
@@ -45,16 +37,11 @@ function symbols(plugins: PluginMetadata[], found: RecordSummary[], files: Recor
       return Promise.resolve({ items, total: items.length });
     }),
     getRecordOwner: () => Promise.reject(new Error('A symbol names its plugin.')),
-    getCopyDocument: (address, formKey) => {
-      const copyKey = key(formKey, address);
-      const copy = files[copyKey];
-      const firstOnFile = Object.entries(files).find(([, other]) => other.file === copy?.file)?.[0];
-      return Promise.resolve(copy ? { kind: firstOnFile !== copyKey ? 'ContainersFile' : 'OwnFile', location: copy.file } : null);
-    },
+    getCopyDocument,
     ...answering,
   };
   const open = (uri: vscode.Uri) => new Promise<{ getText(): string }>((resolve) => {
-    const text = Object.values(files).find((copy) => copy.file === uri.path)?.text;
+    const text = textOnFile(uri.path);
     if (text === undefined) throw new Error('The file is gone.');
     resolve({ getText: () => text });
   });
@@ -80,15 +67,24 @@ describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story
     ]);
   });
 
-  it('searches every compiled plugin, active or not (ADR-0012)', async () => {
-    const nonCompiledPlugin = { name: 'A.esp', origin: 'ModC' };
+  it('lists the copies of every compiled plugin, active or not, and none of a plugin that is not compiled (ADR-0012)', async () => {
+    const notCompiled = { name: 'A.esp', origin: 'ModC' };
     const inactive = { name: 'D.esp', origin: 'ModD' };
-    const { client, symbolsFor } = symbols(
-      [plugin(nonCompiledPlugin, { isCompiledPlugin: false }), plugin(modA), plugin(inactive, { inLoadOrder: false })], [], {});
+    const INACTIVE_FILE = '/source/ModD/plugin-source/D.esp/Gun.json';
+    const { symbolsFor } = symbols(
+      [plugin(notCompiled, { isCompiledPlugin: false }), plugin(modA), plugin(inactive, { inLoadOrder: false })],
+      [summary(GUN, notCompiled, 'RustyGun'), summary(GUN, modA, 'RustyGun'), summary(GUN, inactive, 'RustyGun')],
+      {
+        [key(GUN, notCompiled)]: { file: '/source/ModC/plugin-source/A.esp/Gun.json', text: '' },
+        [key(GUN, modA)]: { file: GUN_FILE, text: '' },
+        [key(GUN, inactive)]: { file: INACTIVE_FILE, text: '' },
+      },
+    );
 
-    await symbolsFor('Rusty');
-
-    expect(vi.mocked(client.searchRecords).mock.calls.map(([, , scope]) => [scope?.name, scope?.origin])).toEqual([['A.esp', 'ModA'], ['D.esp', 'ModD']]);
+    expect(listed(await symbolsFor('Rusty'))).toEqual([
+      { name: `RustyGun [${GUN}]`, plugin: 'A.esp', uri: `file:${GUN_FILE}` },
+      { name: `RustyGun [${GUN}]`, plugin: 'D.esp', uri: `file:${INACTIVE_FILE}` },
+    ]);
   });
 
   it('lists nothing for an empty query, without asking mEdit', async () => {
@@ -171,7 +167,3 @@ describe('Go to Symbol in Workspace (plugin-source.md, In the text editor, story
     ]);
   });
 });
-
-function key(formKey: string, { name, origin }: typeof modA): string {
-  return `${formKey} ${name} ${origin}`;
-}

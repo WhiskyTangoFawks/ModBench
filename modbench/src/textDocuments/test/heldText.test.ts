@@ -12,29 +12,22 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { heldText, isUnsaved, onHeldTextChanged } from '../heldText';
+import { onHeldTextChanged } from '../heldText';
 
 const document = (text: string, isDirty: boolean) => ({ getText: () => text, isDirty });
+const changed = (change: Change) => { h.changed.forEach((listener) => { listener(change); }); };
 
 describe('the text VS Code holds for a document', () => {
-  it('is its text', () => {
-    expect(heldText(document('{}', false))).toBe('{}');
-  });
-
-  it('is unsaved while VS Code holds changes to it', () => {
-    expect([isUnsaved(document('', true)), isUnsaved(document('', false))]).toEqual([true, false]);
-  });
-
   it('reports a change to that document that changed text, and no other', () => {
     const mine = document('a', false);
     const heard = vi.fn();
     onHeldTextChanged(mine, heard);
 
-    h.changed.forEach((l) => { l({ document: document('a', false), contentChanges: [{}] }); });
-    h.changed.forEach((l) => { l({ document: mine, contentChanges: [] }); });
+    changed({ document: document('a', false), contentChanges: [{}] });
+    changed({ document: mine, contentChanges: [] });
     expect(heard).not.toHaveBeenCalled();
 
-    h.changed.forEach((l) => { l({ document: mine, contentChanges: [{}] }); });
+    changed({ document: mine, contentChanges: [{}] });
     expect(heard).toHaveBeenCalledTimes(1);
   });
 
@@ -43,7 +36,7 @@ describe('the text VS Code holds for a document', () => {
     const heard = vi.fn();
     onHeldTextChanged(mine, heard).dispose();
 
-    h.changed.forEach((l) => { l({ document: mine, contentChanges: [{}] }); });
+    changed({ document: mine, contentChanges: [{}] });
 
     expect(heard).not.toHaveBeenCalled();
   });

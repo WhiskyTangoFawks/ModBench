@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { fakeInstanceAdapter, readingFixture, sourceModsOf, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { sourceCommands } from '../sourceCommands';
+import { isPluginSourcePath } from '../../instanceAdapter/instanceAdapter';
 
 const SOURCES = { ModA: '/instance/source/ModA', ModB: '/instance/source/Old ModB' };
 
@@ -38,43 +39,22 @@ describe('sourceCommands build', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
     const saved: string[] = [];
+    const predicates: ((path: string) => boolean)[] = [];
     const saveUnsaved = (folder: string, isPluginSource: (path: string) => boolean) => {
       saved.push(folder);
-      expect(isPluginSource('/instance/source/ModA/plugin-source/A.esp/Cell.json')).toBe(true);
-      expect(isPluginSource('/instance/source/ModA/assets/Notes.json')).toBe(false);
+      predicates.push(isPluginSource);
       return Promise.resolve(folder.endsWith('Old ModB') ? ['/instance/source/Old ModB/plugin-source/B.esp/Cell.json'] : []);
     };
 
     const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved }).build(['ModA', 'ModB']);
 
     expect(saved).toEqual(['/instance/source/ModA', '/instance/source/Old ModB']);
+    expect(predicates).toEqual([isPluginSourcePath, isPluginSourcePath]);
     expect(client.calls).toHaveLength(1);
     expect(client.calls[0]?.args[0]).toMatchObject([{ name: 'ModA' }]);
     expect(outcome).toMatchObject({
       refused: [{ item: 'ModB', reason: 'VS Code did not save its plugin source: /instance/source/Old ModB/plugin-source/B.esp/Cell.json' }],
     });
-  });
-
-  it('refuses a mod whose metadata cannot be read, naming why, and builds the rest', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', BUILT);
-    const adapter = fakeAdapter({ unreadableMetadata: new Map([['ModA', 'EISDIR: meta.ini']]) });
-
-    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll }).build(['ModA', 'ModB']);
-
-    expect(client.calls).toMatchObject([{ args: [[{ name: 'ModB' }], expect.anything()] }]);
-    expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'its metadata could not be read: EISDIR: meta.ini' }] });
-  });
-
-  it('refuses a mod whose remote cannot be read, naming why, and builds the rest', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', BUILT);
-    const adapter = fakeAdapter({ hosts: new Map([['/instance/source/ModA', { kind: 'unreadable', reason: 'git remote failed' }]]) });
-
-    const outcome = await sourceCommands({ client, adapter, saveUnsaved: savedAll }).build(['ModA', 'ModB']);
-
-    expect(client.calls).toMatchObject([{ args: [[{ name: 'ModB' }], expect.anything()] }]);
-    expect(outcome).toMatchObject({ refused: [{ item: 'ModA', reason: 'its remote could not be read: git remote failed' }] });
   });
 
   it('hands mEdit no archive variant for a release the table names none for', async () => {
@@ -86,17 +66,20 @@ describe('sourceCommands build', () => {
     expect(client.calls.map((call) => call.args[1])).toEqual([{ exclusionMark: EXCLUSION_MARK, archives: null, statCache: '/instance/stat-cache' }]);
   });
 
-  it('refuses a mod no repository builds, naming why, and builds the rest', async () => {
+  it.each<[string, InstanceAnswers, readonly string[], string, string, string]>([
+    ['whose metadata cannot be read', { unreadableMetadata: new Map([['ModA', 'EISDIR: meta.ini']]) }, ['ModA', 'ModB'],
+      'ModA', 'its metadata could not be read: EISDIR: meta.ini', 'ModB'],
+    ['whose remote cannot be read', { hosts: new Map([['/instance/source/ModA', { kind: 'unreadable', reason: 'git remote failed' }]]) }, ['ModA', 'ModB'],
+      'ModA', 'its remote could not be read: git remote failed', 'ModB'],
+    ['no repository builds', {}, ['ModA', 'ModC'], 'ModC', 'no repository in the source folder builds it', 'ModA'],
+  ])('refuses a mod %s, naming why, and builds the rest', async (_case, answers, mods, item, reason, sent) => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('build', BUILT);
 
-    const outcome = await sourceCommands({ client, adapter: fakeAdapter(), saveUnsaved: savedAll }).build(['ModA', 'ModC']);
+    const outcome = await sourceCommands({ client, adapter: fakeAdapter(answers), saveUnsaved: savedAll }).build(mods);
 
-    expect(client.calls).toEqual([{ method: 'build', args: [[expect.objectContaining({ name: 'ModA' })], expect.anything()] }]);
-    expect(outcome).toEqual({
-      ...BUILT,
-      refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }],
-    });
+    expect(client.calls).toMatchObject([{ args: [[{ name: sent }], expect.anything()] }]);
+    expect(outcome).toEqual({ ...BUILT, refused: [{ item, reason }] });
   });
 });
 

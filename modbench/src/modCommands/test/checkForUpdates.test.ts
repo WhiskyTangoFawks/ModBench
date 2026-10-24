@@ -48,8 +48,9 @@ describe('check for updates', () => {
 
     const { fake, result } = await checking(['Gone', 'Held'], answers, (url) => (url === FILES('1') ? new Response('', { status: 404 }) : listing('2.0')));
 
-    const outcome = result.applied ? result.outcome : undefined;
-    expect([outcome?.landed, outcome?.refused.map(({ item }) => item)]).toEqual([[{ name: 'Held', updateAvailable: false }], [{ name: 'Gone' }]]);
+    expect(result).toEqual({
+      applied: true, outcome: { landed: [{ name: 'Held', updateAvailable: false }], refused: [{ item: { name: 'Gone' }, reason: 'Nexus does not hold this mod.' }] },
+    });
     expect(fake.calls).toEqual([{ verb: 'writeNewestVersion', mod: 'Held', version: '2.0' }]);
   });
 

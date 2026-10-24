@@ -37,16 +37,18 @@ describe('saving the unsaved plugin source under a source folder', () => {
     expect(sibling.save).toHaveBeenCalledOnce();
   });
 
-  it('leaves alone a document of another mod\'s folder, a sibling folder of the same prefix, a file that is no plugin source, and a clean one', async () => {
-    const other = document('file', '/source/ModB/plugin-source/B.esp/Cell.json');
-    const prefixed = document('file', '/source/ModAx/plugin-source/A.esp/Cell.json');
-    const asset = document('file', '/source/ModA/assets/Notes.json');
-    const clean = document('file', CELL);
-    clean.isDirty = false;
-    h.textDocuments = [other, prefixed, asset, clean];
+  it.each<[string, string, boolean]>([
+    ['a document of another mod\'s folder', '/source/ModB/plugin-source/B.esp/Cell.json', true],
+    ['a sibling folder of the same prefix', '/source/ModAx/plugin-source/A.esp/Cell.json', true],
+    ['a file that is no plugin source', '/source/ModA/assets/Notes.json', true],
+    ['a clean document', CELL, false],
+  ])('leaves alone %s', async (_case, path, isDirty) => {
+    const untouched = document('file', path);
+    untouched.isDirty = isDirty;
+    h.textDocuments = [untouched];
 
     expect(await save()).toEqual([]);
-    for (const untouched of [other, prefixed, asset, clean]) expect(untouched.save).not.toHaveBeenCalled();
+    expect(untouched.save).not.toHaveBeenCalled();
   });
 
   it('matches the folder without case, as the layout does', async () => {
