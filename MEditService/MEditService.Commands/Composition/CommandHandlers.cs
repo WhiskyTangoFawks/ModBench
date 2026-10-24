@@ -185,7 +185,6 @@ public static class CommandHandlers
             sp.GetRequiredService<IModFolderRepository>(),
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<ISourceAdapter>(),
             new ExternalChangeCheck(
                 sp.GetRequiredService<INotificationPublisher>(),
                 sp.GetRequiredService<IPluginAdapter>(),

@@ -43,6 +43,9 @@ public sealed class UnsavedDocumentTests : IDisposable
         _file = _compiledPlugin.SourceFileOf(_index.DocumentOf(_npc, _compiledPlugin.KeyOf()));
     }
 
+    private string InstanceRootNamed(string name) =>
+        Directory.CreateDirectory(Path.Combine(_fixture.InstanceRoot, name)).FullName;
+
     public void Dispose()
     {
         _index.Dispose();
@@ -111,7 +114,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         var log = new List<LogEntry>();
         using var loggers = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(log)));
         var notifications = new InMemoryNotificationPublisher();
-        using var logged = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "logged"), loggerFactory: loggers, notifications: notifications);
+        using var logged = Indexes.Reconciled(_fixture, InstanceRootNamed("logged"), loggerFactory: loggers, notifications: notifications);
 
         foreach (var typed in new[] { Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved"), Typed("\"CompiledPluginNpc\"", "\"CompiledPluginNpc\",,") })
         {
@@ -189,7 +192,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     {
         var thrown = Faults.Of(thrownType);
         using var faulting = Indexes.Reconciled(
-            _fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: new InMemoryNotificationPublisher { OnPublish = Faults.On(IsRowsChanged, thrown) });
+            _fixture, InstanceRootNamed("faulting"), notifications: new InMemoryNotificationPublisher { OnPublish = Faults.On(IsRowsChanged, thrown) });
 
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
 
@@ -202,7 +205,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     {
         var statusFault = Faults.InTurn(typeof(NotSupportedException));
         var notifications = new InMemoryNotificationPublisher();
-        using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: notifications);
+        using var faulting = Indexes.Reconciled(_fixture, InstanceRootNamed("faulting"), notifications: notifications);
         notifications.OnPublish = Faults.On(IsRowsChanged, Faults.Of(typeof(InvalidOperationException)))
             + (notification => { if (notification is LoadOrderStatusNotification) statusFault(); });
 
@@ -225,7 +228,7 @@ public sealed class UnsavedDocumentTests : IDisposable
             throw new OperationCanceledException();
         });
         var notifications = new InMemoryNotificationPublisher();
-        using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: notifications);
+        using var faulting = Indexes.Reconciled(_fixture, InstanceRootNamed("faulting"), notifications: notifications);
         notifications.OnPublish = Faults.On(IsRowsChanged, Faults.Of(typeof(InvalidOperationException)))
             + (notification => { if (notification is LoadOrderStatusNotification { Status.State: LoadOrderState.Failed }) statusCancelled(); });
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
@@ -246,7 +249,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         var log = new List<LogEntry>();
         using var loggers = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(log)));
         var notifications = new InMemoryNotificationPublisher();
-        using var index = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "disposed"), loggerFactory: loggers, notifications: notifications);
+        using var index = Indexes.Reconciled(_fixture, InstanceRootNamed("disposed"), loggerFactory: loggers, notifications: notifications);
         var disposed = false;
         notifications.OnPublish = notification =>
         {
@@ -267,7 +270,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     public void AHandOverThatValidatesCleanly_ClearsTheFailureAnEarlierHandOverSet()
     {
         var faults = new InMemoryNotificationPublisher { FaultsOn = IsRowsChanged };
-        using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: faults);
+        using var faulting = Indexes.Reconciled(_fixture, InstanceRootNamed("faulting"), notifications: faults);
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\""))]);
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the failed status");
 
@@ -282,7 +285,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     public void AHandOverWhoseStatusCannotBePublished_LeavesTheNextHandOverValidated()
     {
         var faults = new InMemoryNotificationPublisher();
-        using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: faults);
+        using var faulting = Indexes.Reconciled(_fixture, InstanceRootNamed("faulting"), notifications: faults);
         var validationFault = Faults.Of(typeof(InvalidOperationException));
         faults.OnPublish = Faults.On(IsRowsChanged, validationFault)
             + Faults.On(n => n is LoadOrderStatusNotification, Faults.Of(typeof(NotSupportedException)));
@@ -300,7 +303,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     public void AHandOverThatValidatesCleanly_LeavesAFailureTheReconcileSet()
     {
         var faults = new InMemoryNotificationPublisher { FaultsOn = IsRowsChanged };
-        using var faulting = Indexes.Reconciled(_fixture, Path.Combine(_fixture.InstanceRoot, "faulting"), notifications: faults);
+        using var faulting = Indexes.Reconciled(_fixture, InstanceRootNamed("faulting"), notifications: faults);
         _compiledPlugin.HandEdit(faulting.DocumentOf(_npc, _compiledPlugin.KeyOf()), "\"CompiledPluginNpc\"", "\"EditedOnDisk\"");
         faulting.Holder.Apply(faulting.Holder.Current);
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the reconcile's failed status");

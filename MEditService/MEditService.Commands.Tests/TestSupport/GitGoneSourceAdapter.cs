@@ -58,7 +58,6 @@ internal sealed class GitGoneSourceAdapter : ISourceAdapter
 
     public bool HoldsAnotherRepository(string sourceFolder) => _inner.HoldsAnotherRepository(sourceFolder);
 
-    public string? InstanceRootNotFound(string? instanceRoot) => _inner.InstanceRootNotFound(instanceRoot);
 
     public string ContentStamp(string text) => _inner.ContentStamp(text);
 

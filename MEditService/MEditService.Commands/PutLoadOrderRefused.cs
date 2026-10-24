@@ -6,9 +6,6 @@ public enum PutLoadOrderRefusal
     /// <summary>The Data folder the snapshot names is not on disk.</summary>
     DataFolderNotFound,
 
-    /// <summary>No instance root, nowhere to keep the rows (ADR-0010).</summary>
-    InstanceRootNotFound,
-
     /// <summary>A release this build has no Mutagen assembly for.</summary>
     UnsupportedGameRelease,
 

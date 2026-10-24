@@ -1204,6 +1204,7 @@ internal sealed class Indexer : IDisposable
     internal bool WhileClosed(Func<ClosedStore, string?> whileClosed, out string? heldElsewhere)
     {
         heldElsewhere = null;
+        string? failure = null;
         EnterExclusive();
         try
         {
@@ -1213,12 +1214,14 @@ internal sealed class Indexer : IDisposable
                 AskReconcile();
                 return false;
             }
-            heldElsewhere = whileClosed(new ClosedStore(_storeFactory, handedOut));
+            try { heldElsewhere = whileClosed(new ClosedStore(_storeFactory, handedOut)); }
+            catch (IndexFaultException ex) { failure = ex.Message; }
             var refusal = heldElsewhere;
-            Swap(standing => standing with { HeldElsewhere = refusal });
+            var failed = failure;
+            Swap(standing => standing with { HeldElsewhere = refusal, Failure = failed });
         }
         finally { ExitExclusive(); }
-        if (heldElsewhere is null) AskReconcile();
+        if (heldElsewhere is null && failure is null) AskReconcile();
         else PublishStatus();
         return true;
     }

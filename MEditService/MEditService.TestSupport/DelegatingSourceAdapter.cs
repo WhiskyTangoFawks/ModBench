@@ -39,7 +39,6 @@ public abstract class DelegatingSourceAdapter(ISourceAdapter inner) : ISourceAda
 
     public virtual SourceFailure? WhyGitCannotRun() => inner.WhyGitCannotRun();
 
-    public virtual string? InstanceRootNotFound(string? instanceRoot) => inner.InstanceRootNotFound(instanceRoot);
 
     public virtual string ContentStamp(string text) => inner.ContentStamp(text);
 
