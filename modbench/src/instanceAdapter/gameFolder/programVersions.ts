@@ -6,44 +6,46 @@ import { programsOf } from '../../tables/gamePaths';
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
 import type { GameFolder } from '../instanceAdapter';
-import { fileVersionOf, productVersionOf } from './versionResource';
+import { versionResourceOf, type VersionResource } from './versionResource';
 
+/** A program's version; or, named, a program the game folder lacks, one with no version resource, a file that is no
+ *  Windows program, or one the file system would not read. */
 export type ProgramVersion =
   | { readonly kind: 'read'; readonly version: string }
-  | { readonly kind: 'notFound'; readonly program: string }
-  | { readonly kind: 'unreadable'; readonly why: string };
+  | { readonly kind: 'notFound' | 'noVersionResource' | 'notAProgram'; readonly program: string }
+  | { readonly kind: 'unreadable'; readonly program: string; readonly why: string };
 
-export interface ProgramVersions {
-  readonly game: ProgramVersion;
-  readonly extender: ProgramVersion;
-}
+/** Both versions; or neither, because the game folder was not found, or the game's programs are not known. */
+export type ProgramVersions =
+  | { readonly kind: 'found'; readonly game: ProgramVersion; readonly extender: ProgramVersion }
+  | { readonly kind: 'unresolved' }
+  | { readonly kind: 'unknownGame' };
 
 // The reference takes a game program's product version where its file version starts so, as some games' programs
 // carry their true version there alone.
 const FALLBACK_GAME_VERSION = '1.0.0';
 
-async function gameVersionOf(path: string): Promise<string> {
-  const version = await fileVersionOf(path);
-  return version.startsWith(FALLBACK_GAME_VERSION) ? (await productVersionOf(path)) || version : version;
-}
+const gameVersion = ({ fileVersion, productVersion }: Extract<VersionResource, { readonly kind: 'read' }>): string =>
+  (fileVersion.startsWith(FALLBACK_GAME_VERSION) && productVersion !== '' ? productVersion : fileVersion);
 
-async function versionIn(root: string, program: string, read: (path: string) => Promise<string>): Promise<ProgramVersion> {
+async function versionIn(
+  root: string, program: string, versionOf: (read: Extract<VersionResource, { readonly kind: 'read' }>) => string,
+): Promise<ProgramVersion> {
   try {
-    return { kind: 'read', version: await read(join(root, program)) };
+    const resource = await versionResourceOf(join(root, program));
+    return resource.kind === 'read' ? { kind: 'read', version: versionOf(resource) } : { kind: resource.kind, program };
   } catch (err) {
-    return errnoCode(err) === 'ENOENT' ? { kind: 'notFound', program } : { kind: 'unreadable', why: errorMessage(err) };
+    return errnoCode(err) === 'ENOENT' ? { kind: 'notFound', program } : { kind: 'unreadable', program, why: errorMessage(err) };
   }
 }
 
-const neither = (why: string): ProgramVersions => ({ game: { kind: 'unreadable', why }, extender: { kind: 'unreadable', why } });
-
 export async function programVersions(gameFolder: GameFolder, release: string | undefined): Promise<ProgramVersions> {
-  if (gameFolder.kind !== 'found') return neither('the game folder was not found');
+  if (gameFolder.kind !== 'found') return { kind: 'unresolved' };
   const programs = programsOf(release);
-  if (programs === undefined) return neither('Modbench knows no program of this game');
+  if (programs === undefined) return { kind: 'unknownGame' };
   const [game, extender] = await Promise.all([
-    versionIn(gameFolder.root, programs.game, gameVersionOf),
-    versionIn(gameFolder.root, programs.extenderLoader, fileVersionOf),
+    versionIn(gameFolder.root, programs.game, gameVersion),
+    versionIn(gameFolder.root, programs.extenderLoader, ({ fileVersion }) => fileVersion),
   ]);
-  return { game, extender };
+  return { kind: 'found', game, extender };
 }

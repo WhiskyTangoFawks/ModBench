@@ -1,7 +1,7 @@
 import { pluginKey } from '../../loadOrderFileCodec/pluginsText';
 import type { PluginEntry, PluginsProvided } from '../instanceAdapter';
 import { readPluginsProvided, type ReadingSource } from '../instanceReading';
-import { programVersions, type ProgramVersion } from '../gameFolder/programVersions';
+import { programVersions, type ProgramVersion, type ProgramVersions } from '../gameFolder/programVersions';
 import type { ConditionFacts, Known } from './engineProtocol';
 
 // The reference installer reads the version of a script extender it does not find as no version at all: each part 0.
@@ -20,8 +20,21 @@ function versionFact(version: ProgramVersion, notFound: (program: string) => Kno
   switch (version.kind) {
     case 'read': return { known: version.version };
     case 'notFound': return notFound(version.program);
-    case 'unreadable': return { unknown: version.why };
+    case 'noVersionResource': return { unknown: `${version.program} has no version resource` };
+    case 'notAProgram': return { unknown: `${version.program} is not a Windows program` };
+    case 'unreadable': return { unknown: `${version.program} cannot be read: ${version.why}` };
   }
+}
+
+function versionFacts(versions: ProgramVersions): Pick<ConditionFacts, 'gameVersion' | 'extenderVersion'> {
+  if (versions.kind !== 'found') {
+    const unknown = { unknown: versions.kind === 'unresolved' ? 'the game folder was not found' : 'Modbench knows no program of this game' };
+    return { gameVersion: unknown, extenderVersion: unknown };
+  }
+  return {
+    gameVersion: versionFact(versions.game, (program) => ({ unknown: `${program} is not in the game folder` })),
+    extenderVersion: versionFact(versions.extender, () => ({ known: NO_VERSION })),
+  };
 }
 
 /** What a FOMOD's conditions read of the instance, read now. */
@@ -31,9 +44,5 @@ export async function conditionFacts(source: ReadingSource): Promise<ConditionFa
     readPluginsProvided(source, settings.profile), source.pluginOrder(settings.profile),
     settings.gameFolder().then((gameFolder) => programVersions(gameFolder, settings.gameRelease)),
   ]);
-  return {
-    plugins: pluginStates(provided, order),
-    gameVersion: versionFact(versions.game, (program) => ({ unknown: `${program} is not in the game folder` })),
-    extenderVersion: versionFact(versions.extender, () => ({ known: NO_VERSION })),
-  };
+  return { plugins: pluginStates(provided, order), ...versionFacts(versions) };
 }

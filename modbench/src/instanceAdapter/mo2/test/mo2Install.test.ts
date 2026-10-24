@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import type { FomodDialog, InstallationFileReader, InstanceAdapter, InstallPackage } from '../../instanceAdapter';
 import type { FomodMove } from '../../../wire/fomodPage';
 import { programsOf, SCRIPT_EXTENDER_FOLDERS } from '../../../tables/gamePaths';
-import { windowsProgram } from '../../../test/windowsProgram';
+import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
 import { adapterOver } from '../../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../../test/mo2/corpusFixture';
 import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
@@ -377,6 +377,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
     describe('conditions on the versions of the game and its script extender', () => {
       const { game: gameProgram, extenderLoader } = present(programsOf('Fallout4'), 'the programs of the fixture\'s game');
+      const program = (fileVersion: readonly number[]): Buffer => windowsProgram({ version: versionInfo(fileVersion) });
       let game: string;
 
       beforeEach(async () => {
@@ -392,8 +393,8 @@ describe('installing a mod through the MO2 Instance adapter', () => {
         );
 
       it('answers them from the versions of the game\'s program and the extender\'s loader in the game folder', async () => {
-        await writeFile(join(game, gameProgram), windowsProgram({ fileVersion: [1, 10, 163, 0] }));
-        await writeFile(join(game, extenderLoader), windowsProgram({ fileVersion: [0, 0, 6, 23] }));
+        await writeFile(join(game, gameProgram), program([1, 10, 163, 0]));
+        await writeFile(join(game, extenderLoader), program([0, 0, 6, 23]));
 
         await installed(
           ['<gameDependency version="1.10.163.0"/>', 'game.esp'],
@@ -406,17 +407,24 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       });
 
       it('reads a script extender whose loader the game folder lacks as MO2 does, as version 0', async () => {
-        await writeFile(join(game, gameProgram), windowsProgram({ fileVersion: [1, 10, 163, 0] }));
+        await writeFile(join(game, gameProgram), program([1, 10, 163, 0]));
 
         await installed(['<foseDependency version="0.0"/>', 'any-extender.esp'], ['<foseDependency version="0.0.6.23"/>', 'extender.esp']);
 
         expect(await filesIn(folder(MOD))).toEqual(['any-extender.esp', 'meta.ini']);
       });
 
-      it('refuses, naming the game\'s program, when the game folder lacks it', async () => {
-        await expect(installed(['<gameDependency version="1.10.163.0"/>', 'game.esp'])).rejects.toThrow(
-          `The FOMOD's conditions read the game's version, which could not be read: ${gameProgram} is not in the game folder.`,
-        );
+      it.each<[string, Buffer | undefined, Buffer | undefined, string]>([
+        ['the game\'s program the game folder lacks', undefined, undefined, `the game's version, which could not be read: ${gameProgram} is not in the game folder`],
+        ['a game program with no version resource', windowsProgram(), undefined, `the game's version, which could not be read: ${gameProgram} has no version resource`],
+        ['an extender loader that is no Windows program', program([1, 10, 163, 0]), Buffer.from('not a program'),
+          `the script extender's version, which could not be read: ${extenderLoader} is not a Windows program`],
+      ])('refuses, naming %s', async (_, gameBytes, loaderBytes, unread) => {
+        if (gameBytes !== undefined) await writeFile(join(game, gameProgram), gameBytes);
+        if (loaderBytes !== undefined) await writeFile(join(game, extenderLoader), loaderBytes);
+
+        await expect(installed(['<gameDependency version="1.10.163.0"/>', 'game.esp'], ['<foseDependency version="0.0.6.23"/>', 'extender.esp']))
+          .rejects.toThrow(`The FOMOD's conditions read ${unread}.`);
       });
     });
   });

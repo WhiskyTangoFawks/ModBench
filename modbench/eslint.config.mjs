@@ -263,7 +263,7 @@ export default defineConfig(
     {
         files: ['src/instanceAdapter/gameFolder/versionResource.ts'],
         rules: {
-            'no-restricted-imports': restrictedImports({ vscode: true, packages: false, path: false, inAdapter: true, byteReads: false }),
+            'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: false, inAdapter: true, byteReads: false }),
         },
     },
     {
