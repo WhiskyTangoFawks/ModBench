@@ -32,6 +32,7 @@ import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileRe
 import { readPluginLines } from '../../../test/mo2/adapterOver';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../../test/mo2/corpusFixture';
 import { NO_DETECTORS } from '../../../test/noDetectors';
+import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 
 const MOD = 'mods/Patch Mod';
 const ORIGIN: FileOrigin = { kind: 'mod', name: 'Patch Mod' };
@@ -81,7 +82,7 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
       instanceRoot: root,
       gameFolderSetting: fixedGameFolderSetting(),
       detectors: NO_DETECTORS,
-      installationFileReader: fakeInstallationFileReader([]),
+      installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE,
     }, undefined);
     for (const [before] of NAMED_FOR_IT.slice(1)) await put(before);
     for (const path of NOT_NAMED_FOR_IT) await put(path);

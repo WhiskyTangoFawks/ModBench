@@ -51,7 +51,6 @@ import { pluginCommands, pluginSyncOver } from './pluginCommands/plugins';
 import { modlistRepositoryCommands } from './sourceCommands/modlistRepositoryCommands';
 import { sourceCommands } from './sourceCommands/sourceCommands';
 import { modSyncOver, modCommands } from './modCommands/modCommands';
-import { warnIfFomod } from './mods/fomodWarning';
 import { downloadedFileCommands } from './downloadedFileCommands/downloads';
 import { editingFlow } from './instanceCommands/editing';
 import { instanceCommands } from './instanceCommands/instanceCommands';
@@ -120,11 +119,19 @@ interface Opened {
   side: (own: Own, deps: ViewsDeps) => InstanceSide;
 }
 
-function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own): Opened {
+// esbuild writes the engine's process and copies its add-on beside the extension. The engine answers a step in
+// milliseconds, so a minute of silence is an engine that hangs.
+const fomodEngineIn = (extensionUri: vscode.Uri) => ({
+  process: vscode.Uri.joinPath(extensionUri, 'out', 'fomodEngine.js').fsPath,
+  folder: vscode.Uri.joinPath(extensionUri, 'out', 'fomodEngine').fsPath,
+  silence: 60_000,
+});
+
+function openFolderAsInstance(outputChannel: vscode.LogOutputChannel, own: Own, extensionUri: vscode.Uri): Opened {
   return whenOpened<Opened>(openedFolder(isInstance, (line) => outputChannel.info(line)), {
     instance: (instanceRoot) => {
       const adapter = adapterForInstance({
-        instanceRoot, gameFolderSetting, installationFileReader: downloadedFileReader,
+        instanceRoot, gameFolderSetting, installationFileReader: downloadedFileReader, fomodEngine: fomodEngineIn(extensionUri),
       });
       const instance = own(new Instance({
         adapter, gameFolderSettingId: gameFolderSetting.id, window: vscode.window, log: outputChannel,
@@ -153,7 +160,6 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const plugins = own(pluginsBox.onInstance({
     instance, commands: pluginCommands({ adapter, client }), pluginSync, modStatuses,
   }));
-  const fomodWarning = warnIfFomod(reporterFor('install'));
   const { view: downloadsView, nameFilter: downloadsFilter } = own(createDownloadsView({
     commands: downloadedFileCommands(adapter), queryInfo: queryInfoOver(adapter, deps.nexus), instance, reporter: reporterFor('downloadedFiles'), ask, trash,
     log: (line) => outputChannel.warn(`[downloadedFiles] ${line}`),
@@ -162,7 +168,7 @@ function buildInstanceSide(own: Own, { instanceRoot, adapter, instance }: Opened
   const toolbox = own(createToolboxView({ instance, channel: outputChannel }));
   const mods = own(createModsView({
     instance, commands: modCommands(adapter, client, readStatus), copyReads: adapter, log: (line) => outputChannel.warn(`[modList] ${line}`), modSync, reporterFor, ask, trash,
-    extensionUri: deps.extensionUri, warnIfFomod: fomodWarning,
+    extensionUri: deps.extensionUri,
     downloadedFileInstallReporting: {
       reporter: reporterFor('downloadedFiles'), log: (line) => outputChannel.warn(`[downloadedFiles] ${line}`),
       progressViewId: DOWNLOADS_KEY_ARGS.view,
@@ -252,7 +258,7 @@ function start(context: vscode.ExtensionContext): void {
   const focusedView = createFocusedView();
 
   const ownedByViews = ownership();
-  const opened = openFolderAsInstance(outputChannel, ownedByViews.own);
+  const opened = openFolderAsInstance(outputChannel, ownedByViews.own, context.extensionUri);
   const sourceModRepositories = sourceModRepositoriesOver({ client: meditClient, outputChannel, ...opened.facts });
   const sourceEditing: SourceEditing = {
     applyWorkspaceChanges: (items) => applyWorkspaceChanges(items),

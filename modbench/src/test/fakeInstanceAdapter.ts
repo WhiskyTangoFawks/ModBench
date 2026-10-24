@@ -1,7 +1,7 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
-  entryNotFound, filesWinningFirst, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type SourceMods, type OriginFile, type InstallKeys, type PluginOrderChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+  entryNotFound, filesWinningFirst, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type SourceMods, type OriginFile, type InstallKeys, type FomodAnswer, type PluginOrderChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
@@ -83,7 +83,7 @@ export type AdapterCall =
   | { readonly verb: 'writeSubmodules' }
   | { readonly verb: 'refuseUnpublishedPins' }
   | { readonly verb: 'writePathTokens' }
-  | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly keys: InstallKeys };
+  | { readonly verb: 'install'; readonly package: InstallPackage; readonly target: InstallTarget; readonly keys: InstallKeys; readonly fomod?: FomodAnswer };
 
 export type WriteVerb = AdapterCall['verb'];
 
@@ -440,8 +440,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         if (reachesOut(relativePath)) throw notAFileOf({ kind: 'mod', name: mod }, relativePath);
       }),
     trashSourceFolder: (mod) => record({ verb: 'trashSourceFolder', mod }, true),
-    install: (installed, target, keys) =>
-      record<InstallOutcome>({ verb: 'install', package: installed, target, keys }, answers.installed ?? { landed: true, isFomod: false }),
+    install: (installed, target, keys, fomod) =>
+      record<InstallOutcome>({ verb: 'install', package: installed, target, keys, ...(fomod && { fomod }) }, answers.installed ?? { landed: true }),
     subscribe: (listener): Subscription => {
       listeners.add(listener);
       return { dispose: () => { listeners.delete(listener); } };

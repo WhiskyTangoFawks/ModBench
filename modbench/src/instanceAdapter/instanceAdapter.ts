@@ -203,9 +203,30 @@ export interface InstallTarget {
   readonly name: string;
 }
 
-/** An install that landed, and whether its package is a scripted installer, whose files land as
- *  they are; or none, because the target's folder is there for a new mod or absent for an upgrade. */
-export type InstallOutcome = { readonly landed: true; readonly isFomod: boolean } | { readonly landed: false };
+/** The options picked in one group of a FOMOD's step, each by the name its installer shows. */
+export interface FomodGroupChoice {
+  readonly group: string;
+  readonly options: readonly string[];
+}
+
+/** The choices made on one of a FOMOD's steps, by the name its installer shows. */
+export interface FomodStepChoice {
+  readonly step: string;
+  readonly groups: readonly FomodGroupChoice[];
+}
+
+/** How a FOMOD's installer is answered: its choices, step by step, or Manual, which installs a plain copy. */
+export type FomodAnswer = { readonly kind: 'choices'; readonly steps: readonly FomodStepChoice[] } | { readonly kind: 'manual' };
+
+/** A FOMOD its installer installed, with each file it names that its archive lacks and anything else its installer
+ *  said; or one installed as a plain copy, and why its installer did not run. */
+export type FomodLanded =
+  | { readonly kind: 'installer'; readonly missing: readonly string[]; readonly notes: readonly string[] }
+  | { readonly kind: 'plainCopy'; readonly why: string };
+
+/** An install that landed, and how, when its package is a FOMOD; or none, because the target's folder is there for a
+ *  new mod or absent for an upgrade. */
+export type InstallOutcome = { readonly landed: true; readonly fomod?: FomodLanded } | { readonly landed: false };
 
 /** Names match as the manager matches them. An entry added at the winning end is disabled. A
  *  separator added is enabled and gets its folder, after its `anchor` mod or before the
@@ -634,9 +655,9 @@ export interface InstanceAdapter {
   trashModFile(mod: string, relativePath: string, trash: MoveToTrash): Promise<void>;
   /** Moves the source folder that builds the mod into the trash; false when none does. */
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
-  /** Puts the package's files in a new folder, or in place of the mod's own. Rejects with why; a
-   *  new mod's folder goes, and an upgrade that failed part way is not rolled back. */
-  install(installed: InstallPackage, target: InstallTarget, keys: InstallKeys): Promise<InstallOutcome>;
+  /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own. Rejects with why; a
+   *  new mod's folder goes, and a failed upgrade is not rolled back. */
+  install(installed: InstallPackage, target: InstallTarget, keys: InstallKeys, fomod?: FomodAnswer): Promise<InstallOutcome>;
 
   // Subscribe: the instance changed.
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's

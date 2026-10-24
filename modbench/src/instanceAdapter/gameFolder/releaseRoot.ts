@@ -15,27 +15,33 @@ const MAX_WRAPPERS = 32;
 
 const named = (name: string) => (entry: { name: string }): boolean => entry.name.toLowerCase() === name;
 
-async function hasModuleConfig(fomodDir: string): Promise<boolean> {
-  return (await listEntries(fomodDir, ignoreSkippedLink)).some((entry) => entry.isFile && named('moduleconfig.xml')(entry));
+/** A FOMOD's installer: a module config, or a script. */
+export type FomodKind = 'xml' | 'script';
+
+const INSTALLER_FILES: readonly [string, FomodKind][] = [['moduleconfig.xml', 'xml'], ['script.cs', 'script']];
+
+async function installerIn(fomodDir: string): Promise<FomodKind | undefined> {
+  const files = (await listEntries(fomodDir, ignoreSkippedLink)).filter((entry) => entry.isFile);
+  return INSTALLER_FILES.find(([name]) => files.some(named(name)))?.[1];
 }
 
-/** Where a release's files start: its Data folder, or below each lone wrapper folder. A
- *  scripted installer keeps its tree as it is, because Modbench does not run its steps. */
-export async function releaseRoot(extracted: string): Promise<{ root: string; isFomod: boolean }> {
+/** Where a release's files start: its Data folder, below each lone wrapper folder, or beside its FOMOD's installer. */
+export async function releaseRoot(extracted: string): Promise<{ root: string; fomod?: FomodKind }> {
   let level = extracted;
   for (let depth = 0; depth < MAX_WRAPPERS; depth++) {
     const entries = await listEntries(level, ignoreSkippedLink);
     const folders = entries.filter((entry) => entry.isDirectory);
 
     const fomodDir = folders.find(named('fomod'));
-    if (fomodDir && (await hasModuleConfig(join(level, fomodDir.name)))) return { root: level, isFomod: true };
+    const fomod = fomodDir && (await installerIn(join(level, fomodDir.name)));
+    if (fomod) return { root: level, fomod };
 
     const dataDir = folders.find(named('data'));
-    if (dataDir) return { root: join(level, dataDir.name), isFomod: false };
+    if (dataDir) return { root: join(level, dataDir.name) };
 
     const onlyFolder = folders.length === 1 && entries.every((entry) => !entry.isFile) ? present(folders[0], 'the lone folder') : undefined;
-    if (onlyFolder === undefined || DATA_DIRS.has(onlyFolder.name.toLowerCase())) return { root: level, isFomod: false };
+    if (onlyFolder === undefined || DATA_DIRS.has(onlyFolder.name.toLowerCase())) return { root: level };
     level = join(level, onlyFolder.name);
   }
-  return { root: level, isFomod: false };
+  return { root: level };
 }

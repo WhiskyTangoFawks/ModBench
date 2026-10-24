@@ -49,6 +49,7 @@ import { adapterOver, contextOver } from '../../../test/mo2/adapterOver';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_LOAD_ORDER, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../../test/mo2/corpusFixture';
+import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 
 const INI = 'ModOrganizer.ini';
 const DOWNLOADED_FILE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
@@ -57,7 +58,7 @@ const adapterAt = (
   instanceRoot: string, gameFolderSettingValue?: string, gameFolderSettingChanged?: (listener: () => void) => Subscription,
   installationFileReader: InstallationFileReader = fakeInstallationFileReader([]),
 ): ManagerAdapter => mo2InstanceAdapter({
-  instanceRoot, gameFolderSetting: fixedGameFolderSetting(gameFolderSettingValue, gameFolderSettingChanged), detectors: NO_DETECTORS, installationFileReader,
+  instanceRoot, gameFolderSetting: fixedGameFolderSetting(gameFolderSettingValue, gameFolderSettingChanged), detectors: NO_DETECTORS, installationFileReader, fomodEngine: FOMOD_ENGINE,
 }, undefined);
 
 const watchedOver = (context: Mo2Context): ReadingSource & Pick<ManagerAdapter, 'subscribe'> =>

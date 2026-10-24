@@ -92,7 +92,7 @@ describe('mod lifecycle corpus (install)', () => {
       .installMod({ kind: 'downloadedFile', name: MANUAL }, { kind: 'new', name: 'Manual' }, true);
     const after = await snapshotTree(dir);
 
-    expect(outcome).toEqual({ applied: true, isFomod: false, downloadedFile: MANUAL });
+    expect(outcome).toEqual({ applied: true, downloadedFile: MANUAL });
     assertOnlyChanged(before, after, new Set(['mods/Manual/Manual.esp', 'mods/Manual/meta.ini', 'profiles/Default/modlist.txt', `downloads/${MANUAL}.meta`]));
     expect(await readFile(join(dir, 'profiles', 'Default', 'modlist.txt'), 'utf8')).toContain('-Manual');
     expect(await readDownloadedFile(dir, MANUAL)).toMatchObject({ meta: { status: 'Installed' } });

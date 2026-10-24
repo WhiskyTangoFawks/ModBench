@@ -19,7 +19,7 @@ describe('where a release\'s files start, when it holds links', () => {
     await mkdir(join(base, 'real'), { recursive: true });
     await symlink(join(base, 'real'), join(extracted, 'Data'));
 
-    expect(await releaseRoot(extracted)).toEqual({ root: join(extracted, 'Data'), isFomod: false });
+    expect(await releaseRoot(extracted)).toEqual({ root: join(extracted, 'Data') });
   });
 
   it('takes a link to a module config file for a FOMOD', async () => {
@@ -27,7 +27,7 @@ describe('where a release\'s files start, when it holds links', () => {
     await writeFile(join(base, 'config.xml'), '');
     await symlink(join(base, 'config.xml'), join(extracted, 'fomod', 'ModuleConfig.xml'));
 
-    expect(await releaseRoot(extracted)).toEqual({ root: extracted, isFomod: true });
+    expect(await releaseRoot(extracted)).toEqual({ root: extracted, fomod: 'xml' });
   });
 
   it('does not unwrap a lone folder when a link to a file sits beside it', async () => {
@@ -35,6 +35,6 @@ describe('where a release\'s files start, when it holds links', () => {
     await writeFile(join(base, 'readme.txt'), '');
     await symlink(join(base, 'readme.txt'), join(extracted, 'readme.txt'));
 
-    expect(await releaseRoot(extracted)).toEqual({ root: extracted, isFomod: false });
+    expect(await releaseRoot(extracted)).toEqual({ root: extracted });
   });
 });

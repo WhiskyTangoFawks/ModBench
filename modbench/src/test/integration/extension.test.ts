@@ -598,6 +598,36 @@ describe('a gesture the agent runs', () => {
     assert.strictEqual(await agentModEnabled(), true);
     assert.ok(readFileSync(modlistPath, 'utf8').includes('+Agent Mod'));
   });
+
+  it('installs a FOMOD with its choices, through the engine the extension ships', async () => {
+    const release = mkdtempSync(path.join(os.tmpdir(), 'modbench-it-fomod-'));
+    const installed = path.join(root, 'mods', 'Fomod Mod');
+    try {
+      for (const file of ['a/A.esp', 'b/B.esp']) {
+        mkdirSync(path.dirname(path.join(release, file)), { recursive: true });
+        writeFileSync(path.join(release, file), file);
+      }
+      mkdirSync(path.join(release, 'fomod'));
+      const option = (name: string, source: string) =>
+        `<plugin name="${name}"><description/><files><file source="${source}" destination="${path.basename(source)}"/></files><typeDescriptor><type name="Optional"/></typeDescriptor></plugin>`;
+      writeFileSync(path.join(release, 'fomod', 'ModuleConfig.xml'),
+        '<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">'
+        + '<moduleName>Fomod Mod</moduleName><installSteps order="Explicit"><installStep name="Main"><optionalFileGroups order="Explicit">'
+        + `<group name="Pick" type="SelectExactlyOne"><plugins order="Explicit">${option('A', 'a/A.esp')}${option('B', 'b/B.esp')}</plugins></group>`
+        + '</optionalFileGroups></installStep></installSteps></config>');
+
+      const answer = await callTool('mod_install', {
+        argument: [{ kind: 'folder', path: release }],
+        options: { name: 'Fomod Mod', choices: [{ step: 'Main', groups: [{ group: 'Pick', options: ['B'] }] }] },
+      });
+
+      assert.strictEqual(answer.isError, false, answer.text);
+      assert.deepStrictEqual(readdirSync(installed).sort(), ['B.esp', 'meta.ini']);
+    } finally {
+      rmSync(release, { recursive: true, force: true });
+      rmSync(installed, { recursive: true, force: true });
+    }
+  });
 });
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
