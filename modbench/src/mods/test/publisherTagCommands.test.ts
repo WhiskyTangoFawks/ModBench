@@ -145,7 +145,7 @@ describe('modbench.mod.addPublisherTag (publishing.md, Publisher tags, story 2)'
     await invoke('modbench.mod.addPublisherTag', fileA, [fileA]);
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not add Include on 1 of 1 files and folders.', detail: '"M/a.dds" (It is outside the instance.)' },
+      { severity: 'error', message: 'Could not add Include on 1 of 1 file and folder rows.', detail: '"M/a.dds" (It is outside the instance.)' },
     ]);
   });
 

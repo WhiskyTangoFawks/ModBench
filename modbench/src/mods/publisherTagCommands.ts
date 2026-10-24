@@ -88,7 +88,7 @@ export function registerPublisherTagCommands(
         reporter.report('error', `Failed to ${change} ${tag}.`, result.refusal);
         return;
       }
-      const noun = rows.every(({ relativePath }) => relativePath === undefined) ? 'mods' : 'files and folders';
+      const noun = rows.every(({ relativePath }) => relativePath === undefined) ? 'mod rows' : 'file and folder rows';
       reporter.selectionOutcome(`Could not ${change} ${tag} on ${result.outcome.refused.length} of ${rows.length} ${noun}.`, result.outcome, labelOf);
     },
   });

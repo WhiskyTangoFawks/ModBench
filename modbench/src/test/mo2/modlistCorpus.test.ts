@@ -252,3 +252,31 @@ describe('a mod\'s and Overwrite\'s files corpus — exclude and include rename 
     ]));
   });
 });
+
+describe('compiler_settings.json corpus — a publisher tag change touches the publisher\'s configuration and nothing else', () => {
+  let dir: string;
+  const row = { origin: { kind: 'mod', name: 'DragIn Manual Extract' } } as const;
+  const SETTINGS = 'compiler_settings.json';
+
+  beforeEach(async () => {
+    dir = cloneCorpusFixture();
+    await writeFile(join(dir, SETTINGS), '{\n  "Include": [],\n  "Source": "somewhere"\n}\n');
+  });
+  afterEach(() => rm(dir, { recursive: true, force: true }));
+
+  it('adds a mod\'s folder under the tag, then removes it', async () => {
+    const before = await snapshotTree(dir);
+    const commands = modCommands(adapterOver(dir), unscriptedMEdit, unreadStatus);
+
+    const added = await commands.changePublisherTag('add', 'Ignore', [row]);
+
+    expect(added).toEqual({ applied: true, outcome: { landed: [row], refused: [] } });
+    const after = await snapshotTree(dir);
+    assertOnlyChanged(before, after, new Set([SETTINGS]));
+    expect(after.get(SETTINGS)?.toString()).toBe('{\n  "Include": [],\n  "Source": "somewhere",\n  "Ignore": [\n    "mods\\\\DragIn Manual Extract"\n  ]\n}\n');
+
+    await commands.changePublisherTag('remove', 'Ignore', [row]);
+
+    expect((await snapshotTree(dir)).get(SETTINGS)?.toString()).toBe('{\n  "Include": [],\n  "Source": "somewhere",\n  "Ignore": []\n}\n');
+  });
+});
