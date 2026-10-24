@@ -44,9 +44,9 @@ async function checkedOutByGit(folders: TokenFolders, platform: NodeJS.Platform,
   return execFileSync('git', ['cat-file', '--filters', '--path=file.ini', blob], { cwd: root, encoding: 'utf8' });
 }
 
-const SHARE: TokenFolders = { instance: '\\\\nas\\share\\Modlists\\LitR', game: '//nas/share/Games/Fallout 4' };
-const DRIVE: TokenFolders = { instance: 'C:\\Users\\me\\LitR', game: 'D:\\Games\\Fallout 4' };
-const PROTON: TokenFolders = { instance: '/home/me/LitR', game: '/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4' };
+const SHARE: TokenFolders = { instance: '\\\\nas\\share\\Modlists\\LitR', game: '//nas/share/Games/Fallout 4', downloads: '//nas/share/Downloads', committedOutsideInstance: [] };
+const DRIVE: TokenFolders = { instance: 'C:\\Users\\me\\LitR', game: 'D:\\Games\\Fallout 4', downloads: 'E:\\Downloads', committedOutsideInstance: [] };
+const PROTON: TokenFolders = { instance: '/home/me/LitR', game: '/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4', downloads: '/mnt/data/Downloads', committedOutsideInstance: [] };
 
 describe('the token filter', () => {
   it.each([
@@ -57,8 +57,21 @@ describe('the token filter', () => {
     ['a network share, at a line\'s start', SHARE, 'win32', 'x\n\\\\nas\\share\\Modlists\\LitR\\tools', 'x\n{instance folder:\\}\\tools'],
     ['a Wine prefix\'s drive C', PROTON, 'linux', 'x=C:\\\\Games\\\\Fallout 4\\\\Data', 'x={game folder:\\\\}\\\\Data'],
     ['a Wine prefix through drive Z', PROTON, 'linux', 'x=Z:/home/me/.steam/compatdata/377160/pfx/drive_c/Games/Fallout 4/x.exe', 'x={game folder:/}/x.exe'],
+    ['a network share, for the downloads folder', SHARE, 'win32', 'x=\\\\nas\\share\\Downloads\\a.7z', 'x={downloads folder:\\}\\a.7z'],
+    ['a drive, for the downloads folder in another case', DRIVE, 'win32', 'x=e:/downloads/a.7z', 'x={downloads folder:/}/a.7z'],
+    ['a Wine prefix through drive Z, for the downloads folder', PROTON, 'linux', 'x=Z:/mnt/data/Downloads', 'x={downloads folder:/}'],
   ] as const)('holds a folder on %s by its token', async (_place, folders, platform, written, held) => {
     expect(await heldByGit(folders, platform, written)).toBe(held);
+  });
+
+  it.each([
+    ['the instance folder\'s token, the commit holding no token of its own', 'x=C:/Users/me/LitR/downloads/a.7z', 'x={instance folder:/}/downloads/a.7z', []],
+    ['the downloads folder\'s own token, the commit holding it', 'x=C:/Users/me/LitR/downloads/a.7z', 'x={downloads folder:/}/a.7z', ['downloads folder']],
+    ['the game folder\'s own token, the commit holding it', 'x=C:/Users/me/LitR/Stock Game/Data', 'x={game folder:/}/Data', ['game folder']],
+  ] as const)('holds a game or downloads folder inside the instance folder by %s', async (_token, written, held, committedOutsideInstance) => {
+    const inside: TokenFolders = { ...DRIVE, game: 'C:\\Users\\me\\LitR\\Stock Game', downloads: 'C:\\Users\\me\\LitR\\downloads', committedOutsideInstance };
+
+    expect(await heldByGit(inside, 'win32', written)).toBe(held);
   });
 
   it.each([
@@ -67,6 +80,7 @@ describe('the token filter', () => {
     ['a network share, with escaped backslashes', SHARE, 'win32', 'x={instance folder:\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Modlists\\\\LitR\\\\tools'],
     ['a network share, with the doubled separator\'s token', SHARE, 'win32', 'x={instance folder:\\\\\\\\}\\\\tools', 'x=\\\\\\\\nas\\\\share\\\\Modlists\\\\LitR\\\\tools'],
     ['a Wine prefix, on its drive C', PROTON, 'linux', 'x={game folder:\\\\}', 'x=C:\\\\Games\\\\Fallout 4'],
+    ['a drive, for the downloads folder', DRIVE, 'win32', 'x={downloads folder:/}/a.7z', 'x=E:/Downloads/a.7z'],
   ] as const)('puts the path of a folder on %s in place of its token', async (_place, folders, platform, held, written) => {
     expect(await checkedOutByGit(folders, platform, held)).toBe(written);
   });

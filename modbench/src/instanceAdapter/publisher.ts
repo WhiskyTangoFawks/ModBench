@@ -2,7 +2,7 @@
 // (ADR-0024): the mod manager answers everything but the publisher's configuration.
 
 import type { InstanceAdapter, InstanceReading, PublisherConfiguration, PublisherTag, Subscription } from './instanceAdapter';
-import type { PathSpelling } from './pathTokens';
+import type { PathSpelling, TokenProgram } from './pathTokens';
 
 export type ManagerReading = Omit<InstanceReading, 'publisherConfiguration'>;
 
@@ -12,6 +12,8 @@ export type ManagerAdapter = Omit<InstanceAdapter, 'reading' | 'publisherTags'> 
 export interface ConfigurationFile {
   readonly name: string;
   readonly spelling: PathSpelling;
+  /** What the file holds of this machine alone, blanked when git holds the file. */
+  readonly blanked?: TokenProgram;
 }
 
 export interface Publisher {

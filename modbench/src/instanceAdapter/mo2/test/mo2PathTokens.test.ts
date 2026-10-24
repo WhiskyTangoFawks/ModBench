@@ -117,20 +117,38 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS([`path=${written(root)}`]));
   });
 
-  it('holds the game folder by its own token, and a game folder inside the instance folder by the instance folder\'s', async () => {
+  it('holds the game folder by its own token', async () => {
     const game = await gameFolder();
     const { root, adapter } = await instanceRepository([], game);
-    await mkdir(join(root, 'Stock Game', 'Data'), { recursive: true });
-    const stock = adapterOver(root, { game: join(root, 'Stock Game') });
     await put(root, 'ModOrganizer.ini', SETTINGS([`gamePath=@ByteArray(${onWineDrive(game, '\\\\')})`]));
-    await put(root, 'profiles/Default/Fallout4Custom.INI', `sPath=${onWineDrive(join(root, 'Stock Game'), '\\')}\r\n`);
 
     await adapter.writePathTokens();
-    const outside = held(root, 'ModOrganizer.ini');
-    await stock.writePathTokens();
 
-    expect([outside, held(root, 'profiles/Default/Fallout4Custom.INI')])
-      .toEqual([SETTINGS(['gamePath=@ByteArray({game folder:\\\\})']), 'sPath={instance folder:\\}\\Stock Game\r\n']);
+    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['gamePath=@ByteArray({game folder:\\\\})']));
+  });
+
+  it('holds a game folder inside the instance folder by the instance folder\'s token', async () => {
+    const { root } = await instanceRepository([]);
+    await mkdir(join(root, 'Stock Game', 'Data'), { recursive: true });
+    await put(root, 'profiles/Default/Fallout4Custom.INI', `sPath=${onWineDrive(join(root, 'Stock Game'), '\\')}\r\n`);
+
+    await adapterOver(root, { game: join(root, 'Stock Game') }).writePathTokens();
+
+    expect(held(root, 'profiles/Default/Fallout4Custom.INI')).toBe('sPath={instance folder:\\}\\Stock Game\r\n');
+  });
+
+  it('keeps the game folder\'s own token once the repository holds it, though the game folder then moves into the instance folder', async () => {
+    const game = await gameFolder();
+    const { root, adapter } = await instanceRepository([], game);
+    await put(root, 'ModOrganizer.ini', SETTINGS([`gamePath=@ByteArray(${onWineDrive(game, '\\\\')})`]));
+    await adapter.writePathTokens();
+    held(root, 'ModOrganizer.ini');
+    await mkdir(join(root, 'Stock Game', 'Data'), { recursive: true });
+    await put(root, 'ModOrganizer.ini', SETTINGS([`gamePath=@ByteArray(${onWineDrive(join(root, 'Stock Game'), '\\\\')})`]));
+
+    await adapterOver(root, { game: join(root, 'Stock Game') }).writePathTokens();
+
+    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['gamePath=@ByteArray({game folder:\\\\})']));
   });
 
   it('shows each committed file to a diff with this machine\'s paths', async () => {
@@ -168,6 +186,65 @@ describe('the MO2 adapter\'s path tokens', () => {
       expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['[Settings]', `${key}={account}`]));
     },
   );
+
+  it('holds a downloads folder outside the instance folder by its own token', async () => {
+    const outside = await folder('downloads');
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'ModOrganizer.ini', SETTINGS(['[Settings]', `download_directory=${onWineDrive(outside, '/')}`]));
+
+    await adapter.writePathTokens();
+
+    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['[Settings]', 'download_directory={downloads folder:/}']));
+  });
+
+  it('holds a downloads folder inside the instance folder by the instance folder\'s token, though a file no filter covers holds a downloads token', async () => {
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'README.md', 'Set download_directory to {downloads folder}\n');
+    git(root, 'add', '--', 'README.md');
+    git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'readme');
+    await put(root, 'ModOrganizer.ini', SETTINGS(['[Settings]', `download_directory=${onWineDrive(root, '/')}/dl`]));
+
+    await adapter.writePathTokens();
+
+    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['[Settings]', 'download_directory={instance folder:/}/dl']));
+  });
+
+  it('holds the default downloads folder, which the settings do not name, by the instance folder\'s token', async () => {
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'ModOrganizer.ini', SETTINGS([`path=${onWineDrive(join(root, 'downloads'), '/')}/a.7z`]));
+
+    await adapter.writePathTokens();
+
+    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['path={instance folder:/}/downloads/a.7z']));
+  });
+
+  it('puts a clone\'s own downloads folder in place of the downloads token', async () => {
+    const outside = await folder('downloads');
+    const { clone, adapter } = await cloned((origin) => ['[Settings]', `download_directory=${onWineDrive(outside, '/')}`, `path=${onWineDrive(origin, '/')}/x`]);
+
+    const left = await adapter.writePathTokens();
+
+    expect([left, await readFile(join(clone, 'ModOrganizer.ini'), 'utf8'), git(clone, 'status', '--porcelain')])
+      .toEqual([undefined, SETTINGS(['[Settings]', `download_directory=${onWineDrive(join(clone, 'downloads'), '/')}`, `path=${onWineDrive(clone, '/')}/x`]), '']);
+  });
+
+  it('answers no path in a downloads folder outside the instance folder', async () => {
+    const outside = await folder('downloads');
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'ModOrganizer.ini', SETTINGS(['[Settings]', `download_directory=${onWineDrive(outside, '/')}`]));
+    await adapter.writePathTokens();
+
+    expect(await adapter.pathsOutsideFolders()).toEqual([]);
+  });
+
+  it('drops the folders MO2\'s file dialogs last browsed', async () => {
+    const { root, adapter } = await instanceRepository([]);
+    await put(root, 'ModOrganizer.ini', SETTINGS(['[recentDirectories]', '1\\name=Mod', '1\\directory=D:/Elsewhere', '[Settings]', 'style=dark']));
+
+    await adapter.writePathTokens();
+
+    expect([held(root, 'ModOrganizer.ini'), await adapter.pathsOutsideFolders()]).toEqual([SETTINGS(['[Settings]', 'style=dark']), []]);
+  });
 
   it.each([
     ['a profile\'s INI', 'profiles/Default/Fallout4Custom.ini', '[Settings]\r\nusername=x\r\n'],
@@ -231,11 +308,20 @@ describe('the MO2 adapter\'s path tokens', () => {
         .toEqual([publisherSettings(spelt(clone), spelt(steam)), '']);
     });
 
+    it('blanks the output file, which each compile chooses', async () => {
+      const { root, adapter } = await instanceRepository([]);
+      await put(root, PUBLISHER_FILE, JSON.stringify({ Source: root, OutputFile: join(root, 'LitR.wabbajack') }));
+
+      await adapter.writePathTokens();
+
+      expect([held(root, PUBLISHER_FILE), await adapter.pathsOutsideFolders()]).toEqual([JSON.stringify({ Source: '{instance folder}', OutputFile: '' }), []]);
+    });
+
     it('answers each path outside the two folders as a commit would hold it', async () => {
       const game = await gameFolder();
       const { root, adapter } = await instanceRepository([], game);
       const outside = join(tmpdir(), 'Life in the Ruins.wabbajack');
-      await put(root, PUBLISHER_FILE, JSON.stringify({ Source: root, GamePath: game, OutputFile: outside }));
+      await put(root, PUBLISHER_FILE, JSON.stringify({ Source: root, GamePath: game, Image: outside }));
       await adapter.writePathTokens();
 
       expect(await adapter.pathsOutsideFolders()).toEqual([{ file: PUBLISHER_FILE, path: JSON.stringify(outside).slice(1, -1) }]);
