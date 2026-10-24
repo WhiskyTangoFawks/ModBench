@@ -44,6 +44,7 @@ As a user, I want:
 
 1. A cell whose plugin has nothing there to have no colour.
 2. Each column's header painted with the worst state among its cells, as a summary; the cells are what count.
+3. A collapsed column's cells to keep their colour without their text. The strip then shows where the copy differs, as VS Code's overview ruler shows where a file changes. Cites: VS Code's interaction
 
 ## What takes part
 
@@ -65,5 +66,5 @@ As a user, I want:
 
 ## Test seam
 
-- The panel, given mEdit's classification: each row's background, collapsed and expanded, each cell's background and text, each header's colour, and each cell's tooltip.
-- Theme colours: each colour the panel paints with is contributed in the extension manifest, with a default for each kind of theme.
+- The panel, given mEdit's classification: each row's background, collapsed and expanded, each cell's background and text, in an open and a collapsed column, each header's colour, and each cell's tooltip.
+- Theme colours: each conflict colour the panel paints with is contributed in the extension manifest, with a default for each kind of theme.

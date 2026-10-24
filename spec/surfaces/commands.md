@@ -211,6 +211,7 @@ A field gesture from the palette acts on the focused cell of the record tab in f
 | referenced by | reads | `modbench.record.referencedBy` | a record | - | xEdit Referenced By | List the records that reference a record, in VS Code's References view. With no Argument, the record tab in focus, or a picker. | query-record-index |
 | open field value | reads | `modbench.record.openFieldValue` | record, plugin, field path | - | xEdit View grid | Open a field value in an editor tab. | none |
 | filter | reads | `modbench.record.filter`, `modbench.record.clearFilter` | - | query: a `.sql` file, or a new document | xEdit navigator | Narrow the record tree to the FormKeys a SQL query returns. | query-record-index |
+| collapse no conflict | reads | `modbench.record.collapseNoConflict`, `modbench.record.showNoConflict` | - | - | xEdit View grid, Hide no conflict and empty rows | Collapse the rows where every copy agrees and the columns identical to the master, in every record panel, or show them again. | none |
 
 ## Downloaded file
 
