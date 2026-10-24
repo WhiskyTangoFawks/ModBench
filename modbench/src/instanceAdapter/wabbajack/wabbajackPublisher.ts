@@ -201,6 +201,31 @@ function changedEntries(entries: readonly string[], change: PublisherTagChange, 
   return others.length === entries.length ? [...entries, inside.split(sep).join('\\')] : entries;
 }
 
+interface InstanceMove {
+  readonly from: readonly string[];
+  readonly to: string | undefined;
+}
+
+function followedEntries(entries: readonly string[], moves: readonly InstanceMove[]): readonly string[] {
+  const moveOf = (entry: string): InstanceMove | undefined => {
+    const names = namesOf(entry);
+    return moves.find(({ from }) => from.every((name, depth) => names[depth] === name));
+  };
+  if (!entries.some((entry) => moveOf(entry) !== undefined)) return entries;
+  const listed = new Set(entries.filter((entry) => moveOf(entry) === undefined).map((entry) => namesOf(entry).join('/')));
+  return entries.flatMap((entry) => {
+    const move = moveOf(entry);
+    if (move === undefined) return [entry];
+    if (move.to === undefined) return [];
+    const rest = entry.split(/[\\/]/).filter((name) => name !== '').slice(move.from.length);
+    const followed = [move.to, ...rest].join('\\');
+    const key = namesOf(followed).join('/');
+    if (listed.has(key)) return [];
+    listed.add(key);
+    return [followed];
+  });
+}
+
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
   const file = join(instanceRoot, COMPILER_SETTINGS.name);
   const neverShipped = manager.neverShipped.map((folder) => namesOf(relative(instanceRoot, folder)));
@@ -238,6 +263,26 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         return changed === entries ? before : serialized({ ...settings, [listedUnder]: changed }, before);
       });
       return refused;
+    },
+    followFolders: async (moves) => {
+      const inside = moves.flatMap(({ from, to }) => {
+        const fromInside = inInstance(instanceRoot, from);
+        const toInside = to === undefined ? undefined : inInstance(instanceRoot, to);
+        return fromInside === undefined ? [] : [{ from: namesOf(fromInside), to: toInside?.split(sep).join('\\') }];
+      });
+      await putIfChanged(file, (before) => {
+        const settings: Record<string, unknown> = { ...settingsIn(before, file) };
+        let changed = false;
+        for (const { listedUnder } of TAGS) {
+          const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']) ?? [];
+          const followed = followedEntries(entries, inside);
+          if (followed !== entries) {
+            settings[listedUnder] = followed;
+            changed = true;
+          }
+        }
+        return changed ? serialized(settings, before) : before;
+      }, { ifMissing: '{}' });
     },
     subscribe: (listener) => watchFiles(instanceRoot, COMPILER_SETTINGS.name, () => listener()),
   };

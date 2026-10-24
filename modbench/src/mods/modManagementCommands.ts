@@ -184,6 +184,9 @@ function partialsOfUninstall(item: Uninstalled, modOrderFile: string): PartialFa
   if (item.sourceRefusal !== undefined) {
     partial.push({ message: `"${item.name}" was uninstalled, but its source folder could not be moved to the trash.`, detail: item.sourceRefusal, severity: 'warning' });
   }
+  if (item.tagRefusal !== undefined) {
+    partial.push({ message: `"${item.name}" was uninstalled, but its publisher tags could not be removed.`, detail: item.tagRefusal, severity: 'warning' });
+  }
   if (item.lineRefusal !== undefined) {
     partial.push({ message: `"${item.name}" was uninstalled, but its ${modOrderFile} line could not be removed.`, detail: item.lineRefusal, severity: 'warning' });
   } else if (item.markRefusal !== undefined) {
@@ -216,10 +219,13 @@ export function registerModContextCommands(
       return {
         applied: true,
         outcome: { landed: [newName], refused: [] },
-        partial: result.lineRefusals.map(({ profile, refusal }) => ({
-          message: `"${oldName}" was renamed, but its ${commands.names.modOrderFile} line in profile "${profile}" could not be renamed.`,
-          detail: refusal, severity: 'warning',
-        })),
+        partial: [
+          ...(result.tagRefusal === undefined ? [] : [{ message: `"${oldName}" was renamed, but its publisher tags could not follow it.`, detail: result.tagRefusal, severity: 'warning' as const }]),
+          ...result.lineRefusals.map(({ profile, refusal }) => ({
+            message: `"${oldName}" was renamed, but its ${commands.names.modOrderFile} line in profile "${profile}" could not be renamed.`,
+            detail: refusal, severity: 'warning' as const,
+          })),
+        ],
       };
     }),
     report: (result) => {

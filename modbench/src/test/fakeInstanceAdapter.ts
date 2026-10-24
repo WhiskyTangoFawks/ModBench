@@ -1,7 +1,7 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
-  entryNotFound, filesWinningFirst, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type SourceMods, type OriginFile, type InstallKeys, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+  entryNotFound, filesWinningFirst, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type SourceMods, type OriginFile, type InstallKeys, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
@@ -75,6 +75,7 @@ export type AdapterCall =
   | { readonly verb: 'trashEntryFolder'; readonly entry: EntryRef }
   | { readonly verb: 'trashModFile'; readonly mod: string; readonly relativePath: string }
   | { readonly verb: 'trashSourceFolder'; readonly mod: string }
+  | { readonly verb: 'followModFolders'; readonly moves: Parameters<InstanceAdapter['followModFolders']>[0] }
   | { readonly verb: 'changePublisherTag'; readonly change: PublisherTagChange; readonly tag: string; readonly paths: readonly string[] }
   | { readonly verb: 'writeNewestVersion'; readonly mod: string; readonly version: string }
   | { readonly verb: 'writeModMetadata'; readonly mod: string; readonly metadata: ModMetadata }
@@ -124,6 +125,8 @@ export interface InstanceAnswers {
   updatable?: ReadonlySet<string>;
   /** The publisher tags the instance's publisher declares. */
   publisherTags?: readonly PublisherTag[];
+  /** Why the publisher's configuration cannot be read. */
+  unreadablePublisher?: string;
   /** Paths the publisher refuses as outside the instance. */
   outsideInstance?: ReadonlySet<string>;
   /** Mods whose name gives them no source folder. */
@@ -288,6 +291,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     publisherTags: answers.publisherTags ?? [],
     changePublisherTag: (change, tag, paths) =>
       write({ verb: 'changePublisherTag', change, tag, paths }, () => paths.flatMap((path) => (answers.outsideInstance?.has(path) ? [{ path, reason: 'It is outside the instance.' }] : []))),
+    publisherConfigurationRefusal: () => Promise.resolve(answers.unreadablePublisher),
+    followModFolders: (moves) => (answers.publisherTags === undefined ? Promise.resolve() : write({ verb: 'followModFolders', moves }, () => undefined)),
     modFolderPath: (mod) => Promise.resolve(namesNoFolder(mod) ? undefined : foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod)),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),

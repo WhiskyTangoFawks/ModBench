@@ -279,4 +279,32 @@ describe('compiler_settings.json corpus — a publisher tag change touches the p
 
     expect(JSON.parse((await snapshotTree(dir)).get(SETTINGS)?.toString() ?? '')).toMatchObject({ Include: [], Source: 'somewhere', Ignore: [] });
   });
+
+  it('follows a rename and leaves with an uninstall', async () => {
+    const adapter = adapterOver(dir);
+    const commands = modCommands(adapter, unscriptedMEdit, unreadStatus);
+    await modSyncOver(adapter)();
+    const settings = async () => (await snapshotTree(dir)).get(SETTINGS)?.toString() ?? '';
+    await commands.changePublisherTag('add', 'Ignore', [row]);
+
+    await commands.renameMod('DragIn Manual Extract', 'Renamed');
+
+    expect(await settings()).toContain('"Ignore": [\n    "mods\\\\Renamed"');
+
+    await commands.uninstallMods(['Renamed'], () => Promise.resolve());
+
+    expect(await settings()).not.toContain('Renamed');
+  });
+
+  it('refuses a rename and an uninstall, changing nothing, while the settings cannot be read', async () => {
+    await writeFile(join(dir, SETTINGS), 'not json');
+    const before = await snapshotTree(dir);
+    const commands = modCommands(adapterOver(dir), unscriptedMEdit, unreadStatus);
+
+    const renamed = await commands.renameMod('DragIn Manual Extract', 'Renamed');
+    const uninstalled = await commands.uninstallMods(['DragIn Manual Extract'], () => Promise.resolve());
+
+    expect([renamed.applied, uninstalled.applied]).toEqual([false, false]);
+    assertOnlyChanged(before, await snapshotTree(dir), new Set());
+  });
 });
