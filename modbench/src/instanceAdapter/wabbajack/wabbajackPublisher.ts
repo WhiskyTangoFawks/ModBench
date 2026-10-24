@@ -316,8 +316,12 @@ function withAppended(text: string, key: string, value: string): string {
   if (list === undefined) {
     const root = parseTree(text, [], READS);
     if (root === undefined) throw new Error('no settings object');
-    const property = `${JSON.stringify(key)}: [ ${entry} ]`;
     const lastProperty = root.children?.at(-1);
+    const { eol, unit } = layoutOf(text);
+    const indent = lastProperty === undefined ? unit : /^[ \t]*/.exec(text.slice(lineStartOf(text, lastProperty.offset)))?.[0] ?? '';
+    const property = text.includes('\n')
+      ? `${JSON.stringify(key)}: [${eol}${indent}${unit}${entry}${eol}${indent}]`
+      : `${JSON.stringify(key)}: [ ${entry} ]`;
     return lastProperty === undefined ? insertIntoEmpty(text, root, property) : insertAfter(text, lastProperty, property);
   }
   const last = list.children?.at(-1);
