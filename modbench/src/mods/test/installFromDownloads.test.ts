@@ -24,7 +24,6 @@ const { installMod, upgradeLoss, ask } = vi.hoisted(() => ({ installMod: vi.fn()
 
 import { registerModInstallCommands } from '../installCommands';
 import type { LocatedDownloadedFileRow, DownloadedFileRow, Instance } from '../../instanceLoader/instance';
-import type { FomodLanded } from '../../modCommands/modCommands';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 import type { UpgradeCandidate } from '../../instanceLoader/instance';
@@ -43,14 +42,12 @@ const fakeInstance = (rows: readonly LocatedDownloadedFileRow[] = []): Pick<Inst
 
 interface DownloadedFileInstallDeps {
   reporter: ReturnType<typeof recordingReporter>;
-  warnIfFomod: (name: string, fomod: FomodLanded | undefined) => void;
   log: (line: string) => void;
   progressViewId: string;
 }
 
 const installDeps = (over: Partial<DownloadedFileInstallDeps> = {}): DownloadedFileInstallDeps => ({
   reporter: recordingReporter(),
-  warnIfFomod: vi.fn(),
   log: (line) => { downloadsLogLines.push(line); },
   progressViewId: 'modbench.downloads',
   ...over,
@@ -59,7 +56,7 @@ const installDeps = (over: Partial<DownloadedFileInstallDeps> = {}): DownloadedF
 const installDownloadedFile = async (file: LocatedDownloadedFileRow, listed: readonly LocatedDownloadedFileRow[], deps: DownloadedFileInstallDeps): Promise<void> => {
   registerModInstallCommands({
     commands: installOver(), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), ask,
-    warnIfFomod: deps.warnIfFomod, downloadedFileInstallReporting: deps,
+    downloadedFileInstallReporting: deps,
   });
   const handler = registerCommand.mock.calls.findLast((call) => call[0] === 'modbench.mod.install')?.[1];
   await handler?.({ argument: { kind: 'downloadedFile', row: file } });
@@ -142,14 +139,17 @@ describe('modbench.mod.install over a downloaded file', () => {
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'boom' }]);
   });
 
-  it('install: a FOMOD installation file installs and the notice names the mod install made', async () => {
-    const fomod = { kind: 'plainCopy', why: 'no choices were given for its steps' } as const;
-    installMod.mockResolvedValueOnce({ applied: true, fomod });
-    const warnIfFomod = vi.fn();
+  it('install: a FOMOD installed as a plain copy warns, naming the mod install made and why its installer did not run', async () => {
+    installMod.mockResolvedValueOnce({ applied: true, fomod: { kind: 'plainCopy', why: 'no choices were given for its steps' } });
+    const reporter = recordingReporter();
 
-    await installRow(installDeps({ reporter: recordingReporter(), warnIfFomod }));
+    await installRow(installDeps({ reporter }));
 
-    await vi.waitFor(() => expect(warnIfFomod).toHaveBeenCalledWith('foo', fomod));
+    await vi.waitFor(() => expect(reporter.reports).toEqual([{
+      severity: 'warning',
+      message: '"foo" is a FOMOD installed as a plain copy: its files need arranging by hand, because its installer\'s own steps did not run:',
+      detail: 'no choices were given for its steps.',
+    }]));
   });
 });
 

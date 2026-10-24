@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { Instance, InstanceView } from '../instanceLoader/instance';
-import type { FomodLanded, ModCommands } from '../modCommands/modCommands';
+import type { ModCommands } from '../modCommands/modCommands';
 import type { SourceCommands } from '../sourceCommands/sourceCommands';
 import { sourceFiles } from '../instanceLoader/loadOrderSnapshot';
 import { modOfOrigin } from '../instanceLoader/modOfOrigin';
@@ -58,7 +58,6 @@ interface ModsViewDeps {
   ask: AskQuestion;
   trash: MoveToTrash;
   extensionUri: vscode.Uri;
-  warnIfFomod: (name: string, fomod: FomodLanded | undefined) => void;
   downloadedFileInstallReporting: Parameters<typeof registerModInstallCommands>[0]['downloadedFileInstallReporting'];
   /** The one selected mod row with a Nexus id in the focused Mods or Downloads view, for the palette. */
   nexusRow: () => NexusModRow | undefined;
@@ -151,7 +150,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
     ...registerConflictTable(instance, (files) => sameCopies(deps.copyReads, files), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     ...registerModInstallCommands({
-      commands, instance, reporterFor, ask, warnIfFomod: deps.warnIfFomod, downloadedFileInstallReporting: deps.downloadedFileInstallReporting,
+      commands, instance, reporterFor, ask, downloadedFileInstallReporting: deps.downloadedFileInstallReporting,
     }),
     registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), deps.nexusRow),
     ...registerSortDirectionToggle('mod', provider),

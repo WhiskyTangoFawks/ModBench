@@ -59,7 +59,6 @@ function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
     instance: { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
     ask: vi.fn(),
-    warnIfFomod: vi.fn(),
     downloadedFileInstallReporting: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     ...over,
   };
@@ -312,19 +311,17 @@ describe('modbench.mod.install called by the agent', () => {
   it('installs the downloaded file named as a new mod under the name given, asking nothing, and answers the mod written', async () => {
     const row = downloadedFileRowFixture('foo.7z', { modID: '111', version: '2.0' });
     installMod.mockResolvedValueOnce({ applied: true });
-    const warnIfFomod = vi.fn();
     const reporter = recordingReporter();
 
     registerModInstallCommands(deps({
       instance: { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [row] } }), refresh: () => Promise.resolve() },
-      warnIfFomod, downloadedFileInstallReporting: { reporter, log: vi.fn(), progressViewId: 'modbench.downloads' },
+      downloadedFileInstallReporting: { reporter, log: vi.fn(), progressViewId: 'modbench.downloads' },
     }));
     const answered = await install([{ kind: 'downloadedFile', name: 'foo.7z' }], { name: 'Foo' });
 
     expect(installMod).toHaveBeenCalledWith(
       { kind: 'downloadedFile', name: 'foo.7z' }, { kind: 'new', name: 'Foo' }, false, NO_CHOICES);
     expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Foo' }], refused: [] }, partial: [] });
-    expect(warnIfFomod).not.toHaveBeenCalled();
     expect(reporter.reports).toEqual([]);
     nothingAsked();
   });
@@ -389,16 +386,24 @@ describe('modbench.mod.install called by the agent', () => {
     expect(answered).toEqual({ applied: false, refusal: 'Failed to install "Harder VATS".', detail: 'would lose files' });
   });
 
-  it('answers how a FOMOD landed, warning nothing itself', async () => {
-    const fomod = { kind: 'installer', missing: ['gone.esp'] } as const;
+  it.each([
+    ['as a plain copy, and why', { kind: 'plainCopy', why: 'its installer cannot be read: bad XML' } as const, [{
+      message: '"Bar" is a FOMOD installed as a plain copy: its files need arranging by hand, because its installer\'s own steps did not run:',
+      detail: 'its installer cannot be read: bad XML.', severity: 'warning',
+    }]],
+    ['without files its archive lacks, and what else its installer said', { kind: 'installer', missing: ['gone.esp', 'gone'], notes: ['Installer failed'] } as const, [
+      { message: '"Bar" lacks files its FOMOD names and its archive does not hold:', detail: 'gone.esp, gone', severity: 'warning' },
+      { message: '"Bar": its FOMOD\'s installer says', detail: 'Installer failed', severity: 'warning' },
+    ]],
+  ])('answers a FOMOD that landed %s, each a partial failure the agent reads with its Output line', async (_, fomod, partial) => {
     installMod.mockResolvedValueOnce({ applied: true, fomod });
-    const warnIfFomod = vi.fn();
+    const reporter = recordingReporter();
 
-    registerModInstallCommands(deps({ warnIfFomod }));
+    registerModInstallCommands(deps({ downloadedFileInstallReporting: { reporter, log: vi.fn(), progressViewId: 'modbench.downloads' } }));
     const answered = await install([outsideInstallationFile], { name: 'Bar' });
 
-    expect(answered).toMatchObject({ outcome: { landed: [{ name: 'Bar', fomod }] } });
-    expect(warnIfFomod).not.toHaveBeenCalled();
+    expect(answered).toEqual({ applied: true, outcome: { landed: [{ name: 'Bar', fomod }], refused: [] }, partial });
+    expect(reporter.reports).toEqual([]);
   });
 
   it.each([

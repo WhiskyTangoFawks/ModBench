@@ -218,9 +218,11 @@ export interface FomodStepChoice {
 /** How a FOMOD's installer is answered: its choices, step by step, or Manual, which installs a plain copy. */
 export type FomodAnswer = { readonly kind: 'choices'; readonly steps: readonly FomodStepChoice[] } | { readonly kind: 'manual' };
 
-/** A FOMOD its installer installed, with each file it names that its archive lacks; or one installed as a plain copy,
- *  and why its installer did not run. */
-export type FomodLanded = { readonly kind: 'installer'; readonly missing: readonly string[] } | { readonly kind: 'plainCopy'; readonly why: string };
+/** A FOMOD its installer installed, with each file it names that its archive lacks and anything else its installer
+ *  said; or one installed as a plain copy, and why its installer did not run. */
+export type FomodLanded =
+  | { readonly kind: 'installer'; readonly missing: readonly string[]; readonly notes: readonly string[] }
+  | { readonly kind: 'plainCopy'; readonly why: string };
 
 /** An install that landed, and how, when its package is a FOMOD; or none, because the target's folder is there for a
  *  new mod or absent for an upgrade. */

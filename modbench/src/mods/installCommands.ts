@@ -48,7 +48,6 @@ interface ModInstallDeps {
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
-  warnIfFomod: (name: string, fomod: FomodLanded | undefined) => void;
   downloadedFileInstallReporting: { reporter: Reporter; log: (line: string) => void; progressViewId: string };
 }
 
@@ -67,6 +66,18 @@ const unmarked = (downloadedFile: string | undefined, downloadedFileRefusal: str
 
 const unlined = (mod: string, modOrderFile: string, lineRefusal: string | undefined): PartialFailure[] =>
   (lineRefusal === undefined ? [] : [{ message: `"${mod}" was installed, but its ${modOrderFile} line could not be written`, detail: lineRefusal, severity: 'warning' }]);
+
+// A FOMOD that landed as a plain copy, or without some of its files, warns a view and writes the agent's Output line.
+const fomodPartial = (mod: string, fomod: FomodLanded | undefined): PartialFailure[] => {
+  if (fomod === undefined) return [];
+  if (fomod.kind === 'plainCopy') {
+    return [{ message: `"${mod}" is a FOMOD installed as a plain copy: its files need arranging by hand, because its installer's own steps did not run:`, detail: `${fomod.why}.`, severity: 'warning' }];
+  }
+  return [
+    ...(fomod.missing.length === 0 ? [] : [{ message: `"${mod}" lacks files its FOMOD names and its archive does not hold:`, detail: fomod.missing.join(', '), severity: 'warning' as const }]),
+    ...fomod.notes.map((note) => ({ message: `"${mod}": its FOMOD's installer says`, detail: note, severity: 'warning' as const })),
+  ];
+};
 
 const packageOf = (argument: readonly Argument[]): Pick<Install, 'package' | 'via'> => {
   const [only, ...more] = argument;
@@ -116,7 +127,7 @@ async function pickPackage(): Promise<{ kind: 'archive' | 'folder'; path: string
 // modbench.mod.install: with no package, as from the Mods menu, it asks installation-file-or-folder first,
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { commands, instance, reporterFor, ask, warnIfFomod, downloadedFileInstallReporting } = deps;
+  const { commands, instance, reporterFor, ask, downloadedFileInstallReporting } = deps;
   const reporterOf = (via: InstallVia): Reporter => (via === 'downloadedFile' ? downloadedFileInstallReporting.reporter : reporterFor(via));
   const newModNameRefusal = (name: string) => promptRefusal(commands.newModNameRefusal(name));
   const failedMessage = ({ package: installed, target, via }: Install): string =>
@@ -132,6 +143,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         partial: [
           ...unlined(install.target.name, commands.names.modOrderFile, outcome.lineRefusal),
           ...unmarked(outcome.downloadedFile, outcome.downloadedFileRefusal),
+          ...fomodPartial(install.target.name, outcome.fomod),
         ],
       };
     } catch (err) {
@@ -186,7 +198,6 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         reporterOf(install.via).report('error', result.refusal, result.detail);
         return;
       }
-      for (const { name, fomod } of result.outcome.landed) warnIfFomod(name, fomod);
       reportPartial(downloadedFileInstallReporting.reporter, result.partial, downloadedFileInstallReporting.log);
     },
   };

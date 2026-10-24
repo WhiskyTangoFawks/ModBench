@@ -155,7 +155,7 @@ describe('installMod', () => {
   });
 
   it('says how a FOMOD landed, as the adapter found', async () => {
-    const fomod = { kind: 'installer', missing: ['gone.esp'] } as const;
+    const fomod = { kind: 'installer', missing: ['gone.esp'], notes: [] } as const;
     const { result } = await install(INSTALLATION_FILE, NEW_MOD, { installed: { landed: true, fomod } });
 
     expect(result).toEqual({ applied: true, fomod });

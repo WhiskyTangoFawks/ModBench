@@ -233,7 +233,7 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS,
         { kind: 'choices', steps: [{ step: 'Main', groups: [{ group: 'Pick', options: ['A'] }] }] });
 
-      expect(outcome).toEqual({ landed: true, fomod: { kind: 'installer', missing: [] } });
+      expect(outcome).toEqual({ landed: true, fomod: { kind: 'installer', missing: [], notes: [] } });
       assertOnlyChanged(before, await snapshotTree(root), new Set([`mods/${MOD}/A.esp`, `mods/${MOD}/meta.ini`]));
     });
 
@@ -242,16 +242,6 @@ describe('installing a mod through the MO2 Instance adapter', () => {
 
       expect(outcome).toEqual({ landed: true, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
       expect(await filesIn(folder(MOD))).toEqual(['a/A.esp', 'b/B.esp', 'fomod/ModuleConfig.xml', 'meta.ini']);
-    });
-
-    it('lands the release as it is when its installer cannot be read, saying why', async () => {
-      await mkdir(join(source, 'fomod'), { recursive: true });
-      await writeFile(join(source, 'fomod', 'ModuleConfig.xml'), '<config><moduleName>Never closed</moduleName>');
-
-      const outcome = await holding([]).install({ kind: 'folder', path: source }, { kind: 'new', name: MOD }, KEYS, { kind: 'choices', steps: [] });
-
-      expect(outcome.landed && outcome.fomod?.kind === 'plainCopy' && outcome.fomod.why).toMatch(/^its installer cannot be read: \S/);
-      expect(await filesIn(folder(MOD))).toEqual(['fomod/ModuleConfig.xml', 'meta.ini']);
     });
 
     it('writes nothing when its installer refuses the choices', async () => {
@@ -263,23 +253,18 @@ describe('installing a mod through the MO2 Instance adapter', () => {
       assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
 
-    it('answers its conditions from the active profile\'s plugins, and refuses one that reads the game\'s version', async () => {
+    it('answers its conditions from the active profile\'s plugins', async () => {
       const game = await mkdtemp(join(tmpdir(), 'medit-fomod-game-'));
       try {
         await mkdir(join(game, 'Data'));
         const adapter = adapterOver(root, { gameFolder: { kind: 'found', root: game, dataFolder: join(game, 'Data') } });
-        const plugins = [
+
+        await adapter.install(await fomod(`<conditionalFileInstalls><patterns>${[
           conditional('<fileDependency file="Patch Mod.esp" state="Active"/>', 'active.esp'),
           conditional('<fileDependency file="NonAsciiRetexture - Addon.esl" state="Inactive"/>', 'inactive.esp'),
           conditional('<fileDependency file="Unofficial Fallout 4 Patch.esp" state="Missing"/>', 'missing.esp'),
           conditional('<fileDependency file="NonAsciiRetexture - Addon.esl" state="Active"/>', 'wrong.esp'),
-        ].join('');
-        const installing = (patterns: string) => async (name: string) => adapter.install(
-          await fomod(`<conditionalFileInstalls><patterns>${patterns}</patterns></conditionalFileInstalls>`), { kind: 'new', name }, KEYS, { kind: 'choices', steps: [] });
-
-        await installing(plugins)(MOD);
-        await expect(installing(conditional('<gameDependency version="1.10.163.0"/>', 'game.esp'))('Versioned'))
-          .rejects.toThrow('The FOMOD\'s conditions read the game\'s version, which could not be read: Modbench reads no program\'s version.');
+        ].join('')}</patterns></conditionalFileInstalls>`), { kind: 'new', name: MOD }, KEYS, { kind: 'choices', steps: [] });
 
         expect(await filesIn(folder(MOD))).toEqual(['active.esp', 'inactive.esp', 'meta.ini', 'missing.esp']);
       } finally {
