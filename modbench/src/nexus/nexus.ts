@@ -31,7 +31,7 @@ const MISCELLANEOUS_FILE = 5;
 type NewestVersion = { found: true; version: string } | { found: false; reason: string };
 
 /** A file downloaded from Nexus: its bytes as the server streams them, and what Nexus knows of it. */
-export type Download = { found: true; info: NexusFileInfo; bytes: ReadableStream<Uint8Array> } | { found: false; reason: string };
+type Download = { found: true; info: NexusFileInfo; bytes: ReadableStream<Uint8Array> } | { found: false; reason: string };
 
 const firstServerOf = (links: unknown): string | undefined => {
   const first: unknown = Array.isArray(links) ? links.at(0) : undefined;
