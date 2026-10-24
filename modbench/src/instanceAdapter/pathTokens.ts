@@ -6,8 +6,9 @@ export interface TokenFolders {
   readonly instance: string;
   readonly game: string | undefined;
   readonly downloads: string | undefined;
-  /** The folders a commit already holds by their own token, whatever their place: a clone cleans back what it smudged. */
-  readonly committedOutside?: readonly FolderName[];
+  /** The folders the commit holds by their own token, though a folder can sit inside the instance folder here: a clone
+   *  cleans back what it smudged. */
+  readonly committedOutsideInstance: readonly FolderName[];
 }
 
 export type FolderName = 'game folder' | 'downloads folder';
@@ -113,10 +114,10 @@ const firstOfEach = (spellings: readonly Spelling[], key: (spelling: Spelling) =
 
 /** The folders' tokens in `spelling`. A game or downloads folder inside the instance folder takes the instance folder's
  *  token, so a clone finds its own, unless a commit holds the folder by its own. */
-export function folderTokens({ instance, game, downloads, committedOutside = [] }: TokenFolders, platform: NodeJS.Platform, spelling: PathSpelling): TokenProgram {
+export function folderTokens({ instance, game, downloads, committedOutsideInstance }: TokenFolders, platform: NodeJS.Platform, spelling: PathSpelling): TokenProgram {
   const instanceSpellings = spellingsOf('instance folder', instance, platform, spelling);
   const others = ([['game folder', game], ['downloads folder', downloads]] as const)
-    .map(([name, folder]) => ({ folder: committedOutside.includes(name) ? undefined : folder, spellings: spellingsOf(name, folder, platform, spelling) }));
+    .map(([name, folder]) => ({ folder: committedOutsideInstance.includes(name) ? undefined : folder, spellings: spellingsOf(name, folder, platform, spelling) }));
   const outside = others.flatMap(({ folder, spellings }) => (folder !== undefined && isInside(folder, instance, platform) ? [] : spellings));
   const cleaned = firstOfEach([...instanceSpellings, ...outside], ({ text }) => text)
     .sort((a, b) => b.text.length - a.text.length);

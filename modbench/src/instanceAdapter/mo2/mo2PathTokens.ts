@@ -43,7 +43,7 @@ interface CoveredFile {
 
 // The mod manager's configuration holds the accounts, so its filter is a driver of its own.
 const coveredFiles = (publisherFile: ConfigurationFile | undefined): CoveredFile[] => [
-  { pattern: SETTINGS_FILE_PATTERN, driver: 'modbench-settings-tokens', spelling: SPELLING, holdsAccounts: true },
+  { pattern: SETTINGS_FILE_PATTERN, driver: 'modbench-settings-tokens', spelling: SPELLING, holdsAccounts: true, blanked: RECENT_DIRECTORIES_DROPPED },
   { pattern: PROFILE_INIS_PATTERN, driver: 'modbench-tokens', spelling: SPELLING, holdsAccounts: false },
   ...(publisherFile === undefined ? [] : [
     { pattern: `/${publisherFile.name}`, driver: 'modbench-publisher-tokens', spelling: publisherFile.spelling, holdsAccounts: false, blanked: publisherFile.blanked },
@@ -178,7 +178,6 @@ const filesNotWritten = async (instanceRoot: string, covered: readonly CoveredFi
 export const pathTokensWritten = async (instanceRoot: string, publisherFile: ConfigurationFile | undefined): Promise<boolean> =>
   (await filesNotWritten(instanceRoot, coveredFiles(publisherFile))).length === 0;
 
-// The folder a clone has none named for is the default one.
 async function downloadsFolder({ instanceRoot, resolveDownloadsFolder }: Mo2Context): Promise<string | undefined> {
   const settings = await get(settingsFile(instanceRoot), '');
   const named = readDownloadDirectory(settings);
@@ -187,35 +186,35 @@ async function downloadsFolder({ instanceRoot, resolveDownloadsFolder }: Mo2Cont
   return resolution.kind === 'resolved' ? resolution.downloadsDir : undefined;
 }
 
-// What the last commit holds. A repository with no commit holds none; a grep with no match is exit code 1.
-const committedOutsideIn = async (instanceRoot: string): Promise<FolderName[]> => {
-  if (await git(instanceRoot, 'rev-parse', '--verify', '--quiet', 'HEAD').then(() => false, () => true)) return [];
-  const held = await git(instanceRoot, 'grep', '-h', '-o', '-E', String.raw`\{(game|downloads) folder`, 'HEAD').catch((err: unknown) => {
-    if (typeof err !== 'object' || err === null || !('code' in err) || err.code !== 1) throw err;
-    return '';
+// A command that finds nothing exits 1, and git config --unset-all a key that is not set exits 5.
+const unlessExit = (code: number, run: () => Promise<string>): Promise<string | undefined> =>
+  run().catch((err: unknown) => {
+    if (typeof err !== 'object' || err === null || !('code' in err) || err.code !== code) throw err;
+    return undefined;
   });
+
+// Only the files a filter covers: any other file can hold the text of a token.
+async function committedOutsideInstanceIn(instanceRoot: string, covered: readonly CoveredFile[]): Promise<FolderName[]> {
+  const found = await Promise.all(covered.map(({ driver }) =>
+    unlessExit(1, () => git(instanceRoot, 'grep', '--cached', '-h', '-o', '-E', String.raw`\{(game|downloads) folder`, '--', `:(attr:filter=${driver})`))));
+  const held = found.join('');
   return (['game folder', 'downloads folder'] as const).filter((name) => held.includes(`{${name}`));
-};
+}
 
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
 export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): Mo2PathTokens {
   const { instanceRoot } = context;
   const covered = coveredFiles(publisherFile);
-  const configOf = (files: readonly CoveredFile[], { game, downloads, committedOutside }: Omit<TokenFolders, 'instance'>, accounts: TokenProgram): Readonly<Record<string, string>> =>
+  const configOf = (files: readonly CoveredFile[], { game, downloads, committedOutsideInstance }: Omit<TokenFolders, 'instance'>, accounts: TokenProgram): Readonly<Record<string, string>> =>
     Object.fromEntries(files.flatMap(({ driver, spelling, holdsAccounts, blanked }) => {
-      const folders = folderTokens({ instance: instanceRoot, game, downloads, committedOutside }, process.platform, spelling);
-      return Object.entries(tokenFilterConfig(driver, folders, ...(holdsAccounts ? [accounts, RECENT_DIRECTORIES_DROPPED] : []), ...(blanked === undefined ? [] : [blanked])));
+      const folders = folderTokens({ instance: instanceRoot, game, downloads, committedOutsideInstance }, process.platform, spelling);
+      return Object.entries(tokenFilterConfig(driver, folders, ...(holdsAccounts ? [accounts] : []), ...(blanked === undefined ? [] : [blanked])));
     }));
   const configWritten = async (folders: Omit<TokenFolders, 'instance'>, accounts: TokenProgram): Promise<void> => {
     for (const [key, value] of Object.entries(configOf(covered, folders, accounts))) await git(instanceRoot, 'config', key, value);
   };
-  const NO_FOLDERS = { game: undefined, downloads: undefined };
-  // A key not set is exit code 1 to read and 5 to unset.
-  const unlessExit = async (code: number, run: () => Promise<string>): Promise<string | undefined> =>
-    (await run().catch((err: unknown) => {
-      if (typeof err !== 'object' || err === null || !('code' in err) || err.code !== code) throw err;
-    })) ?? undefined;
+  const NO_FOLDERS = { game: undefined, downloads: undefined, committedOutsideInstance: [] };
   const configHeld = async (): Promise<Undo> => {
     const keys = Object.keys(configOf(covered, NO_FOLDERS, accountTokens('')));
     const before = await Promise.all(keys.map(async (key) => unlessExit(1, () => git(instanceRoot, 'config', '--get', key))));
@@ -236,7 +235,7 @@ export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<Gam
     await configWritten(NO_FOLDERS, accounts);
     await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     const game = await gameFolder();
-    await configWritten({ game: foundRoot(game), downloads: await downloadsFolder(context), committedOutside: await committedOutsideIn(instanceRoot) }, accounts);
+    await configWritten({ game: foundRoot(game), downloads: await downloadsFolder(context), committedOutsideInstance: await committedOutsideInstanceIn(instanceRoot, covered) }, accounts);
     const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     await statsForgotten(instanceRoot, files);
     if (holding.length === 0) return undefined;
