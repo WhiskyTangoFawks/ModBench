@@ -522,3 +522,90 @@ describe('the publisher tags that name no path in the instance (publishing.md, P
     expect(await publisherOver().configuration()).toMatchObject({ kind: 'unreadable', reason: expect.stringMatching(/ at line 3, column 9$/) as unknown });
   });
 });
+
+describe('a write to the compiler settings changes only the entries it names (Never silently wrong)', () => {
+  const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
+  const folder = (name: string) => join(root, 'mods', name);
+  const kept = (...present: string[]) => ({ present, owns: (path: string) => path.toLowerCase().endsWith('.manifest.json') });
+  const settingsWith = (list: string, key = 'Include') => `// shaped by hand\n{\n  /* mine */\n  "${key}": ${list},\n  "Mine": 1,\n}\n`;
+  const entries = (...lines: string[]) => `[\n${lines.map((line) => `    ${line}`).join('\n')}\n  ]`;
+
+  type Gesture = () => Promise<unknown>;
+  const removal = (name: string): Gesture => () => publisherOver().changeTag('remove', 'Include', [folder(name)]);
+  const addition = (name: string): Gesture => () => publisherOver().changeTag('add', 'Include', [folder(name)]);
+  const renaming = (from: string, to: string): Gesture => () => publisherOver().followFolders([{ from: folder(from), to: folder(to) }]);
+
+  const cases: readonly [name: string, gesture: Gesture, before: string, after: string][] = [
+    ['remove: a block comment before the comma stays', removal('A'),
+      settingsWith(entries('"mods/A" /* x */,', '"mods/B"')), settingsWith(entries(' /* x */', '"mods/B"'))],
+    ['remove: a line comment after the comma stays', removal('A'),
+      settingsWith(entries('"mods/A", // about a', '"mods/B"')), settingsWith(entries(' // about a', '"mods/B"'))],
+    ['remove: the first entry takes its line', removal('A'),
+      settingsWith(entries('"mods/A",', '"mods/B",', '"mods/C"')), settingsWith(entries('"mods/B",', '"mods/C"'))],
+    ['remove: a middle entry takes its line', removal('B'),
+      settingsWith(entries('"mods/A", // about a', '"mods/B",', '"mods/C" // about c')), settingsWith(entries('"mods/A", // about a', '"mods/C" // about c'))],
+    ['remove: the last entry without a trailing comma takes the comma before it, not the comment after that comma', removal('C'),
+      settingsWith(entries('"mods/A",', '"mods/B", // about b', '"mods/C"')), settingsWith(entries('"mods/A",', '"mods/B" // about b'))],
+    ['remove: the last entry with a trailing comma takes its line', removal('C'),
+      settingsWith(entries('"mods/A",', '"mods/C",')), settingsWith(entries('"mods/A",'))],
+    ['remove: the only entry leaves an empty list', removal('A'),
+      settingsWith(entries('"mods/A"')), settingsWith('[\n  ]')],
+    ['remove: an inline entry with a comment between it and its comma', removal('A'),
+      settingsWith('["mods/A" /* x */, "mods/B"]'), settingsWith('[ /* x */ "mods/B"]')],
+    ['remove: a block comment before the value stays', removal('A'),
+      settingsWith(entries('/* c */ "mods/A",', '"mods/B"')), settingsWith(entries('/* c */ ', '"mods/B"'))],
+    ['add: after a last entry with a trailing comma and a comment, the comment stays on its entry', addition('X'),
+      settingsWith(entries('"mods/C", // about c')), settingsWith(entries('"mods/C", // about c', '"mods\\\\X",'))],
+    ['add: after a last entry without a comma, the comment stays on its entry', addition('X'),
+      settingsWith(entries('"mods/C" // about c')), settingsWith(entries('"mods/C", // about c', '"mods\\\\X"'))],
+    ['add: after a last entry with a block comment, the comment stays on its entry', addition('X'),
+      settingsWith(entries('"mods/B",', '"mods/C" /* about c */')), settingsWith(entries('"mods/B",', '"mods/C", /* about c */', '"mods\\\\X"'))],
+    ['add: after a plain last entry', addition('X'),
+      settingsWith(entries('"mods/C"')), settingsWith(entries('"mods/C",', '"mods\\\\X"'))],
+    ['add: to an inline list', addition('X'),
+      settingsWith('["mods/C"]'), settingsWith('["mods/C", "mods\\\\X"]')],
+    ['add: to an empty list', addition('X'),
+      settingsWith('[]'), settingsWith('["mods\\\\X"]')],
+    ['add: a list the settings lack follows the settings it keeps', () => publisherOver().changeTag('add', 'Always Enabled', [folder('C')]),
+      settingsWith(entries('"mods/A"')), settingsWith(entries('"mods/A"')).replace('  "Mine": 1,\n', '  "Mine": 1,\n  "AlwaysEnabled": [\n    "mods\\\\C"\n  ],\n')],
+    ['add: a list the settings lack follows the last setting, before the comment after it', () => publisherOver().changeTag('add', 'Always Enabled', [folder('C')]),
+      '{\n  "Mine": 1, // mine\n}\n', '{\n  "Mine": 1, // mine\n  "AlwaysEnabled": [\n    "mods\\\\C"\n  ],\n}\n'],
+    ['add: a list the settings lack follows a last setting without a comma', () => publisherOver().changeTag('add', 'Always Enabled', [folder('C')]),
+      '{\n  "Mine": 1 // mine\n}\n', '{\n  "Mine": 1, // mine\n  "AlwaysEnabled": [\n    "mods\\\\C"\n  ]\n}\n'],
+    ['add: to the empty last list of a key listed twice, the one the compiler reads', addition('X'),
+      '{\n  "Include": [\n    "mods/old"\n  ],\n  "Include": [\n  ]\n}\n', '{\n  "Include": [\n    "mods/old"\n  ],\n  "Include": [\n    "mods\\\\X"\n  ]\n}\n'],
+    ['keep-out: a gone manifest goes and the file is added, leaving the comment', () => publisherOver().keepOut(kept(join(root, 'mods', 'B', 'B.manifest.json'))),
+      settingsWith(entries('"mods/Old/Old.manifest.json", // gone', '"mine"'), 'Ignore'),
+      settingsWith(entries(' // gone', '"mine",', '"mods\\\\B\\\\B.manifest.json"'), 'Ignore')],
+    ['follow: a renamed entry keeps its comments and its place', renaming('B', 'D'),
+      settingsWith(entries('"mods/A",', '"mods/B", // about b', '"mods/C"')), settingsWith(entries('"mods/A",', '"mods\\\\D", // about b', '"mods/C"'))],
+  ];
+
+  for (const eol of ['\n', '\r\n']) {
+    it.each(cases)(`${eol === '\n' ? 'LF' : 'CRLF'} %s`, async (_, gesture, before, after) => {
+      await writeSettings(before.replaceAll('\n', eol));
+
+      await gesture();
+
+      expect(await settingsText()).toBe(after.replaceAll('\n', eol));
+    });
+  }
+
+  it('keeps a tab indent and a missing final newline', async () => {
+    await writeSettings('{\n\t"Include": [\n\t\t"mods\\\\A"\n\t]\n}');
+
+    await publisherOver().changeTag('add', 'Include', [folder('C')]);
+
+    expect(await settingsText()).toBe('{\n\t"Include": [\n\t\t"mods\\\\A",\n\t\t"mods\\\\C"\n\t]\n}');
+  });
+
+  it('edits the last of a key listed twice, the one the compiler reads', async () => {
+    await writeSettings('{\n  "Ignore": [\n    "ignored"\n  ],\n  "Ignore": [\n    "read"\n  ]\n}');
+
+    await publisherOver().changeTag('add', 'Ignore', [folder('C')]);
+    await publisherOver().followFolders([{ from: join(root, 'read'), to: folder('D') }]);
+    await publisherOver().changeTag('remove', 'Ignore', [folder('C')]);
+
+    expect(await settingsText()).toBe('{\n  "Ignore": [\n    "ignored"\n  ],\n  "Ignore": [\n    "mods\\\\D"\n  ]\n}');
+  });
+});

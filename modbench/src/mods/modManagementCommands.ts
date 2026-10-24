@@ -221,6 +221,7 @@ export function registerModContextCommands(
         outcome: { landed: [newName], refused: [] },
         partial: [
           ...(result.tagRefusal === undefined ? [] : [{ message: `"${oldName}" was renamed, but its publisher tags could not follow it.`, detail: result.tagRefusal, severity: 'warning' as const }]),
+          ...(result.keepOutRefusal === undefined ? [] : [{ message: `"${oldName}" was renamed, but the files Modbench keeps could not be kept out of the publisher.`, detail: result.keepOutRefusal, severity: 'warning' as const }]),
           ...result.lineRefusals.map(({ profile, refusal }) => ({
             message: `"${oldName}" was renamed, but its ${commands.names.modOrderFile} line in profile "${profile}" could not be renamed.`,
             detail: refusal, severity: 'warning' as const,

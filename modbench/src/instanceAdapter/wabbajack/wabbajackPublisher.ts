@@ -3,7 +3,7 @@
 // Publisher tags, story 5).
 
 import { isAbsolute, join, relative, sep } from 'node:path';
-import { parse, parseTree, printParseErrorCode, type ParseError } from 'jsonc-parser';
+import { applyEdits, parse, parseTree, printParseErrorCode, type Edit, type Node, type ParseError } from 'jsonc-parser';
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { get, listDir, putIfChanged, readOrAbsent } from '../files';
@@ -204,11 +204,9 @@ function coveringIn(instanceRoot: string, root: PathNode, neverShipped: readonly
   };
 }
 
-// A file's own indentation, line ends and final newline, which a rewrite keeps.
-function serialized(settings: object, form: string): string {
-  const indent = /\n([ \t]+)"/.exec(form)?.[1] ?? (form.includes('\n') ? '  ' : undefined);
-  const eol = form.includes('\r\n') ? '\r\n' : '\n';
-  return JSON.stringify(settings, undefined, indent).replaceAll('\n', eol) + (form.endsWith('\n') ? eol : '');
+interface ListChange {
+  readonly changed: ReadonlyMap<number, string | undefined>;
+  readonly appended: readonly string[];
 }
 
 const isUnder = (names: readonly string[], folder: readonly string[]): boolean => folder.every((name, depth) => names[depth] === name);
@@ -216,11 +214,17 @@ const isUnder = (names: readonly string[], folder: readonly string[]): boolean =
 const sameNames = (first: readonly string[], second: readonly string[]): boolean =>
   first.length === second.length && first.every((name, at) => name === second[at]);
 
-function changedEntries(entries: readonly string[], change: PublisherTagChange, inside: string): readonly string[] {
-  const names = namesOf(inside);
-  const others = entries.filter((entry) => !sameNames(namesOf(entry), names));
-  if (change === 'remove') return others.length === entries.length ? entries : others;
-  return others.length === entries.length ? [...entries, inside.split(sep).join('\\')] : entries;
+const wabbajackSpelling = (inside: string): string => inside.split(sep).join('\\');
+
+function changedEntries(entries: readonly string[], change: PublisherTagChange, insides: readonly string[]): ListChange {
+  const named = (entry: string): boolean => insides.some((inside) => sameNames(namesOf(inside), namesOf(entry)));
+  if (change === 'remove') return { changed: new Map(entries.flatMap((entry, at) => (named(entry) ? [[at, undefined] as const] : []))), appended: [] };
+  const appended: string[] = [];
+  for (const inside of insides) {
+    const listed = [...entries, ...appended].some((entry) => sameNames(namesOf(entry), namesOf(inside)));
+    if (!listed) appended.push(wabbajackSpelling(inside));
+  }
+  return { changed: new Map(), appended };
 }
 
 interface InstanceMove {
@@ -228,24 +232,130 @@ interface InstanceMove {
   readonly to: string | undefined;
 }
 
-function followedEntries(entries: readonly string[], moves: readonly InstanceMove[]): readonly string[] {
+function followedEntries(entries: readonly string[], moves: readonly InstanceMove[]): ListChange {
   const moveOf = (entry: string): InstanceMove | undefined => {
     const names = namesOf(entry);
     return moves.find(({ from }) => isUnder(names, from));
   };
-  if (!entries.some((entry) => moveOf(entry) !== undefined)) return entries;
   const listed = new Set(entries.filter((entry) => moveOf(entry) === undefined).map((entry) => namesOf(entry).join('/')));
-  return entries.flatMap((entry) => {
+  const changed = new Map<number, string | undefined>();
+  for (const [at, entry] of entries.entries()) {
     const move = moveOf(entry);
-    if (move === undefined) return [entry];
-    if (move.to === undefined) return [];
+    if (move === undefined) continue;
     const rest = entry.split(/[\\/]/).filter((name) => name !== '').slice(move.from.length);
-    const followed = [move.to, ...rest].join('\\');
-    const key = namesOf(followed).join('/');
-    if (listed.has(key)) return [];
-    listed.add(key);
-    return [followed];
-  });
+    const followed = move.to === undefined ? undefined : [move.to, ...rest].join('\\');
+    const key = followed === undefined ? undefined : namesOf(followed).join('/');
+    if (key === undefined || listed.has(key)) {
+      changed.set(at, undefined);
+    } else {
+      listed.add(key);
+      changed.set(at, followed);
+    }
+  }
+  return { changed, appended: [] };
+}
+
+function layoutOf(text: string): { eol: string; unit: string } {
+  return { eol: text.includes('\r\n') ? '\r\n' : '\n', unit: /\n([ \t]+)"/.exec(text)?.[1] ?? '  ' };
+}
+
+// The list the read takes: the last of a key listed twice.
+const listOf = (text: string, key: string): Node | undefined =>
+  parseTree(text, [], READS)?.children?.findLast((property) => property.children?.[0]?.value === key)?.children?.[1];
+
+const SKIPPED = /\s+|\/\/[^\n]*|\/\*[\s\S]*?\*\//y;
+
+function afterSkipped(text: string, from: number): number {
+  let at = from;
+  for (;;) {
+    SKIPPED.lastIndex = at;
+    const skipped = SKIPPED.exec(text);
+    if (skipped === null) return at;
+    at += skipped[0].length;
+  }
+}
+
+function commaFrom(text: string, from: number): number | undefined {
+  const at = afterSkipped(text, from);
+  return text[at] === ',' ? at : undefined;
+}
+
+const lineStartOf = (text: string, offset: number): number => text.lastIndexOf('\n', offset - 1) + 1;
+
+function withoutEntry(text: string, list: Node, at: number): string {
+  const entry = list.children?.[at];
+  const previous = list.children?.[at - 1];
+  if (entry === undefined) throw new Error(`no entry ${at}`);
+  const end = entry.offset + entry.length;
+  const own = commaFrom(text, end);
+  const separator = own ?? (previous === undefined ? undefined : commaFrom(text, previous.offset + previous.length));
+  const bare = own === undefined || text.slice(end, own).trim() === '';
+  const tail = own !== undefined && bare ? own + 1 : end;
+  const lineStart = lineStartOf(text, entry.offset);
+  const lineEnd = /^[ \t]*\r?\n/.exec(text.slice(tail))?.[0];
+  const whole = bare && lineEnd !== undefined && text.slice(lineStart, entry.offset).trim() === '';
+  const edits: Edit[] = whole
+    ? [{ offset: lineStart, length: tail + lineEnd.length - lineStart, content: '' }]
+    : [{ offset: entry.offset, length: entry.length, content: '' }];
+  if (separator !== undefined && !(whole && own !== undefined)) edits.push({ offset: separator, length: 1, content: '' });
+  return applyEdits(text, edits);
+}
+
+function insertIntoEmpty(text: string, container: Node, item: string): string {
+  const { eol, unit } = layoutOf(text);
+  const multiline = text.slice(container.offset, container.offset + container.length).includes('\n');
+  const lineStart = lineStartOf(text, container.offset);
+  const indent = /^[ \t]*/.exec(text.slice(lineStart))?.[0] ?? '';
+  const content = multiline ? `${eol}${indent}${unit}${item}` : item;
+  return applyEdits(text, [{ offset: container.offset + 1, length: 0, content }]);
+}
+
+function withAppended(text: string, key: string, value: string): string {
+  const list = listOf(text, key);
+  const entry = JSON.stringify(value);
+  if (list === undefined) {
+    const root = parseTree(text, [], READS);
+    if (root === undefined) throw new Error('no settings object');
+    const lastProperty = root.children?.at(-1);
+    const { eol, unit } = layoutOf(text);
+    const indent = lastProperty === undefined ? unit : /^[ \t]*/.exec(text.slice(lineStartOf(text, lastProperty.offset)))?.[0] ?? '';
+    const property = text.includes('\n')
+      ? `${JSON.stringify(key)}: [${eol}${indent}${unit}${entry}${eol}${indent}]`
+      : `${JSON.stringify(key)}: [ ${entry} ]`;
+    return lastProperty === undefined ? insertIntoEmpty(text, root, property) : insertAfter(text, lastProperty, property);
+  }
+  const last = list.children?.at(-1);
+  return last === undefined ? insertIntoEmpty(text, list, entry) : insertAfter(text, last, entry);
+}
+
+function insertAfter(text: string, last: Node, entry: string): string {
+  const end = last.offset + last.length;
+  const own = commaFrom(text, end);
+  const from = own === undefined ? end : own + 1;
+  const lineEnd = text.indexOf('\n', from);
+  const lineEndAt = lineEnd > 0 && text[lineEnd - 1] === '\r' ? lineEnd - 1 : lineEnd;
+  const indent = text.slice(lineStartOf(text, last.offset), last.offset);
+  const ownLine = lineEnd !== -1 && indent.trim() === '' && afterSkipped(text.slice(0, lineEndAt), from) === lineEndAt;
+  if (!ownLine) return applyEdits(text, [{ offset: end, length: 0, content: `, ${entry}` }]);
+  const comma = own === undefined ? ',' : '';
+  const line = `${layoutOf(text).eol}${indent}${entry}${own === undefined ? '' : ','}`;
+  const edits: Edit[] = lineEndAt === end
+    ? [{ offset: end, length: 0, content: comma + line }]
+    : [{ offset: end, length: 0, content: comma }, { offset: lineEndAt, length: 0, content: line }];
+  return applyEdits(text, edits);
+}
+
+function withListChanged(text: string, key: string, change: ListChange): string {
+  let after = text;
+  for (const at of [...change.changed.keys()].sort((a, b) => b - a)) {
+    const list = listOf(after, key);
+    const entry = list?.children?.[at];
+    if (list === undefined || entry === undefined) throw new Error(`${key} holds no entry ${at}`);
+    const now = change.changed.get(at);
+    after = now === undefined ? withoutEntry(after, list, at) : applyEdits(after, [{ offset: entry.offset, length: entry.length, content: JSON.stringify(now) }]);
+  }
+  for (const value of change.appended) after = withAppended(after, key, value);
+  return after;
 }
 
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
@@ -290,10 +400,8 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
         return inside === undefined ? [] : [inside];
       });
       await putIfChanged(file, (before) => {
-        const settings: Record<string, unknown> = { ...settingsIn(before, file) };
-        const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']) ?? [];
-        const changed = insides.reduce<readonly string[]>((now, inside) => changedEntries(now, change, inside), entries);
-        return changed === entries ? before : serialized({ ...settings, [listedUnder]: changed }, before);
+        const entries = valueOf(settingsIn(before, file), listedUnder, file, [isNames, 'a list of paths']) ?? [];
+        return withListChanged(before, listedUnder, changedEntries(entries, change, insides));
       });
       return refused;
     },
@@ -301,20 +409,14 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       const inside = moves.flatMap(({ from, to }) => {
         const fromInside = inInstance(instanceRoot, from);
         const toInside = to === undefined ? undefined : inInstance(instanceRoot, to);
-        return fromInside === undefined ? [] : [{ from: namesOf(fromInside), to: toInside?.split(sep).join('\\') }];
+        return fromInside === undefined ? [] : [{ from: namesOf(fromInside), to: toInside === undefined ? undefined : wabbajackSpelling(toInside) }];
       });
       await putIfChanged(file, (before) => {
-        const settings: Record<string, unknown> = { ...settingsIn(before, file) };
-        let changed = false;
-        for (const { listedUnder } of TAGS) {
+        const settings = settingsIn(before, file);
+        return TAGS.reduce((text, { listedUnder }) => {
           const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']) ?? [];
-          const followed = followedEntries(entries, inside);
-          if (followed !== entries) {
-            settings[listedUnder] = followed;
-            changed = true;
-          }
-        }
-        return changed ? serialized(settings, before) : before;
+          return withListChanged(text, listedUnder, followedEntries(entries, inside));
+        }, before);
       }, { ifMissing: '{}' });
     },
     keepOut: async ({ present, owns }) => {
@@ -323,13 +425,12 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
       const isGone = (entry: string): boolean => owns(join(instanceRoot, ...namesOf(entry))) && !insides.some((inside) => sameNames(namesOf(inside), namesOf(entry)));
       let written: { before: string; after: string } | undefined;
       await putIfChanged(file, (before) => {
-        const settings: Record<string, unknown> = { ...settingsIn(before, file) };
-        const entries = valueOf(settings, 'Ignore', file, [isNames, 'a list of paths']) ?? [];
-        const remaining = entries.filter((entry) => !isGone(entry));
+        const entries = valueOf(settingsIn(before, file), 'Ignore', file, [isNames, 'a list of paths']) ?? [];
+        const changed = new Map(entries.flatMap((entry, at) => (isGone(entry) ? [[at, undefined] as const] : [])));
+        const remaining = entries.filter((_, at) => !changed.has(at));
         const missing = insides.filter((inside) => !remaining.some((entry) => isUnder(namesOf(inside), namesOf(entry))));
-        if (missing.length === 0 && remaining.length === entries.length) return before;
-        const after = serialized({ ...settings, Ignore: [...remaining, ...missing.map((inside) => inside.split(sep).join('\\'))] }, before);
-        written = { before, after };
+        const after = withListChanged(before, 'Ignore', { changed, appended: missing.map(wabbajackSpelling) });
+        if (after !== before) written = { before, after };
         return after;
       });
       return async () => {

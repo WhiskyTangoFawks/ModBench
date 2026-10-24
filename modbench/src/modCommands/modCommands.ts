@@ -488,21 +488,29 @@ async function createEmptyMod(adapter: InstanceAdapter, name: string): Promise<C
   return line;
 }
 
-/** `lineRefusals` names each profile whose line could not be renamed: the folder is renamed, and
- *  that profile loses the mod's place until `mod sync` adopts the folder. `tagRefusal`: its publisher tags
- *  could not follow it. */
+/** `lineRefusals` names each profile whose line could not be renamed: it loses the mod's place until
+ *  `mod sync`. `tagRefusal`: the publisher tags could not follow. `keepOutRefusal`: Modbench's files
+ *  could not be kept out of the publisher. */
 export type RenameModResult =
-  | { applied: true; lineRefusals: { profile: string; refusal: string }[]; unchanged?: true; tagRefusal?: string }
+  | { applied: true; lineRefusals: { profile: string; refusal: string }[]; unchanged?: true; tagRefusal?: string; keepOutRefusal?: string }
   | { applied: false; refusal: string };
 
-async function moveTagsAfterRename(adapter: InstanceAdapter, from: string | undefined, to: string): Promise<string | undefined> {
+async function refusalOf(attempt: () => Promise<unknown>): Promise<string | undefined> {
   try {
-    const target = await adapter.modFolderPath(to);
-    if (from !== undefined && target !== undefined) await adapter.followModFolders([{ from, to: target }]);
+    await attempt();
     return undefined;
   } catch (err) {
     return errorMessage(err);
   }
+}
+
+async function updatePublisherAfterRename(adapter: InstanceAdapter, from: string | undefined, to: string) {
+  const tagRefusal = await refusalOf(async () => {
+    const target = await adapter.modFolderPath(to);
+    if (from !== undefined && target !== undefined) await adapter.followModFolders([{ from, to: target }]);
+  });
+  const keepOutRefusal = await refusalOf(() => adapter.keepOutOfPublisher());
+  return { ...(tagRefusal !== undefined && { tagRefusal }), ...(keepOutRefusal !== undefined && { keepOutRefusal }) };
 }
 
 // The folder, then a source mod's build configuration, then the line in each profile, the active one first. A
@@ -535,14 +543,14 @@ async function renameMod({ adapter, mEdit }: SourceModWriters, from: string, to:
     }
     return { applied: false, refusal: configured.message };
   }
-  const tagRefusal = await moveTagsAfterRename(adapter, fromFolder, to);
+  const publisherRefusals = await updatePublisherAfterRename(adapter, fromFolder, to);
   const lineRefusals: { profile: string; refusal: string }[] = [];
   const ordered = [activeProfile, ...profiles.filter((profile) => profile !== activeProfile)];
   for (const profile of ordered) {
     const line = wrote(await landIn(adapter, profile, () => [{ kind: 'renameMod', from, to }]));
     if (!line.applied) lineRefusals.push({ profile, refusal: line.refusal });
   }
-  return { applied: true, lineRefusals, ...(tagRefusal !== undefined && { tagRefusal }) };
+  return { applied: true, lineRefusals, ...publisherRefusals };
 }
 
 type ModSyncResult =
