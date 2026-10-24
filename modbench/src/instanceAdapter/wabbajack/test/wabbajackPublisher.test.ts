@@ -582,6 +582,17 @@ describe('a write to the compiler settings changes only the entries it names (Ne
     expect(await settingsText()).toBe(changedLines([12, ['   "Mine": 1,', '   "AlwaysEnabled": [', '      "mods\\\\C"', '   ],']]));
   });
 
+  it('edits the last of a key listed twice, the one the compiler reads', async () => {
+    const twice = '{\n  "Ignore": [\n    "ignored"\n  ],\n  "Ignore": [\n    "read"\n  ]\n}';
+    await writeSettings(twice);
+
+    await publisherOver().changeTag('add', 'Ignore', [folder('C')]);
+    await publisherOver().followFolders([{ from: join(root, 'read'), to: folder('D') }]);
+    await publisherOver().changeTag('remove', 'Ignore', [folder('C')]);
+
+    expect(await settingsText()).toBe('{\n  "Ignore": [\n    "ignored"\n  ],\n  "Ignore": [\n    "mods\\\\D"\n  ]\n}');
+  });
+
   it('keeps a tab indent and a missing final newline', async () => {
     await writeSettings('{\n\t"Include": [\n\t\t"mods\\\\A"\n\t]\n}');
 

@@ -285,9 +285,19 @@ function withoutEntry(text: string, key: string, at: number): string {
   return applyEdits(text, edits);
 }
 
-// Edits the text of the list under `key` and nothing else, so the file's comments, trailing commas, key order and
-// final newline stay.
-function withListChanged(text: string, key: string, entries: readonly string[] | undefined, { slots, appended }: ListChange): string {
+// Edits the list the read takes, the last of a key listed twice, and nothing else. Alone in a document, it is the only one.
+function withListChanged(text: string, key: string, entries: readonly string[] | undefined, change: ListChange): string {
+  const read = parseTree(text, [], READS)?.children?.findLast((property) => property.children?.[0]?.value === key)?.children?.[1];
+  if (read === undefined) return withFirstListChanged(text, key, entries, change);
+  const { insertSpaces, tabSize, eol } = formatOf(text);
+  const head = `{${eol}${insertSpaces ? ' '.repeat(tabSize ?? 2) : '\t'}${JSON.stringify(key)}: `;
+  const tail = `${eol}}`;
+  const alone = `${head}${text.slice(read.offset, read.offset + read.length)}${tail}`;
+  const edited = withFirstListChanged(alone, key, entries, change);
+  return text.slice(0, read.offset) + edited.slice(head.length, edited.length - tail.length) + text.slice(read.offset + read.length);
+}
+
+function withFirstListChanged(text: string, key: string, entries: readonly string[] | undefined, { slots, appended }: ListChange): string {
   const formattingOptions = formatOf(text);
   const edit = (now: string, path: (string | number)[], value: unknown, isArrayInsertion = false): string =>
     applyEdits(now, modify(now, path, value, { formattingOptions, isArrayInsertion }));
