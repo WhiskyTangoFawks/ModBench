@@ -38,7 +38,7 @@ Restore needs each installation file a manifest names in your downloads folder. 
 
 ### Set up a modlist on another machine
 
-Clone the modlist repository: the clone is the instance folder. Log in to Nexus, or put the installation files in its downloads folder. Then restore. The repository holds a token in place of each path to the instance folder or the game folder, and restore puts this machine's paths there. Restore also clones each source mod that has a remote, and builds it.
+Clone the modlist repository: the clone is the instance folder. Log in to Nexus, or put the installation files in its downloads folder. Then restore. The repository holds a token in place of each path to the instance folder, the game folder or the downloads folder, and restore puts this machine's paths there. Restore also clones each source mod that has a remote, and builds it.
 
 ## Source mods
 
