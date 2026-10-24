@@ -26,6 +26,7 @@ import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
 import { registerBuildCommand } from './buildCommand';
 import { BuildProblems } from './buildProblems';
+import { PublisherProblems } from './publisherProblems';
 import { registerDecompileAndCommitCommand } from './decompileAndCommitCommand';
 import { registerManifestGestures, type ManifestGestureDeps } from './manifestGestures';
 import { registerCheckForUpdatesGestures, type CheckForUpdatesDeps } from './checkForUpdatesGestures';
@@ -131,6 +132,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     view.onDidChangeVisibility(expand),
     view.onDidChangeCheckboxState(onModCheckboxChanged),
     ...registerModDecorations(instance, vscode.workspace, view),
+    new PublisherProblems(vscode.languages.createDiagnosticCollection('modbench-publisher'), instance),
     ...registerModContextCommands({
       commands, instance, viewSelection: () => view.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
       log,

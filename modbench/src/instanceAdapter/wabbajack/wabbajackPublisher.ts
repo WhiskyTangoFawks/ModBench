@@ -3,9 +3,10 @@
 // Publisher tags, story 5).
 
 import { isAbsolute, join, relative, sep } from 'node:path';
+import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
-import { get, putIfChanged, readOrAbsent } from '../files';
-import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange } from '../instanceAdapter';
+import { get, listDir, putIfChanged, readOrAbsent } from '../files';
+import type { Covering, Listed, PathRefusal, PublisherConfiguration, PublisherTag, PublisherTagChange, TagNamingNoPath } from '../instanceAdapter';
 import type { ConfigurationFile, Publisher } from '../publisher';
 import { sedSubstitution } from '../pathTokens';
 import { watchFiles } from '../watchFiles';
@@ -118,6 +119,72 @@ function valueOf<T>(settings: object, key: string, file: string, wanted: [(value
   if (value === undefined) return undefined;
   if (!isWanted(value)) throw new Error(`${file}: ${key} is not ${saying}`);
   return value;
+}
+
+// The line (1-based) of each string in the lists the settings hold, in the blanked text, where nothing but strings
+// and structure remain. A key listed twice keeps its last, as the parse does.
+function entryLines(blanked: string): Map<string, number[]> {
+  const lines = new Map<string, number[]>();
+  const chars = blanked.split('');
+  let depth = 0;
+  let key: string | undefined;
+  let line = 1;
+  for (let at = 0; at < chars.length; at++) {
+    const char = chars[at];
+    if (char === '\n') line++;
+    else if (char === '[' || char === '{') depth++;
+    else if (char === ']' || char === '}') depth--;
+    else if (char === '"') {
+      let end = at + 1;
+      while (chars[end] !== '"' && end < chars.length) end += chars[end] === '\\' ? 2 : 1;
+      let after = end + 1;
+      while (chars[after]?.trim() === '') after++;
+      if (depth === 1 && chars[after] === ':') {
+        key = JSON.parse(chars.slice(at, end + 1).join('')) as string;
+        lines.set(key, []);
+      } else if (depth === 2 && key !== undefined) {
+        lines.get(key)?.push(line);
+      }
+      line += chars.slice(at, end).filter((c) => c === '\n').length;
+      at = end;
+    }
+  }
+  return lines;
+}
+
+type Listings = Map<string, Promise<ReadonlyMap<string, string> | undefined>>;
+
+// Whether the instance holds a file or folder at `names`, each compared without case.
+async function holdsPath(instanceRoot: string, names: readonly string[], listings: Listings): Promise<boolean> {
+  let folder = instanceRoot;
+  for (const name of names) {
+    const listed = folder;
+    const listing = listings.get(listed) ?? listDir(listed).then(
+      (entries) => new Map(entries.map((entry) => [entry.name.toLowerCase(), entry.name])),
+      (err: unknown) => {
+        if (errnoCode(err) === 'ENOENT' || errnoCode(err) === 'ENOTDIR') return undefined;
+        throw err;
+      },
+    );
+    listings.set(listed, listing);
+    const actual = (await listing)?.get(name);
+    if (actual === undefined) return false;
+    folder = join(folder, actual);
+  }
+  return true;
+}
+
+async function tagsNamingNoPath(instanceRoot: string, settings: object, text: string, file: string): Promise<TagNamingNoPath[]> {
+  const lines = entryLines(blankedSkips(text));
+  const listings: Listings = new Map();
+  const naming: TagNamingNoPath[] = [];
+  for (const { listedUnder, tag } of TAGS) {
+    const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']) ?? [];
+    for (const [at, entry] of entries.entries()) {
+      if (!await holdsPath(instanceRoot, namesOf(entry), listings)) naming.push({ file, line: lines.get(listedUnder)?.[at] ?? 1, tag, entry });
+    }
+  }
+  return naming;
 }
 
 function tagsByPath(settings: object, file: string): PathNode {
@@ -235,7 +302,7 @@ export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers
     const settings = settingsIn(text, file);
     const tags = tagsByPath(settings, file);
     const covering = coveringIn(instanceRoot, tags, neverShipped, await shippedModsIn(settings, file, manager));
-    return { kind: 'read', covering, listed: listedIn(instanceRoot, tags) };
+    return { kind: 'read', covering, listed: listedIn(instanceRoot, tags), namesNoPath: await tagsNamingNoPath(instanceRoot, settings, text, file) };
   };
   return {
     tags: TAGS.map(({ tag }) => tag),

@@ -455,3 +455,46 @@ describe('the watch on the compiler settings (ADR-0003)', () => {
       .toEqual({ armedBefore: 0, signals: 3, watched: [root, SETTINGS_FILE], armedAfter: 0 });
   });
 });
+
+describe('the publisher tags that name no path in the instance (publishing.md, Publisher tags, story 4)', () => {
+  async function naming() {
+    const configuration = await publisherOver().configuration();
+    if (configuration.kind !== 'read') throw new Error(`expected read, got ${JSON.stringify(configuration)}`);
+    return configuration.namesNoPath.map(({ tag, entry, line }) => [tag.name, entry, line]);
+  }
+
+  it('lists an entry naming no file or folder, with its line, as comments and trailing commas leave it', async () => {
+    await mkdir(join(root, 'mods', 'A', 'textures'), { recursive: true });
+    await writeFile(join(root, 'mods', 'A', 'meta.ini'), '');
+    await writeSettings([
+      '{',
+      '  // "Ignore": ["gone"]',
+      '  "Include": ["mods\\\\A", "mods\\\\Gone",],',
+      '  "Ignore": [',
+      '    "mods/A/meta.ini",',
+      '    "mods/A/meta.ini/inside",',
+      '    "mods\\\\A\\\\Gone.txt"',
+      '  ],',
+      '  "AlwaysEnabled": ["mods\\\\Missing"]',
+      '}',
+    ].join('\n'));
+
+    expect(await naming()).toEqual([
+      ['Include', 'mods\\Gone', 3], ['Ignore', 'mods/A/meta.ini/inside', 6], ['Ignore', 'mods\\A\\Gone.txt', 7], ['Always Enabled', 'mods\\Missing', 9],
+    ]);
+  });
+
+  it('matches a path without case, at either separator', async () => {
+    await mkdir(join(root, 'Mods', 'Alpha'), { recursive: true });
+    await writeSettings({ Include: ['mods\\alpha', 'MODS/ALPHA/'] });
+
+    expect(await naming()).toEqual([]);
+  });
+
+  it('names the configuration file the line is in', async () => {
+    await writeSettings({ Include: ['nowhere'] });
+    const configuration = await publisherOver().configuration();
+
+    expect(configuration.kind === 'read' && configuration.namesNoPath[0]?.file).toBe(join(root, SETTINGS_FILE));
+  });
+});

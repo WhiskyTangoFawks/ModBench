@@ -492,10 +492,18 @@ export interface PathRefusal {
   readonly reason: string;
 }
 
+/** A publisher tag in the configuration that names no path in the instance, on its line (1-based) in `file`. */
+export interface TagNamingNoPath {
+  readonly file: string;
+  readonly line: number;
+  readonly tag: PublisherTag;
+  readonly entry: string;
+}
+
 /** The publisher's configuration: none while the instance holds no publisher's, or why it could not be read. */
 export type PublisherConfiguration =
   | { readonly kind: 'none' }
-  | { readonly kind: 'read'; readonly covering: Covering; readonly listed: Listed }
+  | { readonly kind: 'read'; readonly covering: Covering; readonly listed: Listed; readonly namesNoPath: readonly TagNamingNoPath[] }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
 /** The instance as parsed facts, every one from the same read of its settings, and what the watch cannot hear. */

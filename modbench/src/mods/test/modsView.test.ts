@@ -24,7 +24,7 @@ vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
   Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
-  languages: { createDiagnosticCollection: () => ({ dispose: () => undefined }) },
+  languages: { createDiagnosticCollection: () => ({ clear: () => undefined, set: () => undefined, dispose: () => undefined }) },
   workspace: {
     ...fakeVscodeModule().workspace,
     getConfiguration: () => ({ get: () => undefined }),
