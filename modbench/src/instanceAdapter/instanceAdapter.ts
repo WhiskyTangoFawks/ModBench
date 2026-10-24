@@ -654,7 +654,7 @@ export interface InstanceAdapter {
   /** Moves the source folder that builds the mod into the trash; false when none does. */
   trashSourceFolder(mod: string, trash: MoveToTrash): Promise<boolean>;
   /** Puts the package's files, a FOMOD's as `fomod` answers it, in a new folder or the mod's own. Rejects with why; a
-   *  new mod's folder goes, and an upgrade that failed part way is not rolled back. */
+   *  new mod's folder goes, and a failed upgrade is not rolled back. */
   install(installed: InstallPackage, target: InstallTarget, keys: InstallKeys, fomod?: FomodAnswer): Promise<InstallOutcome>;
 
   // Subscribe: the instance changed.
