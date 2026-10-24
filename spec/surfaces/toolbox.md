@@ -14,7 +14,7 @@ As a user, I want every row to read the instance value and nothing else, so the 
 
 | Row | Description | Icon | Tooltip | Click |
 |---|---|---|---|---|
-| Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder | none |
+| Game | the game the instance is for, as the mod manager's configuration names it | `$(game)` | the game folder, the game's version, and the script extender's version, or that the game folder holds none | none |
 | Profile | the active profile's name | `$(account)` | "Switch profile" | `switch` |
 | Modlist | "no repository", or "repository" ([modlist-repository.md](modlist-repository.md)) | `$(source-control)` | none | none |
 
