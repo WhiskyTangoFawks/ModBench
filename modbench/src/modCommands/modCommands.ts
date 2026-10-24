@@ -489,8 +489,8 @@ async function createEmptyMod(adapter: InstanceAdapter, name: string): Promise<C
 }
 
 /** `lineRefusals` names each profile whose line could not be renamed: the folder is renamed, and
- *  that profile loses the mod's place until `mod sync` adopts the folder. `tagRefusal` is set when the
- *  folder is renamed and its publisher tags could not follow it. */
+ *  that profile loses the mod's place until `mod sync` adopts the folder. `tagRefusal`: its publisher tags
+ *  could not follow it. */
 export type RenameModResult =
   | { applied: true; lineRefusals: { profile: string; refusal: string }[]; unchanged?: true; tagRefusal?: string }
   | { applied: false; refusal: string };
