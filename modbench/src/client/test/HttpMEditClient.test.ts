@@ -293,7 +293,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
         refused: [
           {
             item: 'ModB', refusal: 'NotFound', message: "'ModB' was skipped: installation file 'B.7z' is missing.",
-            installationFileNotFound: 'B.7z',
+            installationFileNotFound: { name: 'B.7z', size: 7, hash: 'H', page: 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2' },
           },
           { item: 'ModC', refusal: 'Lacking', message: "'ModC' was skipped: its package does not hold 'c.nif'." },
           {
@@ -309,7 +309,7 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
           { item: 'ModC', reason: "'ModC' was skipped: its package does not hold 'c.nif'." },
           { item: 'ModD', reason: "'ModD' was skipped: its submodule 'Mod Source' is missing." },
         ],
-        notFound: [{ mod: 'ModB', installationFile: 'B.7z' }, { mod: 'ModD', submodule: 'Mod Source' }],
+        notFound: [{ mod: 'ModB', installationFile: { name: 'B.7z', hash: 'H', page: 'https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2' } }, { mod: 'ModD', submodule: 'Mod Source' }],
       },
       path: '/restore-from-manifest', body: { mods: [modToRestore('ModA'), modToRestore('ModB'), modToRestore('ModC')], ...restoreFacts, gesture: expect.any(String) as unknown } },
     { name: 'decompile', verb: (c) => c.decompile([first, second], true),

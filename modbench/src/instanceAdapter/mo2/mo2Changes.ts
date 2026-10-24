@@ -1,7 +1,9 @@
 // MO2's changes to the plugin order, the profile, the mod folders and the downloaded files' metadata:
 // each file spliced through its own codec under its lock and written whole.
 
+import { basename } from 'node:path';
 import { errorMessage } from '../../ports/errorMessage';
+import type { NexusFileInfo } from '../../ports/nexusFileInfo';
 import { firstLines } from '../../loadOrderFileCodec/firstLines';
 import {
   appendPluginInText, movePluginsInText, parsePlugins, pluginKey, removePluginFromText, setPluginEnabledInText,
@@ -11,7 +13,8 @@ import { loadOrderTextOf } from './codecs/loadOrderText';
 import { parseDownloadedFileMeta, setHiddenInText, setInstalledInText, setNexusFileInfoInText, setUninstalledInText } from './codecs/downloads';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadedFileMeta, trashDownloadedFileMeta } from './downloadedFileMeta';
-import { ensureDir, exists, putIfChanged, withLock, write } from '../files';
+import { ensureDir, exists, putIfChanged, putStreamedIf, remove, withLock, write } from '../files';
+import { digestOf } from '../downloadedFileContents/contentDigest';
 import { entryNotFound, type DownloadedFileMark, InstanceAdapter, PluginOrderChange } from '../instanceAdapter';
 import { downloadedFilePath, pluginOrderFiles, settingsFile } from './layout';
 import { sourceModsIn } from './sourceMods';
@@ -20,7 +23,7 @@ import { readPluginsProvided, type ReadingSource } from '../instanceReading';
 
 type Mo2Changes = Pick<InstanceAdapter,
   | 'changePluginOrder' | 'changePluginOrderOverProvided' | 'createModFolder' | 'renameModFolder' | 'trashEntryFolder' | 'trashSourceFolder' | 'markDownloadedFile' | 'writeNexusFileInfo'
-  | 'trashDownloadedFile' | 'selectProfile'>;
+  | 'putDownloadedFile' | 'trashDownloadedFile' | 'selectProfile'>;
 
 async function heldDownloadedFile(context: Mo2Context, name: string): Promise<{ downloadsDir: string; file: string } | undefined> {
   const downloadsDir = await currentDownloadsDir(context);
@@ -61,6 +64,27 @@ function markIn(text: string, mark: DownloadedFileMark): string {
 }
 
 const pluginOrderIn = (text: string): PluginEntry[] => firstLines(parsePlugins(text), ({ name }) => pluginKey(name)).kept;
+
+async function putDownloadedFile(
+  context: Mo2Context, name: string, bytes: AsyncIterable<Uint8Array>, { hash, info }: { readonly hash: string; readonly info: NexusFileInfo },
+): Promise<{ readonly put: boolean }> {
+  if (basename(name) !== name || name === '..') throw new Error(`'${name}' is not a file name`);
+  const downloadsDir = await currentDownloadsDir(context);
+  const file = downloadedFilePath(downloadsDir, name);
+  const gameName = await metaGameOfDomain(context, info.game);
+  return withLock(file, async () => {
+    if (await exists(file)) throw new Error(`'${name}' is already in the downloads folder`);
+    await ensureDir(downloadsDir);
+    if (!(await putStreamedIf(file, bytes, async (temp) => (await digestOf(temp)) === hash))) return { put: false };
+    try {
+      await spliceDownloadedFileMeta(downloadsDir, name, (text) => setNexusFileInfoInText(text, info, gameName));
+    } catch (err) {
+      await remove(file);
+      throw err;
+    }
+    return { put: true };
+  });
+}
 
 export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Changes {
   const { instanceRoot } = context;
@@ -133,6 +157,8 @@ export function mo2Changes(context: Mo2Context, source: ReadingSource): Mo2Chang
       const { wrote } = await spliceDownloadedFileMeta(held.downloadsDir, name, (text) => setNexusFileInfoInText(text, info, gameName));
       return { gone: false, wrote };
     },
+
+    putDownloadedFile: (name, bytes, file) => putDownloadedFile(context, name, bytes, file),
 
     async trashDownloadedFile(name, trash) {
       const held = await heldDownloadedFile(context, name);

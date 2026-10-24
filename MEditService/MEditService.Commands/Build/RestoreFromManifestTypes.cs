@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using MEditService.ModFolderAdapter;
 using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Build;
@@ -52,7 +53,7 @@ public enum RestoreRefusal
 /// request hands them; a NotBuilt mod, its build's refusal (ADR-0019).</summary>
 internal sealed record RestoreSkip(RestoreRefusal Kind, BuildRefusal Build = BuildRefusal.None)
 {
-    public string? InstallationFileNotFound { get; init; }
+    public ManifestPackage.InstallationFile? InstallationFileNotFound { get; init; }
 
     public string? SubmoduleNotFound { get; init; }
 

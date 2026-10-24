@@ -223,15 +223,16 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
-    public async Task AModLackingItsInstallationFile_NamesIt_SoARequestHandingItBringsItBack()
+    public async Task AModLackingItsInstallationFile_NamesItAsItsManifestDoes_SoARequestCanFetchAndHandIt()
     {
         _folders.WithFile(Mod, "meta.ini", "[General]");
-        _folders.Manifests[Mod] = new Manifest(new ManifestPackage.InstallationFile("Mod.zip", 7, "#dl/Mod.zip"), []);
+        var named = new ManifestPackage.InstallationFile("Mod.zip", 7, "#dl/Mod.zip", "https://www.nexusmods.com/fallout4/mods/1?tab=files&file_id=2");
+        _folders.Manifests[Mod] = new Manifest(named, []);
 
         var skipped = Assert.Single((await Handler.RestoreAsync([ModFrom(Mod)], Instance())).Refused);
 
         Assert.Equal(RestoreRefusal.NotFound, skipped.Refusal);
-        Assert.Equal("Mod.zip", skipped.InstallationFileNotFound);
+        Assert.Equal(named, skipped.InstallationFileNotFound);
     }
 
     [Fact]

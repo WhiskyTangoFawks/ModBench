@@ -224,6 +224,7 @@ async function restoreFromManifestForAgent(
 function restoreMessage(status: RestoreStatus, label: Label): string {
   switch (status.phase) {
     case 'ReadingFiles': return `Restore from manifest — reading the files of "${label(status.mod)}"…`;
+    case 'Downloading': return `Restore from manifest — downloading "${status.file}" from Nexus…`;
     case 'Restoring': return `Restore from manifest — "${label(status.mod ?? '')}", ${status.modsDone} of ${status.modsTotal} mods done…`;
   }
 }

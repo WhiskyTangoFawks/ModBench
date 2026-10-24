@@ -102,15 +102,30 @@ export async function lookupByMd5(read: Read, { games, md5, fileName }: { games:
   return { found: false, reason };
 }
 
-/** The file by the mod's page and file list; a file whose ID is known needs the page only. A file list that fails or names no such file leaves what the page said. */
-export async function lookupByName(read: Read, { game, modID, fileID, fileName }: { game: string; modID: string; fileID?: string; fileName: string }): Promise<FileFound> {
-  const mod = `/v1/games/${game}/mods/${modID}`;
-  const page = await read(`${mod}.json`);
+const modPath = (game: string, modID: string): string => `/v1/games/${game}/mods/${modID}`;
+
+async function fromPage(read: Read, { game, modID, fileID }: { game: string; modID: string; fileID?: string }): Promise<FileFound> {
+  const page = await read(`${modPath(game, modID)}.json`);
   if ('reason' in page) return { found: false, ...page };
   if (!isRecord(page.json)) return { found: false, reason: NOT_READ };
   const name = text(page.json.name);
   const modFields = { ...modFieldsOf(page.json), modName: name === undefined ? undefined : plainTextOf(name) };
-  const info = overlay<NexusFileInfo>({ game, modID, fileID }, modFields);
-  if (fileID !== undefined) return { found: true, info };
-  return fromFileList(read, `${mod}/files.json`, namesOf(fileName), info);
+  return { found: true, info: overlay<NexusFileInfo>({ game, modID, fileID }, modFields) };
+}
+
+/** The file by the mod's page and file list; a file whose ID is known needs the page only. A file list that fails or names no such file leaves what the page said. */
+export async function lookupByName(read: Read, { game, modID, fileID, fileName }: { game: string; modID: string; fileID?: string; fileName: string }): Promise<FileFound> {
+  const page = await fromPage(read, { game, modID, fileID });
+  if (!page.found || fileID !== undefined) return page;
+  return fromFileList(read, `${modPath(game, modID)}/files.json`, namesOf(fileName), page.info);
+}
+
+/** The file by its ID, from its own record and its mod's page, as the mod manager takes a file it downloads. */
+export async function lookupById(read: Read, { game, modID, fileID }: { game: string; modID: string; fileID: string }): Promise<FileFound> {
+  const file = await read(`${modPath(game, modID)}/files/${fileID}.json`, 'Nexus does not hold this file.');
+  if ('reason' in file) return { found: false, ...file };
+  if (!isRecord(file.json)) return { found: false, reason: NOT_READ };
+  const page = await fromPage(read, { game, modID, fileID });
+  if (!page.found) return page;
+  return { found: true, info: overlay(page.info, { ...fileFieldsOf(file.json), fileTime: number(file.json.uploaded_timestamp), versionFromNewest: true }) };
 }

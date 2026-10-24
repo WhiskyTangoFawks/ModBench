@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
+import type { NexusPage } from './nexusPage';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
 import type { FomodMove, FomodState, ReleaseImage } from '../wire/fomodPage';
 
@@ -564,6 +565,8 @@ export interface InstanceAdapter {
   installationFile(mod: string): Promise<FileRead<InstallationFile | undefined>>;
   /** The downloaded file of `name` in the downloads folder, with its hashes; undefined when the folder holds none of that name. */
   downloadedFile(name: string): Promise<FileRead<InstallationFile | undefined>>;
+  /** The file on Nexus a page names, or its mod alone; undefined when it is no Nexus page. */
+  nexusFileAt(page: string): NexusPage | undefined;
   /** What Nexus is asked about the downloaded file of `name`; undefined when the downloads folder holds none of that name. */
   downloadedFileQuery(name: string): Promise<FileRead<DownloadedFileQuery | undefined>>;
   /** What the mod manager's metadata says of `mod`'s version and installation file; none when it says none. */
@@ -638,6 +641,9 @@ export interface InstanceAdapter {
   markDownloadedFile(name: string, mark: DownloadedFileMark): Promise<Marked>;
   /** Writes what Nexus names of a downloaded file into its metadata, made when it has none. Keeps every value `info` does not name. Rejects, writing nothing, when the instance's game has no name in Nexus's terms. */
   writeNexusFileInfo(name: string, info: NexusFileInfo): Promise<Marked>;
+  /** Puts `bytes` as the downloaded file `name`, with what Nexus names of it in its metadata, when their hash is `hash`, and
+   *  puts nothing when it is not. Refuses a name the downloads folder holds, writing nothing. */
+  putDownloadedFile(name: string, bytes: AsyncIterable<Uint8Array>, file: { readonly hash: string; readonly info: NexusFileInfo }): Promise<{ readonly put: boolean }>;
   selectProfile(profile: string): Promise<Written>;
 
   // Put and rename in mods/.

@@ -34,11 +34,11 @@ Check out the commit that worked, or revert the commits that broke the game. The
 
 Push the modlist to a shared remote. Each mod's manifest is a file of its own, so when two people change different mods, their manifests merge cleanly. A conflict lands in one mod's manifest, or in a profile's mod order or plugin order, which are text files. After you pull or merge, restore.
 
-Restore needs each installation file a manifest names in your downloads folder. It skips a mod whose file is missing, and names the file.
+Restore needs each installation file a manifest names in your downloads folder. When you are logged in to Nexus with a Premium account, restore downloads a missing file from the Nexus page its manifest names. It skips a mod whose file it cannot find or download, and names the file and why.
 
 ### Set up a modlist on another machine
 
-Clone the modlist repository: the clone is the instance folder. Put the installation files in its downloads folder. MO2's configuration holds the first machine's paths, so edit them for this one. Then restore. Restore clones each source mod that has a remote, and builds it.
+Clone the modlist repository: the clone is the instance folder. Log in to Nexus, or put the installation files in its downloads folder. MO2's configuration holds the first machine's paths, so edit them for this one. Then restore. Restore clones each source mod that has a remote, and builds it.
 
 ## Source mods
 

@@ -1382,6 +1382,13 @@ export interface components {
             /** Format: int32 */
             y?: number | null;
         };
+        InstallationFile: {
+            name: string;
+            /** Format: int64 */
+            size: number;
+            hash: string;
+            page?: string | null;
+        };
         InstallationFileEntryRequest: {
             path: string;
             hash: string;
@@ -1840,7 +1847,7 @@ export interface components {
             item: string;
             refusal: components["schemas"]["RestoreRefusal"];
             message: string;
-            installationFileNotFound?: string | null;
+            installationFileNotFound?: components["schemas"]["InstallationFile"] | null;
             gameFilesNotFound: string[];
             buildRefusal: components["schemas"]["BuildRefusal"];
             submoduleNotFound?: string | null;

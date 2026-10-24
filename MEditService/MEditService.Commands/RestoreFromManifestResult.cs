@@ -14,10 +14,10 @@ public sealed record ModRestored(
     string Mod, IReadOnlyList<string> Written, IReadOnlyList<string> NamedByNoLine, string? StatCacheNotWritten, ModMetadata Metadata,
     bool Uncommitted = false, string? LeftDetached = null);
 
-/// <summary>A skipped mod. A NotFound mod names the installation file, the game files and the submodule it lacks, for a request
-/// to hand. A NotBuilt mod names its build's refusal.</summary>
+/// <summary>A skipped mod. A NotFound mod names the installation file, as its manifest names it, the game files and the submodule
+/// it lacks, for a request to fetch and hand. A NotBuilt mod names its build's refusal.</summary>
 public sealed record RestoreRefused(
-    string Item, RestoreRefusal Refusal, string Message, string? InstallationFileNotFound, IReadOnlyList<string> GameFilesNotFound,
+    string Item, RestoreRefusal Refusal, string Message, ManifestPackage.InstallationFile? InstallationFileNotFound, IReadOnlyList<string> GameFilesNotFound,
     BuildRefusal BuildRefusal = BuildRefusal.None, string? SubmoduleNotFound = null) : IItemRefused<RestoreRefusal>
 {
     object IItemRefused<RestoreRefusal>.Item => Item;

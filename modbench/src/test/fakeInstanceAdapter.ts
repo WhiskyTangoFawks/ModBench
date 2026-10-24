@@ -4,6 +4,7 @@ import {
   entryNotFound, filesWinningFirst, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp, type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type SourceMods, type OriginFile, type InstallKeys, type FomodAnswer, type PluginOrderChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
+import { parseNexusPage } from '../instanceAdapter/nexusPage';
 import { pluginsProvidedOf } from '../instanceAdapter/pluginsProvided';
 import { loadedWithNoLineOf } from '../tables/gamePaths';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
@@ -64,6 +65,7 @@ export type AdapterCall =
   | { readonly verb: 'changePluginOrder' | 'changePluginOrderOverProvided'; readonly profile: string; readonly changes: readonly PluginOrderChange[] }
   | { readonly verb: 'markDownloadedFile'; readonly name: string; readonly mark: DownloadedFileMark }
   | { readonly verb: 'writeNexusFileInfo'; readonly name: string; readonly info: NexusFileInfo }
+  | { readonly verb: 'putDownloadedFile'; readonly name: string; readonly info: NexusFileInfo }
   | { readonly verb: 'trashDownloadedFile'; readonly name: string }
   | { readonly verb: 'selectProfile'; readonly profile: string }
   | { readonly verb: 'createModFolder'; readonly mod: string }
@@ -219,6 +221,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
   let current = reading;
   let calls: AdapterCall[] = [];
   const hashed: string[] = [];
+  // The fake's hash of a downloaded file put is its bytes as text.
+  const put = new Map<string, FileRead<InstallationFile>>();
   const listeners = new Set<() => void>();
   let readings = 0;
   let readingFailure: string | undefined;
@@ -281,7 +285,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
     modFolderPath: (mod) => Promise.resolve(namesNoFolder(mod) ? undefined : foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod)),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
-    downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? { kind: 'read', answer: undefined }),
+    downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? put.get(name) ?? { kind: 'read', answer: undefined }),
+    nexusFileAt: parseNexusPage,
     downloadedFileQuery: (name) => {
       const reason = answers.unreadableQueries?.get(name);
       if (reason !== undefined) return Promise.resolve({ kind: 'unreadable', reason });
@@ -352,6 +357,17 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         }
         return { gone: false, wrote: held.excluded !== excluded } as const;
       }),
+    putDownloadedFile: async (name, bytes, { hash, info }) => {
+      const chunks: Uint8Array[] = [];
+      for await (const chunk of bytes) chunks.push(chunk);
+      const text = Buffer.concat(chunks).toString();
+      return write({ verb: 'putDownloadedFile', name, info }, () => {
+        if (answers.downloadedFiles?.has(name) || put.has(name)) throw new Error(`'${name}' is already in the downloads folder`);
+        if (text !== hash) return { put: false };
+        put.set(name, { kind: 'read', answer: { path: `/downloads/${name}`, size: text.length, hash, entries: [] } });
+        return { put: true };
+      });
+    },
     writeNexusFileInfo: (name, info) =>
       write({ verb: 'writeNexusFileInfo', name, info }, () => (downloadedFileNamed(name) === undefined ? { gone: true } as const : { gone: false, wrote: true } as const)),
     trashDownloadedFile: (name) =>

@@ -3,11 +3,12 @@
 // writes the file whole.
 
 import { randomBytes } from 'node:crypto';
-import { constants, type Dirent } from 'node:fs';
+import { constants, createWriteStream, type Dirent } from 'node:fs';
 import {
   access, appendFile, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
 } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { errnoCode } from './errno';
 import { errorMessage } from '../ports/errorMessage';
 import type { FileRead, FileStamp } from './instanceAdapter';
@@ -230,6 +231,21 @@ async function writeAtomic(path: string, text: string): Promise<void> {
   } catch (err) {
     await rm(tmp, { force: true });
     throw reportedAsTarget(err, tmp, target);
+  }
+}
+
+/** Streams `bytes` to a temp beside `path`, and moves it to `path` only when `keep` accepts the temp; answers whether it did.
+ *  The temp goes either way. */
+export async function putStreamedIf(path: string, bytes: AsyncIterable<Uint8Array>, keep: (temp: string) => Promise<boolean>): Promise<boolean> {
+  await removeStaleTempsFor(path);
+  const tmp = tempWritePath(path);
+  try {
+    await pipeline(bytes, createWriteStream(tmp, { flags: 'wx' }));
+    if (!(await keep(tmp))) return false;
+    await fsRename(tmp, path);
+    return true;
+  } finally {
+    await rm(tmp, { force: true });
   }
 }
 

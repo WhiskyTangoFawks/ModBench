@@ -250,11 +250,14 @@ export interface WhatRestoreDestroys {
 
 type RestoredMod = components['schemas']['ModRestored'];
 
-/** A skipped mod lacking an installation file or a submodule, by name, or game files, by their path in the mod folder, that
- *  the call did not hand. A call that hands them brings it back. */
+/** An installation file as a manifest names it: by name, with its hash and its page on its host. */
+export type ManifestInstallationFile = Pick<components['schemas']['InstallationFile'], 'name' | 'hash'> & { readonly page?: string };
+
+/** A skipped mod lacking an installation file, as its manifest names it, a submodule, by name, or game files, by their path in
+ *  the mod folder, that the call did not hand. A call that hands them brings it back. */
 export interface NotFound {
   mod: string;
-  installationFile?: string;
+  installationFile?: ManifestInstallationFile;
   gameFiles: readonly string[];
   submodule?: string;
 }
