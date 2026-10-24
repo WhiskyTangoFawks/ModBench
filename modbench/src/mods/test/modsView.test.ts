@@ -4,11 +4,13 @@ import type * as vscode from 'vscode';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  uriFile, uriFrom, DataTransferItem, DataTransfer,
+  uriFile, uriFrom, fakeUri, DataTransferItem, DataTransfer, Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection,
 } from '../../test/vscodeMock';
 import {
   filterBoxWindowMock, filterBoxCommandsMock, currentBoxOf, waitForMessage, FakeTreeViews, type FakeTreeView,
 } from '../../drivingLib/test/nameFilterViewHarness';
+
+const diagnosticCollections = new Map<string, FakeDiagnosticCollection>();
 
 const h = vi.hoisted(() => ({
   state: {
@@ -23,8 +25,8 @@ const h = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
-  languages: { createDiagnosticCollection: () => ({ clear: () => undefined, set: () => undefined, dispose: () => undefined }) },
+  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer, Diagnostic, DiagnosticSeverity, Range,
+  languages: { createDiagnosticCollection: (name: string) => { const collection = new FakeDiagnosticCollection(); diagnosticCollections.set(name, collection); return collection; } },
   workspace: {
     ...fakeVscodeModule().workspace,
     getConfiguration: () => ({ get: () => undefined }),
@@ -121,6 +123,18 @@ beforeEach(() => {
   h.state.contextKeys.clear();
   h.decorationProviders.length = 0;
   h.picked.length = 0;
+});
+
+describe('the Mods view\'s problems (publishing.md, Publisher tags, story 4)', () => {
+  it('publishes a publisher tag that names no path to the Problems panel', () => {
+    const file = '/instance/compiler_settings.json';
+    const publisherConfiguration = { kind: 'read', covering: () => [], listed: () => [], namesNoPath: [{ file, line: 2, message: 'gone' }] } as const;
+    const instance = new FakeInstance(instanceValueFixture({ publisherConfiguration }));
+
+    createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
+
+    expect(diagnosticCollections.get('modbench-publisher')?.has(fakeUri(file))).toBe(true);
+  });
 });
 
 describe('the Mods filter follows a row change with no keystroke', () => {

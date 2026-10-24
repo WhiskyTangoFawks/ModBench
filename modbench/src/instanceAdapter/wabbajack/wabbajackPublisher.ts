@@ -3,6 +3,7 @@
 // Publisher tags, story 5).
 
 import { isAbsolute, join, relative, sep } from 'node:path';
+import { parse, parseTree, printParseErrorCode, type ParseError } from 'jsonc-parser';
 import { errnoCode } from '../errno';
 import { errorMessage } from '../../ports/errorMessage';
 import { get, listDir, putIfChanged, readOrAbsent } from '../files';
@@ -56,56 +57,14 @@ interface PathNode {
 
 const pathNode = (): PathNode => ({ tags: new Set(), below: new Map() });
 
-// Each index of `chars` outside every string, in order; `visit` answers the index to go on from.
-function outsideStrings(chars: readonly string[], visit: (at: number) => number): void {
-  let inString = false;
-  for (let at = 0; at < chars.length; at++) {
-    const char = chars[at];
-    if (inString) {
-      if (char === '\\') at++;
-      else if (char === '"') inString = false;
-    } else if (char === '"') {
-      inString = true;
-    } else {
-      at = visit(at);
-    }
-  }
-}
-
-const blank = (chars: string[], from: number, to: number): void => {
-  for (let at = from; at < to; at++) if (chars[at] !== '\n') chars[at] = ' ';
-};
-
-// What Wabbajack's serializer skips, blanked so each position stays where it was: comments, and a comma before a
-// closing bracket.
-function blankedSkips(text: string): string {
-  const chars = text.split('');
-  outsideStrings(chars, (at) => {
-    const opening = chars.slice(at, at + 2).join('');
-    if (opening !== '//' && opening !== '/*') return at;
-    const closing = opening === '//' ? '\n' : '*/';
-    const end = text.indexOf(closing, at + 2);
-    const to = end === -1 ? chars.length : end + (opening === '//' ? 0 : 2);
-    blank(chars, at, to);
-    return to - 1;
-  });
-  outsideStrings(chars, (at) => {
-    if (chars[at] !== ',') return at;
-    let next = at + 1;
-    while (chars[next]?.trim() === '') next++;
-    if (chars[next] === ']' || chars[next] === '}') chars[at] = ' ';
-    return at;
-  });
-  return chars.join('');
-}
+// As Wabbajack's serializer reads it: comments and a comma before a closing bracket are skipped.
+const READS = { allowTrailingComma: true };
 
 function settingsIn(text: string, file: string): object {
-  let settings: unknown;
-  try {
-    settings = JSON.parse(blankedSkips(text));
-  } catch (err) {
-    throw new Error(`${file} is not JSON: ${errorMessage(err)}`, { cause: err });
-  }
+  const errors: ParseError[] = [];
+  const settings: unknown = parse(text, errors, READS);
+  const [first] = errors;
+  if (first !== undefined) throw new Error(`${file} is not JSON: ${printParseErrorCode(first.error)}`);
   if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) throw new Error(`${file} holds no settings object`);
   return settings;
 }
@@ -121,33 +80,12 @@ function valueOf<T>(settings: object, key: string, file: string, wanted: [(value
   return value;
 }
 
-// The line (1-based) of each string in the lists the settings hold, in the blanked text, where nothing but strings
-// and structure remain. A key listed twice keeps its last, as the parse does.
-function entryLines(blanked: string): Map<string, number[]> {
+// The line (1-based) of each entry in each list the settings hold. A key listed twice keeps its last, as the parse does.
+function entryLines(text: string): Map<string, number[]> {
   const lines = new Map<string, number[]>();
-  const chars = blanked.split('');
-  let depth = 0;
-  let key: string | undefined;
-  let line = 1;
-  for (let at = 0; at < chars.length; at++) {
-    const char = chars[at];
-    if (char === '\n') line++;
-    else if (char === '[' || char === '{') depth++;
-    else if (char === ']' || char === '}') depth--;
-    else if (char === '"') {
-      let end = at + 1;
-      while (chars[end] !== '"' && end < chars.length) end += chars[end] === '\\' ? 2 : 1;
-      let after = end + 1;
-      while (chars[after]?.trim() === '') after++;
-      if (depth === 1 && chars[after] === ':') {
-        key = String(JSON.parse(chars.slice(at, end + 1).join('')));
-        lines.set(key, []);
-      } else if (depth === 2 && key !== undefined) {
-        lines.get(key)?.push(line);
-      }
-      line += chars.slice(at, end).filter((c) => c === '\n').length;
-      at = end;
-    }
+  for (const property of parseTree(text, [], READS)?.children ?? []) {
+    const [key, list] = property.children ?? [];
+    lines.set(String(key?.value), (list?.children ?? []).map((entry) => text.slice(0, entry.offset).split('\n').length));
   }
   return lines;
 }
@@ -174,14 +112,25 @@ async function holdsPath(instanceRoot: string, names: readonly string[], listing
   return true;
 }
 
+async function problemWith(instanceRoot: string, entry: string, listings: Listings): Promise<string | undefined> {
+  try {
+    return await holdsPath(instanceRoot, namesOf(entry), listings) ? undefined : `"${entry}" names no path in the instance.`;
+  } catch (err) {
+    return `"${entry}" could not be checked: ${errorMessage(err)}`;
+  }
+}
+
 async function tagsNamingNoPath(instanceRoot: string, settings: object, text: string, file: string): Promise<TagNamingNoPath[]> {
-  const lines = entryLines(blankedSkips(text));
+  const lines = entryLines(text);
   const listings: Listings = new Map();
   const naming: TagNamingNoPath[] = [];
   for (const { listedUnder, tag } of TAGS) {
     const entries = valueOf(settings, listedUnder, file, [isNames, 'a list of paths']) ?? [];
     for (const [at, entry] of entries.entries()) {
-      if (!await holdsPath(instanceRoot, namesOf(entry), listings)) naming.push({ file, line: lines.get(listedUnder)?.[at] ?? 1, tag, entry });
+      const problem = await problemWith(instanceRoot, entry, listings);
+      const line = lines.get(listedUnder)?.[at];
+      if (line === undefined) throw new Error(`${file}: no line for ${listedUnder} entry ${at}`);
+      if (problem !== undefined) naming.push({ file, line, message: `${tag.name}: ${problem}` });
     }
   }
   return naming;
@@ -298,21 +247,32 @@ function followedEntries(entries: readonly string[], moves: readonly InstanceMov
 export function wabbajackPublisher(instanceRoot: string, manager: ManagerAnswers): Publisher {
   const file = join(instanceRoot, COMPILER_SETTINGS.name);
   const neverShipped = manager.neverShipped.map((folder) => namesOf(relative(instanceRoot, folder)));
-  const read = async (text: string): Promise<PublisherConfiguration> => {
+  const understood = async (text: string) => {
     const settings = settingsIn(text, file);
     const tags = tagsByPath(settings, file);
-    const covering = coveringIn(instanceRoot, tags, neverShipped, await shippedModsIn(settings, file, manager));
-    return { kind: 'read', covering, listed: listedIn(instanceRoot, tags), namesNoPath: await tagsNamingNoPath(instanceRoot, settings, text, file) };
+    return { settings, tags, covering: coveringIn(instanceRoot, tags, neverShipped, await shippedModsIn(settings, file, manager)) };
   };
+  const settingsText = () => readOrAbsent(() => get(file), undefined);
   return {
     tags: TAGS.map(({ tag }) => tag),
     configurationFile: COMPILER_SETTINGS,
     configuration: async (): Promise<PublisherConfiguration> => {
       try {
-        const text = await readOrAbsent(() => get(file), undefined);
-        return text === undefined ? { kind: 'none' } : await read(text);
+        const text = await settingsText();
+        if (text === undefined) return { kind: 'none' };
+        const { settings, tags, covering } = await understood(text);
+        return { kind: 'read', covering, listed: listedIn(instanceRoot, tags), namesNoPath: await tagsNamingNoPath(instanceRoot, settings, text, file) };
       } catch (err) {
         return { kind: 'unreadable', reason: errorMessage(err) };
+      }
+    },
+    refusal: async () => {
+      try {
+        const text = await settingsText();
+        if (text !== undefined) await understood(text);
+        return undefined;
+      } catch (err) {
+        return errorMessage(err);
       }
     },
     changeTag: async (change, tagName, paths) => {

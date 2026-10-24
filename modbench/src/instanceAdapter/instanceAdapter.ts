@@ -492,12 +492,11 @@ export interface PathRefusal {
   readonly reason: string;
 }
 
-/** A publisher tag in the configuration that names no path in the instance, on its line (1-based) in `file`. */
+/** A problem with a path one entry of the publisher's configuration names, on its line (1-based) in `file`. */
 export interface TagNamingNoPath {
   readonly file: string;
   readonly line: number;
-  readonly tag: PublisherTag;
-  readonly entry: string;
+  readonly message: string;
 }
 
 /** The publisher's configuration: none while the instance holds no publisher's, or why it could not be read. */

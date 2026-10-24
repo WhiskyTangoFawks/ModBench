@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { diagnosticsByPath } from './diagnosticsByPath';
 import type { CompileDiagnostic, PluginAddress } from '../client';
 import type { SourceFiles } from '../instanceLoader/loadOrderSnapshot';
 import { pluginAddressKey } from '../wire/pluginAddress';
@@ -22,13 +23,9 @@ export class BuildProblems {
       return;
     }
 
-    const byPath = new Map<string, vscode.Diagnostic[]>();
-    for (const d of diagnostics) {
-      const fsPath = files.file(d.sourceRelativePath);
-      const list = byPath.get(fsPath) ?? [];
-      list.push(new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), d.message, vscode.DiagnosticSeverity.Warning));
-      byPath.set(fsPath, list);
-    }
+    const byPath = diagnosticsByPath(diagnostics.map((d) => [
+      files.file(d.sourceRelativePath), new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), d.message, vscode.DiagnosticSeverity.Warning),
+    ]));
     const uris = [...byPath].map(([fsPath, list]) => {
       const uri = vscode.Uri.file(fsPath);
       this.collection.set(uri, list);

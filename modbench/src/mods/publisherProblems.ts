@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
+import { diagnosticsByPath } from './diagnosticsByPath';
 import type { InstanceView, InstanceValue } from '../instanceLoader/instance';
 
-/** The publisher tags that name no path in the instance, in the Problems panel, each on its line in the publisher's configuration. */
 export class PublisherProblems {
   private readonly following: vscode.Disposable;
 
@@ -18,13 +18,10 @@ export class PublisherProblems {
   private show({ publisherConfiguration }: InstanceValue): void {
     this.collection.clear();
     if (publisherConfiguration.kind !== 'read') return;
-    const byFile = new Map<string, vscode.Diagnostic[]>();
-    for (const { file, line, tag, entry } of publisherConfiguration.namesNoPath) {
-      const list = byFile.get(file) ?? [];
-      const range = new vscode.Range(line - 1, 0, line - 1, Number.MAX_SAFE_INTEGER);
-      list.push(new vscode.Diagnostic(range, `${tag.name}: "${entry}" names no path in the instance.`, vscode.DiagnosticSeverity.Warning));
-      byFile.set(file, list);
-    }
+    const range = (line: number) => new vscode.Range(line - 1, 0, line - 1, Number.MAX_SAFE_INTEGER);
+    const byFile = diagnosticsByPath(publisherConfiguration.namesNoPath.map(({ file, line, message }) => [
+      file, new vscode.Diagnostic(range(line), message, vscode.DiagnosticSeverity.Warning),
+    ]));
     for (const [file, list] of byFile) this.collection.set(vscode.Uri.file(file), list);
   }
 }

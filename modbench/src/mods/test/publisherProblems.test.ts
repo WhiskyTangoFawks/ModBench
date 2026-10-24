@@ -3,17 +3,16 @@ import { Diagnostic, DiagnosticSeverity, Range, uriFile, fakeUri, FakeDiagnostic
 
 vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri: { file: uriFile } }));
 
-import type { PublisherConfiguration, PublisherTag } from '../../instanceAdapter/instanceAdapter';
+import type { PublisherConfiguration } from '../../instanceAdapter/instanceAdapter';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { valueWithSourceDirs } from './sourceDirsFixture';
 import { PublisherProblems } from '../publisherProblems';
 
-const IGNORE: PublisherTag = { name: 'Ignore', badge: 'IG', marksPaths: true };
 const FILE = '/instance/compiler_settings.json';
 
 const naming = (...lines: number[]): PublisherConfiguration => ({
   kind: 'read', covering: () => [], listed: () => [],
-  namesNoPath: lines.map((line) => ({ file: FILE, line, tag: IGNORE, entry: `gone${line}` })),
+  namesNoPath: lines.map((line) => ({ file: FILE, line, message: `problem on ${line}` })),
 });
 
 const instanceHolding = (publisherConfiguration: PublisherConfiguration) =>
@@ -31,8 +30,8 @@ describe('a publisher tag that names no path (publishing.md, Publisher tags, sto
     new PublisherProblems(collection, instanceHolding(naming(3, 7)));
 
     expect(problemsOf(collection)).toEqual([
-      [lineRange(2), 'Ignore: "gone3" names no path in the instance.', DiagnosticSeverity.Warning],
-      [lineRange(6), 'Ignore: "gone7" names no path in the instance.', DiagnosticSeverity.Warning],
+      [lineRange(2), 'problem on 3', DiagnosticSeverity.Warning],
+      [lineRange(6), 'problem on 7', DiagnosticSeverity.Warning],
     ]);
   });
 

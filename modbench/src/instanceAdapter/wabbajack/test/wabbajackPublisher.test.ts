@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
@@ -457,11 +457,8 @@ describe('the watch on the compiler settings (ADR-0003)', () => {
 });
 
 describe('the publisher tags that name no path in the instance (publishing.md, Publisher tags, story 4)', () => {
-  async function naming() {
-    const configuration = await publisherOver().configuration();
-    if (configuration.kind !== 'read') throw new Error(`expected read, got ${JSON.stringify(configuration)}`);
-    return configuration.namesNoPath.map(({ tag, entry, line }) => [tag.name, entry, line]);
-  }
+  const naming = () => publisherOver().configuration();
+  const reads = (namesNoPath: unknown) => ({ kind: 'read', namesNoPath });
 
   it('lists an entry naming no file or folder, with its line, as comments and trailing commas leave it', async () => {
     await mkdir(join(root, 'mods', 'A', 'textures'), { recursive: true });
@@ -478,23 +475,44 @@ describe('the publisher tags that name no path in the instance (publishing.md, P
       '  "AlwaysEnabled": ["mods\\\\Missing"]',
       '}',
     ].join('\n'));
+    const file = join(root, SETTINGS_FILE);
 
-    expect(await naming()).toEqual([
-      ['Include', 'mods\\Gone', 3], ['Ignore', 'mods/A/meta.ini/inside', 6], ['Ignore', 'mods\\A\\Gone.txt', 7], ['Always Enabled', 'mods\\Missing', 9],
-    ]);
+    expect(await naming()).toMatchObject(reads([
+      { file, line: 3, message: 'Include: "mods\\Gone" names no path in the instance.' },
+      { file, line: 6, message: 'Ignore: "mods/A/meta.ini/inside" names no path in the instance.' },
+      { file, line: 7, message: 'Ignore: "mods\\A\\Gone.txt" names no path in the instance.' },
+      { file, line: 9, message: 'Always Enabled: "mods\\Missing" names no path in the instance.' },
+    ]));
+  });
+
+  it('takes a key listed twice at its last, as the parse does', async () => {
+    await writeSettings('{\n  "Include": ["first"],\n  "Include": [\n    "second"\n  ]\n}');
+
+    expect(await naming()).toMatchObject(reads([{ line: 4, message: 'Include: "second" names no path in the instance.' }]));
   });
 
   it('matches a path without case, at either separator', async () => {
     await mkdir(join(root, 'Mods', 'Alpha'), { recursive: true });
     await writeSettings({ Include: ['mods\\alpha', 'MODS/ALPHA/'] });
 
-    expect(await naming()).toEqual([]);
+    expect(await naming()).toMatchObject(reads([]));
   });
 
-  it('names the configuration file the line is in', async () => {
-    await writeSettings({ Include: ['nowhere'] });
-    const configuration = await publisherOver().configuration();
+  it('says a folder it cannot list could not be checked, and keeps every other entry and the configuration read', async () => {
+    await mkdir(join(root, 'mods', 'A'), { recursive: true });
+    await symlink(join(root, 'mods', 'loop'), join(root, 'mods', 'loop'), 'dir');
+    await writeSettings({ Include: ['mods\\loop\\x', 'mods\\A', 'mods\\Gone'] });
 
-    expect(configuration.kind === 'read' && configuration.namesNoPath[0]?.file).toBe(join(root, SETTINGS_FILE));
+    expect(await naming()).toMatchObject(reads([
+      { message: expect.stringMatching(/^Include: "mods\\loop\\x" could not be checked: .+/) as unknown },
+      { message: 'Include: "mods\\Gone" names no path in the instance.' },
+    ]));
+    expect(await covering('mods', 'A')).toEqual(['Include']);
+  });
+
+  it('refuses an unreadable configuration without walking the instance', async () => {
+    await writeSettings('{ not json');
+
+    expect(await publisherOver().refusal()).toContain('is not JSON');
   });
 });
