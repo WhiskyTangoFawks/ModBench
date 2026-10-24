@@ -82,11 +82,8 @@ export const includedName = (name: string): string => name.slice(0, -EXCLUDED_SU
 export const includedPathOf = (relativePath: string): string =>
   relativePath.split('/').map((segment) => (isExcludedName(segment) ? includedName(segment) : segment)).join('/');
 
-/** The prefix a new mod's extraction folder, inside the mod's folder, is named from. */
-export const newModExtractionPrefix = (modFolder: string): string => ownTempPrefix(modFolder, 'new-');
-
-/** The prefix an upgrade's extraction folder, inside the mod's folder, is named from. */
-export const upgradeExtractionPrefix = (modFolder: string): string => ownTempPrefix(modFolder, 'upgrade-');
+/** The prefix an install's staging folder, beside mods/, is named from. */
+export const stagingPrefix = (instanceRoot: string): string => ownTempPrefix(instanceRoot, 'install-');
 
 export const overwriteDir = (instanceRoot: string): string => join(instanceRoot, OVERWRITE_DIR_NAME);
 

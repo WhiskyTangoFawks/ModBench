@@ -15,5 +15,5 @@ const report = (message: EngineReport): void => {
 process.on('message', (request: unknown) => {
   if (!isRequest(request)) return;
   if (request.kind === 'cancel') report({ kind: 'done', result: null });
-  else report({ kind: 'step', steps: [MAIN], current: 0 });
+  else if (request.kind === 'install' || request.kind === 'continue') report({ kind: 'step', steps: [MAIN], current: 0, cause: 'move' });
 });

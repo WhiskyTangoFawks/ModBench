@@ -16,8 +16,8 @@ interface Dialog {
 }
 
 let dialog: Dialog | undefined;
-// The engine reports a step inside each call that changes it, so the report of a select is held back.
-let selecting = false;
+// The engine reports a step inside each call that changes it.
+let cause: 'select' | 'move' = 'move';
 
 const report = (message: EngineReport, then?: () => void): void => {
   process.send?.(message, undefined, undefined, then);
@@ -58,13 +58,12 @@ function install(engineFolder: string, root: string, files: readonly string[], f
     () => FOMM_VERSION,
     () => answer('the game\'s version', facts.gameVersion, ''),
     () => answer('the script extender\'s version', facts.extenderVersion, ''),
-    (_module, _image, select, cont, cancel) => {
+    (module, _image, select, cont, cancel) => {
       dialog = { select, cont, cancel };
+      report({ kind: 'dialog', module });
     },
     () => undefined,
-    (steps, current) => {
-      if (!selecting) report({ kind: 'step', steps, current });
-    },
+    (steps, current) => report({ kind: 'step', steps, current, cause }),
   );
   installer.install([...files], [], '', root, undefined, false, false).then(
     (result) => report({ kind: 'done', result }, exit),
@@ -72,18 +71,18 @@ function install(engineFolder: string, root: string, files: readonly string[], f
   );
 }
 
-function answerStep(stepId: number, selections: readonly Selection[]): void {
-  selecting = true;
-  for (const { groupId, optionIds } of selections) dialog?.select(stepId, groupId, [...optionIds]);
-  selecting = false;
-  dialog?.cont(true, stepId);
+function select(stepId: number, { groupId, optionIds }: Selection): void {
+  cause = 'select';
+  dialog?.select(stepId, groupId, [...optionIds]);
+  cause = 'move';
 }
 
 process.on('message', (request: unknown) => {
   if (!isRequest(request)) return;
   switch (request.kind) {
     case 'install': return install(request.engineFolder, request.root, request.files, request.facts);
-    case 'answer': return answerStep(request.stepId, request.selections);
+    case 'select': return select(request.stepId, request.selection);
+    case 'continue': return dialog?.cont(request.forward, request.stepId);
     case 'cancel': return dialog?.cancel();
   }
 });

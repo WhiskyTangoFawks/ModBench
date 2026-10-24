@@ -32,7 +32,17 @@ export function listen(listener: (msg: ExtensionToWebview) => void): () => void 
   return () => { listeners.delete(listener); };
 }
 
+const pageListeners = new Set<(data: unknown) => void>();
+
+/** A page with a protocol of its own hears every message from the host as it arrived, through the page's one receive
+ *  loop. Returns what stops the listening. */
+export function listenToHost(listener: (data: unknown) => void): () => void {
+  pageListeners.add(listener);
+  return () => { pageListeners.delete(listener); };
+}
+
 window.addEventListener('message', (event: MessageEvent<unknown>) => {
+  pageListeners.forEach((listener) => { listener(event.data); });
   let msg: ExtensionToWebview;
   try {
     msg = parseExtensionToWebview(event.data);

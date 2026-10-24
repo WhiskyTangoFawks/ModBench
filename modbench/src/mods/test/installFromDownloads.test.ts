@@ -1,4 +1,5 @@
 import { unreadStatus } from '../../test/unreadStatus';
+import { FOMOD_PAGE, VIEW_ANSWER } from '../../test/fomodDialogDouble';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const { registerCommand, showQuickPick, createQuickPick, showInputBox } = vi.hoisted(() => ({
@@ -55,7 +56,7 @@ const installDeps = (over: Partial<DownloadedFileInstallDeps> = {}): DownloadedF
 
 const installDownloadedFile = async (file: LocatedDownloadedFileRow, listed: readonly LocatedDownloadedFileRow[], deps: DownloadedFileInstallDeps): Promise<void> => {
   registerModInstallCommands({
-    commands: installOver(), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), ask,
+    commands: installOver(), instance: fakeInstance(listed), reporterFor: () => recordingReporter(), ask, fomodDialog: () => FOMOD_PAGE,
     downloadedFileInstallReporting: deps,
   });
   const handler = registerCommand.mock.calls.findLast((call) => call[0] === 'modbench.mod.install')?.[1];
@@ -86,7 +87,7 @@ describe('modbench.mod.install over a downloaded file', () => {
     await vi.waitFor(() => {
       expect(installMod).toHaveBeenCalledWith(
         { kind: 'downloadedFile', name: 'foo.7z' },
-        { kind: 'new', name: 'foo' }, true, undefined);
+        { kind: 'new', name: 'foo' }, true, VIEW_ANSWER);
     });
   });
 
@@ -98,7 +99,7 @@ describe('modbench.mod.install over a downloaded file', () => {
     await vi.waitFor(() => {
       expect(installMod).toHaveBeenCalledWith(
         { kind: 'downloadedFile', name: 'foo.7z' },
-        { kind: 'new', name: 'foo' }, true, undefined);
+        { kind: 'new', name: 'foo' }, true, VIEW_ANSWER);
     });
   });
 
@@ -117,7 +118,7 @@ describe('modbench.mod.install over a downloaded file', () => {
     expect(report.shownFailures).toEqual([]);
     expect(installMod).toHaveBeenCalledWith(
         { kind: 'downloadedFile', name: 'foo.7z' },
-        { kind: 'new', name: 'foo' }, true, undefined);
+        { kind: 'new', name: 'foo' }, true, VIEW_ANSWER);
   });
 
   it('install: cancelling the name prompt installs nothing', async () => {
@@ -215,7 +216,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
 
     expect(installMod).toHaveBeenCalledWith(
         { kind: 'downloadedFile', name: 'foo.7z' },
-        { kind: 'upgrade', name: 'Harder VATS' }, true, undefined);
+        { kind: 'upgrade', name: 'Harder VATS' }, true, VIEW_ANSWER);
     expect(showInputBox).not.toHaveBeenCalled();
   });
 
@@ -228,7 +229,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
 
     expect(ask).toHaveBeenCalledTimes(1);
     expect(ask).toHaveBeenCalledWith('Upgrade "Harder VATS"?', { modal: true, detail: LOSS }, 'Upgrade');
-    expect(installMod).toHaveBeenCalledWith({ kind: 'downloadedFile', name: 'foo.7z' }, { kind: 'upgrade', name: 'Harder VATS' }, true, undefined);
+    expect(installMod).toHaveBeenCalledWith({ kind: 'downloadedFile', name: 'foo.7z' }, { kind: 'upgrade', name: 'Harder VATS' }, true, VIEW_ANSWER);
   });
 
   it('Esc at the question installs nothing', async () => {
@@ -256,7 +257,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
 
     expect(installMod).toHaveBeenCalledWith(
         { kind: 'downloadedFile', name: 'foo.7z' },
-        { kind: 'new', name: 'foo' }, true, undefined);
+        { kind: 'new', name: 'foo' }, true, VIEW_ANSWER);
   });
 
   it('Esc installs nothing', async () => {
@@ -282,7 +283,7 @@ describe('modbench.mod.install over a downloaded file: the pick among the upgrad
 
     expect(installMod).toHaveBeenCalledWith(
         { kind: 'downloadedFile', name: 'foo.7z' },
-        { kind: 'new', name: 'foo' }, true, undefined);
+        { kind: 'new', name: 'foo' }, true, VIEW_ANSWER);
     expect(createQuickPick).not.toHaveBeenCalled();
   });
 });

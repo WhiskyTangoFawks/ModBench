@@ -29,6 +29,7 @@ export default defineConfig({
       input: {
         [entryOf(WEBVIEW_SCRIPTS.RECORD_PANEL)]: resolve(__dirname, "src/index.html"),
         [entryOf(WEBVIEW_SCRIPTS.CONFLICT_TABLE)]: resolve(__dirname, "src/conflicts.html"),
+        [entryOf(WEBVIEW_SCRIPTS.FOMOD)]: resolve(__dirname, "src/fomod.html"),
       },
       output: {
         entryFileNames: "assets/[name].js",

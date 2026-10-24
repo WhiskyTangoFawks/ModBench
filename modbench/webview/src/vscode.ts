@@ -1,5 +1,6 @@
 import { type WebviewToExtension } from '../../src/wire/messages';
 import type { ConflictTableReady } from '../../src/wire/conflictTable';
+import type { FomodPageMessage } from '../../src/wire/fomodPage';
 
 interface VsCodeApi<Message> {
   // An arrow-typed property, not a method: `postMessage` never needs its own `this`, and this
@@ -23,3 +24,5 @@ export const tabState: TabState = api;
 export const vscode: VsCodeApi<WebviewToExtension> = api;
 
 export const conflictTableHost: VsCodeApi<ConflictTableReady> = api;
+
+export const fomodHost: VsCodeApi<FomodPageMessage> = api;
