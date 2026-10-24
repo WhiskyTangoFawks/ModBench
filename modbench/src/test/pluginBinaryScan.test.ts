@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { join, basename, relative } from 'node:path';
+import { join, basename, dirname, relative, sep } from 'node:path';
 import ts from 'typescript';
 import { present } from '../ports/present';
 import { isTestSupport, SRC } from './scanSource';
@@ -75,22 +75,40 @@ function undecodedReadsIn(sourceText: string, fileName: string): string[] {
   return undecodedReads;
 }
 
-const DIGEST_IMPORTS: Readonly<Record<string, ReadonlySet<string>>> = {
-  'node:fs': new Set(['createReadStream']),
-  'node:crypto': new Set(['createHash']),
-  'xxhash-wasm': new Set(['default']),
+interface ByteReader {
+  readonly imports: Readonly<Record<string, ReadonlySet<string>>>;
+  readonly exports: ReadonlySet<string>;
+  readonly exportReturns: string;
+  readonly exportedTypes?: ReadonlySet<string>;
+}
+
+const DIGEST: ByteReader = {
+  imports: { 'node:fs': new Set(['createReadStream']), 'node:crypto': new Set(['createHash']), 'xxhash-wasm': new Set(['default']) },
+  exports: new Set(['digestOf', 'md5Of']),
+  exportReturns: 'Promise<string>',
 };
-const DIGEST_EXPORTS: ReadonlySet<string> = new Set(['digestOf', 'md5Of']);
-const DIGEST_RETURNS = 'Promise<string>';
+
+const VERSION_READ: ByteReader = {
+  imports: { 'node:fs/promises': new Set(['open']) },
+  exports: new Set(['versionResourceOf']),
+  exportReturns: 'Promise<VersionResource>',
+  exportedTypes: new Set(['VersionResource']),
+};
+
+const FOMOD_XML_READ: ByteReader = {
+  imports: { 'node:fs/promises': new Set(['readFile']), '../errno': new Set(['errnoCode']) },
+  exports: new Set(['releaseXmlText']),
+  exportReturns: 'Promise<string>',
+};
 
 const isExported = (node: ts.Node): boolean =>
   ts.canHaveModifiers(node) && (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
 
 const firstLine = (node: ts.Node): string => present(node.getText().split('\n')[0], 'a statement\'s first line');
 
-function importOffences(statement: ts.ImportDeclaration): string[] {
+function importOffences(statement: ts.ImportDeclaration, imports: ByteReader['imports']): string[] {
   const from = ts.isStringLiteralLike(statement.moduleSpecifier) ? statement.moduleSpecifier.text : firstLine(statement);
-  const allowed = DIGEST_IMPORTS[from];
+  const allowed = imports[from];
   if (allowed === undefined) return [`imports ${from}`];
   const clause = statement.importClause;
   const bindings = clause?.namedBindings;
@@ -99,15 +117,17 @@ function importOffences(statement: ts.ImportDeclaration): string[] {
   return names.filter((name) => !allowed.has(name)).map((name) => `imports ${name} from ${from}`);
 }
 
-function digestModuleOffences(sourceText: string, fileName: string): string[] {
+function byteReaderOffences(reader: ByteReader, sourceText: string, fileName: string): string[] {
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
   const offences: string[] = [];
   for (const statement of source.statements) {
     if (ts.isImportDeclaration(statement)) {
-      offences.push(...importOffences(statement));
-    } else if (ts.isFunctionDeclaration(statement) && DIGEST_EXPORTS.has(statement.name?.text ?? '') && isExported(statement)) {
+      offences.push(...importOffences(statement, reader.imports));
+    } else if (ts.isFunctionDeclaration(statement) && reader.exports.has(statement.name?.text ?? '') && isExported(statement)) {
       const returns = statement.type?.getText() ?? 'nothing declared';
-      if (returns !== DIGEST_RETURNS) offences.push(`${statement.name?.text} returns ${returns}, not ${DIGEST_RETURNS}`);
+      if (returns !== reader.exportReturns) offences.push(`${statement.name?.text} returns ${returns}, not ${reader.exportReturns}`);
+    } else if (ts.isTypeAliasDeclaration(statement) && reader.exportedTypes?.has(statement.name.text) === true) {
+      continue;
     } else if (ts.isExportAssignment(statement) || ts.isExportDeclaration(statement) || isExported(statement)) {
       offences.push(firstLine(statement));
     }
@@ -121,64 +141,114 @@ function digestModuleOffences(sourceText: string, fileName: string): string[] {
   return offences;
 }
 
-const THE_DIGEST = join(SRC, 'instanceAdapter', 'downloadedFileContents', 'contentDigest.ts');
+const BYTE_READERS: readonly (readonly [string, ByteReader])[] = [
+  [join('instanceAdapter', 'downloadedFileContents', 'contentDigest.ts'), DIGEST],
+  [join('instanceAdapter', 'gameFolder', 'versionResource.ts'), VERSION_READ],
+  [join('instanceAdapter', 'fomodInstaller', 'releaseXml.ts'), FOMOD_XML_READ],
+];
+const isByteReader = (path: string): boolean => BYTE_READERS.some(([reader]) => reader === relative(SRC, path));
 
-describe('the extension interprets no plugin binary (ADR-0004): its byte-level reads, in the digest module, feed a hash and nothing else', () => {
+const FOMOD_INSTALLER = join('instanceAdapter', 'fomodInstaller');
+const FOMOD_XML_READ_MODULE = join(FOMOD_INSTALLER, 'releaseXml');
+
+function modulesImported(sourceText: string, fileName: string): string[] {
+  const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
+  const specifiers: string[] = [];
+  walk(source, (node) => {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier !== undefined && ts.isStringLiteralLike(node.moduleSpecifier)) {
+      specifiers.push(node.moduleSpecifier.text);
+    } else if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword
+      || (ts.isIdentifier(node.expression) && node.expression.text === 'require'))) {
+      const [specifier] = node.arguments;
+      if (specifier !== undefined && ts.isStringLiteralLike(specifier)) specifiers.push(specifier.text);
+    }
+  });
+  return specifiers.filter((specifier) => specifier.startsWith('.'))
+    .map((specifier) => relative(SRC, join(dirname(fileName), specifier)).replace(/\.ts$/, ''));
+}
+
+const importsTheFomodXmlReadFromOutside = (sourceText: string, fileName: string): boolean =>
+  !relative(SRC, fileName).startsWith(`${FOMOD_INSTALLER}${sep}`) && modulesImported(sourceText, fileName).includes(FOMOD_XML_READ_MODULE);
+
+describe('the extension interprets no plugin binary (ADR-0004): its byte-level reads, in the digest module, the Game folder\'s version read and the FOMOD installer\'s XML read, feed a hash, a program\'s version or a FOMOD\'s text, and nothing else', () => {
   it('covers the whole extension source tree', () => {
     expect(tsFiles(SRC, { exclude: ['generated'] }).length).toBeGreaterThan(100);
   });
 
-  it('decodes every file it reads, so no production read can yield a plugin\'s bytes', () => {
+  it('decodes every file it reads outside those three, so no production read can yield a plugin\'s bytes', () => {
     const offenders: Record<string, string[]> = {};
     for (const path of tsFiles(SRC, { exclude: ['generated'] })) {
-      if (basename(path) === THIS_FILE_QUOTING_THE_PATTERNS || isTestSupport(relative(SRC, path))) continue;
+      if (basename(path) === THIS_FILE_QUOTING_THE_PATTERNS || isTestSupport(relative(SRC, path)) || isByteReader(path)) continue;
       const undecodedReads = undecodedReadsIn(readFileSync(path, 'utf8'), path);
       if (undecodedReads.length > 0) offenders[path] = undecodedReads;
     }
     expect(offenders).toEqual({});
   });
 
-  it('holds the digest module to node:fs, node:crypto, xxhash-wasm and its two exported hashes, so its bytes reach only a hash', () => {
-    expect(digestModuleOffences(readFileSync(THE_DIGEST, 'utf8'), THE_DIGEST)).toEqual([]);
+  it.each(BYTE_READERS)('holds %s to its imports and its exports, so its bytes reach only what it answers', (path, reader) => {
+    expect(byteReaderOffences(reader, readFileSync(join(SRC, path), 'utf8'), path)).toEqual([]);
+  });
+
+  it('lets only the FOMOD installer import its XML read, whose Windows-1252 fallback answers any file whole', () => {
+    const importers = tsFiles(SRC, { exclude: ['generated'] })
+      .filter((path) => !isTestSupport(relative(SRC, path)) && importsTheFomodXmlReadFromOutside(readFileSync(path, 'utf8'), path));
+    expect(importers).toEqual([]);
+  });
+
+  it.each([
+    "import { releaseXmlText } from '../fomodInstaller/releaseXml';",
+    "export { releaseXmlText } from '../fomodInstaller/releaseXml.ts';",
+    "const { releaseXmlText } = await import('../fomodInstaller/releaseXml');",
+  ])('flags `%s` outside the FOMOD installer, and not inside it', (planted) => {
+    expect(importsTheFomodXmlReadFromOutside(planted, join(SRC, 'instanceAdapter', 'mo2', 'planted.ts'))).toBe(true);
+    expect(importsTheFomodXmlReadFromOutside(planted.replace('../fomodInstaller/', './'), join(SRC, FOMOD_INSTALLER, 'planted.ts'))).toBe(false);
+  });
+
+  it('flags a version read that reads a whole file, or exports a buffer or a type it does not answer with', () => {
+    const planted = "import { open, readFile } from 'node:fs/promises';\n"
+      + 'export type Bytes = Buffer;\nexport async function versionResourceOf(p): Promise<Buffer> {}\n';
+    expect(byteReaderOffences(VERSION_READ, planted, 'versionResource.ts')).toEqual([
+      'imports readFile from node:fs/promises', 'export type Bytes = Buffer;', 'versionResourceOf returns Promise<Buffer>, not Promise<VersionResource>',
+    ]);
   });
 
   it('flags a digest module that imports anything but createReadStream, createHash and the xxHash package, which could carry the bytes elsewhere', () => {
     const other = "import xxhash from 'xxhash-wasm';\nimport { createReadStream } from 'node:fs';\nimport { keep } from './layout';\nexport async function digestOf(p): Promise<string> { keep(p); }\n";
-    expect(digestModuleOffences(other, 'contentDigest.ts')).toEqual(['imports ./layout']);
+    expect(byteReaderOffences(DIGEST, other, 'contentDigest.ts')).toEqual(['imports ./layout']);
     const sibling = "import { createReadStream, writeFileSync } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n";
-    expect(digestModuleOffences(sibling, 'contentDigest.ts')).toEqual(['imports writeFileSync from node:fs']);
+    expect(byteReaderOffences(DIGEST, sibling, 'contentDigest.ts')).toEqual(['imports writeFileSync from node:fs']);
     const whole = "import * as fs from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n";
-    expect(digestModuleOffences(whole, 'contentDigest.ts')).toEqual(['imports node:fs whole']);
+    expect(byteReaderOffences(DIGEST, whole, 'contentDigest.ts')).toEqual(['imports node:fs whole']);
     const byDefault = "import fs from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n";
-    expect(digestModuleOffences(byDefault, 'contentDigest.ts')).toEqual(['imports default from node:fs']);
+    expect(byteReaderOffences(DIGEST, byDefault, 'contentDigest.ts')).toEqual(['imports default from node:fs']);
   });
 
   it('flags an import acquired in the body, which the import list does not show', () => {
     const dynamic = "export async function digestOf(p): Promise<string> { const { keep } = await import('./layout'); }\n";
-    expect(digestModuleOffences(dynamic, 'contentDigest.ts')).toEqual(['imports ./layout']);
+    expect(byteReaderOffences(DIGEST, dynamic, 'contentDigest.ts')).toEqual(['imports ./layout']);
     const required = "export async function digestOf(p): Promise<string> { const { keep } = require('./layout'); }\n";
-    expect(digestModuleOffences(required, 'contentDigest.ts')).toEqual(['imports ./layout']);
+    expect(byteReaderOffences(DIGEST, required, 'contentDigest.ts')).toEqual(['imports ./layout']);
   });
 
   it('flags a hash that answers anything but a string, whichever of the two it is', () => {
     const md5 = "export async function md5Of(p): Promise<Buffer> {}\n";
-    expect(digestModuleOffences(md5, 'contentDigest.ts')).toEqual(['md5Of returns Promise<Buffer>, not Promise<string>']);
+    expect(byteReaderOffences(DIGEST, md5, 'contentDigest.ts')).toEqual(['md5Of returns Promise<Buffer>, not Promise<string>']);
   });
 
   it('flags a second export of any form, which is a second way out for the bytes', () => {
     const named = "import { createReadStream } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\nexport const bytesOf = (p) => createReadStream(p);\n";
-    expect(digestModuleOffences(named, 'contentDigest.ts')).toEqual(['export const bytesOf = (p) => createReadStream(p);']);
+    expect(byteReaderOffences(DIGEST, named, 'contentDigest.ts')).toEqual(['export const bytesOf = (p) => createReadStream(p);']);
     const assigned = "import { createReadStream } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\nexport default createReadStream;\n";
-    expect(digestModuleOffences(assigned, 'contentDigest.ts')).toEqual(['export default createReadStream;']);
+    expect(byteReaderOffences(DIGEST, assigned, 'contentDigest.ts')).toEqual(['export default createReadStream;']);
     const reExported = "export async function digestOf(p): Promise<string> {}\nexport { createReadStream } from 'node:fs';\n";
-    expect(digestModuleOffences(reExported, 'contentDigest.ts')).toEqual(["export { createReadStream } from 'node:fs';"]);
+    expect(byteReaderOffences(DIGEST, reExported, 'contentDigest.ts')).toEqual(["export { createReadStream } from 'node:fs';"]);
   });
 
   it('flags a digestOf that does not declare Promise<string>, so the bytes cannot leave as its answer', () => {
     const undeclared = "export async function digestOf(p) {}\n";
-    expect(digestModuleOffences(undeclared, 'contentDigest.ts')).toEqual(['digestOf returns nothing declared, not Promise<string>']);
+    expect(byteReaderOffences(DIGEST, undeclared, 'contentDigest.ts')).toEqual(['digestOf returns nothing declared, not Promise<string>']);
     const buffer = "export function digestOf(p): Promise<Buffer> {}\n";
-    expect(digestModuleOffences(buffer, 'contentDigest.ts')).toEqual(['digestOf returns Promise<Buffer>, not Promise<string>']);
+    expect(byteReaderOffences(DIGEST, buffer, 'contentDigest.ts')).toEqual(['digestOf returns Promise<Buffer>, not Promise<string>']);
   });
 
   it('flags a header read taken as a Buffer from an undecoded readFile', () => {

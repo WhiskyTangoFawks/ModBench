@@ -23,11 +23,18 @@ export interface GamePathInfo {
   readonly creationClubList?: string;
   /** The folder a mod's script-extender files sit in, under the Data folder. */
   readonly scriptExtenderFolder: string;
+  readonly programs: Programs;
   readonly pluginCompanions: PluginCompanions;
   readonly archiveLists: ArchiveLists;
   /** The BA2 versions the release reads its archives of textures and its other archives as; absent until what mEdit
    *  writes is known to load in the game. */
   readonly ba2Versions?: Ba2Versions;
+}
+
+/** In the game folder: the game's program, and its script extender's loader. */
+export interface Programs {
+  readonly game: string;
+  readonly extenderLoader: string;
 }
 
 export interface Ba2Versions {
@@ -91,31 +98,33 @@ const GAME_PATHS: Record<string, GamePathInfo> = {
   Fallout4: {
     gameName: 'Fallout 4', nexusSlug: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
     masters: FALLOUT4_MASTERS, creationClubList: 'Fallout4.ccc',
-    scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS, archiveLists: FALLOUT4_ARCHIVES,
+    scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4.exe', extenderLoader: 'f4se_loader.exe' },
+    pluginCompanions: FALLOUT4_COMPANIONS, archiveLists: FALLOUT4_ARCHIVES,
     ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   Fallout4VR: {
     gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', validShortNames: ['Fallout4'], masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
     creationClubList: 'Fallout4.ccc',
-    scriptExtenderFolder: 'f4se', pluginCompanions: FALLOUT4_COMPANIONS,
+    scriptExtenderFolder: 'f4se', programs: { game: 'Fallout4VR.exe', extenderLoader: 'f4sevr_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { ...FALLOUT4_ARCHIVES, myGamesFolder: 'Fallout4VR', defaultIni: 'Fallout4.ini' }, ba2Versions: FALLOUT4_BA2_VERSIONS,
   },
   SkyrimSE: {
     gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', validShortNames: ['Skyrim'], steamAppId: '489830', steamFolderName: 'Skyrim Special Edition',
     masters: SKYRIM_MASTERS,
     creationClubList: 'Skyrim.ccc',
-    scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES,
+    scriptExtenderFolder: 'skse', programs: { game: 'SkyrimSE.exe', extenderLoader: 'skse64_loader.exe' },
+    pluginCompanions: SKYRIM_COMPANIONS, archiveLists: SKYRIM_ARCHIVES,
   },
   SkyrimVR: {
     gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', validShortNames: ['Skyrim', 'SkyrimSE'], masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
     creationClubList: 'Skyrim.ccc',
-    scriptExtenderFolder: 'skse', pluginCompanions: SKYRIM_COMPANIONS,
+    scriptExtenderFolder: 'skse', programs: { game: 'SkyrimVR.exe', extenderLoader: 'sksevr_loader.exe' }, pluginCompanions: SKYRIM_COMPANIONS,
     archiveLists: { ...SKYRIM_ARCHIVES, myGamesFolder: 'Skyrim VR', defaultIni: 'Skyrim.ini', userInis: ['Skyrim.ini', 'SkyrimVR.ini', 'SkyrimCustom.ini'] },
   },
   Starfield: {
     gameName: 'Starfield', nexusSlug: 'starfield', steamAppId: '1716740', steamFolderName: 'Starfield',
     masters: STARFIELD_MASTERS, creationClubList: 'Starfield.ccc',
-    scriptExtenderFolder: 'sfse', pluginCompanions: FALLOUT4_COMPANIONS,
+    scriptExtenderFolder: 'sfse', programs: { game: 'Starfield.exe', extenderLoader: 'sfse_loader.exe' }, pluginCompanions: FALLOUT4_COMPANIONS,
     archiveLists: { myGamesFolder: 'Starfield', defaultIni: 'Starfield.ini', userInis: ['StarfieldCustom.ini'], keys: RESOURCE_INDEX_KEYS },
   },
 };
@@ -181,6 +190,11 @@ export function shortNameForNexusDomain(domain: string): string | undefined {
  *  the autodetector's signal to give up rather than guess a folder. */
 export function gamePathInfoForRelease(release: string): GamePathInfo | undefined {
   return GAME_PATHS[release];
+}
+
+/** The game's programs in the game folder; none for no release, or a release the table holds no row for. */
+export function programsOf(release: string | undefined): Programs | undefined {
+  return release === undefined ? undefined : GAME_PATHS[release]?.programs;
 }
 
 /** The plugins the game loads with no line (ADR-0013): its masters in the order the game loads

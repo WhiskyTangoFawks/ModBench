@@ -83,7 +83,7 @@ const BYTE_READS = ['default', 'promises', 'open', 'openSync', 'openAsBlob', 'cr
 const BYTE_READ_PATHS = ['node:fs', 'node:fs/promises', 'fs', 'fs/promises'].map((name) => ({
     name,
     importNames: BYTE_READS,
-    message: 'The extension interprets no plugin binary (ADR-0004): the one byte-level read is the Instance adapter\'s content digest.',
+    message: 'The extension interprets no plugin binary (ADR-0004): the byte-level reads are the Instance adapter\'s content digest and the Game folder\'s read of a program\'s version.',
 }));
 const VSCODE_BOXES = [...DRIVING_BOXES, 'textDocuments'];
 const VSCODE_IMPORT = { name: 'vscode', message: 'Only a view takes VS Code types, the Instance adapter\'s watch, and Text documents.' };
@@ -258,6 +258,12 @@ export default defineConfig(
             'no-restricted-imports': restrictedImports({
                 vscode: true, packages: false, path: false, inAdapter: true, byteReads: false, extra: [DIGEST_PACKAGE_IMPORT],
             }),
+        },
+    },
+    {
+        files: ['src/instanceAdapter/gameFolder/versionResource.ts'],
+        rules: {
+            'no-restricted-imports': restrictedImports({ vscode: true, packages: true, path: false, inAdapter: true, byteReads: false }),
         },
     },
     {
