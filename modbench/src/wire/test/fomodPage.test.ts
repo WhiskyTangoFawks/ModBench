@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { present } from '../../ports/present';
 import {
   groupsNeedingPick, hasPrevious, isLastVisible, isOptionLocked, isPicked, optionsAfterClick, parseFomodMove, parseFomodShown,
   type FomodGroup, type FomodGroupType, type FomodOption, type FomodStep,
@@ -10,7 +9,11 @@ const option = (id: number, over: Partial<FomodOption> = {}): FomodOption =>
 
 const group = (type: FomodGroupType, ...options: FomodOption[]): FomodGroup => ({ id: 0, name: 'G', type, options });
 
-const at = (from: FomodGroup, index: number): FomodOption => present(from.options[index], 'the option');
+function at(from: FomodGroup, index: number): FomodOption {
+  const found = from.options[index];
+  if (found === undefined) throw new Error(`The group has no option ${index}.`);
+  return found;
+}
 
 const step = (id: number, visible: boolean, ...groups: FomodGroup[]): FomodStep =>
   ({ id, name: `S${id}`, visible, optionalFileGroups: { group: groups } });

@@ -421,10 +421,10 @@ describe('the FOMOD installer', () => {
 
     it('waits on the user for as long as the user takes, though the engine says nothing', async () => {
       await release(TWO_STEPS, TWO_STEPS_FILES);
-      const patient = { ...FOMOD_ENGINE, silence: 50 };
+      const patient = { ...FOMOD_ENGINE, silence: 500 };
 
       const { landing } = await answered((_, move) => {
-        setTimeout(() => move({ kind: 'cancel' }), 200);
+        setTimeout(() => move({ kind: 'cancel' }), 800);
       }, { engine: patient });
 
       expect(landing).toEqual({ cancelled: true });
