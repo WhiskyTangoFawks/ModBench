@@ -5,7 +5,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { errnoCode } from '../errno';
-import { exists, get, isRepository, makeTempDir, putIfChanged, remove, undoAll, write, type Undo } from '../files';
+import { exists, get, isRepository, makeTempDir, putIfChanged, readOrAbsent, remove, undoAll, write, type Undo } from '../files';
 import { git, gitFed, gitWritingInto } from '../git';
 import type { GameFolder, InstanceAdapter } from '../instanceAdapter';
 import {
@@ -166,17 +166,64 @@ const pathsIn = (text: string): string[] => [...text.matchAll(PATH)].map(({ 0: m
   return text[index - 1] === '(' ? quoted.replace(/\)$/, '') : quoted;
 });
 
-const filterWritten = (instanceRoot: string, driver: string): Promise<boolean> =>
+const filterConfigured = (instanceRoot: string, driver: string): Promise<boolean> =>
   git(instanceRoot, 'config', '--get', `filter.${driver}.clean`).then((value) => value.trim() !== '', () => false);
 
 const filesNotWritten = async (instanceRoot: string, covered: readonly CoveredFile[]): Promise<CoveredFile[]> => {
-  const written = await Promise.all(covered.map(({ driver }) => filterWritten(instanceRoot, driver)));
+  const written = await Promise.all(covered.map(({ driver }) => filterConfigured(instanceRoot, driver)));
   return covered.filter((_file, at) => !written[at]);
 };
 
-/** Whether the repository's local config holds the path filter of each file it covers, `publisherFile` among them. */
-export const pathTokensWritten = async (instanceRoot: string, publisherFile: ConfigurationFile | undefined): Promise<boolean> =>
-  (await filesNotWritten(instanceRoot, coveredFiles(publisherFile))).length === 0;
+// Every worktree of the repository shares its config and attributes, so the programs sit in the common git directory.
+const programDirectory = async (instanceRoot: string): Promise<string> =>
+  join(resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-common-dir')).trim()), 'modbench');
+
+type FilterFolders = Omit<TokenFolders, 'instance'>;
+const NO_FOLDERS: FilterFolders = { game: undefined, downloads: undefined, committedOutsideInstance: [] };
+
+function filterOf(instanceRoot: string, covered: readonly CoveredFile[], directory: string, { game, downloads, committedOutsideInstance }: FilterFolders, accounts: TokenProgram): TokenFilter {
+  const filters = covered.map(({ driver, spelling, holdsAccounts, blanked }) => {
+    const folders = folderTokens({ instance: instanceRoot, game, downloads, committedOutsideInstance }, process.platform, spelling);
+    return tokenFilter(driver, directory, folders, ...(holdsAccounts ? [accounts] : []), ...(blanked === undefined ? [] : [blanked]));
+  });
+  const merged = (of: (filter: TokenFilter) => Readonly<Record<string, string>>): Record<string, string> =>
+    Object.fromEntries(filters.flatMap((filter) => Object.entries(of(filter))));
+  return { config: merged(({ config }) => config), programFiles: merged(({ programFiles }) => programFiles) };
+}
+
+async function filterPut(instanceRoot: string, covered: readonly CoveredFile[], directory: string, folders: FilterFolders, accounts: TokenProgram): Promise<void> {
+  const { config, programFiles } = filterOf(instanceRoot, covered, directory, folders, accounts);
+  await mkdir(directory, { recursive: true });
+  for (const [file, text] of Object.entries(programFiles)) await write(file, text);
+  for (const [key, value] of Object.entries(config)) await git(instanceRoot, 'config', key, value);
+}
+
+// Answers the call that restores each key and program file as the repository held it, and the folder if it held none.
+async function filterHeld(instanceRoot: string, covered: readonly CoveredFile[], directory: string): Promise<Undo> {
+  const { config, programFiles } = filterOf(instanceRoot, covered, directory, NO_FOLDERS, accountTokens(''));
+  const keys = await Promise.all(Object.keys(config).map(async (key) => ({ key, value: await unlessExit(1, () => git(instanceRoot, 'config', '--get', key)) })));
+  const files = await Promise.all(Object.keys(programFiles).map(async (file) => ({ file, text: await readOrAbsent<string | undefined>(() => get(file), undefined) })));
+  const folderHeld = await exists(directory);
+  return async () => {
+    for (const { key, value } of keys) {
+      if (value === undefined) await unlessExit(5, () => git(instanceRoot, 'config', '--unset-all', key));
+      else await git(instanceRoot, 'config', key, value.replace(/\n$/, ''));
+    }
+    if (!folderHeld) return remove(directory);
+    for (const { file, text } of files) {
+      if (text === undefined) await remove(file);
+      else await write(file, text);
+    }
+  };
+}
+
+/** Whether the repository's local config holds the path filter of each file it covers, `publisherFile` among them, and the programs it names are there. */
+export async function pathTokensWritten(instanceRoot: string, publisherFile: ConfigurationFile | undefined): Promise<boolean> {
+  const covered = coveredFiles(publisherFile);
+  if ((await filesNotWritten(instanceRoot, covered)).length > 0) return false;
+  const { programFiles } = filterOf(instanceRoot, covered, await programDirectory(instanceRoot), NO_FOLDERS, accountTokens(''));
+  return (await Promise.all(Object.keys(programFiles).map(exists))).every(Boolean);
+}
 
 async function downloadsFolder({ instanceRoot, resolveDownloadsFolder }: Mo2Context): Promise<string | undefined> {
   const settings = await get(settingsFile(instanceRoot), '');
@@ -203,58 +250,19 @@ async function committedOutsideInstanceIn(instanceRoot: string, covered: readonl
 
 const foundRoot = (folder: GameFolder): string | undefined => (folder.kind === 'found' ? folder.root : undefined);
 
-// The programs sit in the git directory, spelt with forward slashes, which Windows' sed reads too.
-const programDirectory = async (instanceRoot: string): Promise<string> =>
-  resolve(instanceRoot, (await git(instanceRoot, 'rev-parse', '--git-path', 'modbench')).trim()).replaceAll('\\', '/');
-
 export function mo2PathTokens(context: Mo2Context, gameFolder: () => Promise<GameFolder>, publisherFile: ConfigurationFile | undefined): Mo2PathTokens {
   const { instanceRoot } = context;
   const covered = coveredFiles(publisherFile);
-  const filterOf = (directory: string, { game, downloads, committedOutsideInstance }: Omit<TokenFolders, 'instance'>, accounts: TokenProgram): TokenFilter => {
-    const filters = covered.map(({ driver, spelling, holdsAccounts, blanked }) => {
-      const folders = folderTokens({ instance: instanceRoot, game, downloads, committedOutsideInstance }, process.platform, spelling);
-      return tokenFilter(driver, directory, folders, ...(holdsAccounts ? [accounts] : []), ...(blanked === undefined ? [] : [blanked]));
-    });
-    const merged = (of: (filter: TokenFilter) => Readonly<Record<string, string>>): Record<string, string> => Object.fromEntries(filters.flatMap((filter) => Object.entries(of(filter))));
-    return { config: merged(({ config }) => config), programFiles: merged(({ programFiles }) => programFiles) };
-  };
-  const filterWritten = async (directory: string, folders: Omit<TokenFolders, 'instance'>, accounts: TokenProgram): Promise<void> => {
-    const { config, programFiles } = filterOf(directory, folders, accounts);
-    await mkdir(directory, { recursive: true });
-    for (const [file, text] of Object.entries(programFiles)) await write(file, text);
-    for (const [key, value] of Object.entries(config)) await git(instanceRoot, 'config', key, value);
-  };
-  const NO_FOLDERS = { game: undefined, downloads: undefined, committedOutsideInstance: [] };
-  const filterHeld = async (directory: string): Promise<Undo> => {
-    const { config, programFiles } = filterOf(directory, NO_FOLDERS, accountTokens(''));
-    const keys = Object.keys(config);
-    const before = await Promise.all(keys.map(async (key) => unlessExit(1, () => git(instanceRoot, 'config', '--get', key))));
-    const files = Object.keys(programFiles);
-    const texts = await Promise.all(files.map(async (file) => ((await exists(file)) ? get(file) : undefined)));
-    return async () => {
-      for (const [at, key] of keys.entries()) {
-        const value = before[at];
-        if (value === undefined) await unlessExit(5, () => git(instanceRoot, 'config', '--unset-all', key));
-        else await git(instanceRoot, 'config', key, value.replace(/\n$/, ''));
-      }
-      for (const [at, file] of files.entries()) {
-        const text = texts[at];
-        if (text === undefined) await remove(file);
-        else await write(file, text);
-      }
-    };
-  };
-
   const written = async (takeBack: Undo[]): Promise<string | undefined> => {
     takeBack.push(await attributesWritten(instanceRoot, covered));
     const files = (await filesGitHolds(instanceRoot, covered)).flatMap(({ file, covered: isCovered }) => (isCovered ? [file] : []));
     const accounts = accountTokens(await get(settingsFile(instanceRoot), ''));
     const directory = await programDirectory(instanceRoot);
-    takeBack.push(await filterHeld(directory));
-    await filterWritten(directory, NO_FOLDERS, accounts);
+    takeBack.push(await filterHeld(instanceRoot, covered, directory));
+    await filterPut(instanceRoot, covered, directory, NO_FOLDERS, accounts);
     await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     const game = await gameFolder();
-    await filterWritten(directory, { game: foundRoot(game), downloads: await downloadsFolder(context), committedOutsideInstance: await committedOutsideInstanceIn(instanceRoot, covered) }, accounts);
+    await filterPut(instanceRoot, covered, directory, { game: foundRoot(game), downloads: await downloadsFolder(context), committedOutsideInstance: await committedOutsideInstanceIn(instanceRoot, covered) }, accounts);
     const holding = await withScratch((scratch) => smudged(scratch, instanceRoot, files));
     await statsForgotten(instanceRoot, files);
     if (holding.length === 0) return undefined;

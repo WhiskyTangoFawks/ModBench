@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
@@ -54,8 +54,8 @@ const onWineDrive = (path: string, separator: string): string =>
 
 const SETTINGS = (lines: readonly string[]): string => ['[General]\r\ngameName=Fallout 4\r\nselected_profile=Default', ...lines, ''].join('\r\n');
 
-async function instanceRepository(lines: readonly string[], game?: string) {
-  const root = await folder('instance');
+async function instanceRepository(lines: readonly string[], game?: string, name = 'instance') {
+  const root = await folder(name);
   await put(root, 'ModOrganizer.ini', SETTINGS(lines));
   await put(root, 'profiles/Default/modlist.txt', '');
   await mkdir(join(root, 'mods'));
@@ -65,6 +65,13 @@ async function instanceRepository(lines: readonly string[], game?: string) {
 }
 
 const objectsIn = async (root: string): Promise<string[]> => (await readdir(join(root, '.git', 'objects'), { recursive: true })).sort();
+
+const exists = (path: string): Promise<boolean> => stat(path).then(() => true, () => false);
+
+const programsIn = async (root: string): Promise<[string, string][]> => {
+  const folder = join(root, '.git', 'modbench');
+  return Promise.all((await readdir(folder)).sort().map(async (name): Promise<[string, string]> => [name, await readFile(join(folder, name), 'utf8')]));
+};
 
 const held = (root: string, path: string): string => {
   git(root, 'add', '--', path);
@@ -258,6 +265,29 @@ describe('the MO2 adapter\'s path tokens', () => {
     expect(held(root, file)).toBe(written);
   });
 
+  it('holds the instance folder by a token when its name holds letters outside ASCII', async () => {
+    const { root, adapter } = await instanceRepository([], undefined, 'Jörg');
+    await put(root, 'ModOrganizer.ini', SETTINGS([`path=${onWineDrive(root, '/')}/tools`]));
+
+    await adapter.writePathTokens();
+
+    expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['path={instance folder:/}/tools']));
+  });
+
+  it('keeps its filter programs where every worktree of the repository finds them', async () => {
+    const { root } = await instanceRepository([]);
+    git(root, 'add', '--', 'profiles');
+    git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'start');
+    const linked = join(await folder('worktrees'), 'linked');
+    git(root, 'worktree', 'add', '--quiet', linked);
+    await put(linked, 'ModOrganizer.ini', SETTINGS(['gamePath=C:/Games']));
+
+    await adapterOver(linked).writePathTokens();
+    git(root, 'worktree', 'remove', '--force', linked);
+
+    expect(() => held(root, 'ModOrganizer.ini')).not.toThrow();
+  });
+
   it('refuses to stage a file the token filter fails on, rather than hold it as it is', async () => {
     const { root, adapter } = await instanceRepository([]);
     await adapter.writePathTokens();
@@ -421,6 +451,7 @@ describe('the MO2 adapter\'s path tokens', () => {
 
     const config = git(root, 'config', '--local', '--list').split('\n').filter((line) => line.includes('modbench-'));
     expect([config, await readFile(join(root, '.git', 'info', 'attributes'), 'utf8').catch(() => '')]).toEqual([[], '']);
+    expect(await exists(join(root, '.git', 'modbench'))).toBe(false);
   });
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('(Windows has no POSIX mode bits, and root reads every file) takes back only the filter a failed write added, and keeps each the repository held', async () => {
@@ -433,6 +464,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     const written = async () => [
       git(root, 'config', '--local', '--list').split('\n').filter((line) => line.includes('modbench-')),
       await readFile(join(root, '.git', 'info', 'attributes'), 'utf8'),
+      await programsIn(root),
     ];
     const before = await written();
     await chmod(join(root, 'profiles/Default/Fallout4Prefs.ini'), 0o000);

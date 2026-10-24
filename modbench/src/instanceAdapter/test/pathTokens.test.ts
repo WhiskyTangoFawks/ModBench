@@ -26,7 +26,7 @@ async function repositoryFiltering(folders: TokenFolders, platform: NodeJS.Platf
   const git = (...args: string[]): string => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
   git('init', '--quiet');
   git('config', 'core.autocrlf', 'false');
-  const directory = join(root, '.git', 'modbench').replaceAll('\\', '/');
+  const directory = join(root, '.git', 'modbench');
   const { config, programFiles } = tokenFilter(DRIVER, directory, folderTokens(folders, platform, spelling));
   await mkdir(directory);
   for (const [file, text] of Object.entries(programFiles)) await writeFile(file, text);

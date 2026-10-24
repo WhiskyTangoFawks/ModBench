@@ -134,7 +134,7 @@ export function folderTokens({ instance, game, downloads, committedOutsideInstan
 
 const shellQuoted = (text: string): string => `'${text.replaceAll("'", "'\\''")}'`;
 
-/** The git config that makes git hold each file `driver` covers by its tokens, and the sed programs it names. */
+/** The git config that makes git hold each file a driver covers by its tokens, and the sed programs it names. */
 export interface TokenFilter {
   readonly config: Readonly<Record<string, string>>;
   readonly programFiles: Readonly<Record<string, string>>;
@@ -145,7 +145,7 @@ export function tokenFilter(driver: string, directory: string, ...programs: read
   const programFiles: Record<string, string> = {};
   const sed = (kind: 'clean' | 'smudge'): string => {
     const expressions = programs.flatMap((program) => program[kind]);
-    const file = `${directory}/${driver}.${kind}.sed`;
+    const file = `${directory.replaceAll('\\', '/')}/${driver}.${kind}.sed`;
     programFiles[file] = expressions.map((expression) => `${expression}\n`).join('');
     // The sed git ships on Windows drops each carriage return unless --binary.
     return `LC_ALL=C sed --binary -f ${shellQuoted(file)}`;
@@ -155,6 +155,7 @@ export function tokenFilter(driver: string, directory: string, ...programs: read
     config: {
       [`filter.${driver}.clean`]: sed('clean'),
       [`filter.${driver}.smudge`]: smudge,
+      // A file the filter fails on is refused, not held as it is.
       [`filter.${driver}.required`]: 'true',
       [`diff.${driver}.textconv`]: smudge,
     },
