@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Diagnostic, DiagnosticSeverity, Range, uriFile, FakeDiagnosticCollection } from '../../test/vscodeMock';
+import { Diagnostic, DiagnosticSeverity, Range, uriFile, fakeUri, FakeDiagnosticCollection } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri: { file: uriFile } }));
 
@@ -19,8 +19,10 @@ const naming = (...lines: number[]): PublisherConfiguration => ({
 const instanceHolding = (publisherConfiguration: PublisherConfiguration) =>
   new FakeInstance({ ...valueWithSourceDirs(new Map()), publisherConfiguration });
 
+const lineRange = (line: number) => new Range(line, 0, line, Number.MAX_SAFE_INTEGER);
+
 const problemsOf = (collection: FakeDiagnosticCollection) =>
-  (collection.get(uriFile(FILE)) ?? []).map(({ range, message, severity }) => [range.startLine, message, severity]);
+  (collection.get(fakeUri(FILE)) ?? []).map(({ range, message, severity }) => [range, message, severity]);
 
 describe('a publisher tag that names no path (publishing.md, Publisher tags, story 4)', () => {
   it('shows a warning on its line in the publisher\'s configuration, zero-based for the panel', () => {
@@ -29,8 +31,8 @@ describe('a publisher tag that names no path (publishing.md, Publisher tags, sto
     new PublisherProblems(collection, instanceHolding(naming(3, 7)));
 
     expect(problemsOf(collection)).toEqual([
-      [2, 'Ignore: "gone3" names no path in the instance.', DiagnosticSeverity.Warning],
-      [6, 'Ignore: "gone7" names no path in the instance.', DiagnosticSeverity.Warning],
+      [lineRange(2), 'Ignore: "gone3" names no path in the instance.', DiagnosticSeverity.Warning],
+      [lineRange(6), 'Ignore: "gone7" names no path in the instance.', DiagnosticSeverity.Warning],
     ]);
   });
 
@@ -40,10 +42,10 @@ describe('a publisher tag that names no path (publishing.md, Publisher tags, sto
     new PublisherProblems(collection, instance);
 
     instance.publish({ ...instance.value, publisherConfiguration: naming(5) });
-    const afterChange = problemsOf(collection).map(([line]) => line);
+    const afterChange = problemsOf(collection).map(([range]) => range);
     instance.publish({ ...instance.value, publisherConfiguration: { kind: 'none' } });
 
-    expect({ afterChange, afterNone: collection.has(uriFile(FILE)) }).toEqual({ afterChange: [4], afterNone: false });
+    expect({ afterChange, afterNone: collection.has(fakeUri(FILE)) }).toEqual({ afterChange: [lineRange(4)], afterNone: false });
   });
 
   it('stops following the instance when disposed', () => {
@@ -53,6 +55,6 @@ describe('a publisher tag that names no path (publishing.md, Publisher tags, sto
 
     instance.publish({ ...instance.value, publisherConfiguration: naming(1) });
 
-    expect(collection.has(uriFile(FILE))).toBe(false);
+    expect(collection.has(fakeUri(FILE))).toBe(false);
   });
 });

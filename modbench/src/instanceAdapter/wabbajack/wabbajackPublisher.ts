@@ -140,7 +140,7 @@ function entryLines(blanked: string): Map<string, number[]> {
       let after = end + 1;
       while (chars[after]?.trim() === '') after++;
       if (depth === 1 && chars[after] === ':') {
-        key = JSON.parse(chars.slice(at, end + 1).join('')) as string;
+        key = String(JSON.parse(chars.slice(at, end + 1).join('')));
         lines.set(key, []);
       } else if (depth === 2 && key !== undefined) {
         lines.get(key)?.push(line);

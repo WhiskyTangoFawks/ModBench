@@ -19,8 +19,7 @@ export interface ConfigurationFile {
   readonly blanked?: TokenProgram;
 }
 
-/** The files Modbench keeps in the instance, all absolute paths. */
-export interface KeptFiles {
+interface KeptFiles {
   readonly present: readonly string[];
   /** Whether a path is one of the shapes Modbench keeps a file at, there now or not. */
   readonly owns: (path: string) => boolean;
