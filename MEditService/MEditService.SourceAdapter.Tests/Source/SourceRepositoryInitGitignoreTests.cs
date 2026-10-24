@@ -1,12 +1,12 @@
 using MEditService.Codec.Serialization;
+using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
 public sealed class SourceRepositoryInitGitignoreTests
 {
-    private static readonly (IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin) Plugin =
-        ([new TreeFile(Path.Combine("npc_", "Test.esp", "000001.json"), "{}"u8.ToArray())], new DecompiledPlugin("Test.esp", null));
+    private static readonly (IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin) Plugin = PluginBaselines.OneRecordOf("Test.esp");
 
     private static string[] CommittedPaths(string sourceFolder) =>
         GitProbe.Run(Path.Combine(sourceFolder, ".git"), sourceFolder, "ls-tree", "-r", "--name-only", "main")
@@ -16,7 +16,7 @@ public sealed class SourceRepositoryInitGitignoreTests
         GitProbe.TryRun(Path.Combine(sourceFolder, ".git"), sourceFolder, out _, "check-ignore", path);
 
     [Fact]
-    public void Init_TracksExactlyTheGitignoreTheBuildConfigurationThePluginSourceAndTheAssets()
+    public void AnInit_TracksExactlyTheGitignoreTheBuildConfigurationThePluginSourceAndTheAssets()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
 
@@ -28,7 +28,7 @@ public sealed class SourceRepositoryInitGitignoreTests
     }
 
     [Fact]
-    public void Init_IgnoresAFileLaterPutBesideTheSource_AndTracksOneLaterPutAmongTheAssets()
+    public void AFileLaterPutBesideTheSource_IsIgnored_AndOneLaterPutAmongTheAssetsIsTracked()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
         TestAdapters.Source().Init(sourceFolder, "Mod", [Plugin], []);
@@ -41,7 +41,7 @@ public sealed class SourceRepositoryInitGitignoreTests
     }
 
     [Fact]
-    public void Init_DoesNotUnignoreATopLevelFolderThatMerelyEndsWithPluginSource_ForThePatternIsNotASuffixMatch()
+    public void ATopLevelFolderThatMerelyEndsWithPluginSource_StaysIgnored_ForThePatternIsNotASuffixMatch()
     {
         using var sourceFolder = new ScratchDirectory("medit-init-gitignore-");
         TestAdapters.Source().Init(sourceFolder, "Mod", [Plugin], []);

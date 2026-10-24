@@ -11,7 +11,7 @@ public sealed class UnsavedDocumentsTests
     public UnsavedDocumentsTests() => _unsaved.Arrived += paths => _arrivals.Add([.. paths]);
 
     [Fact]
-    public void Apply_ReportsTheDocumentsWhoseTextChanged_WereHanded_OrWereDropped()
+    public void ApplyingASet_ReportsTheDocumentsWhoseTextChanged_WereHanded_OrWereDropped()
     {
         _unsaved.Apply([A, B]);
         _unsaved.Apply([A, B with { Text = "typed" }]);
@@ -21,7 +21,7 @@ public sealed class UnsavedDocumentsTests
     }
 
     [Fact]
-    public void Apply_OfTheSetAlreadyHeld_ReportsNothing()
+    public void ApplyingTheSetAlreadyHeld_ReportsNothing()
     {
         _unsaved.Apply([A, B]);
         _arrivals.Clear();
@@ -32,7 +32,7 @@ public sealed class UnsavedDocumentsTests
     }
 
     [Fact]
-    public void Apply_OfADocumentByARelativePath_RefusesAndHoldsNothingNew()
+    public void ADocumentByARelativePath_IsRefused_AndNothingNewIsHeld()
     {
         _unsaved.Apply([A]);
         _arrivals.Clear();
@@ -45,7 +45,7 @@ public sealed class UnsavedDocumentsTests
     }
 
     [Fact]
-    public void Apply_OfNoSet_Refuses_ForWithoutOneTheIndexWouldReadTheDisk()
+    public void NoSet_IsRefused_ForWithoutOneTheIndexWouldReadTheDisk()
     {
         var refused = _unsaved.Apply(null);
 
@@ -53,7 +53,7 @@ public sealed class UnsavedDocumentsTests
     }
 
     [Fact]
-    public void Apply_OfAnAbsoluteSet_Accepts()
+    public void AnAbsoluteSet_IsAccepted()
     {
         Assert.Null(_unsaved.Apply([A, B]));
     }

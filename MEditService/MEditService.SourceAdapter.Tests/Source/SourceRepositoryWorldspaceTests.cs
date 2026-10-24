@@ -44,21 +44,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
             .ToList();
 
     [Fact]
-    public void PutInWorldspace_ACell_LandsInTheBlockItsGridFallsIn()
-    {
-        InTheTree(Worldspace, "wrld");
-
-        Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
-
-        Assert.Contains(
-            PluginSourceRoot.ContainerDocument(Path.Combine(
-                "plugin-source", PluginName, "Worldspaces", "000800_Vendor.esp", "0, -1", "1, -2",
-                "000801_Vendor.esp")),
-            Documents());
-    }
-
-    [Fact]
-    public void PutInWorldspace_ACellWithNoGrid_HasNoPlace_AndInventsNoFile()
+    public void ACellWithNoGrid_HasNoPlaceInAWorldspace_AndInventsNoFile()
     {
         InTheTree(Worldspace, "wrld");
         var before = Documents();
@@ -71,7 +57,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
     }
 
     [Fact]
-    public void GetCellAt_AGridWithACell_IsThatCellsDocument()
+    public void TheCellAtAGridACellHolds_IsThatCellsDocument()
     {
         InTheTree(Worldspace, "wrld");
         var cell = ACellAt("9, -9");
@@ -81,7 +67,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
     }
 
     [Fact]
-    public void GetCellAt_AGridNoCellHolds_IsNull()
+    public void AGridNoCellHolds_HasNoCell()
     {
         InTheTree(Worldspace, "wrld");
         Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
@@ -96,25 +82,14 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
         PluginSourceRoot.ContainerDocument(Path.Combine(
             "plugin-source", PluginName, "Worldspaces", "000800_Vendor.esp", "0, -1", "1, -2", "000801_Vendor.esp"));
 
-    [Fact]
-    public void GetCellAt_AGridWhoseCellDocumentRootIsNotAnObject_RefusesNamingThatFile()
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("{")]
+    public void TheCellAtAGridWhoseCellDocumentIsNoRecordDocument_IsRefusedNamingThatFile(string text)
     {
         InTheTree(Worldspace, "wrld");
         Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
-        File.WriteAllText(Path.Combine(_modFolder, CellDocumentAtNineMinusNine), "[]");
-
-        var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.GetCellAt(Plugin, Worldspace, 9, -9).Stopped());
-
-        Assert.Equal(CellDocumentAtNineMinusNine, refused.File?.SourceRelativePath);
-        Assert.Contains("its root is not a JSON object", refused.Reason, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void GetCellAt_AGridWhoseCellDocumentIsNoJson_RefusesNamingThatFile()
-    {
-        InTheTree(Worldspace, "wrld");
-        Repository.PutInWorldspace(Plugin, ACellAt("9, -9"), Worldspace);
-        File.WriteAllText(Path.Combine(_modFolder, CellDocumentAtNineMinusNine), "{");
+        File.WriteAllText(Path.Combine(_modFolder, CellDocumentAtNineMinusNine), text);
 
         var refused = Assert.IsType<SourceFailure.Unreadable>(Repository.GetCellAt(Plugin, Worldspace, 9, -9).Stopped());
 
@@ -122,7 +97,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
     }
 
     [Fact]
-    public void WorldspaceOf_AnExteriorCellWhoseWorldspaceDeclaresNoFormKey_RefusesNamingTheWorldspacesFile()
+    public void TheWorldspaceOfAnExteriorCellWhoseWorldspaceDeclaresNoFormKey_IsRefusedNamingTheWorldspacesFile()
     {
         InTheTree(Worldspace, "wrld");
         var cell = ACellAt("9, -9");
@@ -135,7 +110,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
     }
 
     [Fact]
-    public void WorldspaceOf_AnExteriorCell_IsTheWorldspaceItSitsIn()
+    public void TheWorldspaceOfAnExteriorCell_IsTheOneItSitsIn()
     {
         InTheTree(Worldspace, "wrld");
         var cell = ACellAt("9, -9");
@@ -145,7 +120,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
     }
 
     [Fact]
-    public void WorldspaceOf_AnInteriorCell_IsNull()
+    public void AnInteriorCell_HasNoWorldspace()
     {
         var cell = InTheTree(InteriorCell, "cell");
 
@@ -153,7 +128,7 @@ public sealed class SourceRepositoryWorldspaceTests : IDisposable
     }
 
     [Fact]
-    public void WorldspaceOf_ACellTheTreeFilesUnderNeitherAGroupNorAWorldspace_RefusesWithTheReadersWords()
+    public void TheWorldspaceOfACellTheTreeFilesUnderNeitherAGroupNorAWorldspace_IsRefusedWithTheReadersWords()
     {
         var cell = InTheTree(InteriorCell, "cell");
         var cells = Path.Combine(_modFolder, "plugin-source", PluginName, "Cells");

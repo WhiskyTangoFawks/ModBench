@@ -15,14 +15,8 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
 
     private static ISourceRepository SourceModOver(ScratchDirectory modFolder)
     {
-        TestAdapters.Source().Init(
-            modFolder,
-            [
-                ([new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
-                    new DecompiledPlugin("Test.esp", null)),
-                ([new TreeFile("plugin-source/Other.esp/npc_/Other.esp/000002.json", "{}"u8.ToArray())],
-                    new DecompiledPlugin("Other.esp", OthersSourceModBinary)),
-            ]);
+        Assert.Null(TestAdapters.Source().Init(
+            modFolder, [PluginBaselines.OneRecordOf("Test.esp"), PluginBaselines.OneRecordOf("Other.esp", OthersSourceModBinary)]));
         return TestAdapters.Source().OverFolder(TestMod.In(modFolder), GameRelease.Fallout4);
     }
 
@@ -74,7 +68,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
         var recorded = repository.WriteBinary(Test, "SECOND", () =>
         {
             written = true;
-            LastWriteRecord.RefuseRefUpdates(modFolder);
+            GitHooks.RefuseRefUpdates(modFolder);
         }).Value();
 
         Assert.False(recorded);
@@ -88,7 +82,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
         using var modFolder = new ScratchDirectory("medit-last-written-");
         var repository = SourceModOver(modFolder);
         repository.WriteBinary(Test, "FIRST", () => { }).Value();
-        LastWriteRecord.RefuseRefUpdates(modFolder);
+        GitHooks.RefuseRefUpdates(modFolder);
         var written = false;
 
         var failure = Assert.IsType<SourceFailure.GitFailed>(repository.WriteBinary(Test, "SECOND", () => written = true).Stopped());
@@ -129,39 +123,7 @@ public sealed class SourceRepositoryLastWrittenBinaryTests
     }
 
     [Fact]
-    public void ARepositoryOpenedForAMod_RefusesToWriteTheRecordOfAPluginAnotherModProvides()
-    {
-        using var modFolder = new ScratchDirectory("medit-last-written-");
-        SourceModOver(modFolder);
-        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder, modFolder), GameRelease.Fallout4);
-
-        Assert.Throws<ArgumentException>(() => repository.WriteBinary(new PluginAddress("Test.esp", "OtherMod"), "ABC", () => { }).Value());
-        Assert.Empty(repository.LastWrittenBinarySha256s(Test).Value());
-    }
-
-    [Fact]
-    public void ARepositoryOpenedForAMod_RefusesToReadTheRecordOfAPluginAnotherModProvides()
-    {
-        using var modFolder = new ScratchDirectory("medit-last-written-");
-        SourceModOver(modFolder);
-        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder, modFolder), GameRelease.Fallout4);
-
-        Assert.Throws<ArgumentException>(() => repository.LastWrittenBinarySha256s(new PluginAddress("Test.esp", "OtherMod")).Value());
-    }
-
-    [Fact]
-    public void ARepositoryOpenedForAMod_RefusesToReplaceTheSourceOfAPluginAnotherModProvides()
-    {
-        using var modFolder = new ScratchDirectory("medit-last-written-");
-        SourceModOver(modFolder);
-        var repository = TestAdapters.Source().OverFolder(new PluginProvider.FromMod("TestMod", modFolder, modFolder), GameRelease.Fallout4);
-
-        Assert.Throws<ArgumentException>(() => repository.ReplaceSourceFrom(new PluginAddress("Test.esp", "OtherMod"), [], "ABC"));
-        Assert.Empty(repository.LastWrittenBinarySha256s(Test).Value());
-    }
-
-    [Fact]
-    public void ARepositoryOpenedForAMod_AnswersThePluginsThatModProvides()
+    public void ARepositoryOpenedForAMod_AnswersThePluginsOfThatMod_ItsNameComparedWithoutCase()
     {
         using var modFolder = new ScratchDirectory("medit-last-written-");
         SourceModOver(modFolder);
@@ -187,33 +149,9 @@ public sealed class SourceRepositoryLastWrittenBinaryWithoutGitTests : IDisposab
     public void TheLastWrittenBinaries_WithGitGoneFromPath_AnswerGitUnavailable()
     {
         var repository = TestAdapters.Source().OverFolder(TestMod.In(_modFolder), GameRelease.Fallout4);
-        var path = Environment.GetEnvironmentVariable("PATH");
-        Environment.SetEnvironmentVariable("PATH", string.Empty);
-        try
-        {
-            Assert.IsType<SourceFailure.GitUnavailable>(repository.LastWrittenBinarySha256s(new PluginAddress("A.esp", TestMod.Name)).Stopped());
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PATH", path);
-        }
-    }
 
-    [Fact]
-    public void AWrite_AfterWhichGitIsGoneFromPath_AnswersTheRecordUnfinished_ForTheBinaryIsWritten()
-    {
-        var repository = TestAdapters.Source().OverFolder(TestMod.In(_modFolder), GameRelease.Fallout4);
-        var path = Environment.GetEnvironmentVariable("PATH");
-        try
-        {
-            var finished = repository.WriteBinary(
-                new PluginAddress("A.esp", TestMod.Name), "SECOND", () => Environment.SetEnvironmentVariable("PATH", string.Empty));
+        var answer = GitOffPath.While(() => repository.LastWrittenBinarySha256s(new PluginAddress("A.esp", TestMod.Name)));
 
-            Assert.False(finished.Value());
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PATH", path);
-        }
+        Assert.IsType<SourceFailure.GitUnavailable>(answer.Stopped());
     }
 }

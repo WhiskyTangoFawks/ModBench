@@ -24,7 +24,7 @@ internal static class SourceMods
             .GetAwaiter().GetResult();
         var source = read.Answered();
 
-        TestAdapters.Source().Init(modFolder, [(source.Files, new DecompiledPlugin(pluginName, source.BinarySha256))]);
+        TestAdapters.Source().Init(modFolder, [(source.Files, new DecompiledPlugin(new PluginAddress(pluginName, Path.GetFileName(modFolder)), source.BinarySha256))]);
     }
 
     internal static void Init(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>

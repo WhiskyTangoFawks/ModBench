@@ -50,7 +50,7 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
         await Init(new ReadingAs("READ-FROM"), source);
 
         var (_, handedOver, _) = Assert.Single(source.InitCalls);
-        Assert.Equal([("First.esp", "READ-FROM")], handedOver.Select(handed => (handed.Plugin.Plugin, handed.Plugin.BinarySha256)));
+        Assert.Equal([("First.esp", "READ-FROM")], handedOver.Select(handed => (handed.Plugin.Plugin.Name, handed.Plugin.BinarySha256)));
     }
 
     [Fact]

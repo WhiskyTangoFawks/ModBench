@@ -53,8 +53,6 @@ public interface ISourceAdapter
     /// <summary>Why git cannot be run here, so no repository can be made or written; null when it can.</summary>
     SourceFailure? WhyGitCannotRun();
 
-    /// <summary>The refusal naming the instance root when it is not there; null when it is.</summary>
-
     /// <summary>The stamp of one document's text, as the UTF-8 the record index stores: every side hashes through here, so a
     /// file that is not valid UTF-8 stamps alike on disk and in the record index.</summary>
     string ContentStamp(string text);
@@ -63,7 +61,7 @@ public interface ISourceAdapter
     /// the assets and a build configuration naming <paramref name="output"/>, then any <paramref name="repair"/>.</summary>
     SourceFailure? Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
-        IReadOnlyList<Asset> assets, (string Plugin, TreeCommit Commit)? repair = null);
+        IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null);
 
     /// <summary>What the build of the source in <paramref name="sourceFolder"/> writes, as its working tree says now.</summary>
     Answer<SourceToBuild, SourceFailure> SourceToBuild(string sourceFolder);

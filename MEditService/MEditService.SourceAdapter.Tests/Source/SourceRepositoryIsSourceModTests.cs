@@ -20,7 +20,7 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void IsSourceMod_PluginOfAModWhoseOwnFolderHoldsARepository_IsFalse()
+    public void APluginOfAModWhoseOwnFolderRatherThanItsSourceFolderHoldsARepository_IsOfNoSourceMod()
     {
         CommitOnMain(_modFolder);
 
@@ -28,7 +28,7 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void SourceReads_TreeInTheModsOwnSourceModFolder_IsFalse()
+    public void ATreeInTheModsOwnFolderRatherThanItsSourceFolder_DoesNotRead()
     {
         CommitOnMain(_modFolder);
         MakeTree(_modFolder);
@@ -37,13 +37,13 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void IsSourceMod_FolderWithNoGitDirectory_IsFalse()
+    public void AFolderWithNoGitDirectory_IsNoSourceMod()
     {
         Assert.False(TestAdapters.Source().IsSourceMod(_sourceFolder));
     }
 
     [Fact]
-    public void IsSourceMod_RepositoryWithNoMain_IsFalse()
+    public void ARepositoryWithNoMain_IsNoSourceMod()
     {
         Git(_sourceFolder, "init", "-q", "-b", "main");
 
@@ -51,7 +51,7 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void IsSourceMod_RepositoryWithMain_IsTrue()
+    public void ARepositoryWithMain_IsASourceMod()
     {
         CommitOnMain();
 
@@ -59,7 +59,7 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void IsSourceMod_RepositoryWhoseMainGitPacked_IsTrue()
+    public void ARepositoryWhoseMainGitPacked_IsASourceMod()
     {
         CommitOnMain();
         Git(_sourceFolder, "pack-refs", "--all");
@@ -68,13 +68,13 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void IsSourceMod_FolderThatDoesNotExist_IsFalseNotAThrow()
+    public void AFolderThatDoesNotExist_IsNoSourceMod_NotAThrow()
     {
         Assert.False(TestAdapters.Source().IsSourceMod(Path.Combine(_sourceFolder, "Gone")));
     }
 
     [Fact]
-    public void IsSourceMod_PluginOfASourceMod_IsTrue()
+    public void APluginOfAModWhoseSourceFolderHoldsARepository_IsOfASourceMod()
     {
         CommitOnMain();
 
@@ -82,19 +82,19 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void IsSourceMod_PluginOfAModWithNoRepository_IsFalse()
+    public void APluginOfAModWithNoRepository_IsOfNoSourceMod()
     {
         Assert.False(TestAdapters.Source().IsSourceMod(Registered));
     }
 
     [Fact]
-    public void IsSourceMod_PluginTheGameProvides_IsFalse()
+    public void APluginTheGameProvides_IsOfNoSourceMod()
     {
         Assert.False(TestAdapters.Source().IsSourceMod(Registered with { Provider = PluginProvider.Game }));
     }
 
     [Fact]
-    public void SourceReads_SourceModHoldingThePluginsTree_IsTrue()
+    public void APluginsSource_ReadsFromASourceModHoldingItsTree()
     {
         CommitOnMain();
         MakeTree();
@@ -103,7 +103,7 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void SourceReads_SourceModHoldingNoTreeForThePlugin_IsFalseThoughSourceMod()
+    public void APluginsSource_DoesNotReadFromASourceModHoldingNoTreeForIt()
     {
         CommitOnMain();
 
@@ -112,7 +112,7 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void SourceReads_TreeInAModThatIsNotSourceMod_IsFalse()
+    public void ATreeInAModThatIsNoSourceMod_DoesNotRead()
     {
         MakeTree();
 
@@ -120,7 +120,7 @@ public sealed class SourceRepositoryIsSourceModTests : IDisposable
     }
 
     [Fact]
-    public void SourceReads_PluginTheGameProvides_IsFalse()
+    public void TheSourceOfAPluginTheGameProvides_DoesNotRead()
     {
         Assert.False(TestAdapters.Source().SourceReads(Registered with { Provider = PluginProvider.Game }));
     }

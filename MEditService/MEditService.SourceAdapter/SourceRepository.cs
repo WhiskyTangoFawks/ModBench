@@ -16,6 +16,7 @@ internal sealed class SourceRepository : ISourceRepository
     private readonly string _modName;
     private readonly GameRelease _release;
     private readonly SourceRepositoryGit _git;
+    private readonly TreeStamps _stamps;
 
     public string SourceFolder => _sourceFolder;
 
@@ -27,9 +28,9 @@ internal sealed class SourceRepository : ISourceRepository
 
     internal ISourceFiles Files { get; }
 
-    private SourceRepository(string sourceFolder, GameRelease release, string modName, ISourceFiles files)
+    private SourceRepository(string sourceFolder, GameRelease release, string modName, ISourceFiles files, TreeStamps stamps)
     {
-        (_sourceFolder, _release, _modName, Files) = (sourceFolder, release, modName, files);
+        (_sourceFolder, _release, _modName, Files, _stamps) = (sourceFolder, release, modName, files, stamps);
         _git = new SourceRepositoryGit(sourceFolder);
         Locator = new SourceRepositoryLocator(sourceFolder, release, files);
         Layout = new SourceRepositoryLayout(sourceFolder, release, Locator, files);
@@ -37,18 +38,18 @@ internal sealed class SourceRepository : ISourceRepository
     }
 
     /// <summary>This repository read through <paramref name="files"/>.</summary>
-    internal SourceRepository Over(ISourceFiles files) => new(_sourceFolder, _release, _modName, files);
+    internal SourceRepository Over(ISourceFiles files) => new(_sourceFolder, _release, _modName, files, _stamps);
 
     /// <summary>The repository over <paramref name="mod"/>'s source folder, or null when the folder is not
     /// a source mod and so has no source tree to answer from.</summary>
-    internal static SourceRepository? Open(PluginProvider.FromMod mod, GameRelease release) =>
-        IsSourceMod(mod) ? Over(mod, release) : null;
+    internal static SourceRepository? Open(PluginProvider.FromMod mod, GameRelease release, TreeStamps stamps) =>
+        IsSourceMod(mod) ? Over(mod, release, stamps) : null;
 
     /// <summary>The repository over a mod's source folder, which refuses the last-written record of a plugin
     /// another mod provides (ADR-0012): a repository knows only its folder.</summary>
-    internal static SourceRepository Over(PluginProvider.FromMod mod, GameRelease release) =>
+    internal static SourceRepository Over(PluginProvider.FromMod mod, GameRelease release, TreeStamps stamps) =>
         new(mod.SourceFolder ?? throw new InvalidOperationException($"'{mod.Name}' is not a source mod, so it has no source folder."),
-            release, mod.Name, DiskFiles.Instance);
+            release, mod.Name, DiskFiles.Instance, stamps);
 
     /// <summary>True exactly when <paramref name="sourceFolder"/> holds a repository whose <c>main</c>
     /// exists.</summary>
@@ -166,14 +167,14 @@ internal sealed class SourceRepository : ISourceRepository
             : null);
 
     /// <summary>What the file at <paramref name="path"/> holds, read from its text as the record index reads it.</summary>
-    internal static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path, ISourceFiles files)
+    internal static RecordOfFileAnswer RecordOfFile(LoadOrderSnapshot loadOrder, string path, ISourceFiles files, TreeStamps stamps)
     {
         var fullPath = Path.GetFullPath(path);
         if (SourceRepositoryLayout.CarriesNoRecord(fullPath)) return new RecordOfFileAnswer.HoldsNone();
         foreach (var plugin in loadOrder.Plugins)
         {
             if (plugin.Provider is PluginProvider.FromMod mod && TreeFolderHolding(plugin, fullPath) is { } tree)
-                return Over(mod, loadOrder.GameRelease).Over(files).Locator.RecordOfFile(plugin.Key, tree, fullPath);
+                return Over(mod, loadOrder.GameRelease, stamps).Over(files).Locator.RecordOfFile(plugin.Key, tree, fullPath);
         }
         return new RecordOfFileAnswer.Refused($"{fullPath} is under no compiled plugin's source.");
     }
@@ -296,7 +297,7 @@ internal sealed class SourceRepository : ISourceRepository
 
     /// <summary>One listing of the plugin's tree. A file whose file-system stamp is unchanged and
     /// settled is not read again, unless an unsaved text stands in for it.</summary>
-    public RecordStamps StampsOf(PluginAddress plugin) => TreeStamps.StampsOf(_sourceFolder, Spelled(plugin), _release, Files);
+    public RecordStamps StampsOf(PluginAddress plugin) => _stamps.StampsOf(_sourceFolder, Spelled(plugin), _release, Files);
 
     /// <summary>Every record the tree holds whose text differs from the last commit's, an embedded
     /// child among them; a tree with no repository is all added. A failed read answers why, never

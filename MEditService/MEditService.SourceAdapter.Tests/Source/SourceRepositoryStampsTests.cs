@@ -2,6 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -18,12 +19,13 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, TestMod.Name);
 
     private readonly ScratchDirectory _modFolder = new("medit-stamps-");
+    private readonly FakeTimeProvider _clock = new(TimeProvider.System.GetUtcNow());
     private readonly ISourceRepository _repository;
 
     public SourceRepositoryStampsTests()
     {
         PluginBaselines.InitWithNoRecords(_modFolder);
-        _repository = TestAdapters.OpenSourceMod(_modFolder, GameRelease.Fallout4);
+        _repository = TestAdapters.Source(_clock).Open(TestMod.In(_modFolder), GameRelease.Fallout4).Require();
         _repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "FixtureNpc", NpcBody)).Wrote();
     }
 
@@ -37,7 +39,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     private static string StampOf(string text) => TestAdapters.Source().ContentStamp(text);
 
     [Fact]
-    public void ContentStamp_IsEqualForEqualBytesAndDistinctForDifferentOnes()
+    public void AContentStamp_IsEqualForEqualBytesAndDistinctForDifferentOnes()
     {
         var a = "{\n  \"Value\": 250\n}\n";
         var alsoA = "{\n  \"Value\": 250\n}\n";
@@ -48,7 +50,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_ListsEachDocumentByItsFormKey_WithTheStampOfItsBytes()
+    public void EachDocument_IsListedByItsFormKey_WithTheStampOfItsBytes()
     {
         var stamps = _repository.StampsOf(Plugin);
 
@@ -56,15 +58,15 @@ public sealed class SourceRepositoryStampsTests : IDisposable
         Assert.Empty(stamps.Unreadable);
     }
 
-    private static Task PastTheSettleWindow() => Task.Delay(TimeSpan.FromSeconds(2.2));
+    private void PastTheSettleWindow() => _clock.SetUtcNow(TimeProvider.System.GetUtcNow().AddSeconds(3));
 
     [Fact]
-    public async Task StampsOf_AfterAHandEditOfTheSameLengthKeepingTheModificationTime_NamesTheNewBytes_OfASettledFile()
+    public void AHandEditOfASettledFile_OfTheSameLengthKeepingTheModificationTime_IsStampedAsItsNewBytes()
     {
         var file = NpcFile;
         var modified = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         File.SetLastWriteTimeUtc(file, modified);
-        await PastTheSettleWindow();
+        PastTheSettleWindow();
         _repository.StampsOf(Plugin);
         var edited = NpcBody.Replace("FixtureNpc", "FixtureNpX", StringComparison.Ordinal);
         File.WriteAllText(file, edited);
@@ -74,9 +76,9 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public async Task StampsOf_AFileUnchangedAndSettled_IsNotReadAgain()
+    public void AFileUnchangedAndSettled_IsNotReadAgain()
     {
-        await PastTheSettleWindow();
+        PastTheSettleWindow();
         _repository.StampsOf(Plugin);
         using var denyingSharingSoAnyReadWouldFail = new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None);
 
@@ -87,7 +89,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_AFileChangedWithinTheSettleWindow_IsReadAgain()
+    public void AFileChangedWithinTheSettleWindow_IsReadAgain()
     {
         _repository.StampsOf(Plugin);
         using var denyingSharingSoAnyReadWouldFail = new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None);
@@ -96,7 +98,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_AFileThatIsNotValidUtf8_StampsTheTextTheIndexStores()
+    public void AFileThatIsNotValidUtf8_IsStampedAsTheTextTheIndexStores()
     {
         var file = NpcFile;
         var bytes = File.ReadAllBytes(file);
@@ -107,7 +109,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_AFileWithAnUnknownField_IsAProblemOnThatFile_AndStillAStampedDocument()
+    public void AFileWithAnUnknownField_IsAProblemOnThatFile_AndStillAStampedDocument()
     {
         File.WriteAllText(NpcFile, NpcBody.Replace("\"FormKey\"", "\"NoSuchField\": 1,\n  \"FormKey\"", StringComparison.Ordinal));
 
@@ -121,7 +123,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_AFlatRecordUnderAnotherLeafName_IsAProblemNamingWhereItBelongs()
+    public void AFlatRecordUnderAnotherLeafName_IsAProblemNamingWhereItBelongs()
     {
         var original = NpcFile;
         var misplaced = Path.Combine(Path.GetDirectoryName(original).Require(), "Renamed.json");
@@ -134,7 +136,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_ARecordOutsideTheLightRangeOfALightHeader_IsAProblemOnItsFile()
+    public void ARecordOutsideTheLightRangeOfALightHeader_IsAProblemOnItsFile()
     {
         var light = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4) { IsSmallMaster = true };
         File.WriteAllBytes(Path.Combine(_modFolder, PluginSourceRoot.HeaderDocument(PluginName)), HeaderDocument.Write(light));
@@ -150,7 +152,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_ABlockLevelDocumentWithAValueOfTheWrongType_IsAProblemOnThatFile()
+    public void ABlockLevelDocumentWithAValueOfTheWrongType_IsAProblemOnThatFile()
     {
         var level = Path.Combine(_modFolder, PluginSourceRoot.For(PluginName), "Cells", "0", "GroupRecordData.json");
         Directory.CreateDirectory(Path.GetDirectoryName(level).Require());
@@ -163,7 +165,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_ATreeWhoseOnlyChangeIsAFileMovedOutOfPlace_IsNotTheSameStamps()
+    public void ATreeWhoseOnlyChangeIsAFileMovedOutOfPlace_IsNotTheSameStamps()
     {
         var placed = _repository.StampsOf(Plugin);
         File.Move(NpcFile, Path.Combine(Path.GetDirectoryName(NpcFile).Require(), "Renamed.json"));
@@ -172,7 +174,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_AFileDeclaringNoFormKey_IsReportedUnreadable()
+    public void AFileDeclaringNoFormKey_IsUnreadable()
     {
         File.WriteAllText(Path.Combine(Path.GetDirectoryName(NpcFile).Require(), "Stray - 000A00_Fixture.esp.json"), "{\"EditorID\":\"Stray\"}");
 
@@ -183,7 +185,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_AFileThatIsNotValidJson_SaysWhereTheReaderStopped()
+    public void AFileThatIsNotValidJson_IsUnreadableWhereTheReaderStopped()
     {
         File.WriteAllText(NpcFile, "{\n  \"FormKey\": \"000800:Fixture.esp\",\n  \"EditorID\": }");
 
@@ -194,7 +196,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_AFileOfValidJsonWhoseRootIsAnArray_SaysItsRootIsNoObject_NotThatTheJsonIsInvalid()
+    public void AFileOfValidJsonWhoseRootIsAnArray_IsUnreadableForItsRootIsNoObject_NotForInvalidJson()
     {
         File.WriteAllText(NpcFile, "[1, 2]");
 
@@ -205,7 +207,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_AFormKeyTwoDocumentsDeclare_NamesItWithBothDocuments()
+    public void AFormKeyTwoDocumentsDeclare_IsClaimedByBoth()
     {
         var file = Path.GetRelativePath(_modFolder, NpcFile);
         var twin = Path.Combine(Path.GetDirectoryName(file).Require(), "Twin - 000800_Fixture.esp.json");
@@ -218,7 +220,7 @@ public sealed class SourceRepositoryStampsTests : IDisposable
     }
 
     [Fact]
-    public void StampsOf_APluginWithNoTree_ListsNothing()
+    public void APluginWithNoTree_HasNoStamps()
     {
         var stamps = _repository.StampsOf(new PluginAddress("Absent.esp", TestMod.Name));
 
