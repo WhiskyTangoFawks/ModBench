@@ -20,15 +20,12 @@ export interface FomodEngine {
 }
 
 interface FomodInstall {
-  /** The folder that holds the FOMOD's `fomod` folder. */
   readonly root: string;
-  /** The empty folder the selected files land in. */
   readonly into: string;
   readonly facts: ConditionFacts;
   readonly choices: readonly FomodStepChoice[];
 }
 
-/** The files landed, and each file the FOMOD names that its archive lacks; or why its installer cannot be read. */
 type FomodInstalled = { readonly kind: 'installer'; readonly missing: readonly string[] } | { readonly kind: 'unreadable'; readonly why: string };
 
 type Step = types.IInstallStep;
@@ -185,8 +182,8 @@ async function land(root: string, files: readonly string[], into: string, instru
   }
 }
 
-/** Runs the FOMOD's installer over its choices and lands the files they select in `into`. Rejects, landing nothing,
- *  when the choices do not answer it, its module dependencies do not hold, or a fact its conditions read is unknown. */
+// Rejects, landing nothing, when the choices do not answer the installer, its module dependencies do not hold, or a
+// fact its conditions read is unknown.
 async function installFomod(engine: FomodEngine, { root, into, facts, choices }: FomodInstall): Promise<FomodInstalled> {
   const files = await filesUnder(root);
   const run = await runEngine(engine, { kind: 'install', engineFolder: engine.folder, root, files, facts }, answerer(choices));
