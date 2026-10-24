@@ -308,7 +308,6 @@ describe('the FOMOD installer', () => {
       closed: number;
     }
 
-    // Each state shown is answered by the next reply, and the last reply answers every state after.
     type Reply = FomodMove | ((state: FomodState) => FomodMove);
     const INSTALL: FomodMove = { kind: 'continue', forward: true, stepId: 0 };
     const CANCEL: FomodMove = { kind: 'cancel' };

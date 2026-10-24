@@ -39,7 +39,7 @@ import type { ReadingSource } from '../../instanceReading';
 import { readingSource } from '../mo2Reads';
 import { OVERWRITE_ORIGIN } from '../../../wire/pluginAddress';
 import type {
-  InstallationFileReader, GameFolder, InstallTarget, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided, Subscription,
+  InstallationFileReader, GameFolder, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange, PluginsProvided, Subscription,
 } from '../../instanceAdapter';
 import { setIniValue } from '../codecs/qSettingsIni';
 import { ownTempPrefix } from '../../files';
