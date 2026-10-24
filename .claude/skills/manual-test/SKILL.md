@@ -34,6 +34,8 @@ code --extensionDevelopmentPath="$(git rev-parse --show-toplevel)/modbench" \
 
 The workspace root must be a real MO2 instance directory (CONTRIBUTING.md § Launch the extension). Default to `DevListFallout/` (CONTRIBUTING.md § Local folders) unless the user names another instance. Do not open the Modbench source repo itself as the workspace — the Toolbox will have nothing to show.
 
+Run one Extension Development Host per MO2 instance at a time: a worktree isolates the tree, not the runtime.
+
 ## 3 — Activate the extension
 
 The extension activates on `onStartupFinished`, so the views populate once the window is ready. The activity bar icon appears (Toolbox), and the backend launches automatically — the Plugins tree's rows gain chevrons once the load order is ready. Nothing switches views; every MO2-side view stays exactly where it was.

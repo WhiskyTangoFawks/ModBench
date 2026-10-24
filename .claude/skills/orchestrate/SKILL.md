@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Your goal is the delivery of the epic. The executor's goal is its ticket. Deferral belongs to the user. Work inside your goal gets done in this run. A defect the run finds is inside your goal. Root CLAUDE.md's chain of authority decides what reaches the user.
 
-Resolve before you route. A stop, break or question an executor or reviewer raises is a claim until you have worked it through the chain yourself: the principles, the ADRs the work touches, the spec, and GLOSSARY.md's words, as they stand on `main`. What the chain answers goes back to the lane as the answer, with the texts quoted. Two things reach the user: two documents at one level that disagree, and a need no document speaks to, each with your attempt quoted.
+Resolve before you route. A stop, break or question an executor or reviewer raises is a claim until you have worked it through the chain yourself: the principles, the ADRs the work touches, the architecture and surfaces, and GLOSSARY.md's words, as they stand on `main`. Read them with `git show main:<path>`: the checkout may hold the maintainer's uncommitted drafts. What the chain answers goes back to the lane as the answer, with the texts quoted. Two things reach the user: two documents at one level that disagree, and a need no document speaks to, each with your attempt quoted.
 
 Read tickets, reports and the chain's documents; leave source to the executors. Every source file you open is context you will not have later in the run- spend your context wisely.
 
@@ -36,7 +36,7 @@ Three things sit outside that rule:
 
 Present the lanes with one line per ticket, and the model tier the ticket will run on.
 
-Before the first dispatch, confirm that `git symbolic-ref -q HEAD` names `refs/heads/main` and that `git status --porcelain` prints nothing. If either check fails, refuse and give the reason.
+Before the first dispatch, confirm that `git symbolic-ref -q HEAD` names `refs/heads/main` and that `git status --porcelain` lists no file outside the maintainer's documents. If either check fails, refuse and give the reason.
 
 For each ticket, assign yourself and start one fresh `general-purpose` agent with `isolation: "worktree"` and `run_in_background: true` on the specified model tier. The agent's working directory is its own worktree under `.claude/worktrees/`, cut from local `HEAD` (`worktree.baseRef` is `head`, since a run never pushes), and its first act is `git checkout -b fix-<n>-<slug>`. A global hook blocks EnterWorktree for subagents, so the executor never leaves that directory. If the ticket touches a directory whose dependencies are gitignored and slow to install, such as `node_modules`, tell the executor to symlink it from the checkout.
 
@@ -65,7 +65,7 @@ When an executor reports committed, work through these in order.
    - For a new cross-boundary import, name what it drags with it.
    - When a named surface was wired, retired or renamed, grep `CLAUDE.md`, the specs and adjacent doc comments for present-tense claims about it. A stale doc comment is fixed; a stale claim in a maintainer's document is a break for the drain.
 6. Run `git -C <checkout-absolute-path> merge --no-ff <branch>`.
-7. Where the outcome leaves a maintainer's document out of step with the code, such as a feature the README's What works today list should now name, quote it as a break for the drain.
+7. Where the outcome leaves a maintainer's document out of step with the code, quote it as a break for the drain.
 8. Close the ticket. Anything that needs human eyes is noted for the drain, since verification happens at the epic.
 9. Remove the worktree (`git worktree remove .claude/worktrees/<name>`) and delete the branch.
 10. Tell every open executor what landed and the new baseline test count, in one line.
@@ -79,7 +79,7 @@ When an executor reports committed, work through these in order.
 
 The tracker is yours to read, assign, close and comment on. Tickets come from the user.
 
-**Criterion:** merged, breaks quoted for the drain, ticket closed, worktree gone, `main` clean, other lanes told, findings sorted.
+**Criterion:** merged, breaks quoted for the drain, ticket closed, worktree gone, the checkout clean outside the maintainer's documents, other lanes told, findings sorted.
 
 ## 4. Drain
 
@@ -87,7 +87,7 @@ The run ends when the epic is achieved. Acceptance runs first, then the Windows 
 
 Run the Windows gates once on the final `main`, through `/windows-vm`: the per-ticket gates ran on Linux alone. A red Windows gate is a defect the run found. Then post one comment on the epic. It lists what landed, both ticketed and not, what needs human eyes and why, what parked and the strategic question each park waits on, what was never dispatched, and every break in the chain of authority's form. Tactical decisions stay in the commit messages. The epic is the user's review surface. If everyticket is closed and no open questions remain, close the epic ticket.
 
-**Criterion:** every story is passed or out of reach, `accept.sh down` printed, the Windows gates ran on the final `main` and every red one is fixed or in the comment, the comment is posted, no worktree remains, and `main` is clean.
+**Criterion:** every story is passed or out of reach, `accept.sh down` printed, the Windows gates ran on the final `main` and every red one is fixed or in the comment, the comment is posted, no worktree remains, and the checkout is clean outside the maintainer's documents.
 
 ## Unattended mechanics
 

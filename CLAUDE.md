@@ -47,6 +47,7 @@ principle > ADR > architecture and surfaces > code. Together they are the specif
   - It meets two documents at one level that disagree.
 - A copy of another box's code is never the way around a stop; ADR-0014 rejects it.
 - Report every break: two documents in the chain that disagree about the work. Build to the higher one. A break report and a stop quote the texts at stake, name their levels and say what you built; the maintainer decides every change to their documents.
+- The maintainer's documents are `spec/` and every `CLAUDE.md`.
 - GLOSSARY.md is the maintainer's modding vocabulary, outside the chain. Specification prose, code and identifiers use its words. A label the user sees uses the reference tool's word. A divergence can make that word mislead, such as "top" in a view whose sort the user can reverse. The label then uses another word, and the register records that divergence. A concept with no word in either is described, never named. When it needs a name, ask the maintainer.
 
 ## Rules that matter
