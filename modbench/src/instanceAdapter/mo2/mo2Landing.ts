@@ -107,9 +107,14 @@ export function mo2Landing(
       try {
         await fill(installed, extraction.path);
         const release = await releaseRoot(extraction.path);
-        const { root, fomod } = release.fomod === undefined
+        const landing = release.fomod === undefined
           ? { root: release.root, fomod: undefined }
           : await fomodLanding(fomodEngine, { root: release.root, fomod: release.fomod }, answer, () => conditionFacts(source));
+        if ('cancelled' in landing) {
+          await extraction.abandon();
+          return { landed: false, cancelled: true };
+        }
+        const { root, fomod } = landing;
         await extraction.land(root, { ...metaIniOf(keys), nexusId: effectiveModId(keys.nexusId, keys.installationFileName), gameName });
         return fomod === undefined ? { landed: true } : { landed: true, fomod };
       } catch (err) {

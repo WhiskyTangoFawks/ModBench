@@ -20,6 +20,7 @@ import { ModListProvider, OverwriteNode, type ModlistNode } from './ModListProvi
 import type { ModStatuses } from './modStatuses';
 import { registerModDecorations } from './modDecorations';
 import { registerModInstallCommands } from './installCommands';
+import { fomodDialog } from './fomodDialog';
 import { registerCompareFileCommand } from './compareFile';
 import { registerGoToModCommand } from './goToMod';
 import { registerBuildCommand } from './buildCommand';
@@ -150,7 +151,7 @@ export function createModsView(deps: ModsViewDeps): ModsView {
     registerCompareFileCommand(instance, reporterFor('mod.compareFile'), () => view.selection),
     ...registerConflictTable(instance, (files) => sameCopies(deps.copyReads, files), deps.extensionUri, () => view.selection, reporterFor('mod.openConflicts'), vscode.workspace),
     ...registerModInstallCommands({
-      commands, instance, reporterFor, ask, downloadedFileInstallReporting: deps.downloadedFileInstallReporting,
+      commands, instance, reporterFor, ask, fomodDialog: () => fomodDialog(deps.extensionUri, ask), downloadedFileInstallReporting: deps.downloadedFileInstallReporting,
     }),
     registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), deps.nexusRow),
     ...registerSortDirectionToggle('mod', provider),

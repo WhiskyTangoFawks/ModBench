@@ -13,7 +13,7 @@ import { selectionOutcomeOf, type CommandResult, type SelectionResult } from '..
 import { isRefused, type MEditClient, type ReadModStatus } from '../client';
 import { installMod, upgradeLoss } from './install';
 export type { SelectionResult };
-export type { FomodAnswer, FomodLanded, FomodStepChoice, InstallTarget } from '../instanceAdapter/instanceAdapter';
+export type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice, InstallTarget } from '../instanceAdapter/instanceAdapter';
 export type { ModPackage } from './install';
 
 type Landing = CommandResult<Awaited<ReturnType<InstanceAdapter['changeModOrder']>>>;

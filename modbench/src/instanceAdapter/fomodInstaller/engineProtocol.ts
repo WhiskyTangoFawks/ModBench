@@ -19,12 +19,15 @@ export interface Selection {
 
 export type EngineRequest =
   | { readonly kind: 'install'; readonly engineFolder: string; readonly root: string; readonly files: readonly string[]; readonly facts: ConditionFacts }
-  | { readonly kind: 'answer'; readonly stepId: number; readonly selections: readonly Selection[] }
+  | { readonly kind: 'select'; readonly stepId: number; readonly selection: Selection }
+  | { readonly kind: 'continue'; readonly forward: boolean; readonly stepId: number }
   | { readonly kind: 'cancel' };
 
-/** `step` is each step the engine moves to, `failed` an installer it cannot read, `broken` an engine that cannot run. */
+/** `dialog` is the installer opening, `step` the installer as it stands after each change, and `cause` what changed it: a
+ *  selection, or the start and every move between steps. `failed` an installer it cannot read, `broken` an engine that cannot run. */
 export type EngineReport =
-  | { readonly kind: 'step'; readonly steps: readonly types.IInstallStep[]; readonly current: number }
+  | { readonly kind: 'dialog'; readonly module: string }
+  | { readonly kind: 'step'; readonly steps: readonly types.IInstallStep[]; readonly current: number; readonly cause: 'select' | 'move' }
   | { readonly kind: 'unanswered'; readonly question: string; readonly why: string }
   | { readonly kind: 'done'; readonly result: types.InstallResult | null }
   | { readonly kind: 'failed'; readonly message: string }

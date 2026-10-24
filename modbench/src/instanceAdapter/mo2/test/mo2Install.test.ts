@@ -240,8 +240,21 @@ describe('installing a mod through the MO2 Instance adapter', () => {
     it('lands the release as it is for Manual', async () => {
       const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, { kind: 'manual' });
 
-      expect(outcome).toEqual({ landed: true, fomod: { kind: 'plainCopy', why: 'Manual was asked for' } });
+      expect(outcome).toEqual({ landed: true, fomod: { kind: 'manual' } });
       expect(await filesIn(folder(MOD))).toEqual(['a/A.esp', 'b/B.esp', 'fomod/ModuleConfig.xml', 'meta.ini']);
+    });
+
+    it('writes nothing, and says it was cancelled, when the user cancels the installer', async () => {
+      const before = await snapshotTree(root);
+      const dialog = {
+        show: () => undefined, close: () => undefined, confirmMissing: () => Promise.resolve(true),
+        onMove: (handler: (move: { kind: 'cancel' }) => void) => { setImmediate(() => handler({ kind: 'cancel' })); },
+      };
+
+      const outcome = await holding([]).install(await fomod(PICK), { kind: 'new', name: MOD }, KEYS, { kind: 'dialog', dialog });
+
+      expect(outcome).toEqual({ landed: false, cancelled: true });
+      assertOnlyChanged(before, await snapshotTree(root), new Set());
     });
 
     it('writes nothing when its installer refuses the choices', async () => {

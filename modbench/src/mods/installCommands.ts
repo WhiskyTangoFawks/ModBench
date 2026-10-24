@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { LocatedDownloadedFileRow, Instance } from '../instanceLoader/instance';
 import { INSTALLATION_FILE_EXTENSIONS } from '../instanceAdapter/instanceAdapter';
-import type { FomodAnswer, FomodLanded, FomodStepChoice, InstallTarget, ModCommands, ModPackage } from '../modCommands/modCommands';
+import type { FomodAnswer, FomodDialog, FomodLanded, FomodStepChoice, InstallTarget, ModCommands, ModPackage } from '../modCommands/modCommands';
 import { downloadedFileArgumentOf, downloadedFileNamed } from '../drivingLib/argument';
 import {
   argumentOfKind, registerAgentGesture, reportPartial, type AgentGesture, type GestureResult, type PartialFailure,
@@ -48,6 +48,8 @@ interface ModInstallDeps {
   instance: Pick<Instance, 'value' | 'refresh'>;
   reporterFor: (tag: string) => Reporter;
   ask: AskQuestion;
+  /** The page one view install answers a FOMOD's installer on. */
+  fomodDialog: () => FomodDialog;
   downloadedFileInstallReporting: { reporter: Reporter; log: (line: string) => void; progressViewId: string };
 }
 
@@ -67,9 +69,10 @@ const unmarked = (downloadedFile: string | undefined, downloadedFileRefusal: str
 const unlined = (mod: string, modOrderFile: string, lineRefusal: string | undefined): PartialFailure[] =>
   (lineRefusal === undefined ? [] : [{ message: `"${mod}" was installed, but its ${modOrderFile} line could not be written`, detail: lineRefusal, severity: 'warning' }]);
 
-// A FOMOD that landed as a plain copy, or without some of its files, warns a view and writes the agent's Output line.
+// A FOMOD that landed as a plain copy Modbench chose, or without some of its files, warns a view and writes the agent's
+// Output line. A plain copy asked for, by Manual, warns of nothing.
 const fomodPartial = (mod: string, fomod: FomodLanded | undefined): PartialFailure[] => {
-  if (fomod === undefined) return [];
+  if (fomod === undefined || fomod.kind === 'manual') return [];
   if (fomod.kind === 'plainCopy') {
     return [{ message: `"${mod}" is a FOMOD installed as a plain copy: its files need arranging by hand, because its installer's own steps did not run:`, detail: `${fomod.why}.`, severity: 'warning' }];
   }
@@ -127,7 +130,7 @@ async function pickPackage(): Promise<{ kind: 'archive' | 'folder'; path: string
 // modbench.mod.install: with no package, as from the Mods menu, it asks installation-file-or-folder first,
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { commands, instance, reporterFor, ask, downloadedFileInstallReporting } = deps;
+  const { commands, instance, reporterFor, ask, fomodDialog, downloadedFileInstallReporting } = deps;
   const reporterOf = (via: InstallVia): Reporter => (via === 'downloadedFile' ? downloadedFileInstallReporting.reporter : reporterFor(via));
   const newModNameRefusal = (name: string) => promptRefusal(commands.newModNameRefusal(name));
   const failedMessage = ({ package: installed, target, via }: Install): string =>
@@ -137,6 +140,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     try {
       const outcome = await commands.installMod(install.package, install.target, install.force, install.fomod);
       if (!outcome.applied) return { applied: false, refusal: failedMessage(install), detail: outcome.refusal };
+      if (outcome.cancelled === true) return { applied: true, outcome: { landed: [], refused: [] } };
       return {
         applied: true,
         outcome: { landed: [{ name: install.target.name, ...(outcome.fomod && { fomod: outcome.fomod }) }], refused: [] },
@@ -153,7 +157,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
 
   const newMod = async (installed: ModPackage, defaultName: string, via: InstallVia): Promise<Install | undefined> => {
     const name = await promptModName(defaultName, newModNameRefusal);
-    return name ? { package: installed, target: { kind: 'new', name }, via, force: true } : undefined;
+    return name ? { package: installed, target: { kind: 'new', name }, via, force: true, fomod: { kind: 'dialog', dialog: fomodDialog() } } : undefined;
   };
 
   const pickedPackage = async (): Promise<Install | undefined> => {
@@ -173,7 +177,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     const row = downloadedFileNamed(instance.value.downloadedFiles, name);
     const target = await chooseInstallTarget(row, (defaultName) => promptModName(defaultName, newModNameRefusal));
     if (!target || !(await upgradeConfirmed(target))) return undefined;
-    return { package: downloadedFilePackage(row), target, via: 'downloadedFile', force: true };
+    return { package: downloadedFilePackage(row), target, via: 'downloadedFile', force: true, fomod: { kind: 'dialog', dialog: fomodDialog() } };
   };
 
   const gesture: AgentGesture<KindedRow, Install, InstallResult, InstallOptions> = {

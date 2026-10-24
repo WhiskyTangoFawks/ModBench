@@ -127,6 +127,13 @@ describe('installMod', () => {
     expect(result).toEqual({ applied: false, refusal });
   });
 
+  it('lists no line and refuses nothing for an install the user cancelled', async () => {
+    const { result, calls } = await install(INSTALLATION_FILE, NEW_MOD, { installed: { landed: false, cancelled: true } });
+
+    expect(result).toEqual({ applied: true, cancelled: true });
+    expect(calls.map((call) => call.verb)).toEqual(['install']);
+  });
+
   it('refuses a new mod named by blanks and installs nothing', async () => {
     const { result, calls } = await install(INSTALLATION_FILE, { kind: 'new', name: '  ' });
 

@@ -101,7 +101,7 @@ async function markInstalled(adapter: InstanceAdapter, name: string): Promise<st
 export async function installMod(
   deps: { adapter: InstanceAdapter; readStatus: ReadModStatus; listMod: (name: string) => Promise<CommandResult> },
   installed: ModPackage, target: InstallTarget, force: boolean, fomod?: FomodAnswer,
-): Promise<CommandResult<{ fomod?: FomodLanded; lineRefusal?: string; downloadedFile?: string; downloadedFileRefusal?: string }>> {
+): Promise<CommandResult<{ cancelled?: true; fomod?: FomodLanded; lineRefusal?: string; downloadedFile?: string; downloadedFileRefusal?: string }>> {
   if (target.kind === 'new' && target.name.trim() === '') return { applied: false, refusal: EMPTY_MOD_NAME };
   const loss = force ? undefined : await upgradeLoss(deps, target);
   if (loss !== undefined) return { applied: false, refusal: `${loss} Request it again with force to replace its files.` };
@@ -114,7 +114,7 @@ export async function installMod(
   } catch (err) {
     return refuse(err);
   }
-  if (!outcome.landed) return { applied: false, refusal: claimRefusal(target) };
+  if (!outcome.landed) return outcome.cancelled === true ? { applied: true, cancelled: true } : { applied: false, refusal: claimRefusal(target) };
   const line = target.kind === 'new' ? await deps.listMod(target.name) : { applied: true as const };
   const listed = { applied: true as const, fomod: outcome.fomod, ...(line.applied ? {} : { lineRefusal: line.refusal }) };
   if (file === undefined) return listed;

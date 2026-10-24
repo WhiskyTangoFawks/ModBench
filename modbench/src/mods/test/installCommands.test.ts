@@ -1,4 +1,5 @@
 import { unreadStatus } from '../../test/unreadStatus';
+import { FOMOD_PAGE, VIEW_ANSWER } from '../../test/fomodDialogDouble';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile } from '../../test/vscodeMock';
 
@@ -59,6 +60,7 @@ function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
     instance: { value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows: [downloadedFileRowFixture('foo.7z')] } }), refresh: () => Promise.resolve() },
     reporterFor: () => recordingReporter(),
     ask: vi.fn(),
+    fomodDialog: () => FOMOD_PAGE,
     downloadedFileInstallReporting: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     ...over,
   };
@@ -130,7 +132,7 @@ describe('modbench.mod.install: installation file or folder, asked first', () =>
 
     expect(installMod).toHaveBeenCalledWith(
       { kind: 'archive', path: row.path },
-      { kind: 'new', name: 'New Mod' }, true, undefined,
+      { kind: 'new', name: 'New Mod' }, true, VIEW_ANSWER,
     );
   });
 
@@ -164,7 +166,7 @@ describe('modbench.mod.install: installation file or folder, asked first', () =>
     await invoke('modbench.mod.install');
 
     expect(installMod).toHaveBeenCalledWith(
-      { kind: 'archive', path: '/archive/foo.7z' }, { kind: 'new', name: 'New Mod' }, true, undefined,
+      { kind: 'archive', path: '/archive/foo.7z' }, { kind: 'new', name: 'New Mod' }, true, VIEW_ANSWER,
     );
   });
 
@@ -202,7 +204,7 @@ describe('modbench.mod.install: installation file or folder, asked first', () =>
       canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
     }));
     expect(installMod).toHaveBeenCalledWith(
-      { kind: 'folder', path: '/somewhere/Loose Files' }, { kind: 'new', name: 'New Mod' }, true, undefined,
+      { kind: 'folder', path: '/somewhere/Loose Files' }, { kind: 'new', name: 'New Mod' }, true, VIEW_ANSWER,
     );
   });
 });
@@ -226,6 +228,23 @@ describe('modbench.mod.install: the name prompt', () => {
     await invoke('modbench.mod.install');
 
     expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: name }));
+  });
+});
+
+describe('modbench.mod.install: an install the user cancelled on the FOMOD installer\'s page', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('reports nothing', async () => {
+    const reporter = recordingReporter();
+    installMod.mockResolvedValueOnce({ applied: true, cancelled: true });
+    showQuickPick.mockResolvedValueOnce({ packageKind: 'folder' });
+    showOpenDialog.mockResolvedValueOnce([uriFile('/somewhere/foo')]);
+    showInputBox.mockResolvedValueOnce('New Mod');
+
+    registerModInstallCommands(deps({ reporterFor: () => reporter, downloadedFileInstallReporting: { reporter, log: vi.fn(), progressViewId: 'modbench.downloads' } }));
+    await invoke('modbench.mod.install');
+
+    expect(reporter.reports).toEqual([]);
   });
 });
 
@@ -263,7 +282,7 @@ describe('modbench.mod.install: a downloaded file is its package', () => {
     await invoke('modbench.mod.install', { argument: { kind: 'downloadedFile', row } });
 
     expect(installMod).toHaveBeenCalledWith(
-      { kind: 'downloadedFile', name: 'foo.7z' }, { kind: 'new', name: 'Foo' }, true, undefined);
+      { kind: 'downloadedFile', name: 'foo.7z' }, { kind: 'new', name: 'Foo' }, true, VIEW_ANSWER);
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(showOpenDialog).not.toHaveBeenCalled();
   });
@@ -391,6 +410,7 @@ describe('modbench.mod.install called by the agent', () => {
       message: '"Bar" is a FOMOD installed as a plain copy: its files need arranging by hand, because its installer\'s own steps did not run:',
       detail: 'its installer cannot be read: bad XML.', severity: 'warning',
     }]],
+    ['by Manual, with nothing to warn of', { kind: 'manual' } as const, []],
     ['without files its archive lacks, and what else its installer said', { kind: 'installer', missing: ['gone.esp', 'gone'], notes: ['Installer failed'] } as const, [
       { message: '"Bar" lacks files its FOMOD names and its archive does not hold:', detail: 'gone.esp, gone', severity: 'warning' },
       { message: '"Bar": its FOMOD\'s installer says', detail: 'Installer failed', severity: 'warning' },

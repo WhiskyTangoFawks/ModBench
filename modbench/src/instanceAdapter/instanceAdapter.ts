@@ -7,6 +7,7 @@ import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import { PLUGIN_SOURCE_FOLDER } from '../wire/sourceMod';
+import type { FomodMove, FomodState } from '../wire/fomodPage';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { dataFolderFile } from './gameFolder/dataFolder';
@@ -215,18 +216,35 @@ export interface FomodStepChoice {
   readonly groups: readonly FomodGroupChoice[];
 }
 
-/** How a FOMOD's installer is answered: its choices, step by step, or Manual, which installs a plain copy. */
-export type FomodAnswer = { readonly kind: 'choices'; readonly steps: readonly FomodStepChoice[] } | { readonly kind: 'manual' };
+/** The page a user answers a FOMOD's installer on: it shows the installer as it stands, sends the user's moves, and asks
+ *  whether to install without the files the FOMOD names and its archive lacks. `close` ends it, whatever else did. */
+export interface FomodDialog {
+  readonly show: (state: FomodState) => void;
+  readonly onMove: (handler: (move: FomodMove) => void) => void;
+  readonly confirmMissing: (missing: readonly string[]) => Promise<boolean>;
+  readonly close: () => void;
+}
+
+/** How a FOMOD's installer is answered: its choices, step by step; the user's moves on its page; or Manual, which
+ *  installs a plain copy. */
+export type FomodAnswer =
+  | { readonly kind: 'choices'; readonly steps: readonly FomodStepChoice[] }
+  | { readonly kind: 'dialog'; readonly dialog: FomodDialog }
+  | { readonly kind: 'manual' };
 
 /** A FOMOD its installer installed, with each file it names that its archive lacks and anything else its installer
- *  said; or one installed as a plain copy, and why its installer did not run. */
+ *  said; one installed as a plain copy because Manual was asked for; or one installed as a plain copy because its
+ *  installer did not run, and why. */
 export type FomodLanded =
   | { readonly kind: 'installer'; readonly missing: readonly string[]; readonly notes: readonly string[] }
+  | { readonly kind: 'manual' }
   | { readonly kind: 'plainCopy'; readonly why: string };
 
 /** An install that landed, and how, when its package is a FOMOD; or none, because the target's folder is there for a
- *  new mod or absent for an upgrade. */
-export type InstallOutcome = { readonly landed: true; readonly fomod?: FomodLanded } | { readonly landed: false };
+ *  new mod or absent for an upgrade; or none, because the user cancelled the FOMOD's installer. */
+export type InstallOutcome =
+  | { readonly landed: true; readonly fomod?: FomodLanded }
+  | { readonly landed: false; readonly cancelled?: true };
 
 /** Names match as the manager matches them. An entry added at the winning end is disabled. A
  *  separator added is enabled and gets its folder, after its `anchor` mod or before the

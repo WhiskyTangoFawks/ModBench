@@ -14,6 +14,7 @@ vi.mock('vscode', () => ({
   Uri: { file: (p: string) => ({ fsPath: p }) },
 }));
 
+import { FOMOD_PAGE } from './fomodDialogDouble';
 import { registerModInstallCommands } from '../mods/installCommands';
 import { DownloadedFileNode } from '../downloads/DownloadsProvider';
 import { modCommands } from '../modCommands/modCommands';
@@ -32,7 +33,7 @@ describe('the Downloads-Mods seam: modbench.mod.install given a Downloads row', 
     createQuickPick.mockReturnValue(qp);
     registerModInstallCommands({
       commands: modCommands(fakeInstanceAdapter().adapter, new InMemoryMEditClient(), unreadStatus), instance,
-      reporterFor: () => recordingReporter(), ask: vi.fn(),
+      reporterFor: () => recordingReporter(), ask: vi.fn(), fomodDialog: () => FOMOD_PAGE,
       downloadedFileInstallReporting: { reporter: recordingReporter(), log: vi.fn(), progressViewId: 'modbench.downloads' },
     });
     const node = new DownloadedFileNode(downloadedFileRowFixture('foo.7z'));

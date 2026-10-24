@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fomodLanding, type ConditionFacts, type FomodEngine } from '../fomodInstaller';
-import type { FomodLanded, FomodStepChoice } from '../../instanceAdapter';
+import type { FomodDialog, FomodLanded, FomodStepChoice } from '../../instanceAdapter';
+import type { FomodMove, FomodState } from '../../../wire/fomodPage';
 import { present } from '../../../ports/present';
 import { engineProcessFrom, FOMOD_ENGINE } from '../../../test/fomodEngine';
 
@@ -294,6 +295,171 @@ describe('the FOMOD installer', () => {
         ['core/Core.esp']);
 
       await expect(install([])).rejects.toThrow('The FOMOD\'s conditions read the game\'s version, which could not be read: no version in this test.');
+    });
+  });
+
+  describe('answered by the user on a page', () => {
+    interface Page {
+      readonly states: FomodState[];
+      readonly confirmed: (string[])[];
+      closed: number;
+    }
+
+    // The user is a script: given the state just shown, the moves that follow.
+    async function answered(
+      react: (state: FomodState, move: (move: FomodMove) => void, seen: number) => void,
+      { engine = FOMOD_ENGINE, confirms = true }: { engine?: FomodEngine; confirms?: boolean } = {},
+    ): Promise<{ page: Page; landing: Awaited<ReturnType<typeof fomodLanding>> }> {
+      const page: Page = { states: [], confirmed: [], closed: 0 };
+      let handler: ((move: FomodMove) => void) | undefined;
+      const dialog: FomodDialog = {
+        show: (state) => {
+          page.states.push(state);
+          const seen = page.states.length;
+          setImmediate(() => react(state, (move) => present(handler, 'the installer\'s listener')(move), seen));
+        },
+        onMove: (listener) => {
+          handler = listener;
+        },
+        confirmMissing: (missing) => {
+          page.confirmed.push([...missing]);
+          return Promise.resolve(confirms);
+        },
+        close: () => {
+          page.closed += 1;
+        },
+      };
+      const landing = await fomodLanding(engine, { root, fomod: 'xml' }, { kind: 'dialog', dialog }, () => Promise.resolve(KNOWN));
+      if ('root' in landing) landedIn = landing.root;
+      return { page, landing };
+    }
+    const idOf = (state: FomodState, step: string, group: string, option: string): { stepId: number; groupId: number; optionId: number } => {
+      const found = present(state.steps.find(({ name }) => name === step), `step ${step}`);
+      const inGroup = present(found.optionalFileGroups?.group.find(({ name }) => name === group), `group ${group}`);
+      return { stepId: found.id, groupId: inGroup.id, optionId: present(inGroup.options.find(({ name }) => name === option), option).id };
+    };
+    const pick = (option: string) => (state: FomodState, move: (move: FomodMove) => void): void => {
+      const { stepId, groupId, optionId } = idOf(state, 'Main', 'Pick', option);
+      move({ kind: 'select', stepId, groupId, optionIds: [optionId] });
+    };
+
+    it('shows the installer as it stands after each click, then lands the files of the choices when Install is clicked', async () => {
+      await release(TWO_STEPS, TWO_STEPS_FILES);
+      const visibleSteps = (state: FomodState): string[] => state.steps.filter(({ visible }) => visible).map(({ name }) => name);
+
+      const { page, landing } = await answered((state, move, seen) => {
+        if (seen === 1) pick('Option A')(state, move);
+        else move({ kind: 'continue', forward: true, stepId: 0 });
+      });
+
+      expect(page.states.map(visibleSteps)).toEqual([['Main', 'Only for B'], ['Main']]);
+      expect(landing).toMatchObject({ fomod: { kind: 'installer', missing: [], notes: [] } });
+      expect(await filesLanded()).toEqual(['A.esp', 'Core.esp']);
+      expect(page.closed).toBe(1);
+    });
+
+    it('moves on to the next step visible, and reports the installer module on every state', async () => {
+      await release(TWO_STEPS, TWO_STEPS_FILES);
+
+      const { page, landing } = await answered((_, move, seen) => move({ kind: 'continue', forward: true, stepId: seen - 1 }));
+
+      expect(page.states.map(({ module, current }) => [module, current])).toEqual([['Test', 0], ['Test', 1]]);
+      expect(await filesLanded()).toEqual(['Core.esp', 'extra/A.esp', 'textures/B.esp']);
+      expect(landing).toMatchObject({ fomod: { kind: 'installer' } });
+    });
+
+    it('keeps the choices when the user goes Back', async () => {
+      await release(TWO_STEPS, TWO_STEPS_FILES);
+
+      const { page } = await answered((state, move, seen) => {
+        if (seen === 1) pick('Option B')(state, move);
+        else if (seen === 2) move({ kind: 'continue', forward: true, stepId: 0 });
+        else if (seen === 3) move({ kind: 'continue', forward: false, stepId: 1 });
+        else move({ kind: 'cancel' });
+      });
+
+      const back = present(page.states[3], 'the state after Back');
+      expect(back.current).toBe(0);
+      expect(back.steps[0]?.optionalFileGroups?.group[0]?.options.map(({ selected }) => selected)).toEqual([false, true]);
+    });
+
+    it('installs nothing, and says so, when the user cancels', async () => {
+      await release(TWO_STEPS, TWO_STEPS_FILES);
+
+      const { page, landing } = await answered((_, move) => move({ kind: 'cancel' }));
+
+      expect(landing).toEqual({ cancelled: true });
+      expect(page.closed).toBe(1);
+      await releaseLeftAsItWas(TWO_STEPS_FILES);
+    });
+
+    it('lands the release as it is, with no reason to give, when the user picks Manual', async () => {
+      await release(TWO_STEPS, TWO_STEPS_FILES);
+
+      const { landing } = await answered((_, move) => move({ kind: 'manual' }));
+
+      expect(landing).toEqual({ root, fomod: { kind: 'manual' } });
+    });
+
+    it('shows the header and Install alone for a FOMOD with no step to see, and lands its files when Install is clicked', async () => {
+      await release(config(`<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}</requiredInstallFiles>`), ['core/Core.esp']);
+
+      const { page, landing } = await answered((_, move) => move({ kind: 'continue', forward: true, stepId: 0 }));
+
+      expect(page.states).toEqual([{ module: 'Test', steps: [], current: 0 }]);
+      expect(landing).toMatchObject({ fomod: { kind: 'installer' } });
+      expect(await filesLanded()).toEqual(['Core.esp']);
+    });
+
+    it('installs nothing when the user cancels a FOMOD with no step to see', async () => {
+      await release(config(`<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}</requiredInstallFiles>`), ['core/Core.esp']);
+
+      const { landing } = await answered((_, move) => move({ kind: 'cancel' }));
+
+      expect(landing).toEqual({ cancelled: true });
+    });
+
+    it('waits on the user for as long as the user takes, though the engine says nothing', async () => {
+      await release(TWO_STEPS, TWO_STEPS_FILES);
+      const patient = { ...FOMOD_ENGINE, silence: 50 };
+
+      const { landing } = await answered((_, move) => {
+        setTimeout(() => move({ kind: 'cancel' }), 200);
+      }, { engine: patient });
+
+      expect(landing).toEqual({ cancelled: true });
+    });
+
+    describe('a file the FOMOD names and its archive lacks', () => {
+      const LACKING = config(`<requiredInstallFiles>${file('core/Core.esp', 'Core.esp')}${file('gone/Gone.esp', 'Gone.esp')}</requiredInstallFiles>`);
+
+      it('is named to the user, who may install without it', async () => {
+        await release(LACKING, ['core/Core.esp']);
+
+        const { page, landing } = await answered((_, move) => move({ kind: 'continue', forward: true, stepId: 0 }));
+
+        expect(page.confirmed).toEqual([['gone/Gone.esp']]);
+        expect(landing).toMatchObject({ fomod: { kind: 'installer', missing: ['gone/Gone.esp'] } });
+        expect(await filesLanded()).toEqual(['Core.esp']);
+      });
+
+      it('installs nothing when the user cancels the confirmation', async () => {
+        await release(LACKING, ['core/Core.esp']);
+
+        const { landing } = await answered((_, move) => move({ kind: 'continue', forward: true, stepId: 0 }), { confirms: false });
+
+        expect(landing).toEqual({ cancelled: true });
+        await releaseLeftAsItWas(['core/Core.esp']);
+      });
+    });
+
+    it('closes the page, and refuses, when the module dependencies do not hold', async () => {
+      await release(config('<moduleDependencies operator="And"><fileDependency file="Needed.esm" state="Active"/></moduleDependencies>'), ['core/Core.esp']);
+      const closed = { count: 0 };
+      const dialog: FomodDialog = { show: () => undefined, onMove: () => undefined, confirmMissing: () => Promise.resolve(true), close: () => { closed.count += 1; } };
+
+      await expect(fomodLanding(FOMOD_ENGINE, { root, fomod: 'xml' }, { kind: 'dialog', dialog }, () => Promise.resolve(KNOWN))).rejects.toThrow(/needed\.esm/i);
+      expect(closed.count).toBe(1);
     });
   });
 });
