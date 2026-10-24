@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { join, basename, relative } from 'node:path';
+import { join, basename, dirname, relative, sep } from 'node:path';
 import ts from 'typescript';
 import { present } from '../ports/present';
 import { isTestSupport, SRC } from './scanSource';
@@ -148,6 +148,28 @@ const BYTE_READERS: readonly (readonly [string, ByteReader])[] = [
 ];
 const isByteReader = (path: string): boolean => BYTE_READERS.some(([reader]) => reader === relative(SRC, path));
 
+const FOMOD_INSTALLER = join('instanceAdapter', 'fomodInstaller');
+const FOMOD_XML_READ_MODULE = join(FOMOD_INSTALLER, 'releaseXml');
+
+function modulesImported(sourceText: string, fileName: string): string[] {
+  const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
+  const specifiers: string[] = [];
+  walk(source, (node) => {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier !== undefined && ts.isStringLiteralLike(node.moduleSpecifier)) {
+      specifiers.push(node.moduleSpecifier.text);
+    } else if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword
+      || (ts.isIdentifier(node.expression) && node.expression.text === 'require'))) {
+      const [specifier] = node.arguments;
+      if (specifier !== undefined && ts.isStringLiteralLike(specifier)) specifiers.push(specifier.text);
+    }
+  });
+  return specifiers.filter((specifier) => specifier.startsWith('.'))
+    .map((specifier) => relative(SRC, join(dirname(fileName), specifier)).replace(/\.ts$/, ''));
+}
+
+const importsTheFomodXmlReadFromOutside = (sourceText: string, fileName: string): boolean =>
+  !relative(SRC, fileName).startsWith(`${FOMOD_INSTALLER}${sep}`) && modulesImported(sourceText, fileName).includes(FOMOD_XML_READ_MODULE);
+
 describe('the extension interprets no plugin binary (ADR-0004): its byte-level reads, in the digest module, the Game folder\'s version read and the FOMOD installer\'s XML read, feed a hash, a program\'s version or a FOMOD\'s text, and nothing else', () => {
   it('covers the whole extension source tree', () => {
     expect(tsFiles(SRC, { exclude: ['generated'] }).length).toBeGreaterThan(100);
@@ -165,6 +187,21 @@ describe('the extension interprets no plugin binary (ADR-0004): its byte-level r
 
   it.each(BYTE_READERS)('holds %s to its imports and its exports, so its bytes reach only what it answers', (path, reader) => {
     expect(byteReaderOffences(reader, readFileSync(join(SRC, path), 'utf8'), path)).toEqual([]);
+  });
+
+  it('lets only the FOMOD installer import its XML read, whose Windows-1252 fallback answers any file whole', () => {
+    const importers = tsFiles(SRC, { exclude: ['generated'] })
+      .filter((path) => !isTestSupport(relative(SRC, path)) && importsTheFomodXmlReadFromOutside(readFileSync(path, 'utf8'), path));
+    expect(importers).toEqual([]);
+  });
+
+  it.each([
+    "import { releaseXmlText } from '../fomodInstaller/releaseXml';",
+    "export { releaseXmlText } from '../fomodInstaller/releaseXml.ts';",
+    "const { releaseXmlText } = await import('../fomodInstaller/releaseXml');",
+  ])('flags `%s` outside the FOMOD installer, and not inside it', (planted) => {
+    expect(importsTheFomodXmlReadFromOutside(planted, join(SRC, 'instanceAdapter', 'mo2', 'planted.ts'))).toBe(true);
+    expect(importsTheFomodXmlReadFromOutside(planted.replace('../fomodInstaller/', './'), join(SRC, FOMOD_INSTALLER, 'planted.ts'))).toBe(false);
   });
 
   it('flags a version read that reads a whole file, or exports a buffer or a type it does not answer with', () => {
