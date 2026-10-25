@@ -6,13 +6,13 @@ const FOLDER_KEY = 'modbench.folder';
 
 type FolderCheck = 'instance' | 'untrustedInstance' | 'notAnInstance';
 
-function answerInstanceCheck(root: string | undefined, isInstance: (root: string) => boolean, instance: Exclude<FolderCheck, 'notAnInstance'>): FolderCheck {
-  const answer = root !== undefined && isInstance(root) ? instance : 'notAnInstance';
+const openRoots = (): string[] => vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
+
+function answerInstanceCheck(foundInstance: boolean, instance: Exclude<FolderCheck, 'notAnInstance'>): FolderCheck {
+  const answer = foundInstance ? instance : 'notAnInstance';
   void vscode.commands.executeCommand('setContext', FOLDER_KEY, answer);
   return answer;
 }
-
-const openRoot = (): string | undefined => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
 export type OpenedFolder = { folder: 'instance'; instanceRoot: string } | { folder: 'notAnInstance' };
 
@@ -20,10 +20,14 @@ export type OpenedFolder = { folder: 'instance'; instanceRoot: string } | { fold
  *  why. An instance whose files cannot be read is still an instance: its views show the error row
  *  (common.md, States, stories 2 and 4). */
 export function openedFolder(isInstance: (root: string) => boolean, log: (message: string) => void): OpenedFolder {
-  const root = openRoot();
-  const folder = answerInstanceCheck(root, isInstance, 'instance');
-  if (folder === 'instance' && root !== undefined) return { folder, instanceRoot: root };
-  const what = root === undefined ? 'No folder is open' : `"${root}" is not an instance`;
+  const roots = openRoots();
+  const [chosen, ...others] = roots.filter(isInstance);
+  answerInstanceCheck(chosen !== undefined, 'instance');
+  if (chosen !== undefined) {
+    for (const other of others) log(`[toolbox] "${other}" is also an instance; this window opens "${chosen}".`);
+    return { folder: 'instance', instanceRoot: chosen };
+  }
+  const what = roots.length === 0 ? 'No folder is open' : 'No open folder is an instance';
   log(`[toolbox] ${what}; every view says how to open one.`);
   return { folder: 'notAnInstance' };
 }
@@ -33,7 +37,7 @@ export function afterTrust(isInstance: (root: string) => boolean, start: () => v
     start();
     return { dispose: () => undefined };
   }
-  answerInstanceCheck(openRoot(), isInstance, 'untrustedInstance');
+  answerInstanceCheck(openRoots().some(isInstance), 'untrustedInstance');
   return vscode.workspace.onDidGrantWorkspaceTrust(start);
 }
 
