@@ -42,7 +42,7 @@ Clone the modlist repository: the clone is the instance folder. Log in to Nexus,
 
 ## Source mods
 
-Decompile and Commit Mod puts a mod under git. It makes a repository in `source/` that holds the mod's plugin source, every other file of the mod, and its manifest, in one commit. You choose how the repository uses its `main` branch.
+Decompile and Commit Mod puts a mod under git. It makes a repository in `source/` that holds the mod's plugin source, its manifest, and only the files its installation file does not yield with their bytes, in one commit. The manifest names the installation file the rest come from. You choose how the repository uses its `main` branch.
 
 ### Publish a source mod
 
@@ -64,6 +64,6 @@ For your own mods, you can use whatever workflow you want. Work directly on main
 
 ### Vendored
 
-In the vendored workflow, `main` holds the author's releases, and your edits live on a branch. When the author updates the mod, you need to install the update, then decompile and commit to main, and rebase your edit branch. This allows you to maintain your own changes on top of another mod. Because git has a size limit of what is stored, and decompiling a mod stores it's assets as well, I recommend creating a custom patch mod, that contains the plugin as an override without the assets, to avoid unnessarily committing assets you don't need to manage.
+In the vendored workflow, `main` holds the author's releases, and your edits live on a branch. When the author updates the mod, point the manifest at the new release, decompile its plugins onto `main`, and rebase your edit branch. This allows you to maintain your own changes on top of another mod. Git holds the plugin source and your own files; the author's other files come from the installation file.
 
-It is the users responsibility to understand the permissions for a vendored mod if you are going to publish the git repository. Publishing a mod's assets on git publicly when you do not have permission to do so is a violation of Nexus terms of service.
+It is the users responsibility to understand the permissions for a vendored mod if you are going to publish the git repository. Publishing a mod's plugin source or assets on git publicly when you do not have permission to do so is a violation of Nexus terms of service.

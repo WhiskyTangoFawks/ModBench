@@ -77,7 +77,7 @@ A git workflow where `main` is the work itself.
 Avoid: custom mod, personal mod
 
 ## Vendored workflow
-A git workflow where `main` holds the author's releases of the mod. Edits live on the `edit` branch. The repository holds no link to the author's releases, so they are not a git remote.
+A git workflow where `main` holds the author's releases of the mod. Edits live on the `edit` branch. Its manifest names the author's release it builds from, and the releases are not a git remote.
 
 Avoid: modified mod (a vendored workflow describes where `main` points), upstream (git's word for a branch's remote counterpart)
 

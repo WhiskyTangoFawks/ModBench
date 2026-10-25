@@ -18,7 +18,7 @@ As a user, I want:
 1. To decompile any plugin in my modlist, whatever tool wrote it and however it bends convention.
 2. To trust the source: it says what the plugin means, and compiling it unchanged gives a plugin that means the same, though its bytes may differ. Cites: ADR-0006
 3. To be told when a plugin cannot become source without losing meaning, and never to get a source that quietly lost it. The refusal names the record, and says whether the plugin is malformed or Mutagen mishandles it, because the remedy differs. Cites: Never silently wrong; GLOSSARY.md, Malformed plugin
-4. To take the author's new release into my edits myself: decompile it onto the mod's `main`, then merge my branch with git, where each conflict lands in one record's file. Cites: ADR-0007
+4. To take the author's new release into my edits myself: point the manifest at it and decompile its plugins onto the mod's `main`, then merge my branch with git, where each conflict lands in one record's file. Cites: ADR-0007
 
 ## Decompile and repair
 
