@@ -9,7 +9,7 @@ import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection } from '../../src/wire/messages';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
-import { DIMMED_OPACITY } from './gridStyles';
+import { DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH } from './gridStyles';
 import type { FieldMetadata } from './types';
 import {
   compareOverride, compareResultFixture, diffNode, fieldMeta, hostPickingEnum, lastPostedEnvelope, lastToldCell, loaded, member, panelClient,
@@ -437,9 +437,10 @@ describe('RecordPanel — the file\'s column', () => {
     await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
     vi.mocked(vscode.postMessage).mockClear();
 
+    const other = headerOf('Other.esp');
     fireEvent.click(headerOf('MyMod.esp'));
-    fireEvent.click(within(headerOf('Other.esp')).getByRole('button'));
-    fireEvent.click(headerOf('Other.esp'));
+    fireEvent.click(within(other).getByRole('button'));
+    fireEvent.click(other);
 
     expect(vi.mocked(vscode.postMessage).mock.calls.filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.OPEN_COLUMNS)).toEqual([[{
       type: WEBVIEW_TO_EXTENSION.OPEN_COLUMNS, records: [{ formKey: '000001:Fallout4.esm', plugin: { name: 'Other.esp', origin: 'ModB' } }],
@@ -1105,15 +1106,26 @@ describe('RecordPanel — column collapse', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
 
-  const collapseButton = (plugin: string) => within(required(screen.getByText(plugin).closest('th'), 'the column\u2019s header')).getByRole('button');
+  const collapseButton = (plugin: string) => within(required(screen.getAllByRole('columnheader').find(th => th.title.startsWith(plugin)), 'the column\u2019s header')).getByRole('button');
 
-  it('the button in a plugin column header collapses that column, hiding its field values while the chip itself stays visible', async () => {
+  it('the button in a plugin column header collapses that column, hiding its field values while its header stays as a strip', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
 
     fireEvent.click(collapseButton('MyMod.esp'));
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
-    expect(screen.getByText('MyMod.esp')).toBeInTheDocument();
+    expect(screen.getAllByRole('columnheader')[2]).toHaveTextContent(/^\[00\]$/);
+  });
+
+  it('a collapsed column keeps its cells\u2019 colour without their text', async () => {
+    renderPanel(compareResult);
+    await waitFor(() => screen.getByText('Override Name'));
+    const colour = required(screen.getByText('Override Name').closest('td'), 'the cell').style.backgroundColor;
+    expect(colour).not.toBe('');
+
+    fireEvent.click(collapseButton('MyMod.esp'));
+    const row = required(screen.getByText('Name').closest('tr'), 'the Name row');
+    expect(row.cells[2].style.backgroundColor).toBe(colour);
   });
 
   it('the button of a collapsed column expands it again', async () => {
@@ -1134,7 +1146,7 @@ describe('RecordPanel — column collapse', () => {
 
     loadRecord('000002:Fallout4.esm');
 
-    await waitFor(() => screen.getByText('MyMod.esp'));
+    await waitFor(() => expect(screen.getAllByRole('columnheader')).toHaveLength(3));
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
   });
 });
@@ -1207,7 +1219,7 @@ describe('RecordPanel — column widths: a column\'s header and every cell under
 
     fireEvent.click(within(required(screen.getByText('MyMod.esp').closest('th'), 'the header')).getByRole('button'));
 
-    expect(new Set(widthsOfColumn(2))).toEqual(new Set(['48px']));
+    expect(new Set(widthsOfColumn(2))).toEqual(new Set([`${COLLAPSED_COLUMN_WIDTH}px`]));
     expect(new Set(widthsOfColumn(1))).toEqual(new Set(['']));
   });
 
