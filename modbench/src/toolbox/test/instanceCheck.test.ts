@@ -49,7 +49,7 @@ describe('the instance check', () => {
 });
 
 describe('several open folders', () => {
-  const instances = new Set(['/instanceA', '/instanceB']);
+  const instances = new Set(['/instanceA', '/instanceB', '/instanceC']);
   const isInstance = (root: string) => instances.has(root);
 
   it('opens the first folder that is an instance, whatever its place in the list', () => {
@@ -57,14 +57,24 @@ describe('several open folders', () => {
     expect(openedFolder(isInstance, () => undefined)).toEqual({ folder: 'instance', instanceRoot: '/instanceA' });
   });
 
-  it('names each other instance in the log, never a plain folder', () => {
-    open('/repo', '/instanceA', '/instanceB');
+  it('names the chosen instance and each other instance in the log, never a plain folder', () => {
+    open('/repo', '/instanceA', '/instanceB', '/instanceC');
     const log = vi.fn<(message: string) => void>();
     openedFolder(isInstance, log);
-    const lines = log.mock.calls.map(([line]) => line);
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain('/instanceB');
-    expect(lines[0]).not.toContain('/repo');
+    expect(log.mock.calls.map(([line]) => line)).toEqual([
+      '[toolbox] "/instanceB" is also an instance; this window opens "/instanceA".',
+      '[toolbox] "/instanceC" is also an instance; this window opens "/instanceA".',
+    ]);
+  });
+
+  it.each<[string, string[], string]>([
+    ['no folder is open', [], '[toolbox] No folder is open; every view says how to open one.'],
+    ['no open folder is an instance', ['/repo'], '[toolbox] No open folder is an instance; every view says how to open one.'],
+  ])('says in the log when %s', (_case, roots, line) => {
+    open(...roots);
+    const log = vi.fn<(message: string) => void>();
+    openedFolder(isInstance, log);
+    expect(log.mock.calls).toEqual([[line]]);
   });
 
   it('says nothing of other instances when there is one', () => {
@@ -72,13 +82,6 @@ describe('several open folders', () => {
     const log = vi.fn<(message: string) => void>();
     openedFolder(isInstance, log);
     expect(log).not.toHaveBeenCalled();
-  });
-
-  it('answers the check before trust for an instance behind another folder', () => {
-    h.isTrusted = false;
-    open('/repo', '/instanceA');
-    afterTrust(isInstance, () => undefined);
-    expect(writesOfTheKey()).toEqual([['setContext', FOLDER_KEY, 'untrustedInstance']]);
   });
 });
 
@@ -98,13 +101,14 @@ describe('Modbench in a folder by its trust', () => {
     expect(start).toHaveBeenCalledOnce();
   });
 
-  it.each([
-    ['an instance', true, 'untrustedInstance'],
-    ['a folder the mod manager does not recognize', false, 'notAnInstance'],
-  ])('answers the check before trust for %s', (_name, recognized, answer) => {
+  it.each<[string, string[], string]>([
+    ['an instance', ['/instanceA'], 'untrustedInstance'],
+    ['an instance behind another folder', ['/repo', '/instanceA'], 'untrustedInstance'],
+    ['a folder the mod manager does not recognize', ['/repo'], 'notAnInstance'],
+  ])('answers the check before trust for %s', (_name, roots, answer) => {
     h.isTrusted = false;
-    h.folders = [{ uri: { fsPath: '/folder' } }];
-    afterTrust(() => recognized, () => undefined);
+    open(...roots);
+    afterTrust((root) => root.startsWith('/instance'), () => undefined);
     expect(writesOfTheKey()).toEqual([['setContext', FOLDER_KEY, answer]]);
   });
 });

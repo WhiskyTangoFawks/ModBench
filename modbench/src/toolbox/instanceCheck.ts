@@ -14,21 +14,20 @@ function answerInstanceCheck(foundInstance: boolean, instance: Exclude<FolderChe
   return answer;
 }
 
-const openInstances = (isInstance: (root: string) => boolean): string[] => openRoots().filter(isInstance);
-
 export type OpenedFolder = { folder: 'instance'; instanceRoot: string } | { folder: 'notAnInstance' };
 
 /** Outside an instance only the Toolbox registers, row-less, and each view's `viewsWelcome` says
  *  why. An instance whose files cannot be read is still an instance: its views show the error row
  *  (common.md, States, stories 2 and 4). */
 export function openedFolder(isInstance: (root: string) => boolean, log: (message: string) => void): OpenedFolder {
-  const [chosen, ...others] = openInstances(isInstance);
+  const roots = openRoots();
+  const [chosen, ...others] = roots.filter(isInstance);
   answerInstanceCheck(chosen !== undefined, 'instance');
   if (chosen !== undefined) {
     for (const other of others) log(`[toolbox] "${other}" is also an instance; this window opens "${chosen}".`);
     return { folder: 'instance', instanceRoot: chosen };
   }
-  const what = openRoots().length === 0 ? 'No folder is open' : 'No open folder is an instance';
+  const what = roots.length === 0 ? 'No folder is open' : 'No open folder is an instance';
   log(`[toolbox] ${what}; every view says how to open one.`);
   return { folder: 'notAnInstance' };
 }
@@ -38,7 +37,7 @@ export function afterTrust(isInstance: (root: string) => boolean, start: () => v
     start();
     return { dispose: () => undefined };
   }
-  answerInstanceCheck(openInstances(isInstance).length > 0, 'untrustedInstance');
+  answerInstanceCheck(openRoots().some(isInstance), 'untrustedInstance');
   return vscode.workspace.onDidGrantWorkspaceTrust(start);
 }
 
