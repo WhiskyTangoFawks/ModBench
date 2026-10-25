@@ -16,7 +16,7 @@ All three hold: it is hard to reverse, a reader would be surprised by it without
 ## Form
 
 - The title is the decision, as the shortest phrase that states it.
-- The opening paragraph is one to three sentences: the forces, the decision and why. It names the principle it applies.
+- The opening paragraph is one to three sentences: the forces, the decision and why.
 - Consequences, when present, are effects a reader holding only the paragraph would get wrong, each with its reason.
 - Alternatives rejected, when present, are options a reader would propose, each with why not.
 - A new ADR takes the number one past the highest in this folder.

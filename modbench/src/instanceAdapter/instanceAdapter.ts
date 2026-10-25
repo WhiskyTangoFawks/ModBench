@@ -330,12 +330,12 @@ export interface SourceMods {
   readonly notes: readonly string[];
 }
 
-/** A source mod's repository as the instance repository holds it (ADR-0023): the folder git checks it out in, the commit
+/** A source mod's repository as the instance repository holds it (ADR-0022): the folder git checks it out in, the commit
  *  the instance repository pins and the branch it follows. */
 export interface Submodule { readonly folder: string; readonly pin: string; readonly branch?: string }
 
 /** Where a clone fetches a source mod's repository from: its remote's URL with no credential, or why it has no host
- *  (ADR-0023). */
+ *  (ADR-0022). */
 export type SourceHost = { readonly kind: 'host'; readonly url: string } | { readonly kind: 'noRemote' } | { readonly kind: 'noHost'; readonly why: string };
 
 /** Why one source mod is not as a submodule would be. */

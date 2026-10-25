@@ -1,6 +1,6 @@
 namespace MEditService.SourceAdapter;
 
-/// <summary>A source mod's repository as a submodule of the instance repository (ADR-0023): git holds its remote, its pin
+/// <summary>A source mod's repository as a submodule of the instance repository (ADR-0022): git holds its remote, its pin
 /// and the branch it follows, and git clones it. Modbench moves no commit and no existing branch.</summary>
 internal static class Submodules
 {

@@ -120,7 +120,7 @@ internal sealed record BuildConfigurationRequest(
 internal sealed record BuildRequest(IReadOnlyList<BuildModRequest> Mods, string ExclusionMark, ArchiveVariantsRequest? Archives, string StatCache);
 
 /// <summary>A mod by name, the source folder whose build configuration names it, its folder, its version, its metadata
-/// files, which its manifest does not name, and whether the Instance adapter makes its repository a submodule (ADR-0023).</summary>
+/// files, which its manifest does not name, and whether the Instance adapter makes its repository a submodule (ADR-0022).</summary>
 internal sealed record BuildModRequest(
     string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule = false);
 

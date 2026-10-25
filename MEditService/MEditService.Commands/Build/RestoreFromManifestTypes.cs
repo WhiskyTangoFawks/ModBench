@@ -26,7 +26,7 @@ public enum RestoreRefusal
     /// <summary>A file its package does not hold, or an installation file that has other bytes.</summary>
     Lacking,
 
-    /// <summary>Its package has no host, so no clone can fetch it (ADR-0023).</summary>
+    /// <summary>Its package has no host, so no clone can fetch it (ADR-0022).</summary>
     NoHost,
 
     /// <summary>A lack is an installation file, a game file or a submodule the request did not hand.</summary>

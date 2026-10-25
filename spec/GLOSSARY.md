@@ -190,12 +190,12 @@ The game installation: the Steam install or a stock game folder.
 Avoid: game directory, data folder (that is a subpath), install path
 
 ## Stock game folder
-A game folder that is Wabbajack's Stock Game: a copy of the vanilla game files outside Steam's management.
+A game folder that is Wabbajack's Stock Game: one outside Steam's management.
 
 Avoid: game copy, vanilla folder
 
 # Package
-What a mod folder is made from: an installation file, the game folder, or a source mod's repository at a commit.
+What a folder is made from: an installation file, the game folder, or a source mod's repository at a commit.
 
 Avoid: source (that is source code), archive (that is a BA2 or BSA), provider
 
@@ -205,7 +205,7 @@ Where a package is fetched from: a site such as Nexus, a store such as Steam, or
 Avoid: repository (MO2's word for a host), source
 
 # Manifest
-The one file recording how a mod folder is made: what it is made from, its host when it has one, each of the mod's files, and the steps that build it with the tools they run.
+The one file recording how a folder is made: what it is made from, its host when it has one, each of the folder's files, and the steps that build it with the tools they run.
 
 Avoid: record (a plugin's unit of data), recipe, directives
 

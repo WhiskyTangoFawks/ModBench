@@ -38,7 +38,7 @@ modbench_driving: "MODBENCH · Driving adapters — the views and the agent: rea
 medit_core: "MEDIT · Core — the write side; it references the kernel and the repositories" {
   class: band; grid-rows: 1
   commands: "Commands\nowns: the write side\nhides: the rules that decide a write" {
-    engine: "Build engine — one deep module\nowns: a mod folder from its source or its manifest,\nand a manifest from a mod folder\nhides: matching, extraction, packing" {class: core}
+    engine: "Build engine — one deep module\nowns: a folder from its source or its manifest,\nand a manifest from a folder\nhides: matching, extraction, packing" {class: core}
   }
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through a repository and forgets" {
@@ -80,7 +80,7 @@ medit_repositories: "MEDIT · Repositories — the only boxes that read or write
   class: band; grid-rows: 1
   sourceadapter: "Source adapter\nowns: a source mod's folder: plugin source, assets\nand repository\nhides: the layout inside plugin source, and git" {class: repositories}
   pluginadapter: "Plugin adapter\nowns: the plugin files\nhides: the binary format" {class: repositories}
-  modfolderadapter: "Mod folder adapter\nowns: a mod folder, its manifest wherever it lives,\nthe stat cache,\nand what it reads: downloaded files and the game folder\nhides: the manifest's text" {class: repositories}
+  modfolderadapter: "Mod folder adapter\nowns: a folder a manifest builds, its manifest wherever it lives,\nthe stat cache,\nand what it reads: downloaded files and the game folders\nhides: the manifest's text" {class: repositories}
 }
 modbench_repositories: "MODBENCH · Repositories — the Instance adapter is the one reader and writer of the mod manager's and the publisher's files" {
   class: band; grid-rows: 1

@@ -16,7 +16,7 @@ public static class FileHash
         return Convert.ToBase64String(bytes);
     }
 
-    /// <summary>The pin of a game folder mod (ADR-0023): a hash of the files it takes, each by path and hash, alphabetically.</summary>
+    /// <summary>The pin of a game folder mod (ADR-0022): a hash of the files it takes, each by path and hash, alphabetically.</summary>
     public static string OfFilesTaken(IEnumerable<HashedFile> files)
     {
         var text = string.Concat(files

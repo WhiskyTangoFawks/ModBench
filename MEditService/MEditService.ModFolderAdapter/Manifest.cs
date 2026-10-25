@@ -33,10 +33,10 @@ public abstract record ManifestPackage
     public sealed record InstallationFile(string Name, long Size, string Hash, string? Page = null) : ManifestPackage;
 
     /// <summary>A source mod's repository by its folder's name, which names its submodule when it is one. Git holds a
-    /// submodule's remote, pin and branch; a repository that is no submodule has no host (ADR-0023).</summary>
+    /// submodule's remote, pin and branch; a repository that is no submodule has no host (ADR-0022).</summary>
     public sealed record SourceRepository(string Name, bool IsSubmodule) : ManifestPackage;
 
-    /// <summary>The game folder by the game's name, pinned by a hash of the files the mod takes from it (ADR-0023).</summary>
+    /// <summary>The game folder by the game's name, pinned by a hash of the files the mod takes from it (ADR-0022).</summary>
     public sealed record GameFolder(string Name, string Hash) : ManifestPackage;
 }
 

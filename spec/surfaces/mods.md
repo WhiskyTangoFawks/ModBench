@@ -185,7 +185,7 @@ As a user, I want:
 
 As a user, I want:
 
-1. Build to write the mod folder from its repository and the installation files its manifest names, without asking: the source's assets copied, each plugin compiled from its plugin source, its steps run in order, and the manifest's file lines written last. A compiled plugin's source is the truth, and build makes the folder from it. Cites: catalog `build`; ADR-0006; ADR-0007; ADR-0023
+1. Build to write the mod folder from its repository and the installation files its manifest names, without asking: the source's assets copied, each plugin compiled from its plugin source, its steps run in order, and the manifest's file lines written last. A compiled plugin's source is the truth, and build makes the folder from it. Cites: catalog `build`; ADR-0006; ADR-0007; ADR-0022
 2. The manifest to name the output folder and, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
 3. A file in the folder the build did not make left where it is, and the mod shown as differing from its manifest. Restore from manifest removes it. Cites: ADR-0022
 4. A build whose manifest names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Cites: ADR-0003
