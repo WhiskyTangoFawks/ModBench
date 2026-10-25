@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
 /// <summary>Real documents, with <see cref="Unreadable"/>'s record read as ingest reads one it could not
-/// turn into its document, and <see cref="FailedRecordType"/> a type whose enumeration failed.</summary>
+/// turn into its document, and FailedRecordType as a type whose enumeration failed.</summary>
 internal sealed class DiagnosingAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {
     public string? Unreadable { get; set; }
