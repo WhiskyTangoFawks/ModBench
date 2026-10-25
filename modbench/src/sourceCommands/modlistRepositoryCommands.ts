@@ -378,19 +378,11 @@ async function submodulesWritten(adapter: Adapter): Promise<{ notes: readonly Mo
   }
 }
 
-// modlist-repository.md, The repository, story 4: what a commit holds is what the path tokens make of the files now.
 async function pathsReported(adapter: Adapter): Promise<readonly string[]> {
-  let left: string | undefined;
   try {
-    left = await adapter.writePathTokens();
+    return (await adapter.pathsOutsideFolders()).map(({ file, path }) => `${file} holds a path no path token names: ${path}`);
   } catch (err) {
-    return [`the path tokens could not be written: ${errorMessage(err)}`];
-  }
-  const kept = left === undefined ? [] : [left];
-  try {
-    return [...kept, ...(await adapter.pathsOutsideFolders()).map(({ file, path }) => `${file} holds a path no path token names: ${path}`)];
-  } catch (err) {
-    return [...kept, `the paths the instance repository's files hold could not be read: ${errorMessage(err)}`];
+    return [`the paths the instance repository's files hold could not be read: ${errorMessage(err)}`];
   }
 }
 

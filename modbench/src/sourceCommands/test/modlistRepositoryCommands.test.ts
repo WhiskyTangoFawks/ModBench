@@ -199,33 +199,29 @@ describe('modlistRepositoryCommands update manifest', () => {
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect([adapter.calls, outcome]).toMatchObject([[{ verb: 'writeSubmodules' }, { verb: 'keepOutOfPublisher' }, { verb: 'writePathTokens' }], { applied: true, notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], repositoryNotes: ['source/Odd is not a source mod'] }]);
+    expect([adapter.calls, outcome]).toMatchObject([[{ verb: 'writeSubmodules' }, { verb: 'keepOutOfPublisher' }], { applied: true, notes: [{ mod: 'ModA', note: 'it has a remote but no branch checked out' }], repositoryNotes: ['source/Odd is not a source mod'] }]);
   });
 
-  it('reports each path no path token names, naming its file, and why a path token stays', async () => {
-    const { commands, client, adapter } = commandsOver({
-      pathTokenLeft: 'ModOrganizer.ini still holds a path token', pathsOutsideFolders: [{ file: 'ModOrganizer.ini', path: 'C:/Modding/x.exe' }],
-    });
+  it('reports each path no path token names, naming its file, and leaves the path tokens as git init wrote them', async () => {
+    const { commands, client, adapter } = commandsOver({ pathsOutsideFolders: [{ file: 'ModOrganizer.ini', path: 'C:/Modding/x.exe' }] });
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect([adapter.calls.map(({ verb }) => verb), outcome]).toMatchObject([['writeSubmodules', 'keepOutOfPublisher', 'writePathTokens'], {
-      applied: true, repositoryNotes: ['ModOrganizer.ini still holds a path token', 'ModOrganizer.ini holds a path no path token names: C:/Modding/x.exe'],
+    expect([adapter.calls.map(({ verb }) => verb), outcome]).toMatchObject([['writeSubmodules', 'keepOutOfPublisher'], {
+      applied: true, repositoryNotes: ['ModOrganizer.ini holds a path no path token names: C:/Modding/x.exe'],
     }]);
   });
 
-  it.each([
-    ['writing the path tokens', { refusals: refusing('writePathTokens', 'git is not available') }, 'the path tokens could not be written: git is not available'],
-    ['reading the paths', { unreadReads: { pathsOutsideFolders: 'git is not available' } },
-      "the paths the instance repository's files hold could not be read: git is not available"],
-  ])('names the failure of %s beside the manifests that landed', async (_failure, failing: InstanceAnswers, note) => {
-    const { commands, client } = commandsOver(failing);
+  it('names the failure to read the paths beside the manifests that landed', async () => {
+    const { commands, client } = commandsOver({ unreadReads: { pathsOutsideFolders: 'git is not available' } });
     client.setCommandResult('updateManifest', UPDATED);
 
     const outcome = await commands.updateManifest(['ModA']);
 
-    expect(outcome).toMatchObject({ applied: true, landed: UPDATED.landed, repositoryNotes: [note] });
+    expect(outcome).toMatchObject({
+      applied: true, landed: UPDATED.landed, repositoryNotes: ["the paths the instance repository's files hold could not be read: git is not available"],
+    });
   });
 
   it('reports each path no path token names when every mod is refused', async () => {
