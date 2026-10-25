@@ -143,6 +143,23 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
         .toEqual({ gone: false, refusal: `"${path}" has no suffix of its own to remove, and its folder excludes it.` });
     });
 
+    it('takes a file\'s own mark, in any case, as its mark, and a folder\'s mark above it as none of its own', async () => {
+      const marksOf = async (relativePath: string) => {
+        const file = await adapter.originFile(GAMMA, relativePath);
+        return { excluded: file?.excluded, markedExcluded: file?.markedExcluded, includedPath: file?.includedPath };
+      };
+
+      await adapter.markOriginFile(GAMMA, 'y.dds', 'Excluded');
+
+      expect({
+        underAMarkedFolder: await marksOf(`meshes${adapter.exclusionMark}/b.nif`),
+        markedInAnotherCase: await marksOf(`z.dds${adapter.exclusionMark.toUpperCase()}`),
+      }).toEqual({
+        underAMarkedFolder: { excluded: true, markedExcluded: false, includedPath: 'meshes/b.nif' },
+        markedInAnotherCase: { excluded: true, markedExcluded: true, includedPath: 'z.dds' },
+      });
+    });
+
     it('refuses to mark a file onto a name that is there', async () => {
       const marked = `x.dds${adapter.exclusionMark}`;
       expect(await adapter.markOriginFile(GAMMA, 'x.dds', 'Excluded')).toEqual({ gone: false, refusal: `"${marked}" is already there.` });

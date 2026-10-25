@@ -34,7 +34,6 @@ export const rootFiles = (src: string = SRC): string[] =>
 export const sourceFiles = (roots: readonly string[]): string[] =>
   roots.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
 
-/** A temporary tree of `files`, each a path relative to its root mapped to its text, removed when the test finishes. */
 export function plantedTree(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'modbench-planted-tree-'));
   onTestFinished(() => { rmSync(root, { recursive: true, force: true }); });

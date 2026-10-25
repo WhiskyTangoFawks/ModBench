@@ -1,13 +1,14 @@
-// The Modbench column of the zoom-out, spec/architecture/target-architecture.d2, and each band's
-// lib, which it does not draw, joined to the box folders on disk.
+// The boxes are the Modbench column of spec/architecture/target-architecture.d2. A band's lib is a box
+// the zoom-out does not draw; it counts where its folder is.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { URL } from 'node:url';
 
-const SRC = new URL('../src/', import.meta.url);
-const ZOOM_OUT = new URL('../../spec/architecture/target-architecture.d2', import.meta.url);
+const MODBENCH = new URL('../', import.meta.url);
+const SRC = new URL('src/', MODBENCH);
+const ZOOM_OUT = new URL('../spec/architecture/target-architecture.d2', MODBENCH);
 
 /** @returns {Record<string, string[]>} */
-function boxIdsByBand() {
+function drawnByBand() {
     /** @type {Record<string, string[]>} */
     const bands = {};
     /** @type {string[] | undefined} */
@@ -15,7 +16,7 @@ function boxIdsByBand() {
     for (const line of readFileSync(ZOOM_OUT, 'utf8').split('\n')) {
         const container = /^modbench_(\w+): "/.exec(line)?.[1];
         if (container !== undefined) {
-            current = [`${container}lib`];
+            current = [];
             bands[container] = current;
             continue;
         }
@@ -26,21 +27,34 @@ function boxIdsByBand() {
     return bands;
 }
 
+const DRAWN = drawnByBand();
+
 const PROJECT_FOLDERS = readdirSync(SRC, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name !== 'test' && existsSync(new URL(`${entry.name}/tsconfig.json`, SRC)))
     .map((entry) => entry.name);
 
 /** @param {string} id */
-const folderOf = (id) => PROJECT_FOLDERS.find((folder) => folder.toLowerCase() === id);
+const projectFolderOf = (id) => PROJECT_FOLDERS.find((folder) => folder.toLowerCase() === id);
+
+/** @param {string} band @param {string} id @returns {string[]} */
+function srcBoxOf(band, id) {
+    const folder = projectFolderOf(id);
+    if (folder !== undefined) return [folder];
+    if (existsSync(new URL(`${id}/tsconfig.json`, MODBENCH))) return [];
+    throw new Error(`target-architecture.d2 draws the box ${id} in modbench_${band}, and neither src/ nor modbench/ holds a project of that name`);
+}
+
+/** @param {string} band @returns {string[]} */
+function boxesOf(band) {
+    const drawn = DRAWN[band];
+    if (drawn === undefined) throw new Error(`target-architecture.d2 draws no band modbench_${band}`);
+    const lib = projectFolderOf(`${band}lib`);
+    return [...(lib === undefined ? [] : [lib]), ...drawn.flatMap((id) => srcBoxOf(band, id))];
+}
 
 /** @type {Record<string, string[]>} */
-export const BOXES_BY_BAND = Object.fromEntries(
-    Object.entries(boxIdsByBand()).map(([band, ids]) => [band, ids.flatMap((id) => folderOf(id) ?? [])]),
-);
+export const BOXES_BY_BAND = Object.fromEntries(['kernel', 'driving', 'core', 'readmodel', 'repositories'].map((band) => [band, boxesOf(band)]));
 
-export const DRIVING_BOXES = BOXES_BY_BAND.driving ?? [];
-export const CORE_BOXES = BOXES_BY_BAND.core ?? [];
-export const BOXES = [
-    ...(BOXES_BY_BAND.kernel ?? []), ...DRIVING_BOXES, ...CORE_BOXES,
-    ...(BOXES_BY_BAND.readmodel ?? []), ...(BOXES_BY_BAND.repositories ?? []),
-];
+export const DRIVING_BOXES = boxesOf('driving');
+export const CORE_BOXES = boxesOf('core');
+export const BOXES = Object.values(BOXES_BY_BAND).flat();
