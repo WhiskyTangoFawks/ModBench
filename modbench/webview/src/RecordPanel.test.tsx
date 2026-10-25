@@ -1142,12 +1142,17 @@ describe('RecordPanel — column collapse', () => {
   });
 
   it('collapsed state survives a read of the record under the FormKey it moved to', async () => {
-    const [master, winner] = compareResult.overrides;
-    const reloaded: CompareResult = {
-      ...compareResult,
-      overrides: [{ ...master, fields: [{ metadata: strMeta, value: 'Reloaded Name' }] }, winner],
-      diffs: [{ ...compareResult.diffs[0], values: { 'Fallout4.esm': 'Reloaded Name', 'MyMod.esp': 'Override Name' } }],
-    };
+    const reloaded = compareResultFixture({
+      conflictAll: 'Conflict',
+      overrides: [
+        compareOverride({ formKey: '000002:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false, fields: [{ metadata: strMeta, value: 'Reloaded Name' }], conflictThis: 'Master' }),
+        compareOverride({ formKey: '000002:Fallout4.esm', plugin: 'MyMod.esp', isWinner: true, fields: [{ metadata: strMeta, value: 'Override Name' }], conflictThis: 'ConflictWins' }),
+      ],
+      diffs: [diffNode({
+        fieldName: 'Name', values: { 'Fallout4.esm': 'Reloaded Name', 'MyMod.esp': 'Override Name' },
+        winnerColumn: 'MyMod.esp', cellStates: { 'MyMod.esp': 'ConflictWins' }, conflictAll: 'Conflict',
+      })],
+    });
     const load = vi.fn().mockResolvedValueOnce(loaded(compareResult)).mockResolvedValue(loaded(reloaded));
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText('Override Name'));
