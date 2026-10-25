@@ -29,7 +29,7 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public void SerializeToText_ForAPopulatedCell_EmbedsEveryChildSlot()
+    public void APopulatedCellsText_EmbedsEveryChildSlot()
     {
         var text = RecordTextCodec.SerializeToText(MakePopulatedCell(), GameRelease.Fallout4);
 
@@ -49,7 +49,7 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public void RoundTrip_OfAnEmbeddedCell_IsChildFaithful_WithTheParentsOwnFieldsUntouchedSoEmbedsChildrenNeverReadsAsSerializesChildrenInsteadOfItself()
+    public void AnEmbeddedCellsText_ReadsBackChildFaithful_WithTheParentsOwnFieldsUntouchedSoEmbedsChildrenNeverReadsAsSerializesChildrenInsteadOfItself()
     {
 
         var roundTripped = ReadBack.Of(MakePopulatedCell(), GameRelease.Fallout4, "cell");
@@ -64,7 +64,7 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public void SerializeToText_ForAWorldspace_EmbedsItsTopCell()
+    public void AWorldspacesText_EmbedsItsTopCell()
     {
         var worldspace = new Worldspace(Mod)
         {

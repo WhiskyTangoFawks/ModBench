@@ -20,10 +20,12 @@ public sealed class RecordHeaderSchemaTests
     private static long Bit(EnumMember member) =>
         long.Parse(member.BitValue ?? throw new InvalidOperationException($"{member.Value} has no bit."), CultureInfo.InvariantCulture);
 
-    [Fact]
-    public void TheHeaderMembers_AreXEditsRows_InItsOrder_UnderItsLabels()
+    [Theory]
+    [InlineData("weap")]
+    [InlineData("gmst")]
+    public void TheHeaderMembers_AreXEditsRows_InItsOrder_UnderItsLabels_OnceEvenForATableOfSeveralRecordClasses(string table)
     {
-        var header = HeaderOf("weap");
+        var header = HeaderOf(table);
 
         Assert.Equal(
             ["MajorRecordFlagsRaw", "FormKey", "VersionControl", "FormVersion", "Version2"],
@@ -31,14 +33,6 @@ public sealed class RecordHeaderSchemaTests
         Assert.Equal(
             ["Record Flags", "FormID", "Version Control Info 1", "Form Version", "Version Control Info 2"],
             header.Select(c => c.Field.DisplayLabel));
-    }
-
-    [Fact]
-    public void ATableOfSeveralRecordClasses_HasTheHeaderMembersOnce()
-    {
-        Assert.Equal(
-            ["MajorRecordFlagsRaw", "FormKey", "VersionControl", "FormVersion", "Version2"],
-            HeaderOf("gmst").Select(c => c.Name));
     }
 
     [Fact]

@@ -18,26 +18,15 @@ public sealed class ConditionSchemaTests
         (owner.Fields ?? throw new InvalidOperationException($"Expected fields to look up member '{name}'."))
             .Single(f => f.Name == name);
 
-    [Fact]
-    public void ConditionElement_CarriesADiscriminatorOverBothConcreteConditionClasses()
+    [Theory]
+    [InlineData("Conditions.[].MutagenObjectType", new[] { nameof(ConditionFloat), nameof(ConditionGlobal) })]
+    [InlineData("Conditions.[].Data.MutagenObjectType", new[] { nameof(GetEventData), nameof(FunctionConditionData) })]
+    public void AConditionAndItsData_EachCarryADiscriminatorOverTheirConcreteClasses(string path, string[] leaves)
     {
-        var discriminator = Member(ConditionElement(), "MutagenObjectType");
+        var discriminator = SchemaFields.At(GameRelease.Fallout4, "cobj", path);
 
         Assert.True(discriminator.IsDiscriminator);
-        Assert.Equal(
-            [nameof(ConditionFloat), nameof(ConditionGlobal)],
-            discriminator.EnumMembers.Select(m => m.Value));
-    }
-
-    [Fact]
-    public void ConditionData_CarriesADiscriminatorOverBothConcreteConditionDataClasses()
-    {
-        var discriminator = Member(Member(ConditionElement(), "Data"), "MutagenObjectType");
-
-        Assert.True(discriminator.IsDiscriminator);
-        Assert.Equal(
-            [nameof(GetEventData), nameof(FunctionConditionData)],
-            discriminator.EnumMembers.Select(m => m.Value));
+        Assert.Equal(leaves, discriminator.EnumMembers.Select(m => m.Value));
     }
 
     [Fact]
@@ -110,18 +99,12 @@ public sealed class ConditionSchemaTests
     [InlineData("alch", "Effects")]
     public void EveryConditionBearingColumn_ReachesTheFunctionMemberBelowIt(string table, string column)
     {
-        var found = new List<string>();
-        Walk(Schemas[table].RecordColumns.Single(c => c.Name == column).Field, column, found);
+        var found = SchemaFields.Below(column, SchemaFields.At(GameRelease.Fallout4, table, column))
+            .Where(f => f.Field is { Name: "Function", SiblingsInUse: not null })
+            .Select(f => f.Path)
+            .ToList();
 
         Assert.NotEmpty(found);
-        Assert.All(found, path => Assert.EndsWith("Data.Function", path, StringComparison.Ordinal));
-    }
-
-    private static void Walk(FieldMetadata meta, string path, List<string> found)
-    {
-        if (meta.Name == "Function" && meta.SiblingsInUse != null) found.Add(path);
-        if (meta.ElementType != null) Walk(meta.ElementType, path, found);
-        foreach (var field in meta.Fields ?? [])
-            Walk(field, $"{path}.{field.Name}", found);
+        Assert.All(found, path => Assert.Matches(@"Data\.Function(<\w+>)?$", path));
     }
 }

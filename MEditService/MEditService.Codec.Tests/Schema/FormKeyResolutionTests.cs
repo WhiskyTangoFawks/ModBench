@@ -5,77 +5,23 @@ namespace MEditService.Codec.Tests.Schema;
 
 public class FormKeyResolutionTests
 {
-    [Fact]
-    public void From_NullEntry_ReturnsUnresolved()
-    {
-        var resolution = FormKeyResolution.From("000001:Test.esp", null, ["race"], GameRelease.Fallout4);
-        Assert.Equal(FormKeyResolutionState.Unresolved, resolution.State);
-        Assert.Null(resolution.RecordType);
-        Assert.Null(resolution.EditorId);
-    }
+    private static ResolvedFormKey? Held(string? recordType) => recordType is null ? null : new ResolvedFormKey(recordType, "HeldRecord");
 
-    [Fact]
-    public void From_EntryOfWrongType_ReturnsResolvedWrongType()
+    [Theory]
+    [InlineData("a key the lookup lacks", "000001:Test.esp", null, "race", FormKeyResolutionState.Unresolved, null)]
+    [InlineData("a key resolving to another type", "001234:Test.esp", "npc_", "race", FormKeyResolutionState.ResolvedWrongType, "npc_")]
+    [InlineData("a key resolving to its type", "001234:Test.esp", "race", "race", FormKeyResolutionState.ResolvedValidType, "race")]
+    [InlineData("a key of a link that names no type", "001234:Test.esp", "npc_", "", FormKeyResolutionState.ResolvedValidType, "npc_")]
+    [InlineData("an engine-hardcoded key the lookup never carried", "000007:Fallout4.esm", null, "npc_", FormKeyResolutionState.ResolvedValidType, null)]
+    [InlineData("a low object ID in an ordinary plugin, a broken link", "000007:SomeMod.esp", null, "npc_", FormKeyResolutionState.Unresolved, null)]
+    [InlineData("the first ordinary object ID in a master", "000800:Fallout4.esm", null, "npc_", FormKeyResolutionState.Unresolved, null)]
+    [InlineData("the last reserved object ID in a master", "0007FF:Fallout4.esm", null, "npc_", FormKeyResolutionState.ResolvedValidType, null)]
+    [InlineData("text that is no FormKey, refused later by the edit", "not-a-formkey", null, "npc_", FormKeyResolutionState.Unresolved, null)]
+    public void AKey_ResolvesByWhatTheLookupHoldsAndWhetherTheEngineHardcodesIt(
+        string _, string formKey, string? held, string validTypes, FormKeyResolutionState state, string? recordType)
     {
-        var entry = new ResolvedFormKey("npc_", "SomeNpc");
-        var resolution = FormKeyResolution.From("001234:Test.esp", entry, ["race"], GameRelease.Fallout4);
-        Assert.Equal(FormKeyResolutionState.ResolvedWrongType, resolution.State);
-        Assert.Equal("npc_", resolution.RecordType);
-        Assert.Equal("SomeNpc", resolution.EditorId);
-    }
+        var resolution = FormKeyResolution.From(formKey, Held(held), validTypes.Split(',', StringSplitOptions.RemoveEmptyEntries), GameRelease.Fallout4);
 
-    [Fact]
-    public void From_EntryOfValidType_ReturnsResolvedValidType()
-    {
-        var entry = new ResolvedFormKey("race", "SomeRace");
-        var resolution = FormKeyResolution.From("001234:Test.esp", entry, ["race"], GameRelease.Fallout4);
-        Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
-        Assert.Equal("race", resolution.RecordType);
-        Assert.Equal("SomeRace", resolution.EditorId);
-    }
-
-    [Fact]
-    public void From_NoValidTypesConstraint_AnyResolvedTypeIsValid()
-    {
-        var entry = new ResolvedFormKey("npc_", "AnyRecord");
-        var resolution = FormKeyResolution.From("001234:Test.esp", entry, [], GameRelease.Fallout4);
-        Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
-    }
-
-    [Fact]
-    public void From_EngineHardcodedFormKeyMissingFromLookup_ResolvesValidTypeBypassingValidation_BecauseAMissInTheImplicitlyAlwaysLoadedMastersModuleSpaceIsARecordTypeTheLookupNeverCarried()
-    {
-        var resolution = FormKeyResolution.From("000007:Fallout4.esm", null, ["npc_"], GameRelease.Fallout4);
-        Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
-        Assert.Null(resolution.RecordType);
-        Assert.Null(resolution.EditorId);
-    }
-
-    [Fact]
-    public void From_LowObjectIdInOrdinaryPlugin_StaysUnresolved_BecauseItIsABrokenReferenceNotAnEngineConstantSoGatingOnObjectIdAloneIsWrong()
-    {
-        var resolution = FormKeyResolution.From("000007:SomeMod.esp", null, ["npc_"], GameRelease.Fallout4);
-        Assert.Equal(FormKeyResolutionState.Unresolved, resolution.State);
-    }
-
-    [Fact]
-    public void From_ObjectId0x800AtHighRangeBoundary_StaysUnresolved_BecauseItIsTheFirstOrdinaryNonReservedObjectIdAndMustStillBeChecked()
-    {
-        var resolution = FormKeyResolution.From("000800:Fallout4.esm", null, ["npc_"], GameRelease.Fallout4);
-        Assert.Equal(FormKeyResolutionState.Unresolved, resolution.State);
-    }
-
-    [Fact]
-    public void From_ObjectIdJustBelowHighRangeBoundary_ResolvesValidType_BecauseOneBelow0x800IsStillReserved()
-    {
-        var resolution = FormKeyResolution.From("0007FF:Fallout4.esm", null, ["npc_"], GameRelease.Fallout4);
-        Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
-    }
-
-    [Fact]
-    public void From_MalformedFormKeyString_StaysUnresolved_DoesNotThrow_BecauseItReachesHereBeforeTheEditRefusalAndFormKeyFactoryThrowsSoUnparseableMeansNotHardcoded()
-    {
-        var resolution = FormKeyResolution.From("not-a-formkey", null, ["npc_"], GameRelease.Fallout4);
-        Assert.Equal(FormKeyResolutionState.Unresolved, resolution.State);
+        Assert.Equal((state, recordType, Held(held)?.EditorId), (resolution.State, resolution.RecordType, resolution.EditorId));
     }
 }

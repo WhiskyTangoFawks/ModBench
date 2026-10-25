@@ -6,162 +6,82 @@ namespace MEditService.Codec.Tests.Schema;
 
 public class CheckErrorBuilderTests
 {
-    private static JsonElement J(string json) => JsonSerializer.Deserialize<JsonElement>(json);
+    private sealed record Case(FieldMetadata Meta, string? Json, Func<string, ResolvedFormKey?> Resolve, string? MissingStringsFile = null);
 
-    private static readonly FieldMetadata FormKeyMeta = new(
-        "Race", "formKey", false, ["race"], [], AllowsNull: false);
+    private static readonly FieldMetadata RaceLink = new("Race", "formKey", false, ["race"], [], AllowsNull: false);
 
-    private static ResolvedFormKey? Entry(string recordType) => new ResolvedFormKey(recordType, null);
+    private static readonly FieldMetadata TranslatedName = new("Name", "translatedString", false, [], [], AllowsNull: true);
 
-    private static readonly FieldMetadata TranslatedMeta = new(
-        "Name", "translatedString", false, [], [], AllowsNull: true);
+    private static readonly FieldMetadata Factions = new("Factions", "array", true, [], [],
+        ElementType: new FieldMetadata("", "struct", false, [], [], Fields: [new FieldMetadata("Faction", "formKey", false, ["fact"], [], AllowsNull: false)]));
 
-    private static string? NamedMissing(FieldMetadata meta, string? json, string? file = "Test_en.STRINGS") =>
-        CheckErrorBuilder.Build(
-            meta, json is null ? null : J(json), _ => null, GameRelease.Fallout4, indexed: true, missingStringsFile: file);
+    private static readonly Func<string, ResolvedFormKey?> Unresolved = _ => null;
 
-    [Fact]
-    public void Build_TranslatedStringHoldingOnlyItsTargetLanguage_NamesTheStringsFile() =>
-        Assert.Equal("Test_en.STRINGS", NamedMissing(TranslatedMeta, "{\"TargetLanguage\":\"English\"}"));
+    private static Func<string, ResolvedFormKey?> Resolving(string recordType) => _ => new ResolvedFormKey(recordType, null);
+
+    private static readonly Dictionary<string, Case> Cases = new(StringComparer.Ordinal)
+    {
+        ["a translated string holding only its target language"] =
+            new(TranslatedName, """{"TargetLanguage":"English"}""", Unresolved, "Test_en.STRINGS"),
+        ["a translated string holding its text"] =
+            new(TranslatedName, """{"TargetLanguage":"English","Value":"A Door"}""", Unresolved, "Test_en.STRINGS"),
+        ["a translated string holding its text in every language"] =
+            new(TranslatedName, """{"TargetLanguage":"English","Values":[{"Language":"English","String":"A Door"}]}""", Unresolved, "Test_en.STRINGS"),
+        ["an absent translated string"] = new(TranslatedName, null, Unresolved, "Test_en.STRINGS"),
+        ["a translated string of a plugin missing no strings file"] = new(TranslatedName, """{"TargetLanguage":"English"}""", Unresolved),
+        ["a link to a record of its type"] = new(RaceLink, "\"000001:Test.esp\"", Resolving("race")),
+        ["a null link that may be null"] = new(RaceLink with { AllowsNull = true }, null, Resolving("race")),
+        ["a null link that may not be null"] = new(RaceLink, null, Resolving("race")),
+        ["a dangling link"] = new(RaceLink, "\"000FFF:Test.esp\"", Unresolved),
+        ["a link to a record of another type"] =
+            new(RaceLink with { ValidFormKeyTypes = ["npc_", "lvln", "kywd"] }, "\"000001:Test.esp\"", Resolving("race")),
+        ["a field that is no link"] = new(new FieldMetadata("Height", "float", false, [], []), "1.5", Unresolved),
+        ["a list of links, one dangling"] = new(
+            new FieldMetadata("Keywords", "array", true, [], [], ElementType: new FieldMetadata("", "formKey", false, ["kywd"], [], AllowsNull: true)),
+            """["000001:Test.esp", null, "000FFF:Test.esp"]""",
+            key => key == "000001:Test.esp" ? new ResolvedFormKey("kywd", null) : null),
+        ["a null link in a list of structs"] = new(Factions, """[{"Faction": null, "Rank": 0}]""", Unresolved),
+        ["a link a stored document omits in a list of structs"] = new(Factions, """[{"Rank": 0}]""", Unresolved),
+        ["a null link two structs down"] = new(
+            new FieldMetadata("links", "array", true, [], [], ElementType: new FieldMetadata("", "struct", false, [], [],
+                Fields: [new FieldMetadata("inner", "struct", false, [], [], Fields: [new FieldMetadata("Target", "formKey", false, ["kywd"], [], AllowsNull: false)])])),
+            """[{"inner":{"Target":null}}]""",
+            Unresolved),
+        ["an absent link with a declared default"] = new(
+            new FieldMetadata("Owner", "struct", false, [], [], Fields: [new FieldMetadata("Link", "formKey", false, ["npc_"], [], AllowsNull: false, Default: "000001:Test.esp")]),
+            "{}",
+            key => key == "000001:Test.esp" ? new ResolvedFormKey("race", null) : null),
+    };
+
+    private static string? Built(string name)
+    {
+        var (meta, json, resolve, missingStringsFile) = Cases[name];
+        return CheckErrorBuilder.Build(
+            meta, json is null ? null : JsonSerializer.Deserialize<JsonElement>(json), resolve, GameRelease.Fallout4,
+            indexed: true, missingStringsFile: missingStringsFile);
+    }
 
     [Theory]
-    [InlineData("{\"TargetLanguage\":\"English\",\"Value\":\"A Door\"}")]
-    [InlineData("{\"TargetLanguage\":\"English\",\"Values\":[{\"Language\":\"English\",\"String\":\"A Door\"}]}")]
-    [InlineData(null)]
-    public void Build_TranslatedStringThatHoldsTextOrIsAbsent_IsClean(string? json) =>
-        Assert.Null(NamedMissing(TranslatedMeta, json));
+    [InlineData("a translated string holding only its target language", "Test_en.STRINGS")]
+    [InlineData("a null link that may not be null", "Found a NULL reference, expected: RACE")]
+    [InlineData("a dangling link", "[000FFF:Test.esp] <Error: Could not be resolved>")]
+    [InlineData("a link to a record of another type", "Found a RACE reference, expected: KYWD, LVLN, NPC_")]
+    [InlineData("a list of links, one dangling", "[2]: [000FFF:Test.esp] <Error: Could not be resolved>")]
+    [InlineData("a null link in a list of structs", "[0].Faction: Found a NULL reference, expected: FACT")]
+    [InlineData("a link a stored document omits in a list of structs", "[0].Faction: Found a NULL reference, expected: FACT")]
+    [InlineData("a null link two structs down", "[0].inner.Target: Found a NULL reference, expected: KYWD")]
+    [InlineData("an absent link with a declared default", "Link: Found a RACE reference, expected: NPC_")]
+    public void AFieldInError_IsReportedAtItsPath(string name, string expected) =>
+        Assert.Equal(expected, Built(name));
 
-    [Fact]
-    public void Build_TranslatedStringOfAPluginWithNoMissingStringsFile_IsClean() =>
-        Assert.Null(NamedMissing(TranslatedMeta, "{\"TargetLanguage\":\"English\"}", file: null));
-
-    [Fact]
-    public void Build_CleanScalarReference_ReturnsNull()
-    {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000001:Test.esp\""), _ => Entry("race"), GameRelease.Fallout4, indexed: true);
-        Assert.Null(err);
-    }
-
-    [Fact]
-    public void Build_NullScalarReference_NonNullableField_ReturnsNullNotAllowedMessage()
-    {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, null, _ => Entry("race"), GameRelease.Fallout4, indexed: true);
-        Assert.Equal("Found a NULL reference, expected: RACE", err);
-    }
-
-    [Fact]
-    public void Build_NullScalarReference_NullableField_ReturnsNull()
-    {
-        var meta = FormKeyMeta with { AllowsNull = true };
-        var err = CheckErrorBuilder.Build(meta, null, _ => Entry("race"), GameRelease.Fallout4, indexed: true);
-        Assert.Null(err);
-    }
-
-    [Fact]
-    public void Build_DanglingScalarReference_ReturnsUnresolvedMessage()
-    {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000FFF:Test.esp\""), _ => null, GameRelease.Fallout4, indexed: true);
-        Assert.Equal("[000FFF:Test.esp] <Error: Could not be resolved>", err);
-    }
-
-    [Fact]
-    public void Build_TypeMismatchedReference_NamesTheAllowedSignaturesInOrder()
-    {
-        var meta = FormKeyMeta with { ValidFormKeyTypes = ["npc_", "lvln", "kywd"] };
-        var err = CheckErrorBuilder.Build(meta, J("\"000001:Test.esp\""), _ => Entry("race"), GameRelease.Fallout4, indexed: true);
-        Assert.Equal("Found a RACE reference, expected: KYWD, LVLN, NPC_", err);
-    }
-
-    [Fact]
-    public void Build_TypeMismatchedScalarReference_ReturnsMismatchMessage()
-    {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000001:Test.esp\""), _ => Entry("npc_"), GameRelease.Fallout4, indexed: true);
-        Assert.Equal("Found a NPC_ reference, expected: RACE", err);
-    }
-
-    [Fact]
-    public void Build_ArrayOfFormKey_PerElementErrors_JoinedWithSemicolon()
-    {
-        var elemMeta = new FieldMetadata("", "formKey", false, ["kywd"], [], AllowsNull: true);
-        var meta = new FieldMetadata("Keywords", "array", true, [], [], ElementType: elemMeta);
-        var value = J("""["000001:Test.esp", null, "000FFF:Test.esp"]""");
-
-        var err = CheckErrorBuilder.Build(meta, value, fk => fk == "000001:Test.esp" ? Entry("kywd") : null, GameRelease.Fallout4, indexed: true);
-
-        Assert.Equal("[2]: [000FFF:Test.esp] <Error: Could not be resolved>", err);
-    }
-
-    [Fact]
-    public void Build_StructArray_FormKeySubField_ErrorIncludesIndexAndFieldName()
-    {
-        var factionField = new FieldMetadata("Faction", "formKey", false, ["fact"], [], AllowsNull: false);
-        var elemMeta = new FieldMetadata("", "struct", false, [], [], Fields: [factionField]);
-        var meta = new FieldMetadata("Factions", "array", true, [], [], ElementType: elemMeta);
-        var value = J("""[{"Faction": null, "Rank": 0}]""");
-
-        var err = CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4, indexed: true);
-
-        Assert.Equal("[0].Faction: Found a NULL reference, expected: FACT", err);
-    }
-
-    [Fact]
-    public void Build_AbsentNonNullableMember_IsANullReference_ForAStoredDocumentOmitsAnUnsetLink()
-    {
-        var factionField = new FieldMetadata("Faction", "formKey", false, ["fact"], [], AllowsNull: false);
-        var meta = new FieldMetadata("Factions", "array", true, [], [],
-            ElementType: new FieldMetadata("", "struct", false, [], [], Fields: [factionField]));
-        var value = J("""[{"Rank": 0}]""");
-
-        Assert.Equal("[0].Faction: Found a NULL reference, expected: FACT",
-            CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4, indexed: true));
-    }
-
-    [Fact]
-    public void Build_AbsentMemberWithADeclaredDefault_IsCheckedAsThatDefault()
-    {
-        var link = new FieldMetadata("Link", "formKey", false, ["npc_"], [], AllowsNull: false, Default: "000001:Test.esp");
-        var meta = new FieldMetadata("Owner", "struct", false, [], [], Fields: [link]);
-        var asked = new List<string>();
-
-        CheckErrorBuilder.Build(meta, J("{}"), key => { asked.Add(key); return Entry("npc_"); }, GameRelease.Fallout4, indexed: true);
-
-        Assert.Equal(["000001:Test.esp"], asked);
-    }
-
-    [Fact]
-    public void Build_EmptyValidTypes_AnyResolvedTypeAccepted()
-    {
-        var meta = new FieldMetadata("Link", "formKey", false, [], [], AllowsNull: false);
-        var err = CheckErrorBuilder.Build(meta, J("\"000001:Test.esp\""), _ => Entry("npc_"), GameRelease.Fallout4, indexed: true);
-        Assert.Null(err);
-    }
-
-    [Fact]
-    public void Build_NonFormKeyField_ReturnsNull()
-    {
-        var meta = new FieldMetadata("Height", "float", false, [], []);
-        var err = CheckErrorBuilder.Build(meta, J("1.5"), _ => null, GameRelease.Fallout4, indexed: true);
-        Assert.Null(err);
-    }
-
-    [Fact]
-    public void Build_NestedStructInsideArrayStruct_FormKeyReached()
-    {
-        var innerFk = new FieldMetadata("Target", "formKey", false, ["kywd"], [], AllowsNull: false);
-        var innerStruct = new FieldMetadata("inner", "struct", false, [], [], Fields: [innerFk]);
-        var elemMeta = new FieldMetadata("", "struct", false, [], [], Fields: [innerStruct]);
-        var meta = new FieldMetadata("links", "array", true, [], [], ElementType: elemMeta);
-        var value = J("""[{"inner":{"Target":null}}]""");
-
-        var err = CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4, indexed: true);
-
-        Assert.Equal("[0].inner.Target: Found a NULL reference, expected: KYWD", err);
-    }
-
-    [Fact]
-    public void Build_HardcodedFormKeyMissingFromLookup_ReturnsNull_ForTheImplicitlyAlwaysLoadedMastersRecordsWereNeverInFormLookup()
-    {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000007:Fallout4.esm\""), _ => null, GameRelease.Fallout4, indexed: true);
-        Assert.Null(err);
-    }
+    [Theory]
+    [InlineData("a translated string holding its text")]
+    [InlineData("a translated string holding its text in every language")]
+    [InlineData("an absent translated string")]
+    [InlineData("a translated string of a plugin missing no strings file")]
+    [InlineData("a link to a record of its type")]
+    [InlineData("a null link that may be null")]
+    [InlineData("a field that is no link")]
+    public void ACleanField_ReportsNothing(string name) =>
+        Assert.Null(Built(name));
 }

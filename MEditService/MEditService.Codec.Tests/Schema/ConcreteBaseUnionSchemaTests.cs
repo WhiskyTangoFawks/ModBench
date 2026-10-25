@@ -7,7 +7,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Codec.Tests.Indexing;
+namespace MEditService.Codec.Tests.Schema;
 
 public sealed class ConcreteBaseUnionSchemaTests
 {
@@ -91,10 +91,10 @@ public sealed class ConcreteBaseUnionSchemaTests
     [Fact]
     public void LandscapeLayers_AnAlphaLayerElement_ReadsAsAlphaLayerNotAsItsBase()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("Layers701.esp"), Fallout4Release.Fallout4);
-        var cell = new Cell(mod.GetNextFormKey("Cell701"), Fallout4Release.Fallout4)
+        var mod = new Fallout4Mod(ModKey.FromFileName("Layers.esp"), Fallout4Release.Fallout4);
+        var cell = new Cell(mod.GetNextFormKey("Cell"), Fallout4Release.Fallout4)
         {
-            Landscape = new Landscape(mod.GetNextFormKey("Land701"), Fallout4Release.Fallout4)
+            Landscape = new Landscape(mod.GetNextFormKey("Land"), Fallout4Release.Fallout4)
             {
                 Layers = [new BaseLayer(), new AlphaLayer { AlphaLayerData = new byte[] { 1, 2 } }],
             },

@@ -4,10 +4,10 @@ namespace MEditService.Codec.Tests.TestSupport;
 
 /// <summary>Flattens a Mutagen <c>Mask&lt;bool&gt;</c> graph to (dotted path, value) leaves, so a
 /// fidelity failure names the field and a walker that visited nothing is distinguishable from
-/// genuine equality (assert on the leaf count).</summary>
+/// genuine equality (assert there are leaves).</summary>
 public static class MaskInspector
 {
-    public static IEnumerable<(string Path, bool Value)> CountLeaves(object? node, string path = "")
+    public static IEnumerable<(string Path, bool Value)> Leaves(object? node, string path = "")
     {
         switch (node)
         {
@@ -22,12 +22,12 @@ public static class MaskInspector
 
         if (type.GetField("Overall") is { } overallField && type.GetField("Specific") is { } specificField)
         {
-            foreach (var leaf in CountLeaves(overallField.GetValue(node), path))
+            foreach (var leaf in Leaves(overallField.GetValue(node), path))
             {
                 yield return leaf;
             }
 
-            foreach (var leaf in CountLeaves(specificField.GetValue(node), path))
+            foreach (var leaf in Leaves(specificField.GetValue(node), path))
             {
                 yield return leaf;
             }
@@ -49,14 +49,14 @@ public static class MaskInspector
                         ?? throw new InvalidOperationException($"Expected '{elementType.Name}' to declare Item2.");
                     var idx = item1Field.GetValue(element);
                     var val = item2Field.GetValue(element);
-                    foreach (var leaf in CountLeaves(val, $"{path}[{idx}]"))
+                    foreach (var leaf in Leaves(val, $"{path}[{idx}]"))
                     {
                         yield return leaf;
                     }
                 }
                 else
                 {
-                    foreach (var leaf in CountLeaves(element, $"{path}[{i}]"))
+                    foreach (var leaf in Leaves(element, $"{path}[{i}]"))
                     {
                         yield return leaf;
                     }
@@ -71,7 +71,7 @@ public static class MaskInspector
         foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
         {
             var childPath = path.Length == 0 ? field.Name : $"{path}.{field.Name}";
-            foreach (var leaf in CountLeaves(field.GetValue(node), childPath))
+            foreach (var leaf in Leaves(field.GetValue(node), childPath))
             {
                 yield return leaf;
             }
@@ -85,7 +85,7 @@ public static class MaskInspector
             }
 
             var childPath = path.Length == 0 ? prop.Name : $"{path}.{prop.Name}";
-            foreach (var leaf in CountLeaves(prop.GetValue(node), childPath))
+            foreach (var leaf in Leaves(prop.GetValue(node), childPath))
             {
                 yield return leaf;
             }

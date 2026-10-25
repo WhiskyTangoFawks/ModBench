@@ -15,7 +15,7 @@ public sealed class RecordDocumentEditsTests
             : throw new InvalidDataException(whyNot);
 
     [Fact]
-    public void WithPluginRenamed_FollowsEveryFormKeyOfThePlugin_AndLeavesEveryOtherByteAndKeyAlone()
+    public void ARenameOfAPlugin_FollowsEveryFormKeyOfThePlugin_AndLeavesEveryOtherByteAndKeyAlone()
     {
         const string Text = "{\r\n\t\"FormKey\":   \"000801:Old.esp\",\n  \"Name\": \"Old.esp\",\n  \"Race\": \"000802:Other.esm\",  \"Link\": \"000803:Old.esp\" }";
 
@@ -25,7 +25,7 @@ public sealed class RecordDocumentEditsTests
     }
 
     [Fact]
-    public void WithPluginRenamed_ForTheHeader_FollowsItsRootModKey_ButNoOtherModKeyMember()
+    public void ARenameOfAPlugin_FollowsTheHeadersRootModKey_ButNoOtherModKeyMember()
     {
         const string Text = """{ "ModKey": "Old.esp", "ModHeader": { "ModKey": "Old.esp" } }""";
 
@@ -33,7 +33,7 @@ public sealed class RecordDocumentEditsTests
     }
 
     [Fact]
-    public void WithPluginRenamed_ForARecord_LeavesAModKeyMemberAlone()
+    public void ARenameOfAPlugin_LeavesARecordsModKeyMemberAlone()
     {
         const string Text = """{ "ModKey": "Old.esp" }""";
 
@@ -41,7 +41,7 @@ public sealed class RecordDocumentEditsTests
     }
 
     [Fact]
-    public void WithPluginRenamed_ForTheHeader_LeavesAModKeyOfAnotherPluginAlone()
+    public void ARenameOfAPlugin_LeavesAModKeyOfAnotherPluginInTheHeaderAlone()
     {
         const string Text = """{ "ModKey": "Other.esp" }""";
 
@@ -51,9 +51,9 @@ public sealed class RecordDocumentEditsTests
     [Theory]
     [InlineData("""{ "FormKey": "000801:Old.esp", """)]
     [InlineData("""{ "FormKey": "000801:Old.esp" } // a comment no document reader takes""")]
-    public void WithPluginRenamed_TextThatIsNoJsonDocument_AnswersWhyNot(string text)
+    public void ARenameOfTextThatIsNoJsonDocument_IsRefusedSayingWhereTheReaderStopped(string text)
     {
         Assert.False(RecordDocumentEdits.TryWithPluginRenamed(Encoding.UTF8.GetBytes(text), false, Old, New, out _, out var whyNot));
-        Assert.NotEmpty(whyNot);
+        Assert.Contains("LineNumber: 0 | BytePositionInLine:", whyNot, StringComparison.Ordinal);
     }
 }

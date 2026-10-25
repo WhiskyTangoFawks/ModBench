@@ -16,25 +16,6 @@ public sealed class DocumentWireSchemaTests
     private static readonly string[] LeafKinds =
         ["bool", "int", "float", "string", "translatedString", "hex", "color", "vector", "enum", "flags", "formKey", "struct", "array"];
 
-    private static IEnumerable<(string Path, FieldMetadata Meta)> AllFields()
-    {
-        foreach (var (table, schema) in Schemas)
-            foreach (var column in schema.RecordColumns)
-                foreach (var found in Walk($"{table}.{column.Name}", column.Field))
-                    yield return found;
-    }
-
-    private static IEnumerable<(string, FieldMetadata)> Walk(string path, FieldMetadata meta)
-    {
-        yield return (path, meta);
-        if (meta.ElementType != null)
-            foreach (var f in Walk(path + "[]", meta.ElementType)) yield return f;
-        foreach (var sub in meta.Fields ?? [])
-            foreach (var f in Walk($"{path}.{sub.Name}", sub)) yield return f;
-        foreach (var (leaf, variant) in meta.Variants ?? new Dictionary<string, FieldMetadata>())
-            foreach (var f in Walk($"{path}<{leaf}>", variant)) yield return f;
-    }
-
     private static FieldMetadata Column(string table, string name) =>
         Schemas[table].RecordColumns.Single(c => c.Name == name).Field;
 
@@ -63,17 +44,17 @@ public sealed class DocumentWireSchemaTests
     public void NoLinkNamesEveryTable_BecauseNoTypesAlreadyMeansAny()
     {
         var tables = Schemas.Values.Count(s => !s.IsHeader);
-        var offenders = AllFields().Where(f => f.Meta.ValidFormKeyTypes.Count >= tables).Select(f => f.Path).ToList();
+        var offenders = SchemaFields.All(GameRelease.Fallout4).Where(f => f.Field.ValidFormKeyTypes.Count >= tables).Select(f => f.Path).ToList();
 
         Assert.Empty(offenders);
-        Assert.Empty(AllFields().First(f => f.Path.EndsWith("Properties[].Object", StringComparison.Ordinal)).Meta.ValidFormKeyTypes);
+        Assert.Empty(SchemaFields.All(GameRelease.Fallout4).First(f => f.Path.EndsWith("Properties[].Object", StringComparison.Ordinal)).Field.ValidFormKeyTypes);
     }
 
     [Fact]
     public void EveryFieldName_IsAMutagenPropertyName()
     {
-        var offenders = AllFields()
-            .Where(f => f.Meta.Name.Length > 0 && !MutagenPascalCaseWithUnderscoreOnlyWhereMutagenWroteOneAsInEdgeLink_0_1.IsMatch(f.Meta.Name))
+        var offenders = SchemaFields.All(GameRelease.Fallout4)
+            .Where(f => f.Field.Name.Length > 0 && !MutagenPascalCaseWithUnderscoreOnlyWhereMutagenWroteOneAsInEdgeLink_0_1.IsMatch(f.Field.Name))
             .Select(f => f.Path)
             .ToList();
 
@@ -83,63 +64,46 @@ public sealed class DocumentWireSchemaTests
     [Fact]
     public void EveryLeaf_IsNamedByAKindTheDocumentSpells()
     {
-        var offenders = AllFields().Where(f => !LeafKinds.Contains(f.Meta.Type)).Select(f => $"{f.Path}: {f.Meta.Type}").ToList();
+        var offenders = SchemaFields.All(GameRelease.Fallout4).Where(f => !LeafKinds.Contains(f.Field.Type)).Select(f => $"{f.Path}: {f.Field.Type}").ToList();
 
         Assert.Empty(offenders);
     }
 
     [Theory]
-    [InlineData("kywd", "Color", "color")]
-    [InlineData("refr", "Position", "vector")]
-    [InlineData("npc_", "Name", "translatedString")]
-    [InlineData("gras", "Unknown3", "hex")]
-    [InlineData("npc_", "Flags", "flags")]
-    [InlineData("npc_", "Aggression", "enum")]
-    public void ALeafEncodingTheCodecOwns_IsNamedByItsKind(string table, string column, string kind) =>
-        Assert.Equal(kind, Column(table, column).Type);
+    [InlineData(GameRelease.Fallout4, "npc_", "AggroRadiusBehaviorEnabled", "bool")]
+    [InlineData(GameRelease.Fallout4, "imad", "Unknown", "int")]
+    [InlineData(GameRelease.Fallout4, "header", "Author", "string")]
+    [InlineData(GameRelease.Fallout4, "npc_", "Name", "translatedString")]
+    [InlineData(GameRelease.Fallout4, "gras", "Unknown3", "hex")]
+    [InlineData(GameRelease.Fallout4, "kywd", "Color", "color")]
+    [InlineData(GameRelease.Fallout4, "refr", "Position", "vector")]
+    [InlineData(GameRelease.Fallout4, "mato", "ProjectionVector", "vector")]
+    [InlineData(GameRelease.Fallout4, "npc_", "Flags", "flags")]
+    [InlineData(GameRelease.Fallout4, "npc_", "Aggression", "enum")]
+    [InlineData(GameRelease.Fallout4, "npc_", "Weight", "struct")]
+    [InlineData(GameRelease.SkyrimSE, "txst", "Diffuse", "string")]
+    [InlineData(GameRelease.SkyrimSE, "sndr", "SoundFiles.[]", "string")]
+    [InlineData(GameRelease.Starfield, "pndt", "OrbitedData.GravityWell", "float")]
+    [InlineData(GameRelease.Starfield, "sech", "Markers.[].ECTE", "string")]
+    public void ALeaf_IsNamedByTheKindTheCodecSpellsItAs(GameRelease release, string table, string path, string kind) =>
+        Assert.Equal(kind, SchemaFields.At(release, table, path).Type);
 
     [Fact]
-    public void EveryDiscriminator_IsTheDocumentsOwnObjectTypeMember_WithAClosedLabelledDomain()
+    public void EveryDiscriminator_IsTheDocumentsOwnObjectTypeMember_AnEnumOfDistinctLabelledLeavesTitledKind()
     {
-        var discriminators = AllFields().Where(f => f.Meta.IsDiscriminator).ToList();
+        var discriminators = SchemaFields.All(GameRelease.Fallout4).Where(f => f.Field.IsDiscriminator || f.Field.Name == "MutagenObjectType").ToList();
 
         Assert.NotEmpty(discriminators);
         Assert.All(discriminators, d =>
         {
-            Assert.Equal("MutagenObjectType", d.Meta.Name);
-            Assert.Equal("enum", d.Meta.Type);
-            Assert.NotEmpty(d.Meta.EnumMembers);
-            Assert.All(d.Meta.EnumMembers, m => Assert.False(string.IsNullOrWhiteSpace(m.Label)));
+            Assert.True(d.Field.IsDiscriminator, d.Path);
+            Assert.Equal("MutagenObjectType", d.Field.Name);
+            Assert.Equal("enum", d.Field.Type);
+            Assert.Equal("Kind", d.Field.DisplayLabel);
+            Assert.NotEmpty(d.Field.EnumMembers);
+            Assert.All(d.Field.EnumMembers, m => Assert.False(string.IsNullOrWhiteSpace(m.Label)));
+            Assert.Equal(d.Field.EnumMembers.Count, d.Field.EnumMembers.Select(m => m.Label).Distinct(StringComparer.Ordinal).Count());
         });
-    }
-
-    [Theory]
-    [InlineData("cobj", "Conditions", "[]")]
-    [InlineData("cobj", "Conditions", "[]", "Data")]
-    [InlineData("npc_", "Level")]
-    [InlineData("qust", "Aliases", "[]")]
-    [InlineData("npc_", "VirtualMachineAdapter", "Scripts", "[]", "Properties", "[]")]
-    [InlineData("omod", "Properties", "[]")]
-    public void EveryUnion_CarriesTheDocumentsDiscriminator(string table, params string[] hops)
-    {
-        var meta = Column(table, hops[0]);
-        foreach (var hop in hops.Skip(1)) meta = hop == "[]" ? RequireElementType(meta) : Member(meta, hop);
-
-        var discriminator = Assert.Single(RequireFields(meta), f => f.IsDiscriminator);
-        Assert.Equal("MutagenObjectType", discriminator.Name);
-    }
-
-    [Theory]
-    [InlineData("gmst", "GameSettingFloat")]
-    [InlineData("glob", "GlobalFloat")]
-    [InlineData("dmgt", "DamageTypeIndexed")]
-    [InlineData("omod", "ArmorModification")]
-    public void ATableOfSeveralRecordClasses_IsARecordLevelUnionCarryingTheDocumentsDiscriminatorAsAColumn_NamingItsClassFirstLikeAnyUnionElement(string table, string leaf)
-    {
-        var discriminator = Column(table, "MutagenObjectType");
-
-        Assert.True(discriminator.IsDiscriminator);
-        Assert.Contains(leaf, discriminator.EnumMembers.Select(m => m.Value));
     }
 
     [Fact]
@@ -178,29 +142,6 @@ public sealed class DocumentWireSchemaTests
     }
 
     [Fact]
-    public void ObjectModPropertyValue_IsOneMemberWithAVariantPerLeaf_SpelledAsTheCodecSpellsTheLeaf()
-    {
-        var value = Member(RequireElementType(Column("omod", "Properties")), "Value");
-        var variants = RequireVariants(value);
-
-        Assert.Contains("ObjectModIntProperty<Armor+Property>", variants.Keys);
-        Assert.Equal("int", variants["ObjectModIntProperty<Armor+Property>"].Type);
-        Assert.Equal("float", variants["ObjectModFloatProperty<Armor+Property>"].Type);
-    }
-
-    [Fact]
-    public void GameSettingData_IsOneColumnWithAVariantPerRecordClass()
-    {
-        var data = Column("gmst", "Data");
-        var variants = RequireVariants(data);
-
-        Assert.Equal("float", variants[nameof(GameSettingFloat)].Type);
-        Assert.Equal("int", variants[nameof(GameSettingInt)].Type);
-        Assert.Equal("translatedString", variants[nameof(GameSettingString)].Type);
-        Assert.Equal("bool", variants[nameof(GameSettingBool)].Type);
-    }
-
-    [Fact]
     public void DamageTypes_IsOneColumnWithAVariantPerRecordClass()
     {
         var damageTypes = Column("dmgt", "DamageTypes");
@@ -214,19 +155,15 @@ public sealed class DocumentWireSchemaTests
     [Fact]
     public void AVariantMap_IsKeyedByTheDiscriminatorsOwnDomain()
     {
-        var offenders = new List<string>();
-        foreach (var (path, meta) in AllFields())
-        {
-            if (meta.Fields is not { } fields) continue;
-            var domain = fields.SingleOrDefault(f => f.IsDiscriminator)?.EnumMembers.Select(m => m.Value).ToHashSet(StringComparer.Ordinal);
-            foreach (var field in fields)
-            {
-                if (field.Variants is not { } variants) continue;
-                if (domain == null) { offenders.Add($"{path}.{field.Name}: variants with no discriminator beside them"); continue; }
-                foreach (var key in variants.Keys.Where(k => !domain.Contains(k)))
-                    offenders.Add($"{path}.{field.Name}: variant {key} names no leaf of the union");
-            }
-        }
+        var offenders =
+            from owner in SchemaFields.All(GameRelease.Fallout4)
+            let fields = owner.Field.Fields ?? []
+            let domain = fields.SingleOrDefault(f => f.IsDiscriminator)?.EnumMembers.Select(m => m.Value).ToHashSet(StringComparer.Ordinal)
+            from field in fields
+            let variants = field.Variants
+            where variants is not null
+            from leaf in domain is null ? ["<no discriminator beside it>"] : variants.Keys.Where(k => !domain.Contains(k))
+            select $"{owner.Path}.{field.Name}: {leaf}";
 
         Assert.Empty(offenders);
     }

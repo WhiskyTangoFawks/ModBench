@@ -35,14 +35,8 @@ public sealed class ContainmentReadOnlySchemaTests
         var writable = Schemas.Values
             .SelectMany(schema => schema.RecordColumns
                 .Where(c => c.Field.ReadOnlyReason != null)
-                .SelectMany(c => Below(c.Field).Where(m => m.ReadOnlyReason == null).Select(m => $"{schema.TableName}.{c.Name}.{m.Name}")));
+                .SelectMany(c => SchemaFields.Below($"{schema.TableName}.{c.Name}", c.Field).Where(m => m.Field.ReadOnlyReason == null).Select(m => m.Path)));
         Assert.Empty(writable);
-
-        static IEnumerable<FieldMetadata> Below(FieldMetadata field) =>
-            new[] { field.ElementType }.OfType<FieldMetadata>()
-                .Concat(field.Fields ?? [])
-                .Concat(field.Variants?.Values ?? [])
-                .SelectMany(m => Below(m).Prepend(m));
     }
 
     [Fact]

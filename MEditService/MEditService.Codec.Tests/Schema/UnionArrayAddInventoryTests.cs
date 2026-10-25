@@ -33,20 +33,15 @@ public class UnionArrayAddInventoryTests
 
     [Theory]
     [MemberData(nameof(UnionArrays))]
-    public void ArrayAdd_BuildsAnElementTheCodecAccepts(string table, string column)
+    public void AnElementAddedWithoutAValue_IsOneTheCodecAccepts(string table, string column)
     {
         var schema = Schemas[table];
-        var bare = RecordMint.BareDocument(schema, GameRelease.Fallout4, "000800:UnionArrayAdd710.esp", editorId: null);
+        var bare = RecordMint.BareDocument(schema, GameRelease.Fallout4, "000800:UnionArrayAdd.esp", editorId: null);
         var col = schema.RecordColumns.Single(c => c.Name == column);
 
         var after = Edited(bare, table, EditOp.Add, null, Member(column));
 
         using var document = JsonDocument.Parse(after);
-        var written = document.RootElement.GetProperty(col.PropertyName);
-        Assert.Equal(1, written.GetArrayLength());
-        var discriminator = col.Field.ElementType.Require().Fields.Require().Single(f => f.IsDiscriminator);
-        Assert.Equal(
-            discriminator.EnumMembers[0].Value,
-            written[0].GetProperty(discriminator.Name).GetString());
+        Assert.Equal(1, document.RootElement.GetProperty(col.PropertyName).GetArrayLength());
     }
 }

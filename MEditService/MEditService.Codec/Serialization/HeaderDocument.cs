@@ -1,5 +1,6 @@
 using System.IO.Abstractions;
 using System.Text.Json.Nodes;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
@@ -51,7 +52,7 @@ public static class HeaderDocument
     /// <summary>Mutagen's serializer omits a Next Object ID equal to its default, which a new mod does not start at.</summary>
     public static IMod RestoreOmittedNextObjectId(IMod mod, byte[] rootDocument)
     {
-        if (JsonNode.Parse(rootDocument)?["ModHeader"]?["Stats"]?["NextFormID"] is null)
+        if (JsonNode.Parse(rootDocument)?[PluginHeader.ModHeaderMember]?["Stats"]?["NextFormID"] is null)
             mod.NextFormID = GameCodecs.For(mod.GameRelease).NextObjectIdDefault;
         return mod;
     }

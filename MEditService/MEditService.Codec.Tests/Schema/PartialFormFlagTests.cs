@@ -14,47 +14,32 @@ public class PartialFormFlagTests
 
     private static Fallout4Mod MakeMod() => new(ModKey.FromFileName("PartialFormFlag.esp"), Fallout4Release.Fallout4);
 
-    private static bool IsPartialForm(IMajorRecordGetter record, string table)
+    private static readonly Dictionary<string, (Func<IMajorRecordGetter> Record, string Table)> Records = new(StringComparer.Ordinal)
     {
-        var document = Document.Parse(RecordTextCodec.SerializeToText(record, GameRelease.Fallout4));
-        return SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table].IsPartialForm(document);
+        ["a cell carrying bit 14"] = (() => new Cell(MakeMod()) { EditorID = "SomeCell", MajorRecordFlagsRaw = PartialFormBit }, "cell"),
+        ["a cell without bit 14"] = (() => new Cell(MakeMod()) { EditorID = "SomeCell" }, "cell"),
+        ["an npc carrying bit 14, which means something else on a type with no Partial Form flag"] =
+            (() => new Npc(MakeMod()) { EditorID = "SomeNpc", MajorRecordFlagsRaw = PartialFormBit }, "npc_"),
+    };
+
+    [Theory]
+    [InlineData("a cell carrying bit 14", true)]
+    [InlineData("a cell without bit 14", false)]
+    [InlineData("an npc carrying bit 14, which means something else on a type with no Partial Form flag", false)]
+    public void ARecord_IsAPartialForm_ExactlyWhenItsTypeDeclaresTheFlagAndItCarriesBit14(string record, bool partialForm)
+    {
+        var (made, table) = Records[record];
+        var document = Document.Parse(RecordTextCodec.SerializeToText(made(), GameRelease.Fallout4));
+
+        Assert.Equal(partialForm, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table].IsPartialForm(document));
     }
 
-    [Fact]
-    public void IsPartialForm_CellWithBitSet_ReturnsTrue()
+    [Theory]
+    [InlineData("cell", true)]
+    [InlineData("npc_", false)]
+    public void ARecordType_IsPartialFormable_ExactlyWhenItDeclaresThePartialFormFlag(string table, bool partialFormable)
     {
-        var cell = new Cell(MakeMod()) { EditorID = "SomeCell", MajorRecordFlagsRaw = PartialFormBit };
-
-        Assert.True(IsPartialForm(cell, "cell"));
-    }
-
-    [Fact]
-    public void IsPartialForm_CellWithoutBitSet_ReturnsFalse()
-    {
-        var cell = new Cell(MakeMod()) { EditorID = "SomeCell" };
-
-        Assert.False(IsPartialForm(cell, "cell"));
-    }
-
-    [Fact]
-    public void IsPartialForm_NonPartialFormableTypeWithSameBitSet_ReturnsFalse_BecauseBit14CarriesUnrelatedMeaningsOnATypeThatDeclaresNoPartialFormFlag()
-    {
-        var npc = MakeMod().Npcs.AddNew("SomeNpc");
-        npc.MajorRecordFlagsRaw = PartialFormBit;
-
-        Assert.False(IsPartialForm(npc, "npc_"));
-    }
-
-    [Fact]
-    public void ACell_IsPartialFormable()
-    {
-        Assert.True(SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["cell"].IsPartialFormable);
-    }
-
-    [Fact]
-    public void AnNpc_IsNotPartialFormable()
-    {
-        Assert.False(SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["npc_"].IsPartialFormable);
+        Assert.Equal(partialFormable, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table].IsPartialFormable);
     }
 
     [Fact]

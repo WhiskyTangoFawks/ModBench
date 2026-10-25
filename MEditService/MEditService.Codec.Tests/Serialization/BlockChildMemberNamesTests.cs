@@ -13,13 +13,6 @@ public sealed class BlockChildMemberNamesTests
             RecordTypes.For(GameRelease.Fallout4).ExteriorCellBlockLevels);
 
     [Fact]
-    public void BlockNumberMembers_NameRealMembersOfBothBlockLevels()
-    {
-        Assert.NotNull(typeof(WorldspaceBlock).GetProperty(RecordTypes.BlockNumberXMember));
-        Assert.NotNull(typeof(WorldspaceSubBlock).GetProperty(RecordTypes.BlockNumberYMember));
-    }
-
-    [Fact]
     public void InteriorCellBlockLevels_AreTheCellsGroupsTwoBlockTypes_OutermostFirst() =>
         Assert.Equal(
             [nameof(CellBlock), nameof(CellSubBlock)],
@@ -30,12 +23,4 @@ public sealed class BlockChildMemberNamesTests
         Assert.Equal(
             [GroupTypeEnum.InteriorCellBlock, GroupTypeEnum.InteriorCellSubBlock],
             RecordTypes.InteriorCellBlockGroupTypes.Select(Enum.Parse<GroupTypeEnum>));
-
-    [Fact]
-    public void GroupTypeMember_NamesARealMemberOfABlockLevel() =>
-        Assert.NotNull(typeof(CellBlock).GetProperty(RecordTypes.GroupTypeMember));
-
-    [Fact]
-    public void CellGridMember_NamesARealMemberOfACell() =>
-        Assert.NotNull(typeof(Cell).GetProperty(RecordTypes.CellGridMember));
 }

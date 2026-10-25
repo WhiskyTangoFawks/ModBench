@@ -7,6 +7,7 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
 namespace MEditService.Codec.Tests.Serialization;
@@ -38,44 +39,98 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
 
     private static string? Why(string text) => RecordTextCodec.WhyNotARecord(text, Release, "weap");
 
-    [Fact]
-    public void ADocumentTheCodecWroteIsARecord()
+    private static readonly Dictionary<string, Action<JsonObject>> Edits = new(StringComparer.Ordinal)
     {
-        Assert.Null(Why(WeaponText()));
-    }
-
-    [Fact]
-    public void ADocumentReformattedAndReordered_IsStillTheRecord()
-    {
-        var reordered = Edited(WeaponText(), root =>
+        ["none"] = _ => { },
+        ["its members reordered"] = root =>
         {
             var value = root["EditorID"];
             _ = root.Remove("EditorID");
             root["EditorID"] = value;
-        });
-
-        Assert.Null(Why(reordered));
-    }
-
-    [Fact]
-    public void AMisspelledField_IsRefused_NamingIt()
-    {
-        var misspelled = Edited(WeaponText(), root =>
+        },
+        ["a field left out"] = root => root.Remove("Name"),
+        ["a float spelled with more digits than its precision"] = root => root["Weight"] = JsonNode.Parse("2.5000000000001"),
+        ["a field misspelled"] = root =>
         {
             var value = root["EditorID"];
             _ = root.Remove("EditorID");
             root["EditorId"] = value;
-        });
+        },
+        ["a number quoted"] = root => root["Weight"] = "2.5",
+        ["an unknown field"] = root => root["Bogus"] = 1,
+        ["a malformed FormKey"] = root => root["FormKey"] = "not a form key",
+    };
 
-        Assert.Contains("EditorId", Why(misspelled), StringComparison.Ordinal);
+    [Theory]
+    [InlineData("none")]
+    [InlineData("its members reordered")]
+    [InlineData("a field left out")]
+    [InlineData("a float spelled with more digits than its precision")]
+    public void ADocumentTheCodecWrote_IsStillTheRecord_AfterAnEditThatKeepsItsMeaning(string edit)
+    {
+        Assert.Null(Why(Edited(WeaponText(), Edits[edit])));
     }
 
-    [Fact]
-    public void AValueOfAnotherJsonTypeThanTheCodecWrites_IsRefused_NamingTheField()
+    [Theory]
+    [InlineData("a field misspelled", "EditorId")]
+    [InlineData("a number quoted", "Weight")]
+    [InlineData("an unknown field", "Bogus")]
+    [InlineData("a malformed FormKey", "FormKey")]
+    public void ADocumentEditedOutOfTheCodecsShape_IsRefused_NamingTheField(string edit, string field)
     {
-        var quoted = Edited(WeaponText(), root => root["Weight"] = "2.5");
+        Assert.StartsWith(field, Why(Edited(WeaponText(), Edits[edit])), StringComparison.Ordinal);
+    }
 
-        Assert.Contains("Weight", Why(quoted), StringComparison.Ordinal);
+    private static readonly ModKey Refusal = ModKey.FromFileName("Refusal.esp");
+
+    private static readonly Dictionary<string, (Func<IMajorRecordGetter> Record, string Table)> Holders = new(StringComparer.Ordinal)
+    {
+        ["an npc"] = (() => new Npc(new FormKey(Refusal, 0x801), Fallout4Release.Fallout4) { EditorID = "Guy" }, "npc_"),
+        ["an armor mod"] = (() => new ArmorModification(new FormKey(Refusal, 0x802), Fallout4Release.Fallout4)
+        {
+            EditorID = "ArmorMod",
+            Properties = [new ObjectModIntProperty<Armor.Property> { Property = Armor.Property.BodyPart, Step = 1f }],
+        }, "omod"),
+        ["a bool game setting"] = (() => new GameSettingBool(new FormKey(Refusal, 0x803), Fallout4Release.Fallout4) { EditorID = "bTest", Data = true }, "gmst"),
+        ["a misc item"] = (() => new MiscItem(new FormKey(Refusal, 0x804), Fallout4Release.Fallout4) { EditorID = "Misc", ComponentDisplayIndices = [1] }, "misc"),
+        ["a scene collection"] = (() => new SceneCollection(new FormKey(Refusal, 0x805), Fallout4Release.Fallout4) { EditorID = "Scco", XNAMs = [1L] }, "scco"),
+        ["a material object"] = (() => new MaterialObject(new FormKey(Refusal, 0x806), Fallout4Release.Fallout4) { EditorID = "Mato", DNAMs = [new MemorySlice<byte>([0x01, 0x02])] }, "mato"),
+        ["a race"] = (() => new Race(new FormKey(Refusal, 0x809), Fallout4Release.Fallout4) { EditorID = "Race" }, "race"),
+        ["a faction"] = (() => new Faction(new FormKey(Refusal, 0x80A), Fallout4Release.Fallout4)
+        {
+            EditorID = "Faction",
+            VendorLocation = new LocationTargetRadius { Radius = 1, Target = new LocationFallback() },
+        }, "fact"),
+    };
+
+    [Theory]
+    [InlineData("an npc", "Flags", "\"NotANumber\"")]
+    [InlineData("an npc", "Aggression", "\"NotARealAggressionLevel\"")]
+    [InlineData("an npc", "Race", "\"not-a-formkey\"")]
+    [InlineData("an npc", "Voice", "42")]
+    [InlineData("an npc", "Keywords", "\"000801:Refusal.esp\"")]
+    [InlineData("an npc", "Weight", "0.5")]
+    [InlineData("an npc", "Weight", """{"Thin":"not-a-number","Fat":0.5,"Muscular":0.3}""")]
+    [InlineData("an npc", "HeightMax", "\"tall\"")]
+    [InlineData("an npc", "EnergyLevel", "256")]
+    [InlineData("an npc", "XpValueOffset", "32768")]
+    [InlineData("an npc", "AggroRadiusWarn", "-1")]
+    [InlineData("an armor mod", "Properties", "99")]
+    [InlineData("an armor mod", "Properties", """[{"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":"not-a-number","Value2":7,"FunctionType":"Set"}]""")]
+    [InlineData("a bool game setting", "Data", "2.5")]
+    [InlineData("a misc item", "ComponentDisplayIndices", "[3, 4096]")]
+    [InlineData("a misc item", "ComponentDisplayIndices", """[3, "nope"]""")]
+    [InlineData("a scene collection", "XNAMs", "[7, 9223372036854775808]")]
+    [InlineData("a material object", "DNAMs", """["0xAAZZ"]""")]
+    [InlineData("a race", "Subgraphs", """[{"Role": "MT", "AnimationPaths": [{"nope": 1}]}, {"Role": "Weapon"}]""")]
+    [InlineData("a faction", "VendorLocation", """{"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": "not-a-number"}}""")]
+    public void AValueTheMembersTypeCannotHold_IsRefused_NamingTheMember(string holder, string member, string value)
+    {
+        var (record, table) = Holders[holder];
+
+        var why = RecordTextCodec.WhyNotARecord(Edited(RecordTextCodec.SerializeToText(record(), Release), root => root[member] = JsonNode.Parse(value)), Release, table);
+
+        Assert.StartsWith(member, why, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -84,24 +139,20 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
         Assert.Equal("Name holds a value of the wrong type.", Why(Edited(WeaponText(), root => root["Name"] = 5)));
     }
 
-    [Fact]
-    public void AnUnknownField_IsRefused_NamingIt()
+    private static readonly Dictionary<string, Func<string>> DocumentsOf = new(StringComparer.Ordinal)
     {
-        Assert.Contains("Bogus", Why(Edited(WeaponText(), root => root["Bogus"] = 1)), StringComparison.Ordinal);
-    }
+        ["weap"] = WeaponText,
+        [PluginHeader.RecordType] = () => Encoding.UTF8.GetString(HeaderDocument.Write(new Fallout4Mod(ModKey.FromFileName("Fresh.esp"), Fallout4Release.Fallout4))),
+    };
 
-    [Fact]
-    public void AFieldLeftOut_IsTheRecordWithThatFieldAtItsDefault()
+    [Theory]
+    [InlineData("weap")]
+    [InlineData(PluginHeader.RecordType)]
+    public void ATruncatedDocument_IsRefused_WhereTheReaderStopped(string recordType)
     {
-        Assert.Null(Why(Edited(WeaponText(), root => root.Remove("Name"))));
-    }
+        var text = DocumentsOf[recordType]();
 
-    [Fact]
-    public void ATruncatedDocument_IsRefused()
-    {
-        var text = WeaponText();
-
-        Assert.StartsWith("Expected end of string, but instead reached end of data", Why(text[..(text.Length / 2)]), StringComparison.Ordinal);
+        Assert.StartsWith("Expected end of string, but instead reached end of data", RecordTextCodec.WhyNotARecord(text[..(text.Length / 2)], Release, recordType), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -142,12 +193,6 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
         }));
 
         Assert.Equal("Keywords[0]: Unable to cast object of type 'System.Boolean' to type 'System.String'.; Weight holds a value of the wrong type.", why);
-    }
-
-    [Fact]
-    public void AMalformedFormKey_IsRefused_NamingTheField()
-    {
-        Assert.StartsWith("FormKey", Why(Edited(WeaponText(), root => root["FormKey"] = "not a form key")), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -208,17 +253,11 @@ public sealed class RecordTextCodecRefusalTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
-    public void AFloatSpelledWithMoreDigitsThanItsPrecision_IsTheSameRecord()
-    {
-        Assert.Null(Why(Edited(WeaponText(), root => root["Weight"] = JsonNode.Parse("2.5000000000001"))));
-    }
-
-    [Fact]
-    public void AHeaderWithAValueOfTheWrongType_IsRefused()
+    public void AHeaderWithAValueOfTheWrongType_IsRefused_NamingTheMember()
     {
         var header = Encoding.UTF8.GetString(HeaderDocument.Write(new Fallout4Mod(ModKey.FromFileName("Fresh.esp"), Fallout4Release.Fallout4)));
 
-        Assert.NotNull(RecordTextCodec.WhyNotARecord(Edited(header, root => root["ModHeader"].Require()["Stats"].Require()["Version"] = "x"), Release, PluginHeader.RecordType));
+        Assert.Equal("ModHeader.Stats.Version: The input string 'x' was not in a correct format.", RecordTextCodec.WhyNotARecord(Edited(header, root => root["ModHeader"].Require()["Stats"].Require()["Version"] = "x"), Release, PluginHeader.RecordType));
     }
 
     [Theory]

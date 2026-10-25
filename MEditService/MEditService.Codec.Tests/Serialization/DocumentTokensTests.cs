@@ -11,7 +11,7 @@ public sealed class DocumentTokensTests
     private static byte[] Bytes(string text) => Encoding.UTF8.GetBytes(text);
 
     [Fact]
-    public void FormKeysIn_ADocumentsOwnKey_IsAtTheRoot_AndAnyOtherFormKeyMemberOutsideAnEmbedSlotIsNot()
+    public void ADocumentsOwnFormKey_IsAtTheRoot_AndAnyOtherFormKeyMemberOutsideAnEmbedSlotIsNot()
     {
         var keys = DocumentTokens.FormKeysIn(
             Bytes("""{ "FormKey": "000800:A.esp", "Race": "000801:A.esp", "Struct": { "FormKey": "000802:A.esp" } }"""), Release);
@@ -22,7 +22,7 @@ public sealed class DocumentTokensTests
     }
 
     [Fact]
-    public void FormKeysIn_TextCutOffMidDocument_YieldsWhatItReadBeforeTheCut()
+    public void TheFormKeysOfTextCutOffMidDocument_AreThoseBeforeTheCut()
     {
         var keys = DocumentTokens.FormKeysIn(Bytes("""{ "FormKey": "000800:A.esp", "Race": "000801:A"""), Release);
 
@@ -30,7 +30,7 @@ public sealed class DocumentTokensTests
     }
 
     [Fact]
-    public void EditorIdsIn_ReadsTheRootsAndAnEmbeddedChilds()
+    public void TheEditorIdsOfADocument_AreTheRootsAndEachEmbeddedChilds()
     {
         var ids = DocumentTokens.EditorIdsIn(Bytes("""{ "EditorID": "Owner", "Temporary": [ { "EditorID": "Child" } ] }"""));
 
@@ -38,13 +38,13 @@ public sealed class DocumentTokensTests
     }
 
     [Fact]
-    public void EditorIdsIn_TextCutOffMidDocument_YieldsWhatItReadBeforeTheCut()
+    public void TheEditorIdsOfTextCutOffMidDocument_AreThoseBeforeTheCut()
     {
         Assert.Equal(["Owner"], DocumentTokens.EditorIdsIn(Bytes("""{ "EditorID": "Owner", "Name": "Cu""")));
     }
 
     [Fact]
-    public void EditorIdIn_ReadsTheRootsOwnAndNeverAChilds()
+    public void ADocumentsEditorId_IsTheRootsOwnAndNeverAChilds()
     {
         var read = DocumentTokens.EditorIdIn("""{ "Temporary": [ { "EditorID": "Child" } ], "EditorID": "Owner" }""");
 
@@ -56,7 +56,7 @@ public sealed class DocumentTokensTests
     [InlineData("""{ "EditorID": null }""")]
     [InlineData("""{ "EditorID": "Cut""")]
     [InlineData("[]")]
-    public void EditorIdIn_ADocumentNamingNoneOrNoDocument_ReadsNone(string text)
+    public void ADocumentNamingNoEditorIdOrNoDocument_ReadsAsNone(string text)
     {
         var read = DocumentTokens.EditorIdIn(text);
 
@@ -65,43 +65,36 @@ public sealed class DocumentTokensTests
     }
 
     [Fact]
-    public void EditorIdIn_ANonStringEditorId_IsUnreadableRatherThanNone()
+    public void ANonStringEditorId_IsUnreadable_RatherThanNone()
     {
-        Assert.NotNull(DocumentTokens.EditorIdIn("""{ "EditorID": 7 }""").WhyUnreadable);
-    }
-
-    [Fact]
-    public void RootStringIn_AnswersAStringMemberOfTheRootOnly()
-    {
-        const string Text = """{ "Type": "Npc", "Count": 3, "Nested": { "Other": "deep" } }""";
-
-        Assert.Equal("Npc", DocumentTokens.RootStringIn(Text, "Type"));
-        Assert.Null(DocumentTokens.RootStringIn(Text, "Count"));
-        Assert.Null(DocumentTokens.RootStringIn(Text, "Other"));
-        Assert.Null(DocumentTokens.RootStringIn(Text, "Missing"));
+        Assert.Equal("'EditorID' is not a string", DocumentTokens.EditorIdIn("""{ "EditorID": 7 }""").WhyUnreadable);
     }
 
     [Theory]
-    [InlineData("""["Type"]""")]
-    [InlineData("""{ "Type": "Npc" """)]
-    public void RootStringIn_OfTextThatIsNoObjectDocument_AnswersNull(string text)
+    [InlineData("""{ "Type": "Npc", "Count": 3, "Nested": { "Other": "deep" } }""", "Type", "Npc")]
+    [InlineData("""{ "Type": "Npc", "Count": 3, "Nested": { "Other": "deep" } }""", "Count", null)]
+    [InlineData("""{ "Type": "Npc", "Count": 3, "Nested": { "Other": "deep" } }""", "Other", null)]
+    [InlineData("""{ "Type": "Npc", "Count": 3, "Nested": { "Other": "deep" } }""", "Missing", null)]
+    [InlineData("""["Type"]""", "Type", null)]
+    [InlineData("""{ "Type": "Npc" """, "Type", null)]
+    public void ARootMember_ReadsAsAString_OnlyWhereTheDocumentsRootHoldsAString(string text, string member, string? expected)
     {
-        Assert.Null(DocumentTokens.RootStringIn(text, "Type"));
+        Assert.Equal(expected, DocumentTokens.RootStringIn(text, member));
     }
 
     [Fact]
-    public void WhyNotADocument_OfAnObject_IsNull()
+    public void AnObject_IsADocument()
     {
         Assert.Null(DocumentTokens.WhyNotADocument("""{ "FormKey": "000800:A.esp" }"""));
     }
 
     [Theory]
-    [InlineData("""["a"]""")]
-    [InlineData("""{ "FormKey": "000800:A.esp", """)]
-    [InlineData("""{ "FormKey": "000800:A.esp" } // a comment no document reader takes""")]
-    public void WhyNotADocument_OfTextThatIsNoObject_SaysWhy(string text)
+    [InlineData("""["a"]""", "its root is not a JSON object.")]
+    [InlineData("""{ "FormKey": "000800:A.esp", """, "LineNumber: 0 | BytePositionInLine: 29.")]
+    [InlineData("""{ "FormKey": "000800:A.esp" } // a comment no document reader takes""", "LineNumber: 0 | BytePositionInLine: 30.")]
+    public void TextThatIsNoObject_IsNoDocument_SayingWhereTheReaderStopped(string text, string why)
     {
-        Assert.False(string.IsNullOrEmpty(DocumentTokens.WhyNotADocument(text)));
+        Assert.EndsWith(why, DocumentTokens.WhyNotADocument(text), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -110,13 +103,13 @@ public sealed class DocumentTokensTests
     [InlineData("""{ "FormKey": "000800_Some.esp" }""", true)]
     [InlineData("""{ "FormKey": "000800:SOME.esp" }""", true)]
     [InlineData("""{ "FormKey": "000800:Other.esp" }""", false)]
-    public void MayCarry_IsFalseOnlyWhenTheBytesCertainlyDoNotSpellTheFormKey(string text, bool expected)
+    public void ADocument_MayCarryAFormKey_UnlessItsBytesCertainlyDoNotSpellIt(string text, bool expected)
     {
         Assert.Equal(expected, DocumentTokens.MayCarry(Bytes(text), Bytes("000800:Some.esp")));
     }
 
     [Fact]
-    public void MayCarry_MatchesAPluginNameBeyondAsciiWithoutCase()
+    public void APluginNameBeyondAscii_IsMatchedWithoutCase()
     {
         Assert.True(DocumentTokens.MayCarry(Bytes("""{ "FormKey": "000800:ÜNI.ESP" }"""), Bytes("000800:Üni.esp")));
         Assert.False(DocumentTokens.MayCarry(Bytes("""{ "FormKey": "000800:Other.esp" }"""), Bytes("000800:Üni.esp")));
