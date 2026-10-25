@@ -3,7 +3,7 @@ import { compareOverride, compareResultFixture, diffNode, fieldMeta } from './te
 import { buildColumns } from './recordUtils';
 import { columnKey } from '../../src/wire/columnKey';
 import { recordRows, type RecordRow } from './recordRows';
-import { collapseRuns, runKey } from './noConflictRuns';
+import { collapseRuns } from './noConflictRuns';
 import type { CompareResult, FieldDiff, FieldMetadata } from './types';
 
 const MASTER = columnKey({ name: 'Fallout4.esm', origin: 'Data/' });
@@ -94,7 +94,8 @@ describe('collapseRuns', () => {
   it('shows the rows of a restored run and leaves the other runs collapsed', () => {
     const rows = rowsOf(metas, [agree('A'), agree('B'), differ('C'), agree('D'), agree('E')]);
 
-    expect(collapsed(rows, [runKey('A')])).toEqual(['A', 'B', 'C', '2 rows']);
+    const firstRun = collapseRuns(rows, { severalRecords: false, restored: new Set() }).find(row => row.kind === 'run');
+    expect(collapsed(rows, [firstRun?.key ?? ''])).toEqual(['A', 'B', 'C', '2 rows']);
   });
 
   it('opened on several records, collapses a row unless the records disagree on it', () => {

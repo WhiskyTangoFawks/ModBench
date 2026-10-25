@@ -4,7 +4,7 @@ import type { ConflictThis } from './types';
 
 const TAKES_PART: readonly ConflictThis[] = ['Override', 'ConflictWins', 'ConflictLoses'];
 
-export const runKey = (firstRowKey: string): string => `run:${firstRowKey}`;
+const runKey = (firstRowKey: string): string => `run:${firstRowKey}`;
 
 interface Collapse {
   severalRecords: boolean;
