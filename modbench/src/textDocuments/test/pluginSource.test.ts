@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { type FakeUri, Uri } from '../../test/vscodeMock';
 
-interface FakeUri { scheme: string; fsPath: string; toString(): string }
 interface FakeDocument { uri: FakeUri; isDirty: boolean; getText(): string }
 
 const h = vi.hoisted(() => {
@@ -28,7 +28,7 @@ const FILE = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
 const MOVED = '/source/ModA/plugin-source/A.esp/Cells/Moved.json';
 
 const document = (scheme: string, fsPath: string, text: string, isDirty = true): FakeDocument =>
-  ({ uri: { scheme, fsPath, toString: () => `${scheme}:${fsPath}` }, isDirty, getText: () => text });
+  ({ uri: Uri.from({ scheme, path: fsPath }), isDirty, getText: () => text });
 
 function unsavedAtEachChange() {
   const seen: { path: string; text: string }[][] = [];

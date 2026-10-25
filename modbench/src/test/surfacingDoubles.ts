@@ -6,7 +6,7 @@ import type { SelectionOutcome } from '../ports/selectionOutcome';
 
 export interface RecordedReport { severity: Severity; message: string; detail?: string }
 
-export interface RecordedSelectionOutcomeCall { message: string; outcome: SelectionOutcome<unknown> }
+interface RecordedSelectionOutcomeCall { message: string; outcome: SelectionOutcome<unknown> }
 
 export interface RecordingReporter extends Reporter {
   readonly reports: RecordedReport[];
@@ -38,7 +38,7 @@ export function recordingReporter(): RecordingReporter {
   };
 }
 
-export interface RecordedQuestion { message: string; detail?: string; buttons: string[] }
+interface RecordedQuestion { message: string; detail?: string; buttons: string[] }
 
 export type ScriptedDialog = AskQuestion & { readonly asked: RecordedQuestion[] };
 

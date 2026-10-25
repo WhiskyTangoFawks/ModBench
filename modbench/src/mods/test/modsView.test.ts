@@ -3,8 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  uriFile, uriFrom, fakeUri, DataTransferItem, DataTransfer, Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, DataTransferItem, DataTransfer, Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection, Uri,
 } from '../../test/vscodeMock';
 import {
   filterBoxWindowMock, filterBoxCommandsMock, currentBoxOf, waitForMessage, FakeTreeViews, type FakeTreeView,
@@ -25,7 +24,7 @@ const h = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer, Diagnostic, DiagnosticSeverity, Range,
+  Uri, DataTransferItem, DataTransfer, Diagnostic, DiagnosticSeverity, Range,
   languages: { createDiagnosticCollection: (name: string) => { const collection = new FakeDiagnosticCollection(); diagnosticCollections.set(name, collection); return collection; } },
   workspace: {
     ...fakeVscodeModule().workspace,
@@ -61,7 +60,6 @@ import { status } from '../../test/modStatusFixture';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
 import { ModStatuses } from '../modStatuses';
-import { Uri } from 'vscode';
 import { createModSync } from '../../drivingLib/syncFailureReport';
 import type { ModSyncRun } from '../../modCommands/modCommands';
 import { rowLabelOf } from '../../drivingLib/argument';
@@ -134,7 +132,16 @@ describe('the Mods view\'s problems (publishing.md, Publisher tags, story 4)', (
 
     createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync() });
 
-    expect(diagnosticCollections.get('modbench-publisher')?.has(fakeUri(file))).toBe(true);
+    expect(diagnosticCollections.get('modbench-publisher')?.has(Uri.file(file))).toBe(true);
+  });
+});
+
+describe('the Mods view is a tree whose rows select several at once (common.md, story 6; mods.md)', () => {
+  it('selects several rows and has Collapse All', () => {
+    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
+
+    const { canSelectMany, showCollapseAll } = treeViews.view('modbench.modList').options;
+    expect({ canSelectMany, showCollapseAll }).toEqual({ canSelectMany: true, showCollapseAll: true });
   });
 });
 

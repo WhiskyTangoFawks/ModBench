@@ -204,51 +204,38 @@ describe('the extension interprets no plugin binary (ADR-0004): its byte-level r
     expect(importsTheFomodXmlReadFromOutside(planted.replace('../fomodInstaller/', './'), join(SRC, FOMOD_INSTALLER, 'planted.ts'))).toBe(false);
   });
 
-  it('flags a version read that reads a whole file, or exports a buffer or a type it does not answer with', () => {
-    const planted = "import { open, readFile } from 'node:fs/promises';\n"
-      + 'export type Bytes = Buffer;\nexport async function versionResourceOf(p): Promise<Buffer> {}\n';
-    expect(byteReaderOffences(VERSION_READ, planted, 'versionResource.ts')).toEqual([
-      'imports readFile from node:fs/promises', 'export type Bytes = Buffer;', 'versionResourceOf returns Promise<Buffer>, not Promise<VersionResource>',
-    ]);
-  });
-
-  it('flags a digest module that imports anything but createReadStream, createHash and the xxHash package, which could carry the bytes elsewhere', () => {
-    const other = "import xxhash from 'xxhash-wasm';\nimport { createReadStream } from 'node:fs';\nimport { keep } from './layout';\nexport async function digestOf(p): Promise<string> { keep(p); }\n";
-    expect(byteReaderOffences(DIGEST, other, 'contentDigest.ts')).toEqual(['imports ./layout']);
-    const sibling = "import { createReadStream, writeFileSync } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n";
-    expect(byteReaderOffences(DIGEST, sibling, 'contentDigest.ts')).toEqual(['imports writeFileSync from node:fs']);
-    const whole = "import * as fs from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n";
-    expect(byteReaderOffences(DIGEST, whole, 'contentDigest.ts')).toEqual(['imports node:fs whole']);
-    const byDefault = "import fs from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n";
-    expect(byteReaderOffences(DIGEST, byDefault, 'contentDigest.ts')).toEqual(['imports default from node:fs']);
-  });
-
-  it('flags an import acquired in the body, which the import list does not show', () => {
-    const dynamic = "export async function digestOf(p): Promise<string> { const { keep } = await import('./layout'); }\n";
-    expect(byteReaderOffences(DIGEST, dynamic, 'contentDigest.ts')).toEqual(['imports ./layout']);
-    const required = "export async function digestOf(p): Promise<string> { const { keep } = require('./layout'); }\n";
-    expect(byteReaderOffences(DIGEST, required, 'contentDigest.ts')).toEqual(['imports ./layout']);
-  });
-
-  it('flags a hash that answers anything but a string, whichever of the two it is', () => {
-    const md5 = "export async function md5Of(p): Promise<Buffer> {}\n";
-    expect(byteReaderOffences(DIGEST, md5, 'contentDigest.ts')).toEqual(['md5Of returns Promise<Buffer>, not Promise<string>']);
-  });
-
-  it('flags a second export of any form, which is a second way out for the bytes', () => {
-    const named = "import { createReadStream } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\nexport const bytesOf = (p) => createReadStream(p);\n";
-    expect(byteReaderOffences(DIGEST, named, 'contentDigest.ts')).toEqual(['export const bytesOf = (p) => createReadStream(p);']);
-    const assigned = "import { createReadStream } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\nexport default createReadStream;\n";
-    expect(byteReaderOffences(DIGEST, assigned, 'contentDigest.ts')).toEqual(['export default createReadStream;']);
-    const reExported = "export async function digestOf(p): Promise<string> {}\nexport { createReadStream } from 'node:fs';\n";
-    expect(byteReaderOffences(DIGEST, reExported, 'contentDigest.ts')).toEqual(["export { createReadStream } from 'node:fs';"]);
-  });
-
-  it('flags a digestOf that does not declare Promise<string>, so the bytes cannot leave as its answer', () => {
-    const undeclared = "export async function digestOf(p) {}\n";
-    expect(byteReaderOffences(DIGEST, undeclared, 'contentDigest.ts')).toEqual(['digestOf returns nothing declared, not Promise<string>']);
-    const buffer = "export function digestOf(p): Promise<Buffer> {}\n";
-    expect(byteReaderOffences(DIGEST, buffer, 'contentDigest.ts')).toEqual(['digestOf returns Promise<Buffer>, not Promise<string>']);
+  it.each([
+    ['a version read that reads a whole file, or exports a buffer or a type it does not answer with', VERSION_READ, 'versionResource.ts',
+      "import { open, readFile } from 'node:fs/promises';\nexport type Bytes = Buffer;\nexport async function versionResourceOf(p): Promise<Buffer> {}\n",
+      ['imports readFile from node:fs/promises', 'export type Bytes = Buffer;', 'versionResourceOf returns Promise<Buffer>, not Promise<VersionResource>']],
+    ['a digest module that imports a module beside the xxHash package and createReadStream, which could carry the bytes elsewhere', DIGEST, 'contentDigest.ts',
+      "import xxhash from 'xxhash-wasm';\nimport { createReadStream } from 'node:fs';\nimport { keep } from './layout';\nexport async function digestOf(p): Promise<string> { keep(p); }\n",
+      ['imports ./layout']],
+    ['a digest module that imports a sibling of createReadStream', DIGEST, 'contentDigest.ts',
+      "import { createReadStream, writeFileSync } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n", ['imports writeFileSync from node:fs']],
+    ['a digest module that imports node:fs whole', DIGEST, 'contentDigest.ts',
+      "import * as fs from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n", ['imports node:fs whole']],
+    ['a digest module that imports node:fs by default', DIGEST, 'contentDigest.ts',
+      "import fs from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\n", ['imports default from node:fs']],
+    ['an import acquired in the body by a dynamic import, which the import list does not show', DIGEST, 'contentDigest.ts',
+      "export async function digestOf(p): Promise<string> { const { keep } = await import('./layout'); }\n", ['imports ./layout']],
+    ['an import acquired in the body by require, which the import list does not show', DIGEST, 'contentDigest.ts',
+      "export async function digestOf(p): Promise<string> { const { keep } = require('./layout'); }\n", ['imports ./layout']],
+    ['a hash other than digestOf that answers anything but a string', DIGEST, 'contentDigest.ts',
+      'export async function md5Of(p): Promise<Buffer> {}\n', ['md5Of returns Promise<Buffer>, not Promise<string>']],
+    ['a second named export, which is a second way out for the bytes', DIGEST, 'contentDigest.ts',
+      "import { createReadStream } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\nexport const bytesOf = (p) => createReadStream(p);\n",
+      ['export const bytesOf = (p) => createReadStream(p);']],
+    ['a second export as the default', DIGEST, 'contentDigest.ts',
+      "import { createReadStream } from 'node:fs';\nexport async function digestOf(p): Promise<string> {}\nexport default createReadStream;\n", ['export default createReadStream;']],
+    ['a second export re-exported from another module', DIGEST, 'contentDigest.ts',
+      "export async function digestOf(p): Promise<string> {}\nexport { createReadStream } from 'node:fs';\n", ["export { createReadStream } from 'node:fs';"]],
+    ['a digestOf that declares no answer, so the bytes could leave as its answer', DIGEST, 'contentDigest.ts',
+      'export async function digestOf(p) {}\n', ['digestOf returns nothing declared, not Promise<string>']],
+    ['a digestOf that answers a buffer', DIGEST, 'contentDigest.ts',
+      'export function digestOf(p): Promise<Buffer> {}\n', ['digestOf returns Promise<Buffer>, not Promise<string>']],
+  ])('flags %s', (_, reader, file, planted, offences) => {
+    expect(byteReaderOffences(reader, planted, file)).toEqual(offences);
   });
 
   it('flags a header read taken as a Buffer from an undecoded readFile', () => {

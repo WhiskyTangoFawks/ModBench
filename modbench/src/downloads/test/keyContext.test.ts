@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile,
+  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, Uri,
 } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  Uri: { file: uriFile },
+  Uri,
 }));
 
 import { DownloadedFileNode, type DownloadsTreeNode } from '../DownloadsProvider';

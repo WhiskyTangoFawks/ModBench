@@ -2,16 +2,16 @@ import { describe, it, expect, vi } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from '../../test/vscodeMock';
 
 const h = vi.hoisted(() => ({
-  created: [] as { id: string; view: { message?: string; dispose: () => void } }[],
+  created: [] as { id: string; options: { canSelectMany?: boolean; showCollapseAll?: boolean }; view: { message?: string; dispose: () => void } }[],
 }));
 
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter,
   Disposable: { from: (...parts: { dispose(): void }[]) => ({ dispose: () => { for (const part of parts) part.dispose(); } }) },
   window: {
-    createTreeView: (id: string) => {
+    createTreeView: (id: string, options: { canSelectMany?: boolean; showCollapseAll?: boolean }) => {
       const view = { message: undefined as string | undefined, dispose: vi.fn() };
-      h.created.push({ id, view });
+      h.created.push({ id, options, view });
       return view;
     },
   },
@@ -30,6 +30,13 @@ describe('the Toolbox view', () => {
     toolbox.say(undefined);
 
     expect([id, during, view.message]).toEqual(['modbench.toolbox', 'Update manifest — reading…', undefined]);
+  });
+
+  it('is a readout: its rows select one at a time and it has no Collapse All (toolbox.md)', () => {
+    createToolboxView({ instance: undefined });
+
+    const { canSelectMany, showCollapseAll } = present(h.created.at(-1), 'the created tree view').options;
+    expect({ canSelectMany, showCollapseAll }).toEqual({ canSelectMany: undefined, showCollapseAll: undefined });
   });
 
   it('disposes the tree view with it', () => {

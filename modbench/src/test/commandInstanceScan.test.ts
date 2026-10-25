@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
-import { CORE_BOXES } from './boxes';
+import { CORE_BOXES } from '../../eslint-rules/boxes.mjs';
 import { productionFiles, SRC } from './scanSource';
 
 const READ_MODEL_NAMES = ['InstanceValue', 'InstanceView'];

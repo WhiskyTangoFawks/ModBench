@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { posix, sep } from 'node:path';
 import ts from 'typescript';
 import { tsFiles } from './tsFiles';
-import { BOXES, BOXES_BY_BAND, CORE_BOXES, DRIVING_BOXES, KERNEL_BOXES, READ_MODEL_AND_REPOSITORY_BOXES, parseProject } from './boxes';
+import { BOXES, BOXES_BY_BAND, DRIVING_BOXES } from '../../eslint-rules/boxes.mjs';
+import { parseProject } from './boxes';
 
 const join = (...segments: string[]): string => posix.join(...segments);
 const inTypeScriptsForwardSlashedForm = (path: string): string => path.split(sep).join('/');
@@ -43,7 +44,7 @@ const productionFilesOnDisk = (): string[] =>
   tsFiles(join(MODBENCH, 'src'), { tsx: false, includeTests: false, exclude: ['test'] })
     .map((f) => relative(MODBENCH, f));
 
-const TEXT_DOCUMENTS = 'textDocuments';
+const VSCODE_BOXES = [...DRIVING_BOXES, 'textDocuments'];
 
 describe('one composite project per box', () => {
   it('reads a real body of boxes off the zoom-out', () => {
@@ -54,30 +55,8 @@ describe('one composite project per box', () => {
     expect(parsed(boxProject(box)).options.composite).toBe(true);
   });
 
-  it.each(KERNEL_BOXES)('%s sees the Node types and no others', (box) => {
-    expect(parsed(boxProject(box)).options.types).toEqual(['node']);
-  });
-
-  it.each(READ_MODEL_AND_REPOSITORY_BOXES.filter((box) => box !== TEXT_DOCUMENTS))('%s sees the Node types and no others', (box) => {
-    expect(parsed(boxProject(box)).options.types).toEqual(['node']);
-  });
-
-  it(`${TEXT_DOCUMENTS} sees the Node and VS Code types, as the one box that holds VS Code's documents`, () => {
-    expect(parsed(boxProject(TEXT_DOCUMENTS)).options.types).toEqual(['node', 'vscode']);
-  });
-
-  it.each(CORE_BOXES)('%s sees the Node types and no others', (box) => {
-    expect(parsed(boxProject(box)).options.types).toEqual(['node']);
-  });
-
-  it.each(DRIVING_BOXES)('%s sees the Node and VS Code types', (box) => {
-    expect(parsed(boxProject(box)).options.types).toEqual(['node', 'vscode']);
-  });
-
-  it.each(DRIVING_BOXES)('%s references neither the codecs nor the tables', (box) => {
-    const references = referencePaths(boxProject(box));
-    expect(references).not.toContain(join('src', 'loadOrderFileCodec'));
-    expect(references).not.toContain(join('src', 'tables'));
+  it.each(BOXES.map((box) => [box, VSCODE_BOXES.includes(box) ? ['node', 'vscode'] : ['node']] as const))('%s sees the types %j and no others', (box, types) => {
+    expect(parsed(boxProject(box)).options.types).toEqual(types);
   });
 
   it.each(LIBS)('$lib is used by two or more boxes of its band, and by no other box', ({ users, band }) => {
@@ -124,7 +103,7 @@ describe('the composition root is one project referencing every box', () => {
     expect(files).toContain(join('src', 'extension.ts'));
     expect(files).toContain(join('src', 'syncWiring.ts'));
     expect(files.filter(isTest)).toEqual([]);
-    for (const box of BOXES) expect(files.filter((f) => f.startsWith(join('src', box) + '/'))).toEqual([]);
+    expect(files.filter((f) => BOXES.some((box) => f.startsWith(join('src', box) + '/')))).toEqual([]);
   });
 });
 

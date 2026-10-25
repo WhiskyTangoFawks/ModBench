@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import { FilterCodeLensProvider } from '../FilterCodeLensProvider';
-import { fakeUri } from '../../test/vscodeMock';
+import { Uri } from '../../test/vscodeMock';
 import { present } from '../../ports/present';
 
 const ARMOR_SQL = 'SELECT form_key FROM "armo"';
@@ -24,7 +24,7 @@ vi.mock('vscode', () => ({
 }));
 
 function makeDocumentDeclaringEveryTextDocumentMember(text: string, fsPath: string): vscode.TextDocument {
-  const uri = fakeUri(fsPath);
+  const uri = Uri.file(fsPath);
   const notImplemented = (): never => { throw new Error('not implemented in this fixture'); };
   return {
     uri, fileName: fsPath, isUntitled: false, languageId: 'sql', encoding: 'utf8',

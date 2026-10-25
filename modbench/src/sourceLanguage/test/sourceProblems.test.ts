@@ -3,6 +3,7 @@ import { feedSourceProblems, type ProblemsByFile } from '../sourceProblems';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import type { PluginProblems } from '../../client';
+import { loadOrderStatusEventFixture } from '../../client/test/fixtures';
 import type { NotificationEvent } from '../../client/apiClient';
 import type { SourceFilesOf } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -15,14 +16,11 @@ const problem = (over: Partial<PluginProblems['problems'][number]> = {}): Plugin
 });
 
 let version = 0;
-const loadOrderStatus = (conflictsComputed: boolean): NotificationEvent => ({
-  kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-  loadOrderStatus: { state: conflictsComputed ? 'Ready' : 'Reconciling', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed, failures: [], version },
-});
+const RECONCILING = { state: 'Reconciling', conflictsComputed: false } as const;
 const reconciledAgain = (client: InMemoryMEditClient) => {
-  client.emit(loadOrderStatus(false));
+  client.emit(loadOrderStatusEventFixture({ ...RECONCILING, version }));
   version += 1;
-  client.emit(loadOrderStatus(true));
+  client.emit(loadOrderStatusEventFixture({ state: 'Ready', conflictsComputed: true, version }));
 };
 
 const sourceFolders: SourceFilesOf = (origin) => ({ file: (relativePath) => `/source/${origin}/${relativePath}` });
@@ -142,10 +140,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
     const asked = () => client.calls.filter(({ method }) => method === 'getPluginProblems').length;
     const before = asked();
 
-    const reconciling = loadOrderStatus(false);
-    client.emit({ ...reconciling, loadOrderStatus: reconciling.loadOrderStatus && {
-      ...reconciling.loadOrderStatus, failures: [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }],
-    } });
+    client.emit(loadOrderStatusEventFixture({ ...RECONCILING, failures: [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }] }));
 
     expect(asked()).toBe(before);
   });
@@ -175,7 +170,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   it('asks nothing on a save when the record index began reconciling while the ask at subscribe was in flight', async () => {
     let answer!: (problems: PluginProblems[]) => void;
     const { client, published, answered } = feed({}, sourceFolders, new Promise<PluginProblems[]>((resolve) => { answer = resolve; }));
-    client.emit(loadOrderStatus(false));
+    client.emit(loadOrderStatusEventFixture(RECONCILING));
     answer([]);
     await vi.waitFor(() => { expect(published).toHaveLength(1); });
     client.emit({ kind: 'rows-changed', plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
@@ -188,7 +183,7 @@ describe('feedSourceProblems (plugin-source.md, In the text editor, story 6)', (
   it.each(['rows-changed', 'plugin-changed'])('asks nothing on %s while the record index reconciles', async (kind) => {
     const { client, answered } = feed({});
     await answered([]);
-    client.emit(loadOrderStatus(false));
+    client.emit(loadOrderStatusEventFixture(RECONCILING));
     client.emit({ kind, plugin: PLUGIN.name, origin: PLUGIN.origin, keys: [REFERRER], sequence: 1 });
 
     await answered([]);

@@ -4,10 +4,10 @@ import {
   type ChildRecordSummary, type WorldspaceSummary,
 } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
-import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom, fakeUri } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri: { from: uriFrom },
+  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri,
 }));
 
 import * as vscode from 'vscode';
@@ -426,7 +426,7 @@ describe('the rows a group reads, and their working-tree state', () => {
     await provider.getChildren(typeNode);
 
     const { path } = recordResourceUri({ name: record.plugin, origin: 'Data/' }, record.formKey);
-    expect(provider.workingTreeStateOf(fakeUri(path))).toBeUndefined();
+    expect(provider.workingTreeStateOf(Uri.file(path))).toBeUndefined();
   });
 });
 

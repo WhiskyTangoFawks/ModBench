@@ -1,10 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
-import { isTestSupport, SRC } from './scanSource';
+import { isTestSupport, plantedTree, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 function erasedAsTypes(clause: ts.ImportClause | ts.NamedExportBindings | undefined, declarationIsTypeOnly: boolean): boolean {
@@ -60,31 +58,18 @@ function importCycles(root: string): string[][] {
   return cycles;
 }
 
-async function plantedTree(files: Record<string, string>): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'medit-import-cycle-scan-'));
-  for (const [path, text] of Object.entries(files)) {
-    await mkdir(join(dir, path, '..'), { recursive: true });
-    await writeFile(join(dir, path), text);
-  }
-  return dir;
-}
-
 describe('no module of modbench imports itself through others, so none reads an export before the module defining it has run', () => {
   it('scans clean', () => {
     expect(importCycles(SRC)).toEqual([]);
   });
 
-  it('catches a planted cycle, and passes one that only a type-only import closes, which compiles away', async () => {
-    const dir = await plantedTree({
+  it('catches a planted cycle, and passes one that only a type-only import closes, which compiles away', () => {
+    const dir = plantedTree({
       'a.ts': "import { b } from './b';\nexport const a = b;\n",
       'b.ts': "import { a } from './a';\nexport const b = () => a;\n",
       'c.ts': "import type { D } from './d';\nexport const c = 1;\nexport type C = D;\n",
       'd.ts': "import { c } from './c';\nexport type D = typeof c;\n",
     });
-    try {
-      expect(importCycles(dir)).toEqual([['a.ts', 'b.ts']]);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    expect(importCycles(dir)).toEqual([['a.ts', 'b.ts']]);
   });
 });

@@ -1,6 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { Linter } from 'eslint';
 import { noLeadingMEdit } from '../../eslint-rules/noLeadingMEdit.mjs';
+import { RuleTester } from './ruleTester';
 
 const MESSAGE =
   'A message never begins "mEdit:". Every notification, Output line, tree row and webview text is '
@@ -8,80 +7,22 @@ const MESSAGE =
   + 'that is about it, never as a label. Only the status bar item carries the prefix, after its icon: '
   + '"$(plug) mEdit: Running" (common.md, The status bar).';
 
-function lint(code: string): Linter.LintMessage[] {
-  const linter = new Linter();
-  return linter.verify(code, {
-    languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },
-    plugins: { local: { rules: { x: noLeadingMEdit } } },
-    rules: { 'local/x': 'error' },
-  });
-}
+const fails = (name: string, code: string) => ({ name, code, errors: [{ message: MESSAGE }] });
 
-describe('no-leading-medit', () => {
-  it('fails a planted string literal that begins "mEdit:", with the rule\'s own message', () => {
-    const messages = lint("warn('mEdit: Could not copy the record');\n");
-
-    expect(messages).toHaveLength(1);
-    expect(messages[0]?.message).toBe(MESSAGE);
-  });
-
-  it('fails a template literal that begins "mEdit:"', () => {
-    const messages = lint('log(`mEdit: ${reason}`);\n');
-
-    expect(messages).toHaveLength(1);
-  });
-
-  it('fails a template literal whose head spells "mEdit:" with an escape', () => {
-    const messages = lint('log(`\\u006dEdit: ${reason}`);\n');
-
-    expect(messages).toHaveLength(1);
-  });
-
-  it('fails a JSX attribute that begins "mEdit:"', () => {
-    const messages = lint('const row = <span title="mEdit: unreachable" />;\n');
-
-    expect(messages).toHaveLength(1);
-  });
-
-  it('fails a message whose "mEdit:" follows leading whitespace', () => {
-    const messages = lint("warn('  mEdit: Could not copy the record');\n");
-
-    expect(messages).toHaveLength(1);
-  });
-
-  it('fails a lowercase "medit:"', () => {
-    const messages = lint("warn('medit: Could not copy the record');\n");
-
-    expect(messages).toHaveLength(1);
-  });
-
-  it('fails a prefix split off to be concatenated', () => {
-    const messages = lint("log('mEdit: ' + reason);\n");
-
-    expect(messages).toHaveLength(1);
-  });
-
-  it('fails JSX text that begins "mEdit:"', () => {
-    const messages = lint('const row = <span>mEdit: unreachable</span>;\n');
-
-    expect(messages).toHaveLength(1);
-  });
-
-  it('passes the status bar item\'s text, whose prefix follows its icon', () => {
-    const messages = lint("setStatusText('$(plug) mEdit: Running');\nsetStatusText(`$(check) mEdit: Ready (${n} plugins)`);\n");
-
-    expect(messages).toEqual([]);
-  });
-
-  it('passes a sentence that is about mEdit', () => {
-    const messages = lint("setUnreachable('mEdit is disconnected — start MEditService and reload.');\n");
-
-    expect(messages).toEqual([]);
-  });
-
-  it('passes "mEdit:" past the start of a message', () => {
-    const messages = lint("warn('Could not reach mEdit: the request timed out');\nwarn(`${verb} failed — mEdit: ${reason}`);\n");
-
-    expect(messages).toEqual([]);
-  });
+new RuleTester({ languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } } }).run('no-leading-medit', noLeadingMEdit, {
+  valid: [
+    { name: 'the status bar item\'s text, whose prefix follows its icon', code: "setStatusText('$(plug) mEdit: Running');\nsetStatusText(`$(check) mEdit: Ready (${n} plugins)`);\n" },
+    { name: 'a sentence that is about mEdit', code: "setUnreachable('mEdit is disconnected — start MEditService and reload.');\n" },
+    { name: '"mEdit:" past the start of a message', code: "warn('Could not reach mEdit: the request timed out');\nwarn(`${verb} failed — mEdit: ${reason}`);\n" },
+  ],
+  invalid: [
+    fails('a string literal that begins "mEdit:"', "warn('mEdit: Could not copy the record');\n"),
+    fails('a template literal that begins "mEdit:"', 'log(`mEdit: ${reason}`);\n'),
+    fails('a template literal whose head spells "mEdit:" with an escape', 'log(`\\u006dEdit: ${reason}`);\n'),
+    fails('a JSX attribute that begins "mEdit:"', 'const row = <span title="mEdit: unreachable" />;\n'),
+    fails('a message whose "mEdit:" follows leading whitespace', "warn('  mEdit: Could not copy the record');\n"),
+    fails('a lowercase "medit:"', "warn('medit: Could not copy the record');\n"),
+    fails('a prefix split off to be concatenated', "log('mEdit: ' + reason);\n"),
+    fails('JSX text that begins "mEdit:"', 'const row = <span>mEdit: unreachable</span>;\n'),
+  ],
 });

@@ -2,7 +2,7 @@ import { unreadStatus } from '../../test/unreadStatus';
 import { FOMOD_PAGE, VIEW_ANSWER } from '../../test/fomodDialogDouble';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, Uri } from '../../test/vscodeMock';
 
 const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuickPick, openExternal } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
@@ -20,7 +20,7 @@ vi.mock('vscode', async () => {
     window: { showOpenDialog, showInputBox, showQuickPick, withProgress: recordedWithProgress },
     env: { openExternal },
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-    Uri: { file: uriFile, parse: (s: string) => ({ toString: () => s }) },
+    Uri: { ...Uri, parse: (s: string) => ({ toString: () => s }) },
   };
 });
 
@@ -91,7 +91,7 @@ describe('modbench.mod.install: installation file or folder, asked first', () =>
     ['Esc at the installation-file-or-folder pick', undefined, undefined, undefined],
     ['Esc at the OS picker for an installation file', { packageKind: 'archive' }, undefined, undefined],
     ['Esc at the OS picker for a folder', { packageKind: 'folder' }, undefined, undefined],
-    ['a cancelled name prompt', { packageKind: 'archive' }, [uriFile('/archive/foo.7z')], undefined],
+    ['a cancelled name prompt', { packageKind: 'archive' }, [Uri.file('/archive/foo.7z')], undefined],
   ])('%s installs nothing', async (_case, pick, picked, name) => {
     showQuickPick.mockResolvedValueOnce(pick);
     showOpenDialog.mockResolvedValueOnce(picked);
@@ -124,7 +124,7 @@ describe('modbench.mod.install: installation file or folder, asked first', () =>
     ['folder', 'folder', '/somewhere/Loose Files', { canSelectFiles: false, canSelectFolders: true, canSelectMany: false }],
   ] as const)('%s: the OS picker offers what install takes, and installs the pick as a new mod under the name prompted', async (_case, packageKind, path, dialog) => {
     showQuickPick.mockResolvedValueOnce({ packageKind });
-    showOpenDialog.mockResolvedValueOnce([uriFile(path)]);
+    showOpenDialog.mockResolvedValueOnce([Uri.file(path)]);
     showInputBox.mockResolvedValueOnce('New Mod');
 
     register();
@@ -145,7 +145,7 @@ describe('modbench.mod.install: the name prompt', () => {
     ['folder', 'C:\\somewhere\\Loose v1.2', 'Loose v1.2'],
   ] as const)('%s picked at %s: the prompt holds %s', async (packageKind, picked, name) => {
     showQuickPick.mockResolvedValueOnce({ packageKind });
-    showOpenDialog.mockResolvedValueOnce([uriFile(picked)]);
+    showOpenDialog.mockResolvedValueOnce([Uri.file(picked)]);
     showInputBox.mockResolvedValueOnce(undefined);
 
     register();
@@ -158,7 +158,7 @@ describe('modbench.mod.install: the name prompt', () => {
 describe('modbench.mod.install from the view: what reaches the user', () => {
   beforeEach(() => {
     showQuickPick.mockResolvedValueOnce({ packageKind: 'folder' });
-    showOpenDialog.mockResolvedValueOnce([uriFile('/somewhere/foo')]);
+    showOpenDialog.mockResolvedValueOnce([Uri.file('/somewhere/foo')]);
     showInputBox.mockResolvedValueOnce('New Mod');
   });
 
@@ -183,8 +183,8 @@ describe('modbench.mod.install from the view: what reaches the user', () => {
 
 describe('modbench.mod.install: a failed install', () => {
   it.each([
-    ['archive', uriFile('/somewhere/foo.zip'), 'installFromInstallationFile'],
-    ['folder', uriFile('/somewhere/foo'), 'installFromFolder'],
+    ['archive', Uri.file('/somewhere/foo.zip'), 'installFromInstallationFile'],
+    ['folder', Uri.file('/somewhere/foo'), 'installFromFolder'],
   ] as const)('from a %s is reported under the gesture, naming the mod', async (packageKind, picked, tag) => {
     const reporter = recordingReporter();
     const tags: string[] = [];
@@ -356,7 +356,7 @@ describe('an install ends on the Instance loader\'s read, with the Mods progress
 
   it('opens the bar, installs, reads, then closes the bar', async () => {
     showQuickPick.mockResolvedValueOnce({ packageKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce([uriFile('/somewhere/foo.zip')]);
+    showOpenDialog.mockResolvedValueOnce([Uri.file('/somewhere/foo.zip')]);
     showInputBox.mockResolvedValueOnce('New Mod');
 
     register({

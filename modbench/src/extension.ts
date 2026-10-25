@@ -60,7 +60,7 @@ import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
 
-// Records a disposable against its owner's teardown and hands it back. `src/test/toolboxScan.test.ts`
+// Records a disposable against its owner's teardown and hands it back. `src/test/disposableOwnershipScan.test.ts`
 // fails on a registration that skips it.
 type Own = <T extends vscode.Disposable>(disposable: T) => T;
 

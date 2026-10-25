@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
-import { EventEmitter, ThemeColor, uriFile } from '../../test/vscodeMock';
+import { EventEmitter, ThemeColor, Uri } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ ThemeColor, EventEmitter, Uri: { file: uriFile } }));
+vi.mock('vscode', () => ({ ThemeColor, EventEmitter, Uri }));
 
 import * as vscode from 'vscode';
 import { ExcludedDownloadedFileDecorationProvider } from '../ExcludedDownloadedFileDecorationProvider';

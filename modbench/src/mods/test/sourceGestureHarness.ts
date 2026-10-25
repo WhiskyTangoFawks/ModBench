@@ -1,7 +1,6 @@
 import { vi } from 'vitest';
 import {
-  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
-  Diagnostic, DiagnosticSeverity, Range, uriFile, uriFrom,
+  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, Diagnostic, DiagnosticSeverity, Range, Uri,
 } from '../../test/vscodeMock';
 import { recordedWithProgress } from '../../test/recordedProgress';
 
@@ -27,7 +26,7 @@ export const vscodeModule = () => ({
   window: { showQuickPick, createQuickPick, withProgress: recordedWithProgress },
   TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
   Diagnostic, DiagnosticSeverity, Range,
-  Uri: { file: uriFile, from: uriFrom },
+  Uri,
 });
 
 export class PluginRowStandIn extends TreeItem {

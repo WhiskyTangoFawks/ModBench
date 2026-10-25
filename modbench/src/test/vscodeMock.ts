@@ -57,33 +57,31 @@ export class Diagnostic {
   constructor(public range: Range, public message: string, public severity: number = DiagnosticSeverity.Error) {}
 }
 
+/** Every member `vscode.Uri` declares: the real class is `private`-constructed, so only a structural double
+ *  stands in for it. Its `toString` is the real one's, less the percent-encoding. */
+export class FakeUri {
+  readonly authority = '';
+  readonly fragment = '';
+
+  constructor(readonly scheme: string, readonly path: string, readonly query = '', readonly fsPath = path) {}
+
+  with(change: { scheme?: string; authority?: string; path?: string; query?: string; fragment?: string }): FakeUri {
+    return new FakeUri(change.scheme ?? this.scheme, change.path ?? this.path, change.query ?? this.query);
+  }
+
+  toString(): string {
+    return `${this.scheme}:${this.scheme === 'file' ? '//' : ''}${this.path}${this.query === '' ? '' : `?${this.query}`}`;
+  }
+
+  toJSON(): unknown { return { scheme: this.scheme, path: this.path, query: this.query }; }
+}
+
 // Real `Uri.file` forward-slashes a backslash path only on Windows (`isWindows` at load time);
 // this always does, so a test on any host can still exercise a decoration provider that compares
 // by `.path`.
-export const uriFile = (p: string) => {
-  const path = p.replaceAll('\\', '/');
-  return { scheme: 'file', fsPath: p, path, toString: () => `file://${path}` };
-};
-
-export const uriFrom = (opts: { scheme: string; path: string; query?: string }) =>
-  ({ scheme: opts.scheme, path: opts.path, query: opts.query ?? '' });
-
-/** `with` answers the changed URI, as vscode.Uri's does. */
-export interface SchemedUri {
-  scheme: string; path: string; fsPath: string; query: string;
-  with(change: { scheme?: string; query?: string }): SchemedUri;
-  toString(): string;
-}
-
-export const uriWith = (scheme: string, path: string, query = ''): SchemedUri => ({
-  scheme, path, fsPath: path, query,
-  with: (change) => uriWith(change.scheme ?? scheme, path, change.query ?? query),
-  toString: () => `${scheme}:${path}?${query}`,
-});
-
-export const UriWith = {
-  from: ({ scheme, path, query }: { scheme: string; path: string; query?: string }) => uriWith(scheme, path, query),
-  file: (path: string) => uriWith('file', path),
+export const Uri = {
+  file: (fsPath: string): FakeUri => new FakeUri('file', fsPath.replaceAll('\\', '/'), '', fsPath),
+  from: ({ scheme, path, query }: { scheme: string; path: string; query?: string }): FakeUri => new FakeUri(scheme, path, query),
 };
 
 class ParsedUri {
@@ -118,25 +116,6 @@ export class DataTransfer {
 export class FakeCancellationToken {
   readonly isCancellationRequested = false;
   onCancellationRequested() { return { dispose: () => { /* no-op */ } }; }
-}
-
-/** Every member `vscode.Uri` declares, for a call whose parameter is typed `vscode.Uri` — the
- *  real class is `private`-constructed, so nothing but a structural double can stand in for it. */
-export interface FakeUri {
-  fsPath: string; scheme: string; authority: string; path: string; query: string; fragment: string;
-  with: (change: {
-    scheme?: string; authority?: string; path?: string; query?: string; fragment?: string;
-  }) => FakeUri;
-  toString: () => string;
-  toJSON: () => unknown;
-}
-
-export function fakeUri(fsPath: string): FakeUri {
-  const uri: FakeUri = {
-    fsPath, scheme: 'file', authority: '', path: fsPath, query: '', fragment: '',
-    with: () => uri, toString: () => fsPath, toJSON: () => ({ fsPath }),
-  };
-  return uri;
 }
 
 type FakeDiagnostics = readonly vscode.Diagnostic[];

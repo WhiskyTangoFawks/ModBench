@@ -2,14 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 
 import {
-  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile,
+  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, Uri,
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  Uri: { file: uriFile },
+  Uri,
 }));
 
 import { DownloadsProvider, DownloadedFileNode, type DownloadsTreeNode } from '../DownloadsProvider';

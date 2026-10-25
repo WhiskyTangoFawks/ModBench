@@ -198,10 +198,15 @@ const notAFileOf = (origin: FileOrigin, relativePath: string): Error =>
 
 const inTheWay = (path: string): Error => new Error(`The folder "${path}" is in the way`);
 
+const isMarked = (name: string): boolean => name.toLowerCase().endsWith(EXCLUSION_MARK);
+
 export function fileIn(folder: string, relativePath: string): OriginFile {
-  const includedPath = relativePath.split('/').map((segment) => segment.replace(EXCLUSION_MARK, '')).join('/');
-  const marked = includedPath !== relativePath;
-  return { relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`, excluded: marked, markedExcluded: marked, includedPath };
+  const segments = relativePath.split('/');
+  const includedPath = segments.map((segment) => (isMarked(segment) ? segment.slice(0, -EXCLUSION_MARK.length) : segment)).join('/');
+  return {
+    relativePath, path: `${folder}/${relativePath}`, sourcePath: `${folder}/${relativePath}`,
+    excluded: segments.some(isMarked), markedExcluded: isMarked(relativePath), includedPath,
+  };
 }
 
 /** The origins' files at their roots, each plugin held by the origin it is given with. */
@@ -424,8 +429,8 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         const held = originFilesOf(origin);
         const there = [...held?.files ?? [], ...held?.folders ?? []].some((one) => one.relativePath === relativePath);
         if (held === undefined || !there) return { gone: true };
-        const ownMark = relativePath.toLowerCase().endsWith(EXCLUSION_MARK);
-        if (mark === 'Included' && !ownMark && relativePath.split('/').slice(0, -1).some((segment) => segment.toLowerCase().endsWith(EXCLUSION_MARK))) {
+        const ownMark = isMarked(relativePath);
+        if (mark === 'Included' && !ownMark && relativePath.split('/').slice(0, -1).some(isMarked)) {
           return { gone: false, refusal: `"${relativePath}" has no suffix of its own to remove, and its folder excludes it.` };
         }
         if (ownMark === (mark === 'Excluded')) return { gone: false, wrote: false, relativePath };
@@ -438,7 +443,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         withOriginFiles(origin, {
           ...held,
           files: held.files.map((file) => fileIn(folder, renamedPath(file.relativePath))),
-          folders: held.folders.map((one) => ({ ...one, relativePath: renamedPath(one.relativePath), path: `${folder}/${renamedPath(one.relativePath)}`, excluded: renamedPath(one.relativePath).includes(EXCLUSION_MARK) })),
+          folders: held.folders.map((one) => ({ ...one, relativePath: renamedPath(one.relativePath), path: `${folder}/${renamedPath(one.relativePath)}`, excluded: renamedPath(one.relativePath).split('/').some(isMarked) })),
         });
         return { gone: false, wrote: true, relativePath: renamedPath(relativePath) };
       }),
@@ -458,18 +463,23 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         if (files !== undefined) withOriginFiles(origin, { ...files, files: files.files.map((file) => (file === own ? fileIn(files.folder ?? '', to) : file)) });
         current = { ...current, pluginOrder: current.pluginOrder.map((plugin) => (sameAsFrom(plugin.name) ? { ...plugin, name: to } : plugin)) };
       }),
-    trashEntryFolder: (entry) =>
-      write({ verb: 'trashEntryFolder', entry }, () => {
-        const held = foldersNow().holding(entry);
-        if (held === undefined) return false;
-        current = { ...current, modFolders: foldersHolding(foldersNow().all.filter((folder) => folder !== held)) };
-        return true;
-      }),
+    trashEntryFolder: async (entry, trash) => {
+      const held = await write({ verb: 'trashEntryFolder', entry }, () => foldersNow().holding(entry));
+      if (held === undefined) return false;
+      await trash(held.path);
+      current = { ...current, modFolders: foldersHolding(foldersNow().all.filter((folder) => folder !== held)) };
+      return true;
+    },
     trashModFile: (mod, relativePath) =>
       write({ verb: 'trashModFile', mod, relativePath }, () => {
         if (reachesOut(relativePath)) throw notAFileOf({ kind: 'mod', name: mod }, relativePath);
       }),
-    trashSourceFolder: (mod) => record({ verb: 'trashSourceFolder', mod }, true),
+    trashSourceFolder: async (mod, trash) => {
+      const source = await write({ verb: 'trashSourceFolder', mod }, () => current.sourceMods.folderOf(mod));
+      if (source === undefined) return false;
+      await trash(source);
+      return true;
+    },
     install: (installed, target, keys, fomod) =>
       record<InstallOutcome>({ verb: 'install', package: installed, target, keys, ...(fomod && { fomod }) }, answers.installed ?? { landed: true }),
     subscribe: (listener): Subscription => {

@@ -12,6 +12,9 @@ import { AgentCall } from '../../drivingLib/agentGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { ModNode } from '../ModListProvider';
+import { sourceCommands } from '../../sourceCommands/sourceCommands';
+import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { fakeInstanceAdapter } from '../../test/fakeInstanceAdapter';
 
 beforeEach(() => {
   handlers.clear();
@@ -32,11 +35,19 @@ describe('modbench.mod.decompileAndCommit', () => {
 
   function decompileAndCommitCommands() {
     let answer: DecompileAndCommitOutcome | WriteRefused = { landed: [], refused: [] };
-    const decompileAndCommit = vi.fn((_mods: readonly string[], _options?: { onProgress?: (status: DecompileAndCommitProgress) => void }) => Promise.resolve(answer));
+    const sent: string[][] = [];
+    const progressListeners: (((status: DecompileAndCommitProgress) => void) | undefined)[] = [];
+    const client = new InMemoryMEditClient();
+    client.setCommandHandler('decompileAndCommit', (mods, options) => {
+      sent.push(mods.map((mod) => mod.name));
+      progressListeners.push(options?.onProgress);
+      return Promise.resolve(answer);
+    });
     return {
-      decompileAndCommit,
+      ...sourceCommands({ client, adapter: fakeInstanceAdapter().adapter, saveUnsaved: () => Promise.resolve([]) }),
       answers: (next: DecompileAndCommitOutcome | WriteRefused) => { answer = next; },
-      sent: () => decompileAndCommit.mock.calls.map(([mods]) => mods),
+      sent: () => sent,
+      progressListeners: () => progressListeners,
     };
   }
 
@@ -179,9 +190,9 @@ describe('modbench.mod.decompileAndCommit', () => {
 
     expect(said).toContain('Decompiling and committing "ModA"…');
 
-    const [, options] = present(commands.decompileAndCommit.mock.calls[0], 'the decompile and commit call');
+    const onProgress = present(commands.progressListeners()[0], 'the progress listener the decompile and commit carried to mEdit');
     said.length = 0;
-    present(options, 'the decompile and commit options').onProgress?.({ mod: 'ModB', phase: 'Committing', modsDone: 0, modsTotal: 1 });
+    onProgress({ mod: 'ModB', phase: 'Committing', modsDone: 0, modsTotal: 1 });
 
     expect(said).toEqual(['Decompiling and committing "ModB" — committing to git…']);
   });

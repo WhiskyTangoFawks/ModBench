@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
-  DiagnosticSeverity, FakeDiagnosticCollection, uriFile, uriFrom, uriParse,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic, DiagnosticSeverity, FakeDiagnosticCollection, uriParse, Uri,
 } from '../../test/vscodeMock';
 import {
   filterBoxCommandsMock, filterBoxWindowMock, currentBoxOf, waitForMessage, FakeTreeViews, type FakeInputBox,
@@ -34,7 +33,7 @@ vi.mock('vscode', () => {
   h.commands = state.commands;
   return {
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Range, Diagnostic,
-    DiagnosticSeverity, Uri: { file: uriFile, from: uriFrom, parse: uriParse },
+    DiagnosticSeverity, Uri: { ...Uri, parse: uriParse },
     StatusBarAlignment: { Left: 1 },
     Position: class { constructor(public line: number, public character: number) {} },
     CodeLens: class { constructor(public range: unknown, public command: unknown) {} },
@@ -180,6 +179,15 @@ beforeEach(() => {
   h.opened.length = 0;
   h.shown.length = 0;
   h.state.boxes.length = 0;
+});
+
+describe('the Plugins view is a tree whose rows select several at once (common.md, story 6; plugins.md)', () => {
+  it('selects several rows and has Collapse All', () => {
+    const { view } = pluginsView();
+
+    const { canSelectMany, showCollapseAll } = view().options;
+    expect({ canSelectMany, showCollapseAll }).toEqual({ canSelectMany: true, showCollapseAll: true });
+  });
 });
 
 describe('the Plugins view registers its own gestures', () => {

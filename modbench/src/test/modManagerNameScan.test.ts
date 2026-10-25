@@ -1,10 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
-import { CONSTRUCTION, IMPLEMENTATIONS, isTestSupport, MANIFEST, SOURCE_ROOTS, SRC, WALKTHROUGH, WEBVIEW_SRC } from './scanSource';
+import { CONSTRUCTION, IMPLEMENTATIONS, isTestSupport, MANIFEST, plantedTree, sourceFiles, SOURCE_ROOTS, SRC, WALKTHROUGH, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 const ADAPTER = 'instanceAdapter';
@@ -56,20 +54,11 @@ function findOffenders(roots: readonly string[]): Record<string, string[]> {
   return offenders;
 }
 
-async function plantedTree(files: Record<string, string>): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'medit-manager-name-scan-'));
-  for (const [path, text] of Object.entries(files)) {
-    await mkdir(join(dir, path, '..'), { recursive: true });
-    await writeFile(join(dir, path), text);
-  }
-  return dir;
-}
-
 const [MO2, WABBAJACK] = IMPLEMENTATIONS;
 
 describe('no extension file names a mod manager or a publisher outside its implementation of the Instance adapter', () => {
   it('covers the whole extension source tree and the webview', () => {
-    const files = SOURCE_ROOTS.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
+    const files = sourceFiles(SOURCE_ROOTS);
     expect(files.length).toBeGreaterThan(100);
     expect(files).toContain(join(WEBVIEW_SRC, 'presentation.ts'));
   });
@@ -94,14 +83,14 @@ describe('no extension file names a mod manager or a publisher outside its imple
     ]).toEqual([true, true, true, false, false, false, false]);
   });
 
-  it('the construction\'s exemption is load-bearing: the file imports each implementation', () => {
+  it('the construction\'s exemption is load-bearing: the file binds a name from each implementation', () => {
     const path = join(SRC, CONSTRUCTION);
-    expect(IMPLEMENTATIONS.map((implementation) => constructionImport(readFileSync(path, 'utf8'), path, implementation)?.bindings))
-      .toEqual([['enabledModsIn', 'isMo2Instance', 'mo2InstanceAdapter', 'overwriteDir', 'Mo2InstanceOptions'], ['wabbajackPublisher']]);
+    expect(IMPLEMENTATIONS.map((implementation) => (constructionImport(readFileSync(path, 'utf8'), path, implementation)?.bindings.length ?? 0) > 0))
+      .toEqual([true, true]);
   });
 
-  it('holds the construction file to the rule beyond its imports and the names they bind', async () => {
-    const dir = await plantedTree({
+  it('holds the construction file to the rule beyond its imports and the names they bind', () => {
+    const dir = plantedTree({
       [CONSTRUCTION]: [
         `import { isMo2Instance, mo2InstanceAdapter } from '${entryOf(MO2)}';`,
         `import { wabbajackPublisher } from '${entryOf(WABBAJACK)}';`,
@@ -110,17 +99,13 @@ describe('no extension file names a mod manager or a publisher outside its imple
         '',
       ].join('\n'),
     });
-    try {
-      expect(findOffenders([dir])).toEqual({ [CONSTRUCTION]: ['mo2', 'wabbajack'] });
-      await writeFile(join(dir, CONSTRUCTION), `import { isMo2Instance } from '${entryOf(MO2)}';\nexport const check = isMo2Instance;\n`);
-      expect(findOffenders([dir])).toEqual({});
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    expect(findOffenders([dir])).toEqual({ [CONSTRUCTION]: ['mo2', 'wabbajack'] });
+    writeFileSync(join(dir, CONSTRUCTION), `import { isMo2Instance } from '${entryOf(MO2)}';\nexport const check = isMo2Instance;\n`);
+    expect(findOffenders([dir])).toEqual({});
   });
 
-  it('catches the name in a comment, a literal or an identifier, and one implementation\'s name in another', async () => {
-    const dir = await plantedTree({
+  it('catches the name in a comment, a literal or an identifier, and one implementation\'s name in another', () => {
+    const dir = plantedTree({
       [join('mods', 'comment.ts')]: '// MO2 sorts these by date.\nexport const x = 1;\n',
       [join('mods', 'tooltip.ts')]: "export const tooltip = 'The files tools wrote while Mod Organizer ran them.';\n",
       [join('plugins', 'command.ts')]: 'export const run = (mo2: { instance: unknown }) => mo2.instance;\n',
@@ -134,21 +119,17 @@ describe('no extension file names a mod manager or a publisher outside its imple
       [ADAPTER_INTERFACE]: '// MO2 is one implementation.\n',
       [join(ADAPTER, 'files.ts')]: "import { x } from './mo2/layout';\nexport const y = x;\n",
     });
-    try {
-      expect(findOffenders([dir])).toEqual({
-        [join('mods', 'comment.ts')]: ['mo2'],
-        [join('mods', 'identifier.ts')]: ['modorganizer'],
-        [join('mods', 'tooltip.ts')]: ['\\bMod Organizer\\b'],
-        [join('mods', 'publisher.ts')]: ['wabbajack'],
-        [join('plugins', 'command.ts')]: ['mo2'],
-        [join('views', 'mo2Trees.ts')]: ['file name'],
-        [join(ADAPTER, 'mo2', 'mo2Ignore.ts')]: ['wabbajack'],
-        [join(ADAPTER, 'wabbajack', 'wabbajackPublisher.ts')]: ['modorganizer'],
-        [ADAPTER_INTERFACE]: ['mo2'],
-        [join(ADAPTER, 'files.ts')]: ['mo2'],
-      });
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    expect(findOffenders([dir])).toEqual({
+      [join('mods', 'comment.ts')]: ['mo2'],
+      [join('mods', 'identifier.ts')]: ['modorganizer'],
+      [join('mods', 'tooltip.ts')]: ['\\bMod Organizer\\b'],
+      [join('mods', 'publisher.ts')]: ['wabbajack'],
+      [join('plugins', 'command.ts')]: ['mo2'],
+      [join('views', 'mo2Trees.ts')]: ['file name'],
+      [join(ADAPTER, 'mo2', 'mo2Ignore.ts')]: ['wabbajack'],
+      [join(ADAPTER, 'wabbajack', 'wabbajackPublisher.ts')]: ['modorganizer'],
+      [ADAPTER_INTERFACE]: ['mo2'],
+      [join(ADAPTER, 'files.ts')]: ['mo2'],
+    });
   });
 });

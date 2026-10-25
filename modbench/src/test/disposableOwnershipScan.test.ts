@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
+import { SRC } from './scanSource';
 
-const SRC = join(__dirname, '..');
-const TOOLBOX = join(SRC, 'extension.ts');
+const ACTIVATION = join(SRC, 'extension.ts');
 const TOOLBOX_COMMANDS = join(SRC, 'toolbox', 'toolboxCommands.ts');
 
 const DISPOSABLE_PRODUCERS = [
@@ -56,23 +56,26 @@ const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =
   ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
 
 describe('the activation file and Toolbox commands own every disposable they construct', () => {
-  it.each([TOOLBOX, TOOLBOX_COMMANDS].map((path) => relative(SRC, path)))(
+  it.each([ACTIVATION, TOOLBOX_COMMANDS].map((path) => relative(SRC, path)))(
     'every registration in %s is owned, or returned to a caller that owns it',
     (relativePath) => {
       expect(unownedProducers(parse(join(SRC, relativePath)))).toEqual([]);
     });
 
   it('finds the registrations at all — an empty scan would pass vacuously', () => {
-    expect([...readFileSync(TOOLBOX, 'utf8').matchAll(/\bown(?:All)?\(/g)].length).toBeGreaterThan(15);
+    expect([...readFileSync(ACTIVATION, 'utf8').matchAll(/\bown(?:All)?\(/g)].length).toBeGreaterThan(15);
     expect([...readFileSync(TOOLBOX_COMMANDS, 'utf8').matchAll(/\bregisterCommand\(/g)].length).toBeGreaterThan(0);
   });
 
-  it('names the producer a dropped own() left unowned', () => {
-    const planted = "vscode.window.createTreeView('modbench.toolbox', {});\n";
-    expect(unownedProducers(parse('planted.ts', `const view = ${planted}`))).toEqual(['createTreeView:1']);
-    expect(unownedProducers(parse('planted.ts', `own(${planted})`))).toEqual([]);
-    expect(unownedProducers(parse('planted.ts', `function f() { return ${planted} }`))).toEqual([]);
-    expect(unownedProducers(parse('planted.ts', `function f() { return [${planted}] }`))).toEqual([]);
-    expect(unownedProducers(parse('planted.ts', `const all = [${planted}]`))).toEqual(['createTreeView:1']);
+  const PRODUCER = "vscode.window.createTreeView('modbench.toolbox', {});\n";
+
+  it.each([
+    ['names a producer kept in a constant', `const view = ${PRODUCER}`, ['createTreeView:1']],
+    ['names a producer kept in an array', `const all = [${PRODUCER}]`, ['createTreeView:1']],
+    ['passes a producer handed to own()', `own(${PRODUCER})`, []],
+    ['passes a producer returned to the caller', `function f() { return ${PRODUCER} }`, []],
+    ['passes a producer returned in an array', `function f() { return [${PRODUCER}] }`, []],
+  ])('%s', (_, text, unowned) => {
+    expect(unownedProducers(parse('planted.ts', text))).toEqual(unowned);
   });
 });

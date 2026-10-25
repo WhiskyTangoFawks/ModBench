@@ -1,5 +1,8 @@
-import { basename, join, relative } from 'node:path';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join, relative } from 'node:path';
 import ts from 'typescript';
+import { onTestFinished } from 'vitest';
 import { tsFiles } from './tsFiles';
 
 export const SRC = join(__dirname, '..');
@@ -27,6 +30,19 @@ export const productionFiles = (root: string): string[] =>
 
 export const rootFiles = (src: string = SRC): string[] =>
   productionFiles(src).filter((path) => basename(path) === relative(src, path));
+
+export const sourceFiles = (roots: readonly string[]): string[] =>
+  roots.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
+
+export function plantedTree(files: Record<string, string>): string {
+  const root = mkdtempSync(join(tmpdir(), 'modbench-planted-tree-'));
+  onTestFinished(() => { rmSync(root, { recursive: true, force: true }); });
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), text);
+  }
+  return root;
+}
 
 const VI_MODULE_CALLS = new Set(['mock', 'doMock', 'unmock', 'doUnmock', 'importActual', 'importMock']);
 
@@ -129,7 +145,7 @@ function isNotAPath(node: ts.Node): boolean {
   return ts.isCallExpression(parent) && parent.expression.kind === ts.SyntaxKind.ImportKeyword;
 }
 
-export function pathLiterals(sourceText: string, fileName: string): string[] {
+function pathLiterals(sourceText: string, fileName: string): string[] {
   const scriptKind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, scriptKind);
   const found: string[] = [];

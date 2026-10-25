@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EventEmitter, ThemeColor, fakeUri, uriFrom } from '../../test/vscodeMock';
+import { EventEmitter, ThemeColor, Uri } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ Uri: { from: uriFrom }, ThemeColor, EventEmitter }));
+vi.mock('vscode', () => ({ Uri, ThemeColor, EventEmitter }));
 
 import * as vscode from 'vscode';
 import { RecordDecorationProvider } from '../RecordDecorationProvider';
@@ -43,7 +43,7 @@ const MODIFIED = new vscode.ThemeColor('gitDecoration.modifiedResourceForeground
 const ADDED = new vscode.ThemeColor('gitDecoration.addedResourceForeground');
 
 describe('RecordDecorationProvider', () => {
-  const uri = fakeUri('/a record row');
+  const uri = Uri.file('/a record row');
 
   it.each<[WorkingTreeState, vscode.FileDecoration | undefined]>([
     ['None', undefined],
@@ -67,7 +67,7 @@ describe('RecordDecorationProvider', () => {
 });
 
 describe('RecordDecorationProvider, a row with changes beneath it', () => {
-  const uri = fakeUri('/a row with children');
+  const uri = Uri.file('/a row with children');
   const DOT = { badge: '•', tooltip: 'Contains emphasized items' };
 
   it.each<[string, WorkingTreeState | undefined, WorkingTreeState[], vscode.FileDecoration | undefined]>([

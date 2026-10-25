@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFile, uriFrom } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, Uri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, Uri: { file: uriFile, from: uriFrom },
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, Uri,
 }));
 
 import { modsKeyContext } from '../gestureEntry';

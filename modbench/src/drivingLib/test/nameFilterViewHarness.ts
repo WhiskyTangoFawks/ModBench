@@ -86,7 +86,7 @@ export class FakeTreeView {
     collapse: [] as Listener<{ element: unknown }>[],
   };
 
-  constructor(readonly treeDataProvider: vscode.TreeDataProvider<unknown> = NO_ROWS) {}
+  constructor(readonly treeDataProvider: vscode.TreeDataProvider<unknown> = NO_ROWS, readonly options: Omit<vscode.TreeViewOptions<unknown>, 'treeDataProvider'> = {}) {}
 
   onDidChangeSelection = (listener: Listener<{ selection: readonly unknown[] }>) => this.subscribe(this.listeners.selection, listener);
   onDidChangeVisibility = (listener: Listener<{ visible: boolean }>) => this.subscribe(this.listeners.visibility, listener);
@@ -124,8 +124,8 @@ export class FakeTreeView {
 export class FakeTreeViews {
   private readonly made: { id: string; view: FakeTreeView }[] = [];
 
-  create = (id: string, options: { treeDataProvider: vscode.TreeDataProvider<unknown> }): FakeTreeView => {
-    const view = new FakeTreeView(options.treeDataProvider);
+  create = (id: string, { treeDataProvider, ...options }: vscode.TreeViewOptions<unknown>): FakeTreeView => {
+    const view = new FakeTreeView(treeDataProvider, options);
     this.made.push({ id, view });
     return view;
   };

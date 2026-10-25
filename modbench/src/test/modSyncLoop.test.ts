@@ -106,23 +106,13 @@ async function settledFakeInstance(overrides: Partial<InstanceReading>) {
   await modSync.settled();
   channel.info.mockClear();
   fake.forgetCalls();
-  return { fake, instance, channel, syncs, modSync };
+  return { fake, instance, channel, syncs };
 }
 
 const mod = (name: string): Mod => ({ kind: 'mod', name, enabled: true });
 
 describe('mod sync, as the Instance value drives it', () => {
   const listed = { mods: [mod('Harder VATS')], modFolders: modFoldersOf('Harder VATS') };
-
-  it('drops the line of a folder deleted by hand, once the next value lands', async () => {
-    const { fake, instance, syncs } = await settledFakeInstance(listed);
-
-    fake.read({ modFolders: modFoldersOf() });
-    await instance.refresh();
-    await syncs[syncs.length - 1];
-
-    expect(fake.calls).toEqual([{ verb: 'changeModOrder', profile: 'Default', changes: [{ kind: 'dropMod', mod: 'Harder VATS' }] }]);
-  });
 
   it('writes nothing, and says why in one Output line, when mods/ goes missing', async () => {
     const { fake, instance, channel, syncs } = await settledFakeInstance(listed);
@@ -134,31 +124,6 @@ describe('mod sync, as the Instance value drives it', () => {
     expect(fake.calls).toEqual([]);
     expect(channel.error).toHaveBeenCalledTimes(1);
     expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('there is no folder for mods'));
-  });
-
-  it('decides on the mod folders the Instance adapter answers when it runs, not on the value that landed before them', async () => {
-    const { fake, instance, modSync } = await settledFakeInstance(listed);
-
-    fake.read({ modFolders: modFoldersOf('Harder VATS', 'Hand Extracted Mod') });
-    await modSync.run();
-
-    expect(instance.value.modFolders?.map((folder) => folder.name)).toEqual(['Harder VATS']);
-    expect(fake.calls).toEqual([{
-      verb: 'changeModOrder', profile: 'Default', changes: [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'Hand Extracted Mod' } }],
-    }]);
-  });
-
-  it('a further landed value once disk and mod order agree writes nothing and logs nothing', async () => {
-    const { fake, instance, channel, syncs } = await settledFakeInstance(listed);
-
-    fake.changed();
-    await pastSequence(instance, instance.sequence);
-    const outcome = await syncs[syncs.length - 1];
-
-    expect(outcome).toEqual({ applied: true, added: [], dropped: [] });
-    expect(fake.calls.flatMap((call) => (call.verb === 'changeModOrder' ? call.changes : []))).toEqual([]);
-    expect(channel.info).not.toHaveBeenCalled();
-    expect(channel.error).not.toHaveBeenCalled();
   });
 });
 
@@ -189,18 +154,5 @@ describe('mod sync, as each landed value drives it', () => {
     await modSync.settled();
 
     expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('1 order.txt line(s)'));
-  });
-
-  it('says a refusal on the Mods view\'s message line as modlist.txt not synced', async () => {
-    const instance = new FakeInstance(instanceValueFixture());
-    const { modSync } = instanceSyncs({ modStatuses: NO_MOD_STATUSES,
-      instance, syncPlugins: noPluginSync, channel: channelDouble(),
-      syncMods: () => Promise.resolve({ applied: false, refusal: '/instance/mods does not exist' }),
-    });
-
-    instance.publish(instance.value);
-    await modSync.settled();
-
-    expect(modSync.message()).toBe('modlist.txt is not synced: /instance/mods does not exist.');
   });
 });

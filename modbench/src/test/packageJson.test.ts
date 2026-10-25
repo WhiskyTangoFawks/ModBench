@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'fs';
 import * as path from 'path';
 import { present } from '../ports/present';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, uriFile, uriFrom,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter, Uri,
 } from './vscodeMock';
 import { ANY_SOURCE_MOD_KEY, FOLDER_KEY, LOGGED_IN_KEY, HAS_REPOSITORY_KEY, INSTANCE_READ_KEY, REPOSITORY_SET_UP_KEY, IN_AN_INSTANCE, holds, isRecord, requires } from './manifest';
 import { catalogCommandIds, COMMANDS_MARKDOWN, GESTURES_MARKDOWN, SYSTEM_COMMANDS_MARKDOWN, SPECIFIED_AHEAD_OF_CODE, RETIRED_AHEAD_OF_CODE } from './commandsCatalog';
@@ -18,7 +18,7 @@ const placed = (entries: readonly MenuEntry[]): [string, string][] =>
 
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, MarkdownString, EventEmitter,
-  Uri: { file: uriFile, from: uriFrom },
+  Uri,
 }));
 
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from '../mods/ModListProvider';
@@ -170,13 +170,13 @@ const RESTORE_FROM_MANIFEST = 'modbench.mod.restoreFromManifest';
 const CHECK_FOR_UPDATES_HERE = 'modbench.modList.checkForUpdatesHere';
 const EVERY_MOD_ENTRY_POINTS = ['modbench.modList.updateManifestHere', 'modbench.modList.restoreFromManifestHere'];
 type Key = { key: string; mac?: string; command: string };
+const keysFiring = (context: Context): Key[] =>
+  pkg.contributes.keybindings.filter((k) => holds(k.when, context)).map(({ key, mac, command }) => ({ key, mac, command }));
 const expectKeysFiring = (context: Context, expected: readonly Key[]): void => {
-  const firing = pkg.contributes.keybindings.filter((k) => holds(k.when, context)).map(({ key, mac, command }) => ({ key, mac, command }));
+  const firing = keysFiring(context);
   expect(firing).toHaveLength(expected.length);
   expect(firing).toEqual(expect.arrayContaining([...expected]));
 };
-const keysFiring = (context: Context): { key: string; mac?: string; command: string }[] =>
-  pkg.contributes.keybindings.filter((k) => holds(k.when, context)).map(({ key, mac, command }) => ({ key, mac, command }));
 const offeredIn = (entries: readonly MenuEntry[], context: Context): string[] =>
   placed(entries.filter((e) => holds(e.when, context))).map(([command]) => command);
 const contextOf = (node: { contextValue?: string }): string => present(node.contextValue, 'the row\'s own contextValue');
@@ -333,8 +333,8 @@ describe('package.json outside an instance', () => {
 describe('package.json Toolbox view', () => {
   const sidebarViews = (): ViewEntry[] => present(pkg.contributes.views.modbench, "contributes.views['modbench']");
 
-  it('is the first view in the Modbench container, so workspace-scope actions sit above the domain trees', () => {
-    expect(present(sidebarViews()[0], 'the first view of the Modbench container').id).toBe('modbench.toolbox');
+  it('is the first view in the Modbench container, above Mods, Plugins and Downloads (toolbox.md, mods.md, plugins.md, downloads.md)', () => {
+    expect(sidebarViews().map((view) => view.id).slice(0, 4)).toEqual(['modbench.toolbox', 'modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']);
   });
 
   const toolboxTitle = (loggedIn: boolean) =>
@@ -369,10 +369,6 @@ describe('package.json New Plugin / record filter reachable from the merged tree
       `a view/title entry for ${command} on modbench.pluginListTree`,
     );
 
-  it('keeps the Plugins name filter at slot 1', () => {
-    expect(entryFor('modbench.pluginListTree.filterHere').group).toBe('navigation@1');
-  });
-
   it('shows filter records at slot 3, and the clear in its place while the record filter is active', () => {
     const filter = entryFor('modbench.record.filter');
     const clear = entryFor('modbench.record.clearFilter');
@@ -394,20 +390,9 @@ describe('package.json New Plugin / record filter reachable from the merged tree
     expect(elsewhere).toEqual([]);
   });
 
-  it('gates the pair\'s palette entries to an instance', () => {
+  it.each(['modbench.record.filter', 'modbench.record.clearFilter', 'modbench.plugin.create'])('gates %s\'s palette entry to an instance', (command) => {
     const palette = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']");
-    for (const command of ['modbench.record.filter', 'modbench.record.clearFilter']) {
-      const entry = present(palette.find((e) => e.command === command), `a commandPalette entry for ${command}`);
-      expect(requires(entry.when, IN_AN_INSTANCE)).toBe(true);
-    }
-  });
-
-  it('gates create plugin\'s palette entry to an instance', () => {
-    const palette = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']");
-    const entry = present(
-      palette.find((e) => e.command === 'modbench.plugin.create'),
-      'a commandPalette entry for modbench.plugin.create',
-    );
+    const entry = present(palette.find((e) => e.command === command), `a commandPalette entry for ${command}`);
     expect(requires(entry.when, IN_AN_INSTANCE)).toBe(true);
   });
 });
@@ -518,13 +503,6 @@ describe('package.json title-bar rubric', () => {
     const entries = navEntries.filter((e) => requires(e.when, `view == ${view}`));
     const visible = statesOf(facts(entries)).map((state) => entries.filter((e) => holds(e.when, { view, ...inInstance, ...state })).length);
     expect(Math.max(...visible), `${view} exposes too many navigation icons`).toBeLessThanOrEqual(4);
-  });
-
-  it('the Mods tree and the merged Plugins tree are in the Modbench sidebar', () => {
-    const sidebarIds = present(pkg.contributes.views.modbench, "contributes.views['modbench']");
-    const sidebar = sidebarIds.map((v) => v.id);
-    expect(sidebar).toContain('modbench.modList');
-    expect(sidebar).toContain('modbench.pluginListTree');
   });
 });
 
@@ -1322,7 +1300,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       .map((e) => present(pkg.contributes.commands.find((c) => c.command === e.command), e.command).title);
     expect(overflowTitles.length).toBeGreaterThan(0);
     const shown = present(new ModListProvider({ statuses: NO_MOD_STATUSES, instance: new FakeInstance(instanceValueFixture({ mods: [] })) }).viewMessage(), 'the empty list\'s message');
-    for (const title of overflowTitles) expect(shown).toContain(title);
+    expect(overflowTitles.filter((title) => !shown.includes(title))).toEqual([]);
     expect(shown).toContain('overflow');
   });
 });

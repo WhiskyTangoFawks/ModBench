@@ -78,6 +78,22 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       expect(await adapter.trashEntryFolder({ kind: 'mod', name: 'Alpha' }, trash)).toBe(false);
     });
 
+    it('hands the trash the folder that holds an entry, and keeps the folder when the trash refuses it', async () => {
+      const handed: string[] = [];
+      const refusing = (path: string): Promise<void> => { handed.push(path); return Promise.reject(new Error('the trash is full')); };
+
+      await expect(adapter.trashEntryFolder({ kind: 'mod', name: 'Alpha' }, refusing)).rejects.toThrow('the trash is full');
+
+      expect({ handed, folders: await folderNames() }).toEqual({ handed: [await adapter.modFolderPath('Alpha')], folders: ['Alpha', 'Beta', 'Gamma'] });
+    });
+
+    it('trashes no source folder for a mod that none builds', async () => {
+      const handed: string[] = [];
+
+      expect(await adapter.trashSourceFolder('Alpha', (path) => { handed.push(path); return Promise.resolve(); })).toBe(false);
+      expect(handed).toEqual([]);
+    });
+
   });
 
   describe('downloaded files', () => {
@@ -125,6 +141,23 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       const path = `meshes${adapter.exclusionMark}/b.nif`;
       expect(await adapter.markOriginFile(GAMMA, path, 'Included'))
         .toEqual({ gone: false, refusal: `"${path}" has no suffix of its own to remove, and its folder excludes it.` });
+    });
+
+    it('takes a file\'s own mark, in any case, as its mark, and a folder\'s mark above it as none of its own', async () => {
+      const marksOf = async (relativePath: string) => {
+        const file = await adapter.originFile(GAMMA, relativePath);
+        return { excluded: file?.excluded, markedExcluded: file?.markedExcluded, includedPath: file?.includedPath };
+      };
+
+      await adapter.markOriginFile(GAMMA, 'y.dds', 'Excluded');
+
+      expect({
+        underAMarkedFolder: await marksOf(`meshes${adapter.exclusionMark}/b.nif`),
+        markedInAnotherCase: await marksOf(`z.dds${adapter.exclusionMark.toUpperCase()}`),
+      }).toEqual({
+        underAMarkedFolder: { excluded: true, markedExcluded: false, includedPath: 'meshes/b.nif' },
+        markedInAnotherCase: { excluded: true, markedExcluded: true, includedPath: 'z.dds' },
+      });
     });
 
     it('refuses to mark a file onto a name that is there', async () => {

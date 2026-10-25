@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fakeUri, Range } from '../../test/vscodeMock';
+import { Range, Uri } from '../../test/vscodeMock';
 
 const h = vi.hoisted(() => ({
   applied: [] as unknown[][],
@@ -41,7 +41,7 @@ function makeDeps(answer: Awaited<ReturnType<InMemoryMEditClient['getEditChanges
   const moving = vi.fn<RecordWriteDeps['moving']>();
   const deps: RecordWriteDeps = {
     meditClient, reporter, refreshSourceControlFor, moving, oneAtATime: oneAtATime(),
-    documentOf: () => Promise.resolve({ uri: fakeUri(FILE) }),
+    documentOf: () => Promise.resolve({ uri: Uri.file(FILE) }),
   };
   return { deps, meditClient, reporter, refreshSourceControlFor, moving };
 }
