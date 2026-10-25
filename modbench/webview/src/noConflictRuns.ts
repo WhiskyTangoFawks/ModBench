@@ -24,11 +24,11 @@ function agrees(row: RecordRow, severalRecords: boolean): boolean {
   }
 }
 
-function quietKeys(rows: readonly RecordRow[], severalRecords: boolean): Set<string> {
+function quietKeys(rows: readonly RecordRow[], { severalRecords, restored }: Collapse): Set<string> {
   const quiet = new Set<string>();
   const stays = new Set<string>();
   for (const row of [...rows].reverse()) {
-    if (agrees(row, severalRecords) && !stays.has(row.key)) quiet.add(row.key);
+    if (agrees(row, severalRecords) && !restored.has(row.key) && !stays.has(row.key)) quiet.add(row.key);
     else if (row.parent !== null) stays.add(row.parent);
   }
   return quiet;
@@ -44,9 +44,9 @@ function runRow(held: readonly RecordRow[]): RunRow {
 }
 
 /** editor.md, Rows, story 6: the rows with each run of rows no copy changes held by one row, but
- *  the runs restored. */
-export function collapseRuns(rows: readonly RecordRow[], { severalRecords, restored }: Collapse): RecordRow[] {
-  const quiet = quietKeys(rows, severalRecords);
+ *  the rows a restore showed. */
+export function collapseRuns(rows: readonly RecordRow[], collapse: Collapse): RecordRow[] {
+  const quiet = quietKeys(rows, collapse);
   const groups: { rows: RecordRow[]; quiet: boolean }[] = [];
   for (const row of rows) {
     const run = groups.at(-1);
@@ -56,7 +56,6 @@ export function collapseRuns(rows: readonly RecordRow[], { severalRecords, resto
     else groups.push({ rows: [row], quiet: quiet.has(row.key) });
   }
   return groups.flatMap(({ rows: held, quiet: isRun }) => {
-    const first = held[0];
-    return isRun && held.length > 1 && first && !restored.has(runKey(first.key)) ? [runRow(held)] : held;
+    return isRun && held.length > 1 ? [runRow(held)] : held;
   });
 }

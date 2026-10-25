@@ -79,9 +79,9 @@ export type WebviewToExtension =
 /** A plugin's copy of a record. */
 export type RecordCopy = Omit<components['schemas']['RecordCopy'], 'documentText'>;
 
-/** The rows collapsed, the columns collapsed, the focused cell and the scroll of a grid. */
 export interface ViewState {
   collapsedRows: string[];
+  restoredRows: string[];
   collapsedColumns: ColumnKey[];
   focusedCell: { rowKey: string; plugin: ColumnKey | null } | null;
   scroll: { top: number; left: number };
@@ -101,6 +101,7 @@ function isScroll(value: unknown): value is ViewState['scroll'] {
 export function isViewState(value: unknown): value is ViewState {
   return typeof value === 'object' && value !== null
     && 'collapsedRows' in value && isStringArray(value.collapsedRows)
+    && 'restoredRows' in value && isStringArray(value.restoredRows)
     && 'collapsedColumns' in value && isStringArray(value.collapsedColumns)
     && 'focusedCell' in value && isFocusedCell(value.focusedCell)
     && 'scroll' in value && isScroll(value.scroll);
@@ -264,7 +265,7 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL; text: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.SHOW_COLUMNS; columns: RecordCopy[] }
   | { type: typeof EXTENSION_TO_WEBVIEW.MODS_CHANGED; modsByOrigin: Record<string, ModRepository> }
-  | { type: typeof EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT; on: boolean };
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT; lens: 'off' | 'on' | 'again' };
 
 export function isString(value: unknown): value is string {
   return typeof value === 'string';

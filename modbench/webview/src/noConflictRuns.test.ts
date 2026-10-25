@@ -91,11 +91,12 @@ describe('collapseRuns', () => {
     expect(collapsed(rows)).toEqual(['A', 'B', 'C']);
   });
 
-  it('shows the rows of a restored run and leaves the other runs collapsed', () => {
-    const rows = rowsOf(metas, [agree('A'), agree('B'), differ('C'), agree('D'), agree('E')]);
-
-    const firstRun = collapseRuns(rows, { severalRecords: false, restored: new Set() }).find(row => row.kind === 'run');
-    expect(collapsed(rows, [firstRun?.key ?? ''])).toEqual(['A', 'B', 'C', '2 rows']);
+  it.each([
+    ['shows the rows a restore showed and leaves the other runs collapsed', [agree('A'), agree('B'), differ('C'), agree('D'), agree('E')], ['A', 'B'], ['A', 'B', 'C', '2 rows']],
+    ['keeps a restored row shown when a re-read moves the start of its run', [agree('A'), agree('B'), agree('C'), differ('D'), agree('E')], ['B', 'C'], ['A', 'B', 'C', 'D', 'E']],
+    ['collapses the rows no restore showed, around a differing row', [agree('A'), agree('B'), agree('C'), differ('D'), agree('E')], ['A'], ['A', '2 rows', 'D', 'E']],
+  ])('%s', (_name, fields, restored, expected) => {
+    expect(collapsed(rowsOf(metas, fields), restored)).toEqual(expected);
   });
 
   it('opened on several records, collapses a row unless the records disagree on it', () => {

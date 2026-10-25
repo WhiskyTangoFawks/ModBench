@@ -23,13 +23,13 @@ export class RecordTabs implements Iterable<RecordTab> {
   open(panel: TabPanel, document: vscode.Uri): RecordTab {
     const tab = new RecordTab(panel, document, { closed: (closed) => { this.close(closed); } });
     this.tabs.add(tab);
-    if (this.collapsingNoConflict) tab.postOnceListening(this.noConflictMessage());
+    if (this.collapsingNoConflict) tab.postOnceListening(this.noConflictMessage('on'));
     return tab;
   }
 
   collapseNoConflict(collapse: boolean): void {
     this.collapsingNoConflict = collapse;
-    for (const tab of this.tabs) tab.postOnceListening(this.noConflictMessage());
+    for (const tab of this.tabs) tab.postOnceListening(this.noConflictMessage(this.collapsingNoConflict ? 'again' : 'off'));
   }
 
   /** The record tab last in focus; none once it closes. */
@@ -69,8 +69,8 @@ export class RecordTabs implements Iterable<RecordTab> {
     return async (address, write) => { await through(0, address, address.formKey, write); };
   }
 
-  private noConflictMessage() {
-    return { type: EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT, on: this.collapsingNoConflict } as const;
+  private noConflictMessage(lens: 'off' | 'on' | 'again') {
+    return { type: EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT, lens } as const;
   }
 
   private close(tab: RecordTab): void {
