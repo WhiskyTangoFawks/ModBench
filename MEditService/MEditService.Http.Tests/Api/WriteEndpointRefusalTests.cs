@@ -1,54 +1,34 @@
 using System.Net;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
-using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class WriteEndpointRefusalTests : HostedTests
+public sealed class WriteEndpointRefusalTests(LoadedApiFixture<TestPluginFixture> loaded)
+    : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
-    private const string Origin = "EditableMod";
-    private const string Plugin = "Editable.esp";
-    private const string DestOrigin = "DestinationMod";
-    private const string DestPlugin = "Destination.esp";
+    private const string ARecord = """{"formKey": "000800:TestPlugin.esp", "plugin": {"name": "TestPlugin.esp", "origin": "Data/"}}""";
 
-    private async Task<string> LoadedSourceAndDestinationsFirstNpc()
+    public static TheoryData<string, string, string> NotAWrite => new()
     {
-        var fx = Owned(new PluginFixtureBuilder("api-write-two")
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew("ApiNpc"), origin: Origin)
-            .WithPlugin(DestPlugin, mod => mod.Npcs.AddNew("DestNpc"), origin: DestOrigin)
-            .BuildScattered());
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        return await Client.FirstFormKey(Plugin, Origin);
-    }
+        { "/records/delete-changes", "no records", """{"records": []}""" },
+        {
+            "/records/delete-changes", "a record with no origin",
+            """{"records": [{"formKey": "000800:TestPlugin.esp", "plugin": {"name": "TestPlugin.esp", "origin": ""}}]}"""
+        },
+        { "/records/copy-changes", "no destination", $$"""{"records": [{{ARecord}}], "mode": "Override", "destinations": []}""" },
+        {
+            "/records/copy-changes", "a copy as new that replaces",
+            $$"""{"records": [{{ARecord}}], "mode": "New", "destinations": [{"name": "TestPlugin.esp", "origin": "Data/"}], "replace": true}"""
+        },
+    };
 
     [Theory]
-    [InlineData("[]")]
-    [InlineData("[{\"formKey\": \"000800:Editable.esp\", \"plugin\": {\"name\": \"Editable.esp\", \"origin\": \"\"}}]")]
-    public async Task DeletingNoRecords_OrARecordWithNoOrigin_IsABadRequest(string records)
+    [MemberData(nameof(NotAWrite))]
+    public async Task AWriteThatCannotBeMade_IsABadRequest(string route, string lacking, string body)
     {
-        var response = await Client.PostJson("/records/delete-changes", $"{{\"records\": {records}}}");
+        var response = await loaded.Client.PostJson(route, body);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task CopyingWithNoDestinationIsABadRequest()
-    {
-        var formKey = await LoadedSourceAndDestinationsFirstNpc();
-
-        var response = await Client.Copy([(formKey, Plugin, Origin)], "Override", []);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task CopyingAsNewWithReplaceIsABadRequest()
-    {
-        var formKey = await LoadedSourceAndDestinationsFirstNpc();
-
-        var response = await Client.Copy(formKey, (Plugin, Origin), "New", (DestPlugin, DestOrigin), replace: true);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 }

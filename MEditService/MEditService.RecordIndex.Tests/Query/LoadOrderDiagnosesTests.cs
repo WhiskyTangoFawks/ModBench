@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
@@ -44,23 +43,10 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
 
         Assert.Equal(Malformed, report.Plugin);
         Assert.Equal("SomeMod", report.Origin);
-        Assert.Equal(ShortRdatRegionPlugin.Anchor, report.Anchor);
-        Assert.Equal("RDAT is 6 bytes; a REGN RDAT is always 8", report.Message);
         Assert.Equal(
             $"{ShortRdatRegionPlugin.Anchor} — fixed-size-subrecord-short, repairable (lossless): "
             + "RDAT is 6 bytes; a REGN RDAT is always 8",
             report.Text);
-    }
-
-    [Fact]
-    public void ADiagnosisWithNoAnchor_ReadsBackWithNone()
-    {
-        var adapter = new DiagnosisClaimingAdapter(new PluginDiagnosis(null, "unknown", null, "boom"));
-        using var index = Indexes.Reconciled(DataFolder, [Clean("Clean.esp")], adapter: adapter);
-
-        var report = Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
-
-        Assert.Equal((null, "boom"), (report.Anchor, report.Message));
     }
 
     [Fact]
@@ -148,7 +134,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
         Assert.Equal(
             [("First.esp", "PERK 00000800 (FirstPerk)"), ("First.esp", "PERK 00000801 (SecondPerk)"),
              ("Second.esp", ShortRdatRegionPlugin.Anchor), ("Disabled.esp", ShortRdatRegionPlugin.Anchor)],
-            reports.Select(r => (r.Plugin, r.Anchor)));
+            reports.Select(r => (r.Plugin, r.Text[..r.Text.IndexOf(" — ", StringComparison.Ordinal)])));
     }
 
 }

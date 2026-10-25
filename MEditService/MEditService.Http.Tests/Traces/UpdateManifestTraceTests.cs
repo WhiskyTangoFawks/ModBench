@@ -72,7 +72,7 @@ public sealed class UpdateManifestTraceTests : HostedTests
     {
         var response = await Client.PostJson("/update-manifest", body);
 
-        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, lacking);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 
     [Fact]

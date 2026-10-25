@@ -135,6 +135,6 @@ public sealed class CreatePluginApiTests : HostedTests
 
         var created = await Client.PostJson("/plugins/create", body);
 
-        Assert.True(created.StatusCode == HttpStatusCode.BadRequest, lacking);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, created.StatusCode));
     }
 }

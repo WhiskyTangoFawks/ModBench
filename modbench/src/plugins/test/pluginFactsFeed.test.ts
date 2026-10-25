@@ -12,7 +12,7 @@ import { PluginFactsFeed } from '../pluginFactsFeed';
 const A = { name: 'A.esp', origin: 'SomeMod' };
 const held = (overrides: Partial<PluginMetadata> = {}) => pluginMetadataFixture({ name: 'A.esp', ...overrides });
 const diagnosis = (text: string): PluginDiagnosisReport => (
-  { plugin: 'A.esp', origin: 'SomeMod', message: text, text }
+  { plugin: 'A.esp', origin: 'SomeMod', text }
 );
 
 function deferred<T>() {

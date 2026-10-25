@@ -304,7 +304,7 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     {
         var response = await Client.PostJson("/restore-from-manifest", body);
 
-        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, lacking);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 
     public static TheoryData<string, string, string> NotAQuestionOfModFolders => new()
@@ -325,6 +325,6 @@ public sealed class RestoreFromManifestTraceTests : HostedTests
     {
         var response = await Client.PostJson(route, body);
 
-        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{route}: {lacking}");
+        Assert.Equal((route, lacking, HttpStatusCode.BadRequest), (route, lacking, response.StatusCode));
     }
 }

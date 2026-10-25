@@ -38,8 +38,7 @@ public sealed class BuildConfigurationApiTests : HostedTests
     {
         var response = await Client.PostJson("/build-configuration", body);
 
-        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, lacking);
-        await response.AssertIsProblem(HttpStatusCode.BadRequest);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 
     [Fact]

@@ -100,7 +100,7 @@ public sealed class CompareRecordsApiTests : HostedTests
 
         var response = await Client.PostJson(route, body);
 
-        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, lacking);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 
     [Fact]

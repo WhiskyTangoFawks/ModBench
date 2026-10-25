@@ -155,6 +155,6 @@ public sealed class BuildModTraceTests : HostedTests
 
         var response = await Client.PostJson("/build", body);
 
-        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, lacking);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 }

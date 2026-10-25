@@ -84,7 +84,7 @@ public sealed class DecompileAndCommitTraceTests : HostedTests
 
         var response = await Client.PostJson("/decompile-and-commit", body);
 
-        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, lacking);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 
     [Fact]

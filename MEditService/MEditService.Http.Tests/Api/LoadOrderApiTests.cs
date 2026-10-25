@@ -2,14 +2,18 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
+public sealed class LoadOrderApiTests : HostedTests
 {
-    private readonly HttpClient _client = loaded.Client;
-    private readonly TestPluginFixture _fixture = loaded.Plugin;
+    private readonly TestPluginFixture _fixture;
+
+    public LoadOrderApiTests() => _fixture = Owned(TestPluginFixture.Create());
 
     private Dictionary<string, object> Body() => SnapshotPlugins.Body(_fixture.DataFolder, _fixture.InstanceRoot, _fixture.Plugins);
 
@@ -28,7 +32,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         var body = Body();
         body.Remove(omitted);
 
-        var response = await _client.PutAsJsonAsync("/load-order", body);
+        var response = await Client.PutAsJsonAsync("/load-order", body);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -41,9 +45,20 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         var body = Body();
         body["stringsLanguage"] = stringsLanguage;
 
-        var response = await _client.PutAsJsonAsync("/load-order", body);
+        var response = await Client.PutAsJsonAsync("/load-order", body);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutLoadOrder_AnUnknownGameRelease_Is400()
+    {
+        var body = Body();
+        body["gameRelease"] = "NotAGame";
+
+        var response = await Client.PutAsJsonAsync("/load-order", body);
+
+        await response.AssertIsProblem(HttpStatusCode.BadRequest);
     }
 
     private const string Named = """ "name": "Any.esp", "path": "/data/Any.esp", "origin": "AnyMod" """;
@@ -71,9 +86,9 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         body["active"] = Array.Empty<object>();
         body["loadedWithNoLine"] = Array.Empty<object>();
 
-        var response = await _client.PutAsJsonAsync("/load-order", body);
+        var response = await Client.PutAsJsonAsync("/load-order", body);
 
-        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, lacking);
+        Assert.Equal((lacking, HttpStatusCode.BadRequest), (lacking, response.StatusCode));
     }
 
     [Fact]
@@ -85,7 +100,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         body["active"] = new[] { new { name = plugin.Name, origin = plugin.Origin }, new { name = plugin.Name, origin = "OtherMod" } };
         body["loadedWithNoLine"] = Array.Empty<object>();
 
-        var response = await _client.PutAsJsonAsync("/load-order", body);
+        var response = await Client.PutAsJsonAsync("/load-order", body);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("OtherMod", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
@@ -97,8 +112,63 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         var body = Body();
         body["dataFolder"] = "/no-such-dir";
 
-        var response = await _client.PutAsJsonAsync("/load-order", body);
+        var response = await Client.PutAsJsonAsync("/load-order", body);
 
         Assert.Equal("DataFolderNotFound", (await response.AssertIsProblem(HttpStatusCode.BadRequest)).GetProperty("refusal").GetString());
+    }
+
+    [Fact]
+    public async Task PutLoadOrder_AModsPluginNamingNoSourceFolder_IsAccepted()
+    {
+        var body = Body();
+        body["plugins"] = _fixture.Plugins.Select(p => new
+        {
+            p.Name,
+            p.Path,
+            p.Origin,
+            Provider = new { Kind = "Mod", Mod = p.Origin, Folder = Path.GetDirectoryName(p.Path) },
+            p.Strings.Archives,
+            p.Strings.StringsFiles,
+        });
+
+        var response = await Client.PutLoadOrderAndAwaitReady(body);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutLoadOrder_APluginTheSnapshotDoesNotListAsActive_ComesBackOutsideTheLoadOrder()
+    {
+        var fx = Owned(new PluginFixtureBuilder("api-reconcile-disabled")
+            .WithPlugin("Active.esp", mod => mod.Npcs.AddNew("FromActive"))
+            .WithPlugin("Dormant.esp", mod => mod.Npcs.AddNew("FromDormant"), enabled: false)
+            .BuildScattered());
+
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+
+        Assert.False((await Client.Plugin("Dormant.esp")).GetProperty("inLoadOrder").GetBoolean());
+    }
+
+    [Fact]
+    public async Task PutLoadOrder_TheGamesStringsFilesItNames_AreWhereALocalizedPluginsNamesAreRead()
+    {
+        var fx = Owned(new PluginFixtureBuilder("api-games-strings")
+            .WithPlugin("Localized.esp", mod =>
+            {
+                mod.UsingLocalization = true;
+                mod.Activators.AddNew("LocalizedLever").Name = new TranslatedString(
+                    Language.English,
+                    new KeyValuePair<Language, string>(Language.French, "Levier"),
+                    new KeyValuePair<Language, string>(Language.English, "Lever"));
+            }, origin: "LocalizedMod")
+            .BuildScattered());
+        var plugin = fx.Plugins.Single();
+        var body = SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, [plugin with { NamedStrings = new PluginStrings([], []) }], stringsLanguage: "French");
+        body["stringsFiles"] = plugin.Strings.StringsFiles;
+
+        (await Client.PutLoadOrderAndAwaitReady(body)).EnsureSuccessStatusCode();
+
+        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Localized.esp&origin=LocalizedMod&type=acti&limit=10");
+        Assert.Equal("Levier", activators.GetProperty("items")[0].GetProperty("fullName").GetString());
     }
 }
