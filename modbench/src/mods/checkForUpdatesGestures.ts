@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { AgentCall, type GestureResult } from '../drivingLib/agentGesture';
 import { runWritingGesture } from '../drivingLib/writingGesture';
 import type { Instance } from '../instanceLoader/instance';
-import { modLabelsOf } from '../instanceLoader/modName';
 import type { CheckForUpdates, UpdateChecked } from '../modCommands/checkForUpdates';
 import type { Reporter } from '../ports/reporter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -30,12 +29,11 @@ export function registerCheckForUpdatesGestures(given: CheckForUpdatesDeps): vsc
 async function checkForView(
   { commands, instance, reporter }: CheckForUpdatesDeps, { mods, refused, view }: ModsToRun,
 ): Promise<void> {
-  const label = modLabelsOf(instance.value.modFolders);
   await runWritingGesture(view, instance, async () => {
     const result = await commands.checkForUpdates(mods);
     if (!result.applied) { reporter.report('error', result.refusal); return; }
     const notAsked: ItemRefusal<string>[] = [
-      ...result.outcome.refused.map(({ item, reason }) => ({ item: label(item.name), reason })),
+      ...result.outcome.refused.map(({ item, reason }) => ({ item: item.name, reason })),
       ...refused,
     ];
     const updates = result.outcome.landed.filter(({ updateAvailable }) => updateAvailable === true).length;
@@ -48,10 +46,6 @@ async function checkForView(
 async function checkForAgent(
   { commands, instance }: CheckForUpdatesDeps, { argument }: AgentCall,
 ): Promise<GestureResult<UpdateChecked>> {
-  const label = modLabelsOf(instance.value.modFolders);
-  const named = (checked: UpdateChecked): UpdateChecked => ({ ...checked, name: label(checked.name) });
   const result = await runWritingGesture(MODS_KEY_ARGS.view, instance, () => commands.checkForUpdates(modsOfAgent(argument, instance.value, 'modsOnly')));
-  if (!result.applied) return { applied: false, refusal: result.refusal };
-  const { landed, refused } = result.outcome;
-  return { applied: true, outcome: { landed: landed.map(named), refused: refused.map(({ item, reason }) => ({ item: named(item), reason })) } };
+  return result.applied ? { applied: true, outcome: result.outcome } : { applied: false, refusal: result.refusal };
 }

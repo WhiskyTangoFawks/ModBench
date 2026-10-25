@@ -1,15 +1,13 @@
-using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using Mutagen.Bethesda.Fallout4;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
 public sealed class NonCompiledPluginReadOnlyTests
 {
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
-
     [Fact]
     public void EditingAPluginWithNoModFolder_IsRefused_NamingThePatchPluginPathInstead()
     {

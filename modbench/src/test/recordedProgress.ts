@@ -1,5 +1,9 @@
 export const progressSteps: string[] = [];
 
+export const instanceThatReads = {
+  refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
+};
+
 export async function recordedWithProgress(
   options: { location: { viewId: string } }, task: () => Promise<unknown>,
 ): Promise<unknown> {

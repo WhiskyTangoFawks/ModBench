@@ -3,8 +3,8 @@ import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, T
 
 vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, Uri: { from: uriFrom } }));
 
-import { dropMove } from '../moveDrop';
-import { ModNode, OverwriteNode, SeparatorNode } from '../ModListProvider';
+import { dropMove, type DraggedRows } from '../moveDrop';
+import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import type { SortDirection } from '../../drivingLib/sortDirectionToggle';
 import type { Mod } from '../../instanceLoader/instance';
 
@@ -43,15 +43,12 @@ describe.each(BOTH)('a drop is a move, as shown, with %s', (direction) => {
     });
   });
 
-  it('mods dropped below the last row land at the bottom of the view', () => {
-    expect(dropMove({ rows: [beta], focused: beta }, undefined, direction)).toEqual({
-      argument: [beta], target: { place: { kind: 'modOrder' }, end: endTheViewShowsAtTheBottom[direction] },
-    });
-  });
-
-  it('a separator dropped below the last row lands at the bottom of the view', () => {
-    expect(dropMove({ rows: [groupA], focused: groupA }, undefined, direction)).toEqual({
-      argument: [groupA], target: { place: { kind: 'modOrder' }, end: endTheViewShowsAtTheBottom[direction] },
+  it.each([
+    ['mods', beta],
+    ['a separator', groupA],
+  ])('%s dropped below the last row land at the bottom of the view', (_case, row) => {
+    expect(dropMove({ rows: [row], focused: row }, undefined, direction)).toEqual({
+      argument: [row], target: { place: { kind: 'modOrder' }, end: endTheViewShowsAtTheBottom[direction] },
     });
   });
 
@@ -64,30 +61,15 @@ describe.each(BOTH)('a drop is a move, as shown, with %s', (direction) => {
     });
   });
 
-  describe('a drop where what is dragged cannot go is no move', () => {
-    it('on Overwrite', () => {
-      expect(dropMove({ rows: [delta], focused: delta }, new OverwriteNode([], 'MO2'), direction)).toBeUndefined();
-    });
-
-    it('on a row being dragged', () => {
-      expect(dropMove({ rows: [alpha, delta], focused: delta }, alpha, direction)).toBeUndefined();
-      expect(dropMove({ rows: [groupA, groupB], focused: groupB }, groupA, direction)).toBeUndefined();
-    });
-
-    it('on a row being dragged, as the view rebuilt it since the drag began', () => {
-      expect(dropMove({ rows: [alpha, delta], focused: delta }, modRow('Alpha'), direction)).toBeUndefined();
-    });
-
-    it('on a row being dragged that is not of the focused row\'s kind', () => {
-      expect(dropMove({ rows: [groupB, delta], focused: delta }, groupB, direction)).toBeUndefined();
-    });
-
-    it('inside a separator being dragged', () => {
-      expect(dropMove({ rows: [groupB, delta], focused: delta }, gamma, direction)).toBeUndefined();
-    });
-
-    it('a separator on a mod', () => {
-      expect(dropMove({ rows: [groupA], focused: groupA }, delta, direction)).toBeUndefined();
-    });
+  it.each<[string, DraggedRows, ModlistNode]>([
+    ['mods on Overwrite', { rows: [delta], focused: delta }, new OverwriteNode([], 'MO2')],
+    ['mods on a mod being dragged', { rows: [alpha, delta], focused: delta }, alpha],
+    ['separators on a separator being dragged', { rows: [groupA, groupB], focused: groupB }, groupA],
+    ['mods on a mod being dragged, as the view rebuilt it since the drag began', { rows: [alpha, delta], focused: delta }, modRow('Alpha')],
+    ['mods on a separator being dragged that is not of the focused row\'s kind', { rows: [groupB, delta], focused: delta }, groupB],
+    ['mods inside a separator being dragged', { rows: [groupB, delta], focused: delta }, gamma],
+    ['a separator on a mod', { rows: [groupA], focused: groupA }, delta],
+  ])('a drop of %s is no move', (_case, dragged, target) => {
+    expect(dropMove(dragged, target, direction)).toBeUndefined();
   });
 });

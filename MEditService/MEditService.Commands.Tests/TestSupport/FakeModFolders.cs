@@ -12,8 +12,6 @@ internal sealed class FakeModFolders : IModFolderRepository
     private readonly HashSet<string> _folders = [];
     private readonly Dictionary<(string Folder, string Path), Func<Stream>> _streams = [];
 
-    public int Opens { get; private set; }
-
     public HashSet<(string Folder, string Path)> Unreadable { get; } = [];
 
     public HashSet<string> UnwritableManifests { get; } = [];
@@ -103,7 +101,13 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public string PathIn(string modFolder, string file) => file[(modFolder.Length + 1)..];
 
-    public Stream OpenInstallationFile(string path) => Open(string.Empty, path);
+    public int InstallationFilesOpened { get; private set; }
+
+    public Stream OpenInstallationFile(string path)
+    {
+        InstallationFilesOpened++;
+        return Open(string.Empty, path);
+    }
 
     /// <summary>A game file is a file of the folder named for the game's Data folder.</summary>
     public Stream OpenGameFile(string dataFolder, string path) => Open(dataFolder, path);
@@ -148,7 +152,6 @@ internal sealed class FakeModFolders : IModFolderRepository
     private Stream Open(string folder, string path)
     {
         if (Unreadable.Contains((folder, path))) throw new IOException($"{path} is held by another process");
-        Opens++;
         return _streams.TryGetValue((folder, path), out var open) ? open() : new MemoryStream(_files[(folder, path)]);
     }
 }

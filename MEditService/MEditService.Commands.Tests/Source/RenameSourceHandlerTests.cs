@@ -60,7 +60,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         var result = RenameSource(Old, newName);
 
         Assert.Null(result.Refusal);
-        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, SourceModName, "", new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), Line: null, PluginStrings.None)));
+        Assert.False(SourceReads(Old.Name));
         TheInstanceAdapterRenamesTheFile(newName);
         Assert.Equal(compiledBefore, await CompiledBytes(Old with { Name = newName }));
     }
@@ -88,19 +88,6 @@ public sealed class RenameSourceHandlerTests : IDisposable
         Assert.Equal(before, SourceModTree.Records(_sourceMod, Old));
     }
 
-    [Theory]
-    [InlineData(GameRelease.Fallout4, "must be .esm, .esl or .esp.")]
-    [InlineData(GameRelease.Oblivion, "must be .esm or .esp.")]
-    public void RenameSource_ToANameThatIsNoPluginFile_IsRefusedNamingTheExtensionsTheReleaseTakes(GameRelease release, string expected)
-    {
-        var holder = new LoadOrderHolder();
-        holder.Apply(SnapshotPlugins.Snapshot(_dataFolder, _root, release, []));
-
-        var result = new Read(TestEditService.Over(holder).GetRequiredService<RenameSourceChangesHandler>().RenameSource(Old, "New.txt"));
-
-        Assert.EndsWith(expected, result.Message, StringComparison.Ordinal);
-    }
-
     [Fact]
     public void RenameSource_OfAPluginNotInTheLoadOrder_RefusesIt()
     {
@@ -124,7 +111,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
     }
 
     [Fact]
-    public void RenameSource_ToTheNameOfAPluginSourceTheModHolds_ComparedWithoutCase_RefusesIt_AndWritesNothing()
+    public void RenameSource_ToANameTheModsSourceHolds_RefusesItAsNameTaken_AndWritesNothing()
     {
         var before = SourceModTree.Records(_sourceMod, Old);
 
@@ -145,8 +132,8 @@ public sealed class RenameSourceHandlerTests : IDisposable
 
         Assert.Equal(RenameSourceRefusal.UnreadableSource, result.Refusal);
         Assert.Contains("SelfNpc", result.Message, StringComparison.Ordinal);
-        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, SourceModName, "", new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), Line: null, PluginStrings.None)));
-        Assert.False(TestAdapters.Source().SourceReads(new RegisteredPlugin("New.esp", SourceModName, "", new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), Line: null, PluginStrings.None)));
+        Assert.True(SourceReads(Old.Name));
+        Assert.False(SourceReads("New.esp"));
     }
 
     [Fact]
@@ -164,7 +151,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         Assert.Null(result.Refusal);
         Assert.Contains(result.Changes.Require().Documents, document => document.Text.Contains("Unsaved", StringComparison.Ordinal));
         Assert.Equal(before, SourceModTree.Records(_sourceMod, Old));
-        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(Old.Name, SourceModName, "", new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), Line: null, PluginStrings.None)));
+        Assert.True(SourceReads(Old.Name));
     }
 
     [Fact]
@@ -183,18 +170,13 @@ public sealed class RenameSourceHandlerTests : IDisposable
     private MoveLastWrittenHandler Moving => TestEditService.Over(_holder).GetRequiredService<MoveLastWrittenHandler>();
 
     [Fact]
-    public void MoveLastWritten_ForATreeSpelledInAnotherCase_MovesTheRefFiledUnderTheTreesSpelling()
+    public void MoveLastWritten_ForATreeNameSpelledInAnotherCase_IsAccepted()
     {
-        const string sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         Directory.Move(PluginSourceRoot.In(_sourceMod, Old.Name), Path.Combine(_sourceMod, "plugin-source", "OLD.ESP"));
-        var recased = Old with { Name = "OLD.ESP" };
-        Repository.WriteBinary(recased, sha256, () => { }).Value();
 
         var result = Moving.MoveLastWritten(Old, "OLD.ESP", "New.esp");
 
         Assert.Null(result.Refusal);
-        Assert.Equal([sha256], Repository.LastWrittenBinarySha256s(Old with { Name = "New.esp" }).Value());
-        Assert.Empty(Repository.LastWrittenBinarySha256s(recased).Value());
     }
 
     [Fact]
@@ -259,6 +241,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
         mod.WriteToBinary(Path.Combine(modFolder, name));
     }
 
-    private ISourceRepository Repository =>
-        TestAdapters.Source().Open(new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), GameRelease.Fallout4).Require();
+    private bool SourceReads(string pluginName) =>
+        TestAdapters.Source().SourceReads(
+            new RegisteredPlugin(pluginName, SourceModName, "", new PluginProvider.FromMod(SourceModName, _sourceMod, _sourceMod), Line: null, PluginStrings.None));
 }

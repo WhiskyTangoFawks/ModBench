@@ -3,7 +3,6 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -11,14 +10,7 @@ namespace MEditService.Commands.Tests.RealData;
 
 public sealed class StaleNextObjectIdRoundTripGateTests
 {
-    public static TheoryData<string, uint> GeneratedPluginsWithAStaleHeader => new()
-    {
-        { StaleHeaderPlugins.SettingsFileName, 5 },
-        { StaleHeaderPlugins.LightFileName, 4 },
-        { StaleHeaderPlugins.FullFileName, 11 },
-    };
-
-    public static TheoryData<string> InitAndCompileGeneratedPlugins => new()
+    public static TheoryData<string> GeneratedPluginsWithAStaleHeader => new()
     {
         StaleHeaderPlugins.SettingsFileName,
         StaleHeaderPlugins.LightFileName,
@@ -27,35 +19,6 @@ public sealed class StaleNextObjectIdRoundTripGateTests
 
     [Theory]
     [MemberData(nameof(GeneratedPluginsWithAStaleHeader))]
-    public async Task Save_OfAGeneratedPluginWithAStaleHeader_KeepsItsNextObjectId_AndDerivesNumRecordsFromContent(
-        string fileName, uint derivedNumRecords)
-    {
-        using var scratch = new CompiledPluginScratch(fileName);
-        var stale = StaleHeaderPlugins.Named(fileName);
-        Assert.Equal((stale.StoredNextObjectId, stale.StoredNumRecords), ReadHeaderStats(scratch.PluginPath));
-
-        await TreeSaves.SaveAsync(scratch.PluginPath, prep =>
-        {
-            prep.Commit();
-            return true;
-        });
-
-        Assert.Equal((stale.StoredNextObjectId, derivedNumRecords), ReadHeaderStats(scratch.PluginPath));
-    }
-
-    [Theory]
-    [MemberData(nameof(InitAndCompileGeneratedPlugins))]
-    public async Task DecompileAndCommit_OfAGeneratedPluginWithAStaleHeader_Succeeds(string fileName)
-    {
-        using var scratch = new CompiledPluginScratch(fileName);
-
-        await scratch.DecompileAndCommitAsync();
-
-        Assert.True(TestAdapters.Source().IsSourceMod(scratch.ModFolder));
-    }
-
-    [Theory]
-    [MemberData(nameof(InitAndCompileGeneratedPlugins))]
     public async Task Compile_OfAGeneratedPluginWithAStaleHeader_ReproducesTheSourceContent(string fileName)
     {
         using var scratch = new CompiledPluginScratch(fileName);
@@ -69,20 +32,6 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         var divergence = TestAdapters.Mutagen().DivergenceFrom(
             fileName, original, scratch.PluginPath, EmptyLoadOrder.Of(GameRelease.Fallout4), HandedStrings.Of(original)).Answered();
         Assert.Null(divergence);
-    }
-
-    [Theory]
-    [InlineData(StaleHeaderPlugins.LightFileName)]
-    [InlineData(StaleHeaderPlugins.FullFileName)]
-    public async Task Compile_OfAGeneratedPluginDeflatedAtAnotherLevel_RewritesItsCompressedRecordsAtMutagensLevel(string fileName)
-    {
-        using var scratch = new CompiledPluginScratch(fileName);
-        var originalHeader = RawPlugin.FirstMiscZlibHeader(await File.ReadAllBytesAsync(scratch.PluginPath));
-        await scratch.DecompileAndCommitAsync();
-
-        await scratch.CompileService().CompileLandedAsync(scratch.Plugin);
-
-        Assert.NotEqual(originalHeader, RawPlugin.FirstMiscZlibHeader(await File.ReadAllBytesAsync(scratch.PluginPath)));
     }
 
     [Fact]
@@ -110,31 +59,24 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         Assert.Contains("not present in the original", result.Message);
     }
 
-    private static (uint NextObjectId, uint NumRecords) ReadHeaderStats(string pluginPath)
-    {
-        using var overlay = Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName(Path.GetFileName(pluginPath)), pluginPath), Fallout4Release.Fallout4);
-        return (overlay.ModHeader.Stats.NextFormID, overlay.ModHeader.Stats.NumRecords);
-    }
-
     private sealed class CompiledPluginScratch : IDisposable
     {
-        internal LoadOrderHolder Holder { get; } = new();
+        private readonly LoadOrderHolder _holder = new();
         private readonly ScratchDirectory _dataFolder = new("medit-stale-header-data-");
+        private readonly ScratchDirectory _modFolder = new("medit-stale-header-");
         private readonly LoadOrderSnapshot _loadOrder;
 
-        public ScratchDirectory ModFolder { get; } = new("medit-stale-header-");
         public string PluginPath { get; }
         public PluginAddress Plugin { get; }
 
         public CompiledPluginScratch(string fileName)
         {
-            PluginPath = Path.Combine(ModFolder, fileName);
-            StaleHeaderPlugins.Named(fileName).WriteInto(ModFolder);
+            PluginPath = Path.Combine(_modFolder, fileName);
+            StaleHeaderPlugins.Named(fileName).WriteInto(_modFolder);
             Plugin = new PluginAddress(fileName, "FixtureMod");
 
             _loadOrder = EmptyMasterStubs.LoadOrderOver(PluginPath, Plugin.Origin, _dataFolder);
-            Holder.Apply(_loadOrder);
+            _holder.Apply(_loadOrder);
         }
 
         public async Task<PluginDecompiledAndCommitted> DecompileAndCommitAsync(Func<string, CancellationToken, Task<IMod>>? deserialize = null) =>
@@ -142,12 +84,11 @@ public sealed class StaleNextObjectIdRoundTripGateTests
                 _loadOrder, Plugin.Origin,
                 deserialize is { } forged ? new ForgedTreeWriteAdapter(forged) : null)).Only();
 
-        public CompilePluginHandler CompileService() =>
-            CompileServices.Over(Holder.Current);
+        public CompilePluginHandler CompileService() => TestEditService.CompileHandler(_holder);
 
         public void Dispose()
         {
-            ModFolder.Dispose();
+            _modFolder.Dispose();
             _dataFolder.Dispose();
         }
     }

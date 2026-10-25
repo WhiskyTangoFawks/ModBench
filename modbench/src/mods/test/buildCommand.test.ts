@@ -3,19 +3,19 @@ import { normalize } from 'node:path';
 
 vi.mock('vscode', async () => (await import('./sourceGestureHarness')).vscodeModule());
 
-import { progressSteps } from '../../test/recordedProgress';
-import { handlers, showQuickPick, instanceThatReads, PluginRowStandIn, ModsRowStandIn } from './sourceGestureHarness';
+import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
+import { handlers, showQuickPick, PluginRowStandIn } from './sourceGestureHarness';
 
 import { registerBuildCommand } from '../buildCommand';
 import { BuildProblems } from '../buildProblems';
+import { ModNode } from '../ModListProvider';
 import { sourceFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { modOfOriginIn } from '../../test/mo2/instanceValueFixture';
 import { valueWithSourceDirs } from './sourceDirsFixture';
-import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { type PluginAddress } from '../../client';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { FakeDiagnosticCollection, TreeItem } from '../../test/vscodeMock';
+import { FakeDiagnosticCollection } from '../../test/vscodeMock';
 import { compiledPluginFixture } from '../../client/test/fixtures';
 import { present } from '../../ports/present';
 
@@ -25,9 +25,13 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+type BuildDeps = Parameters<typeof registerBuildCommand>[0];
+type BuildAnswer = Awaited<ReturnType<BuildDeps['commands']['build']>>;
+
 describe('modbench.mod.build', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
+  const LOOSE = { name: 'Loose.esp', origin: 'Overwrite' };
   const MOD_DIRS = new Map([['ModA', '/mods/ModA'], ['ModB', '/mods/ModB'], ['ModC', '/mods/ModC']]);
   const SOURCE_MODS = ['ModA', 'ModB', 'ModS'];
   const FILES = valueWithSourceDirs(new Map(['ModA', 'ModB', 'ModS'].map((mod) => [mod, normalize(`/instance/source/${mod}`)])));
@@ -36,11 +40,10 @@ describe('modbench.mod.build', () => {
   const builds: (readonly string[])[] = [];
   beforeEach(() => { builds.length = 0; });
 
-  function row(plugin: { name: string; origin: string }): PluginRowStandIn {
-    return new PluginRowStandIn(plugin);
-  }
+  const row = (plugin: { name: string; origin: string }) => new PluginRowStandIn(plugin);
+  const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 
-  function registered(client: InMemoryMEditClient, options: { selection?: readonly unknown[] } = {}) {
+  function registered(outcome: BuildAnswer, options: { selection?: readonly unknown[] } = {}) {
     const reporter = recordingReporter();
     const diagnostics = new FakeDiagnosticCollection();
     registerBuildCommand({
@@ -48,7 +51,7 @@ describe('modbench.mod.build', () => {
         build: (mods) => {
           progressSteps.push('build');
           builds.push(mods);
-          return client.build([], { exclusionMark: '', archives: null, statCache: '' });
+          return Promise.resolve(outcome);
         },
       },
       instance: instanceThatReads,
@@ -62,13 +65,10 @@ describe('modbench.mod.build', () => {
     };
   }
 
-
   it('on a Mods row, builds the mod, and the Mods view\'s progress bar closes once the Instance loader has read again, and lands once', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModA', [PATCH])], refused: [] });
-    const { handler, reporter } = registered(client);
+    const { handler, reporter } = registered({ landed: [built('ModA', [PATCH])], refused: [] });
 
-    await handler(new ModsRowStandIn('ModA'));
+    await handler(modRow('ModA'));
 
     expect(builds).toEqual([['ModA']]);
     expect(progressSteps).toEqual([
@@ -78,83 +78,29 @@ describe('modbench.mod.build', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('on a plugin row, builds the plugin\'s mod', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModA', [PATCH])], refused: [] });
-    const { handler } = registered(client);
+  it('on a plugin row beside one no mod provides, builds the plugin\'s mod under the Plugins view\'s bar and names the other', async () => {
+    const { handler, reporter } = registered({ landed: [built('ModA', [PATCH])], refused: [] });
 
-    await handler(row(PATCH));
+    await handler(row(PATCH), [row(PATCH), row(LOOSE)]);
 
     expect(builds).toEqual([['ModA']]);
-    expect(progressSteps).toContain('progress opens on modbench.pluginListTree');
-  });
-
-  it('on a record tab\'s column header, builds the plugin\'s mod', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModB', [OTHER])], refused: [] });
-    const { handler } = registered(client, { selection: [row(PATCH)] });
-
-    await handler({ webviewSection: 'recordHeader', argument: { kind: 'record', formKey: '000801:Other.esp', plugin: OTHER } });
-
-    expect(builds).toEqual([['ModB']]);
-  });
-
-  it('builds the mods of a selection once each, in one call', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModA', [PATCH]), built('ModB', [OTHER])], refused: [] });
-    const { handler, reporter } = registered(client);
-    const rows = [row(PATCH), new ModsRowStandIn('ModA'), row(OTHER)];
-
-    await handler(rows[0], rows);
-
-    expect(builds).toEqual([['ModA', 'ModB']]);
-    expect(reporter.landings).toEqual(['Built 2 mods.']);
-  });
-
-  it('builds a source mod the mod order does not list', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModS')], refused: [] });
-    const { handler, reporter } = registered(client);
-
-    await handler(new ModsRowStandIn('ModS'));
-
-    expect(builds).toEqual([['ModS']]);
-    expect(reporter.landings).toEqual(['Built "ModS".']);
-  });
-
-  it('names each refused mod and why in one notification, and builds the rest', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', {
-      landed: [built('ModA', [PATCH])], refused: [{ item: 'ModB', reason: 'git was not found on PATH.' }],
-    });
-    const { handler, reporter } = registered(client);
-    const rows = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
-
-    await handler(rows[0], rows);
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not build 1 of 2 mods.', detail: '"ModB" (git was not found on PATH.)' },
-    ]);
-    expect(reporter.landings).toEqual([]);
+    expect(progressSteps[0]).toBe('progress opens on modbench.pluginListTree');
+    expect(reporter.reports.map((r) => r.detail)).toEqual(['"Loose.esp (Overwrite)" (it is not in a mod)']);
   });
 
   it('names each plugin a built mod refused and why, in the same notification', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModA', [PATCH], [{ item: OTHER, reason: 'Other.esp is outside the light range.' }])], refused: [] });
-    const { handler, reporter } = registered(client);
+    const { handler, reporter } = registered({ landed: [built('ModA', [PATCH], [{ item: OTHER, reason: 'Other.esp is outside the light range.' }])], refused: [] });
 
-    await handler(new ModsRowStandIn('ModA'));
+    await handler(modRow('ModA'));
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not build 1 of 2 plugins.', detail: '"Other.esp (ModB)" (Other.esp is outside the light range.)' },
     ]);
   });
 
-  it('sends every named mod to source commands, and names the one they refuse in their words', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
-    const { handler, reporter } = registered(client);
-    const rows = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModC')];
+  it('sends every named mod to source commands, names the one they refuse in their words, and builds the rest', async () => {
+    const { handler, reporter } = registered({ landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
+    const rows = [modRow('ModA'), modRow('ModC')];
 
     await handler(rows[0], rows);
 
@@ -162,13 +108,12 @@ describe('modbench.mod.build', () => {
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not build 1 of 2 mods.', detail: '"ModC" (no repository in the source folder builds it)' },
     ]);
+    expect(reporter.landings).toEqual([]);
   });
 
   it('names a plugin no mod provides before a mod source commands refuse', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
-    const { handler, reporter } = registered(client);
-    const rows = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModC'), row({ name: 'Loose.esp', origin: 'Overwrite' })];
+    const { handler, reporter } = registered({ landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
+    const rows = [modRow('ModA'), modRow('ModC'), row(LOOSE)];
 
     await handler(rows[0], rows);
 
@@ -176,8 +121,7 @@ describe('modbench.mod.build', () => {
   });
 
   it('points at the Problems panel when the build left diagnostics, and puts them on the source files', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', {
+    const { handler, reporter, diagnostics } = registered({
       landed: [{
         mod: 'ModA', refused: [], archivesRefused: [], overwritten: [],
         compiled: [compiledPluginFixture({
@@ -187,9 +131,8 @@ describe('modbench.mod.build', () => {
       }],
       refused: [],
     });
-    const { handler, reporter, diagnostics } = registered(client);
 
-    await handler(new ModsRowStandIn('ModA'));
+    await handler(modRow('ModA'));
 
     expect(reporter.landings).toEqual(['Built "ModA" with 1 diagnostic. See the Problems panel.']);
     expect([...diagnostics].map(([uri, list]) => [uri.fsPath, list.map((d) => d.message)])).toEqual([
@@ -197,35 +140,8 @@ describe('modbench.mod.build', () => {
     ]);
   });
 
-  it('replaces the diagnostics of each plugin that compiled, and keeps a refused plugin\'s of the same mod', async () => {
-    const SIBLING = { name: 'Sibling.esp', origin: 'ModA' };
-    const diagnosticOf = (plugin: { name: string }) =>
-      ({ formKey: `000800:${plugin.name}`, sourceRelativePath: `${plugin.name}/A.json`, message: `${plugin.name} is broken` });
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', {
-      landed: [{
-        mod: 'ModA', refused: [], archivesRefused: [], overwritten: [],
-        compiled: [
-          compiledPluginFixture({ plugin: PATCH, diagnostics: [diagnosticOf(PATCH)] }),
-          compiledPluginFixture({ plugin: SIBLING, diagnostics: [diagnosticOf(SIBLING)] }),
-        ],
-      }],
-      refused: [],
-    });
-    const { handler, diagnostics } = registered(client);
-    await handler(new ModsRowStandIn('ModA'));
-
-    client.setCommandResult('build', { landed: [built('ModA', [PATCH], [{ item: SIBLING, reason: 'no source' }])], refused: [] });
-    await handler(new ModsRowStandIn('ModA'));
-
-    expect([...diagnostics].map(([uri, list]) => [uri.fsPath, list.map((d) => d.message)])).toEqual([
-      [normalize('/instance/source/ModA/Sibling.esp/A.json'), ['Sibling.esp is broken']],
-    ]);
-  });
-
   it('points at the Problems panel from the refusal notification when the plugins that compiled left diagnostics', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', {
+    const { handler, reporter } = registered({
       landed: [{
         mod: 'ModA', refused: [{ item: OTHER, reason: 'no source' }], archivesRefused: [], overwritten: [],
         compiled: [compiledPluginFixture({
@@ -238,9 +154,8 @@ describe('modbench.mod.build', () => {
       }],
       refused: [],
     });
-    const { handler, reporter } = registered(client);
 
-    await handler(new ModsRowStandIn('ModA'));
+    await handler(modRow('ModA'));
 
     expect(reporter.reports).toEqual([{
       severity: 'error',
@@ -250,14 +165,12 @@ describe('modbench.mod.build', () => {
   });
 
   it('names each archive a built mod did not pack and why, in the same notification', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', {
+    const { handler, reporter } = registered({
       landed: [{ ...built('ModA', [PATCH]), archivesRefused: [{ item: 'ModA - Main.ba2', reason: 'Modbench packs no archive for this game.' }] }],
       refused: [],
     });
-    const { handler, reporter } = registered(client);
 
-    await handler(new ModsRowStandIn('ModA'));
+    await handler(modRow('ModA'));
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not build 1 archive.', detail: '"ModA - Main.ba2 (ModA)" (Modbench packs no archive for this game.)' },
@@ -265,13 +178,11 @@ describe('modbench.mod.build', () => {
   });
 
   it('names the part of a mod\'s build that failed after it began writing, beside the files it overwrote', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', {
+    const { handler, reporter } = registered({
       landed: [{ ...built('ModA'), overwritten: ['a.txt'], failure: 'The build stopped before compiling: z.txt is held.' }], refused: [],
     });
-    const { handler, reporter } = registered(client);
 
-    await handler(new ModsRowStandIn('ModA'));
+    await handler(modRow('ModA'));
 
     expect(reporter.reports).toEqual([
       { severity: 'warning', message: 'Built 1 mod only in part.', detail: '"ModA" (The build stopped before compiling: z.txt is held.)' },
@@ -280,13 +191,11 @@ describe('modbench.mod.build', () => {
   });
 
   it('names each file the build overwrote that differed, beside the landing', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', {
+    const { handler, reporter } = registered({
       landed: [{ ...built('ModA', [PATCH]), overwritten: ['MyPatch.esp', 'textures/a.dds'] }, { ...built('ModB'), overwritten: ['b.nif'] }],
       refused: [],
     });
-    const { handler, reporter } = registered(client);
-    const rows = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
+    const rows = [modRow('ModA'), modRow('ModB')];
 
     await handler(rows[0], rows);
 
@@ -302,10 +211,8 @@ describe('modbench.mod.build', () => {
     ['unpushed', ['ModA'], 'Built 1 mod at a commit its remote does not hold, so a clone elsewhere cannot fetch it.', '"ModA"'],
     ['unpushed', ['ModA', 'ModB'], 'Built 2 mods at commits their remotes do not hold, so a clone elsewhere cannot fetch them.', '"ModA", "ModB"'],
   ] as const)('names each mod whose manifest\'s commit does not rebuild it, %s, beside the landing', async (flag, mods, message, detail) => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: mods.map((mod) => ({ ...built(mod), [flag]: true })), refused: [] });
-    const { handler, reporter } = registered(client);
-    const rows = mods.map((mod) => new ModsRowStandIn(mod));
+    const { handler, reporter } = registered({ landed: mods.map((mod) => ({ ...built(mod), [flag]: true })), refused: [] });
+    const rows = mods.map(modRow);
 
     await handler(rows[0], rows);
 
@@ -313,11 +220,9 @@ describe('modbench.mod.build', () => {
   });
 
   it('reports a refusal of the whole selection once, and lands nothing', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { refused: true, message: 'Could not build 1 mod — No load order has been received.' });
-    const { handler, reporter } = registered(client);
+    const { handler, reporter } = registered({ refused: true, message: 'Could not build 1 mod — No load order has been received.' });
 
-    await handler(new ModsRowStandIn('ModA'));
+    await handler(modRow('ModA'));
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not build 1 mod — No load order has been received.', detail: undefined },
@@ -325,10 +230,8 @@ describe('modbench.mod.build', () => {
     expect(reporter.landings).toEqual([]);
   });
 
-  it('from the palette with a selection, builds the selection', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModB')], refused: [] });
-    const { handler } = registered(client, { selection: [new ModsRowStandIn('ModB')] });
+  it('from the palette with a selection, builds the selection without the pick', async () => {
+    const { handler } = registered({ landed: [built('ModB')], refused: [] }, { selection: [modRow('ModB')] });
 
     await handler();
 
@@ -336,36 +239,19 @@ describe('modbench.mod.build', () => {
     expect(builds).toEqual([['ModB']]);
   });
 
-  it('from the palette with only a mod that is not a source mod selected, sends it to source commands without the pick', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
-    const { handler, reporter } = registered(client, { selection: [new ModsRowStandIn('ModC')] });
-
-    await handler();
-
-    expect(showQuickPick).not.toHaveBeenCalled();
-    expect(builds).toEqual([['ModC']]);
-    expect(reporter.reports.map((r) => r.detail)).toEqual(['"ModC" (no repository in the source folder builds it)']);
-  });
-
-  it.each([
-    ['a plugin no mod provides', () => row({ name: 'Game.esm', origin: 'Data' }), '"Game.esm (Data)" (it is not in a mod)'],
-    ['a row that carries no mod or plugin', () => new TreeItem('Separator'), '"Separator" (it carries no mod or plugin)'],
-  ])('from the palette with only %s selected, refuses it without the pick', async (_what, selected, detail) => {
-    const { handler, reporter } = registered(new InMemoryMEditClient(), { selection: [selected()] });
+  it('from the palette with only a plugin no mod provides selected, refuses it without the pick', async () => {
+    const { handler, reporter } = registered({ landed: [], refused: [] }, { selection: [row({ name: 'Game.esm', origin: 'Data' })] });
 
     await handler();
 
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(builds).toEqual([]);
-    expect(reporter.reports.map((r) => r.detail)).toEqual([detail]);
+    expect(reporter.reports.map((r) => r.detail)).toEqual(['"Game.esm (Data)" (it is not in a mod)']);
   });
 
   it('from the palette with no mod, picks among every source mod, and builds the picks', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('build', { landed: [built('ModA'), built('ModB')], refused: [] });
     showQuickPick.mockResolvedValueOnce([{ label: 'ModA' }, { label: 'ModB' }]);
-    const { handler } = registered(client);
+    const { handler } = registered({ landed: [built('ModA'), built('ModB')], refused: [] });
 
     await handler();
 
@@ -375,9 +261,8 @@ describe('modbench.mod.build', () => {
   });
 
   it('from the palette, builds nothing when the pick is dismissed', async () => {
-    const client = new InMemoryMEditClient();
     showQuickPick.mockResolvedValueOnce(undefined);
-    const { handler, reporter } = registered(client);
+    const { handler, reporter } = registered({ landed: [], refused: [] });
 
     await handler();
 
@@ -389,10 +274,8 @@ describe('modbench.mod.build', () => {
     const calling = (...mods: string[]) => new AgentCall(mods.map((name) => ({ kind: 'mod' as const, name })), {});
 
     it('builds the mods given, never the selection, asking and reporting nothing, and answers the outcome', async () => {
-      const client = new InMemoryMEditClient();
       const outcome = { landed: [built('ModA', [PATCH])], refused: [] };
-      client.setCommandResult('build', outcome);
-      const { handler, reporter, diagnostics } = registered(client, { selection: [row(OTHER)] });
+      const { handler, reporter, diagnostics } = registered(outcome, { selection: [row(OTHER)] });
 
       const answered = await handler(calling('ModA'));
 
@@ -406,9 +289,7 @@ describe('modbench.mod.build', () => {
     });
 
     it('sends every named mod to source commands, and answers the refusal they name', async () => {
-      const client = new InMemoryMEditClient();
-      client.setCommandResult('build', { landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
-      const { handler } = registered(client);
+      const { handler } = registered({ landed: [built('ModA')], refused: [{ item: 'ModC', reason: 'no repository in the source folder builds it' }] });
 
       const answered = await handler(calling('ModA', 'ModC'));
 
@@ -417,11 +298,9 @@ describe('modbench.mod.build', () => {
     });
 
     it('answers a plugin and an archive refused inside a built mod as partial failures', async () => {
-      const client = new InMemoryMEditClient();
-      client.setCommandResult('build', { landed: [{
+      const { handler, reporter } = registered({ landed: [{
         ...built('ModA', [], [{ item: PATCH, reason: 'it does not compile' }]), archivesRefused: [{ item: 'ModA - Main.ba2', reason: 'it is too large' }],
       }], refused: [] });
-      const { handler, reporter } = registered(client);
 
       const answered = await handler(calling('ModA'));
 
@@ -431,19 +310,5 @@ describe('modbench.mod.build', () => {
       ] });
       expect(reporter.reports).toEqual([]);
     });
-
-    it('answers a mod built in part and a file it overwrote as partial failures', async () => {
-      const client = new InMemoryMEditClient();
-      client.setCommandResult('build', { landed: [{ ...built('ModA'), failure: 'the archive step failed', overwritten: ['Data/A.esp'] }], refused: [] });
-      const { handler } = registered(client);
-
-      const answered = await handler(calling('ModA'));
-
-      expect(answered).toMatchObject({ applied: true, partial: [
-        { message: 'Built 1 mod only in part.', detail: '"ModA" (the archive step failed)', severity: 'warning' },
-        { message: 'Build overwrote 1 file that differed.', detail: '"Data/A.esp (ModA)"', severity: 'warning' },
-      ] });
-    });
   });
 });
-

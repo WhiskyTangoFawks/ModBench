@@ -50,30 +50,19 @@ public sealed class BuildModHandlerTests : IDisposable
         Assert.Equal(["textures/a.dds"], built.Overwritten);
     }
 
-    [Fact]
-    public async Task AModTheRequestNamesNoSubmodule_NamesItsRepositoryAsAPackageWithNoHost_AndHoldsEachFileItMade()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ABuiltMod_NamesItsRepositoryByItsSourceFoldersName_AsThePackage_SubmoduleOrNotAsTheRequestSays_AndHoldsEachFileItMade(bool isSubmodule)
     {
         WriteSource("{\"output\": \"Mod\"}", ("meshes/c.nif", "added c"));
         WriteInFolder(MetaIni, "[General]");
         WriteInFolder("notes.txt", "mine");
 
-        await Landed();
+        await Landed(_noArchives, isSubmodule);
 
         var manifest = ManifestWritten().Require();
-        Assert.Equal(new ManifestPackage.SourceRepository(SourceFolderName, IsSubmodule: false), manifest.Package);
-        Assert.Equal([new ManifestFile("meshes/c.nif", new PackageEntry.Held())], manifest.Files);
-    }
-
-    [Fact]
-    public async Task AModTheRequestNamesASubmodule_NamesItsSubmoduleByItsSourceFoldersNameAsThePackage_AndHoldsEachFileItMade()
-    {
-        WriteSource("{\"output\": \"Mod\"}", ("meshes/c.nif", "added c"));
-        Shared();
-
-        await Landed(_noArchives, isSubmodule: true);
-
-        var manifest = ManifestWritten().Require();
-        Assert.Equal(new ManifestPackage.SourceRepository(SourceFolderName, IsSubmodule: true), manifest.Package);
+        Assert.Equal(new ManifestPackage.SourceRepository(SourceFolderName, isSubmodule), manifest.Package);
         Assert.Equal([new ManifestFile("meshes/c.nif", new PackageEntry.Held())], manifest.Files);
     }
 
@@ -249,7 +238,7 @@ public sealed class BuildModHandlerTests : IDisposable
         File.WriteAllText(stringsFiles[0], "changed outside Modbench");
 
         var built = Assert.Single((await TestEditService.BuildModHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null)], _noArchives)).Value().Applied);
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, IsSubmodule: false)], _noArchives)).Value().Applied);
 
         Assert.Equal(["Fixture.esp", $"Strings/{Path.GetFileName(stringsFiles[0])}"], built.Overwritten);
     }
@@ -281,7 +270,7 @@ public sealed class BuildModHandlerTests : IDisposable
         _holder.Apply(SnapshotPlugins.Snapshot(Path.Combine(_root, "Data"), _root, GameRelease.Fallout4, []));
 
         var built = Assert.Single((await TestEditService.BuildModHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null)], _noArchives)).Value().Applied);
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], null, IsSubmodule: false)], _noArchives)).Value().Applied);
 
         Assert.Equal(["Fixture.esp"], built.Compiled.Select(plugin => plugin.Name));
         Assert.True(File.Exists(Path.Combine(ModFolder, "Fixture.esp")));
@@ -295,7 +284,7 @@ public sealed class BuildModHandlerTests : IDisposable
 
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4, []));
         var built = (await TestEditService.BuildModHandler(_holder)
-            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], "1.2.3")], _noArchives)).Value();
+            .BuildAsync([new ModToBuild(ModName, SourceFolder, ModFolder, [MetaIni], "1.2.3", IsSubmodule: false)], _noArchives)).Value();
 
         Assert.Empty(built.Refused);
 

@@ -27,7 +27,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     [Fact]
-    public async Task DecompileAndCommit_OfAMismatchedFnamPlugin_NamesOnlyThePluginWhenMutagenReportsNoRecordIdentity()
+    public async Task DecompileAndCommit_OfAMismatchedFnamPlugin_NamesMutagensMishandlingAndNoRecordOrGesture()
     {
         using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
 
@@ -35,24 +35,11 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
         Assert.False(result.Applied);
         Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
-
         Assert.Contains("All FNAM strings should be the same", result.Message);
-        Assert.DoesNotContain("EditorID", result.Message);
-        Assert.DoesNotContain("FormKey", result.Message);
-    }
-
-    [Fact]
-    public async Task DecompileAndCommit_OfAMismatchedFnamPlugin_SaysMutagenMishandlesItAndNamesNoGesture()
-    {
-        using var scratch = new RealFixtureScratch(MismatchedFnamPlugin.Plugin);
-
-        var result = await scratch.DecompileAndCommitAsync();
-
-        Assert.False(result.Applied);
-        Assert.Equal(DecompileAndCommitRefusal.RoundTripFailed, result.Refusal);
-
         Assert.Contains("blocked upstream: Mutagen #687", result.Message);
         Assert.Contains("Mutagen mishandles", result.Message);
+        Assert.DoesNotContain("EditorID", result.Message);
+        Assert.DoesNotContain("FormKey", result.Message);
         Assert.DoesNotContain("Decompile and repair", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("malformed", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain($"— {PluginDiagnosis.UnknownClass}:", result.Message);

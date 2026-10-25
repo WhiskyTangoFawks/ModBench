@@ -3,6 +3,7 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Noggog;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Source;
 
@@ -37,9 +38,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Equal("RenamedCell", _fixture.Document(_fixture.Cell.ToString()).Require().EditorId);
         Assert.Contains("\"EditorID\": \"RenamedCell\"", CellText(), StringComparison.Ordinal);
     }
-
-    private static System.Text.Json.JsonElement Json(string raw) =>
-        System.Text.Json.JsonDocument.Parse(raw).RootElement;
 
     [Fact]
     public void EditingTheFormIdOfAPlainRecord_InAPluginHoldingACell_Succeeds()

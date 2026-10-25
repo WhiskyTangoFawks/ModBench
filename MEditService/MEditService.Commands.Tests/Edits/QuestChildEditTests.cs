@@ -24,8 +24,6 @@ public sealed class QuestChildEditTests : IDisposable
 
     private TestEditor EditService() => _fixture.EditHandler;
 
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
-
     private string QuestText => _fixture.Document(_fixture.Quest.ToString()).Require().Body;
 
     private async Task<IQuestGetter> CompiledQuest()
@@ -45,20 +43,20 @@ public sealed class QuestChildEditTests : IDisposable
             .Select(child => child.GetProperty("FormKey").GetString().Require())];
     }
 
-    public static TheoryData<Func<ContainerModFixture, FormKey>, string, Func<IQuestGetter, IEnumerable<string>>, string[]> QuestChildKinds => new()
+    public static TheoryData<string, Func<ContainerModFixture, FormKey>, string, Func<IQuestGetter, IEnumerable<string>>, string[]> QuestChildKinds => new()
     {
         {
-            f => f.DialogTopic2, ContainerModFixture.DialogTopic2EditorId, q => q.DialogTopics.Select(t => t.EditorID.Require()),
+            "topic", f => f.DialogTopic2, ContainerModFixture.DialogTopic2EditorId, q => q.DialogTopics.Select(t => t.EditorID.Require()),
             [ContainerModFixture.DialogTopicEditorId, "Renamed", ContainerModFixture.DialogTopic3EditorId]
         },
-        { f => f.DialogBranch, ContainerModFixture.DialogBranchEditorId, q => q.DialogBranches.Select(b => b.EditorID.Require()), ["Renamed"] },
-        { f => f.Scene, ContainerModFixture.SceneEditorId, q => q.Scenes.Select(s => s.EditorID.Require()), ["Renamed"] },
+        { "branch", f => f.DialogBranch, ContainerModFixture.DialogBranchEditorId, q => q.DialogBranches.Select(b => b.EditorID.Require()), ["Renamed"] },
+        { "scene", f => f.Scene, ContainerModFixture.SceneEditorId, q => q.Scenes.Select(s => s.EditorID.Require()), ["Renamed"] },
     };
 
     [Theory]
     [MemberData(nameof(QuestChildKinds))]
     public async Task SettingAQuestChildsField_ChangesTheQuestDocumentAtThatPathAndNowhereElse_AndCompilesInOrder(
-        Func<ContainerModFixture, FormKey> child, string editorId, Func<IQuestGetter, IEnumerable<string>> siblings, string[] compiled)
+        string _, Func<ContainerModFixture, FormKey> child, string editorId, Func<IQuestGetter, IEnumerable<string>> siblings, string[] compiled)
     {
         var before = QuestText;
         Assert.Empty(_fixture.ChangedFormKeys());
@@ -126,7 +124,7 @@ public sealed class QuestChildEditTests : IDisposable
             kept => Assert.Contains($"\"{kept}\"", after, StringComparison.Ordinal));
         AssertOnlyTheQuestDocumentChanged();
 
-        Assert.All(new[] { _fixture.DialogTopic, _fixture.Response, _fixture.Response2 }, gone => Assert.Null(_fixture.Document(gone.ToString())));
+        Assert.DoesNotContain(new[] { _fixture.DialogTopic, _fixture.Response, _fixture.Response2 }, gone => _fixture.Document(gone.ToString()) is not null);
         Assert.Equal([_fixture.DialogTopic2.ToString(), _fixture.DialogTopic3.ToString()], QuestSlot(nameof(Quest.DialogTopics)));
 
         var compiled = await CompiledQuest();

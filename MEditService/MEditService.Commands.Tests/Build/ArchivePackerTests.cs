@@ -62,7 +62,7 @@ public sealed class ArchivePackerTests : IDisposable
         holder.Apply(SnapshotPlugins.Snapshot(_scratch, null, GameRelease.Fallout4, []));
 
         var built = (await TestEditService.BuildModHandler(holder, source: source, modFolders: _folders)
-            .BuildAsync([new ModToBuild("Mod", SourceFolder, Mod, [], null)], new InstanceToBuild(".mohidden", new ArchiveVariants(variant, variant), "stat-cache"))).Value();
+            .BuildAsync([new ModToBuild("Mod", SourceFolder, Mod, [], null, IsSubmodule: false)], new InstanceToBuild(".mohidden", new ArchiveVariants(variant, variant), "stat-cache"))).Value();
 
         return (_folders.Written.GetValueOrDefault((Mod, Archive)), Assert.Single(built.Applied).ArchivesRefused.SingleOrDefault());
     }

@@ -19,7 +19,7 @@ public sealed class RestoreFromManifestHandler
         (_repository, _notifications, _source, _build) = (repository, notifications, source, build);
 
     public async Task<RestoreFromManifestResult> RestoreAsync(
-        IReadOnlyList<ModToRestore> mods, InstanceToRestore instance, string? gesture = null, CancellationToken cancel = default)
+        IReadOnlyList<ModToRestore> mods, InstanceToRestore instance, string? gesture, CancellationToken cancel)
     {
         var restored = await ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new RestoreFromManifestProgressNotification(progress)),

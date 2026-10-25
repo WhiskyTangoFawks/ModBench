@@ -42,7 +42,7 @@ internal static class SourceModTree
             .Keys.Order(StringComparer.Ordinal)];
 
     /// <summary>The files holding a record the tree changed since the last commit: an embedded child
-    /// answers with its owner's file, and .</summary>
+    /// answers with its owner's file.</summary>
     internal static IReadOnlyList<string> ChangedDocumentFiles(string modFolder, PluginAddress plugin)
     {
         var repository = Repository(modFolder, plugin);
