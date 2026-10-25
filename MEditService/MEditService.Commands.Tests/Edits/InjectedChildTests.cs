@@ -8,23 +8,11 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class InjectedChildTests : TestInstance
 {
-    public static TheoryData<Func<InjectedChildTests, FormKey>, Func<InjectedChildTests, FormKey>> Injections => new()
-    {
-        { t => t._quest, t => t._injectedTopic },
-        { t => t._quest, t => t._injectedBranch },
-        { t => t._quest, t => t._injectedScene },
-        { t => t._baseTopic, t => t._injectedResponse },
-    };
+    public static TheoryData<string> Injections => ["topic", "branch", "scene", "response"];
 
     private readonly PluginAddress _base;
     private readonly PluginAddress _injector;
-
-    private readonly FormKey _quest;
-    private readonly FormKey _baseTopic;
-    private readonly FormKey _injectedTopic;
-    private readonly FormKey _injectedBranch;
-    private readonly FormKey _injectedScene;
-    private readonly FormKey _injectedResponse;
+    private readonly Dictionary<string, (FormKey Container, FormKey Child)> _injections;
 
     public InjectedChildTests()
     {
@@ -36,13 +24,12 @@ public sealed class InjectedChildTests : TestInstance
         baseQuest.DialogBranches.Add(new DialogBranch(baseMod) { EditorID = "BaseBranch" });
         baseQuest.Scenes.Add(new Scene(baseMod) { EditorID = "BaseScene" });
         baseMod.Quests.Add(baseQuest);
-        (_quest, _baseTopic) = (baseQuest.FormKey, baseTopic.FormKey);
         _base = Add(baseMod, "InjectionBaseMod");
 
         var injectorMod = new Fallout4Mod(ModKey.FromFileName("InjectionInjector.esp"), Fallout4Release.Fallout4);
         injectorMod.ModHeader.MasterReferences.Add(new MasterReference { Master = baseMod.ModKey });
-        var questOverride = new Quest(_quest, Fallout4Release.Fallout4) { EditorID = "BaseQuest" };
-        var topicOverride = new DialogTopic(_baseTopic, Fallout4Release.Fallout4) { EditorID = "BaseTopic" };
+        var questOverride = new Quest(baseQuest.FormKey, Fallout4Release.Fallout4) { EditorID = "BaseQuest" };
+        var topicOverride = new DialogTopic(baseTopic.FormKey, Fallout4Release.Fallout4) { EditorID = "BaseTopic" };
         var injectedResponse = new DialogResponses(injectorMod) { EditorID = "InjectedResponse" };
         var injectedTopic = new DialogTopic(injectorMod) { EditorID = "InjectedTopic" };
         var injectedBranch = new DialogBranch(injectorMod) { EditorID = "InjectedBranch" };
@@ -53,30 +40,35 @@ public sealed class InjectedChildTests : TestInstance
         questOverride.DialogBranches.Add(injectedBranch);
         questOverride.Scenes.Add(injectedScene);
         injectorMod.Quests.Add(questOverride);
-        (_injectedTopic, _injectedBranch, _injectedScene, _injectedResponse) =
-            (injectedTopic.FormKey, injectedBranch.FormKey, injectedScene.FormKey, injectedResponse.FormKey);
+        _injections = new()
+        {
+            ["topic"] = (baseQuest.FormKey, injectedTopic.FormKey),
+            ["branch"] = (baseQuest.FormKey, injectedBranch.FormKey),
+            ["scene"] = (baseQuest.FormKey, injectedScene.FormKey),
+            ["response"] = (baseTopic.FormKey, injectedResponse.FormKey),
+        };
         _injector = Add(injectorMod, "InjectionInjectorMod");
     }
 
     [Theory]
     [MemberData(nameof(Injections))]
-    public async Task AfterInitAndCompileOfBothPlugins_TheInjectingPluginsBinaryHoldsTheChildUnderItsContainer(
-        Func<InjectedChildTests, FormKey> container, Func<InjectedChildTests, FormKey> child)
+    public async Task AfterInitAndCompileOfBothPlugins_TheInjectingPluginsBinaryHoldsTheChildUnderItsContainer(string injected)
     {
+        var (container, child) = _injections[injected];
         using var compiled = await this.CompiledAsync(_injector);
 
-        Assert.Contains(child(this), ChildrenOf(compiled, container(this)));
+        Assert.Contains(child, ChildrenOf(compiled, container));
     }
 
     [Theory]
     [MemberData(nameof(Injections))]
-    public async Task AfterInitAndCompileOfBothPlugins_TheOwningPluginsBinaryKeepsItsOwnChildrenAndNotTheInjected(
-        Func<InjectedChildTests, FormKey> container, Func<InjectedChildTests, FormKey> child)
+    public async Task AfterInitAndCompileOfBothPlugins_TheOwningPluginsBinaryKeepsItsOwnChildrenAndNotTheInjected(string injected)
     {
+        var (container, child) = _injections[injected];
         using var compiled = await this.CompiledAsync(_base);
 
-        var own = ChildrenOf(compiled, container(this));
-        Assert.DoesNotContain(child(this), own);
+        var own = ChildrenOf(compiled, container);
+        Assert.DoesNotContain(child, own);
         Assert.NotEmpty(own);
     }
 

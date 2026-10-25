@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -24,8 +23,6 @@ public sealed class EditRecordChangesTests : IDisposable
     private readonly SourceEditFixture _mod = SourceEditFixture.CompiledPlugin();
 
     public void Dispose() => _mod.Dispose();
-
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     private static RecordEditEnvelope Set(string member, string value) => SetAt(Json(value), Member(member));
 

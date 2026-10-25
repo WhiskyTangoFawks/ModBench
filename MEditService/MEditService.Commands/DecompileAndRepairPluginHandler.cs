@@ -35,7 +35,7 @@ public sealed class DecompileAndRepairPluginHandler
     /// <summary>A repair that drops data, or a source with working-tree changes, is refused once, listing every loss,
     /// unless <paramref name="force"/> waives both; <paramref name="agreedDrops"/> waives the dropped data alone.</summary>
     public async Task<Answer<DecompileAndRepairResult, SelectionRefusal<DecompileAndRepairRefusal>>> DecompileAndRepairAsync(
-        IReadOnlyList<PluginToRepair> plugins, IReadOnlyList<string> metadataFiles, bool force, bool agreedDrops = false,
+        IReadOnlyList<PluginToRepair> plugins, IReadOnlyList<string> metadataFiles, bool force, bool agreedDrops,
         CancellationToken cancel = default)
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })

@@ -4,6 +4,7 @@ using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -14,8 +15,6 @@ public sealed class ResponseEditTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private TestEditor EditService() => _fixture.EditHandler;
-
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     private string QuestText => _fixture.Document(_fixture.Quest.ToString()).Require().Body;
 

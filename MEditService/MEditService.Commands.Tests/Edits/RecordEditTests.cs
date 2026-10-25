@@ -5,6 +5,7 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -13,8 +14,6 @@ public sealed class RecordEditTests : IDisposable
     private readonly SourceEditFixture _mod = SourceEditFixture.CompiledPlugin();
 
     public void Dispose() => _mod.Dispose();
-
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     [Fact]
     public void EditingEditorId_LandsTheNewNameOnTheRecord()

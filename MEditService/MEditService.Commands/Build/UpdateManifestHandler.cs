@@ -15,7 +15,7 @@ public sealed class UpdateManifestHandler
         (_repository, _notifications) = (repository, notifications);
 
     public async Task<UpdateManifestResult> UpdateManifestAsync(
-        IReadOnlyList<ModToUpdate> mods, InstanceToUpdate instance, string? gesture = null, CancellationToken cancel = default)
+        IReadOnlyList<ModToUpdate> mods, InstanceToUpdate instance, string? gesture, CancellationToken cancel)
     {
         var updated = await ModByMod.OverAsync(
             mods, mod => mod.Name, progress => _notifications.Publish(new UpdateManifestProgressNotification(progress)),

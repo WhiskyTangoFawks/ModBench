@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -8,8 +7,6 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class NotActivePluginEditTests
 {
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
-
     private static void Disable(OverriddenAndUnlistedFixture mod, PluginAddress plugin) =>
         mod.Relist(plugin, entry => entry with { Enabled = false });
 

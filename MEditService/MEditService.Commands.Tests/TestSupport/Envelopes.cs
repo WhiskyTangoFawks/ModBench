@@ -8,6 +8,8 @@ namespace MEditService.Commands.Tests.TestSupport;
 /// hops and an optional value (ADR-0005).</summary>
 internal static class Envelopes
 {
+    internal static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
+
     internal static PathHop Member(string name) => new(PathHop.MemberKind, Name: name);
     internal static PathHop At(int index) => new(PathHop.IndexKind, Index: index);
 

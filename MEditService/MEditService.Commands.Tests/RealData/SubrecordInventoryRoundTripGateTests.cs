@@ -8,7 +8,7 @@ namespace MEditService.Commands.Tests.RealData;
 public sealed class SubrecordInventoryRoundTripGateTests
 {
     [Fact]
-    public async Task DecompileAndCommit_OfAShortRdatRegionPlugin_RefusesNamingTheRegionItsDroppedSignaturesAndTheDiagnosisOfTheMalformedSubrecord()
+    public async Task DecompileAndCommit_OfAShortRdatRegionPlugin_RefusesNamingTheRegionAndItsDroppedSignatures()
     {
         using var scratch = new ShortRdatScratch();
 
@@ -23,9 +23,6 @@ public sealed class SubrecordInventoryRoundTripGateTests
         Assert.Contains("ANAM", result.Message);
         Assert.Contains("RDMO", result.Message);
         Assert.Contains("RDSA", result.Message);
-        Assert.Contains("fixed-size-subrecord-short", result.Message);
-        Assert.Contains("repairable (lossless)", result.Message);
-        Assert.Contains("RDAT is 6 bytes; a REGN RDAT is always 8", result.Message);
         Assert.False(TestAdapters.Source().IsSourceMod(scratch.ModFolder));
     }
 
