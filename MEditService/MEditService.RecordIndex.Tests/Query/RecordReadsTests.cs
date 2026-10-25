@@ -61,17 +61,16 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ASearchByFormKey_FindsThatRecord_IgnoringCase_AcrossTypes(bool lowerCase)
+    [InlineData("000800:TestPlugin.esp")]
+    [InlineData("000800:testplugin.esp")]
+    public void ASearchByFormKey_FindsThatRecord_IgnoringCase_AcrossTypes(string search)
     {
         using var index = LoadedIndex();
-        var formKey = _fixture.Npc1FormKey.ToString();
 
-        var result = index.Queries.GetRecords(["npc_", "weap"], plugin: null, search: lowerCase ? formKey.ToLowerInvariant() : formKey, limit: 100, offset: 0).Value();
+        var result = index.Queries.GetRecords(["npc_", "weap"], plugin: null, search: search, limit: 100, offset: 0).Value();
 
+        Assert.Equal(["000800:TestPlugin.esp"], result.Items.Select(r => r.FormKey));
         Assert.Equal(1, result.Total);
-        Assert.Equal(formKey, result.Items[0].FormKey);
     }
 
     [Fact]
@@ -184,8 +183,10 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(raceFormKey.ToString(), Assert.IsType<JsonElement>(raceField.Value).GetString());
     }
 
-    [Fact]
-    public void AnOverrideStack_OfAFilenameInTwoOrigins_HoldsOnlyTheWinningOrigin()
+    [Theory]
+    [InlineData("ModA")]
+    [InlineData("ModB")]
+    public void AnOverrideStack_OfAFilenameInTwoOrigins_HoldsOnlyTheWinningOrigin(string winner)
     {
         FormKey npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("medit-two-origins")
@@ -195,11 +196,9 @@ public class RecordReadsTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
 
-        foreach (var winner in new[] { "ModA", "ModB" })
-        {
-            var stack = index.WithWinner(holder, fixture.DataFolder, fixture.Plugins, winner).StackOf(npcFormKey.ToString());
-            Assert.Equal(winner, Assert.Single(stack).Origin);
-        }
+        var stack = index.WithWinner(holder, fixture.DataFolder, fixture.Plugins, winner).StackOf(npcFormKey.ToString());
+
+        Assert.Equal(winner, Assert.Single(stack).Origin);
     }
 
     [Fact]
@@ -323,9 +322,9 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.NotNull(record);
         var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "Keywords");
         Assert.NotNull(keywordsField);
-        var element = Assert.IsType<JsonElement>(keywordsField.Value);
-        Assert.Equal(JsonValueKind.Array, element.ValueKind);
-        Assert.Equal(2, element.GetArrayLength());
+        Assert.Equal(
+            ["000001:ArrayTest.esm", "000002:ArrayTest.esm"],
+            Assert.IsType<JsonElement>(keywordsField.Value).EnumerateArray().Select(e => e.GetString()));
     }
 
     [Fact]
@@ -361,11 +360,25 @@ public class RecordReadsTests(TestPluginFixture fixture)
     public void AnUnsetFormLinkField_ReadsNull()
     {
         using var index = LoadedIndex();
-        var formKey = _fixture.Npc1FormKey.ToString();
-        var record = index.Queries.GetRecord(formKey).Value();
+
+        var record = index.Queries.GetRecord(_fixture.Npc1FormKey.ToString()).Value();
+
         Assert.NotNull(record);
-        var linkField = record.Fields.FirstOrDefault(f => f.Metadata.Type == "formKey" && f.Value == null);
-        Assert.NotNull(linkField);
+        var combatStyle = Assert.Single(record.Fields, f => f.Metadata.Name == "CombatStyle");
+        Assert.Equal(("formKey", null), (combatStyle.Metadata.Type, combatStyle.Value));
+    }
+
+    [Fact]
+    public void AHeaderMemberTheDocumentOmits_ReadsNull_InTheComparedColumn()
+    {
+        using var index = LoadedIndex();
+
+        var compare = index.Queries.GetCompare(_fixture.Npc1FormKey.ToString()).Value();
+
+        Assert.NotNull(compare);
+        var only = Assert.Single(compare.Overrides);
+        Assert.Equal((TestPluginFixture.PluginName, "TestNPC01"), (only.Plugin, only.EditorId));
+        Assert.Null(Assert.Single(only.Fields, f => f.Metadata.Name == "MajorRecordFlagsRaw").Value);
     }
 
     [Theory]
@@ -422,8 +435,12 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Null(patchKw.CheckError);
     }
 
-    [Fact]
-    public void Search_PagesRecordsWithSharedAndBlankEditorId_ReturnsEveryRowExactlyOnceAndStably()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(6)]
+    public void APageOfRecordsSharingOrLackingAnEditorId_IsItsSliceOfTheListing_EveryTimeItIsAsked(int offset)
     {
         using var fixture = new PluginFixtureBuilder("medit-dup-edid")
             .WithPlugin("DupEditorId.esp", mod =>
@@ -438,26 +455,14 @@ public class RecordReadsTests(TestPluginFixture fixture)
             })
             .Build();
         using var index = Indexes.Reconciled(fixture);
+        IEnumerable<string> Page(int limit, int at) =>
+            index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: limit, offset: at).Value().Items.Select(i => i.FormKey);
+        var listing = Page(100, 0).ToList();
 
-        var full = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 100, offset: 0).Value();
-        Assert.Equal(7, full.Total);
-        var expected = full.Items.Select(i => i.FormKey).ToList();
+        var page = Page(2, offset).ToList();
 
-        List<string> WalkAllPages()
-        {
-            var seen = new List<string>();
-            for (var offset = 0; offset < full.Total; offset += 2)
-            {
-                var page = index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 2, offset: offset).Value();
-                seen.AddRange(page.Items.Select(i => i.FormKey));
-            }
-            return seen;
-        }
-
-        var firstWalk = WalkAllPages();
-        var secondWalk = WalkAllPages();
-
-        Assert.Equal(expected, firstWalk);
-        Assert.Equal(firstWalk, secondWalk);
+        Assert.Equal(7, listing.Count);
+        Assert.Equal(listing.Skip(offset).Take(2), page);
+        Assert.Equal(page, Page(2, offset));
     }
 }

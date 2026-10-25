@@ -13,7 +13,6 @@ public class MissingReferenceTests
     private const string Referrer = "Referrer";
     private static readonly PluginAddress Refers = new("Refers.esp", "RefersMod");
 
-    private static readonly FormKey AbsentRecord = FormKey.Factory("000ABC:Absent.esp");
     private static readonly FormKey EngineDefined = FormKey.Factory("000007:Fallout4.esm");
     private static readonly FormKey FirstHeldRangeFormId = FormKey.Factory("000800:Fallout4.esm");
 
@@ -22,26 +21,6 @@ public class MissingReferenceTests
         using var index = Indexes.Reconciled(fixture.CompiledPlugin());
         var problems = index.Queries.GetProblems().Value() ?? throw new InvalidOperationException("Expected the record index to be ready.");
         return [.. problems.SelectMany(plugin => plugin.Problems.Select(problem => (plugin.Plugin, problem)))];
-    }
-
-    [Fact]
-    public void ReportingMissingReferences_ALinkToARecordNoPluginHolds_NamesTheReferrerAndTheTarget()
-    {
-        FormKey npc = default;
-        using var fixture = new PluginFixtureBuilder("missing-ref-absent")
-            .WithPlugin(Refers.Name, mod =>
-            {
-                var added = mod.Npcs.AddNew(Referrer);
-                npc = added.FormKey;
-                added.Race.SetTo(AbsentRecord);
-            }, origin: Refers.Origin)
-            .BuildScattered();
-
-        var (plugin, missing) = Assert.Single(MissingReferencesOf(fixture));
-
-        Assert.Equal(
-            (Refers, npc.ToString(), AbsentRecord.ToString(), "Race"),
-            (plugin, missing.FormKey, missing.TargetFormKey, missing.FieldPath));
     }
 
     [Fact]

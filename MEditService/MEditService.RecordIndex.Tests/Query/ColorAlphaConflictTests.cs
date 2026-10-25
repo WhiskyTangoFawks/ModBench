@@ -20,49 +20,37 @@ public sealed class ColorAlphaConflictTests
     private static ConflictThis OverrideState(CompareResult result, string member) =>
         result.Diffs.Single(d => d.FieldName == member).CellStates["B.esp"];
 
+    private static readonly Dictionary<string, (Func<CompareResult> Compared, string Member, ConflictThis State)> Colors = new()
+    {
+        ["a color holding no alpha, whose document spells it without one, is identical to its master"] = (
+            () => ComparedCopies.Spelled("B.esp", document => document["LightningColor"] = "#102030", Lightning(Rgb102030), Lightning(Rgb102030)),
+            "LightningColor", ConflictThis.IdenticalToMaster),
+        ["a color holding no alpha, whose document spells one, is identical to its master"] = (
+            () => ComparedCopies.Spelled("B.esp", document => document["LightningColor"] = "#7F102030", Lightning(Rgb102030), Lightning(Rgb102030)),
+            "LightningColor", ConflictThis.IdenticalToMaster),
+        ["a color holding no alpha, absent against its default's rgb spelled without alpha, is identical to its master"] = (
+            () => ComparedCopies.Spelled<Weather>("B.esp", document => document["LightningColor"] = "#000000", _ => { }, _ => { }),
+            "LightningColor", ConflictThis.IdenticalToMaster),
+        ["a color holding no alpha that differs in its rgb overrides"] = (
+            () => ComparedCopies.Of(Lightning(Rgb102030), Lightning(Color.FromArgb(0, 0x10, 0x20, 0x31))),
+            "LightningColor", ConflictThis.Override),
+        ["a color holding alpha that differs in its alpha overrides"] = (
+            () => ComparedCopies.Of(Tint(Rgb102030), Tint(Color.FromArgb(0x7F, Rgb102030))),
+            "Color", ConflictThis.Override),
+        ["a color holding alpha, spelled with and without an opaque alpha, is identical to its master"] = (
+            () => ComparedCopies.Spelled("B.esp", document => document["Color"] = "#102030", Tint(Color.FromArgb(0xFF, Rgb102030)), Tint(Color.FromArgb(0xFF, Rgb102030))),
+            "Color", ConflictThis.IdenticalToMaster),
+    };
+
+    public static TheoryData<string> ColorRules => [.. Colors.Keys];
+
     [Theory]
-    [InlineData("#102030")]
-    [InlineData("#7F102030")]
-    public void AColorHoldingNoAlpha_ThatDiffersOnlyInTheAlphaItsDocumentCarries_IsIdenticalToMaster(string edited)
+    [MemberData(nameof(ColorRules))]
+    public void AColorsCopies_ConflictOnlyInWhatTheColorHolds(string rule)
     {
-        var result = ComparedCopies.Spelled(
-            "B.esp", document => document["LightningColor"] = edited, Lightning(Rgb102030), Lightning(Rgb102030));
+        var (compared, member, state) = Colors[rule];
 
-        Assert.Equal(ConflictThis.IdenticalToMaster, OverrideState(result, "LightningColor"));
-    }
-
-    [Fact]
-    public void AColorHoldingNoAlpha_AbsentAgainstItsDefaultsRgbSpelledWithoutAlpha_IsIdenticalToMaster()
-    {
-        var result = ComparedCopies.Spelled<Weather>("B.esp", document => document["LightningColor"] = "#000000", _ => { }, _ => { });
-
-        Assert.Equal(ConflictThis.IdenticalToMaster, OverrideState(result, "LightningColor"));
-    }
-
-    [Fact]
-    public void AColorHoldingNoAlpha_ThatDiffersInItsRgb_Overrides()
-    {
-        var result = ComparedCopies.Of(Lightning(Rgb102030), Lightning(Color.FromArgb(0, 0x10, 0x20, 0x31)));
-
-        Assert.Equal(ConflictThis.Override, OverrideState(result, "LightningColor"));
-    }
-
-    [Fact]
-    public void AColorHoldingAlpha_ThatDiffersInItsAlpha_Overrides()
-    {
-        var result = ComparedCopies.Of(Tint(Rgb102030), Tint(Color.FromArgb(0x7F, Rgb102030)));
-
-        Assert.Equal(ConflictThis.Override, OverrideState(result, "Color"));
-    }
-
-    [Fact]
-    public void AColorHoldingAlpha_SpelledWithAndWithoutAnOpaqueAlpha_IsIdenticalToMaster()
-    {
-        var opaque = Tint(Color.FromArgb(0xFF, Rgb102030));
-
-        var result = ComparedCopies.Spelled("B.esp", document => document["Color"] = "#102030", opaque, opaque);
-
-        Assert.Equal(ConflictThis.IdenticalToMaster, OverrideState(result, "Color"));
+        Assert.Equal(state, OverrideState(compared(), member));
     }
 
     [Fact]

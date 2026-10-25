@@ -26,7 +26,7 @@ public sealed class VersionStampConflictTests
     [InlineData("VersionControl")]
     [InlineData("FormVersion")]
     [InlineData("Version2")]
-    public void GetCompare_DifferingVersionStamp_ShowsNoConflict(string stamp)
+    public void AVersionStampTheCopiesDifferIn_IsNoConflict(string stamp)
     {
         var diff = ComparedCopies.Of<Keyword>(Stamped, WithDifferingStamps).Diffs.Single(d => d.FieldName == stamp);
 
@@ -36,7 +36,7 @@ public sealed class VersionStampConflictTests
     }
 
     [Fact]
-    public void GetCompare_CopiesDifferingInTheVersionStampsAlone_ShowNoConflictOnTheRecordOrThePlugin()
+    public void CopiesDifferingInTheVersionStampsAlone_ShowNoConflictOnTheRecordOrThePlugin()
     {
         var compare = ComparedCopies.Of<Keyword>(Stamped, WithDifferingStamps);
 
@@ -45,7 +45,7 @@ public sealed class VersionStampConflictTests
     }
 
     [Fact]
-    public void GetCompare_CopiesDifferingInTheVersionStampsAndAnotherField_ConflictOnThatFieldAlone()
+    public void CopiesDifferingInTheVersionStampsAndAnotherField_ConflictOnThatFieldAlone()
     {
         var compare = ComparedCopies.Of<Keyword>(Stamped, keyword =>
         {

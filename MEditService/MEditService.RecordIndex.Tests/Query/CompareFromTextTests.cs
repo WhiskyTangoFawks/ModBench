@@ -151,12 +151,14 @@ public sealed class CompareFromTextTests : IDisposable
     }
 
     [Fact]
-    public void TextThatIsNoRecordDocument_IsAColumnThatCouldNotBeParsed()
+    public void TextThatIsNoRecordDocument_IsAColumnThatCouldNotBeParsed_InTheReadersWords()
     {
+        Assert.False(Document.TryRead("{ not json", out _, out var readersWords));
+
         var compare = Compare(ModPlugin, "{ not json");
 
         var column = compare.Overrides.Single(o => AddressOf(o) == ModPlugin);
-        Assert.False(string.IsNullOrWhiteSpace(column.ParseDiagnosis));
+        Assert.Equal(readersWords, column.ParseDiagnosis);
         Assert.All(compare.Overrides.Where(o => o != column), o => Assert.Null(o.ParseDiagnosis));
     }
 
