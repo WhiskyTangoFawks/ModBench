@@ -57,9 +57,8 @@ export class Diagnostic {
   constructor(public range: Range, public message: string, public severity: number = DiagnosticSeverity.Error) {}
 }
 
-/** Every member `vscode.Uri` declares, for a call whose parameter is typed `vscode.Uri`: the real class is
- *  `private`-constructed, so nothing but a structural double can stand in for it. Its `toString` is the real
- *  one's, less the percent-encoding. */
+/** Every member `vscode.Uri` declares: the real class is `private`-constructed, so only a structural double
+ *  stands in for it. Its `toString` is the real one's, less the percent-encoding. */
 export class FakeUri {
   readonly authority = '';
   readonly fragment = '';

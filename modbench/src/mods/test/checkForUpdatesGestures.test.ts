@@ -28,7 +28,6 @@ import { present } from '../../ports/present';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { checkForUpdatesOver } from '../../modCommands/checkForUpdates';
 import { fakeInstanceAdapter, type AdapterCall, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
-import { GOOD_KEY, nexusAnswering } from '../../nexus/test/nexusDouble';
 
 const CHECK = 'modbench.mod.checkForUpdates';
 
@@ -51,14 +50,11 @@ const folderRow = { argument: { kind: 'folder', path: '/instance/mods/ModA/meshe
 const onNexus = (modId: string) => ({ kind: 'read', answer: { game: 'fallout4', modId, fileId: '1', fileName: undefined, fileStatus: undefined } } as const);
 const ON_NEXUS: InstanceAnswers = { nexusFiles: new Map([['ModA', onNexus('1')], ['ModB', onNexus('2')]]), updatable: new Set(['ModA', 'ModB']) };
 const NEWEST = '2.0';
-const listing = (): Response =>
-  new Response(JSON.stringify({ files: [{ file_id: 1, version: NEWEST, category_id: 1, file_name: 'a.7z' }], file_updates: [] }), { status: 200 });
 const checked = (...mods: string[]): AdapterCall[] => mods.map((mod) => ({ verb: 'writeNewestVersion', mod, version: NEWEST }));
 
-async function register({ answers = ON_NEXUS, loggedIn = true }: { answers?: InstanceAnswers; loggedIn?: boolean } = {}) {
+function register({ answers = ON_NEXUS, loggedIn = true }: { answers?: InstanceAnswers; loggedIn?: boolean } = {}) {
   const fake = fakeInstanceAdapter(undefined, answers);
-  const { nexus } = nexusAnswering(listing);
-  if (loggedIn) await nexus.keep(GOOD_KEY);
+  const nexus = { loggedIn: () => Promise.resolve(loggedIn), newestVersion: () => Promise.resolve({ found: true, version: NEWEST } as const) };
   const reporter = recordingReporter();
   registerCheckForUpdatesGestures({
     commands: { checkForUpdates: checkForUpdatesOver(fake.adapter, nexus) },
@@ -75,7 +71,7 @@ beforeEach(() => {
 
 describe('check for updates, from a view', () => {
   it('checks the selected mods and reads the instance again once they are written', async () => {
-    const { fake, run } = await register();
+    const { fake, run } = register();
 
     await run(CHECK, modRow('ModB'), [modRow('ModA'), modRow('ModB')]);
 
@@ -84,7 +80,7 @@ describe('check for updates, from a view', () => {
   });
 
   it('checks every mod from the Mods title bar', async () => {
-    const { fake, run } = await register();
+    const { fake, run } = register();
 
     await run('modbench.modList.checkForUpdatesHere');
 
@@ -92,7 +88,7 @@ describe('check for updates, from a view', () => {
   });
 
   it('says in one line how many mods have an update, and names each mod it could not ask about in the Output', async () => {
-    const { reporter, run } = await register({ answers: { nexusFiles: new Map([['ModA', onNexus('1')]]), updatable: new Set(['ModA']) } });
+    const { reporter, run } = register({ answers: { nexusFiles: new Map([['ModA', onNexus('1')]]), updatable: new Set(['ModA']) } });
 
     await run(CHECK, modRow('ModA'), [modRow('ModA'), modRow('ModB'), folderRow]);
 
@@ -103,7 +99,7 @@ describe('check for updates, from a view', () => {
   });
 
   it('lands the line when every mod could be asked about', async () => {
-    const { reporter, run } = await register();
+    const { reporter, run } = register();
 
     await run(CHECK, modRow('ModA'), [modRow('ModA'), modRow('ModB')]);
 
@@ -111,7 +107,7 @@ describe('check for updates, from a view', () => {
   });
 
   it('reports a refusal of the whole selection as an error', async () => {
-    const { reporter, run } = await register({ loggedIn: false });
+    const { reporter, run } = register({ loggedIn: false });
 
     await run(CHECK, modRow('ModA'));
 
@@ -123,7 +119,7 @@ describe('check for updates, on a separator', () => {
   const separatorRow = { argument: { kind: 'separator', name: 'Weapons' }, name: 'Weapons' };
 
   it('checks the mods the separator holds, and not the separator', async () => {
-    const { fake, run } = await register();
+    const { fake, run } = register();
 
     await run(CHECK, separatorRow, [separatorRow]);
 
@@ -131,7 +127,7 @@ describe('check for updates, on a separator', () => {
   });
 
   it('runs under the Mods view when no row is selected', async () => {
-    const { run } = await register();
+    const { run } = register();
 
     await run(CHECK);
 
@@ -141,7 +137,7 @@ describe('check for updates, on a separator', () => {
 
 describe('check for updates, from an agent', () => {
   it('checks every mod when the call names none, and answers the outcome', async () => {
-    const { fake, run } = await register({ answers: { nexusFiles: new Map([['ModA', onNexus('1')]]), updatable: new Set(['ModA']) } });
+    const { fake, run } = register({ answers: { nexusFiles: new Map([['ModA', onNexus('1')]]), updatable: new Set(['ModA']) } });
 
     const answer = await run(CHECK, new AgentCall([], {}));
 
@@ -152,7 +148,7 @@ describe('check for updates, from an agent', () => {
   });
 
   it('answers a refusal of the whole call as a refusal', async () => {
-    const { run } = await register({ loggedIn: false });
+    const { run } = register({ loggedIn: false });
 
     expect(await run(CHECK, new AgentCall([], {}))).toEqual({ applied: false, refusal: 'You are not logged in to Nexus.' });
   });

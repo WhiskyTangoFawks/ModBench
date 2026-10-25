@@ -1,6 +1,7 @@
 // The Modbench column of the zoom-out, spec/architecture/target-architecture.d2, and each band's
 // lib, which it does not draw, joined to the box folders on disk.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { URL } from 'node:url';
 
 const SRC = new URL('../src/', import.meta.url);
 const ZOOM_OUT = new URL('../../spec/architecture/target-architecture.d2', import.meta.url);

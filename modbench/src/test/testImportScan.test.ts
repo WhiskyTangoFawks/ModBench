@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { type Box, boxesIn } from './boxes';
 import { importSpecifiers, plantedTree, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
