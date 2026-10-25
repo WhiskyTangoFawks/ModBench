@@ -14,8 +14,6 @@ namespace MEditService.RecordIndex.Tests.Indexing;
 
 public class HeaderIndexingTests
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-
     private static object? FieldValueOf(RecordDetail doc, string name) =>
         doc.Fields.Single(f => f.Metadata.Name == name).Value;
 
@@ -66,28 +64,6 @@ public class HeaderIndexingTests
         Assert.Single(HeaderRows(index));
         index.SetFilter("SELECT form_key FROM records WHERE record_type = 'header' AND json_extract_string(body, '$.Author') = 'Vault Dweller'", "filter.sql");
         Assert.Empty(HeaderRows(index));
-    }
-
-    [Fact]
-    public void TheHeadersAuthorField_MatchesTheModHeaderAuthor()
-    {
-        using var fixture = OnePlugin("header-author", "AuthorTest.esp", mod => mod.ModHeader.Author = "Vault Dweller");
-        using var index = Indexes.Reconciled(fixture);
-
-        var doc = Header(index, "AuthorTest.esp");
-        Assert.Equal("Vault Dweller", Assert.IsType<JsonElement>(FieldValueOf(doc, "Author")).GetString());
-    }
-
-    [Fact]
-    public void TheHeadersFlagsField_ReflectsTheSmallMasterFlagForEsl()
-    {
-        using var fixture = OnePlugin("header-flags", "EslTest.esp", mod => mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small);
-        using var index = Indexes.Reconciled(fixture);
-
-        var doc = Header(index, "EslTest.esp");
-        Assert.Equal(
-            [nameof(Fallout4ModHeader.HeaderFlag.Small)],
-            Assert.IsType<JsonElement>(FieldValueOf(doc, "Flags")).EnumerateArray().Select(e => e.GetString()));
     }
 
     [Fact]
@@ -146,12 +122,12 @@ public class HeaderIndexingTests
         using var index = Indexes.Reconciled(fixture);
         var plugin = fixture.Plugins.Single(p => p.Name == "MastersTest.esp");
         var header = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
-        Assert.Equal(["Kept.esm", "Dropped.esm"], MastersOf(index.DocumentOf(header, plugin.KeyOf())));
+        Assert.Equal(["Kept.esm", "Dropped.esm"], MastersOf(index.DocumentOf(header, plugin.Key)));
 
-        var droppedOverride = index.ListedIn(plugin.KeyOf()).Single(d => d.EditorId == "DroppedNpc");
-        index.Delete(plugin, index.DocumentOf(droppedOverride.FormKey, plugin.KeyOf()));
+        var droppedOverride = index.ListedIn(plugin.Key).Single(d => d.EditorId == "DroppedNpc");
+        index.Delete(plugin, index.DocumentOf(droppedOverride.FormKey, plugin.Key));
 
-        Assert.Equal(["Kept.esm"], MastersOf(index.DocumentOf(header, plugin.KeyOf())));
+        Assert.Equal(["Kept.esm"], MastersOf(index.DocumentOf(header, plugin.Key)));
     }
 
     [Fact]
@@ -172,36 +148,15 @@ public class HeaderIndexingTests
             .CompiledPlugin();
         using var index = Indexes.Reconciled(fixture);
         var plugin = fixture.Plugins.Single(p => p.Name == "MastersTest.esp");
-        var keptKeyword = index.ListedIn(fixture.Plugins.Single(p => p.Name == "Kept.esm").KeyOf()).Single(d => d.EditorId == "KeptKeyword");
-        var linkedKeyword = index.ListedIn(fixture.Plugins.Single(p => p.Name == "Linked.esm").KeyOf()).Single(d => d.EditorId == "LinkedKeyword");
-        var npc = index.DocumentOf(index.ListedIn(plugin.KeyOf()).Single(d => d.EditorId == "KeptNpc").FormKey, plugin.KeyOf());
+        var keptKeyword = index.ListedIn(fixture.Plugins.Single(p => p.Name == "Kept.esm").Key).Single(d => d.EditorId == "KeptKeyword");
+        var linkedKeyword = index.ListedIn(fixture.Plugins.Single(p => p.Name == "Linked.esm").Key).Single(d => d.EditorId == "LinkedKeyword");
+        var npc = index.DocumentOf(index.ListedIn(plugin.Key).Single(d => d.EditorId == "KeptNpc").FormKey, plugin.Key);
 
         index.Edit(plugin, npc, plugin.SourceTextOf(npc).Replace(keptKeyword.FormKey, linkedKeyword.FormKey, StringComparison.Ordinal));
 
         Assert.Equal(
             ["Kept.esm", "Linked.esm"],
-            MastersOf(index.DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), plugin.KeyOf())));
-    }
-
-    [Fact]
-    public void HeaderSchema_MastersColumn_IsReadOnlyWithAReason()
-    {
-        var masters = Reflector.GetSchemas(GameRelease.Fallout4)[PluginHeader.RecordType]
-            .RecordColumns.Single(c => c.Name == "MasterReferences");
-
-        Assert.False(string.IsNullOrWhiteSpace(masters.Field.ReadOnlyReason));
-    }
-
-    [Fact]
-    public void HeaderSchema_MastersColumn_ReasonReachesEveryMemberBelow()
-    {
-        var masters = Reflector.GetSchemas(GameRelease.Fallout4)[PluginHeader.RecordType]
-            .RecordColumns.Single(c => c.Name == "MasterReferences").Field;
-
-        var element = Assert.IsType<FieldMetadata>(masters.ElementType);
-        Assert.Equal(masters.ReadOnlyReason, element.ReadOnlyReason);
-        Assert.NotEmpty(element.Fields ?? []);
-        Assert.All(element.Fields ?? [], member => Assert.Equal(masters.ReadOnlyReason, member.ReadOnlyReason));
+            MastersOf(index.DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), plugin.Key)));
     }
 
     [Fact]
@@ -231,8 +186,10 @@ public class HeaderIndexingTests
         Assert.Equal("PluginB.esp", Assert.Single(index.StackOf("000000:PluginB.esp")).Plugin);
     }
 
-    [Fact]
-    public void TwoOriginsOfOneFilename_EachHaveTheirOwnHeaderDocument_NeitherOverridesTheOther()
+    [Theory]
+    [InlineData("ModA", "Author A")]
+    [InlineData("ModB", "Author B")]
+    public void TwoOriginsOfOneFilename_EachHaveTheirOwnHeaderDocument_NeitherOverridesTheOther(string winner, string author)
     {
         using var fixture = new PluginFixtureBuilder("header-two-origins")
             .WithPlugin("Shared.esp", mod => mod.ModHeader.Author = "Author A", origin: "ModA")
@@ -241,12 +198,10 @@ public class HeaderIndexingTests
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
 
-        foreach (var (origin, author) in new[] { ("ModA", "Author A"), ("ModB", "Author B") })
-        {
-            var header = Assert.Single(index.WithWinner(holder, fixture.DataFolder, fixture.Plugins, origin)
-                .StackOf("000000:Shared.esp"));
-            Assert.Equal(origin, header.Origin);
-            Assert.Equal(author, Assert.IsType<JsonElement>(FieldValueOf(header, "Author")).GetString());
-        }
+        var header = Assert.Single(index.WithWinner(holder, fixture.DataFolder, fixture.Plugins, winner)
+            .StackOf("000000:Shared.esp"));
+
+        Assert.Equal(winner, header.Origin);
+        Assert.Equal(author, Assert.IsType<JsonElement>(FieldValueOf(header, "Author")).GetString());
     }
 }

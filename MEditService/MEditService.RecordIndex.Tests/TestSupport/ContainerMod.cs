@@ -17,7 +17,7 @@ internal sealed class ContainerMod : IDisposable
     private readonly ScatteredFixtureData _fixture;
 
     public LoadOrderEntry Entry { get; }
-    public PluginAddress Plugin => Entry.KeyOf();
+    public PluginAddress Plugin => Entry.Key;
     public string DataFolder => _fixture.DataFolder;
 
     public FormKey Cell { get; }

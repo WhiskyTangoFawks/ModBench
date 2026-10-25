@@ -40,7 +40,7 @@ public sealed class MissingReferencePlacementTests : IDisposable
         Assert.Null(problems.Failure);
         Assert.NotNull(problem.FormKey);
         Assert.Equal(
-            _compiledPlugin.SourceFileOf(_index.DocumentOf(problem.FormKey, _compiledPlugin.KeyOf())),
+            _compiledPlugin.SourceFileOf(_index.DocumentOf(problem.FormKey, _compiledPlugin.Key)),
             Path.Combine(_compiledPlugin.ModFolderOf(), problem.SourceRelativePath));
     }
 

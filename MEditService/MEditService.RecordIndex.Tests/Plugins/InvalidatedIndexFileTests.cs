@@ -52,7 +52,7 @@ public sealed class InvalidatedIndexFileTests : IDisposable
     [Fact]
     public void AFatalError_LeavesThePluginsReadBeforeItAnswering_BeforeTheNextSnapshot()
     {
-        var read = _index.ListedIn(_fixture.Plugins.Single(p => p.Name == Before).KeyOf());
+        var read = _index.ListedIn(_fixture.Plugins.Single(p => p.Name == Before).Key);
 
         Assert.Single(read);
         Assert.Equal([Aborted, After, Before], PublishedIndexedPlugins());

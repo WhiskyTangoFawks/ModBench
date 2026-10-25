@@ -105,11 +105,11 @@ public sealed class PlacedVariantIndexingTests(PlacedVariantIndexingTests.Built 
     [MemberData(nameof(Variants))]
     public void AVariant_IsAChildOfItsCell_InItsPlacementGroup(string table)
     {
+        var formKey = Of(table).FormKey.ToString();
         var children = built.Index.Queries.GetCellChildRecords(Key, built.Cell.ToString()).Value();
-        var group = Of(table).Group == "persistent" ? children.Persistent : children.Temporary;
 
-        var child = Assert.Single(group, c => c.FormKey == Of(table).FormKey.ToString());
-        Assert.Equal(table, child.RecordType);
+        Assert.Equal(Of(table).Group, built.Index.PlacementGroupIn(Key, built.Cell.ToString(), formKey));
+        Assert.Equal(table, children.Persistent.Concat(children.Temporary).Single(c => c.FormKey == formKey).RecordType);
     }
 
     [Theory]

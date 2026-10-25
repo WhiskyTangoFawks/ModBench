@@ -18,7 +18,7 @@ public sealed class ParseFailedRecordTests
     private const string DeletedNpc = "000800:DeletedNpc.esp";
 
     [Fact]
-    public void Reconcile_KeepsTheUnreadableRecordInTheIndexWithItsDiagnosis()
+    public void AnUnreadableRecord_IsKeptInTheIndexWithItsDiagnosis()
     {
         using var scratch = Scratch.Misshaped();
 
@@ -29,18 +29,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void Reconcile_IndexesTheRestOfThePluginAroundTheUnreadableRecord()
-    {
-        using var scratch = Scratch.Misshaped();
-
-        var counts = scratch.Index.Queries.GetPluginRecordTypes(scratch.Plugin).Value();
-
-        Assert.True(counts.Sum(c => c.Count) > 1,
-            "the plugin's readable records must still index; a single unreadable record is not a plugin-wide failure");
-    }
-
-    [Fact]
-    public void Reconcile_LeavesEveryReadableRecordWithoutADiagnosis()
+    public void EveryReadableRecordBesideIt_HasNoDiagnosis()
     {
         using var scratch = Scratch.Misshaped();
 
@@ -51,7 +40,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void Search_ListsEveryMajorRecordThePluginHolds()
+    public void EveryMajorRecordThePluginHolds_IsListed_TheUnreadableOneToo()
     {
         using var scratch = Scratch.Misshaped();
         using var overlay = Fallout4Mod.CreateFromBinaryOverlay(
@@ -103,7 +92,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void TheCompare_ReadsTheUnreadableRecordBackFromItsStoredBody()
+    public void AComparedUnreadableRecord_ReadsBackFromItsStoredBody()
     {
         using var scratch = Scratch.Misshaped();
 
@@ -113,7 +102,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void TheCompare_CarriesTheDiagnosisOnTheUnreadableRecordsDocument()
+    public void AComparedUnreadableRecord_CarriesItsDiagnosis()
     {
         using var scratch = Scratch.Misshaped();
 
@@ -124,7 +113,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void TheCompare_LeavesAReadableRecordsDocumentWithoutADiagnosis()
+    public void AComparedReadableRecord_HasNoDiagnosis()
     {
         using var scratch = Scratch.Misshaped();
         var readable = Perks(scratch).First(r => r.FormKey != PerkWhoseEntryPointParameterFlagsMutagenRefuses);
@@ -135,7 +124,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void Reconcile_OfAPluginWhoseGroupCannotBeEnumerated_KeepsItsOtherRecordTypes()
+    public void APluginWhoseGroupCannotBeEnumerated_KeepsItsOtherRecordTypes()
     {
         using var sources = new ScratchDirectory("medit-parsefail-source-");
         using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(sources), CorruptGroupFixture.PluginName);
@@ -147,7 +136,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void Reconcile_OfAPluginWhoseGroupCannotBeEnumerated_MarksThatRecordTypeAndItsPlugin()
+    public void APluginWhoseGroupCannotBeEnumerated_MarksThatRecordTypeAndItsPlugin()
     {
         using var sources = new ScratchDirectory("medit-parsefail-source-");
         using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(sources), CorruptGroupFixture.PluginName);
@@ -160,7 +149,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void Reconcile_IndexesADeletedRecordWhoseFieldsAreAbsent_AsDeleted_NotParseFailed()
+    public void ADeletedRecordWhoseFieldsAreAbsent_IsIndexedAsDeleted_NotParseFailed()
     {
         using var sources = new ScratchDirectory("medit-parsefail-source-");
         using var scratch = new Scratch(Scratch.DeletedNpcPlugin(sources, (path, npc) => DeletedNpcPlugin.WriteEmpty(path, npc)), DeletedNpcPluginName);
@@ -172,7 +161,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void Reconcile_KeepsADeletedRecordThatStillHoldsFieldsItCannotRead_WithItsDiagnosis()
+    public void ADeletedRecordThatStillHoldsFieldsItCannotRead_IsKeptWithItsDiagnosis()
     {
         using var sources = new ScratchDirectory("medit-parsefail-source-");
         using var scratch = new Scratch(Scratch.DeletedNpcPlugin(sources, (path, npc) => DeletedNpcPlugin.WriteHoldingFields(path, npc)), DeletedNpcPluginName);
@@ -183,7 +172,7 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
-    public void Reconcile_OfAPluginThatCannotBeOpenedAtAllStillReportsAPluginLoadFailure()
+    public void APluginThatCannotBeOpenedAtAll_IsReportedAsAPluginLoadFailure()
     {
         using var scratch = Scratch.Misshaped(corruptWholeFile: true);
 

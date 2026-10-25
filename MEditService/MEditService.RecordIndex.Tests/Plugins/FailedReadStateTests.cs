@@ -34,7 +34,7 @@ public sealed class FailedReadStateTests : IDisposable
         Indexes.Reconciled(_fixture, _fixture.InstanceRoot, adapter, source: _source);
 
     private RecordSummary TheNpc(OpenedIndex index) =>
-        index.ListedIn(Plugin.KeyOf()).Single(row => row.EditorId == NpcEditorId);
+        index.ListedIn(Plugin.Key).Single(row => row.EditorId == NpcEditorId);
 
     private string NpcDocument => Directory.EnumerateFiles(Plugin.ModFolderOf(), "*.json", SearchOption.AllDirectories)
         .Single(file => File.ReadAllText(file).Contains($"\"{NpcEditorId}\"", StringComparison.Ordinal));
@@ -58,7 +58,7 @@ public sealed class FailedReadStateTests : IDisposable
 
     private void FireIfArmed(TreeMoment moment, PluginAddress plugin)
     {
-        if (!PluginAddress.Comparer.Equals(plugin, Plugin.KeyOf())) return;
+        if (!PluginAddress.Comparer.Equals(plugin, Plugin.Key)) return;
         if (moment == TreeMoment.ReadBegins) Interlocked.Increment(ref _treeReads);
         if (_armed is not { } armed || armed.When != moment) return;
         _armed = null;
@@ -69,9 +69,9 @@ public sealed class FailedReadStateTests : IDisposable
 
     private static bool Failed(OpenedIndex index) => index.Status.Failures.Any(f => f.Name == PluginName);
 
-    private bool ReadFromSource(OpenedIndex index) => index.ReadFromItsPluginSource(Plugin.KeyOf());
+    private bool ReadFromSource(OpenedIndex index) => index.ReadFromItsPluginSource(Plugin.Key);
 
-    private bool SourceUnreadable(OpenedIndex index) => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin.KeyOf());
+    private bool SourceUnreadable(OpenedIndex index) => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin.Key);
 
     private static string Reason(OpenedIndex index) => index.Status.Failures.Single(f => f.Name == PluginName).Reason;
 
@@ -150,7 +150,7 @@ public sealed class FailedReadStateTests : IDisposable
         using var index = Reconciled(adapter);
 
         Assert.False(Failed(index));
-        Assert.Contains(index.ListedIn(Plugin.KeyOf()), row => row.EditorId == "WrittenAfterTheFailure");
+        Assert.Contains(index.ListedIn(Plugin.Key), row => row.EditorId == "WrittenAfterTheFailure");
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the changed tree read again");
 
-        Assert.Empty(index.ListedIn(Plugin.KeyOf()));
+        Assert.Empty(index.ListedIn(Plugin.Key));
         Assert.DoesNotContain("showing", Reason(index), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -279,7 +279,7 @@ public sealed class FailedReadStateTests : IDisposable
         File.Move(GitIndex + ".good", GitIndex, overwrite: true);
 
         index.NextSnapshotUntil(() => ReadFromSource(index), "the tree read again");
-        Assert.Contains(index.ListedIn(Plugin.KeyOf()), row => row.EditorId == "RenamedNpc");
+        Assert.Contains(index.ListedIn(Plugin.Key), row => row.EditorId == "RenamedNpc");
     }
 
     [Fact]
@@ -360,7 +360,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         index.NextSnapshotUntil(() => !Failed(index), "the binary read again");
 
-        Assert.Contains(index.ListedIn(Plugin.KeyOf()), row => row.EditorId == "WrittenBeforeTheHold");
+        Assert.Contains(index.ListedIn(Plugin.Key), row => row.EditorId == "WrittenBeforeTheHold");
     }
 
     [Fact]
@@ -493,7 +493,7 @@ public sealed class FailedReadStateTests : IDisposable
         var thrown = Faults.Of(typeof(OutOfMemoryException));
         Arm(TreeMoment.ReadBegins, () => throw thrown);
         using var index = Reconciled();
-        Assert.Contains(thrown.Message, index.PluginResponseOf(Plugin.KeyOf())?.PluginSourceUnreadable?.Reason, StringComparison.Ordinal);
+        Assert.Contains(thrown.Message, index.PluginResponseOf(Plugin.Key)?.PluginSourceUnreadable?.Reason, StringComparison.Ordinal);
         var readsBefore = TreeReads();
 
         index.Reconcile(index.Holder, _fixture.DataFolder, [Plugin with { Origin = Plugin.Origin.ToLowerInvariant() }],
@@ -517,7 +517,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         using var index = Reconciled();
 
-        var unreadable = index.PluginResponseOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
+        var unreadable = index.PluginResponseOf(Plugin.Key)?.PluginSourceUnreadable.Require();
         Assert.Contains(expected, unreadable?.Reason, StringComparison.Ordinal);
         Assert.True(unreadable?.DecompileRepairs);
     }
@@ -537,7 +537,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         using var index = Reconciled();
 
-        var unreadable = index.PluginResponseOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
+        var unreadable = index.PluginResponseOf(Plugin.Key)?.PluginSourceUnreadable.Require();
         Assert.Contains("the file is held", unreadable?.Reason, StringComparison.Ordinal);
         Assert.False(unreadable?.DecompileRepairs);
     }
@@ -552,7 +552,7 @@ public sealed class FailedReadStateTests : IDisposable
         {
             using var index = Reconciled();
 
-            var unreadable = index.PluginResponseOf(Plugin.KeyOf())?.PluginSourceUnreadable.Require();
+            var unreadable = index.PluginResponseOf(Plugin.Key)?.PluginSourceUnreadable.Require();
             Assert.False(string.IsNullOrWhiteSpace(unreadable?.Reason));
             Assert.False(unreadable?.DecompileRepairs);
         }
@@ -576,7 +576,7 @@ public sealed class FailedReadStateTests : IDisposable
 
         Assert.Null(_armed);
         Assert.False(Failed(index));
-        Assert.Contains(index.ListedIn(Plugin.KeyOf()), row => row.EditorId == "EditedNpc");
+        Assert.Contains(index.ListedIn(Plugin.Key), row => row.EditorId == "EditedNpc");
     }
 
     private sealed class HeldAtFirstRead : DelegatingPluginAdapter

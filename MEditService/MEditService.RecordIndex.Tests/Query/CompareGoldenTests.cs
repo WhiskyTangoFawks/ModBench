@@ -19,7 +19,6 @@ public sealed class CompareGoldenTests(CompareGoldenFixture fixture) : IClassFix
         p.IsLight,
         p.IsMaster,
         p.Masters,
-        p.RecordCount,
         p.IsImmutable,
         p.Origin,
         p.MissingMasters,

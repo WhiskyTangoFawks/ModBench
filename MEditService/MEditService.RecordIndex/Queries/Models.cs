@@ -7,14 +7,11 @@ using MEditService.Ports;
 namespace MEditService.RecordIndex.Queries;
 
 // One Kind B diagnosis. Text is PluginDiagnosis.Describe()'s exact refusal fragment, so the
-// Problems panel and the init refusal share one vocabulary; Anchor/DefectClass/Tail ride
-// separately so the frontend can route a repair without re-parsing prose.
+// Problems panel and the init refusal share one vocabulary.
 public record PluginDiagnosisReport(
     string Plugin,
     string Origin,
     string? Anchor,
-    string DefectClass,
-    string? Tail,
     string Message,
     string Text);
 
@@ -31,7 +28,6 @@ public sealed record PluginResponse(
     // that is not one. False for every plugin of a game without blueprint plugins.
     bool IsBlueprint,
     IReadOnlyList<string> Masters,
-    int RecordCount,
     bool IsImmutable,
     string Origin,
     // MissingMasters (ADR-0012): the masters in this plugin's header that are not active.

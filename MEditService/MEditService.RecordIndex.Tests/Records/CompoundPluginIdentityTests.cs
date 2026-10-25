@@ -45,7 +45,7 @@ public class CompoundPluginIdentityTests
     }
 
     [Fact]
-    public void TwoOrigins_SameFilenameSameFormKey_GetRecord_ScopesToRequestedOrigin()
+    public void TwoOrigins_SameFilenameSameFormKey_ARecordReadOfOneOrigin_IsThatOriginsCopy()
     {
         using var fixture = SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey("identity-get", out var npcKey);
         using var index = Indexes.Reconciled(fixture);
@@ -57,7 +57,7 @@ public class CompoundPluginIdentityTests
     }
 
     [Fact]
-    public void TwoOrigins_SameFilenameSameFormKey_CountRecordsForPlugin_CountsRequestedOriginOnly()
+    public void TwoOrigins_SameFilenameSameFormKey_APluginsRecordCounts_AreOfItsOriginOnly()
     {
         using var fixture = SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey("identity-count", out _);
         using var index = Indexes.Open(_holder);
@@ -65,20 +65,6 @@ public class CompoundPluginIdentityTests
 
         Assert.Equal(1, index.CountOf(ModA, "npc_"));
         Assert.Equal(0, index.CountOf(ModB, "npc_"));
-    }
-
-    [Fact]
-    public void TwoOrigins_SameFilenameSameFormKey_GetRecords_FiltersToRequestedOriginAndSurfacesIt()
-    {
-        using var fixture = SharedFilenameFixtureWhereDeterministicFormIdAssignmentGivesBothModsTheSameNpcFormKey("identity-list", out var npcKey);
-        using var index = Indexes.Reconciled(fixture);
-
-        var modAResult = index.Queries.GetRecords(["npc_"], ModA, search: null, limit: 100, offset: 0).Value();
-
-        var item = Assert.Single(modAResult.Items);
-        Assert.Equal(npcKey.ToString(), item.FormKey);
-        Assert.Equal("FromModA", item.EditorId);
-        Assert.Equal("ModA", item.Origin);
     }
 
     [Fact]
@@ -160,7 +146,7 @@ public class CompoundPluginIdentityTests
     }
 
     [Fact]
-    public void TwoOrigins_SameFilenameSameFormKeys_GetReferencedBy_SurfacesOriginPerRow_ThroughModAThenModBOnOneIndex()
+    public void TwoOrigins_SameFilenameSameFormKeys_EachReferenceNamesItsOrigin_ThroughModAThenModBOnOneIndex()
     {
         using var fixture = StructuralFixture("identity-references", out _, out _, out _, out var raceKey);
         using var index = Indexes.Open(_holder);

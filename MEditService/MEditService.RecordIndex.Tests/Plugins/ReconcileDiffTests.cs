@@ -27,7 +27,7 @@ public sealed class ReconcileDiffTests
             })
             .BuildScattered();
 
-    private static PluginAddress Key(ScatteredFixtureData fx, string name) => fx.Plugins.Single(p => p.Name == name).KeyOf();
+    private static PluginAddress Key(ScatteredFixtureData fx, string name) => fx.Plugins.Single(p => p.Name == name).Key;
 
     private static string SharedNpc(OpenedIndex index, ScatteredFixtureData fx) =>
         index.Queries.GetRecords(["npc_"], Key(fx, "A.esm"), search: null, limit: 10, offset: 0).Value().Items.Single().FormKey;

@@ -25,7 +25,7 @@ public class PluginReadInterruptionTests
         var reading = new TaskCompletionSource();
         using var index = Indexes.Open(holder, new PartwayAdapter(
             afterRecords: 2, () => reading.TrySetResult(), thenEachRecordTakes: TimeSpan.FromMilliseconds(50)));
-        holder.Apply(LoadOrderArrival.Snapshot(fixture.DataFolder, instanceRoot: null, GameRelease.Fallout4, fixture.Plugins));
+        holder.Apply(SnapshotPlugins.Snapshot(fixture.DataFolder, instanceRoot: null, GameRelease.Fallout4, fixture.Plugins));
         await reading.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
         var disposing = Task.Run(index.Dispose);
@@ -48,7 +48,7 @@ public class PluginReadInterruptionTests
         }), timeProvider: clock);
         try
         {
-            holder.Apply(LoadOrderArrival.Snapshot(fixture.DataFolder, instanceRoot: null, GameRelease.Fallout4, fixture.Plugins));
+            holder.Apply(SnapshotPlugins.Snapshot(fixture.DataFolder, instanceRoot: null, GameRelease.Fallout4, fixture.Plugins));
             await reading.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
             var disposing = Task.Run(index.Dispose);
@@ -69,12 +69,17 @@ public class PluginReadInterruptionTests
         using var fixture = LongPlugin("read-superseded");
         var holder = new LoadOrderHolder();
         var reads = 0;
+        var aNewerSnapshotOnTheFirstRead = Faults.InTurn(() => holder.Apply(holder.Current));
         using var index = Indexes.Open(holder, new PartwayAdapter(
             afterRecords: 2,
-            () => { if (Interlocked.Increment(ref reads) == 1) holder.Apply(holder.Current); },
+            () =>
+            {
+                Interlocked.Increment(ref reads);
+                aNewerSnapshotOnTheFirstRead();
+            },
             thenEachRecordTakes: TimeSpan.FromMilliseconds(10)));
 
-        holder.Apply(LoadOrderArrival.Snapshot(fixture.DataFolder, instanceRoot: null, GameRelease.Fallout4, fixture.Plugins));
+        holder.Apply(SnapshotPlugins.Snapshot(fixture.DataFolder, instanceRoot: null, GameRelease.Fallout4, fixture.Plugins));
         Waits.Reached(
             () => index.Status.State != LoadOrderState.Reconciling && index.Status.IndexedPlugins.Any(p => p.Name == "Long.esp"),
             "Long.esp indexed");

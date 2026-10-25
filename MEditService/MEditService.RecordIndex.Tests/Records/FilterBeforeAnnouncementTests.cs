@@ -25,6 +25,7 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
     private readonly ILoggerFactory _loggers;
     private readonly OpenedIndex _index;
     private string? _failingAt;
+    private volatile bool _failed;
 
     public FilterBeforeAnnouncementTests()
     {
@@ -38,8 +39,9 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
         SourceMods.Init(Entry(CompiledPlugin));
         _loggers = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider([], entry =>
         {
-            if (_failingAt is { } logged && entry.Message.StartsWith(logged, StringComparison.Ordinal))
-                throw new IOException($"failed at \"{logged}\"");
+            if (_failingAt is not { } logged || !entry.Message.StartsWith(logged, StringComparison.Ordinal)) return;
+            _failed = true;
+            throw new IOException($"failed at \"{logged}\"");
         })));
         _index = Indexes.Open(_holder, loggerFactory: _loggers, notifications: _notifications);
         _notifications.OnPublish = ListNpcsWhenAnnounced;
@@ -66,7 +68,7 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
     private void CompiledPluginNpcEditedWhileOutOfTheLoadOrder_ToMatchTheFilter()
     {
         Reconcile(Resident, CompiledPlugin);
-        var document = _index.DocumentOf(_compiledPluginNpc, Entry(CompiledPlugin).KeyOf());
+        var document = _index.DocumentOf(_compiledPluginNpc, Entry(CompiledPlugin).Key);
         _index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'EditedWhileAway'", "filter.sql");
         Reconcile(Resident);
         Entry(CompiledPlugin).HandEdit(document, "\"CompiledPluginNpc\"", "\"EditedWhileAway\"");
@@ -84,7 +86,7 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
     {
         Reconcile(Resident);
         _index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'ArrivingNpc'", "filter.sql");
-        var arriving = Entry(Arriving).KeyOf();
+        var arriving = Entry(Arriving).Key;
         _announces = n =>
             n is LoadOrderStatusNotification status && status.Status.IndexedPlugins.Contains(arriving, PluginAddress.Comparer);
 
@@ -111,6 +113,7 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
 
         Reconcile(Resident, CompiledPlugin);
 
+        Assert.True(_failed);
         AssertEveryAnnouncementFoundTheOneMatch();
     }
 
@@ -123,11 +126,12 @@ public sealed class FilterBeforeAnnouncementTests : IDisposable
         var renamed = new Fallout4Mod(ModKey.FromFileName(Resident), Fallout4Release.Fallout4);
         renamed.Npcs.AddNew("RenamedOnDisk");
         renamed.WriteToBinary(resident.Path);
-        _announces = n => n is PluginChangedNotification changed && changed.Plugin.Equals(resident.KeyOf());
+        _announces = n => n is PluginChangedNotification changed && changed.Plugin.Equals(resident.Key);
         _failingAt = "Swept winners";
 
         _index.NextSnapshotUnsettledUntil(() => !_listed.IsEmpty, "the plugin's announcement");
 
+        Assert.True(_failed);
         AssertEveryAnnouncementFoundTheOneMatch();
     }
 }

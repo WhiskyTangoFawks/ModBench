@@ -45,7 +45,7 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
     private OpenedIndex OpenIndex(LoadOrderHolder holder, AbortingTreeSource? source = null) =>
         Indexes.Open(holder, new MutagenPluginAdapter(TimeProvider.System), timeProvider: _clock, source: source);
 
-    private PluginAddress Key => _fixture.Plugins.Single().KeyOf();
+    private PluginAddress Key => _fixture.Plugins.Single().Key;
 
     private async Task<Task<Answer<SelectedRows, IndexRefused>>> AReadOutlivingEveryDrain(OpenedIndex index, string instanceRoot)
     {
@@ -68,7 +68,7 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
         Waits.Reached(() => _index.Status is { State: LoadOrderState.Failed, Message: NotReopened }, "the status saying the record index was not reopened");
 
     private void ReceiveTheFixture() =>
-        _index.Receive(_holder, LoadOrderArrival.Snapshot(_fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, _fixture.Plugins));
+        _index.Receive(_holder, SnapshotPlugins.Snapshot(_fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, _fixture.Plugins));
 
     [Fact]
     public async Task ARebuild_WhileAReadOutlivesTheDrain_IsRefused_AndNoStoreOpensOnTheFileUntilTheReadEnds()
@@ -90,7 +90,7 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
         var otherDataFolder = Directory.CreateDirectory(Path.Combine(_fixture.InstanceRoot, "OtherData")).FullName;
         var read = await AReadOutlivingEveryDrain(_index, _fixture.InstanceRoot);
 
-        _index.Receive(_holder, LoadOrderArrival.Snapshot(otherDataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, []));
+        _index.Receive(_holder, SnapshotPlugins.Snapshot(otherDataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, []));
 
         AwaitNotReopened();
         await ReadEnds(read);
@@ -105,10 +105,10 @@ public sealed class ReadOutlivesTheDrainTests : IDisposable
         using var other = new PluginFixtureBuilder("read-outlives-drain-other").WithPlugin("Other.esp", mod => mod.Npcs.AddNew("OtherNpc")).Build();
         var read = await AReadOutlivingEveryDrain(_index, _fixture.InstanceRoot);
 
-        _index.Receive(_holder, LoadOrderArrival.Snapshot(other.DataFolder, other.InstanceRoot, GameRelease.Fallout4, other.Plugins));
+        _index.Receive(_holder, SnapshotPlugins.Snapshot(other.DataFolder, other.InstanceRoot, GameRelease.Fallout4, other.Plugins));
 
         Assert.Equal(LoadOrderState.Ready, _index.Status.State);
-        Assert.NotEmpty(_index.ListedIn(other.Plugins.Single().KeyOf()));
+        Assert.NotEmpty(_index.ListedIn(other.Plugins.Single().Key));
         await ReadEnds(read);
     }
 

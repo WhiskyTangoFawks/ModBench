@@ -67,22 +67,22 @@ public sealed class SqlDoorSchemaTests : IDisposable
     }
 
     [Theory]
-    [InlineData("records", true)]
-    [InlineData("form_lookup", true)]
-    [InlineData("holdings", false)]
-    public void ARelation_ExposesWinner_OnlyWhereAReaderAsksForIt(string relation, bool exposesWinner)
+    [InlineData("records")]
+    [InlineData("form_lookup")]
+    public void ARelationAReaderAsksTheWinnerOf_ExposesIt(string relation)
     {
-        var sql = $"SELECT form_key FROM {relation} WHERE is_winner";
+        _index.SetFilter($"SELECT form_key FROM {relation} WHERE is_winner", "filter.sql");
 
-        if (exposesWinner)
-        {
-            _index.SetFilter(sql, "filter.sql");
-            Assert.NotEmpty(Listing());
-        }
-        else
-        {
-            Assert.Equal(IndexRefusal.FilterRejected, _index.Queries.SetFilter(sql, "filter.sql")?.Refusal);
-        }
+        Assert.NotEmpty(Listing());
+    }
+
+    [Fact]
+    public void Holdings_ExposesNoWinner()
+    {
+        var refused = _index.Queries.SetFilter("SELECT child AS form_key FROM holdings WHERE is_winner", "filter.sql");
+
+        Assert.Equal(IndexRefusal.FilterRejected, refused?.Refusal);
+        Assert.Contains("\"is_winner\" not found", refused?.Message, StringComparison.Ordinal);
     }
 
     [Theory]

@@ -17,7 +17,7 @@ const NOT_INDEXED = { getPlugins: () => Promise.reject(new Error('mEdit is index
 type Fact = { name: string; masters?: string[]; isBlueprint?: boolean; origin?: string; inLoadOrder?: boolean };
 const knowing = (...facts: Fact[]) => ({
   getPlugins: () => Promise.resolve(facts.map((f): PluginMetadata => ({
-    path: `/data/${f.name}`, isLight: false, isMaster: false, recordCount: 0, isImmutable: false, inLoadOrder: true,
+    path: `/data/${f.name}`, isLight: false, isMaster: false, isImmutable: false, inLoadOrder: true,
     hasMatchingRecords: false, isCompiledPlugin: false, hasParseFailure: false, pluginSourceUnreadable: null, masters: [], isBlueprint: false, origin: 'SomeMod', ...f,
   }))),
 });

@@ -32,7 +32,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
         SourceMods.Init(_compiledPlugin);
         _index = Indexes.Open(_holder, timeProvider: _clock);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        _compiledPlugin.HandEdit(_index.DocumentOf(_npc, _compiledPlugin.KeyOf()), "\"CompiledPluginNpc\"", "\"Written\"");
+        _compiledPlugin.HandEdit(_index.DocumentOf(_npc, _compiledPlugin.Key), "\"CompiledPluginNpc\"", "\"Written\"");
         _holder.SourceWritten();
     }
 
@@ -43,7 +43,7 @@ public sealed class ReadAfterSourceWriteTests : IDisposable
     }
 
     private Task<Answer<RenderedDocument?, IndexRefused>> Read() =>
-        Task.Run(() => _index.Queries.GetRenderedDocument(_compiledPlugin.KeyOf(), _npc));
+        Task.Run(() => _index.Queries.GetRenderedDocument(_compiledPlugin.Key, _npc));
 
     [Fact]
     public async Task AReadAfterASourceWrite_AnswersOnceTheNextSnapshotIsReconciled()

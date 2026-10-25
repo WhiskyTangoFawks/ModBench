@@ -105,10 +105,10 @@ public sealed class WorkingTreeStatesBeneathTests : IDisposable
             .CompiledPlugin();
         var entry = fixture.Plugins.Single();
         using var index = Indexes.Reconciled(fixture);
-        index.Edit(entry, index.DocumentOf(topic, entry.KeyOf()),
-            index.BodyOf(topic, entry.KeyOf()).Replace("HeldTopic", "RenamedTopic", StringComparison.Ordinal));
+        index.Edit(entry, index.DocumentOf(topic, entry.Key),
+            index.BodyOf(topic, entry.Key).Replace("HeldTopic", "RenamedTopic", StringComparison.Ordinal));
 
-        var beneath = index.Queries.GetWorkingTreeStatesBeneath(entry.KeyOf()).Value();
+        var beneath = index.Queries.GetWorkingTreeStatesBeneath(entry.Key).Value();
 
         Assert.Equal([WorkingTreeState.Modified], Assert.Single(beneath.RecordTypes, group => group.Key == "qust").Value);
         Assert.Equal([WorkingTreeState.Modified], Assert.Single(beneath.Records, row => row.Key == quest).Value);
@@ -138,9 +138,9 @@ public sealed class WorkingTreeStatesBeneathTests : IDisposable
         var compiledPlugin = fixture.Plugins.Single(p => p.Origin == "SharedMod");
         SourceMods.Init(compiledPlugin);
         using var index = Indexes.Reconciled(fixture);
-        index.Edit(compiledPlugin, index.DocumentOf(placed, compiledPlugin.KeyOf()),
-            index.BodyOf(placed, compiledPlugin.KeyOf()).Replace("SharedRef", "RenamedRef", StringComparison.Ordinal));
-        Assert.NotEmpty(index.Queries.GetWorkingTreeStatesBeneath(compiledPlugin.KeyOf()).Value().Records);
+        index.Edit(compiledPlugin, index.DocumentOf(placed, compiledPlugin.Key),
+            index.BodyOf(placed, compiledPlugin.Key).Replace("SharedRef", "RenamedRef", StringComparison.Ordinal));
+        Assert.NotEmpty(index.Queries.GetWorkingTreeStatesBeneath(compiledPlugin.Key).Value().Records);
 
         var otherOrigin = index.Queries.GetWorkingTreeStatesBeneath(new PluginAddress(sharedName, PluginOrigin.DataDirectory)).Value();
 

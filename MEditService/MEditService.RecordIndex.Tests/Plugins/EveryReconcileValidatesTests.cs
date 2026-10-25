@@ -60,7 +60,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
 
     private void HandEditCompiledPlugin(string editorId = "EditedByHand")
     {
-        var document = _index.DocumentOf(_compiledPluginNpc, _compiledPlugin.KeyOf());
+        var document = _index.DocumentOf(_compiledPluginNpc, _compiledPlugin.Key);
         _compiledPlugin.HandEdit(document, document.EditorId ?? "", editorId);
     }
 
@@ -78,7 +78,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
 
         ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
 
-        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.KeyOf()), row => row.EditorId == "WrittenByAnotherTool");
+        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "WrittenByAnotherTool");
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
 
         ArrivalAnnouncing(RowsChanged(_compiledPluginNpc));
 
-        Assert.Equal("EditedByHand", _index.DocumentOf(_compiledPluginNpc, _compiledPlugin.KeyOf()).EditorId);
+        Assert.Equal("EditedByHand", _index.DocumentOf(_compiledPluginNpc, _compiledPlugin.Key).EditorId);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
 
         ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
 
-        Assert.Empty(_index.ListedIn(_nonCompiledPlugin.KeyOf()));
+        Assert.Empty(_index.ListedIn(_nonCompiledPlugin.Key));
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
 
         ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
 
-        Assert.Empty(_index.ListedIn(_nonCompiledPlugin.KeyOf()));
+        Assert.Empty(_index.ListedIn(_nonCompiledPlugin.Key));
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
 
         ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
 
-        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.KeyOf()), row => row.EditorId == "NonCompiledPluginNpc");
+        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "NonCompiledPluginNpc");
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         File.Delete(_compiledPlugin.Path);
         ArrivalAnnouncing(PluginChanged(_compiledPlugin));
 
-        Assert.Empty(_index.ListedIn(_compiledPlugin.KeyOf()));
+        Assert.Empty(_index.ListedIn(_compiledPlugin.Key));
     }
 
     [Fact]
@@ -152,12 +152,12 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         var bytes = File.ReadAllBytes(_nonCompiledPlugin.Path);
         File.Delete(_nonCompiledPlugin.Path);
         ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
-        Assert.Empty(_index.ListedIn(_nonCompiledPlugin.KeyOf()));
+        Assert.Empty(_index.ListedIn(_nonCompiledPlugin.Key));
 
         File.WriteAllBytes(_nonCompiledPlugin.Path, bytes);
         ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
 
-        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.KeyOf()), row => row.EditorId == "NonCompiledPluginNpc");
+        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "NonCompiledPluginNpc");
     }
 
     [Fact]
@@ -203,16 +203,16 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     [Fact]
     public void AnEqualSnapshot_OfATreeThatFailedToRead_AndStandsUnchanged_ReadsNothingOfIt()
     {
-        var document = _compiledPlugin.SourceFileOf(_index.DocumentOf(_compiledPluginNpc, _compiledPlugin.KeyOf()));
+        var document = _compiledPlugin.SourceFileOf(_index.DocumentOf(_compiledPluginNpc, _compiledPlugin.Key));
         File.Copy(document, Path.Combine(Path.GetDirectoryName(document).Require(), "Backup.json"));
         ArrivalAnnouncing(PluginChanged(_compiledPlugin));
-        Assert.True(_index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.KeyOf()));
+        Assert.True(_index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.Key));
 
         var announced = _index.AnnouncedByEqualArrivals(_notifications, () => Touched(_nonCompiledPlugin));
 
         Assert.All(announced, n => Assert.IsType<PluginChangedNotification>(n));
         Assert.DoesNotContain(announced, PluginChanged(_compiledPlugin));
-        Assert.True(_index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.KeyOf()));
+        Assert.True(_index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.Key));
     }
 
     [Fact]
@@ -224,7 +224,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         RewriteNonCompiledPlugin("FixedByAnotherTool");
         ArrivalAnnouncing(PluginChanged(_nonCompiledPlugin));
 
-        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.KeyOf()), row => row.EditorId == "FixedByAnotherTool");
+        Assert.Contains(_index.ListedIn(_nonCompiledPlugin.Key), row => row.EditorId == "FixedByAnotherTool");
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == NonCompiledPlugin);
     }
 
@@ -243,7 +243,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
 
         File.Delete(blocker);
         failing.NextSnapshotUntil(() => failing.Status.State == LoadOrderState.Ready, "the equal arrival's retry");
-        Assert.NotEmpty(failing.ListedIn(_nonCompiledPlugin.KeyOf()));
+        Assert.NotEmpty(failing.ListedIn(_nonCompiledPlugin.Key));
     }
 
     [Fact]
@@ -252,7 +252,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         SourceMods.Init(_nonCompiledPlugin);
 
         _index.NextSnapshotUntil(
-            () => _index.ReadFromItsPluginSource(_nonCompiledPlugin.KeyOf()), "the arrival's re-derivation of the plugin from its tree");
+            () => _index.ReadFromItsPluginSource(_nonCompiledPlugin.Key), "the arrival's re-derivation of the plugin from its tree");
     }
 
     [Fact]
@@ -272,6 +272,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
 
         index.Reconcile(holder, _fixture.DataFolder, NamingSourceFolder(folder), GameRelease.Fallout4);
 
-        Assert.True(index.ReadFromItsPluginSource(_nonCompiledPlugin.KeyOf()));
+        Assert.True(index.ReadFromItsPluginSource(_nonCompiledPlugin.Key));
     }
 }

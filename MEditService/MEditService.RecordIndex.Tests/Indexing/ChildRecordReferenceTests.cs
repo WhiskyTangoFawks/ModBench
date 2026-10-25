@@ -59,11 +59,11 @@ public sealed class ChildRecordReferenceTests : IDisposable
     public void AnEditedQuestStillListsOnlyWhatItReferences()
     {
         using var index = Indexes.Reconciled(_fixture);
-        var committed = index.DocumentOf(_quest, _plugin.KeyOf());
+        var committed = index.DocumentOf(_quest, _plugin.Key);
 
         index.Edit(_plugin, committed, _plugin.SourceTextOf(committed).Replace("Owner", "OwnerEdited", StringComparison.Ordinal));
 
-        Assert.Equal("OwnerEdited", index.DocumentOf(_quest, _plugin.KeyOf()).EditorId);
+        Assert.Equal("OwnerEdited", index.DocumentOf(_quest, _plugin.Key).EditorId);
         AssertEachListsOnlyItsOwn(index);
     }
 }

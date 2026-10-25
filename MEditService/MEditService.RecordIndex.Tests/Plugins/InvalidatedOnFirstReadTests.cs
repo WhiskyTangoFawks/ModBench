@@ -36,7 +36,7 @@ public sealed class InvalidatedOnFirstReadTests : IDisposable
     {
         Assert.Equal(LoadOrderState.Failed, _index.Status.State);
         Assert.Empty(_index.Status.Failures);
-        Assert.Empty(_index.ListedIn(_fixture.Plugins.Single(p => p.Name == Aborted).KeyOf()));
+        Assert.Empty(_index.ListedIn(_fixture.Plugins.Single(p => p.Name == Aborted).Key));
     }
 
     [Fact]

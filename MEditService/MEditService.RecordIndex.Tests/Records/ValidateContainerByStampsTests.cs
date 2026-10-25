@@ -18,15 +18,13 @@ public sealed class ValidateContainerByStampsTests : IDisposable
     private void ValidateUntilPlacedRefIsNamed(string editorId) =>
         _fixture.Index.NextSnapshotUntil(() => _fixture.Index.CopyIn(_fixture.TemporaryRef, _fixture.Plugin)?.EditorId == editorId, $"the placed reference named {editorId}");
 
-    private bool SourceUnreadable => _fixture.Index.PluginResponseOf(_fixture.Plugin) is { IsCompiledPlugin: true, PluginSourceUnreadable: not null };
-
     private string CellDirectory => Path.GetDirectoryName(_fixture.Mod.SourceFileContaining(ContainerModPlugin.TemporaryRefEditorId)).Require();
 
     private void ValidateUntilSourceUnreadable() =>
-        _fixture.Index.NextSnapshotUntil(() => SourceUnreadable, "the plugin read from its binary in place of its source");
+        _fixture.Index.NextSnapshotUntil(() => _fixture.Index.ReadFromItsPluginFileForItsUnreadableSource(_fixture.Plugin), "the plugin read from its binary in place of its source");
 
     private void ValidateUntilSourceRead() =>
-        _fixture.Index.NextSnapshotUntil(() => !SourceUnreadable, "the plugin read from its source again");
+        _fixture.Index.NextSnapshotUntil(() => !_fixture.Index.ReadFromItsPluginFileForItsUnreadableSource(_fixture.Plugin), "the plugin read from its source again");
 
     [Fact]
     public void AGitRevertOfAPlacedRefsOwningCellDocument_ReachesTheNextRead()

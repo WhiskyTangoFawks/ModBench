@@ -19,7 +19,7 @@ public sealed class FilterAfterValidationTests
         using var index = Indexes.Reconciled(fixture);
         index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'EditedName'", "filter.sql");
         var formKey = npc.ToString();
-        entry.HandEdit(index.DocumentOf(formKey, entry.KeyOf()), "\"FixtureNpc\"", "\"EditedName\"");
+        entry.HandEdit(index.DocumentOf(formKey, entry.Key), "\"FixtureNpc\"", "\"EditedName\"");
 
         index.NextSnapshot();
 

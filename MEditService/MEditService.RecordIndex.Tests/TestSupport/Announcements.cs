@@ -8,7 +8,7 @@ namespace MEditService.RecordIndex.Tests.TestSupport;
 internal static class Announcements
 {
     internal static Predicate<INotification> PluginChanged(LoadOrderEntry plugin) =>
-        n => n is PluginChangedNotification changed && PluginAddress.Comparer.Equals(changed.Plugin, plugin.KeyOf());
+        n => n is PluginChangedNotification changed && PluginAddress.Comparer.Equals(changed.Plugin, plugin.Key);
 
     internal static Predicate<INotification> RowsChanged(string formKey) =>
         n => n is RowsChangedNotification rows && rows.Keys.Contains(formKey);
@@ -41,8 +41,8 @@ internal static class Announcements
     /// <summary>A compiled plugin's one NPC renamed on disk under a new name: announced as its rows.</summary>
     internal static Predicate<INotification> RenamedByHand(this LoadOrderEntry plugin, OpenedIndex index)
     {
-        var listed = index.Queries.GetRecords(["npc_"], plugin.KeyOf(), search: null, limit: 1, offset: 0).Value().Items.Single();
-        var document = index.DocumentOf(listed.FormKey, plugin.KeyOf());
+        var listed = index.Queries.GetRecords(["npc_"], plugin.Key, search: null, limit: 1, offset: 0).Value().Items.Single();
+        var document = index.DocumentOf(listed.FormKey, plugin.Key);
         plugin.RenameByHand(document, $"Edited{Guid.NewGuid():N}");
         return RowsChanged(listed.FormKey);
     }

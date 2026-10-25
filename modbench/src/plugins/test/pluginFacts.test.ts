@@ -9,7 +9,7 @@ const A = { name: 'A.esp', origin: 'SomeMod' };
 const held = (overrides: Partial<PluginMetadata> = {}): PluginMetadata => pluginMetadataFixture({ name: 'A.esp', isCompiledPlugin: true, ...overrides });
 const failure = (reason: string, address = A): PluginLoadFailure => ({ ...address, reason });
 const diagnosis = (text: string, address = A): PluginDiagnosisReport => (
-  { plugin: address.name, origin: address.origin, defectClass: 'fixed-size-subrecord-short', message: text, text }
+  { plugin: address.name, origin: address.origin, message: text, text }
 );
 const changedOutside = (facts: PluginFacts, origin: string, ...names: string[]): void => facts.externalChange({
   origin, changedPlugins: names.map((name) => ({ name, bytesSha256: 'ab12' })),
