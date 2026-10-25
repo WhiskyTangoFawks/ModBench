@@ -9,21 +9,27 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { soleChild, soleGroup } from './browserRows';
+import { NOT_EDITABLE, soleChild, soleGroup } from './browserRows';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import { rowResourceUri } from '../recordResourceUri';
 import type { PluginAddress } from '../../wire/pluginAddress';
 import { present } from '../../ports/present';
-import { settled } from '../../test/settled';
 
 const PLUGIN: PluginAddress = { name: 'Plugin0.esp', origin: 'Data/' };
 const NOTHING: WorkingTreeStatesBeneath = { plugin: [], recordTypes: {}, records: {} };
 
 const uriOf = (row: RecordBrowserNode | undefined) => present(present(row, 'the row').resourceUri, 'the row\'s resourceUri');
 
+function answered(browser: RecordBrowser): Promise<void> {
+  return new Promise((resolve) => {
+    browser.onDidReadBeneath(resolve);
+    browser.beneathFailure.onMessageChanged(resolve);
+  });
+}
+
 async function askedTwice(browser: RecordBrowser, uri: vscode.Uri) {
   const before = browser.statesBeneathOf(uri);
-  await settled();
+  await answered(browser);
   return { before, after: browser.statesBeneathOf(uri) };
 }
 
@@ -78,7 +84,7 @@ describe('the states beneath a row', () => {
 
     browser.statesBeneathOf(rowResourceUri(PLUGIN));
     browser.statesBeneathOf(rowResourceUri(PLUGIN, 'weap'));
-    await settled();
+    await answered(browser);
 
     expect(beneathCalls(client)).toHaveLength(1);
   });
@@ -88,7 +94,7 @@ describe('the states beneath a row', () => {
     client.setQueryAnswer('getRecordTypes', [recordTypeCountFixture({ type: 'weap', count: 1 }), recordTypeCountFixture({ type: 'armo', count: 1 })]);
     client.setQueryAnswer('getWorkingTreeStatesBeneath', { ...NOTHING, plugin: ['Modified'], recordTypes: { weap: ['Added'] } });
     const browser = new RecordBrowser(client);
-    const [weap, armo] = await browser.getPluginChildren(PLUGIN);
+    const [weap, armo] = await browser.getPluginChildren(PLUGIN, NOT_EDITABLE);
 
     const weapons = await askedTwice(browser, uriOf(weap));
 
@@ -179,7 +185,7 @@ describe('the states beneath a row', () => {
     client.setQueryAnswer('getWorkingTreeStatesBeneath', NOTHING);
     browser.refresh();
     const during = browser.statesBeneathOf(row);
-    await settled();
+    await answered(browser);
 
     expect([during, browser.statesBeneathOf(row)]).toEqual([['Modified'], []]);
   });
@@ -204,7 +210,8 @@ describe('the states beneath a row', () => {
 
     browser.refresh();
     release({ ...NOTHING, plugin: ['Modified'] });
-    await settled();
+    client.setQueryAnswer('getWorkingTreeStatesBeneath', NOTHING);
+    await askedTwice(browser, rowResourceUri({ name: 'Other.esp', origin: 'Data/' }));
 
     expect(browser.statesBeneathOf(row)).toEqual([]);
   });
@@ -219,7 +226,6 @@ describe('the states beneath a row', () => {
 
     const { after } = await askedTwice(browser, row);
     browser.statesBeneathOf(row);
-    await settled();
 
     expect(after).toEqual([]);
     expect(browser.beneathFailure.message()).toBe('Failed to load: boom');
@@ -237,13 +243,13 @@ describe('the states beneath a row', () => {
     client.setQueryFailureOnce('getWorkingTreeStatesBeneath', { failed: 'refused', refusal: 'boom' });
     browser.refresh();
     browser.statesBeneathOf(row);
-    await settled();
+    await answered(browser);
     const failed = [browser.statesBeneathOf(row), browser.beneathFailure.message()];
 
     client.setQueryAnswer('getWorkingTreeStatesBeneath', NOTHING);
     browser.refresh();
     browser.statesBeneathOf(row);
-    await settled();
+    await answered(browser);
 
     expect(failed).toEqual([['Modified'], 'Showing the last good read: boom']);
     expect(browser.beneathFailure.message()).toBeUndefined();
@@ -269,7 +275,8 @@ describe('the states beneath a row', () => {
     const before = browser.statesBeneathOf(uriOf(block));
 
     browser.refresh();
-    await settled();
+    browser.statesBeneathOf(uriOf(block));
+    await answered(browser);
 
     expect([before, browser.statesBeneathOf(uriOf(block))]).toEqual([['Added'], []]);
   });
@@ -297,7 +304,7 @@ describe('the rows that are expanded', () => {
     client.setQueryAnswer('getRecordTypes', [recordTypeCountFixture({ type: 'weap', count: 1 })]);
     client.setQueryAnswer('getRecords', { items: [], total: 0 });
     const browser = new RecordBrowser(client);
-    return { browser, group: present((await browser.getPluginChildren(PLUGIN))[0], 'the group') };
+    return { browser, group: present((await browser.getPluginChildren(PLUGIN, NOT_EDITABLE))[0], 'the group') };
   };
 
   it('are the ones VS Code says it expanded, until it says it collapsed them', () => {

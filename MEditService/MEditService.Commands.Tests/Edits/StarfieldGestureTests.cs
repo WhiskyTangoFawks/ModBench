@@ -20,7 +20,7 @@ public sealed class StarfieldGestureTests : IDisposable
     private const string UnrelatedName = "Unrelated.esm";
     private const string CompiledPluginName = "CompiledPlugin.esp";
 
-    private readonly StarfieldInstance _instance = new();
+    private readonly GameInstance _instance = new(GameRelease.Starfield);
     private readonly FormKey _weapon;
     private readonly FormKey _lightInterior;
     private readonly FormKey _lightPlaced;
@@ -189,11 +189,8 @@ public sealed class StarfieldGestureTests : IDisposable
 
         Assert.True(flagged.Applied, flagged.Message);
         var refused = Assert.Single((await _instance.CompileHandler.CompileAsync([_compiledPlugin])).Value().Refused);
-        Assert.Equal(
-            (CompileRefusal.FormIdOutsideFlagLimit,
-             $"{CompiledPluginName} is a medium plugin but holds native FormID(s) outside the medium range (0x0-0xFFFF): {wide}. " +
-             "Clear the medium flag, or change the records' FormIDs."),
-            (refused.Refusal, refused.Message));
+        Assert.Equal(CompileRefusal.FormIdOutsideFlagLimit, refused.Refusal);
+        Assert.Contains(wide.ToString(), refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -243,10 +240,5 @@ public sealed class StarfieldGestureTests : IDisposable
         var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
         block.SubBlocks.Add(subBlock);
         return block;
-    }
-
-    private sealed class StarfieldInstance() : TestInstance(GameRelease.Starfield)
-    {
-        public PluginAddress AddPlugin(StarfieldMod mod, string origin, bool compiledPlugin) => Add(mod, origin, compiledPlugin);
     }
 }

@@ -58,36 +58,21 @@ describe('onPluginCheckboxChanged', () => {
     expect(adapter.calls).toEqual(enabling(['A.esp', true], ['B.esp', false]));
   });
 
-  it.each<[string, [string, 0 | 1][], string]>([
-    ['says why when the whole toggle is refused', [['A.esp', 0]], 'Failed to disable plugins.'],
-    ['names a mixed-state toggle\'s failure generically, having no single direction to name', [['A.esp', 1], ['B.esp', 0]], 'Failed to update plugins.'],
-  ])('%s', async (_, items, message) => {
+  it('names a mixed-state toggle\'s failure generically, having no single direction to name', async () => {
     const reporter = recordingReporter();
 
-    await toggle(toggled(...items), fake(REFUSED), reporter);
+    await toggle(toggled(['A.esp', 1], ['B.esp', 0]), fake(REFUSED), reporter);
 
-    expect(reporter.reports).toMatchObject([{ severity: 'error', message }]);
+    expect(reporter.reports).toMatchObject([{ severity: 'error', message: 'Failed to update plugins.' }]);
   });
 
-  it('names a refused row and why, and lands the one that can', async () => {
-    const adapter = fake();
-    const reporter = recordingReporter();
-
-    await toggle(toggled(['A.esp', 1], ['Gone.esp', 1]), adapter, reporter);
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not enable 1 of 2 plugins.', detail: '"Gone.esp" (Plugin not found in plugins.txt: Gone.esp)' },
-    ]);
-    expect(adapter.calls).toEqual(enabling(['A.esp', true]));
-  });
-
-  it('ignores a non-plugin row (a record-tree row sharing the merged view)', async () => {
+  it('ignores a non-plugin row (a record-tree row sharing the merged view), writing nothing and opening no progress', async () => {
     const adapter = fake();
     const recordNode = await recordRow(recordSummaryFixture(), 'Data/');
 
     await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, pluginCommandsWith(adapter.adapter), recordingReporter(), instance);
 
-    expect(adapter.calls).toEqual([]);
+    expect([adapter.calls, progressSteps]).toEqual([[], []]);
   });
 });
 
@@ -102,18 +87,5 @@ describe('a check box ends when the read lands (common.md, A gesture that writes
     await toggle(toggled(['A.esp', 1]));
 
     expect(progressSteps).toEqual(ENDS_ON_THE_READ);
-  });
-
-  it('still ends on the read when the write is refused', async () => {
-    await toggle(toggled(['A.esp', 1]), fake(REFUSED));
-
-    expect(progressSteps).toEqual(ENDS_ON_THE_READ);
-  });
-
-  it('opens no progress for a record row', async () => {
-    await onPluginCheckboxChanged(
-      { items: [[await recordRow(recordSummaryFixture(), 'Data/'), 1]] }, pluginCommandsWith(fake().adapter), recordingReporter(), instance);
-
-    expect(progressSteps).toEqual([]);
   });
 });

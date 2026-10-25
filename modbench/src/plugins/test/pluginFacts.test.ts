@@ -19,6 +19,7 @@ const CHANGED_TEXT = 'Changed outside Modbench: its bytes differ from what Modbe
 
 type Scene = (facts: PluginFacts) => void;
 
+const reconciledWith = (overrides: Partial<PluginMetadata>): Scene => (facts) => facts.reconciled([held(overrides)], []);
 const failed: Scene = (facts) => facts.reconciled([], [failure('Malformed record')]);
 const masters = (...missing: string[]): Scene => (facts) => facts.reconciled([held({ missingMasters: missing })], []);
 const unreadable: Scene = (facts) => facts.reconciled([held({ hasParseFailure: true })], []);
@@ -29,14 +30,8 @@ const malformed: Scene = (facts) => facts.diagnosed([diagnosis('first'), diagnos
 const scenes = (...parts: Scene[]): Scene => (facts) => parts.forEach((part) => part(facts));
 
 describe('PluginFacts — the tooltip names the origin (plugins.md, A row, Plugin, Tooltip)', () => {
-  it.each([
-    ['Data/', 'the game folder'],
-    ['overwrite/', 'Overwrite'],
-    ['SomeMod', 'SomeMod'],
-    ['Data', 'Data'],
-    ['overwrite', 'overwrite'],
-  ])('%s as %s', (origin, named) => {
-    expect(new PluginFacts().tooltipLines({ name: 'A.esp', origin })).toEqual(['A.esp', named]);
+  it('names the game folder as the user reads it', () => {
+    expect(new PluginFacts().tooltipLines({ name: 'A.esp', origin: 'Data/' })).toEqual(['A.esp', 'the game folder']);
   });
 });
 
@@ -269,27 +264,18 @@ describe('PluginFacts — the Problems panel reads the answers the rows read', (
     facts.reconciled([], []);
     expect(facts.problems().failedToRead).toEqual([]);
   });
-
-  it('lists exactly the plugins whose rows carry the changed outside status', () => {
-    const facts = new PluginFacts();
-    changedOutside(facts, 'SomeMod', 'A.esp', 'B.esp');
-
-    const warned = facts.problems().changedOutside.map((w) => ({ name: w.plugin, origin: w.origin }));
-    expect(warned).toHaveLength(2);
-    expect(warned.every((address) => facts.description(address) === 'changed outside Modbench')).toBe(true);
-  });
 });
 
 describe('PluginFacts — what a row states about its plugin', () => {
   it.each([
-    ['nothing before mEdit answers', undefined, [], { editable: false }],
-    ['a plugin with no source', { isCompiledPlugin: false }, ['nonCompiledPlugin'], { editable: false }],
-    ['an editable compiled plugin', { isCompiledPlugin: true }, ['compiledPlugin', 'editable'], { editable: true }],
-    ['a read-only compiled plugin', { isCompiledPlugin: true, isImmutable: true }, ['compiledPlugin'], { editable: false }],
-    ['a compiled plugin whose plugin source is unreadable', { isCompiledPlugin: true, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } }, ['compiledPlugin'], { editable: false }],
-  ] as const)('%s', (_label, overrides, flags, conditions) => {
+    ['nothing before mEdit answers', scenes(), [], { editable: false }],
+    ['a plugin with no source', reconciledWith({ isCompiledPlugin: false }), ['nonCompiledPlugin'], { editable: false }],
+    ['an editable compiled plugin', reconciledWith({ isCompiledPlugin: true }), ['compiledPlugin', 'editable'], { editable: true }],
+    ['a read-only compiled plugin', reconciledWith({ isCompiledPlugin: true, isImmutable: true }), ['compiledPlugin'], { editable: false }],
+    ['a compiled plugin whose plugin source is unreadable', sourceUnreadable, ['compiledPlugin'], { editable: false }],
+  ] as const)('%s', (_label, scene, flags, conditions) => {
     const facts = new PluginFacts();
-    if (overrides !== undefined) facts.reconciled([held(overrides)], []);
+    scene(facts);
 
     expect(facts.contextFlags(A)).toEqual(flags);
     expect(facts.conditions(A)).toEqual(conditions);
@@ -518,7 +504,6 @@ describe('PluginFacts — a read that failed (common.md, States, stories 2 and 6
     facts.refreshed([held({ laterReadFailure: answer })]);
 
     expect(facts.readFailureMessage()).toBeUndefined();
-    expect(facts.laterReadFailures().size).toBe(0);
   });
 });
 

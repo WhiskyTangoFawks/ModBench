@@ -1,10 +1,7 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -48,14 +45,8 @@ public sealed class InteriorCellCopyCompileTests : IDisposable
 
     private async Task<IFallout4ModGetter> ImportCompiled()
     {
-        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.DestinationPlugin);
-
-        var overlay = ModFactory.ImportGetter(
-            new ModPath(
-                ModKey.FromFileName(ContainerCopyFixture.DestinationPluginName),
-                Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName)),
-            GameRelease.Fallout4);
-        _overlays.Add(overlay);
-        return (IFallout4ModGetter)overlay;
+        var compiled = await _fixture.CompiledAsync(_fixture.DestinationPlugin);
+        _overlays.Add(compiled);
+        return compiled;
     }
 }

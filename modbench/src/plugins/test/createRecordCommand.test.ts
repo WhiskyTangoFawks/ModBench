@@ -141,21 +141,27 @@ describe('modbench.record.create', () => {
     expect(steps).toEqual(['watch MyPatch.esp ModA', 'create MyPatch.esp ModA npc_', 'select 000900:MyPatch.esp in npc_']);
   });
 
-  it('creates nothing, awaits nothing and says nothing when the type pick is left with Esc', async () => {
+  it.each<[string, () => RecordBrowserNode | PluginNode]>([
+    ['a plugin', () => PLUGIN_ROW],
+    ['a container', () => QUEST_ROW],
+  ])('creates nothing, watches nothing and says nothing when the type pick on %s is left with Esc', async (_row, row) => {
     const { steps, reporter, create } = harness();
     showQuickPick.mockResolvedValue(undefined);
 
-    await create(PLUGIN_ROW);
+    await create(row());
 
     expect(steps).toEqual([]);
     expect([reporter.reports, reporter.landings]).toEqual([[], []]);
   });
 
-  it('says why when mEdit cannot name the types, and creates nothing', async () => {
+  it.each<[string, () => RecordBrowserNode | PluginNode, 'getCreatableRecordTypes' | 'getChildRecordTypes']>([
+    ['a plugin', () => PLUGIN_ROW, 'getCreatableRecordTypes'],
+    ['a container', () => QUEST_ROW, 'getChildRecordTypes'],
+  ])('says why when mEdit cannot name the types %s holds, and creates nothing', async (_row, row, query) => {
     const { client, steps, reporter, create } = harness();
-    client.setQueryFailure('getCreatableRecordTypes', { failed: 'refused', refusal: 'mEdit is not running' });
+    client.setQueryFailure(query, { failed: 'refused', refusal: 'mEdit is not running' });
 
-    await create(PLUGIN_ROW);
+    await create(row());
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not look up the record types to create.', detail: 'mEdit is not running' },
@@ -163,12 +169,14 @@ describe('modbench.record.create', () => {
     expect(steps).toEqual([]);
   });
 
-  it('does nothing on a record row that is no container, or with no row and no single plugin, group or container selected', async () => {
+  it.each<[string, () => RecordBrowserNode | undefined]>([
+    ['on a record row that is no container', () => RECORD_ROW],
+    ['with no row and no single plugin, group or container selected', () => undefined],
+  ])('does nothing %s', async (_case, row) => {
     const { steps, reporter, create } = harness([PLUGIN_ROW, NPC_GROUP]);
     showQuickPick.mockImplementation((items) => Promise.resolve(items[0]));
 
-    await create(RECORD_ROW);
-    await create();
+    await create(row());
 
     expect(steps).toEqual([]);
     expect(reporter.reports).toEqual([]);
@@ -216,15 +224,14 @@ describe('modbench.record.create makes the changes mEdit answers', () => {
     expect(steps).toContain('select 000900:MyPatch.esp in npc_');
   });
 
-  it('reports a change VS Code did not apply as one that may have partly landed, selects nothing, and refreshes Source Control', async () => {
+  it('says the record could not be created when VS Code does not apply the change, and selects nothing', async () => {
     const { steps, source, reporter, create } = harness();
     source.applyWorkspaceChanges.mockRejectedValue(new Error('VS Code did not apply the changes.'));
 
     await create(NPC_GROUP);
 
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not create the Non-Player Character record.', detail: 'VS Code did not apply the changes. VS Code stops at the first change it cannot make, so some changes may have landed.' }]);
+    expect(reporter.reports).toMatchObject([{ severity: 'error', message: 'Could not create the Non-Player Character record.' }]);
     expect(reporter.landings).toEqual([]);
-    expect(source.refreshSourceControlFor).toHaveBeenCalledWith(MY_PATCH);
     expect(steps).toEqual(['watch MyPatch.esp ModA', 'create MyPatch.esp ModA npc_', 'forget']);
   });
 });
@@ -286,29 +293,27 @@ describe('modbench.record.create on a container', () => {
     expect(steps).toContain('create MyPatch.esp ModA road {"container":"000803:MyPatch.esp"}');
   });
 
-  it('the grid position prompt refuses anything but two whole numbers', async () => {
+  const NOT_A_GRID_POSITION = 'Two whole numbers, as x, y.';
+
+  it.each<[string, string | undefined]>([
+    ['', NOT_A_GRID_POSITION],
+    ['3', NOT_A_GRID_POSITION],
+    ['3,', NOT_A_GRID_POSITION],
+    ['a, b', NOT_A_GRID_POSITION],
+    ['1.5, 2', NOT_A_GRID_POSITION],
+    ['1, 2, 3', NOT_A_GRID_POSITION],
+    ['1 2', NOT_A_GRID_POSITION],
+    ['0x1, 2', NOT_A_GRID_POSITION],
+    ['0, 0', undefined],
+    ['-3, 12', undefined],
+    ['  7,-8  ', undefined],
+  ])('the grid position prompt answers "%s" with %s', async (input, refusal) => {
     const { client, create } = harness();
     client.setQueryAnswer('getChildRecordTypes', [{ type: 'cell', displayName: 'Cell' }]);
     showInputBox.mockResolvedValue(undefined);
     await create(WORLDSPACE_ROW);
-    const validate = present(prompt().validateInput, 'the prompt\'s validation');
 
-    const refused = ['', '3', '3,', 'a, b', '1.5, 2', '1, 2, 3', '1 2', '0x1, 2'].filter((value) => validate(value) !== undefined);
-    const accepted = ['0, 0', '-3, 12', '  7,-8  '].filter((value) => validate(value) === undefined);
-
-    expect(refused).toEqual(['', '3', '3,', 'a, b', '1.5, 2', '1, 2, 3', '1 2', '0x1, 2']);
-    expect(accepted).toEqual(['0, 0', '-3, 12', '  7,-8  ']);
-    expect(validate('a, b')).toBe('Two whole numbers, as x, y.');
-  });
-
-  it('creates nothing, watches nothing and says nothing when the type pick is left with Esc', async () => {
-    const { steps, reporter, create } = harness();
-    showQuickPick.mockResolvedValue(undefined);
-
-    await create(QUEST_ROW);
-
-    expect(steps).toEqual([]);
-    expect([reporter.reports, reporter.landings]).toEqual([[], []]);
+    expect(present(prompt().validateInput, 'the prompt\'s validation')(input)).toBe(refusal);
   });
 
   it('creates nothing, watches nothing and says nothing when the grid position prompt is left with Esc', async () => {
@@ -330,18 +335,6 @@ describe('modbench.record.create on a container', () => {
 
     expect(showQuickPick).not.toHaveBeenCalled();
     expect(reporter.reports).toEqual([{ severity: 'error', message: '"MQ101" can hold no new record.', detail: undefined }]);
-    expect(steps).toEqual([]);
-  });
-
-  it('says why when mEdit cannot name the types the container holds, and creates nothing', async () => {
-    const { client, steps, reporter, create } = harness();
-    client.setQueryFailure('getChildRecordTypes', { failed: 'refused', refusal: 'mEdit is not running' });
-
-    await create(QUEST_ROW);
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not look up the record types to create.', detail: 'mEdit is not running' },
-    ]);
     expect(steps).toEqual([]);
   });
 

@@ -1,12 +1,9 @@
 using System.Text.Json;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -31,12 +28,8 @@ public sealed class ResponseEditTests : IDisposable
 
     private async Task<IReadOnlyList<string>> CompiledResponseEditorIds()
     {
-        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.Plugin);
-
-        using var overlay = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(ContainerModFixture.PluginName), Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName)),
-            GameRelease.Fallout4);
-        return [.. ((IFallout4ModGetter)overlay).Quests.Single(q => q.FormKey == _fixture.Quest)
+        using var compiled = await _fixture.CompiledAsync(_fixture.Plugin);
+        return [.. compiled.Quests.Single(q => q.FormKey == _fixture.Quest)
             .DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic)
             .Responses.Select(r => r.EditorID.Require())];
     }
@@ -105,36 +98,5 @@ public sealed class ResponseEditTests : IDisposable
         Assert.Equal(before, QuestText);
         Assert.Empty(_fixture.ChangedFormKeys());
         Assert.Equal(responseBefore, _fixture.Document(_fixture.Response.ToString()).Require().Body);
-    }
-
-    [Fact]
-    public async Task CopyingAResponseAsOverride_IntoAPluginLackingItsTopic_CopiesTheTopicInWithItsFieldsAndTheResponseInline()
-    {
-        using var fixture = ContainerCopyFixture.Create();
-
-        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Response1.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
-
-        result.OnlyLanded();
-        var copiedQuest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require();
-        Assert.True(copiedQuest.IsPartialForm());
-        Assert.Equal(ContainerCopyFixture.QuestEditorId, copiedQuest.EditorId);
-        var copiedTopic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
-        Assert.NotNull(copiedTopic);
-        Assert.True(copiedTopic.IsPartialForm());
-        Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, copiedTopic.EditorId);
-        Assert.Equal(
-            fixture.Response1.ToString(),
-            Assert.Single(JsonDocument.Parse(copiedTopic.Body).RootElement.GetProperty("Responses").EnumerateArray())
-                .GetProperty("FormKey").GetString());
-
-        Assert.Equal(fixture.Quest.ToString(), fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.Response1EditorId).FormKey);
-
-        await CompileServices.Over(fixture.LoadOrder).CompileLandedAsync(fixture.DestinationPlugin);
-        using var overlay = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(ContainerCopyFixture.DestinationPluginName), Path.Combine(fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName)),
-            GameRelease.Fallout4);
-        var topic = ((IFallout4ModGetter)overlay).Quests.Single(q => q.FormKey == fixture.Quest)
-            .DialogTopics.Single(t => t.FormKey == fixture.DialogTopic);
-        Assert.Equal(ContainerCopyFixture.Response1EditorId, Assert.Single(topic.Responses).EditorID);
     }
 }

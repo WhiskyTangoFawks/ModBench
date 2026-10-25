@@ -2,6 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -29,7 +30,6 @@ public sealed class SourceEditFixture : TestInstance, ICompiledPlugin
     public FormKey Race { get; }
     public FormKey Keyword { get; }
     public FormKey OtherNpc { get; }
-    public FormKey Worldspace { get; }
     public FormKey Cell { get; }
     public FormKey Quest { get; }
 
@@ -47,17 +47,12 @@ public sealed class SourceEditFixture : TestInstance, ICompiledPlugin
         var otherNpc = mod.Npcs.AddNew(OtherNpcEditorId);
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
-        var worldspace = new Worldspace(mod) { EditorID = "FixtureWorld" };
-        mod.Worldspaces.Add(worldspace);
+        mod.Worldspaces.Add(new Worldspace(mod) { EditorID = "FixtureWorld" });
         var cell = new Cell(mod) { EditorID = "FixtureCell" };
-        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
+        mod.AddInteriorCells(cell);
         var quest = new Quest(mod) { EditorID = "FixtureQuest" };
         mod.Quests.Add(quest);
-        (Worldspace, Cell, Quest) = (worldspace.FormKey, cell.FormKey, quest.FormKey);
+        (Cell, Quest) = (cell.FormKey, quest.FormKey);
 
         // A compiled plugin through the real service: what an edit does to a git working tree is the thing
         // under test, and no mock can answer that.

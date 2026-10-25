@@ -46,7 +46,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
             MajorRecordFlagsRaw = flags,
         };
         also?.Invoke(cell);
-        mod.Cells.Records.Add(BlockOf(cell));
+        mod.AddInteriorCells(cell);
     };
 
     private static Action<Fallout4Mod> Mastering(string master, Action<Fallout4Mod> holds) => mod =>
@@ -470,18 +470,23 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         {
             t => t.Load(
                 (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
+                (Plugin("Override.esp", mod => mod.AddInteriorCells(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" })), true))
+        },
+        {
+            t => t.Load(
+                (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
                 (Plugin("Stranger.esp", CellCopy(0, "Outside", also: cell =>
                 {
                     cell.Flags = 0;
                     cell.Grid = new CellGrid { Point = new P2Int(1, 2) };
                 })), false),
-                (Plugin("Override.esp", mod => mod.Cells.Records.Add(BlockOf(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" }))), true))
+                (Plugin("Override.esp", mod => mod.AddInteriorCells(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" })), true))
         },
         {
             t => t.Load(
                 (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
                 (Plugin("Middle.esp", CellCopy(PartialForm, "Middle", also: cell => cell.Flags = 0)), false),
-                (Plugin("Override.esp", Mastering("Middle.esp", mod => mod.Cells.Records.Add(BlockOf(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" })))), true))
+                (Plugin("Override.esp", Mastering("Middle.esp", mod => mod.AddInteriorCells(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" }))), true))
         },
     };
 
@@ -503,7 +508,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         Load(
             (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
             (middle, true),
-            (Plugin("Override.esp", Mastering("Middle.esp", mod => mod.Cells.Records.Add(BlockOf(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" })))), true));
+            (Plugin("Override.esp", Mastering("Middle.esp", mod => mod.AddInteriorCells(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" }))), true));
         _plugins.Respell(middle, TheCell, "cell", "\"WaterHeight\": 4.0", "\"WaterHeight\": \"deep\"");
 
         var result = WriteFlags(TheCell, PartialForm);
@@ -522,7 +527,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         Load(
             (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
             (middle, true),
-            (Plugin("Override.esp", Mastering("Middle.esp", mod => mod.Cells.Records.Add(BlockOf(placing)))), true));
+            (Plugin("Override.esp", Mastering("Middle.esp", mod => mod.AddInteriorCells(placing))), true));
         _plugins.Respell(middle, TheCell, "cell", "\"WaterHeight\": 4.0", "\"WaterHeight\": \"deep\"");
 
         var result = WriteFlags(rock.FormKey, Persistent);
@@ -556,12 +561,4 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         Assert.True(partial.Applied, partial.Message);
     }
 
-    private static CellBlock BlockOf(Cell cell)
-    {
-        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        return block;
-    }
 }

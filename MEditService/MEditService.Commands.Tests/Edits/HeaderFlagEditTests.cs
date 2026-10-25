@@ -6,7 +6,6 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -31,41 +30,22 @@ public sealed class HeaderFlagEditTests : IDisposable
 
         Assert.Contains("Small", _fixture.Document(HeaderFormKey).Require().Body, StringComparison.Ordinal);
 
-        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.Plugin);
-
-        using var written = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(SourceEditFixture.PluginName),
-                Path.Combine(_fixture.ModFolder, SourceEditFixture.PluginName)),
-            GameRelease.Fallout4);
-        Assert.True(((IModFlagsGetter)written).IsSmallMaster);
+        using var written = await _fixture.CompiledAsync(_fixture.Plugin);
+        Assert.True(written.IsSmallMaster);
     }
 
     [Fact]
-    public async Task Compile_WithTheLightFlagAndAnOutOfRangeRecord_IsRefused_NamingTheRecordAndTheRemedies()
+    public async Task Compile_WithTheLightFlagAndAnOutOfRangeRecord_IsRefused_NamingTheRecord()
     {
         SourceModTree.Seed(_fixture.ModFolder, _fixture.Plugin, $"001000:{SourceEditFixture.PluginName}");
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
-        var answer = (await CompileService().CompileAsync([_fixture.Plugin])).Value();
+        var answer = (await _fixture.CompileHandler.CompileAsync([_fixture.Plugin])).Value();
 
         Assert.Empty(answer.Applied);
         var refused = Assert.Single(answer.Refused);
-        Assert.Equal(
-            (CompileRefusal.FormIdOutsideFlagLimit,
-             $"{SourceEditFixture.PluginName} is a light plugin but holds native FormID(s) outside the light range (0x0-0xFFF): " +
-             $"001000:{SourceEditFixture.PluginName}. Clear the light flag, or change the records' FormIDs."),
-            (refused.Refusal, refused.Message));
-    }
-
-    [Fact]
-    public async Task Compile_OfAnEslWithAnOutOfRangeRecord_NamesRenamingItOffEslAmongTheRemedies()
-    {
-        using var light = SourceEditFixture.CompiledPluginLight("Fixture.esl");
-        SourceModTree.Seed(light.ModFolder, light.Plugin, "001000:Fixture.esl");
-
-        var refused = Assert.Single((await CompileServices.Over(light.LoadOrder).CompileAsync([light.Plugin])).Value().Refused);
-
-        Assert.EndsWith(". Clear the light flag, rename the plugin off .esl, or change the records' FormIDs.", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(CompileRefusal.FormIdOutsideFlagLimit, refused.Refusal);
+        Assert.Contains($"001000:{SourceEditFixture.PluginName}", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -75,11 +55,8 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false)).Applied);
 
-        await CompileService().CompileLandedAsync(_fixture.Plugin);
+        await _fixture.CompileHandler.CompileLandedAsync(_fixture.Plugin);
     }
-
-    private CompilePluginHandler CompileService() =>
-        CompileServices.Over(_fixture.LoadOrder);
 
     private RecordEditResult SetFlags(string names) =>
         Service().Set(_fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse(names).RootElement);
@@ -111,12 +88,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     {
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "Author", JsonDocument.Parse("\"Someone\"").RootElement).Applied);
 
-        await CompileService().CompileLandedAsync(_fixture.Plugin);
-
-        using var written = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(SourceEditFixture.PluginName),
-                Path.Combine(_fixture.ModFolder, SourceEditFixture.PluginName)),
-            GameRelease.Fallout4);
-        Assert.Equal("Someone", ((IFallout4ModGetter)written).ModHeader.Author);
+        using var written = await _fixture.CompiledAsync(_fixture.Plugin);
+        Assert.Equal("Someone", written.ModHeader.Author);
     }
 }

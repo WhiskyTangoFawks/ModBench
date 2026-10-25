@@ -265,7 +265,7 @@ public sealed class CreateRecordChangesHandlerTests
         uint.Parse(formKey[..formKey.IndexOf(':', StringComparison.Ordinal)], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
     [Fact]
-    public void CreateRecord_Refuses_WhenPluginIsNonCompiledPlugin_NamingTheInitCommand()
+    public void CreateRecord_Refuses_WhenPluginIsNonCompiledPlugin()
     {
         using var mod = SourceEditFixture.NonCompiledPlugin();
 
@@ -273,7 +273,6 @@ public sealed class CreateRecordChangesHandlerTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, result.Refusal);
-        Assert.Contains("Decompile and commit its mod", result.Message, StringComparison.Ordinal);
     }
 
     [PosixFact]

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress } from '../client';
 import { registerNameFilter, type NameFilter } from '../drivingLib/nameFilter';
 import { messageLine } from '../drivingLib/messageLine';
+import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { joinSyncMessages, reportSyncFailures, type SyncChannel, type SyncFailureReport, type SyncMessage } from '../drivingLib/syncFailureReport';
 import type { LastModStatuses, PluginCommands } from '../pluginCommands/plugins';
 import type { Reporter } from '../ports/reporter';
@@ -20,7 +21,7 @@ import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import {
-  pluginsCopyValueText, registerCreatePluginCommand, registerPluginSortCommands, registerRevealInExplorerCommand,
+  pluginsCopyValueText, registerCreatePluginCommand, registerRevealInExplorerCommand,
 } from './pluginListCommands';
 import { registerRenamePluginCommand, type RenamePluginDeps } from './pluginRenameCommand';
 import { registerRecordCreateCommand } from './createRecordCommand';
@@ -135,7 +136,7 @@ export function createPluginsView(deps: PluginsViewDeps): PluginsView {
       client, treeProvider: recordBrowser, refreshMatchingPlugins: () => { void tree.facts.refresh(); },
       showRecordFilter, reporter: reporterFor('recordFilter'),
     }),
-    ...registerPluginSortCommands(tree),
+    ...registerSortDirectionToggle('plugin', tree),
     registerRevealInExplorerCommand(tree, reporterFor('pluginListTree.revealInExplorer'), selected.rows),
     view.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
       e, commands, reporterFor('pluginListTree.checkbox'), instance)),

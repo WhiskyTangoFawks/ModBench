@@ -3,7 +3,6 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -18,7 +17,7 @@ public sealed class KnownDefectTests : IDisposable
 
     private string OneSceneWithAnAction()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("DocEdit.esp"), Fallout4Release.Fallout4);
+        var mod = new Fallout4Mod(DocumentEditFixture.ModKey, Fallout4Release.Fallout4);
         var quest = mod.Quests.AddNew("DefectQuest");
         var scene = new Scene(mod) { EditorID = "DefectScene" };
         scene.Actions.Add(new SceneAction { Name = "First" });

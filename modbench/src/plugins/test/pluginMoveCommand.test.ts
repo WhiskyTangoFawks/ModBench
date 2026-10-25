@@ -27,6 +27,7 @@ vi.mock('vscode', async () => {
 });
 
 import type { MEditClient, PluginMetadata } from '../../client';
+import { pluginMetadataFixture } from '../../client/test/fixtures';
 import type { PluginsDrop } from '../../pluginCommands/plugins';
 import { AgentCall } from '../../drivingLib/agentGesture';
 import { Refusal } from '../../drivingLib/refusal';
@@ -41,10 +42,7 @@ import { progressSteps } from '../../test/recordedProgress';
 
 const MOVE = 'modbench.plugin.move';
 const A = { name: 'A.esp', origin: 'ModA' };
-const held = (name: string, masters: string[]): PluginMetadata => ({
-  name, masters, path: `/data/${name}`, isLight: false, isMaster: false, isBlueprint: false, isImmutable: false,
-  origin: 'SomeMod', inLoadOrder: true, hasMatchingRecords: false, isCompiledPlugin: false, hasParseFailure: false, pluginSourceUnreadable: null,
-});
+const held = (name: string, masters: string[]): PluginMetadata => pluginMetadataFixture({ name, masters });
 const LOSING_END = { kind: 'losingEnd' } as const;
 const noMasters = { getPlugins: () => Promise.reject(new Error('mEdit is indexing')) };
 

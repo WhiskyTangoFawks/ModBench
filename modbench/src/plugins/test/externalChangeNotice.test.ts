@@ -1,25 +1,20 @@
-import type { NotificationEvent } from '../../client/test/InMemoryMEditClient';
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('vscode', () => ({}));
 
 import { noticeExternalChanges } from '../externalChangeNotice';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { notificationEventFixture } from '../../client/test/fixtures';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
-function settled(origin: string, ...changed: [name: string, bytesSha256: string | null][]): NotificationEvent {
-  return {
-    kind: 'external-change', plugin: '', origin, keys: [], sequence: 0,
-    changedPlugins: changed.map(([name, bytesSha256]) => ({ name, bytesSha256 })),
-  };
-}
+const settled = (origin: string, ...changed: [name: string, bytesSha256: string | null][]) => notificationEventFixture({
+  kind: 'external-change', plugin: '', origin, changedPlugins: changed.map(([name, bytesSha256]) => ({ name, bytesSha256 })),
+});
 
-function unreadable(origin: string, ...plugins: [name: string, reason: string, decompileRepairs: boolean][]): NotificationEvent {
-  return {
-    kind: 'plugin-source-unreadable', plugin: '', origin, keys: [], sequence: 0,
-    pluginWithUnreadableSources: plugins.map(([name, reason, decompileRepairs]) => ({ name, source: { reason, decompileRepairs } })),
-  };
-}
+const unreadable = (origin: string, ...plugins: [name: string, reason: string, decompileRepairs: boolean][]) => notificationEventFixture({
+  kind: 'plugin-source-unreadable', plugin: '', origin,
+  pluginWithUnreadableSources: plugins.map(([name, reason, decompileRepairs]) => ({ name, source: { reason, decompileRepairs } })),
+});
 
 function noticing() {
   const client = new InMemoryMEditClient();

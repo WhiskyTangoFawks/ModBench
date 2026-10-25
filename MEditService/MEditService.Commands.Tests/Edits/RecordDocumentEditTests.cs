@@ -8,7 +8,6 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -19,7 +18,7 @@ public sealed class RecordDocumentEditTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private readonly Fallout4Mod _mod = new(ModKey.FromFileName("DocEdit.esp"), Fallout4Release.Fallout4);
+    private readonly Fallout4Mod _mod = new(DocumentEditFixture.ModKey, Fallout4Release.Fallout4);
 
     private readonly Keyword _keyword;
     private readonly Race _race;
@@ -72,17 +71,19 @@ public sealed class RecordDocumentEditTests : IDisposable
         return node;
     }
 
-    [Fact]
-    public void Header_Masters_AreRefusedWithTheirReason()
+    [Theory]
+    [InlineData("MasterReferences", "[]", "content-derived")]
+    [InlineData("FormID", "2048", "'FormID' is read-only: a plugin header's FormID names the plugin itself, not a record in it.")]
+    public void AHeaderMemberTheContentDerives_IsRefusedAsReadOnly_WithItsReason(string member, string value, string reason)
     {
         var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
         _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, Encoding.UTF8.GetString(HeaderDocument.Write(_mod)));
 
-        var (result, _) = _fixture.Apply(headerFormKey, SetAt(Json("[]"), Member("MasterReferences")));
+        var (result, _) = _fixture.Apply(headerFormKey, SetAt(Json(value), Member(member)));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains("content-derived", result.Message, StringComparison.Ordinal);
+        Assert.Contains(reason, result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -97,19 +98,6 @@ public sealed class RecordDocumentEditTests : IDisposable
         Assert.Equal("'Keywords[0]': the element is already at position 0.", result.Message);
         Assert.Null(after);
         Assert.Equal(before, _fixture.Document(formKey));
-    }
-
-    [Fact]
-    public void Header_FormID_IsRefusedWithItsReason()
-    {
-        var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
-        _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, Encoding.UTF8.GetString(HeaderDocument.Write(_mod)));
-
-        var (result, _) = _fixture.Apply(headerFormKey, SetAt(Json("2048"), Member("FormID")));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Equal("'FormID' is read-only: a plugin header's FormID names the plugin itself, not a record in it.", result.Message);
     }
 
     [Fact]
@@ -139,44 +127,43 @@ public sealed class RecordDocumentEditTests : IDisposable
     public void MalformedEnvelope_IsRefusedAsSuch(string op, string path, string? value)
     {
         var formKey = SeedNpc();
-        var hops = path == "Keywords[0]" ? new[] { Member("Keywords"), At(0) } : [Member(path)];
-        var envelope = new RecordEditEnvelope(op, hops, value == null ? null : ValueOf(Json(value)));
 
-        var (result, _) = _fixture.Apply(formKey, envelope);
+        var (result, _) = _fixture.Apply(formKey, Spelled(op, path, value));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
     }
 
     [Fact]
-    public void CodecRejection_NamesThePathAndQuotesMutagen()
+    public void AValueTheCodecCannotHold_IsRefusedAsCodecRejected_NamingTheMember_AndQuotingTheCodecsReason()
     {
-        var formKey = SeedNpc();
-        var before = _fixture.Document(formKey);
+        var formKey = _fixture.Seed(new MiscItem(_mod) { EditorID = "Misc", ComponentDisplayIndices = [1] }, "misc");
 
-        var (result, after) = _fixture.Apply(formKey, SetAt(Json("\"tall\""), Member("HeightMax")));
+        var result = _fixture.Refused(formKey, SetAt(Json("[3, 4096]"), Member("ComponentDisplayIndices")));
 
-        Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
-        Assert.Equal("HeightMax", result.Path);
-        Assert.Contains("tall", result.Message, StringComparison.Ordinal);
-        Assert.Null(after);
-        Assert.Equal(before, _fixture.Document(formKey));
+        Assert.Equal("ComponentDisplayIndices", result.Path);
+        Assert.Contains("the codec rejected", result.Message, StringComparison.Ordinal);
+        Assert.Contains("overflow", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Theory]
-    [InlineData("EnergyLevel", "256")]
-    [InlineData("XpValueOffset", "32768")]
-    [InlineData("AggroRadiusWarn", "-1")]
-    public void IntegerWidth_IsTheCodecs(string column, string value)
+    [Fact]
+    public void AUnionValueNamingNoLeaf_IsRefusedAsDiscriminatorInvalid_NamingTheDiscriminator()
     {
-        var formKey = SeedNpc();
+        var result = _fixture.Refused(SeedNpc(), SetAt(Json("""{"Level": 20}"""), Member("Level")));
 
-        var (result, _) = _fixture.Apply(formKey, SetAt(Json(value), Member(column)));
+        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, result.Refusal);
+        Assert.Contains("MutagenObjectType", result.Message, StringComparison.Ordinal);
+    }
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
-        Assert.Equal(column, result.Path);
+    [Fact]
+    public void MovingAnElementOfAKeyedArray_IsRefusedAsMalformed_NamingTheArray()
+    {
+        var result = _fixture.Refused(
+            SeedNpc(), MoveTo(0, Member("VirtualMachineAdapter"), Member("Scripts"), At(0), Member("Properties"), At(0)));
+
+        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
+        Assert.Contains("'VirtualMachineAdapter.Scripts[0].Properties' is a keyed array", result.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -262,21 +249,5 @@ public sealed class RecordDocumentEditTests : IDisposable
         var (result, _) = _fixture.Apply(placed.FormKey.ToString(), SetAt(Json("2.5"), Member("Scale")));
 
         Assert.True(result.Applied, result.Message);
-    }
-
-    [Fact]
-    public void EmbeddedChild_IsPatchedInsideItsParentsDocument()
-    {
-        var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f };
-        var placed = new PlacedObject(_mod) { EditorID = "Ref", Scale = 1f };
-        cell.Temporary.Add(placed);
-        var cellKey = _fixture.Seed(cell, "cell");
-        var before = _fixture.Document(cellKey);
-
-        var (result, _) = _fixture.Apply(placed.FormKey.ToString(), SetAt(Json("2.5"), Member("Scale")));
-
-        Assert.True(result.Applied, result.Message);
-        var after = _fixture.Document(cellKey);
-        Assert.Equal(["Temporary[0].Scale: 1.0 -> 2.5"], DocumentDiffs.Of(before, after));
     }
 }

@@ -14,7 +14,7 @@ export interface EditingViewDeps {
     say(message: string): void;
   };
   reporterFor: (tag: string) => Reporter;
-  log: { info(message: string): void; error(message: string): void };
+  log: { info(message: string): void };
   revealLog: () => void;
   /** The load order the loader refused to build, the Plugins view's message line and the Output. */
   loadOrderPut: Pick<SyncFailureReport, 'run' | 'clear'>;
