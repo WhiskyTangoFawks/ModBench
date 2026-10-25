@@ -298,7 +298,7 @@ describe('uninstall over the selection', () => {
     const reporter = recordingReporter();
     const logged: string[] = [];
 
-    register(commandsOver(mods).commands, { reporter, log: (line) => logged.push(line) });
+    register(commandsOver(mods).commands, { reporter, log: (line) => { logged.push(line); } });
     await invoke('modbench.mod.uninstall', modA);
 
     expect([reporter.reports, logged]).toEqual([[], []]);
@@ -309,7 +309,7 @@ describe('uninstall over the selection', () => {
     const logged: string[] = [];
     const installedFromItsFile = { metadata: new Map([['Mod A', { installationFile: { name: 'mod-a.7z' } }]]), refusals: refusing('markDownloadedFile', 'disk full') };
 
-    register(commandsOver(mods, installedFromItsFile).commands, { reporter, log: (line) => logged.push(line) });
+    register(commandsOver(mods, installedFromItsFile).commands, { reporter, log: (line) => { logged.push(line); } });
     await invoke('modbench.mod.uninstall', modA);
 
     expect(reporter.reports).toEqual([]);
