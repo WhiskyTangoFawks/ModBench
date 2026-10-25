@@ -313,7 +313,17 @@ describe('SseNotificationSubscriber — typed listeners', () => {
 
   function listenToEveryKind(subscriber: SseNotificationSubscriber): unknown[] {
     const heard: unknown[] = [];
-    cases.map(([kind]) => subscriber.onNotification(kind, (p) => heard.push([kind, p])));
+    const hear = (kind: NotificationKind) => (payload: unknown) => { heard.push([kind, payload]); };
+    subscriber.onNotification('load-order-status', hear('load-order-status'));
+    subscriber.onNotification('decompile-and-commit-progress', hear('decompile-and-commit-progress'));
+    subscriber.onNotification('update-manifest-progress', hear('update-manifest-progress'));
+    subscriber.onNotification('restore-from-manifest-progress', hear('restore-from-manifest-progress'));
+    subscriber.onNotification('external-change', hear('external-change'));
+    subscriber.onNotification('plugin-source-unreadable', hear('plugin-source-unreadable'));
+    subscriber.onNotification('record-filter-cleared', hear('record-filter-cleared'));
+    subscriber.onNotification('rows-changed', hear('rows-changed'));
+    subscriber.onNotification('plugin-changed', hear('plugin-changed'));
+    subscriber.onNotification('mod-status-changed', hear('mod-status-changed'));
     return heard;
   }
 
