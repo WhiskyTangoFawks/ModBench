@@ -20,9 +20,9 @@ As a user, I want:
 A mod folder has one package ([ADR-0023](../adr/0023-a-mod-folder-has-only-one-package.md)). A mod's installation file is the downloaded file the mod's metadata names as what the mod was installed from. As a user, I want:
 
 1. One manifest in each mod folder, named for the mod, so a mod installed, uninstalled or renamed reads as a file added, removed or renamed in a diff, and two branches that change two mods merge. Cites: ADR-0022
-2. The manifest to name the mod's installation file with its size and its hash, so an installation file that is corrupt or another version reads as one. Then the manifest lists each of the mod's own files with where it comes from in the package, or that its package does not hold it. Cites: ADR-0023
+2. The manifest to name the mod's installation file with its size and its hash, so an installation file that is corrupt or another version reads as one. Then the manifest lists each of the mod's own files with where it comes from in the package, that its package holds it with other bytes, or that its package does not hold it. Cites: ADR-0023
 3. A file's line to name its path in the package only when that path differs from its path in the mod, as a FOMOD install moves files, so the ordinary line is the short one.
-4. A file to come only from the mod's package, with the bytes the package holds. A file the package does not yield with its bytes is one it does not hold. Cites: ADR-0023
+4. A file to come only from the mod's package, with the bytes the package holds. A file the package does not yield with its bytes is one its package holds with other bytes when the package has a file at its path, and otherwise one its package does not hold. So a file I edited reads apart from a file I added. Cites: ADR-0023
 5. A file's line to carry no hash, because its package fixes its bytes, so an upgrade reads in the diff as the installation file's line and the lines of the files it added, moved or dropped.
 6. An excluded file to come back excluded: its line carries its name as the mod manager marks it, as MO2's `.mohidden` suffix. Cites: MO2
 7. A source mod's manifest to be what its last build wrote: it names the mod's submodule and lists each file the build writes. With no remote, its package has no host, so a clone cannot fetch it. Cites: ADR-0023
@@ -41,7 +41,7 @@ A mod folder has one package ([ADR-0023](../adr/0023-a-mod-folder-has-only-one-p
 As a user, I want:
 
 1. Each mod row to say, while the instance has a repository, differs when its folder differs from its manifest, or no manifest when it has none. A folder differs when a file's bytes differ from the manifest's, when it holds a file no line names, or when a file a line names is gone. Cites: Never silently wrong
-2. A mod to say so, with the count, when its package does not hold a file or has no host, so I see what a clone cannot rebuild before I commit. Cites: Never silently wrong
+2. A mod to say so, with the count, when its package does not hold a file, holds a file with other bytes, or has no host, so I see what a clone cannot rebuild before I commit. Cites: Never silently wrong
 3. Status to cost a stat of each file, and a hash only of a file whose size, modified time or change time differs from Modbench's last read. A tool can keep a file's modified time, and a write always moves its change time. Modbench keeps what it last read on this machine and never commits it, as git keeps its index, so a clone on another machine reads a file as differing only when its bytes do. Cites: Existing tools; ADR-0003
 4. Each file row in a mod to say differs when its bytes differ from the manifest's or no line names it, and the mod's tooltip to say how many files its manifest names and its folder lacks.
 5. The Mods view's badge to count the mods that differ or have no manifest. Cites: VS Code's view badge
@@ -73,11 +73,11 @@ As a user, I want:
 1. Update manifest to write only what changed, so an unchanged mod changes nothing and Source Control holds only what I did. Cites: plugin-source.md, The tree, story 2
 2. No confirmation. The manifests are derived from the mods, and git holds what update manifest replaces. This is an exception to Confirm what destroys.
 3. A mod refused when its installation file is not in the downloads folder, naming the mod and the file, and its manifest left as it was. The other mods land. Cites: Never silently wrong
-4. A file its package does not hold written as such and reported, so the gap is in the diff and the rest of the modlist commits. Cites: Never silently wrong
+4. A file its package does not hold, or holds with other bytes, written as such and reported, so the gap is in the diff and the rest of the modlist commits. Cites: Never silently wrong
 5. A source mod's manifest left to its build, and the mod reported when its folder differs from what the build wrote. Cites: ADR-0022
 6. It stages nothing and commits nothing. Cites: Existing tools
 7. A file whose stat matches Modbench's last read not hashed again, so an update after an update reads nothing. Cites: Status, story 3
-8. One line when it lands: how many mods were unchanged, updated and refused, and how many files their packages do not hold, with each refused mod and each such file in the Output. This report is the modlist's validation. Cites: common, Reporting
+8. One line when it lands: how many mods were unchanged, updated and refused, how many files their packages do not hold, and how many files their packages hold with other bytes, with each refused mod and each such file in the Output. This report is the modlist's validation. Cites: common, Reporting
 9. Each source mod with a remote to become a submodule of the repository, and I run no submodule command. Update manifest writes the source mod's entry in `.gitmodules`, with its remote and its branch, and its line in the ignore list. Source Control then shows the source mod as a change, and my stage and commit record it. A source mod that is gone loses its entry and its line. Cites: ADR-0023
 
 ## Restore from manifest
@@ -87,7 +87,7 @@ As a user, I want:
 1. Each mod's folder to become what its manifest says: every file whose bytes differ written, and every file no line names sent to the trash. A file whose bytes already match is left alone, so a restore after a checkout costs only what the checkout changed. Cites: ADR-0022
 2. One confirmation, only when the restore destroys something: a file whose bytes differ from the manifest's, a file no line names, or metadata whose version or installation file's page on its host differs from the manifest's. It names the mods, or says every mod, and says that a change no manifest holds is lost. A restore after a fresh clone asks nothing. Cites: Confirm what destroys
 3. A source mod with a remote rebuilt from its submodule at the commit the repository pins, and the submodule cloned when it is absent. When the branch the submodule follows is at that commit, restore checks out the branch, so I land on a branch. One at another commit is skipped and named with the commit, because Modbench never moves my repository. Cites: ADR-0023; ADR-0003
-4. A mod skipped, and named with what it lacks, when its installation file or a game file its manifest names is missing or has other bytes, or when its package does not hold a file or has no host. An installation file story 10 downloads is not missing. Every other mod lands. Cites: A selection is one gesture, and each item lands on its own
+4. A mod skipped, and named with what it lacks, when its installation file or a game file its manifest names is missing or has other bytes, or when its package does not hold a file, holds a file with other bytes, or has no host. An installation file story 10 downloads is not missing. Every other mod lands. Cites: A selection is one gesture, and each item lands on its own
 5. A file the build makes, a compiled plugin or a packed archive, to come back as the build makes it, which can differ in bytes. Only what comes from the installation file or the game folder is byte-checked. Cites: ADR-0006
 6. A restore interrupted part way to say so, naming the mods it did not finish. Restoring again is the recovery. This is an exception to A failed gesture writes nothing. Cites: mods.md, What install does, story 5
 7. A mod folder with no manifest left as it is and named in the report, because it can be a mod I have not recorded yet. Uninstall removes it. Cites: Never silently wrong

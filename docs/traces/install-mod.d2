@@ -19,8 +19,8 @@ downloads."the target pick"
 downloads -> modcommands: "the downloaded file, and the target" {class: loadorder}
 upgrade: "an upgrade" {
   modcommands -> client: "the mod's status" {class: query}
-  client -> modcommands: "the mod's status: differs, no manifest, a file its package does not hold, or none" {class: query}
-  modcommands."refused on any of the three, unless the target pick forces it"
+  client -> modcommands: "the mod's status: differs, no manifest, a file its package does not hold, a file its package holds with other bytes, or none" {class: query}
+  modcommands."refused on any but none, unless the target pick forces it"
 }
 modcommands -> instanceadapter: "install: the file, folder or downloaded file, the target, the mod's metadata" {class: loadorder}
 instanceadapter."a new folder, or the release into the mod's own; the root chosen inside"
