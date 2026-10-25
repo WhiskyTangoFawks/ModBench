@@ -240,8 +240,20 @@ def medit_answering(status: int, body: object, put_delay_s: float = 0) -> Genera
         server.server_close()
 
 
-def files_and_bytes(folder: pathlib.Path) -> list[tuple[str, bytes]]:
-    return sorted((str(path), path.read_bytes()) for path in folder.rglob('*') if path.is_file())
+class FileStamp(NamedTuple):
+    path: str
+    size: int
+    modified_ns: int
+    changed_ns: int
+
+
+def file_stamp(path: pathlib.Path) -> FileStamp:
+    stat = path.stat()
+    return FileStamp(str(path), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+
+
+def file_stamps(folder: pathlib.Path) -> list[FileStamp]:
+    return sorted(file_stamp(path) for path in folder.rglob('*') if path.is_file())
 
 
 def changed(folder: pathlib.Path) -> list[str]:

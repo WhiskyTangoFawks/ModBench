@@ -8,7 +8,7 @@ from unittest import mock
 from tests.fixture_medit import (
     INSTANCE,
     call,
-    files_and_bytes,
+    file_stamps,
     fixture_medit,
     hand_load_order,
     medit_answering,
@@ -20,7 +20,7 @@ READY = {'version': 1, 'state': 'Ready'}
 
 class FixtureMEdit(unittest.TestCase):
     def test_medit_holds_the_fixture_instances_load_order_from_a_copy_of_it_and_stops_with_the_harness(self) -> None:
-        checked_in = files_and_bytes(INSTANCE)
+        checked_in = file_stamps(INSTANCE)
         with fixture_medit() as fixture:
             plugins = call('GET', fixture.url + '/plugins')
         self.assertEqual([(plugin['name'], plugin['origin']) for plugin in plugins], [
@@ -33,7 +33,7 @@ class FixtureMEdit(unittest.TestCase):
             ('MBDevMissingMaster.esp', 'MB-DEV Missing Master'),
             ('MBDevPatchAB.esp', 'MB-DEV Patch A+B'),
         ])
-        self.assertEqual(files_and_bytes(INSTANCE), checked_in)
+        self.assertEqual(file_stamps(INSTANCE), checked_in)
         with self.assertRaises(urllib.error.URLError):
             call('GET', fixture.url + '/health')
 
