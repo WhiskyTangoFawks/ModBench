@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
@@ -14,13 +15,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
 
-    public void Dispose()
-    {
-        foreach (var overlay in _overlays) overlay.Dispose();
-        _fixture.Dispose();
-    }
-
-    private readonly List<IDisposable> _overlays = [];
+    public void Dispose() => _fixture.Dispose();
 
     private IReadOnlyList<JsonElement> Responses(string topicFormKey)
     {
@@ -32,17 +27,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
     }
 
     private static string Member(JsonElement response, string name) => response.GetProperty(name).GetString().Require();
-
-    private async Task<IFallout4ModGetter> ImportCompiled()
-    {
-        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.DestinationPlugin);
-
-        var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
-        var overlay = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(ContainerCopyFixture.DestinationPluginName), pluginPath), GameRelease.Fallout4);
-        _overlays.Add(overlay);
-        return (IFallout4ModGetter)overlay;
-    }
 
     [Fact]
     public async Task CopyAsNewRecord_OnADialogTopicWithResponses_LandsTheTopicWithoutItsResponses()
@@ -59,7 +43,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
         Assert.Empty(Responses(newFormKey));
 
-        var compiled = await ImportCompiled();
+        using var compiled = await _fixture.CompiledAsync(_fixture.DestinationPlugin);
         var compiledQuest = compiled.Quests.Single(q => q.FormKey == _fixture.Quest);
         var compiledTopic = compiledQuest.DialogTopics.Single(t => t.FormKey.ToString() == newFormKey);
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId + "DUPLICATE001", compiledTopic.EditorID);
@@ -84,29 +68,19 @@ public sealed class CopyAsNewContainerTests : IDisposable
     public async Task CopyAsNewRecord_OnADialogTopic_WhenDestinationAlreadyOverridesTheQuest_AddsToItsDialogTopicsAndNothingElse()
     {
         _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Quest.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false).OnlyLanded();
-        var questBefore = JsonDocument.Parse(_fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.QuestEditorId).Body);
+        var questBefore = JsonNode.Parse(_fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.QuestEditorId).Body).Require();
 
         var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.DialogTopic.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
 
         var newFormKey = result.OnlyLanded().Require();
-
-        Assert.False(questBefore.RootElement.TryGetProperty(nameof(Quest.DialogTopics), out _));
-        var questAfter = JsonDocument.Parse(_fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.QuestEditorId).Body);
-        foreach (var property in questBefore.RootElement.EnumerateObject())
-        {
-            Assert.True(
-                questAfter.RootElement.TryGetProperty(property.Name, out var now),
-                $"quest document lost '{property.Name}'");
-            Assert.Equal(property.Value.GetRawText(), now.GetRawText());
-        }
-        Assert.Equal(questBefore.RootElement.EnumerateObject().Count() + 1, questAfter.RootElement.EnumerateObject().Count());
-        var landed = Assert.Single(questAfter.RootElement.GetProperty(nameof(Quest.DialogTopics)).EnumerateArray());
-        Assert.Equal(newFormKey, landed.GetProperty("FormKey").GetString());
-
+        var questAfter = JsonNode.Parse(_fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.QuestEditorId).Body).Require().AsObject();
+        Assert.True(questAfter.Remove(nameof(Quest.DialogTopics), out var topics));
+        Assert.Equal(newFormKey, Assert.Single(topics.Require().AsArray()).Require()["FormKey"].Require().GetValue<string>());
+        Assert.Equal(questBefore.ToJsonString(), questAfter.ToJsonString());
         Assert.False(_fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString()).Require().IsPartialForm());
 
-
-        var compiledQuest = (await ImportCompiled()).Quests.Single(q => q.FormKey == _fixture.Quest);
+        using var compiled = await _fixture.CompiledAsync(_fixture.DestinationPlugin);
+        var compiledQuest = compiled.Quests.Single(q => q.FormKey == _fixture.Quest);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, compiledQuest.EditorID);
         Assert.Single(compiledQuest.DialogTopics, t => t.FormKey.ToString() == newFormKey);
     }
@@ -169,7 +143,8 @@ public sealed class CopyAsNewContainerTests : IDisposable
             _fixture.DocumentCarrying(_fixture.DestinationPlugin, ContainerCopyFixture.Response1EditorId + "DUPLICATE001").Body,
             StringComparison.Ordinal);
 
-        var compiledTopic = (await ImportCompiled()).Quests.Single(q => q.FormKey == _fixture.Quest)
+        using var compiled = await _fixture.CompiledAsync(_fixture.DestinationPlugin);
+        var compiledTopic = compiled.Quests.Single(q => q.FormKey == _fixture.Quest)
             .DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic);
         var compiledResponse = Assert.Single(compiledTopic.Responses);
         Assert.Equal(newFormKey, compiledResponse.FormKey.ToString());
@@ -193,17 +168,25 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.DoesNotContain(ContainerCopyFixture.SceneEditorId, questText, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.DialogBranchEditorId, questText, StringComparison.Ordinal);
 
-        var compiledQuest = (await ImportCompiled()).Quests.Single(q => q.FormKey.ToString() == newFormKey);
+        using var compiled = await _fixture.CompiledAsync(_fixture.DestinationPlugin);
+        var compiledQuest = compiled.Quests.Single(q => q.FormKey.ToString() == newFormKey);
         Assert.Equal(ContainerCopyFixture.QuestEditorId + "DUPLICATE001", compiledQuest.EditorID);
         Assert.Empty(compiledQuest.DialogTopics);
         Assert.Empty(compiledQuest.DialogBranches);
         Assert.Empty(compiledQuest.Scenes);
     }
 
-    [Fact]
-    public void CopyAsNewRecord_OfAResponseWhoseChainItCopiesIn_MovesTheDestinationsNextObjectIdPastIt()
+    public static TheoryData<string, Func<ContainerCopyFixture, FormKey>> ChildrenWhoseContainersTheDestinationLacks => new()
     {
-        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.Response1.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
+        { "a response, whose quest and topic it copies in", fixture => fixture.Response1 },
+        { "a reference in an exterior cell, whose worldspace and cell it copies in", fixture => fixture.ExteriorPersistentRef },
+    };
+
+    [Theory]
+    [MemberData(nameof(ChildrenWhoseContainersTheDestinationLacks))]
+    public void CopyAsNewRecord_OfAChildWhoseContainersItCopiesIn_MovesTheDestinationsNextObjectIdPastIt(string _, Func<ContainerCopyFixture, FormKey> child)
+    {
+        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, child(_fixture).ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
 
         Assert.Equal("000801:ContainerDestination.esp", result.OnlyLanded());
         Assert.Equal(0x802u, _fixture.NextObjectId(_fixture.DestinationPlugin));
@@ -218,14 +201,5 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
         Assert.Equal("000802:ContainerDestination.esp", second.OnlyLanded());
         Assert.Equal(0x803u, _fixture.NextObjectId(_fixture.DestinationPlugin));
-    }
-
-    [Fact]
-    public void CopyAsNewRecord_OfAReferenceInAnExteriorCellTheDestinationLacks_MovesTheDestinationsNextObjectIdPastIt()
-    {
-        var result = _fixture.CopyHandler.CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorPersistentRef.ToString())], CopyMode.New, [_fixture.DestinationPlugin], replace: false);
-
-        Assert.Equal("000801:ContainerDestination.esp", result.OnlyLanded());
-        Assert.Equal(0x802u, _fixture.NextObjectId(_fixture.DestinationPlugin));
     }
 }

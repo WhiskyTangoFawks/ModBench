@@ -13,10 +13,15 @@ public sealed class ArrayOpEditTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
+    public static TheoryData<LocationAliasReference?, int?> NestedStructs => new()
+    {
+        { null, null },
+        { new LocationAliasReference { AliasID = 9 }, 9 },
+    };
+
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void MovingAnAliasWhoseNestedStructIsSetOrUnset_StillApplies_AndKeepsTheStruct(bool withLocation)
+    [MemberData(nameof(NestedStructs))]
+    public void MovingAnAliasWhoseNestedStructIsSetOrUnset_StillApplies_AndKeepsTheStruct(LocationAliasReference? location, int? aliasId)
     {
         var quest = new Quest(KeyOf(0x801), Fallout4Release.Fallout4)
         {
@@ -24,7 +29,7 @@ public sealed class ArrayOpEditTests : IDisposable
             Aliases =
             [
                 new QuestLocationAlias { Name = "LocAlias" },
-                new QuestReferenceAlias { Name = "RefAlias", Location = withLocation ? new LocationAliasReference { AliasID = 9 } : null },
+                new QuestReferenceAlias { Name = "RefAlias", Location = location },
             ],
         };
         var formKey = _fixture.Seed(quest, "qust");
@@ -36,6 +41,6 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.Equal(
             ["QuestReferenceAlias", "QuestLocationAlias"],
             aliases.Select(alias => alias.Require()["MutagenObjectType"].Require().GetValue<string>()));
-        Assert.Equal(withLocation ? 9 : null, aliases[0].Require()["Location"]?["AliasID"]?.GetValue<int>());
+        Assert.Equal(aliasId, aliases[0].Require()["Location"]?["AliasID"]?.GetValue<int>());
     }
 }

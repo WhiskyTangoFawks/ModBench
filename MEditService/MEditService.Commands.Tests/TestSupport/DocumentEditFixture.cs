@@ -71,7 +71,7 @@ internal sealed class DocumentEditFixture : TestInstance
         var before = Document(formKey);
         var (result, after) = Apply(formKey, envelope);
         Assert.True(result.Applied, result.Message);
-        return [.. DocumentDiffs.Of(before, after.Require()).Select(Unescaped)];
+        return DocumentDiffs.Of(before, after.Require());
     }
 
     /// <summary>The set that sends back a member's whole value with the one part at <paramref name="path"/>
@@ -88,9 +88,6 @@ internal sealed class DocumentEditFixture : TestInstance
     }
 
     private static JsonNode? Step(JsonNode node, string hop) => int.TryParse(hop, out var index) ? node[index] : node[hop];
-
-    private static string Unescaped(string diff) =>
-        diff.Replace("\\u003C", "<", StringComparison.Ordinal).Replace("\\u003E", ">", StringComparison.Ordinal).Replace("\\u002B", "+", StringComparison.Ordinal);
 
     /// <summary>Applies an edit that must be refused, and checks the document was left as it was.</summary>
     internal RecordEditResult Refused(string formKey, RecordEditEnvelope envelope)

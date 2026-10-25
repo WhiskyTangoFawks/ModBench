@@ -82,8 +82,8 @@ public abstract class TestInstance : IDisposable
 
     public string ModFolderOf(PluginAddress plugin) => FolderOf(plugin.Origin);
 
-    /// <summary>The next plugin in load order. A compiled one is a mod's plugin, made so as it is added;
-    /// one that masters another is built over the load order so far, which holds its masters.</summary>
+    /// <summary>The next plugin in load order. A compiled one is a mod's plugin, made so as it is added; one
+    /// that masters another or is localized is built over the load order so far.</summary>
     protected PluginAddress Add(IMod mod, string origin, bool compiledPlugin = true, Listing listing = Listing.Winning)
     {
         if (_loadOrder is not null) throw new InvalidOperationException("The load order is sealed.");
@@ -103,7 +103,7 @@ public abstract class TestInstance : IDisposable
         if (!compiledPlugin) Write(mod, path);
         else if (entry.Provider is not PluginProvider.FromMod)
             throw new InvalidOperationException($"'{origin}' is not a mod, so its plugin has no folder to init.");
-        else if (mod.MasterReferences.Count == 0) CompiledPluginTemplates.WriteCompiledPlugin(folder, mod);
+        else if (mod.MasterReferences.Count == 0 && !mod.UsingLocalization) CompiledPluginTemplates.WriteCompiledPlugin(folder, mod);
         else
         {
             Write(mod, path);

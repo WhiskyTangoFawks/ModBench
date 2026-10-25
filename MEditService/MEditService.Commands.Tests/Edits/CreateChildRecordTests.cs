@@ -296,7 +296,7 @@ public sealed class CreateChildRecordTests : IDisposable
         {
             var interior = new Cell(plugin) { EditorID = "InteriorCell", Flags = Cell.Flag.IsInteriorCell };
             shape(interior);
-            plugin.Cells.Records.Add(CellBlocks.Interior(interior));
+            plugin.AddInteriorCells(interior);
             cellKey = interior.FormKey;
         });
         cell = cellKey;

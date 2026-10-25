@@ -24,15 +24,9 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
     public PluginAddress SourcePlugin { get; }
     public PluginAddress DestinationPlugin { get; }
 
-    public const string DestinationNpcEditorId = "DestinationNpc";
-    public FormKey DestinationNpc { get; }
-
     public const string QuestEditorId = "SourceQuest";
     public FormKey Quest { get; }
 
-    // A flat record in the source — the negative control for the container-only overwrite scope
-    // (a flat re-copy keeps the FormKeyCollision refusal).
-    public const string FlatNpcEditorId = "SourceFlatNpc";
     public FormKey FlatNpc { get; }
 
     public const string DialogTopicEditorId = "SourceTopic";
@@ -50,15 +44,6 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
 
     public const string DialogBranchEditorId = "SourceBranch";
     public FormKey DialogBranch { get; }
-
-    public const string ChildlessQuestEditorId = "SourceChildlessQuest";
-    public FormKey ChildlessQuest { get; }
-
-    public const string BareQuestEditorId = "SourceBareQuest";
-    public FormKey BareQuest { get; }
-
-    public const string BareTopicEditorId = "SourceBareTopic";
-    public FormKey BareTopic { get; }
 
     // Interior — the non-spatial case: a real block/sub-block pair.
     public const string InteriorCellEditorId = "SourceInteriorCell";
@@ -105,16 +90,10 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
     public const int OtherBlockY = 1;
     public const int OtherSubX = 21;
     public const int OtherSubY = 5;
-    public const int OtherGridX = 170;
-    public const int OtherGridY = 42;
-    public const string OtherBlockCellEditorId = "SourceOtherBlockCell";
     public FormKey OtherBlockCell { get; }
 
     public const int SameBlockOtherSubX = 2;
     public const int SameBlockOtherSubY = -3;
-    public const int SameBlockGridX = 17;
-    public const int SameBlockGridY = -20;
-    public const string SameBlockCellEditorId = "SourceSameBlockCell";
     public FormKey SameBlockCell { get; }
 
     public const string SameSubBlockCellEditorId = "SourceSameSubBlockCell";
@@ -130,7 +109,7 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
     {
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
 
-        var flatNpc = sourceMod.Npcs.AddNew(FlatNpcEditorId);
+        var flatNpc = sourceMod.Npcs.AddNew("SourceFlatNpc");
 
         var quest = new Quest(sourceMod) { EditorID = QuestEditorId };
         var dialogTopic = new DialogTopic(sourceMod) { EditorID = DialogTopicEditorId };
@@ -146,14 +125,6 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
         var dialogBranch = new DialogBranch(sourceMod) { EditorID = DialogBranchEditorId };
         quest.DialogBranches.Add(dialogBranch);
         sourceMod.Quests.Add(quest);
-
-        var childlessQuest = new Quest(sourceMod) { EditorID = ChildlessQuestEditorId };
-        sourceMod.Quests.Add(childlessQuest);
-        var bareQuest = new Quest(sourceMod) { EditorID = BareQuestEditorId };
-        var bareTopic = new DialogTopic(sourceMod) { EditorID = BareTopicEditorId };
-        bareQuest.DialogTopics.Add(bareTopic);
-        sourceMod.Quests.Add(bareQuest);
-        (ChildlessQuest, BareQuest, BareTopic) = (childlessQuest.FormKey, bareQuest.FormKey, bareTopic.FormKey);
 
         var interiorCell = new Cell(sourceMod) { EditorID = InteriorCellEditorId, WaterHeight = InteriorCellWaterHeight };
         var persistentRef = new PlacedObject(sourceMod)
@@ -174,7 +145,7 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
         interiorCell.Temporary.Add(temporaryRef);
         interiorCell.NavigationMeshes.Add(navmesh);
         interiorCell.Landscape = landscape;
-        AddInteriorCell(sourceMod, interiorCell, blockNumber: 0);
+        sourceMod.AddInteriorCells(interiorCell);
 
         var worldspace = new Worldspace(sourceMod) { EditorID = WorldspaceEditorId };
         var topCell = new Cell(sourceMod) { EditorID = TopCellEditorId };
@@ -221,8 +192,8 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
 
         var sameBlockCell = new Cell(sourceMod)
         {
-            EditorID = SameBlockCellEditorId,
-            Grid = new CellGrid { Point = new P2Int(SameBlockGridX, SameBlockGridY) },
+            EditorID = "SourceSameBlockCell",
+            Grid = new CellGrid { Point = new P2Int(17, -20) },
         };
         var sameBlockOtherSub = new WorldspaceSubBlock { BlockNumberX = (short)SameBlockOtherSubX, BlockNumberY = (short)SameBlockOtherSubY };
         sameBlockOtherSub.Items.Add(sameBlockCell);
@@ -230,8 +201,8 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
 
         var otherBlockCell = new Cell(sourceMod)
         {
-            EditorID = OtherBlockCellEditorId,
-            Grid = new CellGrid { Point = new P2Int(OtherGridX, OtherGridY) },
+            EditorID = "SourceOtherBlockCell",
+            Grid = new CellGrid { Point = new P2Int(170, 42) },
         };
         var otherSub = new WorldspaceSubBlock { BlockNumberX = (short)OtherSubX, BlockNumberY = (short)OtherSubY };
         otherSub.Items.Add(otherBlockCell);
@@ -255,8 +226,7 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
             (otherBlockCell.FormKey, sameBlockCell.FormKey, sameSubBlockCell.FormKey);
 
         var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
-        var destinationNpc = destinationMod.Npcs.AddNew(DestinationNpcEditorId);
-        DestinationNpc = destinationNpc.FormKey;
+        destinationMod.Npcs.AddNew("DestinationNpc");
 
         if (destinationLoadsFirst)
         {
@@ -285,14 +255,5 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
 
         Assert.Equal(Worldspace.ToString(), repository.WorldspaceOf(DestinationPlugin, cell).Value());
         TreeTampering.AssertCellSitsInBlocks(DestinationModFolder, DestinationPlugin, cell, blockX, blockY, subX, subY);
-    }
-
-    private static void AddInteriorCell(Fallout4Mod mod, Cell cell, int blockNumber)
-    {
-        var subBlock = new CellSubBlock { BlockNumber = blockNumber, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = blockNumber, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
     }
 }

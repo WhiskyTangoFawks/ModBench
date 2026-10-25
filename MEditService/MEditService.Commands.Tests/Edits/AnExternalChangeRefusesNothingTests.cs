@@ -9,15 +9,12 @@ public sealed class AnExternalChangeRefusesNothingTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     [Fact]
-    public async Task Compile_OverAnotherToolsBytes_ReplacesThem()
+    public async Task Compile_OverAnotherToolsBytes_ReplacesThemWithThePluginItsSourceHolds()
     {
-        var path = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
-        byte[] theirs = "changed-by-xedit"u8.ToArray();
-        File.WriteAllBytes(path, theirs);
+        File.WriteAllBytes(Path.Combine(_mod.ModFolder, CompileFixture.PluginName), "changed-by-xedit"u8.ToArray());
 
-        var result = (await _mod.CompileService().CompileAsync([_mod.Plugin])).Value();
+        using var compiled = await _mod.CompiledAsync(_mod.Plugin);
 
-        Assert.Empty(result.Refused);
-        Assert.NotEqual(theirs, File.ReadAllBytes(path));
+        Assert.Equal(CompileFixture.NpcEditorId, compiled.Npcs.Single(npc => npc.FormKey == _mod.Npc).EditorID);
     }
 }

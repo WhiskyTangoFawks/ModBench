@@ -29,6 +29,18 @@ public sealed class CopyRecordChangesHandlerTests
     }
 
     [Theory]
+    [InlineData(CopyMode.New)]
+    [InlineData(CopyMode.Override)]
+    public void Copying_ARecordTheSourcePluginDoesNotHold_IsRefusedAsNotFound(CopyMode mode)
+    {
+        using var mod = CopyFixture.Create();
+
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, "ABCDEF:Source.esm")], mode, [mod.DestinationPlugin], replace: false);
+
+        Assert.Equal(RecordEditRefusal.RecordNotFound, result.OnlyRefused().Refusal);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void CopyingAsOverride_OfARecordTheDestinationsTreeUsesButNoRecordAnswersTo_RefusesIt_AndTheOthersLand(bool replace)

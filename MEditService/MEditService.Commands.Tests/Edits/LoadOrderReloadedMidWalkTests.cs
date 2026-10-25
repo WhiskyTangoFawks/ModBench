@@ -4,6 +4,7 @@ using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -53,7 +54,7 @@ public sealed class LoadOrderReloadedMidWalkTests : IDisposable
         var staticKey = new FormKey(ModKey.FromFileName("Base.esm"), 0x801);
         var master = Plugin("Base.esm", mod =>
         {
-            mod.Cells.Records.Add(CellBlocks.Interior(new Cell(cellKey, Fallout4Release.Fallout4) { EditorID = "BaseCell" }));
+            mod.AddInteriorCells(new Cell(cellKey, Fallout4Release.Fallout4) { EditorID = "BaseCell" });
             mod.Statics.Add(new Static(staticKey, Fallout4Release.Fallout4) { EditorID = "BaseStatic" });
         });
         var placed = new FormKey(ModKey.FromFileName("Source.esp"), 0x900);
@@ -61,7 +62,7 @@ public sealed class LoadOrderReloadedMidWalkTests : IDisposable
         {
             var cell = new Cell(cellKey, Fallout4Release.Fallout4) { EditorID = "SourceCell", MajorRecordFlagsRaw = (int)PartialFormFlag.Bit };
             cell.Persistent.Add(new PlacedObject(placed, Fallout4Release.Fallout4) { EditorID = "CopiedRef" });
-            mod.Cells.Records.Add(CellBlocks.Interior(cell));
+            mod.AddInteriorCells(cell);
         });
         var destination = Plugin("Dest.esp", mod => mod.Statics.Add(new Static(staticKey, Fallout4Release.Fallout4) { EditorID = "DestStatic" }));
         _plugins.Load((master, false), (source, false), (destination, true));

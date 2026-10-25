@@ -29,17 +29,8 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
     private static Cell CellOf(FormKey formKey, string editorId, float waterHeight, int flags = 0) =>
         new(formKey, Fallout4Release.Fallout4) { EditorID = editorId, WaterHeight = waterHeight, MajorRecordFlagsRaw = flags };
 
-    private static void InAnInteriorBlock(Fallout4Mod mod, Cell cell)
-    {
-        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
-    }
-
     private static Fallout4Mod HoldingTheCell(string name, string editorId, float waterHeight, int flags = 0) =>
-        Plugin(name, mod => InAnInteriorBlock(mod, CellOf(BaseCell, editorId, waterHeight, flags)));
+        Plugin(name, mod => mod.AddInteriorCells(CellOf(BaseCell, editorId, waterHeight, flags)));
 
     private Fallout4Mod SourceWithARefInTheCell(string name, float waterHeight, int flags) => Plugin(name, mod =>
     {
@@ -47,7 +38,7 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
         var placed = new PlacedObject(mod) { EditorID = "CopiedRef", Position = new P3Float(1f, 2f, 3f), Scale = 1f };
         _ref = placed.FormKey;
         cell.Persistent.Add(placed);
-        InAnInteriorBlock(mod, cell);
+        mod.AddInteriorCells(cell);
     });
 
     private static Fallout4Mod MasteringThrough(string name, FormKey held) =>
@@ -69,7 +60,7 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
         var source = SourceWithARefInTheCell("Source.esp", PartialWaterHeight, PartialFormFlag.Bit);
         var master = Plugin("Base.esm", mod =>
         {
-            InAnInteriorBlock(mod, CellOf(BaseCell, "BaseCell", BaseWaterHeight));
+            mod.AddInteriorCells(CellOf(BaseCell, "BaseCell", BaseWaterHeight));
             mod.Statics.Add(new Static(BaseStatic, Fallout4Release.Fallout4) { EditorID = "BaseStatic" });
         });
         _plugins.Load((master, false), (source, false), (destination, true));
@@ -88,7 +79,7 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
     {
         var master = Plugin("Later.esm", mod =>
         {
-            InAnInteriorBlock(mod, CellOf(BaseCell, "LaterCell", LaterWaterHeight));
+            mod.AddInteriorCells(CellOf(BaseCell, "LaterCell", LaterWaterHeight));
             mod.Statics.Add(new Static(LaterStatic, Fallout4Release.Fallout4) { EditorID = "LaterStatic" });
         });
         var source = SourceWithARefInTheCell("Source.esm", BaseWaterHeight, 0);
@@ -107,7 +98,7 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
     {
         var master = Plugin("Later.esm", mod =>
         {
-            InAnInteriorBlock(mod, CellOf(BaseCell, "LaterCell", LaterWaterHeight));
+            mod.AddInteriorCells(CellOf(BaseCell, "LaterCell", LaterWaterHeight));
             mod.Statics.Add(new Static(LaterStatic, Fallout4Release.Fallout4) { EditorID = "LaterStatic" });
         });
         var source = SourceWithARefInTheCell("Source.esm", BaseWaterHeight, 0);
@@ -125,7 +116,7 @@ public sealed class CopyContainerVisibleCopyTests : IDisposable
     {
         var master = Plugin("Base.esm", mod =>
         {
-            InAnInteriorBlock(mod, CellOf(BaseCell, "BaseCell", BaseWaterHeight));
+            mod.AddInteriorCells(CellOf(BaseCell, "BaseCell", BaseWaterHeight));
             mod.Statics.Add(new Static(BaseStatic, Fallout4Release.Fallout4) { EditorID = "BaseStatic" });
         });
         var source = SourceWithARefInTheCell("Source.esp", PartialWaterHeight, 0);
