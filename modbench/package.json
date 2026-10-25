@@ -806,6 +806,14 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "modbench.record.collapseNoConflict",
+          "when": "isWorkspaceTrusted && activeCustomEditorId == 'modbench.record' && !modbench.record.noConflictCollapsed"
+        },
+        {
+          "command": "modbench.record.showNoConflict",
+          "when": "isWorkspaceTrusted && activeCustomEditorId == 'modbench.record' && modbench.record.noConflictCollapsed"
+        },
+        {
           "command": "modbench.record.open",
           "when": "isWorkspaceTrusted"
         },

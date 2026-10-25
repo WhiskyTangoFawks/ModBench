@@ -18,7 +18,6 @@ const agree = (name: string): FieldDiff =>
 const differ = (name: string, state: 'Override' | 'ConflictWins' | 'ConflictLoses' = 'Override'): FieldDiff =>
   diffNode({ fieldName: name, values: { [MASTER]: 1, [MOD]: 2 }, cellStates: { [MOD]: state }, conflictAll: 'Override' });
 
-// A first row that stays, so the record header, which every record opens with, is no part of the runs after it.
 function rowsOf(fieldMetas: FieldMetadata[], fieldDiffs: FieldDiff[], columns: readonly string[] = [MASTER, MOD]): RecordRow[] {
   const metas = [scalar('Lead'), ...fieldMetas];
   const lead = { ...differ('Lead'), conflictAll: 'ConflictBenign' as const };
