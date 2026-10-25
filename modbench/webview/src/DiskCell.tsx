@@ -21,13 +21,15 @@ export function openEditor(cell: HTMLElement): void {
 }
 
 export function DiskCell({
-  style, title, isFocused, onFocusCell, onDoubleClick, context, drag, landing, children,
+  style, title, colSpan, isFocused, onFocusCell, onDoubleClick, onActivate, context, drag, landing, children,
 }: Readonly<{
   style: React.CSSProperties;
   title?: string;
+  colSpan?: number;
   isFocused: boolean;
   onFocusCell: () => void;
   onDoubleClick?: () => void;
+  onActivate?: () => void;
   context: CellContext;
   // What dragging this cell carries; absent when there is nothing to drag.
   drag?: CellDrag;
@@ -46,6 +48,7 @@ export function DiskCell({
       ref={ref}
       tabIndex={0}
       title={title}
+      colSpan={colSpan}
       style={{ ...style, ...(isFocused ? focusedCellStyle : undefined) }}
       data-vscode-context={JSON.stringify(context)}
       data-focused-cell={isFocused || undefined}
@@ -78,6 +81,7 @@ export function DiskCell({
       }}
       onClick={e => {
         onFocusCell();
+        onActivate?.();
         if (isFocused && !inside(e.target, '[data-open-trigger]')) openEditor(e.currentTarget);
       }}
       onDoubleClick={e => { onDoubleClick?.(); openEditor(e.currentTarget); }}

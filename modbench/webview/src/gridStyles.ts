@@ -5,6 +5,8 @@ export const mono = 'var(--vscode-editor-font-family, "Consolas", monospace)';
 export const fg = 'var(--vscode-editor-foreground, #ccc)';
 const borderColor = 'var(--vscode-editorGroup-border, #444)';
 
+export const INDENT_PER_LEVEL = 24;
+
 export const baseCell: React.CSSProperties = {
   border: `1px solid ${borderColor}`,
   padding: '3px 8px',

@@ -58,7 +58,13 @@ interface FormIdRow extends RowBase {
   meta: FieldMetadata;
 }
 
-export type RecordRow = (RowBase & { kind: 'recordHeader' }) | FieldRow | FormIdRow;
+/** The row that holds a run of rows no copy changes (editor.md, Rows, story 6). */
+export interface RunRow extends RowBase {
+  kind: 'run';
+  holds: readonly string[];
+}
+
+export type RecordRow = (RowBase & { kind: 'recordHeader' }) | FieldRow | FormIdRow | RunRow;
 
 interface RowsInput {
   result: CompareResult;
@@ -241,6 +247,6 @@ export function shownCell(
 
 export function navRows(rows: readonly RecordRow[], collapsed: ReadonlySet<string>): NavRow[] {
   return visibleRows(rows, collapsed).map(row => ({
-    key: row.key, parent: row.parent, expandable: row.expandable, expanded: !collapsed.has(row.key),
+    key: row.key, parent: row.parent, expandable: row.expandable, expanded: row.kind !== 'run' && !collapsed.has(row.key),
   }));
 }
