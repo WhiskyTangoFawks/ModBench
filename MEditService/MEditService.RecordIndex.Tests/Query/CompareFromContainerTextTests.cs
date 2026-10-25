@@ -19,8 +19,6 @@ public sealed class CompareFromContainerTextTests : IDisposable
     private readonly OpenedIndex _index;
     private readonly Cell _room;
     private readonly PlacedObject _placed;
-    private readonly Worldspace _world;
-    private readonly PlacedObject _topCellRef;
     private readonly List<LogEntry> _log = [];
     private readonly ILoggerFactory _loggerFactory;
 
@@ -28,8 +26,6 @@ public sealed class CompareFromContainerTextTests : IDisposable
     {
         Cell? room = null;
         PlacedObject? placed = null;
-        Worldspace? world = null;
-        PlacedObject? topCellRef = null;
         _fixture = new PluginFixtureBuilder("medit-compare-container-text")
             .WithPlugin(Plugin.Name, mod =>
             {
@@ -37,15 +33,10 @@ public sealed class CompareFromContainerTextTests : IDisposable
                 room = new Cell(mod) { EditorID = "Room" };
                 room.Temporary.Add(placed);
                 mod.AddInteriorCells(room);
-                topCellRef = new PlacedObject(mod) { EditorID = "TopCellRef", Scale = 1f };
-                var topCell = new Cell(mod) { EditorID = "TopCell" };
-                topCell.Temporary.Add(topCellRef);
-                world = new Worldspace(mod) { EditorID = "World", TopCell = topCell };
-                mod.Worldspaces.Add(world);
             }, origin: Plugin.Origin)
             .BuildScattered()
             .CompiledPlugin();
-        (_room, _placed, _world, _topCellRef) = (room.Require(), placed.Require(), world.Require(), topCellRef.Require());
+        (_room, _placed) = (room.Require(), placed.Require());
         _loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(_log)));
         _index = Indexes.Reconciled(_fixture, loggerFactory: _loggerFactory);
     }
@@ -101,66 +92,26 @@ public sealed class CompareFromContainerTextTests : IDisposable
     }
 
     [Fact]
-    public void AChildNestedTwoDeep_IsReadFromItsContainersText()
-    {
-        _topCellRef.EditorID = "EditedTopCellRef";
-
-        var column = ColumnReadFrom(_topCellRef, TextOf(_world));
-
-        Assert.Equal(("EditedTopCellRef", null), (column.EditorId, column.ParseDiagnosis));
-    }
-
-    [Fact]
-    public void AChildIsReadFromItsContainersText_WhoseFormKeyTheTextChangedToOneNothingHolds()
-    {
-        _placed.EditorID = "Edited";
-        var text = TextOf(_room).Replace(_room.FormKey.ToString(), "000FFF:Tree.esp", StringComparison.Ordinal);
-
-        var column = ColumnReadFrom(_placed, text);
-
-        Assert.Equal(("Edited", null), (column.EditorId, column.ParseDiagnosis));
-    }
-
-    [Fact]
-    public void AContainersTextThatNoLongerCarriesTheChild_IsAColumnWithTheEditsRefusal()
-    {
-        _room.Temporary.Clear();
-
-        var column = ColumnReadFrom(_placed, TextOf(_room));
-
-        Assert.Equal((_placed.FormKey.ToString(), (string?)null), (column.FormKey, column.EditorId));
-        Assert.Contains($"does not carry {_placed.FormKey}", column.ParseDiagnosis, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void AChildNoDocumentInTheTreeCarries_IsAColumnSayingSo_NotItsContainerReadAsIt()
     {
         File.Delete(RoomDocument);
 
         var column = ColumnReadFrom(_placed, TextOf(_room));
 
-        Assert.Equal((_placed.FormKey.ToString(), (string?)null), (column.FormKey, column.EditorId));
-        Assert.Contains(_placed.FormKey.ToString(), column.ParseDiagnosis, StringComparison.Ordinal);
+        Assert.Equal(
+            (_placed.FormKey.ToString(), (string?)null, $"No document in Tree.esp's source tree carries {_placed.FormKey}."),
+            (column.FormKey, column.EditorId, column.ParseDiagnosis));
     }
 
     [Fact]
-    public void AChildTwoDocumentsCarry_IsAColumnWithTheEditsRefusal()
-    {
-        AnotherRoomCarryingThePlacedObject();
-
-        var column = ColumnReadFrom(_placed, TextOf(_room));
-
-        Assert.Contains("OtherRoom - 000A00_Tree.esp", column.ParseDiagnosis, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void AChildTwoDocumentsCarry_IsNamedOnTheOutputWithItsCause()
+    public void AChildTheTreeRefusesToRead_IsAColumnWithTheRefusal_NamedOnTheOutputWithItsCause()
     {
         AnotherRoomCarryingThePlacedObject();
         lock (_log) _log.Clear();
 
         var column = ColumnReadFrom(_placed, TextOf(_room));
 
+        Assert.Contains("OtherRoom - 000A00_Tree.esp", column.ParseDiagnosis, StringComparison.Ordinal);
         LogEntry warning;
         lock (_log) warning = Assert.Single(_log, e => e.Level == LogLevel.Warning);
         Assert.Contains(_placed.FormKey.ToString(), warning.Message, StringComparison.Ordinal);

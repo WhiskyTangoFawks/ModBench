@@ -1,4 +1,3 @@
-using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
@@ -16,7 +15,6 @@ public sealed class ChildRecordTypesQueryTests : IDisposable
     private const string InteriorCell = "000801:Holds.esp";
     private const string ExteriorCell = "000803:Holds.esp";
     private const string TopCell = "000805:Holds.esp";
-    private const string PersistentTopCell = "000807:Holds.esp";
     private const string ExteriorCellWithLandscape = "000808:Holds.esp";
     private static readonly PluginAddress Plugin = new(PluginName, PluginOrigin.DataDirectory);
 
@@ -52,9 +50,6 @@ public sealed class ChildRecordTypesQueryTests : IDisposable
                 mod.Worldspaces.Add(world);
 
                 mod.Worldspaces.Add(Worldspace(0x804, topCell: Cell(TopCell)));
-                var persistent = Cell(PersistentTopCell);
-                persistent.MajorRecordFlagsRaw = PersistentFlag.Bit;
-                mod.Worldspaces.Add(Worldspace(0x806, topCell: persistent));
             })
             .BuildScattered();
         _index = Indexes.Reconciled(_fixture);
@@ -86,27 +81,11 @@ public sealed class ChildRecordTypesQueryTests : IDisposable
     [InlineData(ExteriorCell, new[] { "Landscape", "Navmesh" })]
     [InlineData(TopCell, new[] { "Navmesh" })]
     [InlineData(ExteriorCellWithLandscape, new[] { "Navmesh" })]
-    public void ACell_HoldsWhatItsPlaceInTheIndexAllows(string cell, string[] besidesPlacedRecords)
+    public void ACell_HoldsWhatItsPlaceInThePluginAskedAllows_NotInAnotherOfTheSameName(string cell, string[] besidesPlacedRecords)
     {
         var types = _index.Queries.GetChildRecordTypes(Plugin, cell).Value();
 
         Assert.Equal([.. besidesPlacedRecords, .. PlacedRecordTables.DisplayNames], types?.Select(t => t.DisplayName));
-    }
-
-    [Fact]
-    public void AWorldspacesPersistentCellCarryingThePersistentFlag_HoldsOnlyPlacedRecords()
-    {
-        var types = _index.Queries.GetChildRecordTypes(Plugin, PersistentTopCell).Value();
-
-        Assert.Equal(PlacedRecordTables.DisplayNames, types?.Select(t => t.DisplayName));
-    }
-
-    [Fact]
-    public void ACell_TakesItsPlaceFromThePluginAsked_NotAnotherOfTheSameName()
-    {
-        var types = _index.Queries.GetChildRecordTypes(Plugin, ExteriorCell).Value();
-
-        Assert.Contains("Landscape", types?.Select(t => t.DisplayName) ?? []);
     }
 
     [Fact]

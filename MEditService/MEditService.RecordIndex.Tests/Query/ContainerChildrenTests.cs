@@ -50,7 +50,7 @@ public sealed class ContainerChildrenTests : IDisposable
     }
 
     [Fact]
-    public void GetChildren_Quest_KeepsTheIndexsOrder_WhateverTheChildrensTypes()
+    public void AQuestsChildren_KeepTheIndexsOrder_WhateverTheirTypes()
     {
         var result = _index.Queries.GetContainerChildren(Plugin, Quest).Value();
 
@@ -59,7 +59,7 @@ public sealed class ContainerChildrenTests : IDisposable
     }
 
     [Fact]
-    public void GetChildren_SaysWhichChildHoldsChildrenOfItsOwn_ForADialChildIsItselfAContainerThePluginsTreeExpands()
+    public void AChild_SaysWhetherItHoldsChildrenOfItsOwn_ForADialChildIsItselfAContainerThePluginsTreeExpands()
     {
         var result = _index.Queries.GetContainerChildren(Plugin, Quest).Value();
 
@@ -68,7 +68,7 @@ public sealed class ContainerChildrenTests : IDisposable
     }
 
     [Fact]
-    public void GetChildren_SaysWhichChildIsAContainer_AnEmptyTopicIncluded()
+    public void AChild_SaysWhetherItIsAContainer_AnEmptyTopicIncluded()
     {
         var result = _index.Queries.GetContainerChildren(Plugin, Quest).Value();
 
@@ -77,7 +77,7 @@ public sealed class ContainerChildrenTests : IDisposable
     }
 
     [Fact]
-    public void GetChildren_DialogTopic_ReturnsItsResponses_TaggedInfo()
+    public void ADialogTopicsChildren_AreItsResponses_TaggedInfo()
     {
         var result = _index.Queries.GetContainerChildren(Plugin, TopicA).Value();
 
@@ -86,13 +86,13 @@ public sealed class ContainerChildrenTests : IDisposable
     }
 
     [Fact]
-    public void GetChildren_OfARecordHoldingNone_IsEmpty()
+    public void ARecordHoldingNoChildren_HasNone()
     {
         Assert.Empty(_index.Queries.GetContainerChildren(Plugin, ChildlessQuest).Value());
     }
 
     [Fact]
-    public void GetChildren_ReadsTheChildrenOfTheGivenOrigin()
+    public void TheChildrenOfAContainer_AreThoseOfTheGivenOrigin()
     {
         var modB = new PluginAddress(PluginName, "ModB");
         using var fixture = new PluginFixtureBuilder("container-child-origin")

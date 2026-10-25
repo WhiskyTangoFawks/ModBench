@@ -50,7 +50,7 @@ public sealed class CompareGoldenTests(CompareGoldenFixture fixture) : IClassFix
         diff.CellStates.Values.Any(state => state is not (ConflictThis.OnlyOne or ConflictThis.IdenticalToMaster or ConflictThis.Master));
 
     [Fact]
-    public void Compare_AcrossThreePlugins_MatchesGolden()
+    public void AComparisonAcrossThreePlugins_MatchesItsGolden()
     {
         var captured = new Dictionary<string, object?>
         {
