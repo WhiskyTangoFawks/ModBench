@@ -27,8 +27,6 @@ export class RecordTabs implements Iterable<RecordTab> {
     return tab;
   }
 
-  /** Every record tab collapses the rows no copy changes, or shows them again, and so does each tab
-   *  opened after. */
   collapseNoConflict(collapse: boolean): void {
     this.collapsingNoConflict = collapse;
     for (const tab of this.tabs) tab.postOnceListening(this.noConflictMessage());

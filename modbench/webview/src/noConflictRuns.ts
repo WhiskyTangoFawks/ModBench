@@ -24,7 +24,6 @@ function agrees(row: RecordRow, severalRecords: boolean): boolean {
   }
 }
 
-// A row is quiet when it agrees and every row beneath it does.
 function quietKeys(rows: readonly RecordRow[], severalRecords: boolean): Set<string> {
   const quiet = new Set<string>();
   const stays = new Set<string>();

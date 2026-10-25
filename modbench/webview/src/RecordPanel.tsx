@@ -77,7 +77,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return next;
   });
   // The one focused cell (editor.md, The focused cell).
-  const [placedFocus, setFocusedCell] = useState<FocusedCell | null>(given.focusedCell);
+  const [placedFocus, setPlacedFocus] = useState<FocusedCell | null>(given.focusedCell);
   const [collapseNoConflict, setCollapseNoConflict] = useState(false);
   const [restoredRuns, setRestoredRuns] = useState<ReadonlySet<string>>(new Set());
   const enteredCell = useRef(false);
@@ -85,7 +85,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const headerRow = useRef<HTMLTableRowElement>(null);
   function handleFocusCell(rowKey: string, plugin: ColumnKey | null) {
     enteredCell.current = true;
-    setFocusedCell({ rowKey, plugin });
+    setPlacedFocus({ rowKey, plugin });
   }
   // editor.md, The focused cell, story 7: the grid's keys wait while an editor is open.
   const [editorOpen, setEditorOpen] = useState(false);
@@ -195,11 +195,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result, columns, editableColumns, partialFormColumns],
   );
 
+  const severalRecords = result?.overrides.some(o => o.column != null) === true;
   const shownRows = useMemo(
-    () => collapseNoConflict
-      ? collapseRuns(rows, { severalRecords: result?.overrides.some(o => o.column != null) === true, restored: restoredRuns })
-      : rows,
-    [rows, collapseNoConflict, restoredRuns, result],
+    () => collapseNoConflict ? collapseRuns(rows, { severalRecords, restored: restoredRuns }) : rows,
+    [rows, collapseNoConflict, severalRecords, restoredRuns],
   );
   // A focused cell in a run that collapses is on the run's row until the run is restored.
   const focusedCell = useMemo<FocusedCell | null>(() => {
@@ -208,7 +207,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   }, [shownRows, placedFocus]);
   const restoreRun = (run: RunRow) => {
     setRestoredRuns(prev => new Set(prev).add(run.key));
-    if (focusedCell?.rowKey === run.key) handleFocusCell(run.holds[0] ?? run.key, null);
+    setPlacedFocus(prev => (prev?.rowKey === run.key ? { rowKey: run.holds[0] ?? run.key, plugin: null } : prev));
   };
   const focused = useMemo<GridCell | ValueCell | undefined>(
     () => focusedCell ? shownCell(shownRows, collapsedRows, collapsedColumns, focusedCell) : undefined,
@@ -239,7 +238,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         client.showColumns(msg.columns);
         void refresh(formKey);
       }
-      if (msg.type === EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT) setCollapseNoConflict(msg.on);
+      if (msg.type === EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT) {
+        setCollapseNoConflict(msg.on);
+        if (msg.on) setRestoredRuns(new Set());
+      }
       if (msg.type === EXTENSION_TO_WEBVIEW.MODS_CHANGED) setModsByOrigin(msg.modsByOrigin);
       if (msg.type === EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL) pasteIntoFocused(msg.text);
       if (msg.type === EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR) {
@@ -306,7 +308,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   const title = recordLabel(overrides, formKey);
   // Several records compared, or a file alone, carry no colours to be final (editor.md, Columns, story 7; States, story 7).
-  const severalRecords = overrides.some(o => o.column != null);
   const incompleteMessage = severalRecords || fileCopyAlone ? undefined : recordPanelIncompleteMessage(conflictsComputed);
 
   function openColumn(opened: CompareOverride) {

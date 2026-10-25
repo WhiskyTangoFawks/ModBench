@@ -1173,12 +1173,12 @@
       "editor/title": [
         {
           "command": "modbench.record.collapseNoConflict",
-          "when": "activeCustomEditorId == 'modbench.record' && !modbench.record.noConflictCollapsed",
+          "when": "isWorkspaceTrusted && activeCustomEditorId == 'modbench.record' && !modbench.record.noConflictCollapsed",
           "group": "navigation@1"
         },
         {
           "command": "modbench.record.showNoConflict",
-          "when": "activeCustomEditorId == 'modbench.record' && modbench.record.noConflictCollapsed",
+          "when": "isWorkspaceTrusted && activeCustomEditorId == 'modbench.record' && modbench.record.noConflictCollapsed",
           "group": "navigation@1"
         }
       ],

@@ -3,9 +3,7 @@ import type { RecordTabs } from './recordTabs';
 
 const CONTEXT_KEY = 'modbench.record.noConflictCollapsed';
 
-/** The title-bar toggle of Collapse No Conflict. Like the sort direction, it is a lens: each
- *  activation starts showing every row, and the context key, which outlives an extension host
- *  restart, is told so. */
+/** The context key outlives an extension host restart, so each activation tells it every row shows. */
 export function registerNoConflictLens(tabs: Pick<RecordTabs, 'collapseNoConflict'>): vscode.Disposable[] {
   const show = (collapsed: boolean) => {
     tabs.collapseNoConflict(collapsed);

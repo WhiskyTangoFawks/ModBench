@@ -2141,15 +2141,33 @@ describe('RecordPanel — Collapse No Conflict', () => {
     expect(screen.getAllByText('2 rows')).toHaveLength(1);
   });
 
-  it.each(['ArrowRight', 'Enter'])('restores a run on %s, and the focus lands on its first row', async (key) => {
+  it('restores a run on Right, and the focus lands on its first row', async () => {
     const { container } = await collapsed();
     const run = required(screen.getAllByText('2 rows')[0]?.closest('td'), 'the first run\'s cell');
     act(() => run.focus());
 
-    fireEvent.keyDown(run, { key });
+    fireEvent.keyDown(run, { key: 'ArrowRight' });
 
     expect(screen.getByText('Beta')).toBeInTheDocument();
     expect(Array.from(container.querySelectorAll('[data-focused-cell]'))).toEqual([labelCell('Beta')]);
+  });
+
+  it('puts the focus on the first row of a run a click on its unfocused row restores', async () => {
+    const { container } = await collapsed();
+
+    fireEvent.click(required(screen.getAllByText('2 rows')[0], 'the first run'));
+
+    expect(Array.from(container.querySelectorAll('[data-focused-cell]'))).toEqual([labelCell('Beta')]);
+  });
+
+  it('collapses every run again when the gesture runs again, restored or not', async () => {
+    await collapsed();
+    fireEvent.click(required(screen.getAllByText('2 rows')[0], 'the first run'));
+
+    collapse(false);
+    collapse(true);
+
+    expect(screen.getAllByText('2 rows')).toHaveLength(2);
   });
 
   it('moves the focus to the run row when the focused cell is in a run that collapses', async () => {

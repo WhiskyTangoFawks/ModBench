@@ -141,7 +141,7 @@ describe('what the rows show of what is collapsed', () => {
     const nav = navRows(rows, new Set(['Bounds']));
 
     expect(nav.map(r => r.key)).toEqual([RECORD_HEADER_ROW, 'Record Header.Version', 'Bounds', 'EditorID']);
-    expect(nav.find(r => r.key === 'Bounds')).toEqual({ key: 'Bounds', parent: null, expandable: true, expanded: false, holdsRun: false });
+    expect(nav.find(r => r.key === 'Bounds')).toEqual({ key: 'Bounds', parent: null, expandable: true, expanded: false });
   });
 
   it('a collapsed Record Header hides its members', () => {

@@ -248,6 +248,5 @@ export function shownCell(
 export function navRows(rows: readonly RecordRow[], collapsed: ReadonlySet<string>): NavRow[] {
   return visibleRows(rows, collapsed).map(row => ({
     key: row.key, parent: row.parent, expandable: row.expandable, expanded: row.kind !== 'run' && !collapsed.has(row.key),
-    holdsRun: row.kind === 'run',
   }));
 }

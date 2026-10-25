@@ -1,12 +1,10 @@
 import React from 'react';
 import { DiskCell } from './DiskCell';
-import { focusedRowStyle } from './gridStyles';
+import { INDENT_PER_LEVEL, focusedRowStyle } from './gridStyles';
 import type { FocusedCell } from './gridNavigation';
 import type { RunRow } from './recordRows';
 
-const INDENT_PER_LEVEL = 24;
-
-/** editor.md, Rows, story 6: the row that holds a run, in the diff editor's unchanged-region colours. */
+/** editor.md, Rows, story 6: the row that holds a run. */
 export function CollapsedRun({ row, columnCount, focusedCell, onFocusCell, onRestore }: Readonly<{
   row: RunRow;
   columnCount: number;
