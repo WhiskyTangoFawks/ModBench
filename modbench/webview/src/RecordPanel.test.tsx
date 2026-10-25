@@ -2085,3 +2085,99 @@ describe('RecordPanel — a string field\'s own tab, opened from one record\'s c
     expect(lastToldCell(vscode.postMessage)).toMatchObject({ plugin: 'Fallout4.esm', recordLabel: 'TestNPC [000001:Fallout4.esm]' });
   });
 });
+
+describe('RecordPanel — Collapse No Conflict', () => {
+  const names = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta'];
+  const differing = new Set(['Alpha', 'Delta']);
+  const result: CompareResult = compareResultFixture({
+    overrides: ['Fallout4.esm', 'MyMod.esp'].map((plugin, at) => compareOverride({
+      formKey: '000001:Fallout4.esm', plugin, isWinner: at === 1, editorId: 'TestNPC',
+      conflictThis: at === 0 ? 'Master' : 'Override',
+      fields: names.map(name => ({ metadata: fieldMeta({ name, type: 'string' }), value: `${name} ${differing.has(name) ? at : 'same'}` })),
+    })),
+    diffs: names.map(name => diffNode({
+      fieldName: name,
+      values: { 'Fallout4.esm': `${name} ${differing.has(name) ? 0 : 'same'}`, 'MyMod.esp': `${name} ${differing.has(name) ? 1 : 'same'}` },
+      winnerColumn: 'MyMod.esp', cellStates: { 'MyMod.esp': differing.has(name) ? 'Override' : 'IdenticalToMaster' },
+    })),
+  });
+  const collapse = (on: boolean) => tellPanel({ type: EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT, on });
+  const labelCell = (text: string) => required(screen.getByText(text).closest('td'), `the ${text} label cell`);
+
+  beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function collapsed() {
+    const rendered = renderPanel(result);
+    await screen.findByText('Beta');
+    collapse(true);
+    return rendered;
+  }
+
+  it('holds each run of rows no copy changes in one row that counts them', async () => {
+    await collapsed();
+
+    expect(screen.getAllByText('2 rows')).toHaveLength(2);
+    expect(['Alpha', 'Delta'].map(name => screen.queryByText(name) !== null)).toEqual([true, true]);
+    expect(['Beta', 'Gamma', 'Epsilon', 'Zeta'].map(name => screen.queryByText(name) !== null)).toEqual([false, false, false, false]);
+  });
+
+  it('shows the rows again when told to', async () => {
+    await collapsed();
+
+    collapse(false);
+
+    expect(screen.queryByText('2 rows')).not.toBeInTheDocument();
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+  });
+
+  it('restores a run by a click on its row, and no other', async () => {
+    await collapsed();
+
+    fireEvent.click(required(screen.getAllByText('2 rows')[0], 'the first run'));
+
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+    expect(screen.queryByText('Epsilon')).not.toBeInTheDocument();
+    expect(screen.getAllByText('2 rows')).toHaveLength(1);
+  });
+
+  it('restores a run on Right, and the focus lands on its first row', async () => {
+    const { container } = await collapsed();
+    const run = required(screen.getAllByText('2 rows')[0]?.closest('td'), 'the first run\'s cell');
+    act(() => run.focus());
+
+    fireEvent.keyDown(run, { key: 'ArrowRight' });
+
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+    expect(Array.from(container.querySelectorAll('[data-focused-cell]'))).toEqual([labelCell('Beta')]);
+  });
+
+  it('puts the focus on the first row of a run a click on its unfocused row restores', async () => {
+    const { container } = await collapsed();
+
+    fireEvent.click(required(screen.getAllByText('2 rows')[0], 'the first run'));
+
+    expect(Array.from(container.querySelectorAll('[data-focused-cell]'))).toEqual([labelCell('Beta')]);
+  });
+
+  it('collapses every run again when the gesture runs again, restored or not', async () => {
+    await collapsed();
+    fireEvent.click(required(screen.getAllByText('2 rows')[0], 'the first run'));
+
+    collapse(false);
+    collapse(true);
+
+    expect(screen.getAllByText('2 rows')).toHaveLength(2);
+  });
+
+  it('moves the focus to the run row when the focused cell is in a run that collapses', async () => {
+    const { container } = renderPanel(result);
+    fireEvent.click(await screen.findByText('Beta'));
+
+    collapse(true);
+
+    const focused = Array.from(container.querySelectorAll('[data-focused-cell]'));
+    expect(focused).toHaveLength(1);
+    expect(focused[0]).toHaveTextContent('2 rows');
+  });
+});

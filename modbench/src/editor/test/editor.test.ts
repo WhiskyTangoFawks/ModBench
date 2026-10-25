@@ -1519,3 +1519,60 @@ describe('the Editor disposed', () => {
     expect(editorProviderDisposals.count).toBe(editorProviders.size);
   });
 });
+
+describe('Collapse No Conflict reaches every record panel', () => {
+  const KEY = 'modbench.record.noConflictCollapsed';
+  const lens = (tab: FakePanel) => (tab.webview.postMessage.mock.calls as unknown[][])
+    .map(([message]) => message)
+    .filter((message) => typeof message === 'object' && message !== null && 'type' in message && message.type === 'collapseNoConflict');
+  const pageAsksItsFirstRead = (tab: FakePanel) => { tab.receive({ type: 'requestRecordLoad', requestId: 'r1', formKey: '000801:A.esp', columns: [] }); };
+  const run = async (command: string) => { await commandHandlers.get(command)?.(); };
+
+  function twoTabs() {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getComparison', null);
+    const editor = makeEditor(client);
+    const tabs = [editor.open('000801:A.esp'), editor.open('000802:A.esp')];
+    tabs.forEach(pageAsksItsFirstRead);
+    return { ...editor, tabs };
+  }
+
+  it('starts showing every row, and says so in the context key the title bar reads', () => {
+    makeEditor();
+
+    expect(contextKeys.get(KEY)).toBe(false);
+  });
+
+  it('collapses every open record tab, and shows them again', async () => {
+    const { tabs } = twoTabs();
+
+    await run('modbench.record.collapseNoConflict');
+    expect(tabs.map(lens)).toEqual([[{ type: 'collapseNoConflict', on: true }], [{ type: 'collapseNoConflict', on: true }]]);
+    expect(contextKeys.get(KEY)).toBe(true);
+
+    await run('modbench.record.showNoConflict');
+    expect(tabs.map(lens).map((heard) => heard.at(-1))).toEqual([{ type: 'collapseNoConflict', on: false }, { type: 'collapseNoConflict', on: false }]);
+    expect(contextKeys.get(KEY)).toBe(false);
+  });
+
+  it('collapses a tab opened while it is on, once its page listens', async () => {
+    const { open } = twoTabs();
+    await run('modbench.record.collapseNoConflict');
+
+    const later = open('000803:A.esp');
+    expect(lens(later)).toEqual([]);
+    pageAsksItsFirstRead(later);
+
+    await vi.waitFor(() => expect(lens(later)).toEqual([{ type: 'collapseNoConflict', on: true }]));
+  });
+
+  it('opens a tab showing every row when it is off, and says nothing to its page', async () => {
+    const { open } = twoTabs();
+
+    const later = open('000803:A.esp');
+    pageAsksItsFirstRead(later);
+    await aMacrotask();
+
+    expect(lens(later)).toEqual([]);
+  });
+});

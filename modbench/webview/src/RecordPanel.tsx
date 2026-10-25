@@ -21,8 +21,10 @@ import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
 import { RecordHeaderRow, FormIdRow } from './RecordHeaderRows';
+import { CollapsedRun } from './CollapsedRun';
+import { collapseRuns } from './noConflictRuns';
 import { navigate, type FocusedCell } from './gridNavigation';
-import { recordRows, shownCell, visibleRows, navRows, FORM_ID_PATH, type GridCell, type RecordRow, type ValueCell } from './recordRows';
+import { recordRows, shownCell, visibleRows, navRows, FORM_ID_PATH, type GridCell, type RecordRow, type RunRow, type ValueCell } from './recordRows';
 import { failureReason } from '../../src/wire/readFailed';
 
 // The place of the tab this one stands in for, which an edit's move of the file closed.
@@ -75,13 +77,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return next;
   });
   // The one focused cell (editor.md, The focused cell).
-  const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(given.focusedCell);
+  const [placedFocus, setPlacedFocus] = useState<FocusedCell | null>(given.focusedCell);
+  const [collapseNoConflict, setCollapseNoConflict] = useState(false);
+  const [restoredRuns, setRestoredRuns] = useState<ReadonlySet<string>>(new Set());
   const enteredCell = useRef(false);
   const scroller = useRef<HTMLDivElement>(null);
   const headerRow = useRef<HTMLTableRowElement>(null);
   function handleFocusCell(rowKey: string, plugin: ColumnKey | null) {
     enteredCell.current = true;
-    setFocusedCell({ rowKey, plugin });
+    setPlacedFocus({ rowKey, plugin });
   }
   // editor.md, The focused cell, story 7: the grid's keys wait while an editor is open.
   const [editorOpen, setEditorOpen] = useState(false);
@@ -92,13 +96,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const toldPlace = useRef(JSON.stringify(given));
   const tellPlace = useCallback(() => {
     const place: ViewState = {
-      collapsedRows: [...collapsedRows], collapsedColumns: [...collapsedColumns], focusedCell, scroll: scrolled.current,
+      collapsedRows: [...collapsedRows], collapsedColumns: [...collapsedColumns], focusedCell: placedFocus, scroll: scrolled.current,
     };
     const told = JSON.stringify(place);
     if (told === toldPlace.current) return;
     toldPlace.current = told;
     keepViewState(place);
-  }, [collapsedRows, collapsedColumns, focusedCell]);
+  }, [collapsedRows, collapsedColumns, placedFocus]);
   useEffect(tellPlace, [tellPlace]);
   const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | typeof LABEL_COLUMN, number>>(new Map());
   const resizeColumn = (key: ColumnKey | typeof LABEL_COLUMN, width: number) => setColumnWidths(prev => new Map(prev).set(key, width));
@@ -191,9 +195,23 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result, columns, editableColumns, partialFormColumns],
   );
 
+  const severalRecords = result?.overrides.some(o => o.column != null) === true;
+  const shownRows = useMemo(
+    () => collapseNoConflict ? collapseRuns(rows, { severalRecords, restored: restoredRuns }) : rows,
+    [rows, collapseNoConflict, severalRecords, restoredRuns],
+  );
+  // A focused cell in a run that collapses is on the run's row until the run is restored.
+  const focusedCell = useMemo<FocusedCell | null>(() => {
+    const run = shownRows.find((row): row is RunRow => row.kind === 'run' && row.holds.includes(placedFocus?.rowKey ?? ''));
+    return run ? { rowKey: run.key, plugin: null } : placedFocus;
+  }, [shownRows, placedFocus]);
+  const restoreRun = (run: RunRow) => {
+    setRestoredRuns(prev => new Set(prev).add(run.key));
+    setPlacedFocus(prev => (prev?.rowKey === run.key ? { rowKey: run.holds[0] ?? run.key, plugin: null } : prev));
+  };
   const focused = useMemo<GridCell | ValueCell | undefined>(
-    () => focusedCell ? shownCell(rows, collapsedRows, collapsedColumns, focusedCell) : undefined,
-    [rows, collapsedRows, collapsedColumns, focusedCell],
+    () => focusedCell ? shownCell(shownRows, collapsedRows, collapsedColumns, focusedCell) : undefined,
+    [shownRows, collapsedRows, collapsedColumns, focusedCell],
   );
   // Told after every render, since a re-read or a move changes what the focused cell's menu would
   // offer without a new focus. Only a user's focus enters the grid.
@@ -219,6 +237,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       if (msg.type === EXTENSION_TO_WEBVIEW.SHOW_COLUMNS) {
         client.showColumns(msg.columns);
         void refresh(formKey);
+      }
+      if (msg.type === EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT) {
+        setCollapseNoConflict(msg.on);
+        if (msg.on) setRestoredRuns(new Set());
       }
       if (msg.type === EXTENSION_TO_WEBVIEW.MODS_CHANGED) setModsByOrigin(msg.modsByOrigin);
       if (msg.type === EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL) pasteIntoFocused(msg.text);
@@ -286,7 +308,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   const title = recordLabel(overrides, formKey);
   // Several records compared, or a file alone, carry no colours to be final (editor.md, Columns, story 7; States, story 7).
-  const severalRecords = overrides.some(o => o.column != null);
   const incompleteMessage = severalRecords || fileCopyAlone ? undefined : recordPanelIncompleteMessage(conflictsComputed);
 
   function openColumn(opened: CompareOverride) {
@@ -302,10 +323,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     const rowHeight = e.currentTarget.querySelector('tr')?.offsetHeight ?? 0;
     const viewport = (scroller.current?.clientHeight ?? 0) - (headerRow.current?.offsetHeight ?? 0);
     const page = rowHeight > 0 ? Math.max(1, Math.floor(viewport / rowHeight) - 1) : 1;
-    const move = navigate(e.key, navRows(rows, collapsedRows), navColumns, focusedCell, page);
+    const move = navigate(e.key, navRows(shownRows, collapsedRows), navColumns, focusedCell, page);
     if (!move) return;
     e.preventDefault();
-    if ('toggle' in move) toggleRow(move.toggle);
+    const toggled = 'toggle' in move ? shownRows.find(row => row.key === move.toggle) : undefined;
+    if (toggled?.kind === 'run') restoreRun(toggled);
+    else if ('toggle' in move) toggleRow(move.toggle);
     else handleFocusCell(move.focus.rowKey, move.focus.plugin);
   }
 
@@ -313,6 +336,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     const shared = { key: row.key, columns, collapsedColumns, columnStyle, focusedCell, onFocusCell: handleFocusCell };
     const onToggle = () => toggleRow(row.key);
     switch (row.kind) {
+      case 'run':
+        return (
+          <CollapsedRun
+            key={row.key} row={row} columnCount={columns.length} focusedCell={focusedCell}
+            onFocusCell={handleFocusCell} onRestore={() => restoreRun(row)}
+          />
+        );
       case 'recordHeader':
         return <RecordHeaderRow {...shared} row={row} expanded={!collapsedRows.has(row.key)} onToggle={onToggle} />;
       case 'formId':
@@ -391,7 +421,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           </thead>
           <tbody onKeyDown={handleGridKey}>
             <EditorMounted.Provider value={editorMounted}>
-              {visibleRows(rows, collapsedRows).map(renderRow)}
+              {visibleRows(shownRows, collapsedRows).map(renderRow)}
             </EditorMounted.Provider>
           </tbody>
         </table>

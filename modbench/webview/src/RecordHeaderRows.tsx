@@ -3,14 +3,12 @@ import { EditorMounted } from './cellEditor';
 import { DiskCell } from './DiskCell';
 import { formKeyLabel } from './FormKeyLink';
 import { ExpandArrow } from './ExpandArrow';
-import { baseCell, labelCell, focusedRowStyle, mono, fg } from './gridStyles';
+import { INDENT_PER_LEVEL, baseCell, labelCell, focusedRowStyle, mono, fg } from './gridStyles';
 import type { Column } from './recordUtils';
 import type { FocusedCell } from './gridNavigation';
 import type { ColumnKey } from './types';
 import { LABEL_COLUMN } from './labelColumn';
 import { RECORD_HEADER_ROW, FORM_ID_ROW, type RecordRow } from './recordRows';
-
-const INDENT = 24;
 
 interface FormIdCellProps {
   formKey: string;
@@ -126,7 +124,7 @@ export function FormIdRow({
   return (
     <tr style={rowStyle(focusedCell, FORM_ID_ROW)}>
       <DiskCell
-        style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: INDENT }} isFocused={isFocused(focusedCell, FORM_ID_ROW, null)}
+        style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: INDENT_PER_LEVEL }} isFocused={isFocused(focusedCell, FORM_ID_ROW, null)}
         onFocusCell={() => onFocusCell(FORM_ID_ROW, null)} context={row.label.context}
       >{row.name}</DiskCell>
       {columns.map(({ key, override }) => {

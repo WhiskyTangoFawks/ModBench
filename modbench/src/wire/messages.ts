@@ -22,6 +22,8 @@ export const EXTENSION_TO_WEBVIEW = {
   SHOW_COLUMNS: 'showColumns',
   // A mod's repository state changed in the instance: the origins the tab showed, read again.
   MODS_CHANGED: 'modsChanged',
+  // The lens Collapse No Conflict is in, for every record panel (editor.md, Menus and keys).
+  COLLAPSE_NO_CONFLICT: 'collapseNoConflict',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -261,7 +263,8 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR }
   | { type: typeof EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL; text: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.SHOW_COLUMNS; columns: RecordCopy[] }
-  | { type: typeof EXTENSION_TO_WEBVIEW.MODS_CHANGED; modsByOrigin: Record<string, ModRepository> };
+  | { type: typeof EXTENSION_TO_WEBVIEW.MODS_CHANGED; modsByOrigin: Record<string, ModRepository> }
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT; on: boolean };
 
 export function isString(value: unknown): value is string {
   return typeof value === 'string';

@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import { RecordTab, type EditAddress, type EditGate, type TabPanel } from './recordTab';
-import type { FocusedCellContext } from '../wire/messages';
+import { EXTENSION_TO_WEBVIEW, type FocusedCellContext } from '../wire/messages';
 
 /** The open record tabs, and the one in focus: its record, which Referenced By from the palette
  *  asks about, and its focused cell, which a field gesture from the palette acts on. */
 export class RecordTabs implements Iterable<RecordTab> {
   private readonly tabs = new Set<RecordTab>();
   private active: RecordTab | undefined;
+  private collapsingNoConflict = false;
 
   /** `showCell` hears the in-focus tab's cell whenever it changes. `entered` hears the user take the
    *  focus: a cell clicked, or a tab gaining it. */
@@ -22,7 +23,13 @@ export class RecordTabs implements Iterable<RecordTab> {
   open(panel: TabPanel, document: vscode.Uri): RecordTab {
     const tab = new RecordTab(panel, document, { closed: (closed) => { this.close(closed); } });
     this.tabs.add(tab);
+    if (this.collapsingNoConflict) tab.postOnceListening(this.noConflictMessage());
     return tab;
+  }
+
+  collapseNoConflict(collapse: boolean): void {
+    this.collapsingNoConflict = collapse;
+    for (const tab of this.tabs) tab.postOnceListening(this.noConflictMessage());
   }
 
   /** The record tab last in focus; none once it closes. */
@@ -60,6 +67,10 @@ export class RecordTabs implements Iterable<RecordTab> {
       return answer;
     };
     return async (address, write) => { await through(0, address, address.formKey, write); };
+  }
+
+  private noConflictMessage() {
+    return { type: EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT, on: this.collapsingNoConflict } as const;
   }
 
   private close(tab: RecordTab): void {

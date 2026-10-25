@@ -8,7 +8,7 @@ import { readsAsFlags } from './modelValue';
 import { ExpandArrow } from './ExpandArrow';
 import { collapsedReading, versionControlInfo1 } from './presentation';
 import {
-  baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
+  INDENT_PER_LEVEL, baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
 } from './gridStyles';
 import { defaultOf, type Column } from './recordUtils';
 import type { ColumnKey, ConflictThis, FieldMetadata, FormKeyResolution, PathHop } from './types';
@@ -103,9 +103,6 @@ function masterOrOnlyOne(
 function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: ColumnKey | null): boolean {
   return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin;
 }
-
-// One step of label indentation per ancestor hop, so a row's indent reads as its real depth.
-const INDENT_PER_LEVEL = 24;
 
 interface DiffRowProps {
   row: FieldRow;
