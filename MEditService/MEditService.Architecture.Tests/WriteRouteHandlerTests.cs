@@ -10,30 +10,30 @@ namespace MEditService.Architecture.Tests;
 
 public sealed class WriteRouteHandlerTests
 {
-    internal static readonly (string Method, string Pattern, Type Handler)[] Routes =
+    internal static readonly (string Method, string Pattern, Type Handler, string EndpointMethod)[] Routes =
     [
-        ("POST", "/records/{formKey}/edit-changes", typeof(EditRecordChangesHandler)),
-        ("POST", "/records/{formKey}/edit", typeof(EditRecordHandler)),
-        ("POST", "/records/copy", typeof(CopyRecordHandler)),
-        ("POST", "/records/delete", typeof(DeleteRecordHandler)),
-        ("POST", "/plugins/{plugin}/create-record", typeof(CreateRecordHandler)),
-        ("POST", "/records/delete-changes", typeof(DeleteRecordChangesHandler)),
-        ("POST", "/records/copy-changes", typeof(CopyRecordChangesHandler)),
-        ("POST", "/plugins/create", typeof(CreatePluginHandler)),
-        ("POST", "/plugins/create-in-mod", typeof(CreatePluginInModHandler)),
-        ("POST", "/plugins/decompile", typeof(DecompilePluginHandler)),
-        ("POST", "/plugins/repair-previews", typeof(RepairPreviewsHandler)),
-        ("POST", "/plugins/decompile-and-repair", typeof(DecompileAndRepairPluginHandler)),
-        ("POST", "/plugins/compile", typeof(CompilePluginHandler)),
-        ("POST", "/plugins/rename-source-changes", typeof(RenameSourceChangesHandler)),
-        ("POST", "/plugins/move-last-written", typeof(MoveLastWrittenHandler)),
-        ("POST", "/plugins/{plugin}/create-record-changes", typeof(CreateRecordChangesHandler)),
-        ("PUT", "/load-order", typeof(PutLoadOrderHandler)),
-        ("POST", "/build", typeof(BuildModHandler)),
-        ("POST", "/decompile-and-commit", typeof(DecompileAndCommitModHandler)),
-        ("POST", "/build-configuration", typeof(ChangeBuildConfigurationHandler)),
-        ("POST", "/update-manifest", typeof(UpdateManifestHandler)),
-        ("POST", "/restore-from-manifest", typeof(RestoreFromManifestHandler)),
+        ("POST", "/records/{formKey}/edit-changes", typeof(EditRecordChangesHandler), "EditRecordChanges"),
+        ("POST", "/records/{formKey}/edit", typeof(EditRecordHandler), "EditRecord"),
+        ("POST", "/records/copy", typeof(CopyRecordHandler), "CopyRecord"),
+        ("POST", "/records/delete", typeof(DeleteRecordHandler), "DeleteRecord"),
+        ("POST", "/plugins/{plugin}/create-record", typeof(CreateRecordHandler), "CreateRecord"),
+        ("POST", "/records/delete-changes", typeof(DeleteRecordChangesHandler), "DeleteRecordChanges"),
+        ("POST", "/records/copy-changes", typeof(CopyRecordChangesHandler), "CopyRecordChanges"),
+        ("POST", "/plugins/create", typeof(CreatePluginHandler), "CreatePlugin"),
+        ("POST", "/plugins/create-in-mod", typeof(CreatePluginInModHandler), "CreatePluginInMod"),
+        ("POST", "/plugins/decompile", typeof(DecompilePluginHandler), "Decompile"),
+        ("POST", "/plugins/repair-previews", typeof(RepairPreviewsHandler), "RepairPreviews"),
+        ("POST", "/plugins/decompile-and-repair", typeof(DecompileAndRepairPluginHandler), "DecompileAndRepair"),
+        ("POST", "/plugins/compile", typeof(CompilePluginHandler), "Compile"),
+        ("POST", "/plugins/rename-source-changes", typeof(RenameSourceChangesHandler), "RenameSourceChanges"),
+        ("POST", "/plugins/move-last-written", typeof(MoveLastWrittenHandler), "MoveLastWritten"),
+        ("POST", "/plugins/{plugin}/create-record-changes", typeof(CreateRecordChangesHandler), "CreateRecordChanges"),
+        ("PUT", "/load-order", typeof(PutLoadOrderHandler), "PutLoadOrder"),
+        ("POST", "/build", typeof(BuildModHandler), "Build"),
+        ("POST", "/decompile-and-commit", typeof(DecompileAndCommitModHandler), "DecompileAndCommit"),
+        ("POST", "/build-configuration", typeof(ChangeBuildConfigurationHandler), "ChangeBuildConfiguration"),
+        ("POST", "/update-manifest", typeof(UpdateManifestHandler), "UpdateManifest"),
+        ("POST", "/restore-from-manifest", typeof(RestoreFromManifestHandler), "RestoreFromManifest"),
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";
@@ -85,21 +85,22 @@ public sealed class WriteRouteHandlerTests
 
     private static bool IsQueriesService(Type type) => type.Namespace == QueriesNamespace;
 
-    [Theory]
-    [InlineData("POST", "/records/anything", false, true, false)]
-    [InlineData("POST", "/records/anything", true, false, true)]
-    [InlineData("POST", "/records/anything", true, true, true)]
-    [InlineData("POST", "/records/anything", false, false, true)]
-    [InlineData("GET", "/records/anything", false, true, false)]
-    [InlineData("GET", "/records/anything", true, false, true)]
-    public void ARouteIsAWrite_WhenItsHandlerTakesACommandsHandler_OrIsAMutatingRouteThatTakesNoQueriesService(
-        string method, string pattern, bool takesAHandler, bool takesAQueriesService, bool write)
+    public static TheoryData<string, Type[], bool> RoutesUnderRecords => new()
     {
-        List<Type> parameters = [];
-        if (takesAHandler) parameters.Add(typeof(CopyRecordChangesHandler));
-        if (takesAQueriesService) parameters.Add(typeof(IQueries));
+        { "POST", [typeof(IQueries)], false },
+        { "POST", [typeof(CopyRecordChangesHandler)], true },
+        { "POST", [typeof(CopyRecordChangesHandler), typeof(IQueries)], true },
+        { "POST", [], true },
+        { "GET", [typeof(IQueries)], false },
+        { "GET", [typeof(CopyRecordChangesHandler)], true },
+    };
 
-        Assert.Equal(write, IsWrite(method, pattern, parameters));
+    [Theory]
+    [MemberData(nameof(RoutesUnderRecords))]
+    public void ARouteIsAWrite_WhenItsHandlerTakesACommandsHandler_OrIsAMutatingRouteThatTakesNoQueriesService(
+        string method, Type[] parameters, bool write)
+    {
+        Assert.Equal(write, IsWrite(method, "/records/anything", parameters));
     }
 
     [Fact]

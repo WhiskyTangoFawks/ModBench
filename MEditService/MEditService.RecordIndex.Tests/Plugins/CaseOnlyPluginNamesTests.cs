@@ -35,7 +35,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
         [.. index.Status.Failures.Select(f => f.Name).Order(StringComparer.Ordinal)];
 
     [Fact]
-    public void Reconcile_TwoNamesDifferingOnlyInCase_FailsBothAndIndexesTheRest()
+    public void TwoNamesDifferingOnlyInCase_FailBoth_AndTheRestIndex()
     {
         using var index = Reconciled(Named("Dup.esp"), Twin, Named("Fine.esp"));
 
@@ -44,7 +44,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     }
 
     [Fact]
-    public void Reconcile_ACollisionArrivingAfterOneIndexed_UnregistersIt()
+    public void ACollisionArrivingAfterOneIndexed_UnregistersIt()
     {
         using var index = Reconciled(Named("Dup.esp"), Named("Fine.esp"));
         Assert.Empty(index.Status.Failures);
@@ -56,7 +56,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     }
 
     [Fact]
-    public void Reconcile_ACollisionAsTheOnlyChange_IsReported()
+    public void ACollisionAsTheOnlyChange_IsReported()
     {
         using var index = Reconciled(Named("Fine.esp"));
 
@@ -66,7 +66,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     }
 
     [Fact]
-    public void Reconcile_ACollisionThatEnds_ReadsTheSurvivorAndClearsTheFailures()
+    public void ACollisionThatEnds_ReadsTheSurvivorAndClearsTheFailures()
     {
         using var index = Reconciled(Named("Dup.esp"), Twin, Named("Fine.esp"));
 
@@ -77,7 +77,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     }
 
     [Fact]
-    public void Reconcile_ACollisionWhoseOtherNameLeaves_ReadsTheStayingOne()
+    public void ACollisionWhoseOtherNameLeaves_ReadsTheStayingOne()
     {
         using var index = Reconciled(Named("Dup.esp"), Twin, Named("Fine.esp"));
 
@@ -88,7 +88,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     }
 
     [Fact]
-    public void Reconcile_ACollisionWithAnActiveTwin_ReadsNeitherAndItsActiveStatusIsNotHeld()
+    public void ACollisionWithAnActiveTwin_ReadsNeitherAndItsActiveStatusIsNotHeld()
     {
         var active = Named("Dup.esp") with { Name = "dup.esp" };
 
@@ -99,7 +99,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_WithACollidingPair_AnswersForTheRest()
+    public void ACollidingPair_LeavesTheProblemsAnsweredForTheRest()
     {
         using var index = Reconciled(Named("Dup.esp"), Twin, Named("Fine.esp"));
 
@@ -107,7 +107,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     }
 
     [Fact]
-    public void Reconcile_AFailedPluginWhoseOriginChangesOnlyInCase_KeepsOneFailureRow()
+    public void AFailedPluginWhoseOriginChangesOnlyInCase_KeepsOneFailureRow()
     {
         var missing = Named("Fine.esp") with { Path = Path.Combine(_fixture.DataFolder, "Missing.esp") };
         using var index = Reconciled(missing);
@@ -119,7 +119,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     }
 
     [Fact]
-    public void Reconcile_APluginRespelledOnlyInCase_IsNamedAsSpelledNowEverywhere()
+    public void APluginRespelledOnlyInCase_IsNamedAsSpelledNowEverywhere()
     {
         var fine = Named("Fine.esp");
         using var index = Reconciled(fine);
@@ -134,7 +134,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     }
 
     [Fact]
-    public void Reconcile_AFailedPluginRespelledOnlyInCase_IsNamedAsSpelledNow()
+    public void AFailedPluginRespelledOnlyInCase_IsNamedAsSpelledNow()
     {
         var missing = Named("Fine.esp") with { Path = Path.Combine(_fixture.DataFolder, "Missing.esp") };
         using var index = Reconciled(missing);
@@ -145,7 +145,7 @@ public sealed class CaseOnlyPluginNamesTests : IDisposable
     }
 
     [PosixFact]
-    public void Reconcile_AFileRenamedOnDiskOnlyInCase_KeepsItsRowsUnderTheNewSpelling()
+    public void AFileRenamedOnDiskOnlyInCase_KeepsItsRowsUnderTheNewSpelling()
     {
         var fine = Named("Fine.esp");
         using var index = Reconciled(fine);

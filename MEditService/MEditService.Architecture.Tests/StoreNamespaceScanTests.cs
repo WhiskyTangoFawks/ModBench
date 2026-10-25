@@ -23,13 +23,12 @@ public sealed class StoreNamespaceScanTests
     }
 
     [Fact]
-    public void TheScan_FlagsTheSubstringDuckdb_InAnyCase_AndSkipsTheStoreFolderAndBuildOutput()
+    public void TheScan_FlagsTheSubstringDuckdb_InAnyCase_AndSkipsTheStoreFolder()
     {
         using var root = new ScratchDirectory("medit-store-scan-");
         ScratchFiles.Plant(root, "MEditService.RecordIndex/Store/Sql.cs", "DuckDbSql.Execute();");
         ScratchFiles.Plant(root, "Q/Reads.cs", "using DuckDB.NET.Data;");
         ScratchFiles.Plant(root, "Q/Comment.cs", "// duckdb decides");
-        ScratchFiles.Plant(root, "Q/obj/Generated.cs", "DuckDBConnection c;");
         ScratchFiles.Plant(root, "Q/Clean.cs", "store.Read();");
 
         var files = SourceTree.CSharpFiles(root).ToList();

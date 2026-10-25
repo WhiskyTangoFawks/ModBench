@@ -56,11 +56,15 @@ public sealed class UnsavedDocumentTests : IDisposable
 
     private void Hand(params DocumentChange[] documents) => HandUntil(RowsChanged(_npc), documents);
 
-    private void HandUntil(Predicate<INotification> announced, params DocumentChange[] documents)
+    private void HandUntil(Predicate<INotification> announced, params DocumentChange[] documents) =>
+        HandUntil(_index, _notifications, announced, documents);
+
+    private static void HandUntil(
+        OpenedIndex index, InMemoryNotificationPublisher notifications, Predicate<INotification> announced, params DocumentChange[] documents)
     {
-        var before = _notifications.Notifications.Count;
-        _index.Unsaved.Apply(documents);
-        Waits.Reached(() => _notifications.Since(before).Any(n => announced(n)), "the hand-over's announcement");
+        var before = notifications.Notifications.Count;
+        index.Unsaved.Apply(documents);
+        Waits.Reached(() => notifications.Since(before).Any(n => announced(n)), "the hand-over's announcement");
     }
 
     private string Relative(string path) => Path.GetRelativePath(_compiledPlugin.ModFolderOf(), path);
@@ -116,12 +120,8 @@ public sealed class UnsavedDocumentTests : IDisposable
         var notifications = new InMemoryNotificationPublisher();
         using var logged = Indexes.Reconciled(_fixture, InstanceRootNamed("logged"), loggerFactory: loggers, notifications: notifications);
 
-        foreach (var typed in new[] { Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved"), Typed("\"CompiledPluginNpc\"", "\"CompiledPluginNpc\",,") })
-        {
-            var before = notifications.Notifications.Count;
-            logged.Unsaved.Apply([new DocumentChange(_file, typed)]);
-            Waits.Reached(() => notifications.Since(before).Any(n => PluginChanged(_compiledPlugin)(n)), "the failed read announced");
-        }
+        HandUntil(logged, notifications, PluginChanged(_compiledPlugin), new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved")));
+        HandUntil(logged, notifications, PluginChanged(_compiledPlugin), new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"CompiledPluginNpc\",,")));
 
         lock (log) Assert.Single(log, entry => entry.Level == LogLevel.Warning && entry.Message.Contains(Relative(_file), StringComparison.Ordinal));
     }

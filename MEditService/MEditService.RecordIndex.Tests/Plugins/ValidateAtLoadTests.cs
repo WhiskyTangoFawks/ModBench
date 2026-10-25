@@ -48,6 +48,7 @@ public sealed class ValidateAtLoadTests : IDisposable
 
         restarted.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
+        Assert.Empty(restarted.Status.Failures);
         Assert.Equal("EditedWhileStopped", restarted.DocumentOf(_formKey, _entry.Key).EditorId);
         Assert.Equal([_formKey], Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>()).Keys);
     }

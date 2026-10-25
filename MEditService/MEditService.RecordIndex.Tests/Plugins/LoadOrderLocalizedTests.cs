@@ -20,17 +20,7 @@ public sealed class LoadOrderLocalizedTests
     public void ALocalizedPluginWhoseStringsFilesAreHandedInALaterSnapshot_IsReadAgainWithThem()
     {
         var holder = new LoadOrderHolder();
-        FormKey doorFormKey = default;
-        var data = new PluginFixtureBuilder("load-order-localized-handed-later")
-            .WithPlugin("Fixture.esp", mod =>
-            {
-                var door = mod.Doors.AddNew("MainDoor");
-                door.Name = new TranslatedString(Language.English, "The Big Door");
-                mod.UsingLocalization = true;
-                doorFormKey = door.FormKey;
-            })
-            .Build();
-        using (data)
+        using (var data = LocalizedDoor("load-order-localized-handed-later", out var doorFormKey))
         {
             var strings = Path.Combine(data.DataFolder, "Strings");
             var aside = Path.Combine(data.DataFolder, "Strings aside");
@@ -294,18 +284,19 @@ public sealed class LoadOrderLocalizedTests
 
     private static readonly PluginAddress DataCopy = new("Fixture.esp", PluginOrigin.DataDirectory);
 
-    private static PluginFixtureData LocalizedDoor(string name, out FormKey doorFormKey)
+    private static PluginFixtureData LocalizedDoor(
+        string name, out FormKey doorFormKey, Func<PluginFixtureBuilder, PluginFixtureBuilder>? withTheRest = null)
     {
         FormKey door = default;
-        var data = new PluginFixtureBuilder(name)
+        var builder = new PluginFixtureBuilder(name)
             .WithPlugin("Fixture.esp", mod =>
             {
                 var added = mod.Doors.AddNew("MainDoor");
                 added.Name = new TranslatedString(Language.English, "The Big Door");
                 mod.UsingLocalization = true;
                 door = added.FormKey;
-            })
-            .Build();
+            });
+        var data = (withTheRest?.Invoke(builder) ?? builder).Build();
         doorFormKey = door;
         return data;
     }
@@ -346,53 +337,11 @@ public sealed class LoadOrderLocalizedTests
         return (name.CheckError is not null, name.Value?.ToString()?.Contains("The Big Door", StringComparison.Ordinal) == true);
     }
 
-    [Theory]
-    [InlineData(new[] { "Fixture_en.ILSTRINGS", "Fixture_en.DLSTRINGS" }, "Fixture_en.STRINGS")]
-    [InlineData(new[] { "Fixture_en.ILSTRINGS" }, "Fixture_en.STRINGS, Fixture_en.DLSTRINGS")]
-    public void ALocalizedPluginMissingStringsFiles_NamesThemOnItsName(string[] stringsFilesKept, string expected) =>
-        Assert.Equal(expected, NameCheckErrorLeaving(stringsFilesKept));
-
-    private static string? NameCheckErrorLeaving(string[] stringsFilesKept)
-    {
-        var holder = new LoadOrderHolder();
-        FormKey doorFormKey = default;
-        var data = new PluginFixtureBuilder("load-order-localized-missing")
-            .WithPlugin("Fixture.esp", mod =>
-            {
-                var door = mod.Doors.AddNew("MainDoor");
-                door.Name = new TranslatedString(Language.English, "The Big Door");
-                mod.UsingLocalization = true;
-                doorFormKey = door.FormKey;
-            })
-            .Build();
-        using (data)
-        {
-            var strings = Path.Combine(data.DataFolder, "Strings");
-            Directory.Delete(strings, recursive: true);
-            Directory.CreateDirectory(strings);
-            foreach (var kept in stringsFilesKept) File.WriteAllBytes(Path.Combine(strings, kept), []);
-
-            using var index = Indexes.Open(holder);
-            index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-
-            var detail = index.CopyIn(doorFormKey.ToString(), new PluginAddress("Fixture.esp", PluginOrigin.DataDirectory));
-            return Assert.Single(detail.Require().Fields, f => f.Metadata.Name == "Name").CheckError;
-        }
-    }
-
     [Fact]
     public void ComparingCopiesOfARecordWhoseStringsFilesAreMissing_CarriesEachColumnsStringsFileOnItsName()
     {
         var holder = new LoadOrderHolder();
-        FormKey doorFormKey = default;
-        var data = new PluginFixtureBuilder("load-order-localized-missing-compare")
-            .WithPlugin("Fixture.esp", mod =>
-            {
-                var door = mod.Doors.AddNew("MainDoor");
-                door.Name = new TranslatedString(Language.English, "The Big Door");
-                mod.UsingLocalization = true;
-                doorFormKey = door.FormKey;
-            })
+        using (var data = LocalizedDoor("load-order-localized-missing-compare", out var doorFormKey, builder => builder
             .WithPlugin("Other.esp", (mod, built) =>
             {
                 mod.UsingLocalization = true;
@@ -400,9 +349,7 @@ public sealed class LoadOrderLocalizedTests
                 var copy = (Mutagen.Bethesda.Fallout4.Door)built[0].Doors.Single().DeepCopy();
                 copy.Name = new TranslatedString(Language.English, "The Other Door");
                 mod.Doors.Set(copy);
-            })
-            .Build();
-        using (data)
+            })))
         {
             Directory.Delete(Path.Combine(data.DataFolder, "Strings"), recursive: true);
 

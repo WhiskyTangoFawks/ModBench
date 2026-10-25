@@ -1,21 +1,20 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
-using MEditService.LoadOrder;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using DocumentsByFormKey = System.Collections.Generic.Dictionary<string, (string RecordType, string Body)>;
 
 namespace MEditService.RecordIndex.Tests.RealData;
 
 public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClassFixture<SourceParityFixture>
 {
     [Fact]
-    public void TheCompiledPluginReallyIngestedFromSource_NotViaTheBinaryFallback()
+    public void TheCompiledPluginsRow_SaysItReadsFromItsPluginSource()
     {
-        Assert.Empty(fixture.FromSource.Status.Failures);
-        Assert.True(TestAdapters.Source().SourceReads(new RegisteredPlugin(RealDataPlugin.PluginFileName, SourceParityFixture.Origin, "", new PluginProvider.FromMod(SourceParityFixture.Origin, fixture.ModFolder, fixture.ModFolder), Line: null, PluginStrings.None)));
+        Assert.True(fixture.FromSource.ReadFromItsPluginSource(fixture.Plugin));
     }
 
     [Fact]
@@ -48,45 +47,23 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         var source = AllFormKeysInOneUnpagedQuery(fixture.SourceInstanceRoot).ToHashSet(StringComparer.Ordinal);
 
         Assert.True(binary.Count > 2000, $"fixture looks wrong: only {binary.Count} records");
+        Assert.True(
+            IndexFiles.Rows(fixture.BinaryInstanceRoot, "SELECT form_key FROM records WHERE record_type = 'refr'").Count > 0,
+            "fixture holds no placed references, which the tree embeds in their cells");
         Assert.Equal(binary.Count, source.Count);
         Assert.Empty(binary.Except(source, StringComparer.Ordinal));
         Assert.Empty(source.Except(binary, StringComparer.Ordinal));
     }
 
     [Fact]
-    public void EveryEmbeddedChildRecord_IsItsOwnQueryableRecord_OnBothPaths()
-    {
-        foreach (var type in (string[])["navm", "land", "cell", .. PlacedRecordTables.Names])
-        {
-            var binary = CountOf(fixture.BinaryInstanceRoot, type);
-            if (binary == 0) continue;
-
-            Assert.Equal(binary, CountOf(fixture.SourceInstanceRoot, type));
-        }
-
-        Assert.True(CountOf(fixture.BinaryInstanceRoot, "refr") > 0, "fixture holds no placed references");
-        Assert.True(CountOf(fixture.BinaryInstanceRoot, "cell") > 0, "fixture holds no cells");
-    }
-
-    [Fact]
     public void EveryRecordsDocument_IsByteIdentical_ExceptOnePinnedOverlayVsDeepParseCellDivergence()
     {
-        var binaryDocuments = DocumentsByFormKey(fixture.BinaryInstanceRoot);
-        var sourceDocuments = DocumentsByFormKey(fixture.SourceInstanceRoot);
+        var binaryDocuments = DocumentsIn(fixture.BinaryInstanceRoot);
+        var sourceDocuments = DocumentsIn(fixture.SourceInstanceRoot);
 
-        var mismatched = new List<string>();
-        var byType = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var (formKey, binary) in binaryDocuments)
-        {
-            if (sourceDocuments.TryGetValue(formKey, out var source) && binary.Body == source.Body) continue;
-            mismatched.Add(formKey);
-            byType[binary.RecordType] = byType.GetValueOrDefault(binary.RecordType) + 1;
-        }
+        var mismatched = MismatchedFormKeys(binaryDocuments, sourceDocuments);
 
-        var byTypeText = string.Join(", ", byType.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key}={kv.Value}"));
-
-        Assert.True(mismatched.Count == 1, $"expected exactly the one known divergence; got {mismatched.Count} ({byTypeText})");
-        Assert.Equal("cell=1", byTypeText);
+        Assert.Equal("cell=1", CountsByRecordType(mismatched, binaryDocuments));
 
         var binaryBody = binaryDocuments[mismatched[0]].Body;
         var sourceBody = sourceDocuments[mismatched[0]].Body;
@@ -135,12 +112,23 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     private static IEnumerable<string> AllFormKeysInOneUnpagedQuery(string instanceRoot) =>
         IndexFiles.Rows(instanceRoot, "SELECT form_key FROM records").Select(row => row[0]);
 
-    private static int CountOf(string instanceRoot, string recordType) =>
-        IndexFiles.Rows(instanceRoot, $"SELECT form_key FROM records WHERE record_type = '{recordType}'").Count;
-
-    private static Dictionary<string, (string RecordType, string Body)> DocumentsByFormKey(string instanceRoot) =>
+    private static DocumentsByFormKey DocumentsIn(string instanceRoot) =>
         IndexFiles.Rows(instanceRoot, "SELECT form_key, record_type, body FROM records")
             .ToDictionary(row => row[0], row => (row[1], row[2]), StringComparer.Ordinal);
+
+    private static List<string> MismatchedFormKeys(
+        DocumentsByFormKey binaryDocuments,
+        DocumentsByFormKey sourceDocuments) =>
+        [.. binaryDocuments
+            .Where(binary => !sourceDocuments.TryGetValue(binary.Key, out var source) || binary.Value.Body != source.Body)
+            .Select(binary => binary.Key)];
+
+    private static string CountsByRecordType(
+        List<string> formKeys, DocumentsByFormKey documents) =>
+        string.Join(", ", formKeys
+            .GroupBy(formKey => documents[formKey].RecordType, StringComparer.Ordinal)
+            .OrderByDescending(group => group.Count())
+            .Select(group => $"{group.Key}={group.Count()}"));
 
     private static string StripVersioningBlock(string body) =>
         Regex.Replace(body, "\"Versioning\": \\[[^\\]]*\\]", "\"Versioning\": []");

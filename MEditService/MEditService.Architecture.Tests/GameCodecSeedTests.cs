@@ -25,76 +25,26 @@ public class GameCodecSeedTests
         Assert.Empty(offendingFiles);
     }
 
-    [Fact]
-    public void CoreSources_CallSerializeWholeModOnlyFromDesignatedDoorFiles_ScannedByMethodNameSinceExtensionSyntaxDoesNotSpellTheStaticClass()
+    public static TheoryData<string, string[]> WholeModDoorsAndTheFilesThatMayNameThem => new()
     {
-        const string gatewayMethodName = "SerializeWholeMod";
-        const string gatewayFile = CompileTimeSeedDoor;
-        var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
-        {
-            GameInterface,
-            PluginBinaryAndTreeDoor,
-            HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter,
-        };
+        { "SerializeWholeMod", [CompileTimeSeedDoor, GameInterface, PluginBinaryAndTreeDoor, HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter] },
+        { "DeserializeWholeMod", [CompileTimeSeedDoor, GameInterface, PluginBinaryAndTreeDoor, HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter] },
+        { "MutagenJsonConverter.Instance", [CompileTimeSeedDoor] },
+    };
 
-        var sourceFiles = ProductionSources();
-        Assert.NotEmpty(sourceFiles);
-
-        var offendingFiles = sourceFiles
-            .Where(f => Path.GetFileName(f) != gatewayFile && !designatedDoors.Contains(Path.GetFileName(f)))
-            .Where(f => File.ReadAllText(f).Contains(gatewayMethodName, StringComparison.Ordinal))
+    [Theory]
+    [MemberData(nameof(WholeModDoorsAndTheFilesThatMayNameThem))]
+    public void TheWholeModSerializer_IsReachedOnlyThroughTheGameCodecsDoors(string name, string[] doorFiles)
+    {
+        var offendingFiles = ProductionSources()
+            .Where(f => !doorFiles.Contains(Path.GetFileName(f), StringComparer.Ordinal))
+            .Where(f => File.ReadAllText(f).Contains(name, StringComparison.Ordinal))
             .Select(Path.GetFileName)
             .ToList();
 
         Assert.Empty(offendingFiles);
     }
 
-    [Fact]
-    public void CoreSources_CallDeserializeWholeModOnlyFromDesignatedDoorFiles_ASeparateScanBecauseTheCaseSensitiveSerializeSearchMissesIt()
-    {
-        const string gatewayMethodName = "DeserializeWholeMod";
-        const string gatewayFile = CompileTimeSeedDoor;
-        var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
-        {
-            GameInterface,
-            PluginBinaryAndTreeDoor,
-            HeaderDocumentDoorBecauseModHeaderIsNoMajorRecordGetter,
-        };
-
-        var sourceFiles = ProductionSources();
-        Assert.NotEmpty(sourceFiles);
-
-        var offendingFiles = sourceFiles
-            .Where(f => Path.GetFileName(f) != gatewayFile && !designatedDoors.Contains(Path.GetFileName(f)))
-            .Where(f => File.ReadAllText(f).Contains(gatewayMethodName, StringComparison.Ordinal))
-            .Select(Path.GetFileName)
-            .ToList();
-
-        Assert.Empty(offendingFiles);
-    }
-
-    [Fact]
-    public void CoreSources_NameTheBootstrapReceiverOnlyInTheGatewayFile()
-    {
-        const string bootstrapReceiver = "MutagenJsonConverter.Instance";
-        const string gatewayFile = CompileTimeSeedDoor;
-
-        var sourceFiles = ProductionSources();
-        Assert.NotEmpty(sourceFiles);
-
-        var offendingFiles = sourceFiles
-            .Where(f => Path.GetFileName(f) != gatewayFile)
-            .Where(f => File.ReadAllText(f).Contains(bootstrapReceiver, StringComparison.Ordinal))
-            .Select(Path.GetFileName)
-            .ToList();
-
-        Assert.Empty(offendingFiles);
-    }
-
-    private static readonly IReadOnlyList<string> ProductionProjects =
-        ServiceProjects.Production(ServiceProjects.SolutionDirectory());
-
-    private static string[] ProductionSources() =>
-        [.. ProductionProjects.SelectMany(project => SourceTree.CSharpFiles(
-            ServiceProjects.Folder(ServiceProjects.SolutionDirectory(), project)))];
+    private static List<string> ProductionSources() =>
+        ServiceProjects.ProductionFiles(ServiceProjects.SolutionDirectory());
 }

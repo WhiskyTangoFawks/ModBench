@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
+using System.Text.Json;
 using System.Xml.Linq;
 using Microsoft.CodeAnalysis;
 
@@ -6,35 +8,24 @@ namespace MEditService.Architecture.Tests;
 
 public sealed class BannedApiScopeTests
 {
-    private static readonly string[] MutagenBanProjectsExcludingTheCodecAndThePluginAdapterWhichHoldLiveObjects =
-    [
-        "MEditService.Commands",
-        "MEditService.Http",
-        "MEditService.LoadOrder",
-        "MEditService.ModFolderAdapter",
-        "MEditService.Ports",
-        "MEditService.RecordIndex",
-        "MEditService.SourceAdapter",
-    ];
-
     private const string Rs0030 = "RS0030";
 
     [Fact]
-    public void RS0030_IsAnErrorEverywhere_WithNoPerFolderOrPerProjectSeverity()
+    public void RS0030_IsAnErrorForEveryHandWrittenFile_AndNoProjectSilencesIt()
     {
-        var declaration = Assert.Single(SeverityDeclarations(File.ReadAllLines(EditorConfigPath())));
-        Assert.Equal(("*.cs", "error"), declaration);
-    }
-
-    [Fact]
-    public void TheSeverityRoslynComputes_IsErrorForEveryProject()
-    {
+        var solution = ServiceProjects.SolutionDirectory();
         var configured = ConfiguredSeverities();
+        var files = ServiceProjects.All(solution)
+            .SelectMany(project => SourceTree.CSharpFiles(ServiceProjects.Folder(solution, project)))
+            .ToList();
 
-        Assert.All(
-            new[] { "MEditService.RecordIndex", "MEditService.Commands", "MEditService.Codec", "MEditService.PluginAdapter",
-                "MEditService.TestSupport" },
-            project => Assert.Equal(ReportDiagnostic.Error, configured.For(Path.Combine(project, "Probe.cs"))));
+        Assert.True(files.Count > 500, $"The severity check read only {files.Count} files.");
+        Assert.Empty(files.Where(file => configured.For(file) != ReportDiagnostic.Error).Select(file => SourceTree.Relative(solution, file)));
+        Assert.Empty(ServiceProjects.All(solution)
+            .Select(project => ServiceProjects.Csproj(solution, project))
+            .Append(Path.Combine(solution, "Directory.Build.props"))
+            .Where(file => XDocument.Load(file).Descendants("NoWarn").Any(noWarn => noWarn.Value.Contains(Rs0030, StringComparison.Ordinal)))
+            .Select(file => SourceTree.Relative(solution, file)));
     }
 
     [Fact]
@@ -43,65 +34,69 @@ public sealed class BannedApiScopeTests
         Assert.Equal(ReportDiagnostic.Suppress, ConfiguredSeverities().Global);
     }
 
-    [Fact]
-    public void TheAnalyzerAndTheTimeFile_AreWiredUnconditionally_ForEveryProject()
+    private const string MutagenBan = "BannedSymbols.Mutagen.txt";
+    private const string SyncOverAsyncBan = "BannedSymbols.SyncOverAsync.txt";
+    private const string TimeAndBlockingBan = "BannedSymbols.txt";
+
+    public static IEnumerable<object[]> EveryProjectAndTheBanFilesItCompilesAgainst =>
+        ServiceProjects.All(ServiceProjects.SolutionDirectory()).Select(project => new object[] { project, BanFilesFor(project) });
+
+    private static string[] BanFilesFor(string project) =>
+        ServiceProjects.IsTestSide(project) ? [TimeAndBlockingBan]
+        : HoldersOfLiveMutagenObjects.Contains(project) ? [SyncOverAsyncBan, TimeAndBlockingBan]
+        : [MutagenBan, SyncOverAsyncBan, TimeAndBlockingBan];
+
+    private static readonly string[] HoldersOfLiveMutagenObjects =
+    [
+        "MEditService.Codec",
+        "MEditService.Codec.Fallout4",
+        "MEditService.Codec.Skyrim",
+        "MEditService.Codec.Starfield",
+        "MEditService.PluginAdapter",
+    ];
+
+    private static readonly TimeSpan EvaluationTimeout = TimeSpan.FromSeconds(15);
+
+    [Theory]
+    [MemberData(nameof(EveryProjectAndTheBanFilesItCompilesAgainst))]
+    public async Task AProject_CompilesAgainstTheBanFilesOfItsSide_WithTheAnalyzerAndTheGlobalConfig(string project, string[] banFiles)
     {
-        var props = LoadBuildProps();
+        var items = await EvaluatedItems(project, "AdditionalFiles", "PackageReference", "EditorConfigFiles");
 
-        Assert.Contains(
-            props.Descendants("PackageReference"),
-            e => (string?)e.Attribute("Include") == "Microsoft.CodeAnalysis.BannedApiAnalyzers");
-        Assert.Contains(
-            props.Descendants("EditorConfigFiles"),
-            e => ((string?)e.Attribute("Include"))?.EndsWith("BannedSymbols.globalconfig", StringComparison.Ordinal) == true);
-
-        var timeFile = Assert.Single(
-            props.Descendants("AdditionalFiles"),
-            e => ((string?)e.Attribute("Include"))?.EndsWith("BannedSymbols.txt", StringComparison.Ordinal) == true);
-        Assert.Null(timeFile.Parent?.Attribute("Condition"));
+        Assert.Equal(banFiles, items["AdditionalFiles"].Where(file => file.StartsWith("BannedSymbols", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
+        Assert.Contains("Microsoft.CodeAnalysis.BannedApiAnalyzers", items["PackageReference"]);
+        Assert.Contains("BannedSymbols.globalconfig", items["EditorConfigFiles"]);
     }
 
-    [Fact]
-    public void TheMutagenBanFile_IncludesExactlyTheNamedProductionProjects()
+    private static async Task<Dictionary<string, List<string>>> EvaluatedItems(string project, params string[] itemTypes)
     {
-        var props = LoadBuildProps();
+        var solution = ServiceProjects.SolutionDirectory();
+        var evaluation = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        evaluation.ArgumentList.Add("msbuild");
+        evaluation.ArgumentList.Add(ServiceProjects.Csproj(solution, project));
+        evaluation.ArgumentList.Add("-nodeReuse:false");
+        foreach (var itemType in itemTypes) evaluation.ArgumentList.Add($"-getItem:{itemType}");
+        using var process = Process.Start(evaluation) ?? throw new InvalidOperationException("dotnet did not start.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        using var deadline = new CancellationTokenSource(EvaluationTimeout);
+        try
+        {
+            await process.WaitForExitAsync(deadline.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            Assert.Fail($"dotnet msbuild did not evaluate {project} within {EvaluationTimeout.TotalSeconds} s.");
+        }
+        Assert.True(process.ExitCode == 0, $"dotnet msbuild could not evaluate {project}:\n{await output}\n{await error}");
 
-        var includedProperties = props.Descendants("MutagenBanIncluded").ToList();
-        Assert.All(includedProperties, e => Assert.Equal("true", e.Value));
-        var namedProjects = includedProperties
-            .Select(e => ProjectNamedBy((string?)e.Attribute("Condition") ?? ""))
-            .Order(StringComparer.Ordinal)
-            .ToList();
-        Assert.Equal(MutagenBanProjectsExcludingTheCodecAndThePluginAdapterWhichHoldLiveObjects, namedProjects);
-
-        var mutagenFile = Assert.Single(
-            props.Descendants("AdditionalFiles"),
-            e => ((string?)e.Attribute("Include"))?.EndsWith("BannedSymbols.Mutagen.txt", StringComparison.Ordinal) == true);
-        Assert.Equal("'$(MutagenBanIncluded)' == 'true'", (string?)mutagenFile.Parent?.Attribute("Condition"));
-    }
-
-    private static string ProjectNamedBy(string condition)
-    {
-        var parts = condition.Split('\'');
-        Assert.True(parts.Length >= 4, $"Expected a quoted MSBuildProjectName equality condition, got '{condition}'.");
-        return parts[3];
-    }
-
-    [Fact]
-    public void TheSyncOverAsyncFile_BindsEveryProductionBox_AndNoTestProject()
-    {
-        var props = LoadBuildProps();
-
-        var file = Assert.Single(
-            props.Descendants("AdditionalFiles"),
-            e => ((string?)e.Attribute("Include"))?.EndsWith("BannedSymbols.SyncOverAsync.txt", StringComparison.Ordinal) == true);
-        Assert.Equal("'$(SyncOverAsyncBanIncluded)' == 'true'", (string?)file.Parent?.Attribute("Condition"));
-
-        var included = Assert.Single(props.Descendants("SyncOverAsyncBanIncluded"));
-        Assert.Equal("true", included.Value);
-        var condition = (string?)included.Attribute("Condition") ?? "";
-        Assert.Contains("!$(MSBuildProjectName.EndsWith('.Tests'))", condition, StringComparison.Ordinal);
-        Assert.Contains("'$(MSBuildProjectName)' != 'MEditService.TestSupport'", condition, StringComparison.Ordinal);
+        using var json = JsonDocument.Parse(await output);
+        return itemTypes.ToDictionary(
+            itemType => itemType,
+            itemType => json.RootElement.GetProperty("Items").GetProperty(itemType).EnumerateArray()
+                .Select(item => Path.GetFileName(item.GetProperty("Identity").GetString() ?? string.Empty))
+                .ToList());
     }
 
     private static bool HoldsAGameAssembly(string project) =>
@@ -116,25 +111,24 @@ public sealed class BannedApiScopeTests
         && !id.StartsWith("Mutagen.Bethesda.Serialization", StringComparison.Ordinal);
 
     [Fact]
-    public void TheGameAssemblies_AreTheCodecsGameProjectsOnly_AndNoneCarriesTheMutagenBanFile()
+    public void TheGameAssemblies_AreTheCodecsGameProjectsOnly()
     {
         var projects = ServiceProjects.Production(ServiceProjects.SolutionDirectory());
 
         var holders = projects.Where(HoldsAGameAssembly).ToList();
 
         Assert.Equal(["MEditService.Codec.Fallout4", "MEditService.Codec.Skyrim", "MEditService.Codec.Starfield"], holders);
-        Assert.All(holders, project => Assert.DoesNotContain(project, MutagenBanProjectsExcludingTheCodecAndThePluginAdapterWhichHoldLiveObjects));
     }
 
-    private sealed record ConfiguredSeverity(AnalyzerConfigSet Set, string SolutionDirectory)
+    private sealed record ConfiguredSeverity(AnalyzerConfigSet Set)
     {
         internal ReportDiagnostic Global =>
             Set.GlobalConfigOptions.TreeOptions.TryGetValue(Rs0030, out var severity)
                 ? severity
                 : ReportDiagnostic.Default;
 
-        public ReportDiagnostic For(string relativePath) =>
-            Set.GetOptionsForSourcePath(Path.Combine(SolutionDirectory, relativePath)).TreeOptions
+        public ReportDiagnostic For(string path) =>
+            Set.GetOptionsForSourcePath(path).TreeOptions
                 .TryGetValue(Rs0030, out var severity)
                 ? severity
                 : ReportDiagnostic.Default;
@@ -146,28 +140,12 @@ public sealed class BannedApiScopeTests
         var globalConfigPath = Path.Combine(solutionDirectory, "BannedSymbols.globalconfig");
 
         return new ConfiguredSeverity(
-            AnalyzerConfigSet.Create(ImmutableArray.Create(
-                AnalyzerConfig.Parse(File.ReadAllText(EditorConfigPath()), EditorConfigPath()),
-                AnalyzerConfig.Parse(File.ReadAllText(globalConfigPath), globalConfigPath))),
-            solutionDirectory);
+            AnalyzerConfigSet.Create(EditorConfigs(solutionDirectory)
+                .Append(globalConfigPath)
+                .Select(path => AnalyzerConfig.Parse(File.ReadAllText(path), path))
+                .ToImmutableArray()));
     }
 
-    private static string EditorConfigPath() =>
-        Path.Combine(ServiceProjects.SolutionDirectory(), ".editorconfig");
-
-    private static XDocument LoadBuildProps() =>
-        XDocument.Load(Path.Combine(ServiceProjects.SolutionDirectory(), "Directory.Build.props"));
-
-    private static List<(string Section, string Severity)> SeverityDeclarations(IEnumerable<string> lines)
-    {
-        var declarations = new List<(string, string)>();
-        var section = "";
-        foreach (var line in lines.Select(l => l.Trim()))
-        {
-            if (line.StartsWith('[') && line.EndsWith(']')) section = line[1..^1];
-            else if (line.StartsWith("dotnet_diagnostic.RS0030.severity", StringComparison.Ordinal))
-                declarations.Add((section, line.Split('=')[1].Trim()));
-        }
-        return declarations;
-    }
+    private static IEnumerable<string> EditorConfigs(string solutionDirectory) =>
+        SourceTree.Files(solutionDirectory, ".editorconfig");
 }

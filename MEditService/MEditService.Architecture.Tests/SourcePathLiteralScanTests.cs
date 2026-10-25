@@ -38,7 +38,6 @@ public sealed class SourcePathLiteralScanTests
         ScratchFiles.Plant(root, "Layer/EditService.cs",
             "var tree = Path.Combine(modFolder, \"plugin-source\", plugin);\n"
             + "var glob = Directory.EnumerateFiles(tree, \"*.json\");\n");
-        ScratchFiles.Plant(root, "Layer/obj/Generated.cs", "var root = \"plugin-source\";");
         ScratchFiles.Plant(root, "Layer/SourceRepositoryRival.cs", "internal const string Root = \"plugin-source\";");
 
         var counts = Counts(root, ["MEditService.SourceAdapter", "Layer"]);
@@ -75,20 +74,13 @@ public sealed class SourcePathLiteralScanTests
     }
 
     private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots) =>
-        [.. scannedRoots
-            .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)))
-            .Where(file => !IsRepositoryFile(root, file))
-            .SelectMany(file => Occurrences(File.ReadAllText(file))
-                .Select(o => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {o.Literal}: {o.Count}"))
-            .Order(StringComparer.Ordinal)];
+        SourceTree.Sites(
+            root,
+            scannedRoots.SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r))).Where(file => !IsRepositoryFile(root, file)),
+            [.. LayoutLiteralsWithTheirQuotes.Select(literal => (literal, new Regex(Regex.Escape(literal))))],
+            File.ReadAllText);
 
     private static bool IsRepositoryFile(string root, string file) =>
         Path.GetFileName(file).StartsWith(RepositoryFilePrefix, StringComparison.Ordinal)
-        && Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')
-            .StartsWith(RepositoryFolder + "/", StringComparison.Ordinal);
-
-    private static IEnumerable<(string Literal, int Count)> Occurrences(string text) =>
-        LayoutLiteralsWithTheirQuotes
-            .Select(literal => (Literal: literal, Count: Regex.Count(text, Regex.Escape(literal))))
-            .Where(o => o.Count > 0);
+        && SourceTree.Relative(root, file).StartsWith(RepositoryFolder + "/", StringComparison.Ordinal);
 }

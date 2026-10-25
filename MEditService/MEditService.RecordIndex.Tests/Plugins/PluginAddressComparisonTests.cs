@@ -32,9 +32,7 @@ public sealed class PluginAddressComparisonTests : IDisposable
     [Fact]
     public void AListingUnderAnotherCase_AnswersThePluginsRows()
     {
-        Assert.Equal(
-            _index.ListedIn(_fixture.Plugins.Single().Key).Select(row => row.FormKey),
-            _index.ListedIn(OtherCase).Select(row => row.FormKey));
+        Assert.Equal(["CasedRace", "FromCased"], _index.ListedIn(OtherCase).Select(row => row.EditorId).Order(StringComparer.Ordinal));
     }
 
     private string UnderAnotherCase(string editorId) =>

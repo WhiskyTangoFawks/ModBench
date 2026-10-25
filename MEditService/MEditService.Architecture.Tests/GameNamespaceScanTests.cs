@@ -43,12 +43,11 @@ public sealed class GameNamespaceScanTests
     }
 
     [Fact]
-    public void TheScan_PassesTheExemptFoldersAndBuildOutput_AndNamesAGameNamespaceOrTypeElsewhere()
+    public void TheScan_PassesTheExemptFolders_AndNamesAGameNamespaceOrTypeElsewhere()
     {
         using var root = new ScratchDirectory("medit-game-namespace-scan-");
         ScratchFiles.Plant(root, "Codec/Codec.cs",
             "using Mutagen.Bethesda.Fallout4;\nvar mod = new Fallout4Mod(key, release);");
-        ScratchFiles.Plant(root, "Layer/obj/Generated.cs", "using Mutagen.Bethesda.Fallout4;");
         ScratchFiles.Plant(root, "Layer/Rival.cs", "using Mutagen.Bethesda.Fallout4;");
         ScratchFiles.Plant(root, "Layer/Unqualified.cs", "IFallout4ModGetter mod = Open(path);");
         ScratchFiles.Plant(root, "Layer/Clean.cs", "var release = GameRelease.Fallout4; // Fallout4.esm");

@@ -159,12 +159,13 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void AWorldspaceCellWithNoEditorIdOrGrid_CarriesNulls()
+    public void AWorldspaceCellWithNoEditorIdGridOrFullName_CarriesNulls()
     {
         var result = _index.Queries.GetWorldspaceBlocks(Plugin, FormKeyOf("Bare")).Value();
 
         var cell = Assert.Single(Assert.Single(Assert.Single(result.Blocks).SubBlocks).Cells);
-        Assert.Equal<(string, string?, int?, int?)>((FormKeyOf("BareCell"), null, null, null), (cell.FormKey, cell.EditorId, cell.CellX, cell.CellY));
+        Assert.Equal<(string, string?, int?, int?, string?)>(
+            (FormKeyOf("BareCell"), null, null, null, null), (cell.FormKey, cell.EditorId, cell.CellX, cell.CellY, cell.FullName));
     }
 
     [Fact]

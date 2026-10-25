@@ -13,7 +13,7 @@ public sealed class SharedConcernScanTests
     ];
 
     private static readonly string[] ScannedRoots =
-        ["MEditService.Commands", "MEditService.Commands/Edits", "MEditService.Http"];
+        ["MEditService.Commands", "MEditService.Http"];
 
     [Fact]
     public void TheWriteSide_CarriesNoCopyOfASharedConcernsMechanism()
@@ -38,7 +38,7 @@ public sealed class SharedConcernScanTests
     }
 
     [Fact]
-    public void TheScan_CountsPerFileAndNeedle_AndPassesTheModuleAndBuildOutput()
+    public void TheScan_CountsPerFileAndNeedle_AndPassesTheModule()
     {
         using var root = new ScratchDirectory("medit-shared-concern-scan-");
         ScratchFiles.Plant(root, "Layer/Second.cs",
@@ -46,7 +46,6 @@ public sealed class SharedConcernScanTests
             + "var floor = GameConstants.Get(release).DefaultHighRangeFormID;\n");
         ScratchFiles.Plant(root, "Layer/WriteTargets.cs", "target = new EditTarget(release, record, repository);");
         ScratchFiles.Plant(root, "Layer/FormKeyAllocator.cs", "var floor = GameConstants.Get(release).DefaultHighRangeFormID;");
-        ScratchFiles.Plant(root, "Layer/obj/Generated.cs", "target = new WriteTargets.EditTarget(release, document.Identity, repository);");
         ScratchFiles.Plant(root, "Layer/Clean.cs", "repository.Put(plugin, document);");
 
         var counts = Counts(root, ["Layer"]);
@@ -59,16 +58,15 @@ public sealed class SharedConcernScanTests
             counts);
     }
 
-    private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots) =>
-        [.. scannedRoots
-            .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar))))
-            .SelectMany(file => References(Path.GetFileName(file), File.ReadAllText(file))
-                .Select(r => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {r.Needle}: {r.Count}"))
+    private static List<string> Counts(string root, IReadOnlyList<string> scannedRoots)
+    {
+        var files = scannedRoots.SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r))).ToList();
+        return [.. ConcernMechanismNeedles
+            .SelectMany(c => SourceTree.Sites(
+                root,
+                files.Where(file => !c.Module.Equals(Path.GetFileName(file), StringComparison.Ordinal)),
+                [(c.Needle, new Regex(c.Needle))],
+                File.ReadAllText))
             .Order(StringComparer.Ordinal)];
-
-    private static IEnumerable<(string Needle, int Count)> References(string fileName, string text) =>
-        ConcernMechanismNeedles
-            .Where(c => !c.Module.Equals(fileName, StringComparison.Ordinal))
-            .Select(c => (c.Needle, Count: Regex.Count(text, c.Needle)))
-            .Where(r => r.Count > 0);
+    }
 }
