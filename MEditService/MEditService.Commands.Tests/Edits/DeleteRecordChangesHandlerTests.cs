@@ -157,5 +157,6 @@ public sealed class DeleteRecordChangesHandlerTests
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(RecordEditRefusal.RecordNotFound, refused.Refusal);
+        Assert.Contains("FFFFFF:Fixture.esp", refused.Message, StringComparison.Ordinal);
     }
 }

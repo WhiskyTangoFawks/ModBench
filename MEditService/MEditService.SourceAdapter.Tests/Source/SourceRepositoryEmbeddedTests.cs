@@ -797,7 +797,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var refused = Assert.IsType<SourceFailure.NotCarried>(
             Repository.Remove(Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent")).Failed());
 
-        Assert.StartsWith("No document in Embedded.esp's tree holds 00FFFF:Embedded.esp.", refused.Reason, StringComparison.Ordinal);
+        Assert.StartsWith("No document in Embedded.esp's tree holds 00FFFF:Embedded.esp, so there is none to remove.", refused.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -812,7 +812,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         Assert.Null(Repository.RelativePathOf(Plugin, identity).Value());
         Assert.StartsWith(
-            "No document in Embedded.esp's tree holds 00A001:Embedded.esp.", Repository.Remove(Plugin, identity).Failed().Reason, StringComparison.Ordinal);
+            "No document in Embedded.esp's tree holds 00A001:Embedded.esp, so there is none to remove.", Repository.Remove(Plugin, identity).Failed().Reason, StringComparison.Ordinal);
     }
 
     [Fact]

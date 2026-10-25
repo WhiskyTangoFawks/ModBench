@@ -28,6 +28,20 @@ internal static class Waits
         return true;
     }
 
+    internal static TimeSpan LongestReadUntil<T>(Func<T> read, Func<T, bool> condition)
+    {
+        var longest = TimeSpan.Zero;
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed <= Patience)
+        {
+            var reading = Stopwatch.StartNew();
+            var value = read();
+            if (reading.Elapsed > longest) longest = reading.Elapsed;
+            if (condition(value)) return longest;
+        }
+        throw new TimeoutException($"Never read a value the condition holds for; the longest read took {longest}.");
+    }
+
     internal static async Task<bool> CompletesWithin(Task task, TimeSpan timeout) =>
         await Task.WhenAny(task, Task.Delay(timeout)) == task;
 
