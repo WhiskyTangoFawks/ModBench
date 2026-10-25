@@ -23,7 +23,11 @@ Both must hold — HEAD on a branch (a detached HEAD silently strands every comm
 cd modbench && bash ../.claude/skills/validate/slot-run.sh npm run build
 ```
 
-The published self-contained backend binary lives at `modbench/backend/` (produced by `npm run build:backend`) — rebuild it only if `MEditService/` changed.
+The published self-contained backend binary lives at `modbench/backend/` (produced by `npm run build:backend`). Rebuild it when this lists a file. A merge writes the files it changes, so mtime catches a merged branch whose commits predate the build, which `git log --since` misses:
+
+```bash
+find MEditService \( -name bin -o -name obj -o -name '*Tests*' \) -prune -o \( -name '*.cs' -o -name '*.csproj' -o -name '*.props' \) -newer modbench/backend/MEditService.Http.dll -print
+```
 
 ## 2 — Launch the VS Code Extension Development Host
 
