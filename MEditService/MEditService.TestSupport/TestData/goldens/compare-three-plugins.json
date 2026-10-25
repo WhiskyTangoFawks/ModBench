@@ -14,25 +14,31 @@
         },
         "Children": [
           {
-            "CellStates": {},
+            "CellStates": {
+              "Top.esp": "Override"
+            },
             "CellStatesByFocus": null,
             "CheckErrors": {
               "Base.esm": "Data.ParameterOneRecord: Found a NULL reference, expected: "
             },
             "Children": [
               {
-                "CellStates": {},
+                "CellStates": {
+                  "Top.esp": "Override"
+                },
                 "CellStatesByFocus": null,
                 "CheckErrors": {
                   "Base.esm": "ParameterOneRecord: Found a NULL reference, expected: "
                 },
                 "Children": [
                   {
-                    "CellStates": {},
+                    "CellStates": {
+                      "Top.esp": "Override"
+                    },
                     "CellStatesByFocus": null,
                     "CheckErrors": null,
                     "Children": null,
-                    "ConflictAll": "NoConflict",
+                    "ConflictAll": "Override",
                     "FieldName": "Function",
                     "Indexes": null,
                     "Resolutions": null,
@@ -40,14 +46,16 @@
                       "Base.esm": "GetIsID",
                       "Top.esp": null
                     },
-                    "WinnerColumn": "Base.esm"
+                    "WinnerColumn": "Top.esp"
                   },
                   {
-                    "CellStates": {},
+                    "CellStates": {
+                      "Top.esp": "Override"
+                    },
                     "CellStatesByFocus": null,
                     "CheckErrors": null,
                     "Children": null,
-                    "ConflictAll": "NoConflict",
+                    "ConflictAll": "Override",
                     "FieldName": "MutagenObjectType",
                     "Indexes": null,
                     "Resolutions": null,
@@ -55,10 +63,10 @@
                       "Base.esm": "FunctionConditionData",
                       "Top.esp": null
                     },
-                    "WinnerColumn": "Base.esm"
+                    "WinnerColumn": "Top.esp"
                   }
                 ],
-                "ConflictAll": "NoConflict",
+                "ConflictAll": "Override",
                 "FieldName": "Data",
                 "Indexes": null,
                 "Resolutions": null,
@@ -69,14 +77,16 @@
                   },
                   "Top.esp": null
                 },
-                "WinnerColumn": "Base.esm"
+                "WinnerColumn": "Top.esp"
               },
               {
-                "CellStates": {},
+                "CellStates": {
+                  "Top.esp": "Override"
+                },
                 "CellStatesByFocus": null,
                 "CheckErrors": null,
                 "Children": null,
-                "ConflictAll": "NoConflict",
+                "ConflictAll": "Override",
                 "FieldName": "Flags",
                 "Indexes": null,
                 "Resolutions": null,
@@ -86,10 +96,12 @@
                   ],
                   "Top.esp": null
                 },
-                "WinnerColumn": "Base.esm"
+                "WinnerColumn": "Top.esp"
               },
               {
-                "CellStates": {},
+                "CellStates": {
+                  "Top.esp": "IdenticalToMaster"
+                },
                 "CellStatesByFocus": null,
                 "CheckErrors": null,
                 "Children": null,
@@ -101,14 +113,16 @@
                   "Base.esm": "0x000000",
                   "Top.esp": null
                 },
-                "WinnerColumn": "Base.esm"
+                "WinnerColumn": "Top.esp"
               },
               {
-                "CellStates": {},
+                "CellStates": {
+                  "Top.esp": "Override"
+                },
                 "CellStatesByFocus": null,
                 "CheckErrors": null,
                 "Children": null,
-                "ConflictAll": "NoConflict",
+                "ConflictAll": "Override",
                 "FieldName": "ComparisonValue",
                 "Indexes": null,
                 "Resolutions": null,
@@ -116,14 +130,16 @@
                   "Base.esm": 1.0,
                   "Top.esp": null
                 },
-                "WinnerColumn": "Base.esm"
+                "WinnerColumn": "Top.esp"
               },
               {
-                "CellStates": {},
+                "CellStates": {
+                  "Top.esp": "Override"
+                },
                 "CellStatesByFocus": null,
                 "CheckErrors": null,
                 "Children": null,
-                "ConflictAll": "NoConflict",
+                "ConflictAll": "Override",
                 "FieldName": "MutagenObjectType",
                 "Indexes": null,
                 "Resolutions": null,
@@ -131,10 +147,10 @@
                   "Base.esm": "ConditionFloat",
                   "Top.esp": null
                 },
-                "WinnerColumn": "Base.esm"
+                "WinnerColumn": "Top.esp"
               }
             ],
-            "ConflictAll": "NoConflict",
+            "ConflictAll": "Override",
             "FieldName": "[0]",
             "Indexes": {
               "Base.esm": 0
@@ -155,7 +171,7 @@
               },
               "Top.esp": null
             },
-            "WinnerColumn": "Base.esm"
+            "WinnerColumn": "Top.esp"
           },
           {
             "CellStates": {
@@ -476,7 +492,7 @@
       {
         "CellStates": {
           "Mid.esp": "IdenticalToMaster",
-          "Top.esp": "ConflictWins"
+          "Top.esp": "Override"
         },
         "CellStatesByFocus": null,
         "CheckErrors": {
@@ -485,7 +501,7 @@
           "Top.esp": "[000901:Base.esm] \u003CError: Could not be resolved\u003E"
         },
         "Children": null,
-        "ConflictAll": "Conflict",
+        "ConflictAll": "Override",
         "FieldName": "Race",
         "Indexes": null,
         "Resolutions": {
