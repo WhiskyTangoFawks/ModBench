@@ -55,12 +55,6 @@ public sealed class CopyFixture : TestInstance, ICompiledPlugins
         DestinationNpc = destinationNpc.FormKey;
     }
 
-    /// <summary>Commits the destination's working tree, so what it holds now is what HEAD holds.</summary>
-    public void CommitDestination()
-    {
-        SourceModTree.Commit(DestinationModFolder);
-    }
-
     /// <summary>The source plugin's own bytes, so "a copy, not a move" is asserted against the file
     /// a plugin with no plugin source is read from.</summary>
     public byte[] SourcePluginBytes() => File.ReadAllBytes(Path.Combine(SourceModFolder, SourcePluginName));

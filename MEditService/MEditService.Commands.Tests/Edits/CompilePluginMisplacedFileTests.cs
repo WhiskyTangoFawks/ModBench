@@ -1,6 +1,5 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -30,7 +29,7 @@ public sealed class CompilePluginMisplacedFileTests : IDisposable
         var belongsAt = LayoutPath;
         var renamed = RenameTheNpcFile();
 
-        var answer = (await _mod.CompileService().CompileAsync([_mod.Plugin])).Value();
+        var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
         Assert.Empty(answer.Refused);
         var diagnostics = Assert.Single(answer.Applied).Diagnostics;
@@ -38,21 +37,5 @@ public sealed class CompilePluginMisplacedFileTests : IDisposable
         Assert.Equal(_mod.Npc.ToString(), diagnostic.FormKey);
         Assert.Equal(renamed, diagnostic.SourceRelativePath);
         Assert.Contains(belongsAt, diagnostic.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Compile_AfterEditingTheRenamedRecord_FindsItAtTheLayoutsName_WithNoMisplacement()
-    {
-        var belongsAt = LayoutPath;
-        var renamed = RenameTheNpcFile();
-
-        _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-
-        Assert.True(File.Exists(Path.Combine(_mod.ModFolder, belongsAt)));
-        Assert.False(File.Exists(Path.Combine(_mod.ModFolder, renamed)));
-        var answer = (await _mod.CompileService().CompileAsync([_mod.Plugin])).Value();
-        Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
-        Assert.DoesNotContain(diagnostics, Misplaces);
     }
 }

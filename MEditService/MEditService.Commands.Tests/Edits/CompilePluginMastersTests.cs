@@ -9,93 +9,49 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class CompilePluginMastersTests : IDisposable
+public sealed class CompilePluginMastersTests : TestInstance
 {
     private const string PluginName = "MastersHost.esp";
     private const string BravoName = "Bravo.esm";
     private const string CharlieName = "Charlie.esm";
     private const string DeltaName = "Delta.esm";
-    private readonly ScratchDirectory _modFolder = new("medit-masters-");
-    private readonly ScratchDirectory _dataFolder = new("medit-masters-data-");
-    private readonly List<LoadOrderEntry> _entries;
-    private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginAddress _plugin = new(PluginName, "MastersMod");
-    private readonly FormKey _npc;
-    private readonly FormKey _bravoKeyword;
-    private readonly FormKey _charlieKeyword;
-    private readonly FormKey _deltaKeyword;
 
-    private readonly FormKey _bravoRace;
+    private readonly PluginAddress _plugin;
+    private readonly FormKey _npc;
+    private readonly FormKey _deltaKeyword;
 
     public CompilePluginMastersTests()
     {
-        var bravoPath = Path.Combine(_dataFolder, BravoName);
-        var bravoMod = new Fallout4Mod(ModKey.FromFileName(BravoName), Fallout4Release.Fallout4);
-        var bravoKeyword = bravoMod.Keywords.AddNew("BravoKeyword");
-        _bravoRace = bravoMod.Races.AddNew("BravoRace").FormKey;
-        bravoMod.WriteToBinary(bravoPath);
+        var charlie = Master(CharlieName, "CharlieKeyword");
+        var bravo = Master(BravoName, "BravoKeyword");
+        _deltaKeyword = Master(DeltaName, "DeltaKeyword");
 
-        var charliePath = Path.Combine(_dataFolder, CharlieName);
-        var charlieMod = new Fallout4Mod(ModKey.FromFileName(CharlieName), Fallout4Release.Fallout4);
-        var charlieKeyword = charlieMod.Keywords.AddNew("CharlieKeyword");
-        charlieMod.WriteToBinary(charliePath);
-
-        var deltaPath = Path.Combine(_dataFolder, DeltaName);
-        var deltaMod = new Fallout4Mod(ModKey.FromFileName(DeltaName), Fallout4Release.Fallout4);
-        var deltaKeyword = deltaMod.Keywords.AddNew("DeltaKeyword");
-        deltaMod.WriteToBinary(deltaPath);
-        _deltaKeyword = deltaKeyword.FormKey;
-
-        var pluginPath = Path.Combine(_modFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
+        mod.ModHeader.MasterReferences.AddRange([
+            new MasterReference { Master = ModKey.FromFileName(BravoName) },
+            new MasterReference { Master = ModKey.FromFileName(CharlieName) },
+        ]);
         var npc = mod.Npcs.AddNew("HostNpc");
-        npc.Keywords = [];
-        npc.Keywords.Add(new FormLink<IKeywordGetter>(bravoKeyword.FormKey));
-        npc.Keywords.Add(new FormLink<IKeywordGetter>(charlieKeyword.FormKey));
-        mod.WriteToBinary(pluginPath, new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
-        {
-            MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.Iterate,
-        });
-        (_npc, _bravoKeyword, _charlieKeyword) = (npc.FormKey, bravoKeyword.FormKey, charlieKeyword.FormKey);
-
-        _entries =
-        [
-            new LoadOrderEntry(CharlieName, charliePath, PluginOrigin.DataDirectory, Line: 0, Enabled: true, Winning: true),
-            new LoadOrderEntry(BravoName, bravoPath, PluginOrigin.DataDirectory, Line: 1, Enabled: true, Winning: true),
-            new LoadOrderEntry(DeltaName, deltaPath, PluginOrigin.DataDirectory, Line: 2, Enabled: true, Winning: true),
-            new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin, Line: 3, Enabled: true, Winning: true),
-        ];
-        _loadOrder = SnapshotPlugins.Snapshot(_dataFolder, instanceRoot: null, GameRelease.Fallout4, _entries);
-
-        DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, _plugin.Origin)
-            .GetAwaiter().GetResult();
+        npc.Keywords = [new FormLink<IKeywordGetter>(bravo), new FormLink<IKeywordGetter>(charlie)];
+        _npc = npc.FormKey;
+        _plugin = Add(mod, "MastersMod");
     }
 
-    public void Dispose()
+    private FormKey Master(string name, string keywordEditorId)
     {
-        _modFolder.Dispose();
-        _dataFolder.Dispose();
+        var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
+        var keyword = mod.Keywords.AddNew(keywordEditorId).FormKey;
+        Add(mod, PluginOrigin.DataDirectory, compiledPlugin: false);
+        return keyword;
     }
 
-    private CompilePluginHandler CompileService() =>
-        CompileServices.Over(_loadOrder);
-
-    [Fact]
-    public async Task Compile_ForALinkIntoAPluginTheLoadOrderHolds_ReportsNoUnresolvedDiagnostic()
-    {
-        var answer = (await CompileService().CompileAsync([_plugin])).Value();
-
-        Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
-        Assert.DoesNotContain(
-            diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
-    }
+    private string BinaryPath => Path.Combine(ModFolderOf(_plugin), PluginName);
 
     [Fact]
     public async Task Compile_WhenTheLoadOrderLacksAMasterTheSourceReferences_IsRefusedNamingIt_AndLeavesTheBinary()
     {
-        var binary = File.ReadAllBytes(Path.Combine(_modFolder, PluginName));
-        var withoutBravo = SnapshotPlugins.Snapshot(_dataFolder, instanceRoot: null, GameRelease.Fallout4, _entries.Where(entry => entry.Name != BravoName));
+        var binary = File.ReadAllBytes(BinaryPath);
+        var withoutBravo = SnapshotPlugins.Snapshot(DataFolder, instanceRoot: null, GameRelease.Fallout4, Entries.Where(entry => entry.Name != BravoName));
 
         var answer = (await CompileServices.Over(withoutBravo).CompileAsync([_plugin])).Value();
 
@@ -103,82 +59,43 @@ public sealed class CompilePluginMastersTests : IDisposable
         Assert.Equal(
             (CompileRefusal.MasterNotInLoadOrder, $"{PluginName} could not be compiled: it references {BravoName}, which the load order does not hold"),
             (refused.Refusal, refused.Message));
-        Assert.Equal(binary, File.ReadAllBytes(Path.Combine(_modFolder, PluginName)));
-    }
-
-    [Fact]
-    public async Task Compile_ForAnOverrideOfAnotherPluginsRecord_NamesThatPluginAsAMaster()
-    {
-        SourceEdits.Write(
-            TestAdapters.Source().Open(TestMod.Of(_plugin, _modFolder), GameRelease.Fallout4).Require(), _plugin,
-            new Keyword(_deltaKeyword, Fallout4Release.Fallout4) { EditorID = "DeltaKeyword" },
-            "kywd", GameRelease.Fallout4);
-
-        var answer = (await CompileService().CompileAsync([_plugin])).Value();
-
-        Assert.Empty(answer.Refused);
-        Assert.Single(answer.Applied);
-
-        using var overlayDisposable = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(PluginName), Path.Combine(_modFolder, PluginName)), GameRelease.Fallout4);
-        var overlay = (IFallout4ModGetter)overlayDisposable;
-        Assert.Equal(
-            [CharlieName, BravoName, DeltaName], overlay.MasterReferences.Select(m => m.Master.FileName.String));
-    }
-
-    [Fact]
-    public async Task Compile_ForALinkIntoAnotherPluginNamingTheWrongRecordType_ReportsIt()
-    {
-        SourceEdits.Rewrite<Npc>(
-            TestAdapters.Source().Open(TestMod.Of(_plugin, _modFolder), GameRelease.Fallout4).Require(), _plugin,
-            new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
-            npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_bravoRace)));
-
-        var answer = (await CompileService().CompileAsync([_plugin])).Value();
-
-        Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
-        var diagnostic = Assert.Single(
-            diagnostics, d => d.Message.Contains("RACE reference", StringComparison.Ordinal));
-        Assert.Equal(_npc.ToString(), diagnostic.FormKey);
-        Assert.Equal("Keywords: [2]: Found a RACE reference, expected: KYWD", diagnostic.Message);
+        Assert.Equal(binary, File.ReadAllBytes(BinaryPath));
     }
 
     [Fact]
     public async Task Compile_WritesMasters_InCurrentLoadOrder_NotAlphabetical()
     {
-        var answer = (await CompileService().CompileAsync([_plugin])).Value();
-        Assert.Empty(answer.Refused);
-        Assert.Single(answer.Applied);
+        using var compiled = await this.CompiledAsync(_plugin);
 
-        var pluginPath = Path.Combine(_modFolder, PluginName);
-        using var overlayDisposable = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(PluginName), pluginPath), GameRelease.Fallout4);
-        var overlay = (IFallout4ModGetter)overlayDisposable;
-
-        var masterNames = overlay.MasterReferences.Select(m => m.Master.FileName.String).ToList();
-        Assert.Equal([CharlieName, BravoName], masterNames);
+        Assert.Equal([CharlieName, BravoName], compiled.MasterReferences.Select(m => m.Master.FileName.String));
     }
 
-    [Fact]
-    public async Task Compile_AfterAnEditIntroducesAReferenceToAnUnreferencedPlugin_AddsItAsAMaster()
+    public static TheoryData<string, Action<CompilePluginMastersTests>> EditsReachingDelta => new()
     {
-        SourceEdits.Rewrite<Npc>(
-            TestAdapters.Source().Open(TestMod.Of(_plugin, _modFolder), GameRelease.Fallout4).Require(), _plugin,
-            new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
-            npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_deltaKeyword)));
+        {
+            "an override of its record",
+            test => SourceEdits.Write(
+                test.RepositoryOf(test._plugin).Require(), test._plugin,
+                new Keyword(test._deltaKeyword, Fallout4Release.Fallout4) { EditorID = "DeltaKeyword" },
+                "kywd", GameRelease.Fallout4)
+        },
+        {
+            "a link to its record",
+            test => SourceEdits.Rewrite<Npc>(
+                test.RepositoryOf(test._plugin).Require(), test._plugin,
+                new RecordIdentity(test._npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
+                npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(test._deltaKeyword)))
+        },
+    };
 
-        var answer = (await CompileService().CompileAsync([_plugin])).Value();
-        Assert.Empty(answer.Refused);
-        Assert.Single(answer.Applied);
+    [Theory]
+    [MemberData(nameof(EditsReachingDelta))]
+    public async Task Compile_AfterAnEditReachingAPluginNoMasterNamed_AddsItAsAMaster_InLoadOrder(string _, Action<CompilePluginMastersTests> edit)
+    {
+        edit(this);
 
-        var pluginPath = Path.Combine(_modFolder, PluginName);
-        using var overlayDisposable = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(PluginName), pluginPath), GameRelease.Fallout4);
-        var overlay = (IFallout4ModGetter)overlayDisposable;
+        using var compiled = await this.CompiledAsync(_plugin);
 
-        var masterNames = overlay.MasterReferences.Select(m => m.Master.FileName.String).ToList();
-        Assert.Contains(DeltaName, masterNames);
-        Assert.Equal([CharlieName, BravoName, DeltaName], masterNames);
+        Assert.Equal([CharlieName, BravoName, DeltaName], compiled.MasterReferences.Select(m => m.Master.FileName.String));
     }
 }

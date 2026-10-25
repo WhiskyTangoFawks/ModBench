@@ -2,90 +2,53 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class CompilePluginLinkTests : IDisposable
+public sealed class CompilePluginLinkTests : TestInstance
 {
-    private const string HostName = "LinkHost.esp";
-    private const string HostOrigin = "LinkHostMod";
     private const string TargetName = "LinkTarget.esp";
-    private const string TargetOrigin = "LinkTargetMod";
     private const string HostNpcEditorId = "LinkHostNpc";
     private const string TargetKeywordEditorId = "LinkTargetKeyword";
     private const string Dangling = "ABCDEF:LinkTarget.esp";
 
-    private readonly ScratchDirectory _instanceRoot = new("medit-compile-links-");
-    private readonly ScratchDirectory _dataFolder = new("medit-compile-links-data-");
-    private readonly string _hostFolder;
-    private readonly string _targetFolder;
-    private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginAddress _host = new(HostName, HostOrigin);
-    private readonly PluginAddress _target = new(TargetName, TargetOrigin);
+    private readonly PluginAddress _host;
+    private readonly PluginAddress _target;
     private readonly FormKey _npc;
     private readonly FormKey _targetKeyword;
 
     public CompilePluginLinkTests()
     {
-        _targetFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", TargetOrigin)).FullName;
-        _hostFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", HostOrigin)).FullName;
-
-        var targetPath = Path.Combine(_targetFolder, TargetName);
         var target = new Fallout4Mod(ModKey.FromFileName(TargetName), Fallout4Release.Fallout4);
         _targetKeyword = target.Keywords.AddNew(TargetKeywordEditorId).FormKey;
-        target.WriteToBinary(targetPath);
+        _target = Add(target, "LinkTargetMod");
 
-        var hostPath = Path.Combine(_hostFolder, HostName);
-        var host = new Fallout4Mod(ModKey.FromFileName(HostName), Fallout4Release.Fallout4);
+        var host = new Fallout4Mod(ModKey.FromFileName("LinkHost.esp"), Fallout4Release.Fallout4);
+        host.ModHeader.MasterReferences.Add(new MasterReference { Master = target.ModKey });
         var npc = host.Npcs.AddNew(HostNpcEditorId);
         npc.Keywords = [new FormLink<IKeywordGetter>(_targetKeyword)];
         _npc = npc.FormKey;
-        host.WriteToBinary(hostPath, new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
-        {
-            MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.Iterate,
-        });
-
-        _loadOrder = SnapshotPlugins.Snapshot(
-            _dataFolder, _instanceRoot, GameRelease.Fallout4,
-            [
-                new LoadOrderEntry(TargetName, targetPath, TargetOrigin, Line: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(HostName, hostPath, HostOrigin, Line: 1, Enabled: true, Winning: true),
-            ]);
-        DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, TargetOrigin).GetAwaiter().GetResult();
-        DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, HostOrigin).GetAwaiter().GetResult();
+        _host = Add(host, "LinkHostMod");
     }
-
-    public void Dispose()
-    {
-        _instanceRoot.Dispose();
-        _dataFolder.Dispose();
-    }
-
-    private ISourceRepository HostRepository() =>
-        TestAdapters.Source().Open(TestMod.Of(_host, _hostFolder), GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected {_hostFolder} to already be a compiled plugin repository.");
 
     private void PointTheNpcAt(FormKey keyword) =>
         SourceEdits.Rewrite<Npc>(
-            HostRepository(), _host, new RecordIdentity(_npc.ToString(), "npc_", HostNpcEditorId),
+            RepositoryOf(_host).Require(), _host, new RecordIdentity(_npc.ToString(), "npc_", HostNpcEditorId),
             GameRelease.Fallout4,
             npc => npc.Keywords = [new FormLink<IKeywordGetter>(keyword)]);
 
     private async Task<CompileResult> CompileHost() =>
-        (await CompileServices.Over(_loadOrder).CompileAsync([_host])).Value();
+        (await CompileHandler.CompileAsync([_host])).Value();
 
     private IReadOnlyList<FormKey> KeywordsInTheBinary()
     {
-        using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName(HostName), Path.Combine(_hostFolder, HostName)), Fallout4Release.Fallout4);
-        var keywords = loaded.Npcs.Single().Keywords
-            ?? throw new InvalidOperationException("Expected the compiled NPC to carry a Keywords collection.");
-        return [.. keywords.Select(k => k.FormKey)];
+        using var binary = this.Binary(_host);
+        return [.. binary.Npcs.Single().Keywords.Require().Select(k => k.FormKey)];
     }
 
     [Fact]
@@ -117,7 +80,7 @@ public sealed class CompilePluginLinkTests : IDisposable
     [Fact]
     public async Task Compile_ForALinkIntoACompiledPlugin_ReadsThatPluginsFile_NotItsWorkingTree()
     {
-        SourceModTree.Remove(_targetFolder, _target, new RecordIdentity(_targetKeyword.ToString(), "kywd", TargetKeywordEditorId));
+        SourceModTree.Remove(ModFolderOf(_target), _target, new RecordIdentity(_targetKeyword.ToString(), "kywd", TargetKeywordEditorId));
 
         var answer = await CompileHost();
 
@@ -130,7 +93,7 @@ public sealed class CompilePluginLinkTests : IDisposable
     [Fact]
     public async Task Compile_WhenALoadOrderFileCannotBeRead_NamesTheFile_AndReportsItsLinksAsUnchecked()
     {
-        File.WriteAllText(Path.Combine(_targetFolder, TargetName), "not a plugin at all");
+        File.WriteAllText(Path.Combine(ModFolderOf(_target), TargetName), "not a plugin at all");
 
         var answer = await CompileHost();
 
@@ -149,7 +112,7 @@ public sealed class CompilePluginLinkTests : IDisposable
     [Fact]
     public async Task Compile_WhenTheLinkCheckItselfFails_StillSucceeds_AndSaysTheCheckDidNotRun()
     {
-        var answer = (await CompileServices.Over(_loadOrder, new FaultyLinkAdapter())
+        var answer = (await CompileServices.Over(LoadOrder, new FaultyLinkAdapter())
             .CompileAsync([_host])).Value();
 
         Assert.Empty(answer.Refused);
@@ -174,11 +137,11 @@ public sealed class CompilePluginLinkTests : IDisposable
     [Fact]
     public async Task Compile_ForALinkToARecordTheCompiledPluginItselfHolds_ReportsNothingAboutIt()
     {
-        var ownKeyword = new Keyword(FormKey.Factory($"000801:{HostName}"), Fallout4Release.Fallout4)
+        var ownKeyword = new Keyword(FormKey.Factory($"000801:{_host.Name}"), Fallout4Release.Fallout4)
         {
             EditorID = "HostOwnKeyword",
         };
-        SourceEdits.Write(HostRepository(), _host, ownKeyword, "kywd", GameRelease.Fallout4);
+        SourceEdits.Write(RepositoryOf(_host).Require(), _host, ownKeyword, "kywd", GameRelease.Fallout4);
         PointTheNpcAt(ownKeyword.FormKey);
 
         var answer = await CompileHost();

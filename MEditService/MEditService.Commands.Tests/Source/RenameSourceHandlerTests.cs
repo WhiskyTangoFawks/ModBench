@@ -170,7 +170,7 @@ public sealed class RenameSourceHandlerTests : IDisposable
     [Fact]
     public void MoveLastWritten_WhenGitRefusesTheRefUpdate_RefusesIt()
     {
-        LastWriteRecord.RefuseRefUpdates(_sourceMod);
+        GitHooks.RefuseRefUpdates(_sourceMod);
 
         var result = Moving.MoveLastWritten(Old, Old.Name, "New.esp");
 

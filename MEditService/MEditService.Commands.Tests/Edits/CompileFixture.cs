@@ -25,8 +25,6 @@ public sealed class CompileFixture : TestInstance, ICompiledPlugin
     public string ModFolder => FolderOf(Origin);
     public PluginAddress Plugin { get; }
 
-    // Keyword is a valid target for the NPC's keywords field and Race a resolvable target of the
-    // wrong type, so both FormLink error axes are reachable without inventing data mid-test.
     public FormKey Npc { get; }
     public FormKey Race { get; }
     public FormKey Keyword { get; }
@@ -44,18 +42,7 @@ public sealed class CompileFixture : TestInstance, ICompiledPlugin
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
     }
 
-    private string PluginPath => Path.Combine(ModFolder, PluginName);
-
     private ISourceRepository Repository => RepositoryOf(Plugin).Require();
-
-    public CompilePluginHandler CompileService() => CompileServices.Over(LoadOrder);
-
-    public IFallout4ModGetter Reimport(out IDisposable handle)
-    {
-        var overlay = ModFactory.ImportGetter(new ModPath(ModKey.FromFileName(PluginName), PluginPath), Release);
-        handle = overlay;
-        return (IFallout4ModGetter)overlay;
-    }
 
     public void Rewrite<T>(FormKey formKey, string recordType, string? editorId, Action<T> change)
         where T : class, IMajorRecord =>

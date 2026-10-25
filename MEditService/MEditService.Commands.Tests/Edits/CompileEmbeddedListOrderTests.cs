@@ -6,96 +6,86 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
 public sealed class CompileEmbeddedListOrderTests : TestInstance
 {
-    private const string PluginName = "EmbeddedList.esp";
-    private const string Origin = "EmbeddedListMod";
     private const string QuestEditorId = "Quest";
-    private const string QuestTopics = "a quest's DialogTopics";
-    private const string TopicResponses = "a topic's Responses, inside its quest's document";
-    private const int EnoughForAReversalToDifferFromTheOriginal = 3;
 
-    public static TheoryData<string> EmbeddedLists => [QuestTopics, TopicResponses];
+    public static TheoryData<string, Func<Quest, IList>, Func<IQuestGetter, IEnumerable<FormKey>>> EmbeddedLists => new()
+    {
+        { "a quest's DialogTopics", quest => quest.DialogTopics, quest => quest.DialogTopics.Select(topic => topic.FormKey) },
+        {
+            "a topic's Responses, inside its quest's document",
+            quest => quest.DialogTopics[0].Responses,
+            quest => quest.DialogTopics[0].Responses.Select(response => response.FormKey)
+        },
+    };
 
     private readonly PluginAddress _plugin;
     private readonly FormKey _quest;
-    private readonly FormKey _firstTopic;
 
     public CompileEmbeddedListOrderTests()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
+        var mod = new Fallout4Mod(ModKey.FromFileName("EmbeddedList.esp"), Fallout4Release.Fallout4);
         var quest = mod.Quests.AddNew(QuestEditorId);
-        foreach (var index in Enumerable.Range(1, EnoughForAReversalToDifferFromTheOriginal))
-        {
-            var topic = new DialogTopic(mod) { EditorID = $"Topic{index}" };
-            foreach (var response in Enumerable.Range(1, EnoughForAReversalToDifferFromTheOriginal))
-                topic.Responses.Add(new DialogResponses(mod) { EditorID = $"Topic{index}Response{response}" });
-            quest.DialogTopics.Add(topic);
-        }
-
+        quest.DialogTopics.AddRange([Topic(mod, "Topic1"), Topic(mod, "Topic2"), Topic(mod, "Topic3")]);
         _quest = quest.FormKey;
-        _firstTopic = quest.DialogTopics[0].FormKey;
-        _plugin = Add(mod, Origin);
+        _plugin = Add(mod, "EmbeddedListMod");
+    }
+
+    private static DialogTopic Topic(Fallout4Mod mod, string editorId)
+    {
+        var topic = new DialogTopic(mod) { EditorID = editorId };
+        topic.Responses.AddRange([
+            new DialogResponses(mod) { EditorID = $"{editorId}Response1" },
+            new DialogResponses(mod) { EditorID = $"{editorId}Response2" },
+            new DialogResponses(mod) { EditorID = $"{editorId}Response3" },
+        ]);
+        return topic;
     }
 
     [Theory]
     [MemberData(nameof(EmbeddedLists))]
-    public async Task Compile_OfASourceWithAnElementRemoved_DropsThatElement(string list)
+    public async Task Compile_OfASourceWithTheMiddleElementRemoved_KeepsTheOthersInOrder(
+        string _, Func<Quest, IList> sourceList, Func<IQuestGetter, IEnumerable<FormKey>> compiledList)
     {
-        var original = ChildrenOf(list);
+        var original = ChildrenIn(this.Binary(_plugin), compiledList);
 
-        await CompileAfter(quest =>
-        {
-            var items = ListOf(quest, list);
-            items.RemoveAt(items.Count - 1);
-        });
+        var compiled = await ChildrenAfter(quest => sourceList(quest).RemoveAt(1), compiledList);
 
-        Assert.Equal(original.Take(original.Count - 1), ChildrenOf(list));
+        Assert.Equal([original[0], original[2]], compiled);
     }
 
     [Theory]
     [MemberData(nameof(EmbeddedLists))]
-    public async Task Compile_OfASourceWithTheListReversed_ReversesTheChildren(string list)
+    public async Task Compile_OfASourceWithTheFirstAndLastElementsSwapped_SwapsTheChildren(
+        string _, Func<Quest, IList> sourceList, Func<IQuestGetter, IEnumerable<FormKey>> compiledList)
     {
-        var original = ChildrenOf(list);
+        var original = ChildrenIn(this.Binary(_plugin), compiledList);
 
-        await CompileAfter(quest =>
-        {
-            var items = ListOf(quest, list);
-            var reversed = items.Cast<object>().Reverse().ToList();
-            items.Clear();
-            foreach (var item in reversed) items.Add(item);
-        });
+        var compiled = await ChildrenAfter(
+            quest =>
+            {
+                var items = sourceList(quest);
+                (items[0], items[2]) = (items[2], items[0]);
+            },
+            compiledList);
 
-        Assert.Equal(original.AsEnumerable().Reverse(), ChildrenOf(list));
+        Assert.Equal([original[2], original[1], original[0]], compiled);
     }
 
-    private IList ListOf(Quest quest, string list) =>
-        list == QuestTopics ? quest.DialogTopics : quest.DialogTopics.Single(topic => topic.FormKey == _firstTopic).Responses;
+    private static IReadOnlyList<FormKey> ChildrenIn(IFallout4ModDisposableGetter binary, Func<IQuestGetter, IEnumerable<FormKey>> compiledList)
+    {
+        using (binary) return [.. compiledList(binary.Quests.Single())];
+    }
 
-    private async Task CompileAfter(Action<Quest> editTheSource)
+    private async Task<IReadOnlyList<FormKey>> ChildrenAfter(Action<Quest> editTheSource, Func<IQuestGetter, IEnumerable<FormKey>> compiledList)
     {
         SourceEdits.Rewrite(
             RepositoryOf(_plugin).Require(), _plugin, new RecordIdentity(_quest.ToString(), "qust", QuestEditorId),
             GameRelease.Fallout4, editTheSource);
-
-        var answer = (await CompileHandler.CompileAsync([_plugin])).Value();
-
-        Assert.Empty(answer.Refused);
-        Assert.Single(answer.Applied);
-    }
-
-    private IReadOnlyList<string> ChildrenOf(string list)
-    {
-        using var overlay = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(PluginName), Path.Combine(FolderOf(Origin), PluginName)), GameRelease.Fallout4);
-        var quest = ((IFallout4ModGetter)overlay).Quests.Single();
-        return list == QuestTopics
-            ? [.. quest.DialogTopics.Select(topic => topic.FormKey.ToString())]
-            : [.. quest.DialogTopics.Single(topic => topic.FormKey == _firstTopic).Responses.Select(response => response.FormKey.ToString())];
+        return ChildrenIn(await this.CompiledAsync(_plugin), compiledList);
     }
 }

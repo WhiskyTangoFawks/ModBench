@@ -114,13 +114,16 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
             .Select(c => c.PropertyName)
             .Where(member => member is RecordMembers.VersionControlInfo1 or RecordMembers.VersionControlInfo2);
 
-    /// <summary><paramref name="record"/> made a Partial Form as the record-flag edit makes it; null when it
-    /// already is one.</summary>
-    internal static Document? AsPartialForm(Document record, RecordTableSchema schema, GameRelease release)
+    /// <summary><paramref name="record"/> made a Partial Form as the record-flag edit makes it, a Partial Form
+    /// it already is emptied the same.</summary>
+    internal static Document AsPartialForm(Document record, RecordTableSchema schema, GameRelease release)
     {
         var flags = schema.RecordColumns.Single(c => c.Name == RecordHeaderFlags.Member);
-        if (Of(record, schema, RecordFlagsWrite.HeldBy(record) | PartialFormFlag.Bit) is not { } emptying) return null;
-        return emptying.Apply(record.WithoutAliasesOf(flags), schema, release, left: null);
+        var held = RecordFlagsWrite.HeldBy(record);
+        var unflagged = record.With(held & ~PartialFormFlag.Bit, RecordHeaderFlags.Member);
+        var emptying = Of(unflagged, schema, held | PartialFormFlag.Bit)
+            ?? throw new InvalidOperationException($"Expected '{schema.TableName}' to take the Partial Form flag.");
+        return emptying.Apply(unflagged.WithoutAliasesOf(flags), schema, release, left: null);
     }
 
     internal static Document? LeftOf(LeftCopy? copyOnTheLeft) =>

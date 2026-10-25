@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -21,12 +22,12 @@ public sealed class PartialFormCellCopyToTheLeftTests : TestInstance
     {
         var master = new Fallout4Mod(ModKey.FromFileName("Fallout4.esm"), Fallout4Release.Fallout4);
         var masterCell = new Cell(master) { EditorID = "Inside", Flags = Cell.Flag.IsInteriorCell };
-        master.Cells.Records.Add(CellBlocks.Interior(masterCell));
+        master.AddInteriorCells(masterCell);
         Add(master, "MasterMod", compiledPlugin: false);
 
         var copy = new Fallout4Mod(ModKey.FromFileName("Override.esp"), Fallout4Release.Fallout4);
         copy.ModHeader.MasterReferences.Add(new MasterReference { Master = master.ModKey });
-        copy.Cells.Records.Add(CellBlocks.Interior(new Cell(masterCell.FormKey, Fallout4Release.Fallout4) { EditorID = "Inside" }));
+        copy.AddInteriorCells(new Cell(masterCell.FormKey, Fallout4Release.Fallout4) { EditorID = "Inside" });
         _override = Add(copy, OverrideOrigin);
         _cell = masterCell.FormKey;
     }

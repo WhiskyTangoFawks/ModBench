@@ -6,42 +6,31 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
 using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public abstract class LocalizedSourceCopyScenario : IDisposable
+public abstract class LocalizedSourceCopyScenario : TestInstance
 {
-    protected const string SourcePluginName = "Localized.esm";
-    protected const string SourceOrigin = "LocalizedMod";
-    protected const string DestinationPluginName = "Destination.esp";
-    protected const string DestinationOrigin = "DestinationMod";
     protected const string EnglishName = "The Big Door";
     protected const string FrenchName = "La Grande Porte";
 
-    private readonly ScratchDirectory _sourceModFolder = new("medit-copy-localized-source-");
-    private readonly ScratchDirectory _destinationModFolder = new("medit-copy-localized-dest-");
-    private readonly ScratchDirectory _dataFolder = new("medit-copy-localized-data-");
+    private readonly PluginAddress _source;
+    private readonly PluginAddress _destination;
     private readonly FormKey _door;
     private readonly FormKey _cell;
     private readonly FormKey _placedObject;
-    private readonly LoadOrderSnapshot _loadOrder;
-    private readonly CopyRecordChangesHandler _handler;
 
     protected LocalizedSourceCopyScenario(bool destinationLocalized, bool doorNamedInStringsLanguage = true, bool cellNamedInStringsLanguage = true)
+        : base(stringsLanguage: Language.French)
     {
-        var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
+        var sourceMod = new Fallout4Mod(ModKey.FromFileName("Localized.esm"), Fallout4Release.Fallout4) { UsingLocalization = true };
         var door = sourceMod.Doors.AddNew("MainDoor");
         door.Name = new TranslatedString(Language.English, [
             new KeyValuePair<Language, string>(Language.English, EnglishName),
             new KeyValuePair<Language, string>(doorNamedInStringsLanguage ? Language.French : Language.German, doorNamedInStringsLanguage ? FrenchName : "Das Grosse Tor"),
         ]);
-        sourceMod.UsingLocalization = true;
-        var sourcePath = Path.Combine(_sourceModFolder, SourcePluginName);
-        _door = door.FormKey;
-
         var cell = new Cell(sourceMod)
         {
             EditorID = "MainCell",
@@ -52,83 +41,46 @@ public abstract class LocalizedSourceCopyScenario : IDisposable
         };
         var placedObject = new PlacedObject(sourceMod) { EditorID = "MainRef", Position = new P3Float(1f, 2f, 3f), Scale = 1f };
         cell.Persistent.Add(placedObject);
-        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        sourceMod.Cells.Records.Add(block);
-        (_cell, _placedObject) = (cell.FormKey, placedObject.FormKey);
-        sourceMod.WriteToBinary(sourcePath);
+        sourceMod.AddInteriorCells(cell);
+        (_door, _cell, _placedObject) = (door.FormKey, cell.FormKey, placedObject.FormKey);
+        _source = Add(sourceMod, "LocalizedMod", compiledPlugin: false);
 
-        var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4)
+        var destinationMod = new Fallout4Mod(ModKey.FromFileName("Destination.esp"), Fallout4Release.Fallout4)
         {
             UsingLocalization = destinationLocalized,
         };
         if (destinationLocalized) destinationMod.Doors.AddNew("OtherDoor").Name = new TranslatedString(Language.French, "Une Autre Porte");
-        var destinationPath = Path.Combine(_destinationModFolder, DestinationPluginName);
-        destinationMod.WriteToBinary(destinationPath);
-
-        _loadOrder = SnapshotPlugins.Snapshot(
-            _dataFolder, _dataFolder, GameRelease.Fallout4,
-
-            [
-                new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Line: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Line: 1, Enabled: true, Winning: true),
-            ],
-            stringsLanguage: Language.French);
-        DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, DestinationOrigin).GetAwaiter().GetResult();
-
-        var holder = new LoadOrderHolder();
-        holder.Apply(_loadOrder);
-        _handler = TestEditService.CopyHandler(holder);
-    }
-
-    public void Dispose()
-    {
-        _sourceModFolder.Dispose();
-        _destinationModFolder.Dispose();
-        _dataFolder.Dispose();
+        _destination = Add(destinationMod, "DestinationMod");
     }
 
     protected async Task<string> CopiedDoorBody()
     {
         var body = CopiedBody(_door, _door);
-        await CompileServices.Over(_loadOrder).CompileLandedAsync(Destination);
+        await CompileHandler.CompileLandedAsync(_destination);
         return body;
     }
 
     protected async Task<string> CopiedCellBody()
     {
         var body = CopiedBody(_placedObject, _cell);
-        await CompileServices.Over(_loadOrder).CompileLandedAsync(Destination);
+        await CompileHandler.CompileLandedAsync(_destination);
         return body;
     }
 
-    protected CopyRecordResult CopyCellThenDoor()
-    {
-        RecordAt[] records = [.. new[] { _cell, _door }.Select(formKey => new RecordAt(new PluginAddress(SourcePluginName, SourceOrigin), formKey.ToString()))];
-        return _handler.CopySync(records, CopyMode.Override, [Destination], replace: false);
-    }
+    protected CopyRecordResult CopyCellThenDoor() =>
+        CopyHandler.CopySync([new RecordAt(_source, _cell.ToString()), new RecordAt(_source, _door.ToString())], CopyMode.Override, [_destination], replace: false);
 
     protected CopyRecordResult CopyPlacedObject() =>
-        _handler.CopySync([new RecordAt(new PluginAddress(SourcePluginName, SourceOrigin), _placedObject.ToString())], CopyMode.Override, [Destination], replace: false);
+        CopyHandler.CopySync([new RecordAt(_source, _placedObject.ToString())], CopyMode.Override, [_destination], replace: false);
 
-    protected SourceDocument? DoorInDestination() => SourceModTree.Document(_destinationModFolder, Destination, _door.ToString());
+    protected SourceDocument? DoorInDestination() => SourceModTree.Document(ModFolderOf(_destination), _destination, _door.ToString());
 
-    protected SourceDocument? CellInDestination() => SourceModTree.Document(_destinationModFolder, Destination, _cell.ToString());
-
-    private static PluginAddress Destination => new(DestinationPluginName, DestinationOrigin);
+    protected SourceDocument? CellInDestination() => SourceModTree.Document(ModFolderOf(_destination), _destination, _cell.ToString());
 
     private string CopiedBody(FormKey copied, FormKey landed)
     {
-        var destination = new PluginAddress(DestinationPluginName, DestinationOrigin);
-
-        var result = _handler.CopySync([new RecordAt(new PluginAddress(SourcePluginName, SourceOrigin), copied.ToString())], CopyMode.Override, [destination], replace: false);
-
-        result.OnlyLanded();
-        var document = SourceModTree.Document(_destinationModFolder, destination, landed.ToString());
-        Assert.NotNull(document);
-        return document.Body;
+        CopyHandler.CopySync([new RecordAt(_source, copied.ToString())], CopyMode.Override, [_destination], replace: false).OnlyLanded();
+        return SourceModTree.Document(ModFolderOf(_destination), _destination, landed.ToString()).Require().Body;
     }
 }
 
