@@ -92,7 +92,7 @@ public sealed class HeldPluginsTests
     [Fact]
     public void ThePluginRow_CarriesTheLightAndMasterFlagsThePluginReads()
     {
-        using var data = new PluginFixtureBuilder("lo-ext").WithPlugin("TestMod.esl").Build();
+        using var data = new PluginFixtureBuilder("lo-flags").WithPlugin("TestMod.esl").Build();
         using var held = Open(data);
 
         var row = Opened(held)[Key("TestMod.esl")];

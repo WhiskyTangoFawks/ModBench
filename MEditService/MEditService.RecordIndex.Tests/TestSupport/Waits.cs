@@ -33,11 +33,14 @@ internal static class Waits
 
     internal static async Task AdvancingUntil(this FakeTimeProvider clock, Task task, TimeSpan step)
     {
-        while (!await CompletesWithin(task, TimeSpan.FromMilliseconds(50))) clock.Advance(step);
+        var elapsed = Stopwatch.StartNew();
+        while (!await CompletesWithin(task, TimeSpan.FromMilliseconds(50)))
+        {
+            if (elapsed.Elapsed > Patience) throw new TimeoutException("Never completed while the clock advanced.");
+            clock.Advance(step);
+        }
     }
 
-    /// <summary>Whether a reader polling <paramref name="seen"/> on a thread of its own ever caught it
-    /// holding while <paramref name="act"/> ran.</summary>
     internal static async Task<bool> EverSeenWhile(Func<bool> seen, Action act)
     {
         var stopped = false;

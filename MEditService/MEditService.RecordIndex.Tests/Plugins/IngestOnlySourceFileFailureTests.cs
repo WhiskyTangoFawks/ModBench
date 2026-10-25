@@ -11,6 +11,8 @@ public sealed class IngestOnlySourceFileFailureTests : IDisposable
 
     private OpenedIndex Reloaded() => Indexes.Reconciled(_fixture.DataFolder, [_fixture.Entry]);
 
+    private static bool AProblemIsNamed(OpenedIndex index) => index.Queries.GetProblems().Value() is [{ Problems: [_, ..] }];
+
     private string Relative(string path) => Path.GetRelativePath(_fixture.Entry.ModFolderOf(), path);
 
     private string CellFile => _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
@@ -58,5 +60,19 @@ public sealed class IngestOnlySourceFileFailureTests : IDisposable
         var failure = Assert.Single(index.SourceProblems());
         Assert.Equal((Relative(cell), _fixture.EmbedCell.ToString()), (failure.SourceRelativePath, failure.FormKey));
         Assert.Contains("'EditorID' is not a string", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AChildEditedToCarryItsOwnersFormKeyOnceRead_NamesTheOwnersFile_WhileItsLastGoodRowsStand()
+    {
+        using var index = Reloaded();
+        var cell = CellFile;
+        EditTheCell(TemporaryRef, _fixture.EmbedCell.ToString());
+
+        index.NextSnapshotUntil(() => AProblemIsNamed(index), "the re-read's failure");
+
+        var failure = Assert.Single(index.SourceProblems());
+        Assert.Equal((Relative(cell), _fixture.EmbedCell.ToString()), (failure.SourceRelativePath, failure.FormKey));
+        Assert.Equal(ContainerModPlugin.TemporaryRefEditorId, index.CopyIn(TemporaryRef, _fixture.Plugin)?.EditorId);
     }
 }

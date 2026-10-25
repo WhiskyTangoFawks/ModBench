@@ -35,30 +35,35 @@ public class IndexScopeTests(TestPluginFixture fixture)
         Assert.Null(index.Queries.GetFilter().Value());
     }
 
-    private static readonly Dictionary<string, Action<OpenedIndex, TestPluginFixture, string>> ArrivalsOutsideTheFiltersScope = new()
+    public static TheoryData<string, Func<TestPluginFixture, string, LoadOrderSnapshot[]>> ArrivalsOutsideTheFiltersScope => new()
     {
-        ["another instance"] = (index, fixture, elsewhere) =>
-            index.Reconcile(index.Holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4, elsewhere),
-        ["another game release, then this one again"] = (index, fixture, _) =>
         {
-            index.Reconcile(index.Holder, fixture.DataFolder, fixture.Plugins, GameRelease.SkyrimSE);
-            index.Reconcile(index.Holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
+            "another instance",
+            (fixture, elsewhere) => [SnapshotPlugins.Snapshot(fixture.DataFolder, elsewhere, GameRelease.Fallout4, fixture.Plugins)]
         },
-        ["another data folder"] = (index, _, elsewhere) =>
-            index.Reconcile(index.Holder, elsewhere, [], GameRelease.Fallout4),
+        {
+            "another game release, then this one again",
+            (fixture, _) =>
+            [
+                SnapshotPlugins.Snapshot(fixture.DataFolder, null, GameRelease.SkyrimSE, fixture.Plugins),
+                SnapshotPlugins.Snapshot(fixture.DataFolder, null, GameRelease.Fallout4, fixture.Plugins),
+            ]
+        },
+        {
+            "another data folder",
+            (_, elsewhere) => [SnapshotPlugins.Snapshot(elsewhere, null, GameRelease.Fallout4, [])]
+        },
     };
 
     [Theory]
-    [InlineData("another instance")]
-    [InlineData("another game release, then this one again")]
-    [InlineData("another data folder")]
-    public void ASnapshotOutsideTheFiltersScope_DropsTheFilter(string arrival)
+    [MemberData(nameof(ArrivalsOutsideTheFiltersScope))]
+    public void ASnapshotOutsideTheFiltersScope_DropsTheFilter(string _, Func<TestPluginFixture, string, LoadOrderSnapshot[]> arrivals)
     {
         using var elsewhere = new ScratchDirectory("medit-filter-elsewhere-");
         using var index = Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
         index.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
 
-        ArrivalsOutsideTheFiltersScope[arrival](index, _fixture, elsewhere);
+        ReceiveInTurn(index, arrivals(_fixture, elsewhere));
 
         Assert.Null(index.Queries.GetFilter().Value());
     }
@@ -80,7 +85,9 @@ public class IndexScopeTests(TestPluginFixture fixture)
         RenameNpcOnDisk(data, "Plugin.esp", npcKey, editorIdAfter);
         index.NextSnapshot();
 
-        Assert.Equal(listedAfter, NpcsListed(index).Total);
+        var listed = NpcsListed(index);
+        Assert.Equal(listedAfter, listed.Total);
+        Assert.Equal(Enumerable.Repeat(npcKey.ToString(), listedAfter), listed.Items.Select(row => row.FormKey));
     }
 
     [Fact]
@@ -129,7 +136,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [ForeignIndexHolderFact]
-    public void ASnapshotOfAnotherInstance_ReleasesTheFirstInstancesIndexFile()
+    public void ASnapshotOfAnotherInstance_ReleasesTheFirstInstancesIndexFile_ForOneOfItsOwn()
     {
         using var first = new ScratchDirectory("medit-first-instance-");
         using var second = new ScratchDirectory("medit-second-instance-");
@@ -140,6 +147,12 @@ public class IndexScopeTests(TestPluginFixture fixture)
         index.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, second);
 
         Assert.Null(Record.Exception(() => ForeignIndexHolder.Hold(IndexFiles.In(first)).Dispose()));
+        Assert.Single(Directory.GetFiles(second, "*.duckdb", SearchOption.AllDirectories));
+    }
+
+    private static void ReceiveInTurn(OpenedIndex index, LoadOrderSnapshot[] snapshots)
+    {
+        foreach (var snapshot in snapshots) index.Receive(index.Holder, snapshot);
     }
 
     private static PagedResult<RecordSummary> NpcsListed(OpenedIndex index) =>

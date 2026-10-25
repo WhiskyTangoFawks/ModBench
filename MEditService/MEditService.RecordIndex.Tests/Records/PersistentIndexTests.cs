@@ -113,8 +113,8 @@ public sealed class PersistentIndexTests : IDisposable
         using var second = Launched([alpha, beta]);
 
         Assert.Equal(["Alpha.esp"], second.Opens.Opened);
-        Assert.Contains(second.Index.ListedIn(alpha.Key), d => d.EditorId == "NpcAlphaEdited");
-        Assert.Contains(second.Index.ListedIn(beta.Key), d => d.EditorId == "NpcBeta");
+        Assert.Equal(["NpcAlphaEdited"], second.Index.ListedIn(alpha.Key).Select(row => row.EditorId));
+        Assert.Equal(["NpcBeta"], second.Index.ListedIn(beta.Key).Select(row => row.EditorId));
     }
 
     [Fact]

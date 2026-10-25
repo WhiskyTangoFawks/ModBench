@@ -5,13 +5,14 @@ using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using DocumentsByFormKey = System.Collections.Generic.Dictionary<string, (string RecordType, string Body)>;
 
 namespace MEditService.RecordIndex.Tests.RealData;
 
 public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClassFixture<SourceParityFixture>
 {
     [Fact]
-    public void TheCompiledPluginReallyIngestedFromSource_NotViaTheBinaryFallback()
+    public void TheCompiledPluginsRow_SaysItReadsFromItsPluginSource()
     {
         Assert.True(fixture.FromSource.ReadFromItsPluginSource(fixture.Plugin));
     }
@@ -46,6 +47,9 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         var source = AllFormKeysInOneUnpagedQuery(fixture.SourceInstanceRoot).ToHashSet(StringComparer.Ordinal);
 
         Assert.True(binary.Count > 2000, $"fixture looks wrong: only {binary.Count} records");
+        Assert.True(
+            IndexFiles.Rows(fixture.BinaryInstanceRoot, "SELECT form_key FROM records WHERE record_type = 'refr'").Count > 0,
+            "fixture holds no placed references, which the tree embeds in their cells");
         Assert.Equal(binary.Count, source.Count);
         Assert.Empty(binary.Except(source, StringComparer.Ordinal));
         Assert.Empty(source.Except(binary, StringComparer.Ordinal));
@@ -54,8 +58,8 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     [Fact]
     public void EveryRecordsDocument_IsByteIdentical_ExceptOnePinnedOverlayVsDeepParseCellDivergence()
     {
-        var binaryDocuments = DocumentsByFormKey(fixture.BinaryInstanceRoot);
-        var sourceDocuments = DocumentsByFormKey(fixture.SourceInstanceRoot);
+        var binaryDocuments = DocumentsIn(fixture.BinaryInstanceRoot);
+        var sourceDocuments = DocumentsIn(fixture.SourceInstanceRoot);
 
         var mismatched = MismatchedFormKeys(binaryDocuments, sourceDocuments);
 
@@ -108,19 +112,19 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     private static IEnumerable<string> AllFormKeysInOneUnpagedQuery(string instanceRoot) =>
         IndexFiles.Rows(instanceRoot, "SELECT form_key FROM records").Select(row => row[0]);
 
-    private static Dictionary<string, (string RecordType, string Body)> DocumentsByFormKey(string instanceRoot) =>
+    private static DocumentsByFormKey DocumentsIn(string instanceRoot) =>
         IndexFiles.Rows(instanceRoot, "SELECT form_key, record_type, body FROM records")
             .ToDictionary(row => row[0], row => (row[1], row[2]), StringComparer.Ordinal);
 
     private static List<string> MismatchedFormKeys(
-        Dictionary<string, (string RecordType, string Body)> binaryDocuments,
-        Dictionary<string, (string RecordType, string Body)> sourceDocuments) =>
+        DocumentsByFormKey binaryDocuments,
+        DocumentsByFormKey sourceDocuments) =>
         [.. binaryDocuments
             .Where(binary => !sourceDocuments.TryGetValue(binary.Key, out var source) || binary.Value.Body != source.Body)
             .Select(binary => binary.Key)];
 
     private static string CountsByRecordType(
-        List<string> formKeys, Dictionary<string, (string RecordType, string Body)> documents) =>
+        List<string> formKeys, DocumentsByFormKey documents) =>
         string.Join(", ", formKeys
             .GroupBy(formKey => documents[formKey].RecordType, StringComparer.Ordinal)
             .OrderByDescending(group => group.Count())
