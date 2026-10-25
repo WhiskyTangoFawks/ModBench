@@ -3,7 +3,7 @@ import { PluginHeader } from './PluginHeader';
 import { ColumnEdge } from './ColumnEdge';
 import { DiffRow } from './DiffRow';
 import { buildColumns, headerCellContext, recordLabel } from './recordUtils';
-import { mono, fg, headerCell, headerBackground, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
+import { mono, fg, headerCell, headerBackground, DIMMED_OPACITY, columnWidthStyle } from './gridStyles';
 import type {
   ColumnKey, CompareOverride, CompareResult, PathHop, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
@@ -115,7 +115,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [partialFormColumns, fileOverriddenBy, fileColumn]);
   const columnStyle = useCallback((key: ColumnKey | typeof LABEL_COLUMN): React.CSSProperties => ({
     ...(key !== LABEL_COLUMN && dimmedColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
-    ...columnWidthStyle(key !== LABEL_COLUMN && collapsedColumns.has(key) ? COLLAPSED_COLUMN_WIDTH : columnWidths.get(key)),
+    ...columnWidthStyle(key !== LABEL_COLUMN && collapsedColumns.has(key) ? undefined : columnWidths.get(key)),
   }), [dimmedColumns, collapsedColumns, columnWidths]);
 
   // The column key alone is a rendering key; the override carries the compound identity (ADR-0012)

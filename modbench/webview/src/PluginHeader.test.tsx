@@ -83,7 +83,7 @@ describe('PluginHeader', () => {
   ])('for %s, shows its status, and a tooltip of the file name, the origin and the reason', (_case, facts, status, reason) => {
     const { header } = renderHeader(facts);
     expect(header).toHaveTextContent(status);
-    expect(header).toHaveAttribute('title', `MyMod.esp\nModA\n${reason}`);
+    expect(header).toHaveAttribute('title', `MyMod.esp\nModA\n${status}\n${reason}`);
   });
 
   it.each<[string, Facts, string, string]>([
@@ -134,6 +134,17 @@ describe('PluginHeader', () => {
     expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
     expect(screen.queryByText('MyMod.esp')).not.toBeInTheDocument();
     expect(header).toHaveTextContent(/^\[01\]$/);
+    expect(header).toHaveAttribute('title', 'MyMod.esp\nModA\n(read-only)\nThe game’s plugins are not edited.');
+  });
+
+  it('shows a light plugin\u2019s whole load index while collapsed', () => {
+    const { header } = renderHeader({ override: { loadIndex: 'FE:XXX' } }, { collapsed: true });
+    expect(header).toHaveTextContent(/^\[FE:XXX\]$/);
+  });
+
+  it('shows only its arrow while collapsed when it has no load index, the tooltip naming its file', () => {
+    const { header } = renderHeader({ override: { loadIndex: null }, notActive: true }, { collapsed: true });
+    expect(header).toHaveTextContent(/^$/);
     expect(header).toHaveAttribute('title', expect.stringContaining('MyMod.esp'));
   });
 

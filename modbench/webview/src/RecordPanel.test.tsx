@@ -9,7 +9,7 @@ import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection } from '../../src/wire/messages';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
-import { DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH } from './gridStyles';
+import { DIMMED_OPACITY, getCellStyle } from './gridStyles';
 import type { FieldMetadata } from './types';
 import {
   compareOverride, compareResultFixture, diffNode, fieldMeta, hostPickingEnum, lastPostedEnvelope, lastToldCell, loaded, member, panelClient,
@@ -1106,24 +1106,26 @@ describe('RecordPanel — column collapse', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
 
-  const collapseButton = (plugin: string) => within(required(screen.getAllByRole('columnheader').find(th => th.title.startsWith(plugin)), 'the column\u2019s header')).getByRole('button');
+  const modHeader = () => required(screen.getByText('MyMod.esp').closest('th'), 'the column\u2019s header');
+  const collapseButton = (header: HTMLElement) => within(header).getByRole('button');
 
   it('the button in a plugin column header collapses that column, hiding its field values while its header stays as a strip', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
 
-    fireEvent.click(collapseButton('MyMod.esp'));
+    const header = modHeader();
+    fireEvent.click(collapseButton(header));
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('columnheader')[2]).toHaveTextContent(/^\[00\]$/);
+    expect(header).toBeInTheDocument();
+    expect(screen.queryByText('MyMod.esp')).not.toBeInTheDocument();
   });
 
   it('a collapsed column keeps its cells\u2019 colour without their text', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
-    const colour = required(screen.getByText('Override Name').closest('td'), 'the cell').style.backgroundColor;
-    expect(colour).not.toBe('');
+    const colour = getCellStyle('ConflictWins').backgroundColor;
 
-    fireEvent.click(collapseButton('MyMod.esp'));
+    fireEvent.click(collapseButton(modHeader()));
     const row = required(screen.getByText('Name').closest('tr'), 'the Name row');
     expect(required(row.cells[2], 'the collapsed column\u2019s cell').style.backgroundColor).toBe(colour);
   });
@@ -1132,21 +1134,23 @@ describe('RecordPanel — column collapse', () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
 
-    fireEvent.click(collapseButton('MyMod.esp'));
+    const header = modHeader();
+    fireEvent.click(collapseButton(header));
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
-    fireEvent.click(collapseButton('MyMod.esp'));
+    fireEvent.click(collapseButton(header));
     expect(screen.getByText('Override Name')).toBeInTheDocument();
   });
 
   it('collapsed state survives a read of the record under the FormKey it moved to', async () => {
-    renderPanel(compareResult);
+    const { client } = renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
-    fireEvent.click(collapseButton('MyMod.esp'));
+    fireEvent.click(collapseButton(modHeader()));
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
 
     loadRecord('000002:Fallout4.esm');
 
-    await waitFor(() => expect(screen.getAllByRole('columnheader')).toHaveLength(3));
+    await waitFor(() => expect(client.load).toHaveBeenCalledTimes(2));
+    await act(async () => { await Promise.resolve(); });
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
   });
 });
@@ -1213,14 +1217,26 @@ describe('RecordPanel — column widths: a column\'s header and every cell under
     fireEvent.mouseUp(window, { clientX: by });
   }
 
-  it('collapses a column to a narrow strip, header and cells alike', async () => {
+  it('sizes a collapsed column to its strip, header and cells alike, whatever width it was dragged to', async () => {
     renderPanel(compareResult);
     await screen.findByText('Override Name');
+    const header = required(screen.getByText('MyMod.esp').closest('th'), 'the header');
+    dragEdge(header, 200, 40);
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
 
-    fireEvent.click(within(required(screen.getByText('MyMod.esp').closest('th'), 'the header')).getByRole('button'));
+    fireEvent.click(within(header).getByRole('button'));
 
-    expect(new Set(widthsOfColumn(2))).toEqual(new Set([`${COLLAPSED_COLUMN_WIDTH}px`]));
-    expect(new Set(widthsOfColumn(1))).toEqual(new Set(['']));
+    expect(new Set(widthsOfColumn(2))).toEqual(new Set(['']));
+  });
+
+  it.each([['a plugin column', 'MyMod.esp'], ['the label column', 'Field']])('leaves %s no narrower than the floor when its edge is dragged past it', async (_name, label) => {
+    renderPanel(compareResult);
+    await screen.findByText('Override Name');
+    const index = label === 'Field' ? 0 : 2;
+
+    dragEdge(required(screen.getByText(label).closest('th'), 'the header'), 200, -190);
+
+    expect(new Set(widthsOfColumn(index))).toEqual(new Set(['48px']));
   });
 
   it('gives a plugin column the width its edge is dragged to, header and cells alike', async () => {
