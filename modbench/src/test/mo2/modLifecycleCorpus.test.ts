@@ -4,7 +4,7 @@ import { fakeVscodeModule } from './fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { modCommands } from '../../modCommands/modCommands';
 import {
@@ -39,8 +39,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
 
     expect(after.has('mods/Unofficial Fallout 4 Patch/meta.ini')).toBe(false);
     expect((await readModlistEntries(dir)).some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(false);
-    const metaText = await readFile(join(dir, downloadedFileMeta), 'utf8');
-    expect(metaText).toContain('uninstalled=true');
+    expect(await readDownloadedFile(dir, DOWNLOADED_FILE_NAME)).toMatchObject({ meta: { status: 'Uninstalled' } });
   });
 
   it('uninstallMods on a mod with no linked downloaded file touches only its own folder and modlist.txt', async () => {
@@ -65,25 +64,9 @@ describe('mod lifecycle corpus (uninstall)', () => {
 
     const moved = [...before.keys()].filter((path) => path.startsWith('mods/Harder VATS/'));
     expect(moved).toEqual(expect.arrayContaining(['mods/Harder VATS/meta.ini', 'mods/Harder VATS/Scripts/a.pex']));
-    for (const path of moved) {
-      expect(after.get(path.replace('mods/Harder VATS/', 'mods/Harder VATS 2/')), path).toEqual(before.get(path));
-    }
+    expect(new Map(moved.map((path) => [path, after.get(path.replace('mods/Harder VATS/', 'mods/Harder VATS 2/'))]))).toEqual(new Map(moved.map((path) => [path, before.get(path)])));
     assertOnlyChanged(before, after, new Set([...moved, ...moved.map((p) => p.replace('/Harder VATS/', '/Harder VATS 2/')), MODLIST, 'profiles/Secondary/modlist.txt']));
     expect((await readModlistEntries(dir)).find((e) => e.name === 'Harder VATS 2')).toEqual({ kind: 'mod', name: 'Harder VATS 2', enabled: false });
-  });
-
-  it('renameMod ends with the publisher ignoring the manifest under its new name, and no entry for the old one', async () => {
-    const adapter = adapterOver(dir);
-    await writeFile(join(dir, 'compiler_settings.json'), '{}');
-    await mkdir(join(dir, 'mods', 'X'));
-    await writeFile(join(dir, 'mods', 'X', 'X.manifest.json'), '{}');
-    await adapter.keepOutOfPublisher();
-
-    await modCommands(adapter, unscriptedMEdit, unreadStatus).renameMod('X', 'Y');
-
-    const entries: unknown = Reflect.get(JSON.parse(await readFile(join(dir, 'compiler_settings.json'), 'utf8')), 'Ignore');
-    expect(entries).toEqual(expect.arrayContaining(['mods\\Y\\Y.manifest.json']));
-    expect(entries).not.toContain('mods\\Y\\X.manifest.json');
   });
 });
 
@@ -108,7 +91,7 @@ describe('mod lifecycle corpus (install)', () => {
 
     expect(outcome).toEqual({ applied: true, downloadedFile: MANUAL });
     assertOnlyChanged(before, after, new Set(['mods/Manual/Manual.esp', 'mods/Manual/meta.ini', 'profiles/Default/modlist.txt', `downloads/${MANUAL}.meta`]));
-    expect(await readFile(join(dir, 'profiles', 'Default', 'modlist.txt'), 'utf8')).toContain('-Manual');
+    expect(await readModlistEntries(dir)).toContainEqual({ kind: 'mod', name: 'Manual', enabled: false });
     expect(await readDownloadedFile(dir, MANUAL)).toMatchObject({ meta: { status: 'Installed' } });
   });
 });

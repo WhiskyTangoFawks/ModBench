@@ -4,7 +4,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { write, putIfChanged, isRepository, makeDir } from '../files';
+import { write, putIfChanged, makeDir } from '../files';
 
 let crashBeforeTheNextRenameLands = false;
 
@@ -22,7 +22,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   };
 });
 
-describe('write', () => {
+describe('a file written whole', () => {
   let root: string;
   let path: string;
 
@@ -58,11 +58,8 @@ describe('write', () => {
     await writeFile(path, 'original');
     crashBeforeTheNextRenameLands = true;
 
-    const failure: unknown = await write(path, 'new').then(() => undefined, (err: unknown) => err);
+    await expect(write(path, 'new')).rejects.toThrow(`rename '${path}' -> '${path}'`);
 
-    if (!(failure instanceof Error)) throw new Error('expected write to reject with an Error');
-    expect(failure.message).toContain(path);
-    expect(failure.message).not.toContain('.tmp');
     expect(await readFile(path, 'utf8')).toBe('original');
     expect(await readdir(root)).toEqual(['meta.ini']);
   });
@@ -133,7 +130,7 @@ describe('write', () => {
   });
 });
 
-describe('putIfChanged', () => {
+describe('a file rewritten only where it changes', () => {
   let root: string;
   let path: string;
 
@@ -178,28 +175,7 @@ describe('putIfChanged', () => {
   });
 });
 
-describe('isRepository', () => {
-  let folder: string;
-
-  beforeEach(async () => {
-    folder = await mkdtemp(join(tmpdir(), 'files-compiled-plugin-'));
-  });
-
-  afterEach(async () => {
-    await rm(folder, { recursive: true, force: true });
-  });
-
-  it('is true for a folder holding a .git', async () => {
-    await mkdir(join(folder, '.git'));
-    expect(await isRepository(folder)).toBe(true);
-  });
-
-  it('is false for a folder with no .git', async () => {
-    expect(await isRepository(folder)).toBe(false);
-  });
-});
-
-describe('makeDir', () => {
+describe('a folder made new', () => {
   let parent: string;
 
   beforeEach(async () => {

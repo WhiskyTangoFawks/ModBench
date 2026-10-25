@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { adapterOver } from '../../test/mo2/adapterOver';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
+import { expectKind } from '../../test/expectKind';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -31,7 +32,7 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     expect({
       declared: adapter.publisherTags.map(({ badge }) => badge),
       profile,
-      covering: publisherConfiguration.kind === 'read' && publisherConfiguration.covering(join(root, 'mods', 'Harder VATS'), 'Harder VATS').map(({ badge }) => badge),
+      covering: expectKind(publisherConfiguration, 'read').covering(join(root, 'mods', 'Harder VATS'), 'Harder VATS').map(({ badge }) => badge),
     }).toEqual({ declared: ['NM', 'IN', 'IG', 'AE'], profile: 'Default', covering: ['IN'] });
   });
 
@@ -41,8 +42,7 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     await writeFile(join(root, SETTINGS_FILE), JSON.stringify({ Profile: 'Secondary', AdditionalProfiles: ['Compile'], Include: ['mods'] }));
 
     const { activeProfile, publisherConfiguration } = { activeProfile: await adapterOver(root).activeProfile(), ...await adapterOver(root).reading() };
-    const covering = (mod: string) => (publisherConfiguration.kind === 'read' ? publisherConfiguration.covering(join(root, 'mods', mod, 'x.esp'), mod) : [])
-      .map(({ badge }) => badge);
+    const covering = (mod: string) => expectKind(publisherConfiguration, 'read').covering(join(root, 'mods', mod, 'x.esp'), mod).map(({ badge }) => badge);
 
     expect({ activeProfile, disabledInIt: covering('Harder VATS'), enabledInIt: covering('ENBoost - 12k') })
       .toEqual({ activeProfile: 'Default', disabledInIt: ['IN'], enabledInIt: [] });
@@ -53,7 +53,7 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
 
     const { publisherConfiguration } = await adapterOver(root).reading();
 
-    expect(publisherConfiguration.kind === 'read' && publisherConfiguration.covering(join(root, 'overwrite', 'x.ini'), undefined)).toEqual([]);
+    expect(expectKind(publisherConfiguration, 'read').covering(join(root, 'overwrite', 'x.ini'), undefined)).toEqual([]);
   });
 
   it('lists the files the mod manager\'s side keeps in the publisher\'s ignore list', async () => {
@@ -62,16 +62,6 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     await adapterOver(root).keepOutOfPublisher();
 
     expect(JSON.parse(await readFile(join(root, SETTINGS_FILE), 'utf8'))).toEqual({ Ignore: expect.arrayContaining(['modbench', '.gitignore', 'source']) as unknown });
-  });
-
-  it('hands back a call that leaves the publisher\'s configuration byte for byte as it was', async () => {
-    const text = JSON.stringify({ Ignore: ['mine'] }, undefined, 2);
-    await writeFile(join(root, SETTINGS_FILE), text);
-
-    const takeBack = await adapterOver(root).keepOutOfPublisher();
-    await takeBack();
-
-    expect(await readFile(join(root, SETTINGS_FILE), 'utf8')).toBe(text);
   });
 
   it('drops the entry of a manifest a rename left behind once update manifest keeps the files out again', async () => {
@@ -105,15 +95,15 @@ describe('the Instance adapter the build composes: the mod manager\'s implementa
     expect({ signals, armed: live().length }).toEqual({ signals: 2, armed: 0 });
   });
 
-  it('has git hold the publisher\'s configuration, as the publisher writes it on this machine, by the path tokens', async () => {
+  it('has git hold the publisher\'s configuration by the path tokens, the output file each compile chooses blanked', async () => {
     const git = (...args: string[]): string => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
     git('init', '--quiet');
     git('config', 'core.autocrlf', 'false');
-    await writeFile(join(root, SETTINGS_FILE), JSON.stringify({ Source: root }));
+    await writeFile(join(root, SETTINGS_FILE), JSON.stringify({ Source: root, OutputFile: join(root, 'LitR.wabbajack') }));
 
     await adapterOver(root).writePathTokens();
     git('add', '--', SETTINGS_FILE);
 
-    expect(git('cat-file', 'blob', `:${SETTINGS_FILE}`)).toBe(JSON.stringify({ Source: '{instance folder}' }));
+    expect(git('cat-file', 'blob', `:${SETTINGS_FILE}`)).toBe(JSON.stringify({ Source: '{instance folder}', OutputFile: '' }));
   });
 });

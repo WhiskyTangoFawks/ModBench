@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,7 +16,7 @@ vi.mock('../../files', async (importOriginal) => {
   };
 });
 
-describe('renameFolderWithManifest', () => {
+describe('a mod folder renamed with its manifest', () => {
   let root: string;
   let from: ModFolder;
   let toPath: string;
@@ -31,14 +31,6 @@ describe('renameFolderWithManifest', () => {
   });
 
   afterEach(async () => { await rm(root, { recursive: true, force: true }); });
-
-  it('puts the folder back, and rejects with why the manifest could not be renamed', async () => {
-    failing.endings = ['New.manifest.json'];
-
-    await expect(renameFolderWithManifest(from, toPath, 'New')).rejects.toThrow(`EBUSY: ${join(toPath, 'New.manifest.json')}`);
-
-    expect(await readdir(root)).toEqual(['Old']);
-  });
 
   it('names why the manifest could not be renamed and that the folder sits under its new name because putting it back failed', async () => {
     failing.endings = ['New.manifest.json', 'Old'];

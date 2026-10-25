@@ -107,9 +107,7 @@ describe('the rows a Wabbajack publisher tag covers (publishing.md, Publisher ta
   it('covers nothing outside the instance', async () => {
     await writeSettings({ Include: [''] });
 
-    const configuration = await publisherOver().configuration();
-    expect(configuration.kind === 'read' && [configuration.covering(join(root, 'a.dds'), undefined), configuration.covering(join(root, '..', 'a.dds'), undefined)]
-      .map((tags) => tags.length)).toEqual([1, 0]);
+    expect([await covering('a.dds'), await covering('..', 'a.dds')]).toEqual([['Include'], []]);
   });
 });
 
@@ -179,18 +177,11 @@ describe('compiler settings Modbench cannot read (Never silently wrong)', () => 
   });
 
   it.each([
-    ['a list that holds other than paths', { Include: ['mods\\A', 3] }, 'Include'],
-    ['other than a list', { Ignore: 'mods\\A' }, 'Ignore'],
-  ])('says so, naming the file and its key, when a publisher tag holds %s', async (_, settings, key) => {
-    await writeSettings(settings);
-
-    expect(await reason()).toMatch(new RegExp(`${SETTINGS_FILE}.*${key}`));
-  });
-
-  it.each([
-    ['a compile profile other than a name', { Profile: 3 }, 'Profile'],
-    ['compile profiles other than names', { Profile: 'Main', AdditionalProfiles: 'Extra' }, 'AdditionalProfiles'],
-  ])('says so, naming the file and its key, when they hold %s', async (_, settings, key) => {
+    ['a publisher tag holds a list that holds other than paths', { Include: ['mods\\A', 3] }, 'Include'],
+    ['a publisher tag holds other than a list', { Ignore: 'mods\\A' }, 'Ignore'],
+    ['they hold a compile profile other than a name', { Profile: 3 }, 'Profile'],
+    ['they hold compile profiles other than names', { Profile: 'Main', AdditionalProfiles: 'Extra' }, 'AdditionalProfiles'],
+  ])('says so, naming the file and its key, when %s', async (_, settings, key) => {
     await writeSettings(settings);
 
     expect(await reason()).toMatch(new RegExp(`${SETTINGS_FILE}.*${key}`));
@@ -290,12 +281,13 @@ describe('changing a publisher tag in the compiler settings (publishing.md, Publ
     expect(await settingsText()).toBe('{\r\n    "Include": [\r\n        "mods\\\\A",\r\n        "mods\\\\B"\r\n    ]\r\n}\r\n');
   });
 
-  it('rejects, writing nothing, for a tag it does not declare, and for settings it cannot read', async () => {
-    await writeSettings('{"Include":[]}');
+  it('rejects, writing nothing, for a tag it does not declare', async () => {
+    const text = '{"Include":[]}';
+    await writeSettings(text);
+
     await expect(publisherOver().changeTag('add', 'Nope', [join(root, 'mods', 'A')])).rejects.toThrow('Nope');
-    await writeSettings('not json');
-    await expect(publisherOver().changeTag('add', 'Include', [join(root, 'mods', 'A')])).rejects.toThrow(SETTINGS_FILE);
-    expect(await settingsText()).toBe('not json');
+
+    expect(await settingsText()).toBe(text);
   });
 
   it('rejects while the instance holds no compiler settings, creating none', async () => {
@@ -351,12 +343,6 @@ describe('publisher tags following a mod folder (publishing.md, Publisher tags, 
     expect(await settingsText()).toBe(text);
   });
 
-  it('rejects, writing nothing, for settings it cannot read', async () => {
-    await writeSettings('not json');
-    await expect(publisherOver().followFolders([{ from: folder('A') }])).rejects.toThrow(SETTINGS_FILE);
-    expect(await settingsText()).toBe('not json');
-  });
-
   it('writes nothing when the settings hold a duplicate the move does not touch', async () => {
     const text = '{"Include":["mods\\\\X","mods/x","mods\\\\B"]}';
     await writeSettings(text);
@@ -364,11 +350,6 @@ describe('publisher tags following a mod folder (publishing.md, Publisher tags, 
     await publisherOver().followFolders([{ from: folder('A'), to: folder('C') }]);
 
     expect(await settingsText()).toBe(text);
-  });
-
-  it('does nothing while the instance holds no compiler settings, creating none', async () => {
-    await publisherOver().followFolders([{ from: folder('A'), to: folder('C') }]);
-    await expect(readFile(join(root, SETTINGS_FILE), 'utf8')).rejects.toThrow();
   });
 });
 
@@ -424,14 +405,32 @@ describe('keeping Modbench\'s files out of what Wabbajack ships (publishing.md, 
     expect(await settingsText()).toBe(text);
   });
 
-  it('rejects, writing nothing, for settings it cannot read', async () => {
+});
+
+describe('a change to the compiler settings', () => {
+  const settingsText = () => readFile(join(root, SETTINGS_FILE), 'utf8');
+  const changeTag = () => publisherOver().changeTag('add', 'Include', [join(root, 'mods', 'A')]);
+  const followFolders = () => publisherOver().followFolders([{ from: join(root, 'mods', 'A'), to: join(root, 'mods', 'C') }]);
+  const keepOut = () => publisherOver().keepOut({ present: [join(root, 'x')], owns: () => false });
+
+  it.each([
+    ['changing a publisher tag', changeTag],
+    ['following a mod folder', followFolders],
+    ['keeping Modbench\'s files out', keepOut],
+  ])('rejects, writing nothing, for settings it cannot read, %s', async (_, change) => {
     await writeSettings('not json');
-    await expect(publisherOver().keepOut(kept(join(root, 'x')))).rejects.toThrow(SETTINGS_FILE);
+
+    await expect(change()).rejects.toThrow(SETTINGS_FILE);
+
     expect(await settingsText()).toBe('not json');
   });
 
-  it('does nothing while the instance holds no compiler settings, creating none', async () => {
-    await publisherOver().keepOut(kept(join(root, 'x')));
+  it.each([
+    ['following a mod folder', followFolders],
+    ['keeping Modbench\'s files out', keepOut],
+  ])('does nothing while the instance holds no compiler settings, creating none, %s', async (_, change) => {
+    await change();
+
     await expect(settingsText()).rejects.toThrow();
   });
 });

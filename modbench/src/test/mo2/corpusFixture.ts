@@ -10,7 +10,7 @@ import { expect } from 'vitest';
 
 // A sibling of fixtures/mo2-instance/, never an extension of it: that one is read
 // in place by tests asserting its exact contents, so any addition breaks them.
-export const CORPUS_FIXTURE = join(__dirname, 'fixtures', 'mo2-instance-corpus');
+const CORPUS_FIXTURE = join(__dirname, 'fixtures', 'mo2-instance-corpus');
 
 // The fixture's active profile is "Default"; only the setActiveProfile test
 // switches away from it.

@@ -106,29 +106,16 @@ describe('the FOMOD installer', () => {
     await releaseLeftAsItWas(TWO_STEPS_FILES);
   });
 
-  it('refuses no choices at all, listing the first step', async () => {
-    await release(TWO_STEPS, TWO_STEPS_FILES);
-
-    await expect(install([])).rejects.toThrow(
-      'The choices leave step "Main" unanswered. Step "Main": group "Pick" takes exactly one of "Option A", "Option B" (recommended).',
-    );
-  });
-
   it.each([
-    ['two', ['Option A', 'Option B'], 2],
-    ['none', [], 0],
-  ])('refuses %s picked in a group that takes exactly one', async (_, picked, count) => {
-    await release(TWO_STEPS, TWO_STEPS_FILES);
-
-    await expect(install(choose(['Main', { Pick: picked }]))).rejects.toThrow(
-      `Group "Pick" of step "Main" takes exactly one, and the choices pick ${count}.`,
-    );
-  });
-
-  it.each([
-    ['a group', choose(['Main', { Pik: ['Option A'] }]), 'Step "Main" has no group "Pik".'],
-    ['an option', choose(['Main', { Pick: ['Option C'] }]), 'Group "Pick" of step "Main" has no option "Option C".'],
-  ])('refuses %s the step does not have', async (_, choices, refusal) => {
+    ['no choices at all, listing the first step', [],
+      'The choices leave step "Main" unanswered. Step "Main": group "Pick" takes exactly one of "Option A", "Option B" (recommended).'],
+    ['two picked in a group that takes exactly one', choose(['Main', { Pick: ['Option A', 'Option B'] }]), 'Group "Pick" of step "Main" takes exactly one, and the choices pick 2.'],
+    ['none picked in a group that takes exactly one', choose(['Main', { Pick: [] }]), 'Group "Pick" of step "Main" takes exactly one, and the choices pick 0.'],
+    ['a group the step does not have', choose(['Main', { Pik: ['Option A'] }]), 'Step "Main" has no group "Pik".'],
+    ['an option the step does not have', choose(['Main', { Pick: ['Option C'] }]), 'Group "Pick" of step "Main" has no option "Option C".'],
+    ['a choice for a step the installer does not show, naming it', choose(['Main', { Pick: ['Option A'] }], ['Only for B', {}]),
+      'The installer shows no step "Only for B" for the choices given.'],
+  ])('refuses %s', async (_, choices, refusal) => {
     await release(TWO_STEPS, TWO_STEPS_FILES);
 
     await expect(install(choices)).rejects.toThrow(refusal);
@@ -156,6 +143,30 @@ describe('the FOMOD installer', () => {
       await release(TYPED, TYPED_FILES);
 
       await expect(install(choose(['Types', { Any: [name] }]))).rejects.toThrow(`"${name}" cannot be picked.`);
+    });
+  });
+
+  describe('each group\'s type', () => {
+    const BOUNDED = config(steps(step('Bounded',
+      group('At most', 'SelectAtMostOne', option('A', file('f/a.esp', 'a.esp')) + option('B', file('f/b.esp', 'b.esp')))
+      + group('At least', 'SelectAtLeastOne', option('C', file('f/c.esp', 'c.esp')) + option('D', file('f/d.esp', 'd.esp'))))));
+    const BOUNDED_FILES = ['f/a.esp', 'f/b.esp', 'f/c.esp', 'f/d.esp'];
+
+    it.each([
+      ['two picked in a group that takes at most one', { 'At most': ['A', 'B'], 'At least': ['C'] }, 'Group "At most" of step "Bounded" takes at most one, and the choices pick 2.'],
+      ['none picked in a group that takes at least one', { 'At most': [], 'At least': [] }, 'Group "At least" of step "Bounded" takes at least one, and the choices pick 0.'],
+    ])('refuses %s', async (_, groups, refusal) => {
+      await release(BOUNDED, BOUNDED_FILES);
+
+      await expect(install(choose(['Bounded', groups]))).rejects.toThrow(refusal);
+    });
+
+    it('lands none of a group that takes at most one, and both of one that takes at least one', async () => {
+      await release(BOUNDED, BOUNDED_FILES);
+
+      await install(choose(['Bounded', { 'At most': [], 'At least': ['C', 'D'] }]));
+
+      expect(await filesLanded()).toEqual(['c.esp', 'd.esp']);
     });
   });
 
@@ -252,14 +263,6 @@ describe('the FOMOD installer', () => {
 
     const [landed] = await filesLanded();
     expect(await readFile(join(present(landedIn, 'the folder'), present(landed, 'the one file')), 'utf8')).toBe('bytes of a/A.esp');
-  });
-
-  it('refuses a choice for a step the installer does not show, naming it', async () => {
-    await release(TWO_STEPS, TWO_STEPS_FILES);
-
-    await expect(install(choose(['Main', { Pick: ['Option A'] }], ['Only for B', {}]))).rejects.toThrow(
-      'The installer shows no step "Only for B" for the choices given.',
-    );
   });
 
   it('passes on what else its installer says, as it says it', async () => {

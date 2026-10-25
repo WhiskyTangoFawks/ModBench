@@ -186,6 +186,8 @@ export function modFoldersOf(...entries: readonly (string | (EntryRef & { modNam
 const foldersHolding = (all: readonly ModFolder[]): ModFolders =>
   ({ all, holding: (entry) => all.find((folder) => entryKey(folder) === entryKey(entry)) });
 
+const reachesOutsideModsFolder = (name: string): boolean => name === '' || name === '.' || name === '..' || /[\\/]/.test(name);
+
 function folderBeside(folders: ModFolders | undefined, name: string): string {
   const held = folders?.all[0]?.path ?? '/mods/';
   return `${held.slice(0, Math.max(held.lastIndexOf('/'), held.lastIndexOf('\\')))}/${name}`;
@@ -401,6 +403,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       }),
     createModFolder: (mod) =>
       write({ verb: 'createModFolder', mod }, () => {
+        if (reachesOutsideModsFolder(mod)) throw new Error(`Not a valid mod name: "${mod}"`);
         const held = foldersNow().holding({ kind: 'mod', name: mod });
         if (held !== undefined) throw inTheWay(held.path);
         current = { ...current, modFolders: foldersHolding([...foldersNow().all, { kind: 'mod', name: mod, path: folderBeside(current.modFolders, mod), modName: mod }]) };

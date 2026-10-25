@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { convertToHtml } from '../../codecs/bbcode';
 
-describe('convertToHtml, as MO2 converts a description', () => {
+describe('a description\'s BBCode as MO2 converts it to HTML', () => {
   it.each([
     ['[b]x[/b]', '<b>x</b>'],
     ['[i]x[/i]', '<i>x</i>'],

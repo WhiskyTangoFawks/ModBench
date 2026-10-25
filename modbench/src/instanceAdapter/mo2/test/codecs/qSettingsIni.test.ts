@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readIniSection, readIniValue, replaceIniSection, setIniByteArray, setIniValue } from '../../codecs/qSettingsIni';
 
-describe('readIniValue', () => {
+describe('a value read from a QSettings INI', () => {
   it('reads the key in the named section, not the same key in another', () => {
     const text = '[A]\r\nk=wrong\r\n[B]\r\nk=right\r\n';
     expect(readIniValue(text, 'B', 'k')).toBe('right');
@@ -38,7 +38,7 @@ describe('a repeated key', () => {
   });
 });
 
-describe('readIniSection', () => {
+describe('a section read from a QSettings INI', () => {
   it('maps every key of the section and none of another', () => {
     expect([...readIniSection('[A]\na=1\n[B]\nb=2\nc=3\n', 'B')]).toEqual([['b', '2'], ['c', '3']]);
   });
@@ -70,7 +70,7 @@ describe('decoded values', () => {
   });
 });
 
-describe('values written by setIniValue', () => {
+describe('values written to a QSettings INI, read back as written', () => {
   it.each([
     ['a comma', 'a,b'],
     ['a backslash', 'C:\\Mod\\x'],
@@ -93,7 +93,7 @@ describe('values written by setIniValue', () => {
   });
 });
 
-describe('setIniValue', () => {
+describe('a value set in a QSettings INI', () => {
   it('replaces the key in its section only', () => {
     const text = '[A]\r\nk=1\r\n[B]\r\nk=2\r\n';
     expect(setIniValue(text, 'B', 'k', '9')).toBe('[A]\r\nk=1\r\n[B]\r\nk=9\r\n');
@@ -125,7 +125,7 @@ describe('setIniValue', () => {
   });
 });
 
-describe('replaceIniSection', () => {
+describe('a section replaced whole in a QSettings INI', () => {
   it('replaces a section whole, leaving its neighbours', () => {
     expect(replaceIniSection('[A]\nx=1\ny=2\n[B]\nz=3\n', 'A', ['q=0'])).toBe('[A]\nq=0\n[B]\nz=3\n');
   });
@@ -156,7 +156,7 @@ describe('Qt escapes written', () => {
   });
 });
 
-describe('setIniByteArray', () => {
+describe('a value set as a byte array in a QSettings INI', () => {
   it('escapes a hex digit after an escaped byte, as Qt does', () => {
     expect(setIniByteArray('[A]\n', 'A', 'k', 'Pröfil')).toBe('[A]\nk=@ByteArray(Pr\\xc3\\xb6\\x66il)\n');
   });

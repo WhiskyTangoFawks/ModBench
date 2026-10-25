@@ -1,17 +1,13 @@
 import { setIniValue } from '../codecs/qSettingsIni';
-import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
-import { NO_DETECTORS } from '../../../test/noDetectors';
-import { fakeInstallationFileReader } from '../../../test/fakeInstallationFileReader';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { mo2InstanceAdapter } from '../mo2Instance';
-import { FOMOD_ENGINE } from '../../../test/fomodEngine';
+import { managerOver } from '../../../test/mo2/adapterOver';
 
 let root: string;
 
@@ -27,10 +23,7 @@ describe('the MO2 adapter\'s hashes', () => {
     await mkdir(join(root, 'mods', 'Mod'), { recursive: true });
     await writeFile(join(root, 'Mod.7z'), 'aaaa');
     await writeFile(join(root, 'mods', 'Mod', 'meta.ini'), setIniValue('[General]\r\n', 'General', 'installationFile', join(root, 'Mod.7z')));
-    const adapter = mo2InstanceAdapter({
-      instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), detectors: NO_DETECTORS,
-      installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE,
-    }, undefined);
+    const adapter = managerOver(root);
 
     await adapter.installationFile('Mod');
 

@@ -63,7 +63,7 @@ function counting(installationFileReader: InstallationFileReader): InstallationF
   return { ...installationFileReader, extracted, extract: (path, dest) => { extracted.push(path); return installationFileReader.extract(path, dest); } };
 }
 
-describe('hashIndex', () => {
+describe('the sizes and hashes of the record index', () => {
   it('answers a game file\'s and an origin file\'s size and hash as mEdit\'s manifest carries it', async () => {
     const path = await fileHolding('Game.esm', 'aaaa');
     const index = hashIndex(folder, fakeInstallationFileReader([]));
@@ -112,7 +112,7 @@ describe('hashIndex', () => {
 
     const answer = await index.downloadedFileHash(path);
 
-    expect(answer.kind === 'read' && answer.answer.entries.map((entry) => entry.path)).toEqual(ENTRIES);
+    expect(answer).toMatchObject({ kind: 'read', answer: { entries: ENTRIES.map((path) => ({ path })) } });
   });
 
   it('answers a file it cannot read, or a downloaded file the installation file reader cannot open, with the reason', async () => {
@@ -122,7 +122,7 @@ describe('hashIndex', () => {
     const missing = await index.gameFileHash(join(root, 'none.dds'));
     const notAnInstallationFile = await index.downloadedFileHash(await fileHolding('Mod.esp', 'aaaa'));
 
-    expect(missing.kind === 'unreadable' && missing.reason).toContain('ENOENT');
+    expect(missing).toEqual({ kind: 'unreadable', reason: expect.stringContaining('ENOENT') as unknown });
     expect(notAnInstallationFile).toEqual({ kind: 'unreadable', reason: 'Can not open the file as archive' });
     expect(await readdir(folder).catch(() => [])).toEqual([]);
   });

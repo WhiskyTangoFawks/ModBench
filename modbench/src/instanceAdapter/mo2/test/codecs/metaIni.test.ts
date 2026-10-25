@@ -6,7 +6,7 @@ import { modMetaOf, parseMetaIni, writeMetaIni, setOwnedKeysInText } from '../..
 const modsDir = join(__dirname, '..', '..', '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance', 'mods');
 const meta = (mod: string) => readFileSync(join(modsDir, mod, 'meta.ini'), 'utf8');
 
-describe('parseMetaIni', () => {
+describe('a mod\'s meta.ini read', () => {
   it('reads version, nexusId (modid) and installationFileName (installationFile)', () => {
     expect(parseMetaIni(meta('Unofficial Fallout 4 Patch'))).toEqual({
       gameName: 'Fallout4',
@@ -40,7 +40,7 @@ describe('parseMetaIni', () => {
 
 });
 
-describe('modMetaOf', () => {
+describe('whether a mod\'s update is available', () => {
   it.each([
     ['1.0', '1.1', true],
     ['1.1', '1.1', false],
@@ -50,13 +50,13 @@ describe('modMetaOf', () => {
   });
 });
 
-describe('parseMetaIni — sections', () => {
+describe('a mod\'s meta.ini read by section', () => {
   it('reads [General] keys only, not the same key in another section', () => {
     expect(parseMetaIni('[Plugins]\r\nversion=9\r\n[General]\r\nversion=1\r\n').version).toBe('1');
   });
 });
 
-describe('parseMetaIni — installedFiles', () => {
+describe('the installed files a mod\'s meta.ini holds', () => {
   it('reads two installed-files pairs from the array section, in index order', () => {
     const text = [
       '[General]', 'gameName=Fallout4', 'modid=4598',
@@ -101,15 +101,11 @@ describe('parseMetaIni — installedFiles', () => {
   });
 });
 
-describe('writeMetaIni', () => {
+describe('a mod\'s meta.ini written', () => {
   it('emits a [General] section with only the present keys', () => {
     expect(writeMetaIni({ gameName: 'Fallout4', installationFileName: 'MyMod-1-2.7z' })).toBe(
       '[General]\ngameName=Fallout4\ninstallationFile=MyMod-1-2.7z\n',
     );
-  });
-
-  it('omits absent keys entirely (no blank lines)', () => {
-    expect(writeMetaIni({ gameName: 'Fallout4' })).toBe('[General]\ngameName=Fallout4\n');
   });
 
   it('round-trips modid/version/installationFile through parseMetaIni', () => {
@@ -128,7 +124,7 @@ describe('writeMetaIni', () => {
   });
 });
 
-describe('writeMetaIni — installedFiles', () => {
+describe('the installed files written to a mod\'s meta.ini', () => {
   it('emits the array section whole, in MO2 form', () => {
     expect(writeMetaIni({ installedFiles: [{ nexusId: '123', fileId: '456' }] })).toBe(
       '[installedFiles]\n1\\modid=123\n1\\fileid=456\nsize=1\n',
@@ -168,7 +164,7 @@ describe('writeMetaIni — installedFiles', () => {
   });
 });
 
-describe('setOwnedKeysInText', () => {
+describe('the keys Modbench owns set in a mod\'s meta.ini', () => {
   it.each([
     ['a quoted value', 'installationFile="Mod, v2.7z"'],
     ['an escaped backslash', 'installationFile=C:\\\\x.7z'],

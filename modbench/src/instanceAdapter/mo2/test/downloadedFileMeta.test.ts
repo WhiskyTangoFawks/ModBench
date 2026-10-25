@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { access, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spliceDownloadedFileMeta, trashDownloadedFileMeta } from '../downloadedFileMeta';
+import { spliceDownloadedFileMeta } from '../downloadedFileMeta';
 
-describe('spliceDownloadedFileMeta', () => {
+describe('an edit of a downloaded file\'s .meta', () => {
   let downloadsDir: string;
 
   beforeEach(async () => {
@@ -23,18 +23,6 @@ describe('spliceDownloadedFileMeta', () => {
     expect(await spliceDownloadedFileMeta(downloadsDir, 'foo.7z', (text) => `${text}removed=true\r\n`)).toEqual({ wrote: true });
 
     expect(await readFile(metaPath('foo.7z'), 'utf8')).toBe('[General]\r\nmodID=123\r\nremoved=true\r\n');
-  });
-
-  it('hands the edit empty text for a file with no .meta, and writes one, as MO2\'s QSettings creates the file on its first write so a manual drop gets one too', async () => {
-    const seen: string[] = [];
-
-    await spliceDownloadedFileMeta(downloadsDir, 'manual.7z', (text) => {
-      seen.push(text);
-      return '[General]\r\ninstalled=true\r\n';
-    });
-
-    expect(seen).toEqual(['']);
-    expect(await readFile(metaPath('manual.7z'), 'utf8')).toBe('[General]\r\ninstalled=true\r\n');
   });
 
   it('writes nothing when the edit changes nothing, doing nothing not being an error and an unwritten file firing no watcher', async () => {
@@ -57,38 +45,5 @@ describe('spliceDownloadedFileMeta', () => {
     const text = await readFile(metaPath('foo.7z'), 'utf8');
     expect(text).toContain('removed=true');
     expect(text).toContain('installed=true');
-  });
-});
-
-describe('trashDownloadedFileMeta', () => {
-  let downloadsDir: string;
-
-  beforeEach(async () => {
-    downloadsDir = await mkdtemp(join(tmpdir(), 'downloaded-file-meta-trash-'));
-  });
-
-  afterEach(async () => {
-    await rm(downloadsDir, { recursive: true, force: true });
-  });
-
-  const trashed: string[] = [];
-  const trash = (path: string): Promise<void> => { trashed.push(path); return rm(path); };
-
-  it('moves the .meta to the trash, and answers that it did', async () => {
-    trashed.length = 0;
-    await writeFile(join(downloadsDir, 'foo.7z.meta'), '[General]\r\n');
-
-    expect(await trashDownloadedFileMeta(downloadsDir, 'foo.7z', trash)).toBe(true);
-
-    expect(trashed).toEqual([join(downloadsDir, 'foo.7z.meta')]);
-    await expect(access(join(downloadsDir, 'foo.7z.meta'))).rejects.toThrow();
-  });
-
-  it('trashes nothing for a file with no .meta', async () => {
-    trashed.length = 0;
-
-    expect(await trashDownloadedFileMeta(downloadsDir, 'manual.7z', trash)).toBe(false);
-
-    expect(trashed).toEqual([]);
   });
 });

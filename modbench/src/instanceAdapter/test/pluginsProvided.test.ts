@@ -6,7 +6,7 @@ const file = (relativePath: string, overrides: Partial<OriginFile> = {}): Origin
   ({ relativePath, path: `/x/${relativePath}`, sourcePath: `/x/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath, ...overrides });
 const mod = (name: string, enabled = true): ModlistEntry => ({ kind: 'mod', name, enabled });
 
-describe('filesWinningFirst', () => {
+describe('the origins that provide files, winning first', () => {
   it('lists Overwrite, then each enabled mod in mod order, each with the files nothing excludes', () => {
     const files = new Map([['A', [file('a.esp'), file('hidden.esp', { excluded: true })]], ['B', [file('b.esp')]], ['Off', [file('off.esp')]]]);
     const order: ModlistEntry[] = [mod('A'), { kind: 'separator', name: 'S', enabled: true }, mod('Off', false), mod('B')];
@@ -21,7 +21,7 @@ describe('filesWinningFirst', () => {
   });
 });
 
-describe('pluginsProvidedOf', () => {
+describe('the plugins each origin provides', () => {
   const listedIn = (...names: string[]): DataFolderPlugins => ({ kind: 'listed', names: new Set(names) });
   const pluginsOf = (winningFirst: Parameters<typeof pluginsProvidedOf>[0], data = listedIn()) => {
     const provided = pluginsProvidedOf(winningFirst, data, []);
