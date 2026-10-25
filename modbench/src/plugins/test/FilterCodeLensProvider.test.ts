@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import { FilterCodeLensProvider } from '../FilterCodeLensProvider';
 import { fakeUri } from '../../test/vscodeMock';
@@ -23,11 +23,11 @@ vi.mock('vscode', () => ({
   },
 }));
 
-function makeDocumentDeclaringEveryTextDocumentMember(text: string, fsPath: string, isUntitled = false): vscode.TextDocument {
+function makeDocumentDeclaringEveryTextDocumentMember(text: string, fsPath: string): vscode.TextDocument {
   const uri = fakeUri(fsPath);
   const notImplemented = (): never => { throw new Error('not implemented in this fixture'); };
   return {
-    uri, fileName: fsPath, isUntitled, languageId: 'sql', encoding: 'utf8',
+    uri, fileName: fsPath, isUntitled: false, languageId: 'sql', encoding: 'utf8',
     version: 1, isDirty: false, isClosed: false, eol: 1, lineCount: 1,
     save: () => Promise.resolve(true),
     lineAt: notImplemented,
@@ -46,60 +46,30 @@ function soleLens(lenses: readonly vscode.CodeLens[]): vscode.Command {
   return present(lens.command, "the lens's command");
 }
 
+const APPLY = ['modbench.record.filter', '$(play) Apply as Filter'];
+const CLEAR = ['modbench.record.clearFilter', '$(check) Active — click to clear'];
+
 describe('FilterCodeLensProvider', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('offers to apply an untitled SQL document as the filter, naming the document', () => {
-    const doc = makeDocumentDeclaringEveryTextDocumentMember(ARMOR_SQL, 'Untitled-1', true);
+  it('offers to apply a SQL document as the filter, naming the document', () => {
+    const doc = makeDocumentDeclaringEveryTextDocumentMember(ARMOR_SQL, 'Untitled-1');
 
     const lens = soleLens(new FilterCodeLensProvider().provideCodeLenses(doc));
 
-    expect(lens.command).toBe('modbench.record.filter');
-    expect(lens.title).toBe('$(play) Apply as Filter');
+    expect([lens.command, lens.title]).toEqual(APPLY);
     expect(lens.arguments).toEqual([doc.uri]);
   });
 
-  it('offers to apply a SQL document outside the scripts folder', () => {
-    const doc = makeDocumentDeclaringEveryTextDocumentMember(ARMOR_SQL, '/elsewhere/queries/armor.sql');
-
-    const lens = soleLens(new FilterCodeLensProvider().provideCodeLenses(doc));
-
-    expect(lens.command).toBe('modbench.record.filter');
-    expect(lens.arguments).toEqual([doc.uri]);
-  });
-
-  it('reads that the filter is active, and clears it, on the document whose SQL is in force', () => {
+  it.each<[string, (provider: FilterCodeLensProvider) => void, string, string[]]>([
+    ['clears the filter on the document whose SQL is in force', (provider) => { provider.setActiveSql(ARMOR_SQL); }, ARMOR_SQL, CLEAR],
+    ['offers to apply a document whose SQL differs from the filter in force', (provider) => { provider.setActiveSql('SELECT form_key FROM "weap"'); }, ARMOR_SQL, APPLY],
+    ['ignores leading and trailing whitespace when comparing SQL', (provider) => { provider.setActiveSql(`  ${ARMOR_SQL}  `); }, `\n${ARMOR_SQL}\n`, CLEAR],
+    ['offers to apply again once no filter is in force', (provider) => { provider.setActiveSql(ARMOR_SQL); provider.setActiveSql(null); }, ARMOR_SQL, APPLY],
+  ])('%s', (_case, inForce, text, expected) => {
     const provider = new FilterCodeLensProvider();
-    provider.setActiveSql(ARMOR_SQL);
+    inForce(provider);
 
-    const lens = soleLens(provider.provideCodeLenses(makeDocumentDeclaringEveryTextDocumentMember(ARMOR_SQL, 'Untitled-1', true)));
+    const lens = soleLens(provider.provideCodeLenses(makeDocumentDeclaringEveryTextDocumentMember(text, '/scripts/armor.sql')));
 
-    expect(lens.command).toBe('modbench.record.clearFilter');
-    expect(lens.title).toBe('$(check) Active — click to clear');
-  });
-
-  it('offers to apply a document whose SQL differs from the filter in force', () => {
-    const provider = new FilterCodeLensProvider();
-    provider.setActiveSql('SELECT form_key FROM "weap"');
-
-    expect(soleLens(provider.provideCodeLenses(makeDocumentDeclaringEveryTextDocumentMember(ARMOR_SQL, '/scripts/armor.sql'))).command)
-      .toBe('modbench.record.filter');
-  });
-
-  it('ignores leading and trailing whitespace when comparing SQL', () => {
-    const provider = new FilterCodeLensProvider();
-    provider.setActiveSql(`  ${ARMOR_SQL}  `);
-
-    expect(soleLens(provider.provideCodeLenses(makeDocumentDeclaringEveryTextDocumentMember(`\n${ARMOR_SQL}\n`, '/scripts/armor.sql'))).command)
-      .toBe('modbench.record.clearFilter');
-  });
-
-  it('offers to apply again once no filter is in force', () => {
-    const provider = new FilterCodeLensProvider();
-    provider.setActiveSql(ARMOR_SQL);
-    provider.setActiveSql(null);
-
-    expect(soleLens(provider.provideCodeLenses(makeDocumentDeclaringEveryTextDocumentMember(ARMOR_SQL, '/scripts/armor.sql'))).command)
-      .toBe('modbench.record.filter');
+    expect([lens.command, lens.title]).toEqual(expected);
   });
 });

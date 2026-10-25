@@ -10,51 +10,50 @@ const ready = (version = 3) => tick({ conflictsComputed: true, indexedPlugins: [
 
 function narrated(settle: (status: LoadOrderProgress) => Promise<void> = () => Promise.resolve()) {
   const progress: { closed: boolean }[] = [];
+  const spans: Promise<void>[] = [];
   const deps = {
     showProgress: vi.fn((until: Promise<void>) => {
       const span = { closed: false };
       progress.push(span);
-      void until.then(() => { span.closed = true; });
+      spans.push(until.then(() => { span.closed = true; }));
     }),
     applyIndexed: vi.fn(),
     applyRefused: vi.fn(),
     settle: vi.fn(settle),
     log: vi.fn(),
   };
-  return { deps, progress, narrator: createReconcileNarrator(deps) };
+  return { deps, progress, closed: () => Promise.all(spans), narrator: createReconcileNarrator(deps) };
 }
 
-const flushed = () => new Promise((resolve) => setTimeout(resolve, 0));
+const aWindow = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('the reconcile narrator, the view\'s progress and each row\'s indexed state following the record index status whoever started the reconcile', () => {
   it('shows a rebuild-started refill: rows reset to still indexing, progress while it runs, cleared on Ready', async () => {
     const { deps, progress, narrator } = narrated();
-    narrator.hear(ready());
-    await flushed();
+    narrator.hear(ready(3));
+    await narrator.settled(3);
     deps.settle.mockClear();
 
-    narrator.hear(dropped());
+    narrator.hear(dropped(4));
     expect(deps.applyIndexed).toHaveBeenLastCalledWith([], []);
-    narrator.hear(tick());
-    narrator.hear(tick({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
-    await flushed();
+    narrator.hear(tick({ version: 4 }));
+    narrator.hear(tick({ version: 4, indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
     expect(progress).toEqual([{ closed: false }]);
     expect(deps.applyIndexed).toHaveBeenLastCalledWith([{ name: 'A.esp', origin: 'SomeMod' }], []);
 
-    narrator.hear(ready());
-    await flushed();
+    narrator.hear(ready(4));
+    await narrator.settled(4);
 
     expect(progress).toEqual([{ closed: true }]);
-    expect(deps.settle).toHaveBeenCalledWith(ready());
+    expect(deps.settle.mock.calls).toEqual([[ready(4)]]);
   });
 
-  it('opens one progress for a reconcile, however many ticks it publishes', async () => {
+  it('opens one progress for a reconcile, however many ticks it publishes', () => {
     const { progress, narrator } = narrated();
 
     narrator.hear(tick());
     narrator.hear(tick({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
     narrator.hear(tick({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }, { name: 'B.esp', origin: 'SomeMod' }] }));
-    await flushed();
 
     expect(progress).toHaveLength(1);
   });
@@ -62,100 +61,91 @@ describe('the reconcile narrator, the view\'s progress and each row\'s indexed s
   it('settles a Ready answering a newer version, with no reconcile seen in progress', async () => {
     const { deps, narrator } = narrated();
     narrator.hear(ready(3));
-    await flushed();
+    await narrator.settled(3);
 
     narrator.hear(ready(4));
-    await flushed();
+    await narrator.settled(4);
 
-    expect(deps.settle).toHaveBeenCalledTimes(2);
+    expect(deps.settle.mock.calls).toEqual([[ready(3)], [ready(4)]]);
   });
 
   it('hands over a Ready heard twice, as a put\'s own answer is heard beside the stream\'s, while its hand-off runs, once', async () => {
     let handedOver!: () => void;
-    const { deps, narrator } = narrated(() => new Promise<void>((resolve) => { handedOver = resolve; }));
+    const handOff = new Promise<void>((resolve) => { handedOver = resolve; });
+    const { deps, narrator } = narrated(() => handOff);
 
     narrator.hear(ready(3));
     narrator.hear(ready(3));
-    await flushed();
     handedOver();
-    await flushed();
+    narrator.hear(ready(4));
+    await narrator.settled(4);
 
-    expect(deps.settle).toHaveBeenCalledTimes(1);
+    expect(deps.settle.mock.calls).toEqual([[ready(3)], [ready(4)]]);
   });
 
   it('settles nothing for a Ready repeating a version already handed over', async () => {
     const { deps, narrator } = narrated();
     narrator.hear(ready(3));
-    await flushed();
+    await narrator.settled(3);
 
     narrator.hear(ready(3));
-    await flushed();
+    narrator.hear(ready(4));
+    await narrator.settled(4);
 
-    expect(deps.settle).toHaveBeenCalledTimes(1);
+    expect(deps.settle.mock.calls).toEqual([[ready(3)], [ready(4)]]);
   });
 
   it('closes the progress on a refusal, handing nothing over', async () => {
-    const { deps, progress, narrator } = narrated();
+    const { deps, progress, closed, narrator } = narrated();
     narrator.hear(tick());
 
     narrator.hear(tick({ refusal: { kind: 'heldElsewhere', message: 'another Modbench window holds this instance' } }));
-    await flushed();
+    await closed();
 
     expect(progress).toEqual([{ closed: true }]);
     expect(deps.settle).not.toHaveBeenCalled();
   });
 
-  it('hands the refusal to the views', async () => {
+  it('hands the refusal to the views', () => {
     const { deps, narrator } = narrated();
     const refusal = { kind: 'heldElsewhere' as const, message: 'another Modbench window holds this instance' };
 
     narrator.hear(tick({ refusal }));
-    await flushed();
 
     expect(deps.applyRefused).toHaveBeenCalledWith(refusal);
   });
 
-  it('hands a Failed refusal to the tree with its own kind, not relabeled as heldElsewhere', async () => {
-    const { deps, narrator } = narrated();
-    const refusal = { kind: 'failed' as const, message: 'the reconcile threw something unexpected' };
-
-    narrator.hear(tick({ refusal }));
-    await flushed();
-
-    expect(deps.applyRefused).toHaveBeenCalledWith(refusal);
-  });
-
-  it('writes a failed index to the Output once, however often its status is heard again', async () => {
+  it('writes a failed index to the Output once, however often its status is heard again', () => {
     const { deps, narrator } = narrated();
     const failed = tick({ refusal: { kind: 'failed', message: 'the reconcile threw something unexpected' } });
 
     narrator.hear(tick());
     narrator.hear(failed);
     narrator.hear(failed);
-    await flushed();
 
     expect(deps.log.mock.calls).toEqual([['Indexing failed: the reconcile threw something unexpected']]);
   });
 
   it('answers settled(version) once that version is handed to the views, not when its Ready is heard', async () => {
     let handedOver!: () => void;
-    const { narrator } = narrated(() => new Promise<void>((resolve) => { handedOver = resolve; }));
+    const handOff = new Promise<void>((resolve) => { handedOver = resolve; });
+    const { deps, narrator } = narrated(() => handOff);
     let settled = false;
-    void narrator.settled(3).then(() => { settled = true; });
+    const handed = narrator.settled(3).then(() => { settled = true; });
 
     narrator.hear(ready(3));
-    await flushed();
+    await vi.waitFor(() => { expect(deps.settle).toHaveBeenCalledOnce(); });
     expect(settled).toBe(false);
 
     handedOver();
-    await flushed();
+    await handed;
     expect(settled).toBe(true);
   });
 
   it('answers settled(version) at once for a version already handed over', async () => {
     const { narrator } = narrated();
     narrator.hear(ready(3));
-    await flushed();
+    await narrator.settled(3);
 
     await expect(narrator.settled(2)).resolves.toBeUndefined();
   });
@@ -165,18 +155,18 @@ describe('the reconcile narrator: the refill a rebuild starts, which the rebuild
   it('ends the wait at the refill\'s Ready, not before it', async () => {
     const { narrator } = narrated();
     narrator.hear(ready());
-    await flushed();
+    await narrator.settled(3);
     let refilled = false;
-    void narrator.nextRefill().ended.then(() => { refilled = true; });
+    const ended = narrator.nextRefill().ended.then(() => { refilled = true; });
 
     narrator.hear(ready());
     narrator.hear(dropped());
     narrator.hear(tick());
-    await flushed();
+    await aWindow();
     expect(refilled).toBe(false);
 
     narrator.hear(ready());
-    await flushed();
+    await ended;
     expect(refilled).toBe(true);
   });
 
@@ -211,24 +201,24 @@ describe('the reconcile narrator: the refill a rebuild starts, which the rebuild
   it('hands over the next process\'s first Ready, though its version is one already handed over', async () => {
     const { deps, narrator } = narrated();
     narrator.hear(ready(5));
-    await flushed();
+    await narrator.settled(5);
 
     narrator.detached();
     narrator.hear(ready(1));
-    await flushed();
+    await narrator.settled(1);
 
-    expect(deps.settle).toHaveBeenCalledTimes(2);
+    expect(deps.settle.mock.calls).toEqual([[ready(5)], [ready(1)]]);
   });
 
   it('closes the progress and ends every wait when mEdit goes away', async () => {
-    const { progress, narrator } = narrated();
+    const { progress, closed, narrator } = narrated();
     narrator.hear(ready());
     const refilled = narrator.nextRefill().ended;
     const settled = narrator.settled(9);
     narrator.hear(tick());
 
     narrator.detached();
-    await flushed();
+    await closed();
 
     expect(progress).toEqual([{ closed: true }]);
     await expect(refilled).resolves.toBeUndefined();

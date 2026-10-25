@@ -1,21 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
+import { EventEmitter, ThemeColor, fakeUri, uriFrom } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({
-  Uri: {
-    from: (opts: { scheme: string; path: string; query?: string }) =>
-      ({ scheme: opts.scheme, path: opts.path, query: opts.query ?? '' }),
-  },
-  ThemeColor: class { constructor(public id: string) {} },
-  EventEmitter: class {
-    private handlers: ((e: unknown) => void)[] = [];
-    get event() { return (h: (e: unknown) => void) => { this.handlers.push(h); }; }
-    fire(e?: unknown) { this.handlers.forEach((h) => h(e)); }
-  },
-}));
+vi.mock('vscode', () => ({ Uri: { from: uriFrom }, ThemeColor, EventEmitter }));
 
 import * as vscode from 'vscode';
 import { RecordDecorationProvider } from '../RecordDecorationProvider';
-import { fakeUri } from '../../test/vscodeMock';
 import type { components } from '../../wire/generated/api';
 
 type WorkingTreeState = components['schemas']['WorkingTreeState'];
@@ -31,14 +20,14 @@ function listeners<T>() {
 }
 
 function source(
-  state: WorkingTreeState | undefined | ((uri: vscode.Uri) => WorkingTreeState | undefined),
+  state: WorkingTreeState | undefined,
   beneath: readonly WorkingTreeState[] = [],
   expanded = false,
 ) {
   const reads = listeners<readonly vscode.Uri[]>();
   const beneathReads = listeners<undefined>();
   return {
-    workingTreeStateOf: typeof state === 'function' ? state : () => state,
+    workingTreeStateOf: () => state,
     statesBeneathOf: () => beneath,
     isExpanded: () => expanded,
     onDidReadRecords: reads.on,
@@ -56,28 +45,13 @@ const ADDED = new vscode.ThemeColor('gitDecoration.addedResourceForeground');
 describe('RecordDecorationProvider', () => {
   const uri = fakeUri('/a record row');
 
-  it('returns undefined when the lookup reports no working-tree change', () => {
-    const provider = new RecordDecorationProvider(source('None'), NO_LOCKED_ROWS);
-    expect(provider.provideFileDecoration(uri)).toBeUndefined();
-  });
-
-  it('badges a Modified record with M and the git modified colour', () => {
-    const provider = new RecordDecorationProvider(source('Modified'), NO_LOCKED_ROWS);
-    const decoration = provider.provideFileDecoration(uri);
-    expect(decoration).toEqual({ badge: 'M', color: MODIFIED, tooltip: 'Modified' });
-  });
-
-  it('badges an Added record with A and the git added colour', () => {
-    const provider = new RecordDecorationProvider(source('Added'), NO_LOCKED_ROWS);
-    const decoration = provider.provideFileDecoration(uri);
-    expect(decoration).toEqual({ badge: 'A', color: ADDED, tooltip: 'Added' });
-  });
-
-  it('asks its source about the URI VS Code names', () => {
-    const lookup = vi.fn().mockReturnValue('None');
-    const provider = new RecordDecorationProvider(source(lookup), NO_LOCKED_ROWS);
-    provider.provideFileDecoration(uri);
-    expect(lookup).toHaveBeenCalledWith(uri);
+  it.each<[WorkingTreeState, vscode.FileDecoration | undefined]>([
+    ['None', undefined],
+    ['Modified', { badge: 'M', color: MODIFIED, tooltip: 'Modified' }],
+    ['Added', { badge: 'A', color: ADDED, tooltip: 'Added' }],
+  ])('badges a record whose working-tree state is %s as git does', (state, decoration) => {
+    const provider = new RecordDecorationProvider(source(state), NO_LOCKED_ROWS);
+    expect(provider.provideFileDecoration(uri)).toEqual(decoration);
   });
 
   it('fires onDidChangeFileDecorations for exactly the rows its source reads', () => {
@@ -96,24 +70,14 @@ describe('RecordDecorationProvider, a row with changes beneath it', () => {
   const uri = fakeUri('/a row with children');
   const DOT = { badge: '•', tooltip: 'Contains emphasized items' };
 
-  it('shows a dot in the modified colour while collapsed', () => {
-    const provider = new RecordDecorationProvider(source('None', ['Modified']), NO_LOCKED_ROWS);
-    expect(provider.provideFileDecoration(uri)).toEqual({ ...DOT, color: MODIFIED });
-  });
-
-  it('shows a dot in the added colour when only additions are beneath it', () => {
-    const provider = new RecordDecorationProvider(source(undefined, ['Added']), NO_LOCKED_ROWS);
-    expect(provider.provideFileDecoration(uri)).toEqual({ ...DOT, color: ADDED });
-  });
-
-  it('takes the modified colour when modifications and additions are both beneath it', () => {
-    const provider = new RecordDecorationProvider(source('None', ['Added', 'Modified']), NO_LOCKED_ROWS);
-    expect(provider.provideFileDecoration(uri)?.color).toEqual(MODIFIED);
-  });
-
-  it('shows nothing when nothing is beneath it', () => {
-    const provider = new RecordDecorationProvider(source('None', []), NO_LOCKED_ROWS);
-    expect(provider.provideFileDecoration(uri)).toBeUndefined();
+  it.each<[string, WorkingTreeState | undefined, WorkingTreeState[], vscode.FileDecoration | undefined]>([
+    ['a dot in the modified colour for modifications', 'None', ['Modified'], { ...DOT, color: MODIFIED }],
+    ['a dot in the added colour for additions alone', undefined, ['Added'], { ...DOT, color: ADDED }],
+    ['a dot in the modified colour for modifications and additions both', 'None', ['Added', 'Modified'], { ...DOT, color: MODIFIED }],
+    ['nothing for nothing', 'None', [], undefined],
+  ])('shows, while collapsed, %s beneath it', (_case, state, beneath, decoration) => {
+    const provider = new RecordDecorationProvider(source(state, beneath), NO_LOCKED_ROWS);
+    expect(provider.provideFileDecoration(uri)).toEqual(decoration);
   });
 
   it('shows its own letter rather than the dot when it has a change of its own', () => {

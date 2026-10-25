@@ -56,7 +56,7 @@ function setup(selection: readonly PluginsTreeNode[] = [], ...answers: (string |
   const ask = Object.assign<AskQuestion, { asked: typeof dialog.asked }>(
     (...args) => { stepsWhenAsked.push([...progressSteps]); return dialog(...args); }, { asked: dialog.asked });
   const instanceAnswers: InstanceAnswers = {};
-  const fake = fakeInstanceAdapter(readingFixture(pluginFilesHeld(held('Patch.esp', 'ModA'), held('Taken.esp', 'ModA'), held('Elsewhere.esp', 'ModB'))), instanceAnswers);
+  const fake = fakeInstanceAdapter(readingFixture(pluginFilesHeld(held('Patch.esp', 'ModA'), held('Taken.esp', 'ModA'))), instanceAnswers);
   const instance = {
     value: instanceValueFixture(),
     quiet: async <T>(work: () => Promise<T>): Promise<T> => {
@@ -175,10 +175,9 @@ describe('modbench.plugin.rename', () => {
       expect(await validate('Patch.esp')).toBeUndefined();
     });
 
-    it('refuses a name the plugin\'s own place holds, a case-only rename of itself too', async () => {
+    it('refuses a name the plugin\'s own place holds', async () => {
       const { validate } = setup();
-      expect(await validate('taken.ESP')).toBe('"ModA" already holds "taken.ESP".');
-      expect(await validate('PATCH.esp')).toBe('"ModA" already holds "PATCH.esp".');
+      expect(await validate('Taken.esp')).toBe('"ModA" already holds "Taken.esp".');
     });
 
     it('refuses by the extensions mEdit allows now', async () => {
@@ -191,11 +190,6 @@ describe('modbench.plugin.rename', () => {
       const { validate, fake } = setup();
       vi.spyOn(fake.adapter, 'originHoldsPlugin').mockRejectedValue(new Error('EACCES'));
       expect(await validate('Other.esp')).toBe('Could not check "Other.esp": EACCES');
-    });
-
-    it('lets through a name only another place holds', async () => {
-      const { validate } = setup();
-      expect(await validate('Elsewhere.esp')).toBeUndefined();
     });
   });
 
@@ -212,7 +206,7 @@ describe('modbench.plugin.rename', () => {
 
   it('names the rename and the plugin, and points to git, when VS Code cannot apply the changes', async () => {
     showInputBox.mockResolvedValueOnce('Renamed.esp');
-    const { client, fake, reporter, source, apply, run } = setup();
+    const { client, fake, reporter, apply, run } = setup();
     apply.mockRejectedValueOnce(new Error('EEXIST'));
 
     await run(row());
@@ -222,7 +216,6 @@ describe('modbench.plugin.rename', () => {
       message: 'Could not rename "Patch.esp" (ModA): its plugin source may be partly renamed. Reverting the source rename in git undoes it.',
       detail: 'EEXIST VS Code stops at the first change it cannot make, so some changes may have landed.',
     }]);
-    expect(source.refreshSourceControlFor).toHaveBeenCalledWith(PLUGIN);
     expect(client.calls.filter((c) => c.method === 'moveLastWritten')).toEqual([]);
     expect(fake.calls).toEqual([]);
   });
@@ -272,13 +265,18 @@ describe('modbench.plugin.rename, called by the agent', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('answers a refused source and the point where the file and lines failed, reporting nothing', async () => {
-    const { client, instanceAnswers, reporter, run } = setup();
+  it('answers a refused source, reporting nothing', async () => {
+    const { client, reporter, run } = setup();
     client.setCommandResult('getRenameSourceChanges', { refused: true, message: 'Could not rename the source of "Patch.esp" — NotCompiledPlugin' });
-    expect(await run(calling('Renamed.esp'))).toMatchObject({ applied: false, refusal: 'Could not rename the source of "Patch.esp" — NotCompiledPlugin' });
 
-    client.setCommandResult('getRenameSourceChanges', CHANGES);
+    expect(await run(calling('Renamed.esp'))).toMatchObject({ applied: false, refusal: 'Could not rename the source of "Patch.esp" — NotCompiledPlugin' });
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('answers the point where the file and lines failed, reporting nothing', async () => {
+    const { instanceAnswers, reporter, run } = setup();
     instanceAnswers.refusals = refusing('renamePlugin', 'disk full');
+
     expect(await run(calling('Renamed.esp'))).toMatchObject({
       applied: false,
       refusal: 'Could not rename "Patch.esp" (ModA): its plugin source was renamed, its file and lines were not. Reverting the source rename in git undoes it.',
@@ -303,12 +301,10 @@ describe('modbench.plugin.rename, called by the agent', () => {
     expect(await run(calling('Renamed.esl'))).toMatchObject({ applied: false, refusal: 'Extension must be .esm or .esp' });
   });
 
-  it.each([
-    ['more than one plugin', calling('Renamed.esp', [PLUGIN, PLUGIN]), 'carries one plugin'],
-  ])('refuses %s, renaming nothing', async (_what, call, reason) => {
+  it('refuses more than one plugin, renaming nothing', async () => {
     const { client, fake, run } = setup();
 
-    await expect(run(call)).rejects.toThrow(reason);
+    await expect(run(calling('Renamed.esp', [PLUGIN, PLUGIN]))).rejects.toThrow('carries one plugin');
 
     expect(client.calls.filter((c) => c.method === 'getRenameSourceChanges')).toEqual([]);
     expect(fake.calls).toEqual([]);

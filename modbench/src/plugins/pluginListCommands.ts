@@ -20,13 +20,8 @@ import { Refusal } from '../drivingLib/refusal';
 import { creatablePluginExtensionsOf } from './creatablePluginExtensions';
 import { pluginNameRefusal } from '../pluginCommands/pluginName';
 import type { Reporter } from '../ports/reporter';
-import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { errorMessage } from '../ports/errorMessage';
 import { recordLabel } from '../wire/recordLabel';
-
-export function registerPluginSortCommands(pluginsTree: Pick<PluginsTreeProvider, 'setViewDirection'>): vscode.Disposable[] {
-  return registerSortDirectionToggle('plugin', pluginsTree);
-}
 
 // The row's own reveal-in-Explorer gesture — an instance-scoped fact (which plugin
 // wins, where its file lives), so it reads through the tree rather than a disk lookup of its own.

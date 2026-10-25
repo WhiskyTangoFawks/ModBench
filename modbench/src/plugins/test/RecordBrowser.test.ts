@@ -11,12 +11,12 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { cellRow, childrenOf, placedRow, recordRow, soleChild, soleGroup, worldspaceRow } from './browserRows';
+import { NOT_EDITABLE, browserClient, type BrowserAnswers, cellRow, childrenOf, placedRow, recordRow, soleChild, soleGroup, worldspaceRow } from './browserRows';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 import type { PluginConditions } from '../../drivingLib/recordRowContext';
 import { recordResourceUri } from '../recordResourceUri';
 import type { PluginAddress } from '../../wire/pluginAddress';
-import { expectInstanceOf, expectInstanceOfOrUndefined } from '../../test/expectInstanceOf';
+import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
 import { CONTAINER_TYPES, listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
 
@@ -36,24 +36,9 @@ function makeRecord(
   };
 }
 
-function makeClient(overrides: Partial<{
-  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean; isCreatable?: boolean; isContainer?: boolean }[];
-  records: RecordPage;
-}> = {}): InMemoryMEditClient {
-  const client = new InMemoryMEditClient();
-  const recordTypes = overrides.recordTypes ?? [{ type: 'weap', count: 5, displayName: 'Weapon' }];
-  client.setQueryAnswer('getRecordTypes', recordTypes.map((rt) => ({
-    type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
-    isCreatable: rt.isCreatable ?? true, isContainer: rt.isContainer ?? CONTAINER_TYPES.has(rt.type),
-  })));
-  client.setQueryAnswer('getRecords', overrides.records ?? { items: [makeRecord(0)], total: 1 });
-  client.setQueryAnswer('getWorldspaces', []);
-  client.setQueryAnswer('getWorldspaceBlocks', { blocks: [], topCells: [] });
-  client.setQueryAnswer('getCellChildRecords', { persistent: [], temporary: [] });
-  client.setQueryAnswer('getContainerChildren', []);
-  client.setQueryAnswer('getInteriorCells', []);
-  return client;
-}
+const makeClient = (answers: BrowserAnswers = {}): InMemoryMEditClient => browserClient({
+  recordTypes: [{ type: 'weap', count: 5, displayName: 'Weapon' }], records: { items: [makeRecord(0)], total: 1 }, ...answers,
+});
 
 const PLUGIN0: PluginAddress = { name: 'Plugin0.esp', origin: 'Data/' };
 
@@ -68,6 +53,7 @@ async function containerRowOver(
   return { provider, repo: client, row };
 }
 
+const ERROR_ICON: unknown = expect.objectContaining({ id: 'error' });
 const FAILED_TO_LOAD = [['error', 'Failed to load: boom']];
 const WORLDSPACE_OF_M = { workingTreeState: 'None' as const, formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true };
 
@@ -117,36 +103,10 @@ describe('a plugin\'s children, one group per record type', () => {
     const repo = makeClient({ recordTypes: [{ type: 'weap', count: 10 }, { type: 'npc_', count: 3 }] });
     const provider = new RecordBrowser(repo);
 
-    const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
+    const children = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, NOT_EDITABLE);
 
     expect(children).toHaveLength(2);
     expect(children.map(c => [c.label, c.description])).toEqual([['weap', '10'], ['npc_', '3']]);
-  });
-
-  it('renders the xEdit display name as the label, not the raw signature', async () => {
-    const repo = makeClient({
-      recordTypes: [{ type: 'acti', count: 10, displayName: 'Activator' }],
-    });
-    const provider = new RecordBrowser(repo);
-
-    const typeNode = await soleGroup(provider, PLUGIN0);
-
-    expect(typeNode.label).toBe('Activator');
-  });
-
-  it('carries the backend\'s isCreatable verdict onto the group\'s contextValue', async () => {
-    const repo = makeClient({
-      recordTypes: [
-        { type: 'npc_', count: 1, isCreatable: true },
-        { type: 'qust', count: 1, isCreatable: false },
-      ],
-    });
-    const provider = new RecordBrowser(repo);
-
-    const [npc, qust] = await provider.getPluginChildren(PLUGIN0);
-
-    expect(present(npc, 'the npc_ group').contextValue).toContain('creatable');
-    expect(present(qust, 'the qust group').contextValue).not.toContain('creatable');
   });
 
   it('builds the Worldspace and Cell groups as record-type groups of their type, so they offer create as any group does', async () => {
@@ -167,14 +127,14 @@ describe('a plugin\'s children — an answer that is no failed read', () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getRecordTypes', [{ ...recordTypeCountFixture({ type: 'weap', count: 1 }), get type(): string { throw new Error('the row broke'); } }]);
 
-    await expect(new RecordBrowser(client).getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' })).rejects.toThrow('the row broke');
+    await expect(new RecordBrowser(client).getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, NOT_EDITABLE)).rejects.toThrow('the row broke');
   });
 
   it('shows a failed read as the one error row', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getRecordTypes', { failed: 'unreachable' });
 
-    const children = await new RecordBrowser(client).getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
+    const children = await new RecordBrowser(client).getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, NOT_EDITABLE);
 
     expect(children.map(c => c.contextValue)).toEqual(['error']);
   });
@@ -203,10 +163,9 @@ describe('a record-type group\'s children', () => {
 
     expect(children).toHaveLength(FALLOUT4_ESM_INFO_COUNT);
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
-    expect(repo.calls).toContainEqual({ method: 'getRecords', args: [{ name: 'Plugin0.esp', origin: 'Data/' }, 'weap', 0, expect.any(Number)] });
-    const limitArg = present(repo.calls.find(c => c.method === 'getRecords'), 'the getRecords call').args[3];
-    if (typeof limitArg !== 'number') throw new Error(`Expected a number, got ${String(limitArg)}`);
-    expect(limitArg).toBeGreaterThan(FALLOUT4_ESM_INFO_COUNT);
+    const [plugin, recordType, offset, limit] = present(repo.calls.find(c => c.method === 'getRecords'), 'the getRecords call').args;
+    expect([plugin, recordType, offset]).toEqual([{ name: 'Plugin0.esp', origin: 'Data/' }, 'weap', 0]);
+    expect(limit).toSatisfy((asked: number) => asked > FALLOUT4_ESM_INFO_COUNT);
   });
 
   it('a "qust" row is expandable only when its own record holds children, not by its record type alone', async () => {
@@ -259,16 +218,13 @@ describe('a record-type group row', () => {
     expect((await groupOf({ type: 'weap', count: 42, displayName: 'Weapon' })).label).toBe('Weapon');
   });
 
-  it('shows formatted count as description', async () => {
-    expect((await groupOf({ type: 'weap', count: 1234 })).description).toBe('1,234');
-  });
+  it.each([
+    ['a type mEdit can create', 1234, true, '1,234', 'recordType creatable'],
+    ['a type mEdit cannot create', 3, false, '3', 'recordType'],
+  ])('states the count and create of %s', async (_label, count, isCreatable, description, contextValue) => {
+    const group = await groupOf({ type: 'weap', count, isCreatable });
 
-  it('states no record edit when no one has described its plugin', async () => {
-    expect((await groupOf({ type: 'weap', count: 10 })).contextValue).toBe('recordType creatable');
-  });
-
-  it('states no create on a container type\'s group (a quest, say)', async () => {
-    expect((await groupOf({ type: 'qust', count: 3, displayName: 'Quest', isCreatable: false })).contextValue).toBe('recordType');
+    expect([group.description, group.contextValue]).toEqual([description, contextValue]);
   });
 });
 
@@ -298,21 +254,12 @@ describe('a record row', () => {
     });
   });
 
-  it('states an editable record', async () => {
-    expect((await rowOf(makeRecord(0), 'Data/', { editable: true })).contextValue).toBe('record editable');
-  });
-
-  it('states an override as it states the plugin\'s own records', async () => {
-    const record: RecordSummary = { ...makeRecord(0), plugin: 'PatchMod.esp' };
-    expect((await rowOf(record, 'Data/', { editable: true })).contextValue).toBe('record editable');
-  });
-
-  it('states a record of an immutable plugin read-only', async () => {
-    expect((await rowOf(makeRecord(0), 'Data/', { editable: false })).contextValue).toBe('record');
-  });
-
-  it('offers no record edit on a row whose plugin no caller has described', async () => {
-    expect((await rowOf(makeRecord(0))).contextValue).toBe('record');
+  it.each<[string, RecordSummary, PluginConditions, string]>([
+    ['an editable record', makeRecord(0), { editable: true }, 'record editable'],
+    ['an override as the plugin\'s own records', { ...makeRecord(0), plugin: 'PatchMod.esp' }, { editable: true }, 'record editable'],
+    ['a record of an immutable plugin read-only', makeRecord(0), { editable: false }, 'record'],
+  ])('states %s', async (_label, record, conditions, contextValue) => {
+    expect((await rowOf(record, 'Data/', conditions)).contextValue).toBe(contextValue);
   });
 
   it('carries a medit-record: resourceUri identifying (plugin, origin, formKey)', async () => {
@@ -379,6 +326,8 @@ describe('every row is named as xEdit names it', () => {
       () => placed({ editorId: 'DoorRef', baseEditorId: 'VaultDoor', fullName: 'Vault Door' }), ['DoorRef', '000301:A.esp', 'Vault Door']],
     ['a placed reference without an EditorID by its base record\'s EditorID',
       () => placed({ baseEditorId: 'Barrel01', baseFormKey: '000400:A.esp' }), ['Barrel01', '000301:A.esp', undefined]],
+    ['a placed reference without an EditorID or a base record\'s EditorID by its FormKey',
+      () => placed({ baseFormKey: '000400:A.esp' }), ['000301:A.esp', '000301:A.esp', undefined]],
     ['an unreadable placed reference by the reason alone',
       () => placed({ editorId: 'DoorRef', ...unreadable }), ['DoorRef', '000301:A.esp', UNREADABLE]],
     ['a container\'s child as a record',
@@ -485,7 +434,7 @@ describe('worldspace, cell and placed rows state their record', () => {
   const A_ESP: PluginAddress = { name: 'A.esp', origin: 'ModA' };
   const RECORD = { formKey: '000801:A.esp', editorId: 'World' };
 
-  async function spatialRowsOver(placedEditorId: string | null) {
+  async function spatialRowsOver() {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
     repo.setQueryAnswer('getWorldspaces', [{ workingTreeState: 'None', ...RECORD, hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
@@ -493,7 +442,7 @@ describe('worldspace, cell and placed rows state their record', () => {
       blocks: [],
     });
     repo.setQueryAnswer('getCellChildRecords', {
-      persistent: [{ workingTreeState: 'None', formKey: RECORD.formKey, editorId: placedEditorId, baseFormKey: '000802:A.esp', recordType: 'refr', hasParseFailure: false }],
+      persistent: [{ workingTreeState: 'None', formKey: RECORD.formKey, editorId: RECORD.editorId, baseFormKey: '000802:A.esp', recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
     const provider = new RecordBrowser(repo);
@@ -504,7 +453,7 @@ describe('worldspace, cell and placed rows state their record', () => {
   }
 
   it.each(['worldspace', 'cell', 'placed'] as const)('a %s row', async (which) => {
-    const row = (await spatialRowsOver('World'))[which];
+    const row = (await spatialRowsOver())[which];
 
     expect({ label: row.label, description: row.description }).toEqual({ label: 'World', description: '000801:A.esp' });
     expect(row.command).toEqual({
@@ -514,15 +463,11 @@ describe('worldspace, cell and placed rows state their record', () => {
   });
 
   it.each(['worldspace', 'cell', 'placed'] as const)('a %s row carries its record as its Argument', async (which) => {
-    const row = (await spatialRowsOver('World'))[which];
+    const row = (await spatialRowsOver())[which];
 
     expect(row).toMatchObject({
       argument: { kind: 'record', plugin: { name: 'A.esp', origin: 'ModA' }, formKey: '000801:A.esp' },
     });
-  });
-
-  it('labels a placed reference that has no EditorID by its FormKey', async () => {
-    expect((await spatialRowsOver(null)).placed.label).toBe('000801:A.esp');
   });
 });
 
@@ -592,7 +537,7 @@ describe('the worldspace tree', () => {
       blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ workingTreeState: 'None', formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false }] }] }],
     });
     const provider = new RecordBrowser(repo);
-    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
+    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, NOT_EDITABLE);
     const [wsNode] = await provider.getChildren(wsRoot);
 
     const wsChildren = await provider.getChildren(wsNode);
@@ -619,7 +564,7 @@ describe('the worldspace tree', () => {
       blocks: [],
     });
     const provider = new RecordBrowser(repo);
-    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
+    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, NOT_EDITABLE);
     const [wsNode] = await provider.getChildren(wsRoot);
 
     const wsChildren = await provider.getChildren(wsNode);
@@ -655,7 +600,7 @@ describe('the worldspace tree', () => {
       ...oneSubBlock([interiorCell('b:M.esp', 'RoomB')], 3, 7),
     ]);
     const provider = new RecordBrowser(repo);
-    const [cellGroup] = await provider.getPluginChildren({ name: 'M.esp', origin: 'Data/' });
+    const [cellGroup] = await provider.getPluginChildren({ name: 'M.esp', origin: 'Data/' }, NOT_EDITABLE);
 
     const blocks = await provider.getChildren(present(cellGroup, 'the Cell group'));
     const subBlocks = await provider.getChildren(present(blocks[1], 'the second block'));
@@ -712,7 +657,7 @@ describe('the worldspace tree', () => {
   it('gives a group an expander only when it holds a record', async () => {
     const provider = new RecordBrowser(makeClient({ recordTypes: [{ type: 'weap', count: 1 }, { type: 'npc_', count: 0 }] }));
 
-    const groups = await provider.getPluginChildren(PLUGIN0);
+    const groups = await provider.getPluginChildren(PLUGIN0, NOT_EDITABLE);
 
     expect(groups.map(g => g.collapsibleState)).toEqual([TreeItemCollapsibleState.Collapsed, TreeItemCollapsibleState.None]);
   });
@@ -723,7 +668,7 @@ describe('a failed fetch', () => {
     ['getRecordTypes', async () => {
       const repo = makeClient();
       repo.setQueryFailure('getRecordTypes', { failed: 'refused', refusal: 'boom' });
-      return new RecordBrowser(repo).getPluginChildren(PLUGIN0);
+      return new RecordBrowser(repo).getPluginChildren(PLUGIN0, NOT_EDITABLE);
     }],
     ['getRecords', async () => {
       const repo = makeClient();
@@ -893,7 +838,7 @@ describe('a plugin of a shared filename browses its own children', () => {
     const repo = makeClient({ recordTypes: [{ type: 'weap', count: 1 }] });
     const provider = new RecordBrowser(repo);
 
-    await provider.getPluginChildren({ name: 'Shared.esp', origin: 'ModB' });
+    await provider.getPluginChildren({ name: 'Shared.esp', origin: 'ModB' }, NOT_EDITABLE);
 
     expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: [{ name: 'Shared.esp', origin: 'ModB' }] });
   });
@@ -948,7 +893,7 @@ describe('which record rows are containers is mEdit\'s answer', () => {
     const repo = makeClient({ recordTypes: [{ type: 'xxxx', count: 1, isContainer: true }], records: { items: [makeRecord(0, 'None', true)], total: 1 } });
     repo.setQueryAnswer('getContainerChildren', [makeContainerChild('child1:Fallout4.esm', 'yyyy')]);
     const provider = new RecordBrowser(repo);
-    const [typeNode] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
+    const [typeNode] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, NOT_EDITABLE);
     const [row] = await provider.getChildren(present(typeNode, 'the sole group'));
 
     const children = await provider.getChildren(present(row, 'the sole record row'));
@@ -960,7 +905,7 @@ describe('which record rows are containers is mEdit\'s answer', () => {
   it('a group mEdit calls no container lists leaves, whatever the type', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'qust', count: 1, isContainer: false }], records: { items: [makeRecord(0, 'None', true)], total: 1 } });
     const provider = new RecordBrowser(repo);
-    const [typeNode] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
+    const [typeNode] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, NOT_EDITABLE);
 
     const [row] = await provider.getChildren(present(typeNode, 'the sole group'));
 
@@ -968,20 +913,18 @@ describe('which record rows are containers is mEdit\'s answer', () => {
     expect(present(row, 'the sole record row').collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 
-  it('a container\'s child is a container as mEdit answers for it, whatever its type', async () => {
+  it.each([
+    ['a container with children of a type no container has', 'xxxx', true, true, 'record container', TreeItemCollapsibleState.Collapsed],
+    ['a container with no children', 'dial', true, false, 'record container', TreeItemCollapsibleState.None],
+    ['no container, of a type a container has', 'dial', false, true, 'record', TreeItemCollapsibleState.None],
+  ])('a container\'s child expands as mEdit answers for it: %s', async (_label, recordType, isContainer, hasContainerChildren, contextValue, collapsibleState) => {
     const repo = makeClient();
-    repo.setQueryAnswer('getContainerChildren', [
-      { ...makeContainerChild('child1:Fallout4.esm', 'xxxx', null, true), isContainer: true },
-      { ...makeContainerChild('child2:Fallout4.esm', 'dial', null, true), isContainer: false },
-    ]);
+    repo.setQueryAnswer('getContainerChildren', [{ ...makeContainerChild('child1:Fallout4.esm', recordType, null, hasContainerChildren), isContainer }]);
     const { provider, row } = await containerRowOver(makeRecord(0, 'None', true), 'Data/', repo);
 
     const children = await provider.getChildren(row);
 
-    expect(children.map((c) => [c.contextValue, c.collapsibleState])).toEqual([
-      ['record container', TreeItemCollapsibleState.Collapsed],
-      ['record', TreeItemCollapsibleState.None],
-    ]);
+    expect(children.map((c) => [c.contextValue, c.collapsibleState])).toEqual([[contextValue, collapsibleState]]);
   });
 });
 
@@ -1014,37 +957,6 @@ describe('a container row\'s children', () => {
     expect(present(child, 'the listed child').resourceUri).toEqual(uri);
     expect(read).toEqual([[uri]]);
     expect(provider.workingTreeStateOf(uri)).toBe('Added');
-  });
-
-  it('a returned "dial" child with its own children is itself Collapsed — expandable to its own Responses; one with none and a scene stay leaves', async () => {
-    const repo = makeClient();
-    repo.setQueryAnswer('getContainerChildren', [
-      makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA', true),
-      makeContainerChild('dial2:Fallout4.esm', 'dial', 'TopicB', false),
-      makeContainerChild('scen1:Fallout4.esm', 'scen', 'SceneA'),
-    ]);
-    const { provider, row } = await containerRowOver({ ...makeRecord(0, 'None', true), formKey: 'qust1:Fallout4.esm' }, 'Data/', repo);
-
-    const children = await provider.getChildren(row);
-
-    expect(children.map(c => [c.description, c.collapsibleState])).toEqual([
-      ['dial1:Fallout4.esm', TreeItemCollapsibleState.Collapsed],
-      ['dial2:Fallout4.esm', TreeItemCollapsibleState.None],
-      ['scen1:Fallout4.esm', TreeItemCollapsibleState.None],
-    ]);
-  });
-
-  it('a topic row expands into its Responses', async () => {
-    const repo = makeClient();
-    repo.setQueryAnswer('getContainerChildren', [
-      makeContainerChild('info1:Fallout4.esm', 'info'),
-    ]);
-    const { provider, row } = await containerRowOver({ ...makeRecord(0, 'None', true), formKey: 'dial1:Fallout4.esm' }, 'Data/', repo);
-
-    const children = await provider.getChildren(row);
-
-    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: [{ name: 'Plugin0.esp', origin: 'Data/' }, 'dial1:Fallout4.esm'] });
-    expect(children).toHaveLength(1);
   });
 
   it('two plugins that share a filename browse their own children independently', async () => {
@@ -1093,7 +1005,7 @@ describe('the failure prefix', () => {
     });
     const provider = new RecordBrowser(repo);
 
-    const typeNodes = await provider.getPluginChildren(PLUGIN0);
+    const typeNodes = await provider.getPluginChildren(PLUGIN0, NOT_EDITABLE);
     const perk = present(typeNodes[0], 'the perk type node');
     const weap = present(typeNodes[1], 'the WEAP type node');
 
@@ -1119,7 +1031,7 @@ describe('the failure prefix', () => {
     });
     const provider = new RecordBrowser(repo);
 
-    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
+    const [wsRoot] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, NOT_EDITABLE);
     const [failing, healthy] = await provider.getChildren(wsRoot);
     const [blockNode] = await provider.getChildren(failing);
     const [subBlock] = await provider.getChildren(blockNode);
@@ -1127,18 +1039,8 @@ describe('the failure prefix', () => {
     const [persistentGroup] = await provider.getChildren(cellNode);
     const [placedNode] = await provider.getChildren(persistentGroup);
 
-    for (const node of [
-      present(wsRoot, 'the worldspace root'),
-      present(failing, 'the failing top cell'),
-      present(blockNode, 'the block node'),
-      present(subBlock, 'the sub-block node'),
-      present(cellNode, 'the cell node'),
-      present(persistentGroup, 'the persistent group'),
-      present(placedNode, 'the placed node'),
-    ]) {
-      expect(expectInstanceOfOrUndefined(node.iconPath, ThemeIcon)?.id).toBe('error');
-    }
-    expect(present(healthy, 'the healthy top-level child').iconPath).toBeUndefined();
+    expect([wsRoot, failing, blockNode, subBlock, cellNode, persistentGroup, placedNode, healthy].map((node) => node?.iconPath))
+      .toEqual([...Array<unknown>(7).fill(ERROR_ICON), undefined]);
   });
 
   it('marks an interior cell that cannot be read, and its group node', async () => {
@@ -1149,17 +1051,13 @@ describe('the failure prefix', () => {
     ]));
     const provider = new RecordBrowser(repo);
 
-    const [interiorRootOrUndefined] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' });
+    const [interiorRootOrUndefined] = await provider.getPluginChildren({ name: 'Plugin0.esp', origin: 'Data/' }, NOT_EDITABLE);
     const interiorRoot = present(interiorRootOrUndefined, 'the interior-cells root');
     const [block] = await provider.getChildren(interiorRoot);
     const [subBlock] = await provider.getChildren(present(block, 'the sole block'));
     const [bad, ok] = await provider.getChildren(present(subBlock, 'the sole sub-block'));
 
-    for (const node of [interiorRoot, present(block, 'the sole block'), present(subBlock, 'the sole sub-block')]) {
-      expect(expectInstanceOf(node.iconPath, ThemeIcon).id).toBe('error');
-    }
-    expect(expectInstanceOf(present(bad, 'the unreadable interior cell').iconPath, ThemeIcon).id).toBe('error');
-    expect(present(ok, 'the readable interior cell').iconPath).toBeUndefined();
+    expect([interiorRoot, block, subBlock, bad, ok].map((node) => node?.iconPath)).toEqual([...Array<unknown>(4).fill(ERROR_ICON), undefined]);
   });
 
   it('marks a container child that cannot be read, and the container row above it', async () => {

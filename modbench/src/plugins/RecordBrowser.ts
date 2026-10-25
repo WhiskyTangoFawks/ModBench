@@ -51,9 +51,6 @@ function collapsibleWhen(hasChildren: boolean): vscode.TreeItemCollapsibleState 
 // PluginsTreeProvider's. Do not reintroduce one: reconciling a "pluginImmutable" contextValue
 // with the row's own read-only-ness story is an open question.
 
-// A row whose plugin no caller has described offers no record edit.
-const NOT_EDITABLE: PluginConditions = { editable: false };
-
 // A row opens its own plugin's copy (commands.md, Argument: "Singular means the clicked row").
 function openCopyCommand(formKey: string, plugin: PluginAddress): vscode.Command {
   return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey, plugin } }] };
@@ -68,7 +65,7 @@ class RecordTypeNode extends vscode.TreeItem {
     group: PluginRecordTypeCount,
     /** Which plugin named `plugin` this node browses (ADR-0012). */
     public readonly origin: string,
-    public readonly conditions: PluginConditions = NOT_EDITABLE,
+    public readonly conditions: PluginConditions,
   ) {
     // Label is the xEdit-parity display name ("Activator"); recordType (the raw
     // 4-char signature, e.g. "acti") stays the internal id — cache key, contextValue, commands.
@@ -110,10 +107,10 @@ class RecordNode extends RecordRowNode {
   constructor(
     public readonly record: RecordSummary,
     origin: string,
-    public readonly conditions: PluginConditions = NOT_EDITABLE,
-    public readonly isContainer = false,
+    public readonly conditions: PluginConditions,
+    public readonly isContainer: boolean,
     // From the same bulk listing `record` came from, never a per-row follow-up call.
-    public readonly hasContainerChildren = false,
+    public readonly hasContainerChildren: boolean,
   ) {
     super('record', record.editorId ?? record.formKey, collapsibleWhen(isContainer && hasContainerChildren),
       { name: record.plugin, origin }, record, conditions, isContainer);
@@ -130,7 +127,7 @@ class WorldspaceNode extends RecordRowNode {
   readonly editorId?: string;
   constructor(
     public readonly plugin: string, public readonly worldspace: WorldspaceSummary, origin: string,
-    public readonly conditions: PluginConditions = NOT_EDITABLE,
+    public readonly conditions: PluginConditions,
   ) {
     super('worldspace', worldspace.editorId ?? worldspace.formKey, collapsibleWhen(worldspace.hasChildren),
       { name: plugin, origin }, worldspace, conditions, true);
@@ -180,7 +177,7 @@ class CellNode extends RecordRowNode {
   readonly editorId?: string;
   constructor(
     public readonly plugin: string, public readonly cell: CellSummary, origin: string,
-    public readonly conditions: PluginConditions = NOT_EDITABLE,
+    public readonly conditions: PluginConditions,
   ) {
     const label = cell.editorId
       ?? (cell.cellX != null ? `<${strRight3(cell.cellX)}, ${strRight3(cell.cellY)}>` : cell.formKey);
@@ -199,7 +196,7 @@ class ChildRecordGroupNode extends vscode.TreeItem {
     public readonly group: 'persistent' | 'temporary',
     public readonly children: ChildRecordSummary[],
     public readonly origin: string,
-    public readonly conditions: PluginConditions = NOT_EDITABLE,
+    public readonly conditions: PluginConditions,
   ) {
     super(group === 'persistent' ? 'Persistent' : 'Temporary', vscode.TreeItemCollapsibleState.Collapsed);
     this.path = [cellFormKey, group];
@@ -220,7 +217,7 @@ class ChildRecordNode extends RecordRowNode {
     public readonly plugin: string,
     public readonly child: ChildRecordSummary,
     origin: string,
-    conditions: PluginConditions = NOT_EDITABLE,
+    conditions: PluginConditions,
   ) {
     super('placed', child.editorId ?? child.baseEditorId ?? child.formKey, vscode.TreeItemCollapsibleState.None,
       { name: plugin, origin }, child, conditions);
@@ -487,7 +484,7 @@ export class RecordBrowser implements vscode.TreeDataProvider<RecordBrowserNode>
   /** Keyed by the plugin rather than by a node this provider built: `PluginsTreeProvider` expands
    *  its own rows, whose whole knowledge of this side is the plugin and the
    *  conditions that row states. */
-  async getPluginChildren(plugin: PluginAddress, conditions: PluginConditions = NOT_EDITABLE): Promise<RecordBrowserNode[]> {
+  async getPluginChildren(plugin: PluginAddress, conditions: PluginConditions): Promise<RecordBrowserNode[]> {
     return this.orErrorNode(async () => {
       const types = answerOf(await this.repository.getRecordTypes(plugin));
       return types.map(t => new RecordTypeNode(plugin.name, t, plugin.origin, conditions));

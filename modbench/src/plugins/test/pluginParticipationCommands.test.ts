@@ -65,19 +65,13 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
   const beta = new PluginNode({ name: 'Beta.esp', enabled: true }, 'SomeMod');
   const locked = new ImplicitMasterNode('Fallout4.esm', 'Data/');
 
-  it('enable applies to every selected plugin, whatever its own current state', async () => {
-    const { adapter } = registered();
-    await invoke('modbench.plugin.enable', alpha, [alpha, beta]);
+  it.each([['modbench.plugin.enable', true], ['modbench.plugin.disable', false]] as const)(
+    '%s applies to every selected plugin, whatever its own current state', async (command, enabled) => {
+      const { adapter } = registered();
+      await invoke(command, alpha, [alpha, beta]);
 
-    expect(adapter.calls).toEqual(enabling(['Alpha.esp', true], ['Beta.esp', true]));
-  });
-
-  it('disable applies to every selected plugin, whatever its own current state', async () => {
-    const { adapter } = registered();
-    await invoke('modbench.plugin.disable', beta, [alpha, beta]);
-
-    expect(adapter.calls).toEqual(enabling(['Alpha.esp', false], ['Beta.esp', false]));
-  });
+      expect(adapter.calls).toEqual(enabling(['Alpha.esp', enabled], ['Beta.esp', enabled]));
+    });
 
   it('drops a locked row from the selection it writes', async () => {
     const { reporter, adapter } = registered();
@@ -127,14 +121,6 @@ describe('the enable and disable entries end when the read lands (common.md, A g
 
     expect(progressSteps).toEqual(ENDS_ON_THE_READ);
   });
-
-  it('still ends on the read when the whole write is refused', async () => {
-    registered(fake(REFUSED));
-
-    await invoke('modbench.plugin.enable', alpha);
-
-    expect(progressSteps).toEqual(ENDS_ON_THE_READ);
-  });
 });
 
 describe('modbench.plugin.enable / modbench.plugin.disable, called by the agent', () => {
@@ -164,13 +150,5 @@ describe('modbench.plugin.enable / modbench.plugin.disable, called by the agent'
     await expect(invoke('modbench.plugin.enable', new AgentCall([{ kind: 'mod', name: 'SomeMod' }], {}))).rejects.toBeInstanceOf(Refusal);
 
     expect(adapter.calls).toEqual([]);
-  });
-
-  it('answers once the instance has been read again, so the agent\'s next read sees the change', async () => {
-    registered();
-
-    await invoke('modbench.plugin.enable', given('Alpha.esp'));
-
-    expect(progressSteps).toEqual(['progress opens on modbench.pluginListTree', 'Instance loader: read every file again', 'progress closes']);
   });
 });

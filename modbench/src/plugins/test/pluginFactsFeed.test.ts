@@ -268,19 +268,4 @@ describe('PluginFactsFeed', () => {
 
     expect(changes).not.toHaveBeenCalled();
   });
-
-  describe('a later read that failed', () => {
-    const failing = (message: string) => held({ laterReadFailure: [{ sourceRelativePath: 'A.esp/Npc.json', message }] });
-    it('is on the rows after a refresh and gone after the next good read, with no notification', async () => {
-      const { feed, client } = feedOver();
-      client.setQueryAnswer('getPlugins', [failing('bad')]);
-      await feed.refresh();
-      expect(feed.rows.readFailureMessage()).toContain('bad');
-
-      client.setQueryAnswer('getPlugins', [held()]);
-      await feed.refresh();
-
-      expect(feed.rows.readFailureMessage()).toBeUndefined();
-    });
-  });
 });

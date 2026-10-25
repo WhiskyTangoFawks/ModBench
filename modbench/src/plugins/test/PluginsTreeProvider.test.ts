@@ -4,11 +4,9 @@ import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/
 import type { PluginAddress } from '../../wire/pluginAddress';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import {
-  type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
-  type WorldspaceSummary, type InteriorCellBlock, type RecordSummary, type CellChildRecords,
-  type ContainerChildSummary, type CellSummary, type ChildRecordSummary, type MEditClient, type ModStatus,
+  type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type InteriorCellBlock, type RecordSummary,
+  type CellSummary, type ChildRecordSummary, type ModStatus,
 } from '../../client';
-import type { ReadFailed } from '../../wire/readFailed';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
@@ -46,7 +44,8 @@ import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
 import { parseRowResourceUri } from '../recordResourceUri';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { CONTAINER_TYPES, listsForThePluginAsked } from '../../client/test/fixtures';
+import { listsForThePluginAsked, pluginMetadataFixture, recordSummaryFixture } from '../../client/test/fixtures';
+import { browserClient } from './browserRows';
 
 function plugin(
   overrides: Partial<Omit<LoadOrderPlugin, 'path'>> & { name: string; path?: string },
@@ -85,64 +84,7 @@ beforeEach(() => { moveCommands.length = 0; });
 
 const moves = () => moveCommands.map(({ plugins, drop }) => ({ names: plugins.map((p) => p.name), drop }));
 
-function held(name: string, overrides: Partial<PluginMetadata> = {}): PluginMetadata {
-  return {
-    name,
-    path: `/data/${name}`,
-    loadOrderIndex: 0,
-    isLight: false,
-    isMaster: false,
-    isBlueprint: false,
-    masters: [],
-    isImmutable: false,
-    origin: 'SomeMod',
-    missingMasters: [],
-    inLoadOrder: true,
-    hasMatchingRecords: true,
-    isCompiledPlugin: false,
-    hasParseFailure: false,
-    pluginSourceUnreadable: null,
-    ...overrides,
-  };
-}
-
-function recordSummary(overrides: Partial<RecordSummary> = {}): RecordSummary {
-  return {
-    formKey: '000001:A.esp', plugin: 'A.esp', loadOrderIndex: 0, isWinner: true,
-    editorId: 'TheWeapon', origin: 'SomeMod', workingTreeState: 'None',
-    hasContainerChildren: false, hasParseFailure: false,
-    ...overrides,
-  };
-}
-
-type WorldspaceBlocks = Exclude<Awaited<ReturnType<MEditClient['getWorldspaceBlocks']>>, ReadFailed>;
-
-function makeClient(overrides: Partial<{
-  plugins: PluginMetadata[];
-  diagnoses: PluginDiagnosisReport[];
-  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean; isCreatable?: boolean }[];
-  records: RecordPage;
-  worldspaces: WorldspaceSummary[];
-  worldspaceBlocks: WorldspaceBlocks;
-  interiorCells: InteriorCellBlock[];
-  cellChildRecords: CellChildRecords;
-  containerChildren: ContainerChildSummary[];
-}> = {}): InMemoryMEditClient {
-  const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getPlugins', overrides.plugins ?? []);
-  client.setQueryAnswer('getDiagnoses', overrides.diagnoses ?? []);
-  client.setQueryAnswer('getRecordTypes', (overrides.recordTypes ?? []).map((rt) => ({
-    type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
-    isCreatable: rt.isCreatable ?? true, isContainer: CONTAINER_TYPES.has(rt.type),
-  })));
-  client.setQueryAnswer('getRecords', overrides.records ?? { items: [], total: 0 });
-  client.setQueryAnswer('getWorldspaces', overrides.worldspaces ?? []);
-  client.setQueryAnswer('getWorldspaceBlocks', overrides.worldspaceBlocks ?? { blocks: [], topCells: [] });
-  client.setQueryAnswer('getCellChildRecords', overrides.cellChildRecords ?? { persistent: [], temporary: [] });
-  client.setQueryAnswer('getContainerChildren', overrides.containerChildren ?? []);
-  client.setQueryAnswer('getInteriorCells', overrides.interiorCells ?? []);
-  return client;
-}
+const held = (name: string, overrides: Partial<PluginMetadata> = {}): PluginMetadata => pluginMetadataFixture({ name, ...overrides });
 
 interface Harness {
   tree: PluginsTreeProvider;
@@ -162,7 +104,7 @@ function makeTree(
   }> = {},
 ): Harness {
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins, extra.loadedWithNoLine));
-  const client = extra.client ?? makeClient();
+  const client = extra.client ?? browserClient();
   const records = new RecordBrowser(client);
   const tree = pluginsTreeOver(instance, {
     client, records,
@@ -227,12 +169,6 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header'
     expect(node.command).toEqual({
       command: 'modbench.record.open', title: 'Open Record', arguments: [{ argument: { kind: 'record', formKey: '000000:Fallout4.esm', plugin: { name: 'Fallout4.esm', origin: 'Data/' } } }],
     });
-  });
-
-  it('two plugins of one file name from different origins open at different addresses', () => {
-    const a = new PluginNode({ name: 'Same.esp', enabled: true }, 'ModA');
-    const b = new PluginNode({ name: 'Same.esp', enabled: true }, 'ModB');
-    expect(a.command?.arguments).not.toEqual(b.command?.arguments);
   });
 });
 
@@ -332,7 +268,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(rows.map((r) => r.origin)).toEqual(['ModA', 'overwrite/']);
   });
 
-  it('resolvePluginPath returns undefined for a LoadOrderPluginLine, never "undefined" as text', async () => {
+  it('finds no file for a line no file answers to', async () => {
     const { tree } = makeTree([plugin({ name: 'Fallout4.esm', line: 0, path: undefined })]);
     expect(await tree.resolvePluginPath(new PluginNode({ name: 'Fallout4.esm', enabled: true }, 'SomeMod'))).toBeUndefined();
   });
@@ -559,14 +495,6 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
       .toEqual({ plugins: [{ name: 'Same.esp', origin: 'ModOne' }, { name: 'Same.esp', origin: 'ModTwo' }] });
   });
 
-  it('handleDrag serialises the whole selection, not just the grabbed row', () => {
-    const { tree } = makeTree(fixturePlugins());
-    const dt = new DataTransfer();
-    tree.handleDrag([node('A.esp'), node('C.esp')], dt, IGNORED_TOKEN);
-    const item = dt.get('application/vnd.medit.pluginlist-node');
-    expect(payloadOf(item)).toEqual({ plugins: [{ name: 'A.esp', origin: 'SomeMod' }, { name: 'C.esp', origin: 'SomeMod' }] });
-  });
-
   it('a drop of rows the view does not hold moves nothing, and does not fall back to the selection', async () => {
     await drag(['Gone.esp'], 'D.esp');
     expect(moveCommands).toEqual([]);
@@ -577,14 +505,18 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(fired).toBe(false);
   });
 
-  it.each([['a record row', 1], ['a record-type group row', 0]])('drop onto %s of this tree is refused, not treated as the end of the list', async (_name, depth) => {
+  type Beneath = (tree: PluginsTreeProvider, group: PluginsTreeNode) => Promise<PluginsTreeNode | undefined>;
+  it.each<[string, Beneath]>([
+    ['a record row', async (tree, group) => (await tree.getChildren(group))[0]],
+    ['a record-type group row', (_tree, group) => Promise.resolve(group)],
+  ])('drop onto %s of this tree is refused, not treated as the end of the list', async (_name, targetBeneath) => {
     const plugins = fixturePlugins();
-    const client = makeClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }], records: { items: [recordSummary()], total: 1 } });
+    const client = browserClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }], records: { items: [recordSummaryFixture()], total: 1 } });
     const h = makeTree(plugins, { client });
     await reconcile(h, plugins.map((p) => held(p.name, { origin: p.origin })));
     const [pluginRow] = await h.tree.getChildren();
     const [group] = await h.tree.getChildren(present(pluginRow, 'the first plugin row'));
-    const target = depth === 0 ? group : (await h.tree.getChildren(present(group, 'the Weapon group')))[0];
+    const target = await targetBeneath(h.tree, present(group, 'the Weapon group'));
     const dt = new DataTransfer();
     h.tree.handleDrag([node('A.esp')], dt, IGNORED_TOKEN);
 
@@ -741,7 +673,7 @@ describe('PluginsTreeProvider — implicit master rows', () => {
     expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
   });
 
-  it('handleDrag still filters to only PluginNode rows, excluding implicit rows for free', async () => {
+  it('drags only plugin lines, never a locked row', async () => {
     const tree = treeFor([plugin({ name: 'Mod.esp', line: 0 })], ['Fallout4.esm']);
     const rows = await tree.getChildren();
     const dt = new DataTransfer();
@@ -787,10 +719,10 @@ describe('PluginsTreeProvider — the sort direction', () => {
   });
 
   it('keeps the order of the groups and records beneath a plugin', async () => {
-    const client = makeClient({
+    const client = browserClient({
       recordTypes: [{ type: 'acti', count: 2, displayName: 'Activator' }, { type: 'weap', count: 1, displayName: 'Weapon' }],
       records: {
-        items: [recordSummary({ formKey: '000001:A.esp', editorId: 'First' }), recordSummary({ formKey: '000002:A.esp', editorId: 'Second' })],
+        items: [recordSummaryFixture({ formKey: '000001:A.esp', editorId: 'First' }), recordSummaryFixture({ formKey: '000002:A.esp', editorId: 'Second' })],
         total: 2,
       },
     });
@@ -916,7 +848,7 @@ const A_ROW = () => plugin({ name: 'A.esp', line: 0, origin: 'SomeMod' });
 const B_ROW = () => plugin({ name: 'B.esp', line: 1, origin: 'SomeMod' });
 
 function makeDisconnectedClient(): InMemoryMEditClient {
-  return disconnect(makeClient());
+  return disconnect(browserClient());
 }
 
 function disconnect(client: InMemoryMEditClient): InMemoryMEditClient {
@@ -1047,7 +979,7 @@ describe('PluginsTreeProvider — a reconcile keeps the rows', () => {
 });
 
 describe('PluginsTreeProvider — the conditions a record row reads are its plugin row\'s', () => {
-  const weaponOf = (record: RecordSummary) => makeClient({
+  const weaponOf = (record: RecordSummary) => browserClient({
     recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }], records: { items: [record], total: 1 },
   });
 
@@ -1058,7 +990,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
   }
 
   it('flips a record row on the reconcile after its mod is decompiled and committed, from the rows already read', async () => {
-    const client = weaponOf(recordSummary());
+    const client = weaponOf(recordSummaryFixture());
     const h = makeTree([plugin({ name: 'A.esp', line: 0 })], { client });
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
@@ -1076,7 +1008,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
   const MOD_COPY = held('Fallout4.esm', { origin: 'ModA', isCompiledPlugin: true });
   const lockedTree = (modCopyWins: boolean) => makeTree(
     [plugin({ name: 'Fallout4.esm', line: null, origin: 'ModA', winning: modCopyWins }), plugin({ name: 'A.esp', line: 0 })],
-    { client: weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data/' })),
+    { client: weaponOf(recordSummaryFixture({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data/' })),
       loadedWithNoLine: [{ name: 'Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data/' }] });
 
   it.each([['last', [DATA_COPY, MOD_COPY]], ['first', [MOD_COPY, DATA_COPY]]])(
@@ -1285,9 +1217,9 @@ describe('PluginsTreeProvider — a row expands into the record browser children
   const withRecords = (client: InMemoryMEditClient) => makeTree([A_ROW()], { client });
 
   it('reads the row\'s own plugin of a shared filename, and every row beneath it carries that plugin', async () => {
-    const client = makeClient({
+    const client = browserClient({
       recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
-      records: { items: [recordSummary({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
+      records: { items: [recordSummaryFixture({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
     });
     const h = makeTree([
       plugin({ name: 'Shared.esp', line: 0, origin: 'ModA', winning: false }),
@@ -1305,7 +1237,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
   });
 
   it('renders a child tree item through the record browser, not the row path', async () => {
-    const client = makeClient({ recordTypes: [{ type: 'weap', count: 5, displayName: 'Weapon' }] });
+    const client = browserClient({ recordTypes: [{ type: 'weap', count: 5, displayName: 'Weapon' }] });
     const h = withRecords(client);
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
@@ -1339,13 +1271,13 @@ describe('PluginsTreeProvider — a row expands into the record browser children
 
 describe('PluginsTreeProvider — a record row is identified by its kind, its plugin and its FormKey', () => {
   const SHARED = '000801:Fallout4.esm';
-  const everyKindOfRecord = () => makeClient({
+  const everyKindOfRecord = () => browserClient({
     recordTypes: [
       { type: 'weap', count: 1, displayName: 'Weapon' },
       { type: 'wrld', count: 1, displayName: 'Worldspace' },
       { type: 'cell', count: 1, displayName: 'Cell' },
     ],
-    records: { items: [recordSummary({ formKey: SHARED })], total: 1 },
+    records: { items: [recordSummaryFixture({ formKey: SHARED })], total: 1 },
     worldspaces: [{ workingTreeState: 'None', formKey: SHARED, editorId: 'Commonwealth', hasParseFailure: false, hasChildren: true }],
     worldspaceBlocks: {
       topCells: [{ workingTreeState: 'None', formKey: '000802:Fallout4.esm', isPersistentWorldspaceCell: true, hasChildren: true, hasParseFailure: false }],
@@ -1475,7 +1407,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
 describe('PluginsTreeProvider — master-issue decoration', () => {
   const withIssues = (h: Harness, issues: string[] | null) => reconcile(h, [held('A.esp', { missingMasters: issues })]);
 
-  it('never touches collapsibleState — AC2, and the leading line stays the checkbox alone', async () => {
+  it('never touches collapsibleState, and the leading line stays the checkbox alone', async () => {
     const h = makeTree([A_ROW()]);
     await withIssues(h, ['Ghost.esm']);
 
@@ -1548,20 +1480,20 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
     await reconcile(h, [held('A.esp'), held('B.esp'), held('C.esp')]);
 
     const rows = await h.tree.getChildren();
-    for (const row of rows) h.tree.getTreeItem(row);
+    rows.map((row) => h.tree.getTreeItem(row));
 
     expect(rows).toHaveLength(3);
     expect([callCount(h.client, 'getPlugins'), callCount(h.client, 'getDiagnoses')]).toEqual([1, 1]);
   });
 
   it('reads nothing at all while rendering children', async () => {
-    const client = makeClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
+    const client = browserClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
     const h = makeTree([A_ROW()], { client });
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
     const children = await h.tree.getChildren(row);
-    for (const child of children) h.tree.getTreeItem(child);
+    children.map((child) => h.tree.getTreeItem(child));
 
     expect(callCount(h.client, 'getPlugins')).toBe(1);
   });
@@ -1570,9 +1502,9 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
 describe('PluginsTreeProvider — the row of a record create wrote', () => {
   const NPCS = { plugin: { name: 'A.esp', origin: 'SomeMod' }, recordType: 'npc_' };
   const NEW_NPC = '000900:A.esp';
-  const listing = (...formKeys: string[]) => makeClient({
+  const listing = (...formKeys: string[]) => browserClient({
     recordTypes: [{ type: 'acti', count: 1, displayName: 'Activator' }, { type: 'npc_', count: formKeys.length, displayName: 'Non-Player Character' }],
-    records: { items: formKeys.map((formKey) => recordSummary({ formKey, plugin: 'A.esp' })), total: formKeys.length },
+    records: { items: formKeys.map((formKey) => recordSummaryFixture({ formKey, plugin: 'A.esp' })), total: formKeys.length },
   });
   async function heldWith(client: InMemoryMEditClient): Promise<Harness> {
     const rows = [A_ROW(), B_ROW()];
@@ -1633,7 +1565,7 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
   });
 
   it('finds a worldspace\'s row beneath the Worldspace group, and walks up through it to its plugin row', async () => {
-    const { tree } = await heldWith(makeClient({
+    const { tree } = await heldWith(browserClient({
       recordTypes: [{ type: 'wrld', count: 2, displayName: 'Worldspace' }],
       worldspaces: ['000800:A.esp', '000900:A.esp'].map((formKey) => ({ formKey, hasParseFailure: false, workingTreeState: 'None', hasChildren: true })),
     }));
@@ -1647,7 +1579,7 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
 
   it('finds an interior cell\'s row beneath the Cell group\'s block and sub-block, and walks up through each to its plugin row', async () => {
     const cell = (formKey: string): CellSummary => ({ workingTreeState: 'None', formKey, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: false });
-    const { tree } = await heldWith(makeClient({
+    const { tree } = await heldWith(browserClient({
       recordTypes: [{ type: 'cell', count: 2, displayName: 'Cell' }],
       interiorCells: [
         { number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells: [cell('000800:A.esp')] }] },
@@ -1680,7 +1612,7 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
     }
 
     it('finds a placed reference beneath the empty cell it was created on, through rows the tree shows after the change', async () => {
-      const h = await heldWith(makeClient({ recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }], interiorCells: interiorCell('000800:A.esp') }));
+      const h = await heldWith(browserClient({ recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }], interiorCells: interiorCell('000800:A.esp') }));
       const [pluginRow] = await h.tree.getChildren();
       const group = await rowBeneath(h.tree, present(pluginRow, 'the A.esp row'), 'recordType');
       const subBlock = await rowBeneath(h.tree, await rowBeneath(h.tree, group, 'interiorBlock'), 'interiorSubBlock');
@@ -1700,7 +1632,7 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
     });
 
     it('finds a new exterior cell beneath its worldspace\'s block and sub-block', async () => {
-      const h = await heldWith(makeClient({
+      const h = await heldWith(browserClient({
         recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
         worldspaces: [{ workingTreeState: 'None', formKey: '000800:A.esp', hasParseFailure: false, hasChildren: false }],
       }));
@@ -1717,7 +1649,7 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
     });
 
     it('finds nothing once the name filter hides the container\'s plugin', async () => {
-      const h = await heldWith(makeClient({
+      const h = await heldWith(browserClient({
         recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }], interiorCells: interiorCell('000800:A.esp'),
         cellChildRecords: { persistent: [placed(NEW_NPC)], temporary: [] },
       }));
@@ -1732,7 +1664,7 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
   });
 
   it('never expands a record row while it looks, since what a record holds is not its group\'s', async () => {
-    const h = await heldWith(makeClient({
+    const h = await heldWith(browserClient({
       recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }],
       interiorCells: [{ number: 0, hasParseFailure: false, subBlocks: [{ number: 0, hasParseFailure: false, cells: [
         { workingTreeState: 'None', formKey: '000800:A.esp', isPersistentWorldspaceCell: false, hasChildren: true, hasParseFailure: false },

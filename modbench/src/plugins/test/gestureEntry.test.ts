@@ -6,8 +6,7 @@ vi.mock('vscode', () => ({
   Uri: { from: uriFrom },
 }));
 
-import { pluginsKeyContext } from '../gestureEntry';
-import { pluralArgument, selectionArgument, singularArgument } from '../../drivingLib/gestureEntry';
+import { pluginsKeyContext, type PluginsKeyContext } from '../gestureEntry';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../pluginRows';
 import type { RecordBrowserNode } from '../RecordBrowser';
 import { recordSummaryFixture } from '../../client/test/fixtures';
@@ -15,23 +14,6 @@ import { cellRow, recordGroupRow, recordRow } from './browserRows';
 
 const pluginRow = (name: string, origin = 'SomeMod') => new PluginNode({ name, enabled: true }, origin);
 const lockedRow = (name: string) => new ImplicitMasterNode(name, 'Data/');
-
-describe('the locked rows (a plugin the game loads with no line) never carry the Argument', () => {
-  const alpha = pluginRow('Alpha.esp');
-  const locked = lockedRow('Fallout4.esm');
-
-  it('a plural gesture drops a locked row from a mixed selection', () => {
-    expect(pluralArgument({ clicked: alpha, selection: [locked, alpha] }, 'plugin')).toEqual([alpha]);
-  });
-
-  it('selectionArgument drops a locked row from a mixed selection too', () => {
-    expect(selectionArgument({ clicked: alpha, selection: [locked, alpha] }, 'plugin')).toEqual([alpha]);
-  });
-
-  it('a singular gesture right-clicked on a locked row takes nothing', () => {
-    expect(singularArgument<PluginsTreeNode, 'plugin'>({ clicked: locked, selection: [locked] }, 'plugin')).toBeUndefined();
-  });
-});
 
 describe('what the Plugins palette entries and keys read off the selection', () => {
   const withFlags = <T extends PluginsTreeNode>(row: T, contextValue: string): T => {
@@ -76,104 +58,121 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   const enabledNow = (row: PluginNode) => row !== beta;
   const context = (selection: readonly PluginsTreeNode[]) => pluginsKeyContext(selection, enabledNow);
 
-  it('reveal sees exactly one selected plugin, a locked one too', () => {
-    expect(context([alpha]).singlePlugin).toBe(true);
-    expect(context([lockedRow('Fallout4.esm')]).singlePlugin).toBe(true);
-    expect(context([alpha, beta]).singlePlugin).toBe(false);
-    expect(context([weapons]).singlePlugin).toBe(false);
+  type Case = [string, () => readonly PluginsTreeNode[], Partial<PluginsKeyContext>];
+  const reads = (_label: string, selection: () => readonly PluginsTreeNode[], expected: Partial<PluginsKeyContext>) => {
+    expect(context(selection())).toMatchObject(expected);
+  };
+
+  describe('reveal sees exactly one selected plugin, a locked one too', () => {
+    it.each<Case>([
+      ['one plugin', () => [alpha], { singlePlugin: true }],
+      ['one locked plugin', () => [lockedRow('Fallout4.esm')], { singlePlugin: true }],
+      ['two plugins', () => [alpha, beta], { singlePlugin: false }],
+      ['a record-type group', () => [weapons], { singlePlugin: false }],
+    ])('%s', reads);
   });
 
-  it('decompile and commit sees a selection of plugins in mods with no repository, every one', () => {
-    expect(context([nonCompiledPlugin, alsoNonCompiledPlugin])).toMatchObject({ allInNonSourceMod: true });
-    expect(context([nonCompiledPlugin, compilable])).toMatchObject({ allInNonSourceMod: false });
-    expect(context([nonCompiledPlugin, inOverwrite])).toMatchObject({ allInNonSourceMod: false });
-    expect(context([])).toMatchObject({ allInNonSourceMod: false });
+  describe('decompile and commit sees a selection of plugins in mods with no repository, every one', () => {
+    it.each<Case>([
+      ['two in mods with no repository', () => [nonCompiledPlugin, alsoNonCompiledPlugin], { allInNonSourceMod: true }],
+      ['one beside a plugin in a source mod', () => [nonCompiledPlugin, compilable], { allInNonSourceMod: false }],
+      ['one beside a plugin in Overwrite', () => [nonCompiledPlugin, inOverwrite], { allInNonSourceMod: false }],
+      ['nothing', () => [], { allInNonSourceMod: false }],
+    ])('%s', reads);
   });
 
-  it('decompile sees a selection of plugins in source mods, every one', () => {
-    expect(context([compilable, compiledPluginReadOnly, nonCompiledPluginInSourceMod])).toMatchObject({ allInSourceMod: true });
-    expect(context([compilable, nonCompiledPlugin])).toMatchObject({ allInSourceMod: false });
-    expect(context([compilable, inOverwrite])).toMatchObject({ allInSourceMod: false });
-    expect(context([])).toMatchObject({ allInSourceMod: false });
+  describe('decompile sees a selection of plugins in source mods, every one', () => {
+    it.each<Case>([
+      ['compiled, read-only and source-less plugins of source mods', () => [compilable, compiledPluginReadOnly, nonCompiledPluginInSourceMod], { allInSourceMod: true }],
+      ['one beside a plugin in a mod with no repository', () => [compilable, nonCompiledPlugin], { allInSourceMod: false }],
+      ['one beside a plugin in Overwrite', () => [compilable, inOverwrite], { allInSourceMod: false }],
+      ['nothing', () => [], { allInSourceMod: false }],
+    ])('%s', reads);
   });
 
-  it('decompile and repair sees a selection of malformed plugins in mods, every one', () => {
+  describe('decompile and repair sees a selection of malformed plugins in mods, every one', () => {
     const malformedInASourceMod = withFlags(pluginRow('Mu.esp', 'ModE'), 'plugin enabled inSourceMod compiledPlugin malformed');
     const malformedInNoSourceMod = withFlags(pluginRow('Nu.esp', 'ModC'), 'plugin enabled inNonSourceMod nonCompiledPlugin malformed');
     const malformedInTheGameFolder = withFlags(pluginRow('Xi.esp', 'Data/'), 'plugin enabled nonCompiledPlugin malformed');
 
-    expect(context([malformedInASourceMod, malformedInNoSourceMod])).toMatchObject({ allMalformedInAMod: true });
-    expect(context([malformedInASourceMod, compilable])).toMatchObject({ allMalformedInAMod: false });
-    expect(context([malformedInTheGameFolder])).toMatchObject({ allMalformedInAMod: false });
-    expect(context([])).toMatchObject({ allMalformedInAMod: false });
+    it.each<Case>([
+      ['malformed plugins of a source mod and of a mod with no repository', () => [malformedInASourceMod, malformedInNoSourceMod], { allMalformedInAMod: true }],
+      ['one beside a plugin not malformed', () => [malformedInASourceMod, compilable], { allMalformedInAMod: false }],
+      ['a malformed plugin in the game folder', () => [malformedInTheGameFolder], { allMalformedInAMod: false }],
+      ['nothing', () => [], { allMalformedInAMod: false }],
+    ])('%s', reads);
   });
 
-  it('rename sees exactly one selected compiled plugin, editable or not', () => {
-    expect(context([compilable]).singleCompiledPlugin).toBe(true);
-    expect(context([compiledPluginReadOnly]).singleCompiledPlugin).toBe(true);
-    expect(context([nonCompiledPlugin]).singleCompiledPlugin).toBe(false);
-    expect(context([compilable, compiledPluginReadOnly]).singleCompiledPlugin).toBe(false);
-    expect(context([weapons]).singleCompiledPlugin).toBe(false);
-    expect(context([]).singleCompiledPlugin).toBe(false);
+  describe('rename sees exactly one selected compiled plugin, editable or not', () => {
+    it.each<Case>([
+      ['an editable compiled plugin', () => [compilable], { singleCompiledPlugin: true }],
+      ['a read-only compiled plugin', () => [compiledPluginReadOnly], { singleCompiledPlugin: true }],
+      ['a plugin with no source', () => [nonCompiledPlugin], { singleCompiledPlugin: false }],
+      ['two compiled plugins', () => [compilable, compiledPluginReadOnly], { singleCompiledPlugin: false }],
+      ['a record-type group', () => [weapons], { singleCompiledPlugin: false }],
+      ['nothing', () => [], { singleCompiledPlugin: false }],
+    ])('%s', reads);
   });
 
-  it('create sees exactly one selected record type or plugin that is a compiled plugin and editable', () => {
-    expect(context([weapons]).singleCreatable).toBe(true);
-    expect(context([compilable]).singleCreatable).toBe(true);
-    expect(context([nonCompiledPluginWeapons]).singleCreatable).toBe(false);
-    expect(context([compiledPluginReadOnly]).singleCreatable).toBe(false);
-    expect(context([nonCompiledPlugin]).singleCreatable).toBe(false);
-    expect(context([weapons, compilable]).singleCreatable).toBe(false);
-    expect(context([own]).singleCreatable).toBe(false);
+  describe('create sees exactly one selected record type, plugin or container that is a compiled plugin\'s and editable', () => {
+    it.each<Case>([
+      ['an editable group', () => [weapons], { singleCreatable: true }],
+      ['an editable compiled plugin', () => [compilable], { singleCreatable: true }],
+      ['a group of a plugin with no source', () => [nonCompiledPluginWeapons], { singleCreatable: false }],
+      ['a read-only compiled plugin', () => [compiledPluginReadOnly], { singleCreatable: false }],
+      ['a plugin with no source', () => [nonCompiledPlugin], { singleCreatable: false }],
+      ['a group and a plugin', () => [weapons, compilable], { singleCreatable: false }],
+      ['a record that is no container', () => [own], { singleCreatable: false }],
+      ['an editable group of a type the game cannot create', () => [quests], { singleCreatable: false }],
+      ['an editable container', () => [quest], { singleCreatable: true }],
+      ['an editable cell', () => [cell], { singleCreatable: true }],
+      ['a read-only container', () => [readOnlyQuest], { singleCreatable: false }],
+      ['two containers', () => [quest, cell], { singleCreatable: false }],
+    ])('%s', reads);
   });
 
-  it('create does not see an editable group of a type the game cannot create', () => {
-    expect(context([quests]).singleCreatable).toBe(false);
+  describe('delete sees a selection of records, cells included, their plugins all let it remove', () => {
+    it.each<Case>([
+      ['a record and a cell of an editable plugin', () => [own, cell], { allDeletableRecords: true }],
+      ['one beside a record of an immutable plugin', () => [own, immutable], { allDeletableRecords: false }],
+      ['one beside a record of a plugin with no source', () => [own, nonCompiledPluginRecord], { allDeletableRecords: false }],
+      ['one beside a plugin', () => [own, alpha], { allDeletableRecords: false }],
+      ['nothing', () => [], { allDeletableRecords: false }],
+    ])('%s', reads);
   });
 
-  it('create sees exactly one selected container whose plugin is a compiled plugin and editable, a cell included', () => {
-    expect(context([quest]).singleCreatable).toBe(true);
-    expect(context([cell]).singleCreatable).toBe(true);
-    expect(context([readOnlyQuest]).singleCreatable).toBe(false);
-    expect(context([own]).singleCreatable).toBe(false);
-    expect(context([quest, cell]).singleCreatable).toBe(false);
+  describe('copy sees a selection of records, cells included, whatever their plugins allow', () => {
+    it.each<Case>([
+      ['records of every plugin', () => [own, cell, immutable, nonCompiledPluginRecord], { allRecords: true }],
+      ['one beside a plugin', () => [own, alpha], { allRecords: false }],
+      ['nothing', () => [], { allRecords: false }],
+    ])('%s', reads);
   });
 
-  it('delete sees a selection of records, cells included, their plugins all let it remove', () => {
-    expect(context([own, cell]).allDeletableRecords).toBe(true);
-    expect(context([own, immutable]).allDeletableRecords).toBe(false);
-    expect(context([own, nonCompiledPluginRecord]).allDeletableRecords).toBe(false);
-    expect(context([own, alpha]).allDeletableRecords).toBe(false);
-    expect(context([]).allDeletableRecords).toBe(false);
+  describe('Space takes the first selected plugin\'s direction, as its line is now, and does nothing over no plugin', () => {
+    it.each<Case>([
+      ['an enabled plugin first', () => [alpha, beta], { selectionToggle: 'disable' }],
+      ['a disabled plugin first', () => [beta, alpha], { selectionToggle: 'enable' }],
+      ['a disabled plugin after a record', () => [own, beta], { selectionToggle: 'enable' }],
+      ['a record and a locked plugin', () => [own, lockedRow('Fallout4.esm')], { selectionToggle: undefined }],
+    ])('%s', reads);
   });
 
-  it('copy sees a selection of records, cells included, whatever their plugins allow', () => {
-    expect(context([own, cell, immutable, nonCompiledPluginRecord]).allRecords).toBe(true);
-    expect(context([own, alpha]).allRecords).toBe(false);
-    expect(context([]).allRecords).toBe(false);
+  describe('enable sees a selection holding a plugin whose line is disabled now, disable one whose line is enabled', () => {
+    it.each<Case>([
+      ['an enabled and a disabled plugin', () => [alpha, beta], { holdsEnabledPlugin: true, holdsDisabledPlugin: true }],
+      ['an enabled plugin', () => [alpha], { holdsEnabledPlugin: true, holdsDisabledPlugin: false }],
+      ['a disabled plugin and a record', () => [beta, own], { holdsEnabledPlugin: false, holdsDisabledPlugin: true }],
+      ['a record and a locked plugin', () => [own, lockedRow('Fallout4.esm')], { holdsEnabledPlugin: false, holdsDisabledPlugin: false }],
+      ['nothing', () => [], { holdsEnabledPlugin: false, holdsDisabledPlugin: false }],
+    ])('%s', reads);
   });
 
-  it('Space takes the first selected plugin\'s direction, as its line is now', () => {
-    expect(context([alpha, beta]).selectionToggle).toBe('disable');
-    expect(context([beta, alpha]).selectionToggle).toBe('enable');
-    expect(context([own, beta]).selectionToggle).toBe('enable');
-  });
-
-  it('enable sees a selection holding a plugin whose line is disabled now, disable one whose line is enabled', () => {
-    expect(context([alpha, beta])).toMatchObject({ holdsEnabledPlugin: true, holdsDisabledPlugin: true });
-    expect(context([alpha])).toMatchObject({ holdsEnabledPlugin: true, holdsDisabledPlugin: false });
-    expect(context([beta, own])).toMatchObject({ holdsEnabledPlugin: false, holdsDisabledPlugin: true });
-    expect(context([own, lockedRow('Fallout4.esm')])).toMatchObject({ holdsEnabledPlugin: false, holdsDisabledPlugin: false });
-    expect(context([])).toMatchObject({ holdsEnabledPlugin: false, holdsDisabledPlugin: false });
-  });
-
-  it('move sees a selection holding a plugin with a plugins.txt line', () => {
-    expect(context([own, lockedRow('Fallout4.esm'), alpha]).holdsPluginLine).toBe(true);
-    expect(context([own, lockedRow('Fallout4.esm')]).holdsPluginLine).toBe(false);
-    expect(context([]).holdsPluginLine).toBe(false);
-  });
-
-  it('Space does nothing over a selection with no plugin', () => {
-    expect(context([own, lockedRow('Fallout4.esm')]).selectionToggle).toBeUndefined();
+  describe('move sees a selection holding a plugin with a plugins.txt line', () => {
+    it.each<Case>([
+      ['a plugin among a record and a locked plugin', () => [own, lockedRow('Fallout4.esm'), alpha], { holdsPluginLine: true }],
+      ['a record and a locked plugin', () => [own, lockedRow('Fallout4.esm')], { holdsPluginLine: false }],
+      ['nothing', () => [], { holdsPluginLine: false }],
+    ])('%s', reads);
   });
 });

@@ -1,13 +1,51 @@
 import type {
-  CellSummary, ChildRecordSummary, PluginAddress, PluginRecordTypeCount, RecordSummary, WorldspaceSummary,
+  CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, InteriorCellBlock, MEditClient, PluginAddress,
+  PluginDiagnosisReport, PluginMetadata, PluginRecordTypeCount, RecordPage, RecordSummary, WorldspaceSummary,
 } from '../../client';
+import type { ReadFailed } from '../../wire/readFailed';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordTypeCountFixture } from '../../client/test/fixtures';
 import { present } from '../../ports/present';
 import type { PluginConditions } from '../../drivingLib/recordRowContext';
 import { RecordBrowser, type RecordBrowserNode } from '../RecordBrowser';
 
+export const NOT_EDITABLE: PluginConditions = { editable: false };
+
 type GroupSpec = Partial<PluginRecordTypeCount> & { type: string };
+
+type WorldspaceBlocks = Exclude<Awaited<ReturnType<MEditClient['getWorldspaceBlocks']>>, ReadFailed>;
+
+export interface BrowserAnswers {
+  plugins?: PluginMetadata[];
+  diagnoses?: PluginDiagnosisReport[];
+  recordTypes?: GroupSpec[];
+  records?: RecordPage;
+  worldspaces?: WorldspaceSummary[];
+  worldspaceBlocks?: WorldspaceBlocks;
+  interiorCells?: InteriorCellBlock[];
+  cellChildRecords?: CellChildRecords;
+  containerChildren?: ContainerChildSummary[];
+}
+
+/** A client answering every read a browsed tree makes, empty unless the test says otherwise. */
+export function browserClient(answers: BrowserAnswers = {}): InMemoryMEditClient {
+  const answered: Required<BrowserAnswers> = {
+    plugins: [], diagnoses: [], recordTypes: [], records: { items: [], total: 0 }, worldspaces: [],
+    worldspaceBlocks: { blocks: [], topCells: [] }, interiorCells: [], cellChildRecords: { persistent: [], temporary: [] }, containerChildren: [],
+    ...answers,
+  };
+  const client = new InMemoryMEditClient();
+  client.setQueryAnswer('getPlugins', answered.plugins);
+  client.setQueryAnswer('getDiagnoses', answered.diagnoses);
+  client.setQueryAnswer('getRecordTypes', answered.recordTypes.map(recordTypeCountFixture));
+  client.setQueryAnswer('getRecords', answered.records);
+  client.setQueryAnswer('getWorldspaces', answered.worldspaces);
+  client.setQueryAnswer('getWorldspaceBlocks', answered.worldspaceBlocks);
+  client.setQueryAnswer('getCellChildRecords', answered.cellChildRecords);
+  client.setQueryAnswer('getContainerChildren', answered.containerChildren);
+  client.setQueryAnswer('getInteriorCells', answered.interiorCells);
+  return client;
+}
 
 export interface BrowserOver {
   client: InMemoryMEditClient;
@@ -15,7 +53,7 @@ export interface BrowserOver {
 }
 
 export async function soleGroup(
-  provider: RecordBrowser, plugin: PluginAddress, conditions?: PluginConditions,
+  provider: RecordBrowser, plugin: PluginAddress, conditions = NOT_EDITABLE,
 ): Promise<RecordBrowserNode> {
   return present((await provider.getPluginChildren(plugin, conditions))[0], 'the sole group');
 }
