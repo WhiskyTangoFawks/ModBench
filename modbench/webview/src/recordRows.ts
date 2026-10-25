@@ -166,11 +166,10 @@ export function recordRows({ result, columns, editableColumns, partialFormColumn
           cellMetas: undefined,
         }));
       } else if (meta.type === 'struct') {
-        // A union member's shape is the leaf's the row's own values name; the row takes the first
-        // column's leaf for its structure, and each cell the shape its own column's leaf gives it.
+        // mEdit sends a union member's children from its winner column's leaf, so the row takes
+        // its structure from that leaf, and each cell the shape its own column's leaf gives it.
         const member = meta.fields?.find(f => f.name === child.fieldName);
-        const owner = columns.map(c => diff.values[c.key]).find(v => v != null);
-        const memberMeta = member && variantFor(member, owner, meta);
+        const memberMeta = member && variantFor(member, diff.values[child.winnerColumn], meta);
         const cellMetas = member?.variants
           ? Object.fromEntries(columns.map(c => [c.key, variantFor(member, diff.values[c.key], meta)]))
           : undefined;

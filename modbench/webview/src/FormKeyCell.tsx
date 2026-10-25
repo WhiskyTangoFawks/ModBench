@@ -8,12 +8,6 @@ import type { FieldMetadata, FormKeyResolution } from './types';
 interface FormKeyCellProps {
   value: unknown;
   meta: FieldMetadata;
-  // Optional, defaulting to non-editable — matches ScalarCell/FlagCell's contract
-  // (presence of somewhere to write is the editability signal). A VMAD composite leaf that
-  // composes this cell but has no write path of its own simply omits it.
-  editable?: boolean;
-  // Optional for the same reason `editable` is — `onPlainClick`/`openPicker` are gated on
-  // `editable` before `onCommit` is ever reached.
   onCommit?: (fk: string) => void;
   checkError?: string | null;
   // The leaf's own resolution signal (ADR-0005) gates the link affordance and label, independent of
@@ -22,7 +16,8 @@ interface FormKeyCellProps {
 }
 
 /** A native QuickPick rather than an in-webview control (xedit.md, divergence 1). */
-export function FormKeyCell({ value, meta, editable, onCommit, checkError, resolution }: FormKeyCellProps) {
+export function FormKeyCell({ value, meta, onCommit, checkError, resolution }: FormKeyCellProps) {
+  const editable = onCommit != null;
   const fk = isString(value) && value ? value : null;
   const picking = useRef(false);
 

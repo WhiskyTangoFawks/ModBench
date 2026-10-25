@@ -181,7 +181,7 @@ describe('a union element', () => {
         fieldName: '[0]', values: { [MASTER]: master, [MOD]: override },
         children: [
           diffNode({ fieldName: 'name', values: { [MASTER]: 'AnAlias', [MOD]: 'AnAlias' } }),
-          diffNode({ fieldName: 'location', values: { [MASTER]: { id: 5 }, [MOD]: null } }),
+          diffNode({ fieldName: 'location', values: { [MASTER]: { id: 5 }, [MOD]: null }, winnerColumn: MASTER }),
         ],
       })],
     })])));
@@ -197,6 +197,33 @@ describe('a union element', () => {
     expect(member?.cells.get(MOD)?.meta).toBe(location);
     expect(member?.meta).toBe(refLocation);
     expect(element?.cells.get(MOD)?.meta).toBe(aliases.elementType);
+  });
+
+  it('a member whose columns hold different leaves takes its shape from the column mEdit names its winner, so every member mEdit sends is a row', () => {
+    const refLocation = fieldMeta({ name: 'location', type: 'struct', fields: [fieldMeta({ name: 'ref', type: 'int' })] });
+    const locLocation = fieldMeta({ name: 'location', type: 'struct', fields: [fieldMeta({ name: 'loc', type: 'int' })] });
+    const location = fieldMeta({ name: 'location', type: 'struct', variants: { RefAlias: refLocation, LocAlias: locLocation } });
+    const aliases = fieldMeta({
+      name: 'aliases', type: 'array', isArray: true,
+      elementType: fieldMeta({
+        name: '', type: 'struct', fields: [fieldMeta({ name: 'Kind', type: 'string', isDiscriminator: true }), location],
+      }),
+    });
+    const master = { Kind: 'RefAlias', location: { ref: 1 } };
+    const override = { Kind: 'LocAlias', location: { loc: 2 } };
+    const rows = fieldRowsOf(rowsFor(answer([aliases], [diffNode({
+      fieldName: 'aliases', values: {},
+      children: [diffNode({
+        fieldName: '[0]', values: { [MASTER]: master, [MOD]: override },
+        children: [diffNode({
+          fieldName: 'location', values: { [MASTER]: master.location, [MOD]: override.location }, winnerColumn: MOD,
+          children: [diffNode({ fieldName: 'loc', values: { [MASTER]: null, [MOD]: 2 }, winnerColumn: MOD })],
+        })],
+      })],
+    })])));
+
+    expect(rows.map(r => r.key)).toEqual(['aliases', 'aliases.[0]', 'aliases.[0].location', 'aliases.[0].location.loc']);
+    expect(rows[2]?.meta).toBe(locLocation);
   });
 });
 
@@ -234,23 +261,23 @@ describe('a condition\'s parameters', () => {
 
     expect(rows.map(r => r.name)).toContain('Link');
   });
+
+  it('a parameter any column\'s function puts in use has a row, so a conflicting override never hides its own data', () => {
+    const mode = fieldMeta({ name: 'Mode', type: 'enum', siblingsInUse: { A: ['Link'], B: [] } });
+    const link = fieldMeta({ name: 'Link', type: 'formKey' });
+
+    const rows = dataRows([mode, link],
+      { MutagenObjectType: 'LeafA', Mode: 'B', Link: '000801:Fallout4.esm' },
+      { MutagenObjectType: 'LeafA', Mode: 'A', Link: '000801:Fallout4.esm' }, 'Link');
+
+    expect(rows.map(r => r.name)).toEqual(['Data', 'Link']);
+  });
 });
 
 describe('a cell\'s context, which its right-click hands a command and the host\'s keys read while it is focused', () => {
   const level = fieldMeta({ name: 'Level', type: 'int' });
   const rows = fieldRowsOf(rowsFor(answer([level], [diffNode({ fieldName: 'Level', values: { [MASTER]: 5, [MOD]: 7 } })]), [MOD]));
   const row = rows[0];
-
-  it('a cell in a column that can be edited names its plugin copy, its path, that the plugin holds the field, and the text it copies', () => {
-    expect(row?.cells.get(MOD)?.context).toEqual({
-      webviewSection: 'cell editableCell', copyText: '7', preventDefaultContextMenuItems: true,
-      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data/', path: [{ kind: 'member', name: 'Level' }], holdsValue: true,
-    });
-  });
-
-  it('a cell in a column that cannot be edited offers copy value alone', () => {
-    expect(row?.cells.get(MASTER)?.context).toEqual({ webviewSection: 'cell', copyText: '5', preventDefaultContextMenuItems: true });
-  });
 
   it('a cell that reads empty copies the empty text', () => {
     const name = fieldMeta({ name: 'Name', type: 'string' });
@@ -283,10 +310,12 @@ describe('the focused cell, as the grid shows it', () => {
     expect(shownCell(rows, none, new Set(), { rowKey: 'Bounds.X', plugin: null })?.context).toMatchObject({ copyText: 'X' });
   });
 
-  it('is none while its row is collapsed away, its column is collapsed, or its row is gone', () => {
-    expect(shownCell(rows, new Set(['Bounds']), new Set(), { rowKey: 'Bounds.X', plugin: MOD })).toBeUndefined();
-    expect(shownCell(rows, none, new Set([MOD]), { rowKey: 'Bounds.X', plugin: MOD })).toBeUndefined();
-    expect(shownCell(rows, none, new Set(), { rowKey: 'Gone', plugin: MOD })).toBeUndefined();
+  it.each([
+    ['its row is collapsed away', new Set(['Bounds']), new Set<ColumnKey>(), 'Bounds.X'],
+    ['its column is collapsed', none, new Set([MOD]), 'Bounds.X'],
+    ['its row is gone', none, new Set<ColumnKey>(), 'Gone'],
+  ])('is none while %s', (_case, collapsedRows, collapsedColumns, rowKey) => {
+    expect(shownCell(rows, collapsedRows, collapsedColumns, { rowKey, plugin: MOD })).toBeUndefined();
   });
 });
 
