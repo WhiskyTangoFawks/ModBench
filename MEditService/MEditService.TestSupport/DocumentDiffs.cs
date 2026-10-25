@@ -32,8 +32,8 @@ public static class DocumentDiffs
             return;
         }
 
-        var left = before?.ToJsonString() ?? "<absent>";
-        var right = after?.ToJsonString() ?? "<absent>";
+        var left = before is null ? "<absent>" : JsonStrings.AsWritten(before);
+        var right = after is null ? "<absent>" : JsonStrings.AsWritten(after);
         if (!string.Equals(left, right, StringComparison.Ordinal)) diffs.Add($"{path}: {left} -> {right}");
     }
 }

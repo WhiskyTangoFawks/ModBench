@@ -1,12 +1,14 @@
 using System.Collections.Concurrent;
 using System.IO.Abstractions;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization;
+using Mutagen.Bethesda.Serialization.Exceptions;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
 using Mutagen.Bethesda.Serialization.Streams;
 using Noggog;
@@ -37,16 +39,39 @@ public static class RecordTextCodec
     /// written back, it must mean what it says (ADR-0006). The header's type is
     /// <see cref="PluginHeader.RecordType"/>.</summary>
     public static string? WhyNotARecord(string text, GameRelease gameRelease, string? recordType) =>
-        WhyNotProduced(text, gameRelease, source => recordType == PluginHeader.RecordType
-            ? Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(source), gameRelease)))
-            : RoundTrip(source, gameRelease, recordType));
+        recordType == PluginHeader.RecordType
+            ? WhyNotProduced(text, gameRelease, source => HeaderRoundTrip(source, gameRelease), HeaderIdentityOf(text))
+            : WhyNotProduced(text, gameRelease, source => RoundTrip(source, gameRelease, recordType), NoIdentityMembers);
+
+    private static readonly IReadOnlySet<string> NoIdentityMembers = new HashSet<string>(StringComparer.Ordinal);
+
+    // The whole mod's root document: a member at fault lies in its ModHeader, and the rest names the mod read.
+    private static HashSet<string> HeaderIdentityOf(string text) =>
+        Document.TryRead(text, out var root, out _)
+            ? [.. root.Element.EnumerateObject().Select(member => member.Name).Where(name => name != PluginHeader.ModHeaderMember)]
+            : [];
+
+    // The header is read through a scratch folder of its own, whose path Mutagen wraps around what the
+    // read threw; no user has that file, so the refusal is what was thrown inside it.
+    private static string HeaderRoundTrip(string source, GameRelease gameRelease)
+    {
+        try
+        {
+            return Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(source), gameRelease)));
+        }
+        catch (FilePathedException ex) when (ex.InnerException is { } thrown)
+        {
+            ExceptionDispatchInfo.Throw(thrown);
+            throw;
+        }
+    }
 
     /// <summary>The same answer for a block level's document, named by its level in
     /// <see cref="RecordTypes.InteriorCellBlockLevels"/> or the worldspace's.</summary>
     public static string? WhyNotABlockLevel(string text, GameRelease gameRelease, string level) =>
-        WhyNotProduced(text, gameRelease, source => BlankDocument(level, gameRelease, Document.Parse(source)));
+        WhyNotProduced(text, gameRelease, source => BlankDocument(level, gameRelease, Document.Parse(source)), NoIdentityMembers);
 
-    private static string? WhyNotProduced(string text, GameRelease gameRelease, Func<string, string> produce)
+    private static string? WhyNotProduced(string text, GameRelease gameRelease, Func<string, string> produce, IReadOnlySet<string> identity)
     {
         if (!Document.TryRead(text, out var written, out var whyNot)) return whyNot;
         try
@@ -57,14 +82,14 @@ public static class RecordTextCodec
         }
         catch (Exception ex) when (OutOfMemoryOrCancellation.In(ex) is null)
         {
-            return ReadFault.Describe(text, source => ThrownBy(produce, source))
-                ?? ReadFault.MisreadMember(text, produce)
+            return ReadFault.Describe(text, source => ThrownBy(produce, source), identity)
+                ?? ReadFault.MisreadMember(text, produce, identity)
                 ?? ReadFault.Unlocated(ex);
         }
     }
 
-    // A container with no children in a slot writes the same bytes as one whose document leaves the slot out
-    // (EmptyChildListBytesTests), and the codec writes no empty list.
+    // A container with no children in a slot writes the same bytes as one whose document leaves the slot out,
+    // and the codec writes no empty list.
     private static Document WithoutEmptyChildLists(Document written, GameRelease gameRelease)
     {
         var slots = RecordTypes.For(gameRelease).EmbeddedSlotNames;

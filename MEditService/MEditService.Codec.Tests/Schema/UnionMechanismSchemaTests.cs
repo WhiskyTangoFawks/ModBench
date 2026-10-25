@@ -10,20 +10,7 @@ public sealed class UnionMechanismSchemaTests
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    private static FieldMetadata At(string table, params string[] hops)
-    {
-        var meta = Schemas[table].RecordColumns.Single(c => c.Name == hops[0]).Field;
-        foreach (var hop in hops.Skip(1)) meta = hop == "[]" ? RequireElementType(meta) : RequireFields(meta).Single(f => f.Name == hop);
-        return meta;
-    }
-
     private static IEnumerable<string> Domain(FieldMetadata meta) => meta.EnumMembers.Select(m => m.Value);
-
-    private static IReadOnlyList<FieldMetadata> RequireFields(FieldMetadata meta) =>
-        meta.Fields ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have fields.");
-
-    private static FieldMetadata RequireElementType(FieldMetadata meta) =>
-        meta.ElementType ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have an element type.");
 
     private static IReadOnlyDictionary<string, FieldMetadata> RequireVariants(FieldMetadata meta) =>
         meta.Variants ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have variants.");
@@ -33,16 +20,21 @@ public sealed class UnionMechanismSchemaTests
     [InlineData("glob")]
     [InlineData("dmgt")]
     [InlineData("omod")]
-    [InlineData("omod", "Properties", "[]")]
-    [InlineData("cobj", "Conditions", "[]")]
-    [InlineData("cobj", "Conditions", "[]", "Data")]
-    [InlineData("npc_", "VirtualMachineAdapter", "Scripts", "[]", "Properties", "[]")]
-    public void EveryBaseWithLeaves_IsOneSparseUnionKeyedByTheDocumentsDiscriminator(string table, params string[] hops)
-    {
-        var fields = hops.Length == 0
-            ? Schemas[table].RecordColumns.Select(c => c.Field).ToList()
-            : RequireFields(At(table, hops));
+    public void ATableOfSeveralRecordClasses_IsOneSparseUnionKeyedByTheDocumentsDiscriminator(string table) =>
+        AssertOneSparseUnion([.. Schemas[table].RecordColumns.Select(c => c.Field)]);
 
+    [Theory]
+    [InlineData("omod", "Properties.[]")]
+    [InlineData("cobj", "Conditions.[]")]
+    [InlineData("cobj", "Conditions.[].Data")]
+    [InlineData("npc_", "VirtualMachineAdapter.Scripts.[].Properties.[]")]
+    [InlineData("npc_", "Level")]
+    [InlineData("qust", "Aliases.[]")]
+    public void AMemberWhoseBaseHasLeaves_IsOneSparseUnionKeyedByTheDocumentsDiscriminator(string table, string path) =>
+        AssertOneSparseUnion(SchemaFields.At(GameRelease.Fallout4, table, path).Fields.Require());
+
+    private static void AssertOneSparseUnion(IReadOnlyList<FieldMetadata> fields)
+    {
         var discriminator = Assert.Single(fields, f => f.IsDiscriminator);
         Assert.Equal("MutagenObjectType", discriminator.Name);
         Assert.Equal("enum", discriminator.Type);
@@ -67,7 +59,7 @@ public sealed class UnionMechanismSchemaTests
     [Fact]
     public void GameSettingData_IsOneScalarWithAVariantPerRecordClass_NotAWidenedText()
     {
-        var data = At("gmst", "Data");
+        var data = SchemaFields.At(GameRelease.Fallout4, "gmst", "Data");
         var variants = RequireVariants(data);
 
         Assert.Equal(
@@ -96,7 +88,7 @@ public sealed class UnionMechanismSchemaTests
     [Fact]
     public void PerkEffectModification_AdvertisesEachLeafsOwnEnumDomain()
     {
-        var modification = At("perk", "Effects", "[]", "Modification");
+        var modification = SchemaFields.At(GameRelease.Fallout4, "perk", "Effects.[].Modification");
         var variants = RequireVariants(modification);
 
         Assert.Equal(["Set", "Add", "Multiply"], Domain(variants[nameof(PerkEntryPointModifyValue)]));
@@ -108,7 +100,7 @@ public sealed class UnionMechanismSchemaTests
     [Fact]
     public void ObjectModPropertyFunctionType_AdvertisesEachLeafsOwnEnumDomain()
     {
-        var functionType = At("omod", "Properties", "[]", "FunctionType");
+        var functionType = SchemaFields.At(GameRelease.Fallout4, "omod", "Properties.[].FunctionType");
         var variants = RequireVariants(functionType);
 
         Assert.Equal(["Set", "MultAndAdd", "Add"], Domain(variants["ObjectModFloatProperty<Armor+Property>"]));

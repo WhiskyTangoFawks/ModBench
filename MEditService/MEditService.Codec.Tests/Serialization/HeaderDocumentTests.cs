@@ -7,7 +7,6 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Exceptions;
-using Mutagen.Bethesda.Serialization.Newtonsoft;
 
 namespace MEditService.Codec.Tests.Serialization;
 
@@ -37,12 +36,12 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public async Task Write_ProducesTheSameBytesAsAFullWholeModWrite_ForAModWithRealGroups_ComparedAsTextForAReadableFailureThenAsBytesBecauseATextOnlyCompareCannotSeeABomOrEncodingDifference()
+    public async Task AHeadersDocument_IsTheBytesTheWholeModDoorWritesForIt_ForAModWithRealGroups_ComparedAsTextForAReadableFailureThenAsBytesBecauseATextOnlyCompareCannotSeeABomOrEncodingDifference()
     {
         var mod = PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords();
 
         using var dir = new ScratchDirectory("medit-headerdoc-");
-        await MutagenJsonConverter.Instance.Serialize(mod, dir.Path);
+        await Fallout4WholeMod.Serialize(mod, dir.Path);
         var wholeModRoot = StripCarriageReturns(await File.ReadAllBytesAsync(Path.Combine(dir.Path, "RecordData.json")));
 
         var produced = HeaderDocument.Write(mod);
@@ -68,7 +67,7 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public void Write_ProducesCanonicalBytes_NoCarriageReturnNoTrailingNewlineNoBom()
+    public void AHeadersDocument_IsCanonicalBytes_NoCarriageReturnNoTrailingNewlineNoBom()
     {
         var produced = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
 
@@ -79,7 +78,7 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public void Write_HoldsNoMastersOrRecordCount_BecauseEveryWriteDerivesThemFromContent()
+    public void AHeadersDocument_HoldsNoMastersOrRecordCount_BecauseEveryWriteDerivesThemFromContent()
     {
         var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
 
@@ -90,7 +89,7 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public void NextObjectId_IsTheOneTheModHeld()
+    public void AHeadersNextObjectId_IsTheOneTheModHeld()
     {
         var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
 
@@ -98,7 +97,7 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public void WithNextObjectId_ChangesTheCounterAndNothingElse()
+    public void SettingTheNextObjectId_ChangesTheCounterAndNothingElse()
     {
         var body = HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords());
 
@@ -111,7 +110,7 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public void Read_RoundTripsEveryHeaderFieldTheDocumentHolds_AndReSerializesToTheSameBytes()
+    public void AHeadersDocument_ReadsBackEveryHeaderFieldItHolds_AndIsWrittenAgainAsTheSameBytes()
     {
         var mod = PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords();
         var body = HeaderDocument.Write(mod);
@@ -129,7 +128,7 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public void Read_RefusesADocumentThatNamesAnotherGame()
+    public void AHeaderDocumentNamingAnotherGame_IsRefused()
     {
         var fallout4 = Encoding.UTF8.GetString(HeaderDocument.Write(new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4)));
         var skyrim = fallout4.Replace("\"GameRelease\": \"Fallout4\"", "\"GameRelease\": \"SkyrimSE\"", StringComparison.Ordinal);
@@ -138,7 +137,7 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public void Read_YieldsAModWithNoRecords()
+    public void AHeaderDocument_ReadsAsAModWithNoRecords()
     {
         var readBack = HeaderDocument.Read(HeaderDocument.Write(PopulatedModWithRealRecordsSoTheCloneDropsTheGroupsShortcutIsExercisedIncludingAContainerHoldingNestedRecords()), GameRelease.Fallout4);
 
@@ -146,7 +145,7 @@ public sealed class HeaderDocumentTests
     }
 
     [Fact]
-    public void WriteAndRead_CreateNothingOnDisk()
+    public void WritingAndReadingAHeader_CreatesNothingOnDisk()
     {
         var before = Directory.EnumerateFileSystemEntries(Path.GetTempPath(), "medit-header-*").ToHashSet(StringComparer.Ordinal);
 

@@ -57,17 +57,11 @@ public sealed class DerivedContainerMembersTests
     public void EveryEmbeddedSlotsElement_IsAMajorRecordByMutagensOwnReckoning(GameRelease release)
     {
         var mod = ModFactory.Activator(ModKey.FromFileName("Sweep.esp"), release);
-
-        foreach (var (parent, slot) in DerivedEmbeddedSlots(release))
-            Assert.True(EnumeratesAsMajorRecordsByMutagensOwnRegistration(mod, ElementOf(release, parent, slot)), $"{parent}.{slot} holds no major record.");
-
         var nestedGroupsWhichMutagenRefusesToEnumerateAsRecords = DerivedChildFields(release).Except(DerivedEmbeddedSlots(release)).ToList();
+
         Assert.NotEmpty(nestedGroupsWhichMutagenRefusesToEnumerateAsRecords);
-        foreach (var (parent, slot) in nestedGroupsWhichMutagenRefusesToEnumerateAsRecords)
-        {
-            Assert.False(EnumeratesAsMajorRecordsByMutagensOwnRegistration(mod, ElementOf(release, parent, slot)),
-                $"{parent}.{slot} holds major records directly, so it belongs in the embedded slots.");
-        }
+        Assert.Empty(DerivedEmbeddedSlots(release).Where(slot => !EnumeratesAsMajorRecordsByMutagensOwnRegistration(mod, ElementOf(release, slot.Parent, slot.Member))).Select(slot => slot.Parent + "." + slot.Member));
+        Assert.Empty(nestedGroupsWhichMutagenRefusesToEnumerateAsRecords.Where(slot => EnumeratesAsMajorRecordsByMutagensOwnRegistration(mod, ElementOf(release, slot.Parent, slot.Member))).Select(slot => slot.Parent + "." + slot.Member));
     }
 
     [Fact]

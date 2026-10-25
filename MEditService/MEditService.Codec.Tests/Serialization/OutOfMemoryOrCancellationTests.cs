@@ -16,6 +16,6 @@ public sealed class OutOfMemoryOrCancellationTests
 
     [Theory]
     [MemberData(nameof(Thrown))]
-    public void In_FindsTheOutOfMemoryOrCancellationAThrowWraps(string _, Exception thrown, Exception? found) =>
+    public void TheOutOfMemoryOrCancellationAThrowWraps_IsFound(string _, Exception thrown, Exception? found) =>
         Assert.Same(found, OutOfMemoryOrCancellation.In(thrown));
 }

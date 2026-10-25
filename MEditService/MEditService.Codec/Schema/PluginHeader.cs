@@ -9,6 +9,9 @@ public static class PluginHeader
 {
     public const string RecordType = "header";
 
+    /// <summary>The whole mod's member holding its header, which the header's document is the root of.</summary>
+    public const string ModHeaderMember = "ModHeader";
+
     /// <summary>The header's masters member, reflected as a read-only column: a write to it is refused
     /// (ADR-0008). Never a runtime branch; the missing delegate is the enforcement.</summary>
     public const string MastersFieldName = "MasterReferences";

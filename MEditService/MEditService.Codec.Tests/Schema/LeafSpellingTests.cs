@@ -29,44 +29,34 @@ public sealed class LeafSpellingTests
     }
 
     [Theory]
-    [InlineData("npc_", "NAM5", "\"0xAB12\"", "\"ab12\"", true)]
-    [InlineData("npc_", "NAM5", "\"0xAB12\"", "\"0xAB13\"", false)]
-    [InlineData("npc_", "TextureLighting", "\"#ff0000\"", "\"#FF0000\"", true)]
-    [InlineData("npc_", "TextureLighting", "\"#FF0000\"", "\"#00FF00\"", false)]
-    [InlineData("npc_", "Race", "\"0008aa:A.esp\"", "\"0008AA:A.esp\"", true)]
-    [InlineData("npc_", "Race", "\"0008AA:A.esp\"", "\"0008AB:A.esp\"", false)]
-    [InlineData("mato", "ProjectionVector", "\"1, 2\"", "\"1,2.0\"", true)]
-    [InlineData("mato", "ProjectionVector", "\"1, 2\"", "\"1, 3\"", false)]
-    [InlineData("npc_", "EditorID", "\"Abc\"", "\"abc\"", false)]
+    [InlineData("npc_", "NAM5", "\"0xAB12\"", "\"ab12\"", null)]
+    [InlineData("npc_", "NAM5", "\"0xAB12\"", "\"0xAB13\"", "NAM5")]
+    [InlineData("npc_", "TextureLighting", "\"#ff0000\"", "\"#FF0000\"", null)]
+    [InlineData("npc_", "TextureLighting", "\"#FF0000\"", "\"#00FF00\"", "TextureLighting")]
+    [InlineData("npc_", "Race", "\"0008aa:A.esp\"", "\"0008AA:A.esp\"", null)]
+    [InlineData("npc_", "Race", "\"0008AA:A.esp\"", "\"0008AB:A.esp\"", "Race")]
+    [InlineData("mato", "ProjectionVector", "\"1, 2\"", "\"1,2.0\"", null)]
+    [InlineData("mato", "ProjectionVector", "\"1, 2\"", "\"1, 3\"", "ProjectionVector")]
+    [InlineData("npc_", "EditorID", "\"Abc\"", "\"abc\"", "EditorID")]
+    [InlineData("npc_", "HeightMax", "2", "2.0", null)]
+    [InlineData("npc_", "HeightMax", "2", "\"2\"", "HeightMax")]
+    [InlineData("npc_", "Flags", """["Essential"]""", """["0x2"]""", null)]
+    [InlineData("npc_", "Flags", """["Essential"]""", """["0x4"]""", "Flags")]
     public void ASpellingTheCodecMayChange_IsTheSameValue_AndAnyOtherIsDroppedByName(
-        string table, string member, string patched, string written, bool same)
+        string table, string member, string patched, string written, string? dropped)
     {
-        Assert.Equal(same ? null : member, DroppedWhenWrittenAs(table, member, patched, written));
-    }
-
-    [Fact]
-    public void NumbersAreComparedByMagnitude_AndAKindMismatchIsNeverTheSame()
-    {
-        Assert.Null(DroppedWhenWrittenAs("npc_", "HeightMax", "2", "2.0"));
-        Assert.Equal("HeightMax", DroppedWhenWrittenAs("npc_", "HeightMax", "2", "\"2\""));
-    }
-
-    [Fact]
-    public void ABitNamedByAMemberAndTheSameBitSpelledInHex_AreTheSameBits()
-    {
-        Assert.Null(DroppedWhenWrittenAs("npc_", "Flags", """["Essential"]""", """["0x2"]"""));
-        Assert.Equal("Flags", DroppedWhenWrittenAs("npc_", "Flags", """["Essential"]""", """["0x4"]"""));
+        Assert.Equal(dropped, DroppedWhenWrittenAs(table, member, patched, written));
     }
 
     [Theory]
-    [InlineData("EditorID", "\"\"", true)]
-    [InlineData("Race", "\"Null\"", true)]
-    [InlineData("NAM5", "\"[]\"", true)]
-    [InlineData("EditorID", "\"Null\"", false)]
-    [InlineData("NAM5", "\"0x01\"", false)]
-    public void TheSentinelAFieldIsMintedWith_IsKeptWhereTheCodecOmitsIt(string member, string patched, bool unset)
+    [InlineData("EditorID", "\"\"", null)]
+    [InlineData("Race", "\"Null\"", null)]
+    [InlineData("NAM5", "\"[]\"", null)]
+    [InlineData("EditorID", "\"Null\"", "EditorID")]
+    [InlineData("NAM5", "\"0x01\"", "NAM5")]
+    public void TheSentinelAFieldIsMintedWith_IsKeptWhereTheCodecOmitsIt(string member, string patched, string? dropped)
     {
-        Assert.Equal(unset ? null : member, DroppedWhenWrittenAs("npc_", member, patched, written: null));
+        Assert.Equal(dropped, DroppedWhenWrittenAs("npc_", member, patched, written: null));
     }
 
     [Theory]
@@ -81,16 +71,11 @@ public sealed class LeafSpellingTests
     }
 
     [Fact]
-    public void AStructElementAddedWithoutAValue_NamesOnlyItsDiscriminator()
+    public void AStructElementAddedWithoutAValue_NamesOnlyItsDiscriminator_AsTheUnionsFirstLeaf()
     {
-        var element = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementType.Require();
-        var discriminator = element.Fields.Require().Single(f => f.IsDiscriminator);
-
         var patch = Patched("cobj", EditOp.Add, null, "Conditions");
 
-        var minted = JsonNode.Parse(patch.Document.Text).Require()["Conditions"].Require()[0].Require().AsObject();
-        Assert.Equal([discriminator.Name], minted.Select(p => p.Key));
-        Assert.Equal(discriminator.EnumMembers[0].Value, minted[discriminator.Name]?.GetValue<string>());
+        Assert.Equal("""{"MutagenObjectType":"ConditionFloat"}""", JsonNode.Parse(patch.Document.Text).Require()["Conditions"].Require()[0].Require().ToJsonString());
     }
 
     [Fact]

@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
 using Noggog;
 
-namespace MEditService.Codec.Tests.Indexing;
+namespace MEditService.Codec.Tests.Schema;
 
 public sealed class SchemaReflectorLeafCoverageCompletenessTests
 {
@@ -22,91 +22,24 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
 
     private static readonly HashSet<string> LoquiSkipProps = new(StringComparer.OrdinalIgnoreCase) { "Registration" };
 
-    private static readonly (string SchemaRegisteredGetterInterfaceName, string Property)[] MandatoryAbstractUnionsANpcLevelAndAQuestAlias =
-    [
-        ("INpcGetter", "Level"),
-        ("IQuestGetter", "Aliases"),
-    ];
-
-    private static readonly (string SchemaRegisteredGetterInterfaceName, string Property)[] TwoLevelChainAbstractUnionsAPerkEffectOverAPerkEntryPointEffect =
-    [
-        ("IPerkGetter", "Effects"),
-    ];
-
-    private static readonly (string SchemaRegisteredGetterInterfaceName, string Property)[] CoveredAbstractUnionsNamedSoAByproductTypeQuietlyChangingShapeIsNoticed =
-    [
-        .. MandatoryAbstractUnionsANpcLevelAndAQuestAlias,
-        .. TwoLevelChainAbstractUnionsAPerkEffectOverAPerkEntryPointEffect,
-        ("IBookGetter", "Teaches"),
-        ("IColorRecordGetter", "Data"),
-        ("IHolotapeGetter", "Data"),
-        ("ISoundDescriptorGetter", "Data"),
-        ("IMagicEffectGetter", "Archetype"),
-        ("IAudioEffectChainGetter", "Effects"),
-    ];
-
-    private static readonly (string SchemaRegisteredGetterInterfaceName, string Property)[] CoveredNestedAbstractUnionsOfSubrecordsEmbeddedInsideOtherRecordTypes =
-    [
-        ("INavmeshGeometryGetter", "Parent"),
-        ("ILocationTargetRadiusGetter", "Target"),
-    ];
-
-    [Fact]
-    public void EveryCoveredAbstractUnion_ExposesNonEmptySubSchemaWithADiscriminator()
+    [Theory]
+    [InlineData("npc_", "Level")]
+    [InlineData("qust", "Aliases.[]")]
+    [InlineData("perk", "Effects.[]")]
+    [InlineData("book", "Teaches")]
+    [InlineData("clfm", "Data")]
+    [InlineData("note", "Data")]
+    [InlineData("sndr", "Data")]
+    [InlineData("mgef", "Archetype")]
+    [InlineData("aech", "Effects.[]")]
+    [InlineData("navm", "NavmeshGeometry.Parent")]
+    [InlineData("fact", "VendorLocation.Target")]
+    public void ACoveredAbstractUnion_ExposesItsMembers_AmongThemTheDocumentsDiscriminator(string table, string path)
     {
-        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+        var members = SchemaFields.At(GameRelease.Fallout4, table, path).Fields;
 
-        var regressed = new List<string>();
-        foreach (var (owner, property) in CoveredAbstractUnionsNamedSoAByproductTypeQuietlyChangingShapeIsNoticed)
-        {
-            var schema = schemas.Values.SingleOrDefault(s => OwnersOf(s)[0].Name == owner);
-            if (schema == null) { regressed.Add($"{owner} (schema not found)"); continue; }
-
-            var column = schema.RecordColumns.SingleOrDefault(c => c.PropertyName == property);
-            AssertCovered(regressed, $"{owner}.{property}",
-                column == null ? null : column.Field.ElementType?.Fields ?? column.Field.Fields);
-        }
-
-        foreach (var (owner, property) in CoveredNestedAbstractUnionsOfSubrecordsEmbeddedInsideOtherRecordTypes)
-        {
-            IReadOnlyList<FieldMetadata>? found = null;
-            foreach (var schema in schemas.Values)
-            {
-                foreach (var column in schema.RecordColumns)
-                {
-                    var nestedFields = column.Field.ElementType?.Fields ?? column.Field.Fields;
-                    if (nestedFields == null) continue;
-                    var match = nestedFields.SingleOrDefault(f => f.Name == property);
-                    if (match == null) continue;
-                    var ownPropWhoseNestedTypeIsReDerivedToExcludeASameNamedPropertyOnAnUnrelatedStruct = DirectDataProperties(OwnersOf(schema)[0], HandKeptSkipOfEditorIdTheWritePathOwnsAndGrupTimestampsSoADriftFailsLoud)
-                        .FirstOrDefault(p => p.Name == column.PropertyName);
-                    if (ownPropWhoseNestedTypeIsReDerivedToExcludeASameNamedPropertyOnAnUnrelatedStruct == null
-                        || NestedGetterType(ownPropWhoseNestedTypeIsReDerivedToExcludeASameNamedPropertyOnAnUnrelatedStruct.PropertyType)?.Name != owner) continue;
-                    found = match.Fields;
-                    break;
-                }
-                if (found != null) break;
-            }
-
-            AssertCovered(regressed, $"{owner}.{property}", found);
-        }
-
-        Assert.True(regressed.Count == 0,
-            $"An abstract-union field the covered abstract-union lists name as " +
-            $"covered regressed: {string.Join(", ", regressed)}. Either the general mechanism no " +
-            "longer reaches it, or it was never actually covered and this list is wrong — " +
-            "investigate, don't just remove it.");
-
-        static void AssertCovered(List<string> regressed, string label, IReadOnlyList<FieldMetadata>? fields)
-        {
-            if (fields == null || fields.Count == 0)
-            {
-                regressed.Add($"{label} (empty or missing sub-schema)");
-                return;
-            }
-            if (fields.All(f => !f.IsDiscriminator))
-                regressed.Add($"{label} (no discriminator)");
-        }
+        Assert.NotNull(members);
+        Assert.Contains(members, member => member.IsDiscriminator);
     }
 
     private static readonly string[] RecordFlagViews = ["Fallout4MajorRecordFlags", "IsCompressed", "IsDeleted", "MajorFlags"];

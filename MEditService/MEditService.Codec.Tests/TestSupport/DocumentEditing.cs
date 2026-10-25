@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -11,17 +12,21 @@ namespace MEditService.Codec.Tests.TestSupport;
 /// back through the codec, and checked for what the codec dropped and a synthetic member changed aside.</summary>
 internal static class DocumentEditing
 {
-    internal sealed record Outcome(EditFailure? Failure, string? Dropped, string? ChangedAside, string? Text);
+    private sealed record Outcome(EditFailure? Failure, string? Dropped, string? ChangedAside, string? Text);
 
     internal static DocumentHop Member(string name) => new(name, null);
 
     internal static DocumentHop At(int index) => new(null, index);
 
-    internal static Outcome Edit(string text, string table, EditOp op, string? value, params DocumentHop[] path) =>
-        Edit(GameRelease.Fallout4, text, table, op, value, path);
-
-    internal static Outcome Edit(GameRelease release, string text, string table, EditOp op, string? value, params DocumentHop[] path) =>
-        Edit(release, Language.English, localized: false, text, table, op, value, path);
+    /// <summary>The hops of a path spelled as the document's paths are: <c>Scripts[0].Properties</c>.</summary>
+    internal static DocumentHop[] Path(string spelled) =>
+    [
+        .. spelled.Split('.').SelectMany(segment =>
+        {
+            var parts = segment.Split('[', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Skip(1).Select(index => At(int.Parse(index.TrimEnd(']'), CultureInfo.InvariantCulture))).Prepend(Member(parts[0]));
+        }),
+    ];
 
     private static Outcome Edit(
         GameRelease release, Language stringsLanguage, bool localized, string text, string table, EditOp op, string? value,
@@ -65,7 +70,8 @@ internal static class DocumentEditing
     }
 
     internal static EditFailure Failure(string text, string table, EditOp op, string? value, params DocumentHop[] path) =>
-        Edit(text, table, op, value, path).Failure ?? throw new InvalidOperationException("Expected the edit to fail.");
+        Edit(GameRelease.Fallout4, Language.English, localized: false, text, table, op, value, path).Failure
+            ?? throw new InvalidOperationException("Expected the edit to fail.");
 
     private static string WrittenBack(string patched, RecordTableSchema schema, GameRelease release) =>
         schema.IsHeader

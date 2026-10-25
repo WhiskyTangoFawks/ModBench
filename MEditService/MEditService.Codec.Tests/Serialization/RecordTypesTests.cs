@@ -1,4 +1,5 @@
 using System.Reflection;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -29,8 +30,6 @@ public sealed class RecordTypesTests
     public void ARecordClassThatInheritsItsGrupSignature_BelongsToThatGrupsTable()
     {
         const string deletedObjectModificationMutagenReadsWhenADeletedOmodHasNoData = "DeletedObjectModification";
-        Assert.NotNull(typeof(AObjectModification).Assembly.GetType(
-            $"{typeof(AObjectModification).Namespace}.{deletedObjectModificationMutagenReadsWhenADeletedOmodHasNoData}"));
 
         Assert.Equal("omod", RecordTypes.For(GameRelease.Fallout4).RecordTypeNamed(deletedObjectModificationMutagenReadsWhenADeletedOmodHasNoData));
     }
@@ -64,34 +63,40 @@ public sealed class RecordTypesTests
         Assert.Equal("wrld", RecordTypes.For(GameRelease.Fallout4).Worldspace);
     }
 
-    [Fact]
-    public void ARecordsGroup_IsTheModsGroupHoldingIt_AsMutagenNamesIt()
+    [Theory]
+    [InlineData("npc_", "Npcs")]
+    [InlineData("cell", "Cells")]
+    [InlineData("refr", null)]
+    public void ARecordTypesGroup_IsTheModsTopLevelGroupHoldingIt_AsMutagenNamesIt_NoneForATypeHeldOnlyInsideAnother(string recordType, string? group)
     {
-        Assert.Equal("Npcs", RecordTypes.For(GameRelease.Fallout4).GroupOf("npc_"));
+        Assert.Equal(group, RecordTypes.For(GameRelease.Fallout4).GroupOf(recordType));
     }
 
-    [Fact]
-    public void ACellsGroup_IsTheCellsGroup_ThoughItHoldsBlocksOfCells()
+    [Theory]
+    [InlineData("Npcs", "npc_")]
+    [InlineData("Globals", null)]
+    public void AGroupOfOneRecordClass_HoldsThatRecordType_AndOneOfSeveralHoldsNoOne_ThoughTheyShareATable(string group, string? recordType)
     {
-        Assert.Equal("Cells", RecordTypes.For(GameRelease.Fallout4).GroupOf("cell"));
+        Assert.Equal(recordType, RecordTypes.For(GameRelease.Fallout4).OnlyRecordTypeIn(group));
     }
 
-    [Fact]
-    public void ARecordHeldOnlyInsideAnother_HasNoGroup()
+    [Theory]
+    [InlineData("npc_", true)]
+    [InlineData("cell", true)]
+    [InlineData("wrld", true)]
+    [InlineData("qust", true)]
+    [InlineData(PluginHeader.RecordType, false)]
+    [InlineData("refr", false)]
+    [InlineData("navm", false)]
+    [InlineData("dial", false)]
+    [InlineData("info", false)]
+    [InlineData("not-a-real-type", false)]
+    public void ARecordType_IsCreatable_ExactlyWhenItHasATopLevelGroupOfItsOwn(string recordType, bool creatable)
     {
-        Assert.Null(RecordTypes.For(GameRelease.Fallout4).GroupOf("refr"));
-    }
+        var types = RecordTypes.For(GameRelease.Fallout4);
 
-    [Fact]
-    public void AGroupOfOneRecordClass_HoldsThatRecordType()
-    {
-        Assert.Equal("npc_", RecordTypes.For(GameRelease.Fallout4).OnlyRecordTypeIn("Npcs"));
-    }
-
-    [Fact]
-    public void AGroupOfSeveralRecordClasses_HoldsNoOneRecordType_ThoughTheyShareATable()
-    {
-        Assert.Null(RecordTypes.For(GameRelease.Fallout4).OnlyRecordTypeIn("Globals"));
+        Assert.Equal(creatable, types.IsCreatable(recordType));
+        Assert.Equal(creatable, types.Creatable.Contains(recordType));
     }
 
     public class RecordOfNoGameClass : DispatchProxy

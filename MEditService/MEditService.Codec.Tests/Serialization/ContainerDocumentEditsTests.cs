@@ -234,6 +234,49 @@ public sealed class ContainerDocumentEditsTests
         Assert.Equal(handFormatted.Replace("PersistRef", "Renamed", StringComparison.Ordinal), replaced);
     }
 
+    private static readonly Fallout4Mod Holder = new(ModKey.FromFileName("Append.esp"), Fallout4Release.Fallout4);
+
+    private static readonly Dictionary<string, Func<IMajorRecordGetter>> Containers = new(StringComparer.Ordinal)
+    {
+        ["a quest holding a topic, a branch and a scene"] = () =>
+        {
+            var quest = new Quest(Holder) { EditorID = "Own" };
+            quest.DialogTopics.Add(new DialogTopic(Holder));
+            quest.DialogBranches.Add(new DialogBranch(Holder));
+            quest.Scenes.Add(new Scene(Holder));
+            return quest;
+        },
+        ["an interior cell holding a child in every slot"] = () =>
+        {
+            var cell = new Cell(Holder) { EditorID = "Own", Flags = Cell.Flag.IsInteriorCell };
+            cell.Persistent.Add(new PlacedObject(Holder));
+            cell.Temporary.Add(new PlacedObject(Holder));
+            cell.NavigationMeshes.Add(new NavigationMesh(Holder));
+            cell.Landscape = new Landscape(Holder);
+            return cell;
+        },
+        ["a worldspace holding a persistent cell and a block"] = () =>
+        {
+            var worldspace = new Worldspace(Holder) { EditorID = "Own", TopCell = new Cell(Holder) };
+            worldspace.SubCells.Add(new WorldspaceBlock());
+            return worldspace;
+        },
+    };
+
+    [Theory]
+    [InlineData("a quest holding a topic, a branch and a scene", new[] { "DialogTopics", "DialogBranches", "Scenes" })]
+    [InlineData("an interior cell holding a child in every slot", new[] { "Persistent", "Temporary", "NavigationMeshes", "Landscape" })]
+    [InlineData("a worldspace holding a persistent cell and a block", new[] { "TopCell", "SubCells" })]
+    public void AContainerWithoutItsChildren_KeepsItsOwnFields_AndHoldsNoChildSlot(string container, string[] slots)
+    {
+        var record = Containers[container]();
+
+        using var own = JsonDocument.Parse(ContainerDocumentEdits.WithoutChildren(Text(record), Release, RecordTypeOf(record)));
+
+        Assert.Equal("Own", own.RootElement.GetProperty("EditorID").GetString());
+        Assert.DoesNotContain(own.RootElement.EnumerateObject(), member => slots.Contains(member.Name));
+    }
+
     [Fact]
     public void CuttingTheChildSlots_OfTheCodecsText_LandsTheOwnFieldsCopy()
     {

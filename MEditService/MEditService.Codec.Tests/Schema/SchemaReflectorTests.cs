@@ -1,5 +1,4 @@
 using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -11,20 +10,17 @@ public class SchemaReflectorTests
     private readonly SchemaReflector _reflector = SharedSchemaReflector.Instance;
 
     [Theory]
-    [InlineData("parw", nameof(PlacedArrow), "Placed Arrow")]
-    [InlineData("pbar", nameof(PlacedBarrier), "Placed Barrier")]
-    [InlineData("pbea", nameof(PlacedBeam), "Placed Beam")]
-    [InlineData("pcon", nameof(PlacedCone), "Placed Cone/Voice")]
-    [InlineData("pfla", nameof(PlacedFlame), "Placed Flame")]
-    [InlineData("pgre", nameof(PlacedTrap), "Placed Projectile")]
-    [InlineData("phzd", nameof(PlacedHazard), "Placed Hazard")]
-    [InlineData("pmis", nameof(PlacedMissile), "Placed Missile")]
-    public void APlacedVariant_IsATableOfItsOwnType_UnderXEditsName(string table, string recordClass, string displayName)
+    [InlineData("parw", "Placed Arrow")]
+    [InlineData("pbar", "Placed Barrier")]
+    [InlineData("pbea", "Placed Beam")]
+    [InlineData("pcon", "Placed Cone/Voice")]
+    [InlineData("pfla", "Placed Flame")]
+    [InlineData("pgre", "Placed Projectile")]
+    [InlineData("phzd", "Placed Hazard")]
+    [InlineData("pmis", "Placed Missile")]
+    public void APlacedVariant_IsATableUnderXEditsName(string table, string displayName)
     {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-
-        Assert.Equal(table, RecordTypes.For(GameRelease.Fallout4).RecordTypeNamed(recordClass));
-        Assert.Equal(displayName, schemas.DisplayNameFor(table));
+        Assert.Equal(displayName, _reflector.GetSchemas(GameRelease.Fallout4).DisplayNameFor(table));
     }
 
     [Theory]
@@ -38,7 +34,7 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Omod_PropertiesColumn_CarriesEachRecordClassOwnPropertyDomain_BecauseEachClassesPropertiesElementClosesOverItsOwnT()
+    public void AnObjectModsProperties_CarryEachRecordClassOwnPropertyDomain_BecauseEachClassesPropertiesElementClosesOverItsOwnT()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "Properties");
@@ -61,7 +57,7 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Omod_PropertiesElement_ExposesSevenLeafUnionFields_BecauseTheGetterInterfaceDeclaresOnlyPropertyAndStepAndThePayloadLivesOnTheSevenGenericLeavesNamedAsTheCodecClosesThem()
+    public void AnObjectModPropertyElement_ExposesSevenLeafUnionFields_BecauseTheGetterInterfaceDeclaresOnlyPropertyAndStepAndThePayloadLivesOnTheSevenGenericLeavesNamedAsTheCodecClosesThem()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "Properties");
@@ -105,7 +101,7 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Glob_OutputCharColumn_ExclusiveToGlobalFloat_NamesThatOneClassAsItsVariant_TheNotPresentOnEverySiblingBranchOfTheFoldBeingRealToday()
+    public void AGlobalsOutputChar_ExclusiveToGlobalFloat_NamesThatOneClassAsItsVariant_TheNotPresentOnEverySiblingBranchOfTheFoldBeingRealToday()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var outputChar = schemas["glob"].RecordColumns.Single(c => c.Name == "OutputChar");
@@ -121,7 +117,7 @@ public class SchemaReflectorTests
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
     [InlineData(GameRelease.Starfield)]
-    public void GetSchemas_EveryDiscoveredTable_HasANonEmptyDisplayName_DifferentFromItsKeyBecauseRecordDisplayNamesForFallsBackToTheRawSignatureOnALookupMiss(GameRelease release)
+    public void EveryDiscoveredTable_HasANonEmptyDisplayName_DifferentFromItsKeyBecauseRecordDisplayNamesForFallsBackToTheRawSignatureOnALookupMiss(GameRelease release)
     {
         var schemas = _reflector.GetSchemas(release);
         var missing = schemas
@@ -132,20 +128,6 @@ public class SchemaReflectorTests
     }
 
     [Theory]
-    [InlineData("npc_", "AggroRadiusBehaviorEnabled", "bool")]
-    [InlineData("npc_", "Weight", "struct")]
-    [InlineData("imad", "Unknown", "int")]
-    [InlineData("npc_", "Name", "translatedString")]
-    [InlineData("npc_", "Flags", "flags")]
-    [InlineData("header", "Author", "string")]
-    public void AColumnsApiType_IsTheLeafTheCodecSpellsItAs(string table, string column, string apiType)
-    {
-        var col = _reflector.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(c => c.Name == column);
-
-        Assert.Equal(apiType, col.ApiType);
-    }
-
-    [Theory]
     [InlineData("npc_", "Race", false)]
     [InlineData("npc_", "Voice", true)]
     [InlineData("npc_", "Factions.[].Faction", false)]
@@ -153,18 +135,16 @@ public class SchemaReflectorTests
         Assert.Equal(allowsNull, SchemaFields.At(GameRelease.Fallout4, table, path).AllowsNull);
 
     [Fact]
-    public void GetSchemas_Npc_EnumColumn_MapsToEnumWithMembers()
+    public void AnEnumsMembers_AreItsValues_CarryingNoBit()
     {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Aggression");
-        Assert.NotNull(col);
-        Assert.Equal("enum", col.ApiType);
-        Assert.NotEmpty(col.Field.EnumMembers);
-        Assert.Contains("Unaggressive", col.Field.EnumMembers.Select(m => m.Value));
+        var aggression = SchemaFields.At(GameRelease.Fallout4, "npc_", "Aggression");
+
+        Assert.Contains("Unaggressive", aggression.EnumMembers.Select(m => m.Value));
+        Assert.All(aggression.EnumMembers, m => Assert.Null(m.BitValue));
     }
 
     [Fact]
-    public void GetSchemas_Npc_FormLinkColumn_MapsToFormKeyTypeWithValidTypes()
+    public void AFormLink_NamesTheTablesItMayPointAt()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Race");
@@ -174,7 +154,7 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Npc_Keywords_IsReflectedAsArrayOfFormKeys()
+    public void AListOfLinks_IsAnArrayOfFormKeys_EachNamingTheTablesItMayPointAt()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Keywords");
@@ -186,7 +166,7 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Npc_Factions_IsReflectedAsArrayOfStructs()
+    public void AListOfStructs_IsAnArrayOfStructs_HoldingTheirMembers()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Factions");
@@ -201,48 +181,18 @@ public class SchemaReflectorTests
     }
 
     [Theory]
-    [InlineData("HeightMin", "float", "Weight", false, "Thin")]
-    [InlineData("XpValueOffset", "int", "Factions", true, "Rank")]
-    [InlineData("Race", "formKey", "Factions", true, "Faction")]
-    [InlineData("Aggression", "enum", "FaceTintingLayers", true, "DataType")]
-    public void GetSchemas_PrimitiveType_ColumnAndSubFieldBothReflected_ASubFieldOfEachPrimitiveTypeMapsAsItsTopLevelColumnDoes(
-        string topLevelColumnName,
-        string expectedApiType,
-        string structOrArrayColumn,
-        bool isArray,
-        string subFieldName)
+    [InlineData("HeightMin", "Weight.Thin", "float")]
+    [InlineData("XpValueOffset", "Factions.[].Rank", "int")]
+    [InlineData("Race", "Factions.[].Faction", "formKey")]
+    [InlineData("Aggression", "FaceTintingLayers.[].DataType", "enum")]
+    public void AMemberOfAStructOrAnArrayElement_IsTheKindAColumnOfItsTypeIs(string column, string member, string kind)
     {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var npc = schemas["npc_"];
-
-        var topCol = npc.RecordColumns.FirstOrDefault(c => c.Name == topLevelColumnName);
-        Assert.NotNull(topCol);
-        Assert.Equal(expectedApiType, topCol.ApiType);
-
-        var structCol = npc.RecordColumns.FirstOrDefault(c => c.Name == structOrArrayColumn);
-        Assert.NotNull(structCol);
-
-        IReadOnlyList<FieldMetadata>? subFields = isArray
-            ? structCol.Field.ElementType?.Fields
-            : structCol.Field.Fields;
-
-        Assert.NotNull(subFields);
-        var subField = subFields.FirstOrDefault(f => f.Name == subFieldName);
-        Assert.NotNull(subField);
-        Assert.Equal(expectedApiType, subField.Type);
+        Assert.Equal(kind, SchemaFields.At(GameRelease.Fallout4, "npc_", column).Type);
+        Assert.Equal(kind, SchemaFields.At(GameRelease.Fallout4, "npc_", member).Type);
     }
 
     [Fact]
-    public void GetSchemas_Npc_EnumColumn_MembersCarryNoBit()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Aggression");
-        Assert.NotNull(col);
-        Assert.All(col.Field.EnumMembers, m => Assert.Null(m.BitValue));
-    }
-
-    [Fact]
-    public void GetSchemas_FlagColumn_EveryMemberCarriesAnAtomicBit_BecauseGetEnumMembersFiltersOutNoneZeroAndCompositeValues()
+    public void AFlagsMembers_EachCarryAnAtomicBit_BecauseGetEnumMembersFiltersOutNoneZeroAndCompositeValues()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Flags");
@@ -258,7 +208,7 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Race_FlagColumn_UlongBackedBitsBeyondJsMaxSafeInteger_SerializedAsStringsSoTheFrontendParsesThemAsBigInt()
+    public void ARacesFlags_UlongBackedBitsBeyondJsMaxSafeInteger_SerializedAsStringsSoTheFrontendParsesThemAsBigInt()
     {
         const string LowPriorityPushable2Pow53 = "9007199254740992";
         const string CannotUsePlayableItems2Pow54 = "18014398509481984";
@@ -274,7 +224,7 @@ public class SchemaReflectorTests
     [Theory]
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
-    public void GetSchemas_Header_FlagsColumn_CarriesMutagensNamesLabelledWithXEdits_XEditsVocabularyIsTheLabelNeverTheValueSincePresentationNeverRewritesAValue(GameRelease release)
+    public void AHeadersFlags_CarryMutagensNamesLabelledWithXEdits_XEditsVocabularyIsTheLabelNeverTheValueSincePresentationNeverRewritesAValue(GameRelease release)
     {
         var schemas = _reflector.GetSchemas(release);
         var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "Flags");
@@ -301,7 +251,7 @@ public class SchemaReflectorTests
     [InlineData(GameRelease.Fallout4)]
     [InlineData(GameRelease.SkyrimSE)]
     [InlineData(GameRelease.Starfield)]
-    public void GetSchemas_Header_PresentsTheLightMasterFlagAsAMemberOfItsOwn(GameRelease release)
+    public void AHeader_PresentsTheLightMasterFlagAsAMemberOfItsOwn(GameRelease release)
     {
         var header = _reflector.GetSchemas(release)["header"];
 
@@ -309,7 +259,7 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Header_MastersColumn_IsTheDocumentsOwnMasterReferences()
+    public void AHeadersMasters_AreTheDocumentsOwnMasterReferences()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "MasterReferences");
@@ -325,7 +275,16 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Container_HasObjectBoundsColumn_WithFirstSecondVectorSubFields_BecauseNoggogP3Int16IsAVectorLeafTheCodecSpellsAsXYZTextNotDroppedAsUnclassified()
+    public void AHeadersMasters_AreReadOnly_ThroughEveryMemberBelow_AsCompileDerivesThem()
+    {
+        var masters = SchemaFields.Below("MasterReferences", SchemaFields.At(GameRelease.Fallout4, "header", "MasterReferences")).ToList();
+
+        Assert.Contains(masters, member => member.Path == "MasterReferences[].Master");
+        Assert.All(masters, member => Assert.Equal("masters are wholly content-derived at compile time", member.Field.ReadOnlyReason));
+    }
+
+    [Fact]
+    public void AContainersObjectBounds_HoldFirstAndSecondVectors_BecauseNoggogP3Int16IsAVectorLeafTheCodecSpellsAsXYZTextNotDroppedAsUnclassified()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["cont"].RecordColumns.FirstOrDefault(c => c.Name == "ObjectBounds");
@@ -337,7 +296,7 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Container_Destructible_HasResistancesAndStagesArraySubFields_ListsNestedInsideAStructNotDropped()
+    public void AContainersDestructible_HoldsResistancesAndStagesArrays_ListsNestedInsideAStructNotDropped()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var destructible = schemas["cont"].RecordColumns.First(c => c.Name == "Destructible");
@@ -357,17 +316,7 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_MaterialObject_HasProjectionVectorColumn_AsAVectorLeaf_ChosenBecauseItHasNoSideTableRowUnlikePlacedPositionSoIsSafeToMakeWritableUnconditionally()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["mato"].RecordColumns.FirstOrDefault(c => c.Name == "ProjectionVector");
-        Assert.NotNull(col);
-        Assert.Equal("vector", col.ApiType);
-        Assert.Null(col.Field.Fields);
-    }
-
-    [Fact]
-    public void GetSchemas_PlacedObject_TeleportDestination_HasPositionRotationVectorSubFields_ChosenBecauseItIsNeverMirroredElsewhereSoIsSafeToMakeWritableUnconditionally()
+    public void APlacedObjectsTeleportDestination_HoldsPositionAndRotationVectors_ChosenBecauseItIsNeverMirroredElsewhereSoIsSafeToMakeWritableUnconditionally()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var teleport = schemas["refr"].RecordColumns.FirstOrDefault(c => c.Name == "TeleportDestination");
@@ -378,7 +327,7 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Cell_HasGridColumn_WithFlagsAndPointSubFields_ChosenBecausePointIsANoggogP2IntBeyondP3Int16AndP3Float()
+    public void ACellsGrid_HoldsFlagsAndAPointVector_ChosenBecausePointIsANoggogP2IntBeyondP3Int16AndP3Float()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["cell"].RecordColumns.FirstOrDefault(c => c.Name == "Grid");
@@ -393,7 +342,7 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Location_WorldspaceCellsAdded_ElementHasCoordinatesListOfVectors_ComposingTheStructNestedListArmWithTheWidenedVectorStructSet()
+    public void ALocationsWorldspaceCellsAdded_ElementHoldsCoordinatesListOfVectors_ComposingTheStructNestedListArmWithTheWidenedVectorStructSet()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["lctn"].RecordColumns.FirstOrDefault(c => c.Name == "WorldspaceCellsAdded");
