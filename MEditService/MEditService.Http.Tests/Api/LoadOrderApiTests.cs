@@ -149,10 +149,8 @@ public sealed class LoadOrderApiTests : HostedTests
         Assert.False((await Client.Plugin("Dormant.esp")).GetProperty("inLoadOrder").GetBoolean());
     }
 
-    [Fact]
-    public async Task PutLoadOrder_TheGamesStringsFilesItNames_AreWhereALocalizedPluginsNamesAreRead()
-    {
-        var fx = Owned(new PluginFixtureBuilder("api-games-strings")
+    private ScatteredFixtureData ALocalizedPlugin() =>
+        Owned(new PluginFixtureBuilder("api-localized-strings")
             .WithPlugin("Localized.esp", mod =>
             {
                 mod.UsingLocalization = true;
@@ -162,13 +160,54 @@ public sealed class LoadOrderApiTests : HostedTests
                     new KeyValuePair<Language, string>(Language.English, "Lever"));
             }, origin: "LocalizedMod")
             .BuildScattered());
-        var plugin = fx.Plugins.Single();
-        var body = SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, [plugin with { NamedStrings = new PluginStrings([], []) }], stringsLanguage: "French");
-        body["stringsFiles"] = plugin.Strings.StringsFiles;
+
+    private async Task<string?> TheLocalizedNameReadInFrench(
+        ScatteredFixtureData fx, LoadOrderEntry plugin, StampedFile[] gameArchives, StampedFile[] gameStringsFiles)
+    {
+        var body = SnapshotPlugins.Body(fx.DataFolder, fx.InstanceRoot, [plugin], stringsLanguage: "French");
+        body["archives"] = gameArchives;
+        body["stringsFiles"] = gameStringsFiles;
 
         (await Client.PutLoadOrderAndAwaitReady(body)).EnsureSuccessStatusCode();
 
         var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Localized.esp&origin=LocalizedMod&type=acti&limit=10");
-        Assert.Equal("Levier", activators.GetProperty("items")[0].GetProperty("fullName").GetString());
+        return activators.GetProperty("items")[0].GetProperty("fullName").GetString();
+    }
+
+    [Fact]
+    public async Task PutLoadOrder_TheGamesStringsFilesItNames_AreWhereALocalizedPluginsNamesAreRead()
+    {
+        var fx = ALocalizedPlugin();
+        var plugin = fx.Plugins.Single();
+
+        Assert.Equal("Levier", await TheLocalizedNameReadInFrench(
+            fx, plugin with { NamedStrings = new PluginStrings([], []) }, [], [.. plugin.Strings.StringsFiles]));
+    }
+
+    private static StampedFile StringsPackedInAnArchive(LoadOrderEntry plugin)
+    {
+        var archive = Path.Combine(Path.GetDirectoryName(plugin.Path).Require(), "Localized - Main.ba2");
+        StringsBa2.Pack(plugin.Strings.StringsFiles.Select(file => file.Path), archive);
+        return HandedStrings.Stamped(archive);
+    }
+
+    public static TheoryData<string, Func<StampedFile, PluginStrings>, Func<StampedFile, StampedFile[]>> ArchivesNamed => new()
+    {
+        { "the game's archives", _ => new PluginStrings([], []), archive => [archive] },
+        { "the plugin's own archives", archive => new PluginStrings([archive], []), _ => [] },
+    };
+
+    [Theory]
+    [MemberData(nameof(ArchivesNamed))]
+    public async Task PutLoadOrder_AnArchiveItNames_IsWhereALocalizedPluginsNamesAreRead(
+        string namedIn, Func<StampedFile, PluginStrings> pluginsOwn, Func<StampedFile, StampedFile[]> theGames)
+    {
+        var fx = ALocalizedPlugin();
+        var plugin = fx.Plugins.Single();
+        var archive = StringsPackedInAnArchive(plugin);
+
+        var name = await TheLocalizedNameReadInFrench(fx, plugin with { NamedStrings = pluginsOwn(archive) }, theGames(archive), []);
+
+        Assert.Equal((namedIn, "Levier"), (namedIn, name));
     }
 }
