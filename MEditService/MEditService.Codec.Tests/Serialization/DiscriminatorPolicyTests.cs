@@ -1,6 +1,5 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
-using MEditService.Codec.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -13,46 +12,14 @@ public sealed class DiscriminatorPolicyTests
 
     private const string Discriminator = "MutagenObjectType";
 
-
-    private static Weapon MakeWeapon() =>
-        new(Mod) { EditorID = "PolicyWeapon", BaseDamage = 7, Value = 11 };
-
     private static GlobalFloat MakeGlobalFloat() =>
         new(Mod) { EditorID = "PolicyGlobal", Data = 2.5f };
-
-    [Fact]
-    public void SerializeToText_ForAWeapon_WritesNoTopLevelDiscriminator()
-    {
-        var text = RecordTextCodec.SerializeToText(MakeWeapon(), GameRelease.Fallout4);
-
-        using var doc = JsonDocument.Parse(text);
-        Assert.False(doc.RootElement.TryGetProperty(Discriminator, out _),
-            $"A concrete-element type must not self-describe:\n{text}");
-    }
-
-    [Fact]
-    public void RoundTrip_ForAWeaponDocument_ReconstitutesFromRecordType_BecauseAConcreteElementTypeWritesNoDiscriminatorAndItsIdentityIsTheIndexsRecordType()
-    {
-        var weapon = ReadBack.Of(MakeWeapon(), GameRelease.Fallout4, "weap");
-
-        Assert.Equal("PolicyWeapon", weapon.GetProperty("EditorID").GetString());
-        Assert.Equal(7u, weapon.GetProperty("BaseDamage").GetUInt32());
-    }
-
-    [Fact]
-    public void SerializeToText_ForAGlobalFloat_KeepsTheDiscriminator_BecauseADiscriminatorIsWrittenOnlyWhenTheGroupElementTypeIsAbstract()
-    {
-        var text = RecordTextCodec.SerializeToText(MakeGlobalFloat(), GameRelease.Fallout4);
-
-        using var doc = JsonDocument.Parse(text);
-        Assert.Equal("GlobalFloat", doc.RootElement.GetProperty(Discriminator).GetString());
-    }
 
     [Theory]
     [InlineData("glob")]
     [InlineData("globalfloat")]
     [InlineData(null)]
-    public void RoundTrip_ForAGlobalFloatDocument_KeepsItGlobalFloat_UnderTheGrupSignatureIngestStoresTheLowercasedClrNameTracksSourcePathFallsBackToAndNoRecordType(string? recordType)
+    public void AGlobalFloatsText_ReadsBackAGlobalFloat_UnderTheGrupSignatureIngestStoresTheLowercasedClrNameTracksSourcePathFallsBackToAndNoRecordType(string? recordType)
     {
         var text = RecordTextCodec.SerializeToText(MakeGlobalFloat(), GameRelease.Fallout4);
 
@@ -63,7 +30,7 @@ public sealed class DiscriminatorPolicyTests
     }
 
     [Fact]
-    public void SerializeToText_ForACellWithChildren_KeepsTheChildrensDiscriminators()
+    public void ACellsChildren_AreWrittenNamingTheirTypes_ThoughTheCellIsNot()
     {
         var cell = new Cell(Mod) { EditorID = "DiscriminatorCell" };
         cell.Persistent.Add(new PlacedObject(Mod) { EditorID = "PersistentRef" });

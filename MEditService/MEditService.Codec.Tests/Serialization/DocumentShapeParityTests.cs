@@ -4,13 +4,11 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Serialization.Newtonsoft;
 
 namespace MEditService.Codec.Tests.Serialization;
 
 public sealed class DocumentShapeParityTests
 {
-
     private static Fallout4Mod NewMod() => new(ModKey.FromFileName("Parity.esp"), Fallout4Release.Fallout4);
 
     [Fact]
@@ -29,7 +27,7 @@ public sealed class DocumentShapeParityTests
         block.SubBlocks.Add(subBlock);
         mod.Cells.Records.Add(block);
 
-        await AssertBothDoorsAgreeTestsSideBecauseCoresGuardKeepsTheMixinOut(mod, cell, "ParityCell");
+        await AssertTheCodecAndTheWholeModDoorWriteOneText(mod, cell, "ParityCell");
     }
 
     [Fact]
@@ -39,11 +37,11 @@ public sealed class DocumentShapeParityTests
         var quest = MakePopulatedQuest(mod);
         mod.Quests.Add(quest);
 
-        await AssertBothDoorsAgreeTestsSideBecauseCoresGuardKeepsTheMixinOut(mod, quest, "ParityQuest");
+        await AssertTheCodecAndTheWholeModDoorWriteOneText(mod, quest, "ParityQuest");
     }
 
     [Fact]
-    public void SerializeToText_ForAQuest_CarriesItsTopicAndItsResponseInline()
+    public void AQuestsText_CarriesItsTopicAndItsResponseInline()
     {
         using var doc = JsonDocument.Parse(RecordTextCodec.SerializeToText(MakePopulatedQuest(NewMod()), GameRelease.Fallout4));
 
@@ -62,7 +60,7 @@ public sealed class DocumentShapeParityTests
     }
 
     [Fact]
-    public async Task Serialize_OfASyntheticModWithNonDefaultGroupAndHeaderFields_WritesThemUnomitted()
+    public async Task TheWholeModDoor_WritesASyntheticModsNonDefaultGroupAndHeaderFieldsUnomitted()
     {
         var mod = NewMod();
         var overriddenForm = new FormKey(ModKey.FromFileName("Test.esm"), 0x001);
@@ -81,7 +79,7 @@ public sealed class DocumentShapeParityTests
         worldspace.SubCellsTimestamp = 424242;
 
         using var dir = new ScratchDirectory("medit-parity-synthetic-");
-        await MutagenJsonConverter.Instance.Serialize(mod, dir.Path);
+        await Fallout4WholeMod.Serialize(mod, dir.Path);
 
         var rootText = await File.ReadAllTextAsync(Path.Combine(dir.Path, "RecordData.json"));
         Assert.Contains($"\"OverriddenForms\"", rootText, StringComparison.Ordinal);
@@ -96,11 +94,11 @@ public sealed class DocumentShapeParityTests
         Assert.Contains("\"SubCellsTimestamp\": 424242", await File.ReadAllTextAsync(worldspaceFile), StringComparison.Ordinal);
     }
 
-    private static async Task AssertBothDoorsAgreeTestsSideBecauseCoresGuardKeepsTheMixinOut(
+    private static async Task AssertTheCodecAndTheWholeModDoorWriteOneText(
         Fallout4Mod mod, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter record, string editorId)
     {
         using var dir = new ScratchDirectory("medit-parity-");
-        await MutagenJsonConverter.Instance.Serialize(mod, dir.Path);
+        await Fallout4WholeMod.Serialize(mod, dir.Path);
 
         var directoryPerRecordContainersRecordDataJsonOrAFlatRecordsOwnFile = Directory.EnumerateDirectories(dir.Path, $"*{editorId}*", SearchOption.AllDirectories)
             .Select(d => Path.Combine(d, "RecordData.json"))

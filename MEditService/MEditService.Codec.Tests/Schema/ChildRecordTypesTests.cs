@@ -97,37 +97,27 @@ public sealed class ChildRecordTypesTests
         Assert.Empty(Of(new Quest(Mod) { MajorRecordFlagsRaw = DeletedFlag.Bit }));
     }
 
-    [Fact]
-    public void EveryTypeHasChildFieldsCallsAContainer_HoldsSomethingWhenEmpty_InEveryPlaceACellCanSit()
-    {
-        var checkedTypes = 0;
-        foreach (var release in Enum.GetValues<GameRelease>())
-        {
-            if (SchemasOf(release) is not { } schemas) continue;
-            var types = RecordTypes.For(release);
-            foreach (var type in schemas.Keys.Where(types.HasChildSlots))
-            {
-                var text = RecordTextCodec.BlankDocument(type, release, Document.Empty.With("000800:Holds.esp", RecordMembers.FormKey));
-                CellPlace?[] places = types.IsCell(type) ? [.. Enum.GetValues<CellPlace>().Cast<CellPlace?>()] : [null];
-                foreach (var place in places)
-                    Assert.True(ChildRecordTypes.Of(type, text, [], place, release).Count > 0, $"{release} {type} in {place} holds nothing.");
-                checkedTypes++;
-            }
-        }
+    private static IEnumerable<(GameRelease Release, string Type, CellPlace? Place)> ContainersInEveryPlace() =>
+        from release in new[] { GameRelease.Fallout4, GameRelease.SkyrimSE, GameRelease.Starfield }
+        let types = RecordTypes.For(release)
+        from type in SharedSchemaReflector.Instance.GetSchemas(release).Keys.Where(types.HasChildSlots)
+        from place in types.IsCell(type) ? Enum.GetValues<CellPlace>().Cast<CellPlace?>() : new CellPlace?[] { null }
+        select (release, type, place);
 
-        Assert.True(checkedTypes > 0, "Expected at least one container type; a sweep over none agrees with anything.");
+    public static TheoryData<GameRelease, string, CellPlace?> EveryContainerInEveryPlaceItCanSit()
+    {
+        var data = new TheoryData<GameRelease, string, CellPlace?>();
+        foreach (var (release, type, place) in ContainersInEveryPlace()) data.Add(release, type, place);
+        return data;
     }
 
-    private static IReadOnlyDictionary<string, RecordTableSchema>? SchemasOf(GameRelease release)
+    [Theory]
+    [MemberData(nameof(EveryContainerInEveryPlaceItCanSit))]
+    public void EveryTypeHasChildFieldsCallsAContainer_HoldsSomethingWhenEmpty_InEveryPlaceACellCanSit(GameRelease release, string type, CellPlace? place)
     {
-        try
-        {
-            return SharedSchemaReflector.Instance.GetSchemas(release);
-        }
-        catch (UnsupportedGameReleaseException)
-        {
-            return null;
-        }
+        var text = RecordTextCodec.BlankDocument(type, release, Document.Empty.With("000800:Holds.esp", RecordMembers.FormKey));
+
+        Assert.NotEmpty(ChildRecordTypes.Of(type, text, [], place, release));
     }
 
     [Fact]

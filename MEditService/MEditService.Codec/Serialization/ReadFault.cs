@@ -13,25 +13,25 @@ internal static class ReadFault
     private const string NullFormKey = "Null";
 
     /// <summary>The reader's refusal of <paramref name="text"/>, naming every field it fails on; null where none
-    /// can be found. <paramref name="thrownBy"/> is what reading a document throws, or null.</summary>
-    internal static string? Describe(string text, Func<string, Exception?> thrownBy)
+    /// can be found. <paramref name="identity"/> names the root members every stripped document keeps.</summary>
+    internal static string? Describe(string text, Func<string, Exception?> thrownBy, IReadOnlySet<string> identity)
     {
-        if (JsonNode.Parse(text) is not JsonObject root || thrownBy(Only(root, [])) is not null) return null;
+        if (JsonNode.Parse(text) is not JsonObject root || thrownBy(Only(root, [], identity)) is not null) return null;
 
-        var faults = FaultsIn(root, [], thrownBy).ToList();
+        var faults = FaultsIn(root, [], thrownBy, identity).ToList();
         return faults.Count > 0 ? string.Join("; ", faults.Select(fault => Say(fault.Path, fault.Thrown))) : null;
     }
 
     /// <summary>A member the reader takes without throwing but reads as a value of another meaning, whose misreading
     /// breaks the members after it: each member alone, against what the codec writes back of it.</summary>
-    internal static string? MisreadMember(string text, Func<string, string> produce)
+    internal static string? MisreadMember(string text, Func<string, string> produce, IReadOnlySet<string> identity)
     {
         if (JsonNode.Parse(text) is not JsonObject root) return null;
 
         var misread = new List<string>();
-        foreach (var key in root.Select(member => member.Key).Where(key => key != RecordMembers.FormKey && key != LoquiUnions.UnionTypeDiscriminator))
+        foreach (var key in root.Select(member => member.Key).Where(key => !IsIdentity(key, identity)))
         {
-            var alone = Only(root, [key]);
+            var alone = Only(root, [key], identity);
             if (ProducedOrNull(produce, alone) is not { } producedText) continue;
             using var written = JsonDocument.Parse(alone);
             using var produced = JsonDocument.Parse(producedText);
@@ -68,14 +68,14 @@ internal static class ReadFault
         IsRewrapped(thrown) ? $"{Spell(path)} holds a value of the wrong type." : $"{Spell(path)}: {thrown.Message}";
 
     private static IEnumerable<(string[] Path, Exception Thrown)> FaultsIn(
-        JsonObject root, string[] path, Func<string, Exception?> thrownBy)
+        JsonObject root, string[] path, Func<string, Exception?> thrownBy, IReadOnlySet<string> identity)
     {
         foreach (var key in KeysOf(NodeAt(root, path)))
         {
             string[] memberPath = [.. path, key];
-            if (thrownBy(Only(root, memberPath)) is not { } thrown) continue;
+            if (thrownBy(Only(root, memberPath, identity)) is not { } thrown) continue;
 
-            var inner = FaultsIn(root, memberPath, thrownBy).ToList();
+            var inner = FaultsIn(root, memberPath, thrownBy, identity).ToList();
             if (inner.Count > 0)
             {
                 foreach (var fault in inner) yield return fault;
@@ -109,15 +109,18 @@ internal static class ReadFault
         return node;
     }
 
-    // The document stripped to its identity and the member at path. The identity is the type it names and
-    // a FormKey, which is the null one unless the member at path is the FormKey itself.
-    private static string Only(JsonObject root, string[] path)
+    private static bool IsIdentity(string name, IReadOnlySet<string> identity) =>
+        name == RecordMembers.FormKey || name == LoquiUnions.UnionTypeDiscriminator || identity.Contains(name);
+
+    // The document stripped to its identity and the member at path. The identity is the type it names, the
+    // members the caller names and a FormKey, which is the null one unless the member at path is the FormKey itself.
+    private static string Only(JsonObject root, string[] path, IReadOnlySet<string> identity)
     {
         var copy = (JsonObject)root.DeepClone();
         var member = path.Length > 0 ? path[0] : null;
         foreach (var name in copy.Select(entry => entry.Key).ToArray())
         {
-            if (name != member && name != RecordMembers.FormKey && name != LoquiUnions.UnionTypeDiscriminator) _ = copy.Remove(name);
+            if (name != member && !IsIdentity(name, identity)) _ = copy.Remove(name);
         }
         if (member != RecordMembers.FormKey && copy.ContainsKey(RecordMembers.FormKey)) copy[RecordMembers.FormKey] = NullFormKey;
 

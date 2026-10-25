@@ -5,34 +5,16 @@ namespace MEditService.Codec.Tests.Schema;
 
 public class ElementKeyTextTests
 {
-    [Fact]
-    public void KeyText_OfAStringMember_IsTheString() =>
-        AssertKeyText("""{"Name":"Ambush","Flags":"Local"}""", "Ambush", "Name");
-
-    [Fact]
-    public void KeyText_OfACompositeKey_JoinsTheMembersInTheOrderTheAnnotationListsThem() =>
-        AssertKeyText("""{"Stage":10,"StageIndex":0}""", "10 / 0", "Stage", "StageIndex");
-
-    [Fact]
-    public void KeyText_OfADottedMemberName_WalksIntoTheElementsOwnSubStruct() =>
-        AssertKeyText("""{"Property":{"Name":"","Alias":3}}""", "3", "Property.Alias");
-
-    [Fact]
-    public void KeyText_OfABoolMember_IsLowercaseTrue() =>
-        AssertKeyText("""{"on":true}""", "true", "on");
-
-    [Fact]
-    public void KeyText_OfAFreshlyAddedElementNamingOnlyItsDiscriminator_IsEmpty_ARealKeyAndTheOnlyHandleOnTheRowUntilTheUserNamesIt() =>
-        AssertKeyText("""{"MutagenObjectType":"ScriptIntProperty"}""", "", "Name");
-
-    [Fact]
-    public void KeyText_OfANullMember_IsEmpty() =>
-        AssertKeyText("""{"Name":null}""", "", "Name");
-
-    private static void AssertKeyText(string elementJson, string expected, params string[] keyMembers)
+    [Theory]
+    [InlineData("""{"Name":"Ambush","Flags":"Local"}""", "Name", "Ambush")]
+    [InlineData("""{"Stage":10,"StageIndex":0}""", "Stage,StageIndex", "10 / 0")]
+    [InlineData("""{"Property":{"Name":"","Alias":3}}""", "Property.Alias", "3")]
+    [InlineData("""{"on":true}""", "on", "true")]
+    [InlineData("""{"MutagenObjectType":"ScriptIntProperty"}""", "Name", "")]
+    [InlineData("""{"Name":null}""", "Name", "")]
+    public void AnElementsKey_ReadsAsItsMembersJoinedInTheOrderTheAnnotationListsThem_AnAbsentOrNullOneEmpty(string element, string keyMembers, string text)
     {
-        var element = JsonDocument.Parse(elementJson).RootElement;
-        Assert.Equal(expected, ElementKey.Of(element, keyMembers).Text);
+        Assert.Equal(text, ElementKey.Of(JsonDocument.Parse(element).RootElement, keyMembers.Split(',')).Text);
     }
 
     private static readonly FieldMetadata FragmentElement = new("", "struct", false, [], [], Fields:

@@ -2,20 +2,10 @@ using MEditService.Codec.Schema;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Codec.Tests.Indexing;
+namespace MEditService.Codec.Tests.Schema;
 
 public sealed class SchemaAnnotationTests
 {
-    [Theory]
-    [InlineData(GameRelease.Fallout4)]
-    [InlineData(GameRelease.SkyrimSE)]
-    [InlineData(GameRelease.Starfield)]
-    public void ShippedTable_EveryEntryResolves_SoAMutagenRenameLeavingAStaleAnnotationFailsHereNotInAUsersFirstLoad(GameRelease release)
-    {
-        var schemas = SharedSchemaReflector.Instance.GetSchemas(release);
-        Assert.NotEmpty(schemas);
-    }
-
     [Fact]
     public void TheSceneActionTypeKnownDefect_IsNamedInTheSchema_ReadOnlyWithItsReason()
     {
@@ -28,27 +18,65 @@ public sealed class SchemaAnnotationTests
         Assert.Contains("unimplemented throw upstream", type.ReadOnlyReason, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void ASkyrimArrayXEditSortsByKey_AlignsByThatKey()
+    [Theory]
+    [InlineData(GameRelease.Fallout4, "npc_", "Factions", "Faction", null)]
+    [InlineData(GameRelease.Fallout4, "npc_", "Perks", "Perk", null)]
+    [InlineData(GameRelease.Fallout4, "npc_", "Items", "Item.Item", "Item.Count,Data.ItemCondition,Data.Owner")]
+    [InlineData(GameRelease.Fallout4, "npc_", "Attacks", "AttackEvent", null)]
+    [InlineData(GameRelease.Fallout4, "npc_", "Sounds", "Keyword", null)]
+    [InlineData(GameRelease.Fallout4, "npc_", "FaceMorphs", "Index", null)]
+    [InlineData(GameRelease.Fallout4, "npc_", "FaceTintingLayers", "Index", null)]
+    [InlineData(GameRelease.Fallout4, "npc_", "Properties", "ActorValue", null)]
+    [InlineData(GameRelease.Fallout4, "npc_", "ObjectTemplates.[].Properties", "Property", null)]
+    [InlineData(GameRelease.Fallout4, "fact", "Relations", "Target", null)]
+    [InlineData(GameRelease.Fallout4, "fact", "Ranks", "Number", null)]
+    [InlineData(GameRelease.Fallout4, "lvli", "Entries", "Data.Level,Data.Reference", "Data.Count,ExtraData.ItemCondition,ExtraData.Owner")]
+    [InlineData(GameRelease.Fallout4, "lvli", "FilterKeywordChances", "FilterKeyword", null)]
+    [InlineData(GameRelease.Fallout4, "lvln", "Entries", "Data.Level,Data.Reference", "Data.Count,ExtraData.ItemCondition,ExtraData.Owner")]
+    [InlineData(GameRelease.Fallout4, "omod", "Properties", "Property", null)]
+    [InlineData(GameRelease.Fallout4, "cont", "Items", "Item.Item", "Item.Count,Data.ItemCondition,Data.Owner")]
+    [InlineData(GameRelease.Fallout4, "furn", "Items", "Item.Item", "Item.Count,Data.ItemCondition,Data.Owner")]
+    [InlineData(GameRelease.Fallout4, "lens", "Sprites", "LensFlareSpriteId", null)]
+    [InlineData(GameRelease.Fallout4, "mswp", "Substitutions", "OriginalMaterial", null)]
+    [InlineData(GameRelease.Fallout4, "regn", "Sounds.Sounds", "Sound", null)]
+    [InlineData(GameRelease.Fallout4, "misc", "Components", null, null)]
+    [InlineData(GameRelease.Fallout4, "perk", "Effects.[].Conditions", "RunOnTabIndex", null)]
+    [InlineData(GameRelease.Fallout4, "qust", "Stages", "Index", null)]
+    [InlineData(GameRelease.Fallout4, "qust", "Aliases.[].Items", "Item.Item", "Item.Count,Data.ItemCondition,Data.Owner")]
+    [InlineData(GameRelease.Fallout4, "lctn", "PersistentActorReferencesAdded", "Actor", null)]
+    [InlineData(GameRelease.Fallout4, "lctn", "PersistentActorReferencesStatic", "Actor", null)]
+    [InlineData(GameRelease.Fallout4, "lctn", "UniqueActorReferencesAdded", "Ref", null)]
+    [InlineData(GameRelease.Fallout4, "lctn", "UniqueActorReferencesStatic", "Ref", null)]
+    [InlineData(GameRelease.Fallout4, "lctn", "LocationRefTypeReferencesAdded", "Ref", null)]
+    [InlineData(GameRelease.Fallout4, "lctn", "LocationRefTypeReferencesStatic", "Ref", null)]
+    [InlineData(GameRelease.Fallout4, "lctn", "WorldspaceCellsAdded", "Location", null)]
+    [InlineData(GameRelease.Fallout4, "lctn", "WorldspaceCellsStatic", "Location", null)]
+    [InlineData(GameRelease.Fallout4, "lctn", "WorldspaceCellsRemoved", "Location", null)]
+    [InlineData(GameRelease.Fallout4, "term", "VirtualMachineAdapter.ScriptFragments.Fragments", "FragmentIndex", null)]
+    [InlineData(GameRelease.Fallout4, "term", "Properties", "ActorValue", null)]
+    [InlineData(GameRelease.Fallout4, "mgef", "Sounds", "Type", null)]
+    [InlineData(GameRelease.Fallout4, "achr", "LinkedReferences", "KeywordOrReference", null)]
+    [InlineData(GameRelease.Fallout4, "achr", "ActivateParents.Parents", "Reference", null)]
+    [InlineData(GameRelease.Fallout4, "refr", "LinkedReferences", null, null)]
+    [InlineData(GameRelease.Fallout4, "navm", "NavmeshGeometry.DoorTriangles", "TriangleBeforeDoor,Door", null)]
+    [InlineData(GameRelease.Fallout4, "navm", "PreCutMapEntries", "Reference", null)]
+    [InlineData(GameRelease.Fallout4, "navi", "MapInfos", "NavigationMesh", null)]
+    [InlineData(GameRelease.Fallout4, "navi", "MapInfos.[].LinkedDoors", "Door", null)]
+    [InlineData(GameRelease.Fallout4, "navi", "PreferredPathing.NavmeshTree", "NodeIndex", null)]
+    [InlineData(GameRelease.Fallout4, "land", "Layers", "Header.Quadrant,Header.LayerNumber", null)]
+    [InlineData(GameRelease.SkyrimSE, "npc_", "Factions", "Faction", null)]
+    [InlineData(GameRelease.SkyrimSE, "lvli", "Entries", "Data.Level,Data.Reference", "Data.Count,ExtraData.ItemCondition,ExtraData.Owner")]
+    [InlineData(GameRelease.Starfield, "npc_", "Factions", "Faction", null)]
+    [InlineData(GameRelease.Starfield, "lvli", "Entries", "Level,Reference", "Count,Data.ItemCondition,Data.Owner")]
+    [InlineData(GameRelease.Starfield, "lvlp", "Entries", "Level,Reference", "Count,Conditions")]
+    [InlineData(GameRelease.Starfield, "stag", "Tags", "Tag", null)]
+    public void AnArrayXEditSorts_AlignsByTheKeyXEditSortsItBy_AndAnyOtherAlignsInSequence(
+        GameRelease release, string table, string path, string? keys, string? extendedKeys)
     {
-        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.SkyrimSE);
-        var factions = schemas["npc_"].RecordColumns.Single(c => c.Name == "Factions").Field;
-        var entries = schemas["lvli"].RecordColumns.Single(c => c.Name == "Entries").Field;
+        var array = SchemaFields.At(release, table, path);
 
-        Assert.Equal(["Faction"], factions.KeyMembers);
-        Assert.Equal(["Data.Level", "Data.Reference"], entries.KeyMembers);
-        Assert.Equal(["Data.Count", "ExtraData.ItemCondition", "ExtraData.Owner"], entries.ExtendedKeyMembers);
-    }
-
-    [Fact]
-    public void AStarfieldArrayXEditSortsByKey_AlignsByThatKey()
-    {
-        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Starfield);
-        var entries = schemas["lvli"].RecordColumns.Single(c => c.Name == "Entries").Field;
-
-        Assert.Equal(["Faction"], schemas["npc_"].RecordColumns.Single(c => c.Name == "Factions").Field.KeyMembers);
-        Assert.Equal(["Level", "Reference"], entries.KeyMembers);
-        Assert.Equal(["Count", "Data.ItemCondition", "Data.Owner"], entries.ExtendedKeyMembers);
+        Assert.Equal(keys?.Split(','), array.KeyMembers);
+        Assert.Equal(extendedKeys?.Split(','), array.ExtendedKeyMembers);
     }
 
     private static FieldMetadata QuestAdapterMember(GameRelease release, string path) =>

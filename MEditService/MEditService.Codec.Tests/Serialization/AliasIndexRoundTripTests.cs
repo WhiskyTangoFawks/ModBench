@@ -9,23 +9,13 @@ namespace MEditService.Codec.Tests.Serialization;
 
 public sealed class AliasIndexRoundTripTests
 {
-    private static ConstructibleObject RecipeWithAnAliasCondition(uint index)
+    internal static ConstructibleObject RecipeWithAnAliasCondition(uint index)
     {
         var recipe = new ConstructibleObject(new FormKey(ModKey.FromFileName("Test.esp"), 0x800), SkyrimRelease.SkyrimSE) { EditorID = "Recipe" };
         var data = new GetDistanceConditionData { UseAliases = true };
         data.Target.Index = index;
         recipe.Conditions.Add(new ConditionFloat { Data = data });
         return recipe;
-    }
-
-    [Theory]
-    [InlineData(0u)]
-    [InlineData(3u)]
-    public void RoundTrip_GivesTheTextOfAConditionOnAnAliasIndexBackUnchanged(uint index)
-    {
-        var text = RecordTextCodec.SerializeToText(RecipeWithAnAliasCondition(index), GameRelease.SkyrimSE);
-
-        Assert.Equal(text, RecordTextCodec.RoundTrip(text, GameRelease.SkyrimSE, "cobj"));
     }
 
     [Theory]

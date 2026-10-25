@@ -8,19 +8,7 @@ namespace MEditService.Codec.Tests.Serialization;
 public sealed class RecordTextCodecBlankDocumentTests
 {
     [Fact]
-    public void BlankDocument_ForAContainerLevel_CarriesTheIdentityGiven()
-    {
-        var document = RecordTextCodec.BlankDocument(
-            nameof(WorldspaceBlock), GameRelease.Fallout4,
-            Document.Empty.With(3, "BlockNumberX").With(-2, "BlockNumberY"));
-
-        using var parsed = JsonDocument.Parse(document);
-        Assert.Equal(3, parsed.RootElement.GetProperty("BlockNumberX").GetInt32());
-        Assert.Equal(-2, parsed.RootElement.GetProperty("BlockNumberY").GetInt32());
-    }
-
-    [Fact]
-    public void BlankDocument_IsSpelledByTheCodec_NotByTheIdentityGiven_BecauseTheCodecMintsTheDocumentOfAnEmptyInstanceSoNothingOutsideItConstructsAContainerLevel()
+    public void AContainerLevelsBlankDocument_IsSpelledByTheCodec_NotByTheIdentityGiven_BecauseTheCodecMintsTheDocumentOfAnEmptyInstanceSoNothingOutsideItConstructsAContainerLevel()
     {
         var document = RecordTextCodec.BlankDocument(
             nameof(WorldspaceBlock), GameRelease.Fallout4,
@@ -30,7 +18,7 @@ public sealed class RecordTextCodecBlankDocumentTests
     }
 
     [Fact]
-    public void BlankDocument_ForAContainerLevel_RoundTripsThroughTheCodec()
+    public void AContainerLevelsBlankDocument_ReadsBackAsItself()
     {
         var document = RecordTextCodec.BlankDocument(
             nameof(WorldspaceBlock), GameRelease.Fallout4,
@@ -43,7 +31,7 @@ public sealed class RecordTextCodecBlankDocumentTests
     }
 
     [Fact]
-    public void BlankDocument_WithNoIdentity_NamesNoMemberAtAll()
+    public void ABlankDocumentGivenNoIdentity_NamesNoMemberAtAll()
     {
         var document = RecordTextCodec.BlankDocument(nameof(WorldspaceSubBlock), GameRelease.Fallout4, Document.Empty);
 
@@ -52,14 +40,12 @@ public sealed class RecordTextCodecBlankDocumentTests
     }
 
     [Fact]
-    public void BlankDocument_ForAMajorRecordContainer_CarriesTheFormKeyAndRoundTrips()
+    public void AContainerRecordsBlankDocument_IsItsFormKeyAlone_AndReadsBackAsItself()
     {
         var identity = Document.Empty.With("000802:Source.esm", "FormKey");
 
         var document = RecordTextCodec.BlankDocument("cell", GameRelease.Fallout4, identity);
 
-        using var parsed = JsonDocument.Parse(document);
-        Assert.Equal("000802:Source.esm", parsed.RootElement.GetProperty("FormKey").GetString());
         Assert.Equal("{\n  \"FormKey\": \"000802:Source.esm\"\n}", document);
         Assert.Equal(
             document,

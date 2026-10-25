@@ -7,9 +7,6 @@ namespace MEditService.Codec.Tests.Schema;
 
 public class LeafTypeNameSchemaTests
 {
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
-        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
-
     [Theory]
     [InlineData("npc_", "Destructible", nameof(Destructible))]
     [InlineData("acti", "Conditions.[].Data", nameof(ConditionData))]
@@ -42,20 +39,5 @@ public class LeafTypeNameSchemaTests
         Assert.Empty(PathsWhere(m => m.LeafTypeName?.EndsWith("Getter", StringComparison.Ordinal) == true));
 
     private static List<string> PathsWhere(Func<FieldMetadata, bool> predicate) =>
-    [
-        .. Schemas
-            .SelectMany(s => s.Value.RecordColumns.Select(c => (Path: $"{s.Key}.{c.Name}", Meta: c.Field)))
-            .SelectMany(c => Walk(c.Path, c.Meta))
-            .Where(f => predicate(f.Meta))
-            .Select(f => f.Path),
-    ];
-
-    private static IEnumerable<(string Path, FieldMetadata Meta)> Walk(string path, FieldMetadata meta)
-    {
-        yield return (path, meta);
-        if (meta.ElementType is { } element)
-            foreach (var e in Walk(path + "[]", element)) yield return e;
-        foreach (var field in meta.Fields ?? [])
-            foreach (var f in Walk($"{path}.{field.Name}", field)) yield return f;
-    }
+        [.. SchemaFields.All(GameRelease.Fallout4).Where(f => predicate(f.Field)).Select(f => f.Path)];
 }
