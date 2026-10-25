@@ -16,7 +16,7 @@ vi.mock('../../files', async (importOriginal) => {
   };
 });
 
-describe('renameFolderWithManifest', () => {
+describe('a mod folder renamed with its manifest', () => {
   let root: string;
   let from: ModFolder;
   let toPath: string;
@@ -32,18 +32,16 @@ describe('renameFolderWithManifest', () => {
 
   afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
-  it('puts the folder back, and rejects with why the manifest could not be renamed', async () => {
-    failing.endings = ['New.manifest.json'];
+  it.each([
+    ['puts the folder back, and rejects with why the manifest could not be renamed', ['New.manifest.json'],
+      () => `EBUSY: ${join(toPath, 'New.manifest.json')}`, ['Old']],
+    ['names why the manifest could not be renamed and that the folder sits under its new name because putting it back failed', ['New.manifest.json', 'Old'],
+      () => `EBUSY: ${join(toPath, 'New.manifest.json')}; the folder now sits at ${toPath} because putting it back failed: EBUSY: ${from.path}`, ['New']],
+  ])('%s', async (_case, endings, message, left) => {
+    failing.endings = endings;
 
-    await expect(renameFolderWithManifest(from, toPath, 'New')).rejects.toThrow(`EBUSY: ${join(toPath, 'New.manifest.json')}`);
+    await expect(renameFolderWithManifest(from, toPath, 'New')).rejects.toThrow(new Error(message()));
 
-    expect(await readdir(root)).toEqual(['Old']);
-  });
-
-  it('names why the manifest could not be renamed and that the folder sits under its new name because putting it back failed', async () => {
-    failing.endings = ['New.manifest.json', 'Old'];
-
-    await expect(renameFolderWithManifest(from, toPath, 'New')).rejects.toThrow(new Error(
-      `EBUSY: ${join(toPath, 'New.manifest.json')}; the folder now sits at ${toPath} because putting it back failed: EBUSY: ${from.path}`));
+    expect(await readdir(root)).toEqual(left);
   });
 });

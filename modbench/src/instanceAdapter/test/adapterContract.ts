@@ -13,8 +13,7 @@ export interface Subject {
   dispose(): Promise<void>;
 }
 
-/** An implementation over a fixture instance; the fake is seeded from MO2's reading of it. */
-export interface Implementation {
+interface Implementation {
   readonly name: string;
   subject(): Promise<Subject>;
 }

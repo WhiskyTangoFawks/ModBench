@@ -10,7 +10,7 @@ import { expect } from 'vitest';
 
 // A sibling of fixtures/mo2-instance/, never an extension of it: that one is read
 // in place by tests asserting its exact contents, so any addition breaks them.
-export const CORPUS_FIXTURE = join(__dirname, 'fixtures', 'mo2-instance-corpus');
+const CORPUS_FIXTURE = join(__dirname, 'fixtures', 'mo2-instance-corpus');
 
 // The fixture's active profile is "Default"; only the setActiveProfile test
 // switches away from it.
@@ -92,3 +92,7 @@ function firstDivergingByte(a: Buffer, b: Buffer): number {
   for (let i = 0; i < len; i++) if (a[i] !== b[i]) return i;
   return len;
 }
+
+/** Each file of a snapshot under `folder`, by path, as text. */
+export const textsUnder = (tree: ReadonlyMap<string, Buffer>, folder: string): Record<string, string> =>
+  Object.fromEntries([...tree].filter(([path]) => path.startsWith(`${folder}/`)).map(([path, bytes]) => [path, bytes.toString()]));

@@ -8,7 +8,7 @@ import {
 const iniPath = join(__dirname, '..', '..', '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance', 'ModOrganizer.ini');
 const ini = () => readFileSync(iniPath, 'utf8');
 
-describe('readSelectedProfile', () => {
+describe('the selected profile ModOrganizer.ini names', () => {
   it('unwraps an @ByteArray(...) value', () => {
     expect(readSelectedProfile(ini())).toBe('Default');
   });
@@ -32,13 +32,13 @@ describe('section-aware lookup', () => {
 
 });
 
-describe('readGameName', () => {
+describe('the game name ModOrganizer.ini names', () => {
   it('throws a message naming the missing key when gameName is absent', () => {
     expect(() => readGameName('[General]\r\nselected_profile=Default\r\n')).toThrow(/missing gameName/);
   });
 });
 
-describe('readGamePath', () => {
+describe('the game path ModOrganizer.ini names', () => {
   it('unwraps an @ByteArray(...) value from the fixture', () => {
     expect(readGamePath(ini())).toBe(String.raw`Z:\\path\to\Stock Game Folder`);
   });
@@ -53,7 +53,7 @@ describe('readGamePath', () => {
   });
 });
 
-describe('readDownloadDirectory', () => {
+describe('the download directory ModOrganizer.ini names', () => {
   it('answers undefined when the key is absent, so MO2\'s own default applies', () => {
     expect(readDownloadDirectory(ini())).toBeUndefined();
   });
@@ -73,7 +73,7 @@ describe('readDownloadDirectory', () => {
   });
 });
 
-describe('setSelectedProfileInText — surgical, byte-faithful', () => {
+describe('the selected profile written to ModOrganizer.ini, every other byte kept', () => {
   it.each(['a,b', 'back\\slash', 'say "hi"', ' padded '])('writes %j so that readSelectedProfile reads it back', (name) => {
     expect(readSelectedProfile(setSelectedProfileInText(ini(), name))).toBe(name);
   });

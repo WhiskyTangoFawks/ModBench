@@ -9,7 +9,7 @@ import {
 
 const metaOf = (text: string) => parseDownloadedFileMeta(text).meta;
 
-describe('parseDownloadedFileMeta', () => {
+describe('a downloaded file\'s status read from its .meta', () => {
   it('uninstalled=true -> Uninstalled status', () => {
     expect(metaOf('[General]\r\nuninstalled=true\r\n').status).toBe('Uninstalled');
   });
@@ -56,7 +56,7 @@ describe('parseDownloadedFileMeta', () => {
   });
 });
 
-describe('parseDownloadedFileMeta hidden', () => {
+describe('whether a downloaded file\'s .meta hides it', () => {
   it('is false when removed is explicitly false', () => {
     expect(parseDownloadedFileMeta('[General]\r\nremoved=false\r\n').hidden).toBe(false);
   });
@@ -68,13 +68,13 @@ describe('parseDownloadedFileMeta hidden', () => {
   });
 });
 
-describe('parseDownloadedFileMeta values', () => {
+describe('the values a downloaded file\'s .meta holds', () => {
   it('are decoded, as MO2 writes a name holding a comma quoted', () => {
     expect(metaOf('[General]\r\nmodName="A, B"\r\n').modName).toBe('A, B');
   });
 });
 
-describe('setHiddenInText', () => {
+describe('a downloaded file hidden or shown in its .meta', () => {
   it('creates a fresh [General] section with removed=true when there is no .meta text', () => {
     expect(setHiddenInText('', true)).toBe('[General]\r\nremoved=true\r\n');
   });
@@ -87,7 +87,7 @@ describe('setHiddenInText', () => {
   });
 });
 
-describe('setInstalledInText', () => {
+describe('a downloaded file marked installed in its .meta', () => {
   it('creates a fresh [General] section with both keys when there is no .meta text', () => {
     expect(setInstalledInText('')).toBe('[General]\r\ninstalled=true\r\nuninstalled=false\r\n');
   });
@@ -100,7 +100,7 @@ describe('setInstalledInText', () => {
 
 });
 
-describe('setUninstalledInText', () => {
+describe('a downloaded file marked uninstalled in its .meta', () => {
   it('leaves installed=true in place — it is a separate key, never cleared, as MO2 writes uninstalled=true on uninstall without clearing installed', () => {
     const text = '[General]\r\ninstalled=true\r\nmodid=12345\r\n';
     expect(setUninstalledInText(text)).toBe(
@@ -109,7 +109,7 @@ describe('setUninstalledInText', () => {
   });
 });
 
-describe('setNexusFileInfoInText', () => {
+describe('the Nexus file info written to a downloaded file\'s .meta', () => {
   const info = {
     game: 'fallout4', modID: '4598', fileID: '78', name: 'Main', version: '2.1.5', fileCategory: 1, modName: 'Patch', category: 12,
     author: 'Team', uploader: 'Uploader', uploaderUrl: 'https://nexus/users/1', description: '[b]Fixes[/b]',

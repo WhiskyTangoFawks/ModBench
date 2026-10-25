@@ -32,7 +32,6 @@ import {
   registerDownloadsSortCommand,
 } from '../DownloadsPanel';
 import { DownloadedFileNode, DownloadsProvider } from '../DownloadsProvider';
-import { downloadedFileNodeFixture } from '../../test/mo2/downloadedFileNodeFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { downloadedFileCommands } from '../../downloadedFileCommands/downloads';
 import type { QueryInfo } from '../../downloadedFileCommands/queryInfo';
@@ -50,7 +49,7 @@ const downloadsFake = (answers: InstanceAnswers = {}) =>
   fakeInstanceAdapter(readingFixture({ downloadedFiles: downloadedFilesOf('a.7z', 'b.7z', 'foo.7z', 'locked.7z') }), answers);
 
 const node = (root: string, name: string, row: Partial<DownloadedFileRow> = {}): DownloadedFileNode =>
-  downloadedFileNodeFixture(downloadedFileRowFixture(name, row, root));
+  new DownloadedFileNode(downloadedFileRowFixture(name, row, root));
 
 const ROOT = '/instance';
 

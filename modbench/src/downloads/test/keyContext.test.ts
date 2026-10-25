@@ -8,16 +8,15 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile },
 }));
 
-import type { DownloadsTreeNode } from '../DownloadsProvider';
-import { downloadedFileNodeFixture } from '../../test/mo2/downloadedFileNodeFixture';
+import { DownloadedFileNode, type DownloadsTreeNode } from '../DownloadsProvider';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText, downloadsKeyContext } from '../keyContext';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
 
 describe('what the Downloads palette entries, handed no row, read off the selection', () => {
-  const plain = downloadedFileNodeFixture(downloadedFileRowFixture('plain.7z'));
-  const withMeta = downloadedFileNodeFixture(downloadedFileRowFixture('meta.7z', { hasMeta: true }));
-  const excluded = downloadedFileNodeFixture(downloadedFileRowFixture('excluded.7z', { hasMeta: true, excluded: true }));
+  const plain = new DownloadedFileNode(downloadedFileRowFixture('plain.7z'));
+  const withMeta = new DownloadedFileNode(downloadedFileRowFixture('meta.7z', { hasMeta: true }));
+  const excluded = new DownloadedFileNode(downloadedFileRowFixture('excluded.7z', { hasMeta: true, excluded: true }));
   const NOTHING = { singleFile: false, singleFileWithMeta: false, holdsFile: false, holdsIncluded: false, holdsExcluded: false };
 
   it.each<[string, DownloadsTreeNode[], ReturnType<typeof downloadsKeyContext>]>([
@@ -35,7 +34,7 @@ describe('what the Downloads palette entries, handed no row, read off the select
 });
 
 describe('Downloads\' own text for the catalog\'s copy value', () => {
-  const alpha = downloadedFileNodeFixture(downloadedFileRowFixture('alpha.7z', { displayName: 'Alpha Mod' }));
+  const alpha = new DownloadedFileNode(downloadedFileRowFixture('alpha.7z', { displayName: 'Alpha Mod' }));
   const copy = (selection: readonly DownloadsTreeNode[]) => downloadsCopyValueText(() => selection);
 
   it('is the file name of a right-clicked row, not its display name', () => {

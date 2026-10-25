@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { canonicalVersion, isUpdateAvailable } from '../../codecs/versionInfo';
 
-describe('isUpdateAvailable: MO2 VersionInfo\'s order (uibase versioninfo.cpp)', () => {
+describe('whether a newer version is an update, in MO2 VersionInfo\'s order (uibase versioninfo.cpp)', () => {
   it.each([
     ['older', '1.0', '1.1', true],
     ['the same', '1.1', '1.1', false],
@@ -42,7 +42,7 @@ describe('isUpdateAvailable: MO2 VersionInfo\'s order (uibase versioninfo.cpp)',
   });
 });
 
-describe('canonicalVersion: VersionInfo::canonicalString (uibase versioninfo.cpp)', () => {
+describe('a version in its canonical form, as VersionInfo::canonicalString writes it (uibase versioninfo.cpp)', () => {
   it.each([
     ['1.2', '1.2.0.0'],
     ['v1.2.3', '1.2.3.0'],
