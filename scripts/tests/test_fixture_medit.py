@@ -1,5 +1,7 @@
+import pathlib
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 import urllib.error
@@ -8,7 +10,8 @@ from unittest import mock
 from tests.fixture_medit import (
     INSTANCE,
     call,
-    file_stamps,
+    changed,
+    copy_checked_in,
     fixture_medit,
     hand_load_order,
     medit_answering,
@@ -20,9 +23,10 @@ READY = {'version': 1, 'state': 'Ready'}
 
 class FixtureMEdit(unittest.TestCase):
     def test_medit_holds_the_fixture_instances_load_order_from_a_copy_of_it_and_stops_with_the_harness(self) -> None:
-        checked_in = file_stamps(INSTANCE)
+        checked_in = changed(INSTANCE)
         with fixture_medit() as fixture:
             plugins = call('GET', fixture.url + '/plugins')
+        self.assertFalse(pathlib.Path(fixture.load_order['instanceRoot']).is_relative_to(INSTANCE))
         self.assertEqual([(plugin['name'], plugin['origin']) for plugin in plugins], [
             ('MBDevFixes.esm', 'MB-DEV Fixes'),
             ('MBDevFixesAddon.esp', 'MB-DEV Fixes Addon'),
@@ -33,9 +37,29 @@ class FixtureMEdit(unittest.TestCase):
             ('MBDevMissingMaster.esp', 'MB-DEV Missing Master'),
             ('MBDevPatchAB.esp', 'MB-DEV Patch A+B'),
         ])
-        self.assertEqual(file_stamps(INSTANCE), checked_in)
+        self.assertEqual(changed(INSTANCE), checked_in)
         with self.assertRaises(urllib.error.URLError):
             call('GET', fixture.url + '/health')
+
+
+class CopyCheckedIn(unittest.TestCase):
+    def test_copies_the_files_git_tracks_and_none_it_ignores_or_has_not_been_told_of(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source, destination = pathlib.Path(temporary) / 'source', pathlib.Path(temporary) / 'copy'
+            (source / 'mods' / 'A').mkdir(parents=True)
+            (source / 'mods' / 'A' / 'A.esp').write_bytes(b'TES4')
+            (source / '.gitignore').write_text('/modbench/\n')
+            subprocess.run(['git', 'init', '-q'], cwd=source, check=True)
+            subprocess.run(['git', 'add', '.'], cwd=source, check=True)
+            (source / 'modbench').mkdir()
+            (source / 'modbench' / 'index.duckdb').write_bytes(b'derived')
+            (source / 'loadorder.txt').write_text('left by a run')
+
+            copy_checked_in(source, destination)
+
+            self.assertEqual(
+                sorted(path.relative_to(destination).as_posix() for path in destination.rglob('*') if path.is_file()),
+                ['.gitignore', 'mods/A/A.esp'])
 
 
 class Stop(unittest.TestCase):
