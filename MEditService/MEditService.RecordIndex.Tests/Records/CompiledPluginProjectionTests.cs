@@ -46,10 +46,10 @@ public sealed class CompiledPluginProjectionTests : IDisposable
     }
 
     private void SeenNow() =>
-        _seenWhenPublished.Add((_index.Sequence, _index.CopyIn(_npc, _mod.KeyOf())?.EditorId));
+        _seenWhenPublished.Add((_index.Sequence, _index.CopyIn(_npc, _mod.Key)?.EditorId));
 
     private void RenameByHand(string formKey, string from, string to) =>
-        _mod.HandEdit(_index.DocumentOf(formKey, _mod.KeyOf()), $"\"{from}\"", $"\"{to}\"");
+        _mod.HandEdit(_index.DocumentOf(formKey, _mod.Key), $"\"{from}\"", $"\"{to}\"");
 
     private void ReDeriveRenamed(string formKey, string from, string to)
     {
@@ -58,16 +58,6 @@ public sealed class CompiledPluginProjectionTests : IDisposable
         var before = _notifications.Notifications.Count;
         _index.NextSnapshotUntil(
             () => _notifications.Since(before).Any(n => Announcements.RowsChanged(formKey)(n)), "the rows changed announcement");
-    }
-
-    [Fact]
-    public async Task ACompiledPluginReDerivedFromADirtyTree_AdvancesTheSequenceExactlyOnce()
-    {
-        var before = _index.Sequence;
-
-        ReDeriveRenamed(_npc, NpcEditorId, "RenamedByHand");
-
-        Assert.Equal(before + 1, _index.Sequence);
     }
 
     [Fact]

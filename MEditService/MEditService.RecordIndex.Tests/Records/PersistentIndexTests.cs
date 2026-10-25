@@ -34,10 +34,10 @@ public sealed class PersistentIndexTests : IDisposable
 
     private sealed class Launch : IDisposable
     {
-        public Launch(string dataFolder, string instanceRoot, IReadOnlyList<LoadOrderEntry> plugins, DiskSaysAdapter? disk)
+        public Launch(string dataFolder, string instanceRoot, IReadOnlyList<LoadOrderEntry> plugins)
         {
             var holder = new LoadOrderHolder();
-            Opens = new GatedPluginAdapter(inner: disk);
+            Opens = new GatedPluginAdapter();
             Index = Indexes.Open(holder, Opens);
             Index.Reconcile(holder, dataFolder, plugins, GameRelease.Fallout4, instanceRoot);
         }
@@ -52,8 +52,7 @@ public sealed class PersistentIndexTests : IDisposable
         }
     }
 
-    private Launch Launched(IReadOnlyList<LoadOrderEntry> plugins, DiskSaysAdapter? disk = null) =>
-        new(_dataFolder, _instanceRoot, plugins, disk);
+    private Launch Launched(IReadOnlyList<LoadOrderEntry> plugins) => new(_dataFolder, _instanceRoot, plugins);
 
     [Fact]
     public void TheIndexFile_HoldsDuckDbToAGigabyte_WhateverTheMachineHas()
@@ -62,7 +61,8 @@ public sealed class PersistentIndexTests : IDisposable
 
         using var launched = Launched([alpha]);
 
-        Assert.Equal(["953.6 MiB"], Assert.Single(IndexFiles.Rows(_instanceRoot, "SELECT current_setting('memory_limit')")));
+        var setting = Assert.Single(launched.Index.Queries.SelectRows("SELECT current_setting('memory_limit') AS memory_limit").Value().Rows);
+        Assert.Equal("953.6 MiB", setting.GetProperty("memory_limit").GetString());
     }
 
     [Fact]
@@ -74,10 +74,10 @@ public sealed class PersistentIndexTests : IDisposable
         Directory.Move(_instanceRoot, moved);
         var movedAlpha = alpha with { Path = alpha.Path.Replace(_instanceRoot, moved, StringComparison.Ordinal) };
 
-        using var second = new Launch(_dataFolder, moved, [movedAlpha], disk: null);
+        using var second = new Launch(_dataFolder, moved, [movedAlpha]);
 
         Assert.Equal(0, second.Opens.OpenedTotal);
-        Assert.NotEmpty(second.Index.ListedIn(movedAlpha.KeyOf()));
+        Assert.NotEmpty(second.Index.ListedIn(movedAlpha.Key));
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class PersistentIndexTests : IDisposable
         using var second = Launched([alpha]);
 
         Assert.Equal(0, second.Opens.OpenedTotal);
-        Assert.NotEmpty(second.Index.ListedIn(alpha.KeyOf()));
+        Assert.NotEmpty(second.Index.ListedIn(alpha.Key));
     }
 
     [Fact]
@@ -102,13 +102,13 @@ public sealed class PersistentIndexTests : IDisposable
         using var second = Launched([beta]);
 
         Assert.Equal(0, second.Opens.OpenedTotal);
-        Assert.Empty(second.Index.ListedIn(alpha.KeyOf()));
-        Assert.NotEmpty(second.Index.ListedIn(beta.KeyOf()));
+        Assert.Empty(second.Index.ListedIn(alpha.Key));
+        Assert.NotEmpty(second.Index.ListedIn(beta.Key));
 
         second.Dispose();
         using var thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration = Launched([alpha, beta]);
         Assert.Equal(0, thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration.Opens.OpenedTotal);
-        Assert.NotEmpty(thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration.Index.ListedIn(alpha.KeyOf()));
+        Assert.NotEmpty(thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration.Index.ListedIn(alpha.Key));
     }
 
     [Fact]
@@ -125,8 +125,8 @@ public sealed class PersistentIndexTests : IDisposable
         using var second = Launched([alpha, beta]);
 
         Assert.Equal(["Alpha.esp"], second.Opens.Opened);
-        Assert.Contains(second.Index.ListedIn(alpha.KeyOf()), d => d.EditorId == "NpcAlphaEdited");
-        Assert.Contains(second.Index.ListedIn(beta.KeyOf()), d => d.EditorId == "NpcBeta");
+        Assert.Contains(second.Index.ListedIn(alpha.Key), d => d.EditorId == "NpcAlphaEdited");
+        Assert.Contains(second.Index.ListedIn(beta.Key), d => d.EditorId == "NpcBeta");
     }
 
     [Fact]
@@ -141,7 +141,7 @@ public sealed class PersistentIndexTests : IDisposable
 
         using var second = Launched([alpha]);
         Assert.Equal(0, second.Opens.OpenedTotal);
-        Assert.NotEmpty(second.Index.ListedIn(alpha.KeyOf()));
+        Assert.NotEmpty(second.Index.ListedIn(alpha.Key));
     }
 
     [Fact]
@@ -153,36 +153,8 @@ public sealed class PersistentIndexTests : IDisposable
         File.Delete(alpha.Path);
 
         using var second = Launched([alpha]);
-        Assert.Empty(second.Index.ListedIn(alpha.KeyOf()));
+        Assert.Empty(second.Index.ListedIn(alpha.Key));
         Assert.Contains(second.Index.Status.Failures, f => f.Name == "Alpha.esp");
-    }
-
-    [Fact]
-    public void APluginTheAdapterSaysWentBetweenOpens_HasItsRowsRemoved()
-    {
-        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
-        using (Launched([alpha])) { }
-        var disk = new DiskSaysAdapter();
-
-        disk.Gone(alpha.Path);
-
-        using var second = Launched([alpha], disk);
-        Assert.Empty(second.Index.ListedIn(alpha.KeyOf()));
-        Assert.Contains(second.Index.Status.Failures, f => f.Name == "Alpha.esp");
-    }
-
-    [Fact]
-    public void APluginTheAdapterSaysChangedBetweenOpens_IsTheOneReadAgain()
-    {
-        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
-        var beta = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Beta.esp", "NpcBeta", 1);
-        using (Launched([alpha, beta])) { }
-        var disk = new DiskSaysAdapter();
-
-        disk.Changed(alpha.Path);
-
-        using var second = Launched([alpha, beta], disk);
-        Assert.Equal(["Alpha.esp"], second.Opens.Opened);
     }
 
     [Fact]
@@ -192,18 +164,12 @@ public sealed class PersistentIndexTests : IDisposable
         var beta = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Beta.esp", "NpcBeta", 1);
         using (Launched([alpha, beta])) { }
 
-        AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce(
-            "UPDATE mirror.index_version SET value = 'written-by-another-build'");
+        IndexFiles.Execute(_instanceRoot, "UPDATE mirror.index_version SET value = 'written-by-another-build'");
 
         using var second = Launched([alpha, beta]);
         Assert.Equal(["Alpha.esp", "Beta.esp"], second.Opens.Opened);
-        Assert.NotEmpty(second.Index.ListedIn(alpha.KeyOf()));
-        Assert.NotEmpty(second.Index.ListedIn(beta.KeyOf()));
-    }
-
-    private void AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce(string sql)
-    {
-        IndexFiles.Execute(_instanceRoot, sql);
+        Assert.NotEmpty(second.Index.ListedIn(alpha.Key));
+        Assert.NotEmpty(second.Index.ListedIn(beta.Key));
     }
 
     [Fact]
@@ -216,7 +182,7 @@ public sealed class PersistentIndexTests : IDisposable
 
         using var second = Launched([alpha]);
         Assert.Equal(["Alpha.esp"], second.Opens.Opened);
-        Assert.NotEmpty(second.Index.ListedIn(alpha.KeyOf()));
+        Assert.NotEmpty(second.Index.ListedIn(alpha.Key));
     }
 
     [Fact]
@@ -228,6 +194,6 @@ public sealed class PersistentIndexTests : IDisposable
         var secondIndexJoiningTheFirstBecauseDuckDbNetSharesOneDatabaseInstancePerPathInAProcess = Launched([alpha]);
         secondIndexJoiningTheFirstBecauseDuckDbNetSharesOneDatabaseInstancePerPathInAProcess.Dispose();
 
-        Assert.NotEmpty(holder.Index.ListedIn(alpha.KeyOf()));
+        Assert.NotEmpty(holder.Index.ListedIn(alpha.Key));
     }
 }

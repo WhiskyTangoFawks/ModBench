@@ -109,29 +109,14 @@ describe('RecordPanel — drag and drop', () => {
     expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('Level')], value: 5 });
   });
 
-  it('a cell dragged onto a column that cannot be edited changes nothing', async () => {
-    const { landed } = drag(await cellOf('Level', MOD), await cellOf('Level', MASTER));
-
-    expect(landed).toBe(false);
-    expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();
-  });
-
-  it('a cell dragged onto another field changes nothing', async () => {
-    const { landed } = drag(await cellOf('Name', MASTER), await cellOf('Level', MOD));
-
-    expect(landed).toBe(false);
-    expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();
-  });
-
-  it('a cell dragged onto a cell that already holds its value writes nothing', async () => {
-    const { landed } = drag(await cellOf('[0]', MASTER), await cellOf('[0]', MOD));
-
-    expect(landed).toBe(false);
-    expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();
-  });
-
-  it('a translated text dragged onto a cell that already holds it writes nothing', async () => {
-    const { landed } = drag(await cellOf('Title', MASTER), await cellOf('Title', MOD));
+  it.each([
+    ['a cell dragged onto a column that cannot be edited', 'Level', MOD, 'Level', MASTER],
+    ['a cell dragged onto another field', 'Name', MASTER, 'Level', MOD],
+    ['a cell dragged onto a cell that already holds its value', '[0]', MASTER, '[0]', MOD],
+    ['a translated text dragged onto a cell that already holds it', 'Title', MASTER, 'Title', MOD],
+    ['an element dropped on its own row in a column that lacks it', '[1]', MASTER, '[1]', MOD],
+  ])('%s lands nowhere and writes nothing', async (_case, fromRow, fromColumn, toRow, toColumn) => {
+    const { landed } = drag(await cellOf(fromRow, fromColumn), await cellOf(toRow, toColumn));
 
     expect(landed).toBe(false);
     expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();
@@ -169,31 +154,21 @@ describe('RecordPanel — drag and drop', () => {
     });
   });
 
-  it('an element dropped on its own row in a column that lacks it changes nothing', async () => {
-    const { landed } = drag(await cellOf('[1]', MASTER), await cellOf('[1]', MOD));
 
-    expect(landed).toBe(false);
-    expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();
-  });
-
-  it('an element dropped on another array row changes nothing', async () => {
-    drag(await cellOf('[1]', MASTER), await cellOf('Others', MOD));
+  it.each([
+    ['on another array row', '[1]', MASTER, 'Others', MOD],
+    ['on an array row in a column that cannot be edited', '[0]', MOD, 'Values', MASTER],
+  ])('an element dropped %s adds nothing', async (_case, fromRow, fromColumn, toRow, toColumn) => {
+    drag(await cellOf(fromRow, fromColumn), await cellOf(toRow, toColumn));
 
     expect(lastAddElement(vscode.postMessage)).toBeUndefined();
   });
 
-  it('an element dropped on an array row in a column that cannot be edited adds nothing', async () => {
-    drag(await cellOf('[0]', MOD), await cellOf('Values', MASTER));
-
-    expect(lastAddElement(vscode.postMessage)).toBeUndefined();
-  });
-
-  it('a cell the plugin does not hold is not draggable', async () => {
-    expect(await cellOf('Name', MOD)).toHaveAttribute('draggable', 'false');
-  });
-
-  it('a cell is draggable', async () => {
-    expect(await cellOf('Level', MASTER)).toHaveAttribute('draggable', 'true');
+  it.each([
+    ['a cell the plugin does not hold is not', 'Name', MOD, 'false'],
+    ['a cell the plugin holds is', 'Level', MASTER, 'true'],
+  ])('%s draggable', async (_case, row, column, draggable) => {
+    expect(await cellOf(row, column)).toHaveAttribute('draggable', draggable);
   });
 });
 

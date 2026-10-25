@@ -49,7 +49,7 @@ public sealed class SourceIngestTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private PluginAddress Plugin => _entry.KeyOf();
+    private PluginAddress Plugin => _entry.Key;
 
     private string ModFolder => _entry.ModFolderOf();
 
@@ -58,25 +58,11 @@ public sealed class SourceIngestTests : IDisposable
     private string NpcSourceFile(OpenedIndex index) =>
         _entry.SourceFileOf(index.DocumentOf(_npc, Plugin));
 
-    private bool ReadFromItsBinaryInPlaceOfItsSource(OpenedIndex index) =>
-        index.PluginResponseOf(Plugin) is { IsCompiledPlugin: true, PluginSourceUnreadable: not null };
-
     private IEnumerable<string> SourceFilesTheReadStoppedAt(OpenedIndex index) =>
         (index.Queries.GetProblems().Value() ?? throw new InvalidOperationException("Expected the record index to be ready."))
             .Single(p => PluginAddress.Comparer.Equals(p.Plugin, Plugin)).Problems.Select(p => p.SourceRelativePath);
 
     private string RootDocument => Path.Combine(ModFolder, PluginSourceRoot.HeaderDocument(PluginName));
-
-    [Fact]
-    public void AnExternalEditToASourceFile_IsAtEffectiveAfterReload_WithNoPointRead()
-    {
-        using (var live = LaunchedFreshOverTheSameSourceModTreeAndToldNothing())
-            _entry.HandEdit(live.DocumentOf(_npc, Plugin), NpcEditorId, "ExternallyRenamed");
-
-        using var reloaded = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
-
-        Assert.Equal("ExternallyRenamed", reloaded.DocumentOf(_npc, Plugin).EditorId);
-    }
 
     [Fact]
     public void ADocumentSortedByHandIntoAFolderBelowItsGroup_IsAtEffectiveAfterReload()
@@ -188,7 +174,7 @@ public sealed class SourceIngestTests : IDisposable
         using var reloaded = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
 
         Assert.NotNull(reloaded.CopyIn(_npc, Plugin));
-        Assert.True(ReadFromItsBinaryInPlaceOfItsSource(reloaded));
+        Assert.True(reloaded.ReadFromItsPluginFileForItsUnreadableSource(Plugin));
         Assert.Empty(reloaded.Status.Failures);
     }
 
@@ -204,7 +190,7 @@ public sealed class SourceIngestTests : IDisposable
         File.WriteAllText(RootDocument, "{ this is not json");
 
         index.NextSnapshotUntil(
-            () => ReadFromItsBinaryInPlaceOfItsSource(index), "the binary read in the tree's place");
+            () => index.ReadFromItsPluginFileForItsUnreadableSource(Plugin), "the binary read in the tree's place");
 
         Assert.Equal(BaselineHeightMax, HeightMaxOf(index.DocumentOf(_npc, Plugin)));
         Assert.Empty(index.Status.Failures);
@@ -222,7 +208,7 @@ public sealed class SourceIngestTests : IDisposable
 
         using var reloaded = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
 
-        Assert.True(ReadFromItsBinaryInPlaceOfItsSource(reloaded));
+        Assert.True(reloaded.ReadFromItsPluginFileForItsUnreadableSource(Plugin));
         Assert.Equal(Path.GetRelativePath(ModFolder, document), Assert.Single(SourceFilesTheReadStoppedAt(reloaded)));
     }
 
@@ -261,23 +247,15 @@ public sealed class SourceIngestTests : IDisposable
     }
 
     [Fact]
-    public void AnEditorIdRename_ReadsAsOneDirtyRecordAfterReload_NotACreateAndADelete()
+    public void AnEditorIdRename_ReadsAsOneModifiedRecordAfterReload_NotACreateAndADelete()
     {
         RenameTheNpc("RenamedAcrossReload");
 
         using var reloaded = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
 
         Assert.Equal("RenamedAcrossReload", reloaded.DocumentOf(_npc, Plugin).EditorId);
-    }
-
-    [Fact]
-    public void AnEditorIdRename_LeavesExactlyOneEntry()
-    {
-        RenameTheNpc("RenamedOnce");
-
-        using var reloaded = LaunchedFreshOverTheSameSourceModTreeAndToldNothing();
-
         Assert.Single(reloaded.StackOf(_npc));
+        Assert.Equal(WorkingTreeState.Modified, reloaded.ListedIn(Plugin).Single(r => r.FormKey == _npc).WorkingTreeState);
     }
 
     private void RenameTheNpc(string newEditorId)

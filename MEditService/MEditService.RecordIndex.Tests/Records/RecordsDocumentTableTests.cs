@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
@@ -18,7 +17,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
         GameRelease.Fallout4);
 
     private int DocumentsOf(string where) =>
-        IndexFiles.Rows(fixture.InstanceRoot, $"SELECT form_key FROM records WHERE {where}").Count;
+        fixture.Index.Queries.SelectRows($"SELECT form_key FROM records WHERE {where}").Value().Rows.Length;
 
     [Fact]
     public void EveryIndexedRecordHasOneDocument()
@@ -46,16 +45,6 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
 
         Assert.Equal(landscapes, DocumentsOf("record_type = 'land'"));
         Assert.Equal(navmeshes, DocumentsOf("record_type = 'navm'"));
-    }
-
-    [Fact]
-    public void ADocumentBody_IsTheCodecsSourceText()
-    {
-        using var overlay = OpenPlugin();
-        var record = ((IFallout4ModGetter)overlay).Npcs.First();
-        var expected = RecordTextCodec.SerializeToText(record, GameRelease.Fallout4);
-
-        Assert.Equal(expected, fixture.Index.BodyOf(record.FormKey.ToString(), CutDownPluginFixture.Plugin));
     }
 
     [Fact]

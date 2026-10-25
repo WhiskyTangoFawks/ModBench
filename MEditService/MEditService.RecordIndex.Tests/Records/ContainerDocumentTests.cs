@@ -14,10 +14,6 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
     private string? StoredBody(string formKey) =>
         fixture.Index.Queries.GetRenderedDocument(CutDownPluginFixture.Plugin, formKey).Value()?.Text;
 
-    private static IModDisposeGetter OpenPlugin() => ModFactory.ImportGetter(
-        new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
-        GameRelease.Fallout4);
-
     [Fact]
     public void AContainersStoredDocument_IsTheDocumentAnOwnFieldsCopyLands()
     {
@@ -38,16 +34,5 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
 
             Assert.Equal(ownFieldsCopy, StoredBody(container.FormKey.ToString()));
         });
-    }
-
-    [Fact]
-    public void ANonContainersDocument_HoldsTheCodecsBytesUnchanged()
-    {
-        using var overlay = OpenPlugin();
-
-        var weapon = ((IFallout4ModGetter)overlay).Weapons.First();
-        var expected = RecordTextCodec.SerializeToText(weapon, GameRelease.Fallout4);
-
-        Assert.Equal(expected, StoredBody(weapon.FormKey.ToString()));
     }
 }

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -13,25 +12,15 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
     private static IReadOnlyDictionary<string, RecordTableSchema> Schemas =>
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    private int Matching(string sql) => IndexFiles.Rows(fixture.InstanceRoot, sql).Count;
+    private JsonElement[] Selected(string sql) => fixture.Index.Queries.SelectRows(sql).Value().Rows;
 
-    private bool Binds(string sql)
-    {
-        try
-        {
-            IndexFiles.Rows(fixture.InstanceRoot, sql);
-            return true;
-        }
-        catch (DuckDBException)
-        {
-            return false;
-        }
-    }
+    private int Matching(string sql) => Selected(sql).Length;
 
-    private string ViewColumnType(string table, string column) =>
-        IndexFiles.Rows(fixture.InstanceRoot,
-            $"SELECT data_type FROM information_schema.columns WHERE table_schema = 'main' AND table_name = '{table}' AND column_name = '{column}'")
-            .Single()[0];
+    private bool Binds(string sql) => fixture.Index.Queries.SelectRows(sql).Holds(out _, out _);
+
+    private string[] ViewColumnTypes(string table, string column) =>
+        [.. Selected($"SELECT data_type FROM view_columns WHERE view_name = '{table}' AND column_name = '{column}'")
+            .Select(row => row.GetProperty("data_type").GetString().Require())];
 
     [Theory]
     [InlineData("npc_", "AggroRadiusBehaviorEnabled", "BOOLEAN")]
@@ -47,7 +36,7 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
     [InlineData("glob", "OutputChar", "BOOLEAN")]
     public void AViewColumn_HasTheSqlTypeOfItsLeaf(string table, string column, string expected)
     {
-        Assert.Equal(expected, ViewColumnType(table, column));
+        Assert.Equal([expected], ViewColumnTypes(table, column));
     }
 
     [Fact]
@@ -62,26 +51,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
     }
 
     [Fact]
-    public void ANonNullableScalar_NeverReadsNullThroughItsView()
-    {
-        Assert.Contains(Schemas["npc_"].RecordColumns, c => c.Name == "XpValueOffset");
-
-        Assert.True(Matching("SELECT form_key FROM \"npc_\"") > 0, "Expected npc_ rows.");
-        Assert.Equal(0, Matching("SELECT form_key FROM \"npc_\" WHERE \"XpValueOffset\" IS NULL"));
-    }
-
-    [Fact]
-    public void OmittedDefaults_ReadAsTheDefault_NotNull()
-    {
-        var absent = IndexFiles.Rows(fixture.InstanceRoot, "SELECT body FROM records WHERE record_type = 'npc_'")
-            .Count(row => !JsonDocument.Parse(row[0]).RootElement.TryGetProperty("CalcMinLevel", out _));
-
-        Assert.True(absent > 0, "Positive control: some npc_ documents must omit CalcMinLevel for this to mean anything.");
-        Assert.Equal(0, Matching("SELECT form_key FROM \"npc_\" WHERE \"CalcMinLevel\" IS NULL"));
-        Assert.Equal(absent, Matching("SELECT form_key FROM \"npc_\" WHERE \"CalcMinLevel\" = 0"));
-    }
-
-    [Fact]
     public void TranslatedStrings_ReadTheirValue_NotTheEnvelope()
     {
         Assert.True(Matching("SELECT form_key FROM \"acti\" WHERE \"Name\" IS NOT NULL") > 0,
@@ -93,8 +62,8 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
     [Fact]
     public void FlagsEnums_ReadAsJoinedNames_SoAFilterCanMatchOneWithLike()
     {
-        var flagName = IndexFiles.Rows(fixture.InstanceRoot, "SELECT form_key FROM cell")
-            .Select(row => fixture.Index.CopyIn(row[0], CutDownPluginFixture.Plugin)?.Fields.FirstOrDefault(f => f.Metadata.Name == "Flags")?.Value)
+        var flagName = Selected("SELECT form_key FROM cell")
+            .Select(row => fixture.Index.CopyIn(row.GetProperty("form_key").GetString().Require(), CutDownPluginFixture.Plugin)?.Fields.FirstOrDefault(f => f.Metadata.Name == "Flags")?.Value)
             .OfType<JsonElement>()
             .Where(value => value.ValueKind == JsonValueKind.Array && value.GetArrayLength() > 0)
             .Select(value => value[0].GetString())
@@ -111,7 +80,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
     [InlineData("npc_", "Weight")]
     public void AnArrayOrStructMember_HasNoViewColumn(string table, string column)
     {
-        Assert.Empty(IndexFiles.Rows(fixture.InstanceRoot,
-            $"SELECT 1 FROM information_schema.columns WHERE table_schema = 'main' AND table_name = '{table}' AND column_name = '{column}'"));
+        Assert.Empty(ViewColumnTypes(table, column));
     }
 }

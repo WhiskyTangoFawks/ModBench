@@ -22,7 +22,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
             .BuildScattered()
             .CompiledPlugin();
         _base = _fixture.Plugins.Single();
-        _baseKey = _base.KeyOf();
+        _baseKey = _base.Key;
         _formKey = fk.ToString();
     }
 
@@ -44,20 +44,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
 
         Assert.Equal(editedBody, index.BodyOf(_formKey, _baseKey));
         Assert.Equal("EditedName", index.DocumentOf(_formKey, _baseKey).EditorId);
-    }
-
-    [Fact]
-    public void AnEdit_MarksTheRecordsRowModified()
-    {
-        using var index = Indexes.Reconciled(_fixture);
-        var committed = index.DocumentOf(_formKey, _baseKey);
-        Assert.Equal(WorkingTreeState.None, RowOf(index).WorkingTreeState);
-
-        index.Edit(_base, committed, index.BodyOf(_formKey, _baseKey).Replace("OriginalName", "EditedName", StringComparison.Ordinal));
-
-        var dirty = RowOf(index);
-        Assert.Equal(WorkingTreeState.Modified, dirty.WorkingTreeState);
-        Assert.Equal("EditedName", dirty.EditorId);
+        Assert.Equal("EditedName", RowOf(index).EditorId);
     }
 
     [Fact]

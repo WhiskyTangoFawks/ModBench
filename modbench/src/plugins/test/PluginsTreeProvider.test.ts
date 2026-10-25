@@ -94,7 +94,6 @@ function held(name: string, overrides: Partial<PluginMetadata> = {}): PluginMeta
     isMaster: false,
     isBlueprint: false,
     masters: [],
-    recordCount: 0,
     isImmutable: false,
     origin: 'SomeMod',
     missingMasters: [],

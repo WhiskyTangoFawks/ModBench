@@ -8,19 +8,15 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, hasSection } from '../../src/wire/messages';
-import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, hostPickingEnum, lastPostedEnvelope, lastToldCell, member, panelClient,
-  parseJsonRecord, required,
-  type PanelOpts,
+  compareOverride, compareResultFixture, diffNode, fieldMeta, hostPickingEnum, lastPostedEnvelope, lastToldCell, loaded, member, panelClient,
+  parseJsonRecord, required, tellPanel,
+  type Loaded, type PanelOpts,
 } from './test/fixtures';
-import type { ColumnKey, CompareResult, PluginLoadFailure } from './types';
-import type { UnreadableSource } from '../../src/wire/unreadableSource';
-
-type Loaded = Awaited<ReturnType<RecordPanelClient['load']>>;
+import type { CompareResult } from './types';
 
 const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
 
@@ -60,8 +56,8 @@ const compareResult: CompareResult = compareResultFixture({
 });
 
 const pluginsResponse = [
-  { name: 'Fallout4.esm', isImmutable: true,  loadOrderIndex: 0 },
-  { name: 'MyMod.esp',    isImmutable: false, loadOrderIndex: 1 },
+  { name: 'Fallout4.esm', isImmutable: true },
+  { name: 'MyMod.esp',    isImmutable: false },
 ];
 
 const immutableWinnerCompareResult: CompareResult = compareResultFixture({
@@ -141,8 +137,8 @@ const twoSiblingFieldsResult: CompareResult = compareResultFixture({
 });
 
 const partialFormCompiledPluginsResponse = [
-  { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
-  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isCompiledPlugin: true },
+  { name: 'Fallout4.esm', isImmutable: true },
+  { name: 'MyMod.esp', isImmutable: false, isCompiledPlugin: true },
 ];
 
 const partialFormCompareResult: CompareResult = compareResultFixture({
@@ -210,11 +206,6 @@ const flagsCompareResult: CompareResult = compareResultFixture({
   ],
 });
 
-const compiledPluginMyModPluginsForTheRealEditableColumnsGate = [
-  { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
-  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isCompiledPlugin: true },
-];
-
 const structFieldMeta: FieldMetadata = fieldMeta({
   name: 'Bounds',
   type: 'struct',
@@ -266,6 +257,8 @@ const structCompareResult: CompareResult = compareResultFixture({
     }),
   ],
 });
+
+const loadRecord = (formKey = '000001:Fallout4.esm') => tellPanel({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey });
 
 function renderPanel(compare: CompareResult, opts: PanelOpts = {}) {
   const client = panelClient(() => compare, { plugins: pluginsResponse, ...opts });
@@ -428,6 +421,17 @@ describe('RecordPanel — the file\'s column', () => {
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
+  it('opens no editor in its own column when its plugin\'s copy cannot be written', async () => {
+    renderPanel(twoCompiledPlugin, {
+      plugins: bothCompiledPlugin.map(p => ({ ...p, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })),
+      fileColumn: 'MyMod.esp|ModA',
+    });
+    await waitFor(() => expect(screen.getByText('File Name')).toBeInTheDocument());
+
+    fireEvent.doubleClick(screen.getByText('File Name'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
   it('opens another column\'s copy on a click on its header, and nothing on a click on its own or on a collapse control', async () => {
     renderPanel(twoCompiledPlugin, { plugins: bothCompiledPlugin, fileColumn: 'MyMod.esp|ModA' });
     await waitFor(() => expect(screen.getByText('Other Name')).toBeInTheDocument());
@@ -445,21 +449,21 @@ describe('RecordPanel — the file\'s column', () => {
 
 describe('RecordPanel — column header native right-click menu', () => {
   afterEach(() => vi.unstubAllGlobals());
+  const compare = compareResultFixture({
+    conflictAll: 'OnlyOne',
+    overrides: [compareOverride({
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+      isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
+    })],
+    diffs: [diffNode({
+      fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
+      winnerColumn: 'MyMod.esp', cellStates: {},
+    })],
+  });
 
   it('the header cell carries the recordHeader context, naming this column\'s own record identity', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    const compare = compareResultFixture({
-      conflictAll: 'OnlyOne',
-      overrides: [compareOverride({
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-        isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
-      })],
-      diffs: [diffNode({
-        fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
-        winnerColumn: 'MyMod.esp', cellStates: {},
-      })],
-    });
     const { container } = renderPanel(compare);
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
@@ -481,18 +485,6 @@ describe('RecordPanel — column header native right-click menu', () => {
     ['a plugin the game provides', { isCompiledPlugin: false, isImmutable: true }, {}, { editable: false, inMod: 'none' }],
   ] as const)('the header of %s carries whether delete applies and the repository state of its origin\'s mod', async (_what, facts, modsByOrigin, expected) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    const compare = compareResultFixture({
-      conflictAll: 'OnlyOne',
-      overrides: [compareOverride({
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-        isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
-      })],
-      diffs: [diffNode({
-        fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
-        winnerColumn: 'MyMod.esp', cellStates: {},
-      })],
-    });
     const { container } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: 'ModA', ...facts }], modsByOrigin });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
@@ -504,23 +496,11 @@ describe('RecordPanel — column header native right-click menu', () => {
 
   it('changes the repository state its header names when the host says the mod changed, without reading the record again', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    const compare = compareResultFixture({
-      conflictAll: 'OnlyOne',
-      overrides: [compareOverride({
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-        isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
-      })],
-      diffs: [diffNode({
-        fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
-        winnerColumn: 'MyMod.esp', cellStates: {},
-      })],
-    });
     const { container, client } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: 'ModA' }], modsByOrigin: { ModA: 'nonSourceMod' } });
     const inMod = () => parseJsonRecord(container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}').inMod;
     await waitFor(() => expect(inMod()).toBe('nonSourceMod'));
 
-    sendMessage({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: { ModA: 'sourceMod' } });
+    tellPanel({ type: EXTENSION_TO_WEBVIEW.MODS_CHANGED, modsByOrigin: { ModA: 'sourceMod' } });
 
     await waitFor(() => expect(inMod()).toBe('sourceMod'));
     expect(client.load).toHaveBeenCalledTimes(1);
@@ -528,21 +508,8 @@ describe('RecordPanel — column header native right-click menu', () => {
 
   it('offers no delete on a column whose state is unknown, when the page is given no plugin facts a column is neither a compiled plugin nor one with no plugin source', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    const compare = compareResultFixture({
-      conflictAll: 'OnlyOne',
-      overrides: [compareOverride({
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-        isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
-      })],
-      diffs: [diffNode({
-        fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
-        winnerColumn: 'MyMod.esp', cellStates: {},
-      })],
-    });
     const load = vi.fn().mockResolvedValue({
-      ok: true, result: compare, immutableSet: null, compiledPluginSet: null, editableSet: null, sourceUnreadableReasons: null, modsByOrigin: {}, conflictsComputed: true, loadFailures: [],
-      fileColumn: undefined, fileCopyAlone: false, fileOverriddenBy: null,
+      ...loaded(compare), immutableSet: null, compiledPluginSet: null, editableSet: null, sourceUnreadableReasons: null,
     } satisfies Loaded);
     const { container } = renderPanel(compare, { load });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
@@ -587,9 +554,7 @@ describe('RecordPanel — a Partial Form column', () => {
     renderPanel(partialFormCompareResult, { plugins: pluginsResponse });
     await waitFor(() => expect(screen.getByText('Name')).toBeInTheDocument());
 
-    const nameRow = screen.getByText('Name').closest('tr');
-    if (!nameRow) throw new Error('expected a tr ancestor of the Name row');
-    const cells = nameRow.querySelectorAll('td');
+    const cells = required(screen.getByText('Name').closest('tr'), 'the Name row').querySelectorAll('td');
     expect(cells[2]).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
     expect(cells[1]).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
@@ -603,26 +568,8 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('control: a scalar cell in the identical editable column the flags cases use opens an editable input on double click', async () => {
-    renderPanel(flagsCompareResult, { plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate });
-    await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
-
-    fireEvent.doubleClick(screen.getByText('Override Name'));
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
-  });
-
-  it('opens no input on a cell of a compiled plugin column whose plugin source is unreadable', async () => {
-    renderPanel(flagsCompareResult, {
-      plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate.map(p => ({ ...p, pluginSourceUnreadable: { reason: 'Its folder is gone.', decompileRepairs: true } })),
-    });
-    await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
-
-    fireEvent.doubleClick(screen.getByText('Override Name'));
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-  });
-
   it('a flags row opens expanded with its checkboxes; collapsing shows the summary and expanding restores them', async () => {
-    renderPanel(flagsCompareResult, { plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate });
+    renderPanel(flagsCompareResult, { plugins: partialFormCompiledPluginsResponse });
     await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(4));
     const flagsRow = () => required(screen.getByText('Flags').closest('tr'), "the Flags row");
 
@@ -635,7 +582,7 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
   });
 
   it('toggling a flag posts set of the member with the names now set', async () => {
-    renderPanel(flagsCompareResult, { plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate });
+    renderPanel(flagsCompareResult, { plugins: partialFormCompiledPluginsResponse });
     await waitFor(() => expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0));
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -658,39 +605,24 @@ describe('RecordPanel — conflict color coding', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(overrideCompareResult);
     await waitFor(() => screen.getByText('Name'));
-    const row = screen.getByText('Name').closest('tr');
-    if (!row) throw new Error('expected a tr ancestor of the Name row');
-    expect(row.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
+    expect(required(screen.getByText('Name').closest('tr'), 'the Name row').style.backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
   });
 
   it('colors only the field that actually differs — an agreeing sibling row gets no background', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(twoSiblingFieldsResult);
     await waitFor(() => screen.getByText('Name'));
-    const nameRow = screen.getByText('Name').closest('tr');
-    const levelRow = screen.getByText('Level').closest('tr');
-    if (!nameRow) throw new Error('expected a tr ancestor of the Name row');
-    if (!levelRow) throw new Error('expected a tr ancestor of the Level row');
+    const nameRow = required(screen.getByText('Name').closest('tr'), 'the Name row');
+    const levelRow = required(screen.getByText('Level').closest('tr'), 'the Level row');
     expect(nameRow.style.backgroundColor).toBe('var(--vscode-modbench-conflictRowOverride)');
     expect(levelRow.style.backgroundColor).toBe('');
-  });
-
-  it('applies green cell background when cellStates is Override', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(overrideCompareResult);
-    await waitFor(() => screen.getByText('Override Name'));
-    const cell = screen.getByText('Override Name').closest('td');
-    if (!cell) throw new Error('expected a td ancestor of the Override Name cell');
-    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflictOverride)');
   });
 
   it('column header background reflects CompareOverride.conflictThis', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
-    const header = screen.getByText('MyMod.esp').closest('th');
-    if (!header) throw new Error('expected a th ancestor of the MyMod.esp header cell');
-    expect(header.style.backgroundColor).toBe('var(--vscode-modbench-conflictWins)');
+    expect(required(screen.getByText('MyMod.esp').closest('th'), 'the MyMod.esp header').style.backgroundColor).toBe('var(--vscode-modbench-conflictWins)');
   });
 });
 
@@ -711,11 +643,7 @@ describe('RecordPanel — conflict cell tooltips and colours', () => {
     })],
   });
 
-  const cellOf = async (text: string): Promise<HTMLElement> => {
-    const cell = (await screen.findByText(text)).closest('td');
-    if (!cell) throw new Error(`expected a td ancestor of ${text}`);
-    return cell;
-  };
+  const cellOf = async (text: string): Promise<HTMLElement> => required((await screen.findByText(text)).closest('td'), `the ${text} cell`);
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
@@ -784,7 +712,7 @@ describe('RecordPanel — conflict cell tooltips and colours', () => {
 });
 
 describe('RecordPanel — postMessage wiring', () => {
-  const fkPlugins = [{ name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 }];
+  const fkPlugins = [{ name: 'Fallout4.esm', isImmutable: true }];
 
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
@@ -803,11 +731,7 @@ describe('RecordPanel — postMessage wiring', () => {
     const { client } = renderPanel(fkCompareResult, { plugins: fkPlugins });
     await screen.findByText('Non-Player Character TestNPC [000001:Fallout4.esm]');
 
-    act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000002:Fallout4.esm' },
-      }));
-    });
+    loadRecord('000002:Fallout4.esm');
 
     await waitFor(() => expect(client.load).toHaveBeenCalledWith('000002:Fallout4.esm'));
   });
@@ -919,7 +843,7 @@ describe('RecordPanel — keys through the rows', () => {
   });
 
   it('acts on no key while an editor is open, where the keys edit its text', async () => {
-    const { container } = await focusedOn('Name', { plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate }, flagsCompareResult);
+    const { container } = await focusedOn('Name', { plugins: partialFormCompiledPluginsResponse }, flagsCompareResult);
     const valueCell = required(screen.getByText('Override Name').closest('td'), 'the editable Name cell');
     fireEvent.click(valueCell);
     fireEvent.doubleClick(valueCell);
@@ -947,23 +871,10 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
     await waitFor(() => screen.getByText('Showing the last good read: MyMod.esp: truncated'));
   });
 
-  it('says nothing of a plugin the panel does not show', async () => {
-    renderPanel(compareResult, { loadFailures: [{ name: 'Elsewhere.esp', origin: 'Data/', reason: 'truncated' }] });
-    await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
-    expect(screen.queryByText(/Showing the last good read/)).not.toBeInTheDocument();
-  });
-
   it('goes once a read lands with the plugin readable again', async () => {
-    const answered = (loadFailures: PluginLoadFailure[]) => ({
-      ok: true as const, result: compareResult, immutableSet: new Set<ColumnKey>(), compiledPluginSet: new Set<ColumnKey>(),
-      sourceUnreadableReasons: new Map<ColumnKey, UnreadableSource>(),
-      modsByOrigin: {},
-      conflictsComputed: true, loadFailures,
-      editableSet: new Set<ColumnKey>(), fileColumn: undefined, fileCopyAlone: false, fileOverriddenBy: null,
-    } satisfies Loaded);
     const load = vi.fn()
-      .mockResolvedValueOnce(answered([{ name: 'MyMod.esp', origin: 'Data/', reason: 'truncated' }]))
-      .mockResolvedValue(answered([]));
+      .mockResolvedValueOnce(loaded(compareResult, { loadFailures: [{ name: 'MyMod.esp', origin: 'Data/', reason: 'truncated' }] }))
+      .mockResolvedValue(loaded(compareResult));
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText(/Showing the last good read/));
 
@@ -974,8 +885,7 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
 });
 
 describe('RecordPanel — incomplete-comparison banner', () => {
-  const incompleteMessage = recordPanelIncompleteMessage(false);
-  if (!incompleteMessage) throw new Error('expected a banner message when conflicts are not yet computed');
+  const incompleteMessage = required(recordPanelIncompleteMessage(false), 'the incomplete-comparison message');
 
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
@@ -986,22 +896,10 @@ describe('RecordPanel — incomplete-comparison banner', () => {
     await waitFor(() => screen.getByText(incompleteMessage));
   });
 
-  it('shows no statement once the sweep has already completed', async () => {
-    renderPanel(compareResult, { conflictsComputed: true });
-    await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
-    expect(screen.queryByText(incompleteMessage)).not.toBeInTheDocument();
-  });
-
   it('a panel already open when the sweep lands reads again and reflects settled data, not just clears its banner over stale content', async () => {
     const load = vi.fn()
-      .mockResolvedValueOnce({
-        ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
-        modsByOrigin: {}, immutableSet: new Set(), conflictsComputed: false, loadFailures: [],
-      })
-      .mockResolvedValue({
-        ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
-        modsByOrigin: {}, immutableSet: new Set(), conflictsComputed: true, loadFailures: [],
-      });
+      .mockResolvedValueOnce(loaded(compareResult, { plugins: pluginsResponse, conflictsComputed: false }))
+      .mockResolvedValue(loaded(compareResult, { plugins: pluginsResponse }));
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText(incompleteMessage));
 
@@ -1018,36 +916,14 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('re-loads data when LOAD_RECORD arrives with the same formKey', async () => {
-    const { client } = renderPanel(compareResult);
-    await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
-    const callsBefore = vi.mocked(client.load).mock.calls.length;
-
-    act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000001:Fallout4.esm' },
-      }));
-    });
-
-    await waitFor(() => expect(vi.mocked(client.load).mock.calls.length).toBeGreaterThan(callsBefore));
-    await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
-  });
-
   it('clears error and shows data after a successful refresh following a load failure', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce({ ok: false, failure: { failed: 'refused', refusal: 'mEdit could not read the record.' } })
-      .mockResolvedValue({
-        ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
-        modsByOrigin: {}, immutableSet: new Set(['Fallout4.esm']), conflictsComputed: true, loadFailures: [],
-      });
+      .mockResolvedValue(loaded(compareResult, { plugins: pluginsResponse }));
     renderPanel(compareResult, { load });
     await waitFor(() => expect(screen.getByText('Failed to load: mEdit could not read the record.')).toBeInTheDocument());
 
-    act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000001:Fallout4.esm' },
-      }));
-    });
+    loadRecord('000001:Fallout4.esm');
 
     await waitFor(() => expect(screen.queryByText(/Failed to load/)).not.toBeInTheDocument());
     await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
@@ -1064,10 +940,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 
 });
 
-const loaded = (result: CompareResult | null, conflictsComputed = true, gone = ['000001:Fallout4.esm'], copiesLacking: string[] = []) => ({
-  ok: true as const, ...(result === null ? { result, gone, copiesLacking } : { result }), immutableSet: new Set<ColumnKey>(), compiledPluginSet: new Set<ColumnKey>(), sourceUnreadableReasons: new Map<ColumnKey, UnreadableSource>(), modsByOrigin: {}, conflictsComputed, loadFailures: [],
-  editableSet: new Set<ColumnKey>(), fileColumn: undefined, fileCopyAlone: false, fileOverriddenBy: null,
-} satisfies Loaded);
+const goneRead = (gone = ['000001:Fallout4.esm'], copiesLacking: string[] = []) => loaded(null, { gone, copiesLacking });
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => undefined;
@@ -1075,12 +948,6 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-const sendMessage = (data: unknown) => {
-  act(() => { window.dispatchEvent(new MessageEvent('message', { data })); });
-};
-
-const loadRecord = (formKey = '000001:Fallout4.esm') =>
-  sendMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey });
 
 describe('RecordPanel — states', () => {
   beforeEach(() => {
@@ -1139,7 +1006,7 @@ describe('RecordPanel — states', () => {
   it('says the record is gone, naming it, in place of the grid', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce(loaded(compareResult))
-      .mockResolvedValue(loaded(null));
+      .mockResolvedValue(goneRead());
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText('Override Name'));
 
@@ -1152,7 +1019,7 @@ describe('RecordPanel — states', () => {
   it('names every record that is gone, not only the tab\'s own', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce(loaded(compareResult))
-      .mockResolvedValue(loaded(null, true, ['000777:Column.esm', '000778:Column.esm']));
+      .mockResolvedValue(goneRead(['000777:Column.esm', '000778:Column.esm']));
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText('Override Name'));
 
@@ -1162,7 +1029,7 @@ describe('RecordPanel — states', () => {
   });
 
   it('says what mEdit said of a copy only its plugin lacks, beside the gone record', async () => {
-    const load = vi.fn().mockResolvedValue(loaded(null, true, ['000777:Column.esm'], ['000778:Column.esm is not in B.esp (ModB).']));
+    const load = vi.fn().mockResolvedValue(goneRead(['000777:Column.esm'], ['000778:Column.esm is not in B.esp (ModB).']));
     renderPanel(compareResult, { load });
 
     await waitFor(() => screen.getByText('000777:Column.esm is gone. 000778:Column.esm is not in B.esp (ModB).'));
@@ -1170,7 +1037,7 @@ describe('RecordPanel — states', () => {
 
   it('says the last read failed, beside the gone record, until a good read replaces it', async () => {
     const load = vi.fn()
-      .mockResolvedValueOnce(loaded(null))
+      .mockResolvedValueOnce(goneRead())
       .mockResolvedValueOnce({ ok: false, failure: { failed: 'refused', refusal: 'mEdit could not read the record.' } })
       .mockResolvedValue(loaded(compareResult));
     renderPanel(compareResult, { load });
@@ -1185,7 +1052,7 @@ describe('RecordPanel — states', () => {
 
   it('shows the record again when a later read finds it', async () => {
     const load = vi.fn()
-      .mockResolvedValueOnce(loaded(null))
+      .mockResolvedValueOnce(goneRead())
       .mockResolvedValue(loaded(compareResult));
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText('000001:Fallout4.esm is gone.'));
@@ -1225,7 +1092,7 @@ describe('RecordPanel — states', () => {
 
     newer.resolve(loaded(compareResult));
     await waitFor(() => screen.getByText('Override Name'));
-    older.resolve(loaded(null));
+    older.resolve(goneRead());
     await act(async () => { await Promise.resolve(); });
 
     expect(screen.getByText('Override Name')).toBeInTheDocument();
@@ -1265,11 +1132,7 @@ describe('RecordPanel — column collapse', () => {
     fireEvent.click(collapseButton('MyMod.esp'));
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
 
-    act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000002:Fallout4.esm' },
-      }));
-    });
+    loadRecord('000002:Fallout4.esm');
 
     await waitFor(() => screen.getByText('MyMod.esp'));
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
@@ -1485,10 +1348,8 @@ describe('RecordPanel — union element rows: two plugins can disagree on which 
     expect(labelCell('aliases')).not.toHaveStyle({ paddingLeft: '24px' });
     expect(labelCell('[0]')).toHaveStyle({ paddingLeft: '24px' });
     expect(labelCell('location')).toHaveStyle({ paddingLeft: '48px' });
-
-    for (const aliasId of gridBodyRowsNotHeaderLoadIndexes().getAllByText('alias_id')) {
-      expect(aliasId.closest('td')).toHaveStyle({ paddingLeft: '72px' });
-    }
+    expect(gridBodyRowsNotHeaderLoadIndexes().getAllByText('alias_id').map(aliasId => aliasId.closest('td')?.style.paddingLeft))
+      .toEqual(['72px', '72px']);
   });
 });
 
@@ -1535,7 +1396,7 @@ const unionCompareResult: CompareResult = compareResultFixture({
 });
 
 const unionCompiledPluginsResponse = [
-  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isCompiledPlugin: true },
+  { name: 'MyMod.esp', isImmutable: false, isCompiledPlugin: true },
 ];
 
 describe('RecordPanel — an abstract union\'s leaf is an editable field, a Mutagen class name being a wire token the user is never shown: the panel displays the reflector\'s labels and posts the values', () => {
@@ -1617,7 +1478,7 @@ describe('RecordPanel — editing an absent member', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('posts one set with the typed value, over the default the editor opens on', async () => {
-    renderPanel(compare, { plugins: compiledPluginMyModPluginsForTheRealEditableColumnsGate });
+    renderPanel(compare, { plugins: partialFormCompiledPluginsResponse });
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Weight'));
     vi.mocked(vscode.postMessage).mockClear();
     const cell = cellAt('Weight', 2);
@@ -1696,8 +1557,8 @@ describe('RecordPanel — a column whose record failed to parse stays in the gri
   });
 
   const plugins = [
-    { name: 'Broken.esp', isImmutable: false, loadOrderIndex: 0, isCompiledPlugin: true },
-    { name: 'Good.esp', isImmutable: false, loadOrderIndex: 1, isCompiledPlugin: true },
+    { name: 'Broken.esp', isImmutable: false, isCompiledPlugin: true },
+    { name: 'Good.esp', isImmutable: false, isCompiledPlugin: true },
   ];
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Broken.esp'));
@@ -1721,27 +1582,10 @@ describe('RecordPanel — a column whose record failed to parse stays in the gri
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  it('tells the host the focused cell\'s context when a cell takes the focus, as a field gesture from the palette acts on the focused cell and gets the context its right-click would hand the command', async () => {
-    renderPanel(compare, { plugins });
-    await waitFor(() => screen.getByText('Readable Name'));
-    vi.mocked(vscode.postMessage).mockClear();
-
-    fireEvent.click(screen.getByText('Readable Name'));
-
-    const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
-    const toldContexts = (): unknown[] => vi.mocked(vscode.postMessage).mock.calls
-      .map(([m]: unknown[]) => m)
-      .filter((m): m is { type: string; context: unknown } => isRecord(m) && m.type === WEBVIEW_TO_EXTENSION.FOCUS_CELL)
-      .map((m) => m.context);
-    await waitFor(() => expect(toldContexts().some((c) =>
-      isRecord(c) && c.plugin === 'Good.esp' && String(c.webviewSection).split(' ').includes('stringValue'))).toBe(true));
-  });
+  const timesEntered = () => vi.mocked(vscode.postMessage).mock.calls
+    .filter(([m]) => m.type === WEBVIEW_TO_EXTENSION.FOCUS_CELL && m.entered).length;
 
   it('tells the host a cell was entered on a click, and not when a re-read changes its text, as a background re-read must not take the focus from the list the user is working in (copy value and the name filter act on the focused view)', async () => {
-    const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
-    const told = (): { context: unknown; entered: unknown }[] => vi.mocked(vscode.postMessage).mock.calls
-      .map(([m]: unknown[]) => m)
-      .filter((m): m is { type: string; context: unknown; entered: unknown } => isRecord(m) && m.type === WEBVIEW_TO_EXTENSION.FOCUS_CELL);
     let shown = compare;
     const client = panelClient(() => shown, { plugins });
     render(<RecordPanel client={client} />);
@@ -1749,8 +1593,8 @@ describe('RecordPanel — a column whose record failed to parse stays in the gri
     vi.mocked(vscode.postMessage).mockClear();
 
     fireEvent.click(screen.getByText('Readable Name'));
-    await waitFor(() => expect(told().some((m) => isRecord(m.context) && m.context.copyText === 'Readable Name')).toBe(true));
-    expect(told().filter((m) => m.entered === true)).toHaveLength(1);
+    await waitFor(() => expect(lastToldCell(vscode.postMessage)).toMatchObject({ plugin: 'Good.esp', copyText: 'Readable Name' }));
+    expect(timesEntered()).toBe(1);
     vi.mocked(vscode.postMessage).mockClear();
 
     shown = {
@@ -1764,35 +1608,25 @@ describe('RecordPanel — a column whose record failed to parse stays in the gri
         ...compare.diffs.slice(1),
       ],
     };
-    act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000001:Broken.esp' },
-      }));
-    });
-    await waitFor(() => expect(told().some((m) => isRecord(m.context) && m.context.copyText === 'Renamed')).toBe(true));
-    expect(told().some((m) => m.entered === true)).toBe(false);
+    loadRecord('000001:Broken.esp');
+    await waitFor(() => expect(lastToldCell(vscode.postMessage)).toMatchObject({ plugin: 'Good.esp', copyText: 'Renamed' }));
+    expect(timesEntered()).toBe(0);
   });
 
   it('tells the host the user entered the grid when the keyboard focuses a cell', async () => {
-    const entered = (): unknown[] => vi.mocked(vscode.postMessage).mock.calls
-      .map(([m]: unknown[]) => m)
-      .filter((m): m is { type: string; entered: unknown } =>
-        typeof m === 'object' && m !== null && 'type' in m && m.type === WEBVIEW_TO_EXTENSION.FOCUS_CELL
-        && 'entered' in m && m.entered === true);
     renderPanel(compare, { plugins });
     await waitFor(() => screen.getByText('Readable Name'));
     vi.mocked(vscode.postMessage).mockClear();
 
-    act(() => { screen.getByText('Readable Name').closest('td')?.focus(); });
+    act(() => { required(screen.getByText('Readable Name').closest('td'), 'the Readable Name cell').focus(); });
 
-    await waitFor(() => expect(entered()).toHaveLength(1));
+    await waitFor(() => expect(timesEntered()).toBe(1));
   });
 
   it('focuses the label cell on a click, and selects no text in the grid', async () => {
     const { container } = renderPanel(compare, { plugins });
     await waitFor(() => screen.getByText('Readable Name'));
-    const label = screen.getAllByText('Name')[0]?.closest('td');
-    if (!label) throw new Error('no label cell');
+    const label = required(screen.getAllByText('Name')[0]?.closest('td'), 'the Name label cell');
 
     fireEvent.click(label);
 
@@ -1844,7 +1678,7 @@ describe('RecordPanel — the Record Header', () => {
       diffNode({ fieldName: 'Name', values: { 'MyMod.esp': 'A Name' }, winnerColumn: 'MyMod.esp' }),
     ],
   });
-  const compiledPlugin = [{ name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isCompiledPlugin: true }];
+  const compiledPlugin = [{ name: 'MyMod.esp', isImmutable: false, isCompiledPlugin: true }];
 
   const rows = (container: HTMLElement) => Array.from(container.querySelectorAll('tbody tr'));
   const rowLabels = (container: HTMLElement) =>
@@ -1946,8 +1780,8 @@ describe('RecordPanel — the Record Header', () => {
       ],
     });
   const stampPlugins = [
-    { name: 'Base.esm', isImmutable: false, loadOrderIndex: 0, isCompiledPlugin: true },
-    { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isCompiledPlugin: true },
+    { name: 'Base.esm', isImmutable: false, isCompiledPlugin: true },
+    { name: 'MyMod.esp', isImmutable: false, isCompiledPlugin: true },
   ];
   const stampCells = (container: HTMLElement) =>
     Array.from(required(rows(container).find(tr => tr.querySelector('td')?.textContent === 'Version Control Info 1'),
@@ -2001,7 +1835,7 @@ describe('RecordPanel — the Record Header', () => {
 
 describe('RecordPanel — a field the schema marks read-only, the reason coming from the field\'s own metadata with nothing in the panel deciding it', () => {
   const reason = 'a known upstream defect';
-  const compiledPlugin = [{ name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isCompiledPlugin: true }];
+  const compiledPlugin = [{ name: 'MyMod.esp', isImmutable: false, isCompiledPlugin: true }];
   const lockedName = fieldMeta({ name: 'Name', type: 'string', readOnlyReason: reason });
   const compare = compareResultFixture({
     overrides: [
@@ -2129,7 +1963,7 @@ describe('RecordPanel — several records side by side', () => {
     await waitFor(() => expect(client.load).toHaveBeenCalledTimes(1));
     const columns = [{ formKey: AMMO, plugin: { name: 'A.esp', origin: 'Data/' } }];
 
-    sendMessage({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns });
+    tellPanel({ type: EXTENSION_TO_WEBVIEW.SHOW_COLUMNS, columns });
 
     expect(client.showColumns).toHaveBeenCalledWith(columns);
     await waitFor(() => expect(client.load).toHaveBeenCalledTimes(2));

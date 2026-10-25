@@ -122,7 +122,7 @@ public sealed class ProblemsPanelTests : IDisposable
     {
         var (index, document, backup) = BrokenReadFromItsTree_ThenStoppedByAClaimedFormKey();
         using var _ = index;
-        Assert.Null(index.PluginResponseOf(Entry(Broken).KeyOf())?.PluginSourceUnreadable);
+        Assert.Null(index.PluginResponseOf(Entry(Broken).Key)?.PluginSourceUnreadable);
 
         var answer = Assert.Single(Ready(index));
 
@@ -154,11 +154,11 @@ public sealed class ProblemsPanelTests : IDisposable
         Build(plugin);
         var (document, backup) = BackupClaimingTheFormKeyOf(plugin, "Referrer");
         using var index = Indexes.Reconciled(Fixture);
-        Assert.NotNull(index.PluginResponseOf(Entry(plugin).KeyOf())?.PluginSourceUnreadable);
+        Assert.NotNull(index.PluginResponseOf(Entry(plugin).Key)?.PluginSourceUnreadable);
 
         var answer = Assert.Single(Ready(index));
 
-        Assert.Equal(Entry(plugin).KeyOf(), answer.Plugin);
+        Assert.Equal(Entry(plugin).Key, answer.Plugin);
         Assert.Equivalent(new[] { document, backup }, answer.Problems.Select(p => p.SourceRelativePath), strict: true);
         Assert.All(answer.Problems, p => Assert.Null(p.TargetFormKey));
         Assert.Null(answer.Failure);
@@ -205,11 +205,11 @@ public sealed class ProblemsPanelTests : IDisposable
         File.Delete(SourceFileHolding(gone, "Referrer"));
 
         var answer = Ready(index);
-        var failed = Assert.Single(answer, p => p.Plugin == Entry(gone).KeyOf());
+        var failed = Assert.Single(answer, p => p.Plugin == Entry(gone).Key);
         Assert.Empty(failed.Problems);
         Assert.Contains(gone.Referrer, failed.Failure, StringComparison.Ordinal);
         Assert.Equal(ProblemsFailureKind.Placement, failed.FailureKind);
-        Assert.Single(Assert.Single(answer, p => p.Plugin == Entry(intact).KeyOf()).Problems);
+        Assert.Single(Assert.Single(answer, p => p.Plugin == Entry(intact).Key).Problems);
     }
 
     [Fact]
@@ -247,7 +247,7 @@ public sealed class ProblemsPanelTests : IDisposable
 
         var answer = Assert.Single(Ready(index));
 
-        Assert.Equal(Entry(plugin).KeyOf(), answer.Plugin);
+        Assert.Equal(Entry(plugin).Key, answer.Plugin);
         Assert.Empty(answer.Problems);
         Assert.Null(answer.Failure);
     }
@@ -268,7 +268,7 @@ public sealed class ProblemsPanelTests : IDisposable
 
         var answer = Assert.Single(Ready(index));
 
-        Assert.Equal(Entry(dormant).KeyOf(), answer.Plugin);
+        Assert.Equal(Entry(dormant).Key, answer.Plugin);
         var problem = Assert.Single(answer.Problems);
         Assert.Equal(
             (Absent, Path.Combine(PluginSourceRoot.For(dormant.Name), "Npcs", "Referrer - 000800_Dormant.esp.json")),
@@ -285,7 +285,7 @@ public sealed class ProblemsPanelTests : IDisposable
 
         var answers = Ready(index);
         foreach (var plugin in new[] { active, ownRecord, activeRecord })
-            Assert.Empty(Assert.Single(answers, answer => answer.Plugin == Entry(plugin).KeyOf()).Problems);
+            Assert.Empty(Assert.Single(answers, answer => answer.Plugin == Entry(plugin).Key).Problems);
     }
 
     [Fact]
@@ -308,7 +308,7 @@ public sealed class ProblemsPanelTests : IDisposable
         var referrer = new Plugin("Referrer.esp", Enabled: false, RefersTo: "000801:Holder.esp");
         using var index = Reconciled(holder, referrer);
 
-        var answer = Assert.Single(Ready(index), p => p.Plugin == Entry(referrer).KeyOf());
+        var answer = Assert.Single(Ready(index), p => p.Plugin == Entry(referrer).Key);
 
         Assert.Equal("000801:Holder.esp", Assert.Single(answer.Problems).TargetFormKey);
     }

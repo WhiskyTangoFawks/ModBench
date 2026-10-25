@@ -1585,8 +1585,6 @@ export interface components {
             plugin: string;
             origin: string;
             anchor?: string | null;
-            defectClass: string;
-            tail?: string | null;
             message: string;
             text: string;
         };
@@ -1638,8 +1636,6 @@ export interface components {
             isMaster: boolean;
             isBlueprint: boolean;
             masters: string[];
-            /** Format: int32 */
-            recordCount: number;
             isImmutable: boolean;
             origin: string;
             missingMasters?: string[] | null;

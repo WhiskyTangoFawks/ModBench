@@ -11,9 +11,8 @@ namespace MEditService.RecordIndex.Tests.TestSupport;
 /// <summary>Parks a read just before a named plugin's documents are opened until the test
 /// releases it, once per arming, which is what makes progressive loading and write order
 /// testable without sleeps.</summary>
-internal sealed class GatedPluginAdapter(
-    string? gateBefore = null, string? poisonPlugin = null, IPluginAdapter? inner = null)
-    : DelegatingPluginAdapter(inner ?? TestAdapters.Mutagen()), IDisposable
+internal sealed class GatedPluginAdapter(string? gateBefore = null, string? poisonPlugin = null)
+    : DelegatingPluginAdapter(TestAdapters.Mutagen()), IDisposable
 {
     private readonly SemaphoreSlim _released = new(0, 1);
     private readonly SemaphoreSlim _arrived = new(0, 1);

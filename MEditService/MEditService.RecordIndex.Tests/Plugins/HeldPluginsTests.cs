@@ -138,22 +138,6 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void TheRecordCount_MatchesTheFile()
-    {
-        using var data = new PluginFixtureBuilder("lo-rcount")
-            .WithPlugin("WithRecords.esp", mod =>
-            {
-                mod.Npcs.AddNew("Npc1");
-                mod.Npcs.AddNew("Npc2");
-                mod.Npcs.AddNew("Npc3");
-            })
-            .Build();
-        using var held = Open(data);
-
-        Assert.Equal(3, Opened(held)[Key("WithRecords.esp")].RecordCount);
-    }
-
-    [Fact]
     public void ThePluginRows_HoldTheHeldPlugin_AndNoUnknownPluginOrOrigin()
     {
         using var data = new PluginFixtureBuilder("lo-find").WithPlugin("CaseMod.esp").Build();

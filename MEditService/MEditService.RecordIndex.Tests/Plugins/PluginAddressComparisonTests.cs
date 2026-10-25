@@ -33,12 +33,12 @@ public sealed class PluginAddressComparisonTests : IDisposable
     public void AListingUnderAnotherCase_AnswersThePluginsRows()
     {
         Assert.Equal(
-            _index.ListedIn(_fixture.Plugins.Single().KeyOf()).Select(row => row.FormKey),
+            _index.ListedIn(_fixture.Plugins.Single().Key).Select(row => row.FormKey),
             _index.ListedIn(OtherCase).Select(row => row.FormKey));
     }
 
     private string UnderAnotherCase(string editorId) =>
-        _index.ListedIn(_fixture.Plugins.Single().KeyOf())
+        _index.ListedIn(_fixture.Plugins.Single().Key)
             .Single(row => row.EditorId == editorId).FormKey.ToUpperInvariant();
 
     [Fact]

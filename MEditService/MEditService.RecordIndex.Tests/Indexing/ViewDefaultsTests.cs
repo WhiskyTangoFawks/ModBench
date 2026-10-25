@@ -10,6 +10,8 @@ public class ViewDefaultsTests
     [Theory]
     [InlineData("dial", "Priority", "50")]
     [InlineData("npc_", "AggroRadiusBehaviorEnabled", "false")]
+    [InlineData("npc_", "CalcMinLevel", "0")]
+    [InlineData("npc_", "XpValueOffset", "0")]
     [InlineData("npc_", "Aggression", "'Unaggressive'")]
     [InlineData("npc_", "Flags", "''")]
     [InlineData("ligh", "FadeValue", "0")]

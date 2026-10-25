@@ -9,16 +9,8 @@ import type { FieldMetadata } from './types';
 interface ScalarCellProps {
   value: unknown;
   meta: FieldMetadata;
-  // There is no edit mode — editability is a property of the column (is the plugin mutable, is it
-  // a compiled plugin), never of a state the user toggles into.
-  editable?: boolean;
-  // Where an edited value goes. Absent is the ordinary state for every caller outside the
-  // field grid — there is nowhere to write, so the cell
-  // renders as text, which is what those callers already had.
+  // Absent where the column cannot be written, and the cell reads as text.
   onCommit?: (v: unknown) => void;
-  // An accessible name for the resting cell, so tests (and screen readers) can
-  // address one cell among many identical-looking ones.
-  ariaLabel?: string;
   // Replaces the resting label alone — the value Ctrl+C copies is still the real
   // model value.
   displayOverride?: string;
@@ -33,19 +25,19 @@ function enumChoices(value: unknown, meta: FieldMetadata): EnumChoice[] {
   return choices.sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function ScalarText({ value, meta, displayOverride, ariaLabel }: {
-  value: unknown; meta: FieldMetadata; displayOverride?: string; ariaLabel?: string;
+function ScalarText({ value, meta, displayOverride }: {
+  value: unknown; meta: FieldMetadata; displayOverride?: string;
 }) {
-  if (displayOverride != null) return <span aria-label={ariaLabel}>{displayOverride}</span>;
+  if (displayOverride != null) return <span>{displayOverride}</span>;
   return value == null
-    ? <span aria-label={ariaLabel} style={{ opacity: 0.35 }}>—</span>
-    : <span aria-label={ariaLabel}>{displayValue(value, meta)}</span>;
+    ? <span style={{ opacity: 0.35 }}>—</span>
+    : <span>{displayValue(value, meta)}</span>;
 }
 
 /** A click focuses a cell (editor.md, The focused cell, story 1); no left click reaches the
  *  extended editor (xedit.md, divergence 6). */
 export function ScalarCell({
-  value, meta, editable = false, onCommit, ariaLabel, displayOverride,
+  value, meta, onCommit, displayOverride,
 }: ScalarCellProps) {
   const [draft, setDraft] = useState(() => modelValue(value, meta));
   const [prevValue, setPrevValue] = useState(value);
@@ -70,8 +62,8 @@ export function ScalarCell({
   // Checked ahead of `active` because there is no state to gate: every open trigger
   // lands here and does nothing — matching xEdit's `vstViewEditing`, which sets `Allowed := False`
   // and shows nothing in advance.
-  if (!editable || !onCommit) {
-    return <ScalarText value={value} meta={meta} displayOverride={displayOverride} ariaLabel={ariaLabel} />;
+  if (!onCommit) {
+    return <ScalarText value={value} meta={meta} displayOverride={displayOverride} />;
   }
 
   if (!active) {
@@ -84,7 +76,7 @@ export function ScalarCell({
         onClick={isEnum ? pickEnum : open}
         style={{ display: 'block', minHeight: '1em' }}
       >
-        <ScalarText value={value} meta={meta} displayOverride={displayOverride} ariaLabel={ariaLabel} />
+        <ScalarText value={value} meta={meta} displayOverride={displayOverride} />
       </span>
     );
   }
@@ -131,7 +123,6 @@ export function ScalarCell({
   const editorProps = {
     'data-editor': true,
     ref: editorMounted,
-    'aria-label': ariaLabel,
     autoFocus: true,
     onKeyDown: onEditorKeyDown,
     onBlur: () => settle(true),

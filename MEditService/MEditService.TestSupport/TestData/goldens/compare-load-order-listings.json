@@ -141,8 +141,7 @@
       "Masters": [],
       "MissingMasters": [],
       "Name": "Base.esm",
-      "Origin": "Data/",
-      "RecordCount": 4
+      "Origin": "Data/"
     },
     {
       "HasMatchingRecords": true,
@@ -156,8 +155,7 @@
       ],
       "MissingMasters": [],
       "Name": "Mid.esp",
-      "Origin": "Data/",
-      "RecordCount": 3
+      "Origin": "Data/"
     },
     {
       "HasMatchingRecords": true,
@@ -171,8 +169,7 @@
       ],
       "MissingMasters": [],
       "Name": "Top.esp",
-      "Origin": "Data/",
-      "RecordCount": 2
+      "Origin": "Data/"
     }
   ],
   "References": [

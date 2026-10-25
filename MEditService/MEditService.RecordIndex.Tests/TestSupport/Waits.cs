@@ -8,8 +8,8 @@ internal static class Waits
 {
     internal static readonly TimeSpan Patience = TimeSpan.FromMinutes(3);
 
-    internal static Task<bool> Until(Func<bool> condition, TimeSpan? timeout = null) =>
-        Task.Run(() => ReachedWithin(condition, timeout ?? TimeSpan.FromSeconds(10)));
+    internal static Task<bool> Until(Func<bool> condition) =>
+        Task.Run(() => ReachedWithin(condition, TimeSpan.FromSeconds(10)));
 
     internal static void Reached(Func<bool> condition, string what)
     {

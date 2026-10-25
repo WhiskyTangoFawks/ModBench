@@ -13,13 +13,12 @@ namespace MEditService.RecordIndex.Tests.TestSupport;
 internal static class SourceMods
 {
     /// <summary>The source mod of the plugin at <paramref name="pluginPath"/>, a mod named for its folder.</summary>
-    internal static void Init(string pluginPath, GameRelease release = GameRelease.Fallout4) =>
-        Init(pluginPath, Path.GetFileName(Path.GetDirectoryName(pluginPath)).Require(), release);
+    internal static void Init(string pluginPath) =>
+        Init(pluginPath, Path.GetFileName(Path.GetDirectoryName(pluginPath)).Require());
 
-    internal static void Init(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
-        Init(entry.Path, entry.Origin, release);
+    internal static void Init(LoadOrderEntry entry) => Init(entry.Path, entry.Origin);
 
-    private static void Init(string pluginPath, string origin, GameRelease release)
+    private static void Init(string pluginPath, string origin)
     {
         var modFolder = Path.GetDirectoryName(pluginPath)
             ?? throw new ArgumentException("A plugin path names a file inside a mod folder.", nameof(pluginPath));
@@ -27,7 +26,7 @@ internal static class SourceMods
         var read = TestAdapters.Mutagen()
             .ReadSourceOfAsync(
                 new RegisteredPlugin(pluginName, PluginOrigin.DataDirectory, pluginPath, PluginProvider.Game, Line: null, HandedStrings.Of(pluginPath)),
-                EmptyLoadOrder.Of(release))
+                EmptyLoadOrder.Of(GameRelease.Fallout4))
             .GetAwaiter().GetResult();
         var source = read.Answered();
 
@@ -41,20 +40,18 @@ internal static class SourceMods
         return fixture;
     }
 
-    internal static ISourceRepository RepositoryOf(LoadOrderEntry entry, GameRelease release = GameRelease.Fallout4) =>
-        TestAdapters.Source().OverFolder(new PluginProvider.FromMod(entry.Origin, entry.ModFolderOf(), entry.ModFolderOf()), release);
-
-    internal static PluginAddress KeyOf(this LoadOrderEntry entry) => new(entry.Name, entry.Origin);
+    internal static ISourceRepository RepositoryOf(LoadOrderEntry entry) =>
+        TestAdapters.Source().OverFolder((PluginProvider.FromMod)entry.Provider, GameRelease.Fallout4);
 
     internal static string ModFolderOf(this LoadOrderEntry entry) =>
         Path.GetDirectoryName(entry.Path) ?? throw new ArgumentException("A compiled plugin entry sits in a mod folder.", nameof(entry));
 
     /// <summary>The file the compiled plugin tree keeps <paramref name="identity"/>'s document in, asked of
     /// the repository: an embedded child names its container's file.</summary>
-    internal static string SourceFileOf(this LoadOrderEntry entry, RecordIdentity identity, GameRelease release = GameRelease.Fallout4)
+    internal static string SourceFileOf(this LoadOrderEntry entry, RecordIdentity identity)
     {
         var modFolder = entry.ModFolderOf();
-        var relativePath = RepositoryOf(entry, release).RelativePathOf(entry.KeyOf(), identity).Value()
+        var relativePath = RepositoryOf(entry).RelativePathOf(entry.Key, identity).Value()
             ?? throw new InvalidOperationException($"No document in {entry.Name}'s tree under '{modFolder}' holds {identity.FormKey}.");
         return Path.Combine(modFolder, relativePath);
     }
@@ -65,7 +62,7 @@ internal static class SourceMods
     /// <summary>The record's own text in the compiled plugin tree: a container's with its children in it, as an
     /// edit starts from.</summary>
     internal static string SourceTextOf(this LoadOrderEntry entry, RecordDetail document) =>
-        RepositoryOf(entry).RecordOf(entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId)).Value()?.Body
+        RepositoryOf(entry).RecordOf(entry.Key, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId)).Value()?.Body
             ?? throw new InvalidOperationException($"No document in {entry.Name}'s tree holds {document.FormKey}.");
 
     /// <summary>Git run against the source mod folder: the "other tool" actor, never an
@@ -97,7 +94,7 @@ internal static class SourceMods
     /// <paramref name="body"/>, then the next snapshot.</summary>
     internal static void Edit(this OpenedIndex index, LoadOrderEntry entry, RecordDetail document, string body)
     {
-        RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, document.EditorId, body)).Wrote();
+        RepositoryOf(entry).Put(entry.Key, new SourceDocument(document.FormKey, document.RecordType, document.EditorId, body)).Wrote();
         index.NextSnapshot();
     }
 
@@ -107,7 +104,7 @@ internal static class SourceMods
         this OpenedIndex index, LoadOrderEntry entry, RecordDetail document, string newEditorId, string body)
     {
         RepositoryOf(entry).Put(
-            entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, newEditorId, body)).Wrote();
+            entry.Key, new SourceDocument(document.FormKey, document.RecordType, newEditorId, body)).Wrote();
         index.NextSnapshot();
     }
 
@@ -121,7 +118,7 @@ internal static class SourceMods
     /// <summary>A document the working tree gains, then the next snapshot.</summary>
     internal static void Create(this OpenedIndex index, LoadOrderEntry entry, string formKey, string recordType, string? editorId, string body)
     {
-        RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(formKey, recordType, editorId, body)).Wrote();
+        RepositoryOf(entry).Put(entry.Key, new SourceDocument(formKey, recordType, editorId, body)).Wrote();
         index.NextSnapshot();
     }
 
@@ -133,11 +130,11 @@ internal static class SourceMods
         var repository = RepositoryOf(entry);
         foreach (var (formKey, body) in deltas)
         {
-            var current = index.DocumentOf(formKey, entry.KeyOf());
+            var current = index.DocumentOf(formKey, entry.Key);
             if (body is null)
-                repository.Remove(entry.KeyOf(), new RecordIdentity(formKey, current.RecordType, current.EditorId)).Wrote();
+                repository.Remove(entry.Key, new RecordIdentity(formKey, current.RecordType, current.EditorId)).Wrote();
             else
-                repository.Put(entry.KeyOf(), new SourceDocument(formKey, current.RecordType, current.EditorId, body)).Wrote();
+                repository.Put(entry.Key, new SourceDocument(formKey, current.RecordType, current.EditorId, body)).Wrote();
         }
         index.NextSnapshot();
     }
@@ -146,7 +143,7 @@ internal static class SourceMods
     /// snapshot.</summary>
     internal static void Delete(this OpenedIndex index, LoadOrderEntry entry, RecordDetail document)
     {
-        RepositoryOf(entry).Remove(entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId)).Wrote();
+        RepositoryOf(entry).Remove(entry.Key, new RecordIdentity(document.FormKey, document.RecordType, document.EditorId)).Wrote();
         index.NextSnapshot();
     }
 }

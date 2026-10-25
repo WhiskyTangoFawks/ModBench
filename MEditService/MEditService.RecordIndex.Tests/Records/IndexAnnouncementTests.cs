@@ -61,25 +61,21 @@ public sealed class IndexAnnouncementTests : IDisposable
         Assert.Equal(_index.Sequence, changed.Sequence);
     }
 
-    [Fact]
-    public async Task ABinaryReDerived_AnnouncesPluginChangedOnce_AtTheSequenceItLandedOn()
+    private static readonly Dictionary<string, Action<string>> BinaryChanges = new()
+    {
+        ["re-derived"] = PluginBinaries.Touch,
+        ["gone"] = File.Delete,
+    };
+
+    [Theory]
+    [InlineData("re-derived")]
+    [InlineData("gone")]
+    public void ABinaryChanged_AnnouncesPluginChangedOnce_AtTheSequenceItLandedOn(string change)
     {
         WriteValidPlugin(_pluginPath);
         ReconcileHeld();
 
-        PluginBinaries.Touch(_pluginPath);
-        _index.NextSnapshot();
-
-        TheOnePluginChanged();
-    }
-
-    [Fact]
-    public async Task ABinaryGone_AnnouncesPluginChangedOnce_AtTheSequenceItLandedOn()
-    {
-        WriteValidPlugin(_pluginPath);
-        ReconcileHeld();
-
-        File.Delete(_pluginPath);
+        BinaryChanges[change](_pluginPath);
         _index.NextSnapshot();
 
         TheOnePluginChanged();

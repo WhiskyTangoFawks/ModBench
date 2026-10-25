@@ -150,8 +150,8 @@ public sealed class WarmReconcileTests
         using (var second = OpenIndex(holder))
         {
             second.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
-            var npc = second.ListedIn(entry.KeyOf()).Single(row => row.EditorId == "CompiledPluginNpc");
-            npcSourceFile = entry.SourceFileOf(second.DocumentOf(npc.FormKey, entry.KeyOf()));
+            var npc = second.ListedIn(entry.Key).Single(row => row.EditorId == "CompiledPluginNpc");
+            npcSourceFile = entry.SourceFileOf(second.DocumentOf(npc.FormKey, entry.Key));
         }
 
         using var third = OpenIndex(holder);
@@ -165,6 +165,6 @@ public sealed class WarmReconcileTests
         using var fourth = OpenIndex(holder);
         fourth.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
         Assert.Contains(
-            fourth.ListedIn(entry.KeyOf()), row => row.EditorId == "EditedBetweenLoads");
+            fourth.ListedIn(entry.Key), row => row.EditorId == "EditedBetweenLoads");
     }
 }

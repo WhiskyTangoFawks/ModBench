@@ -37,7 +37,7 @@ public sealed class SpatialWorkingTreeStateTests : IDisposable
 
     private WorkingTreeState[] WorldspaceExteriorInteriorExteriorRefInteriorRefStates()
     {
-        var plugin = _entry.KeyOf();
+        var plugin = _entry.Key;
         var queries = _index.Queries;
         static WorkingTreeState StateOf(IEnumerable<(string FormKey, WorkingTreeState State)> rows, string formKey) =>
             rows.Single(r => r.FormKey == formKey).State;
@@ -74,7 +74,7 @@ public sealed class SpatialWorkingTreeStateTests : IDisposable
         var edited = new IMajorRecordGetter[] { _records.Worldspace, _records.ExteriorCell, _records.InteriorCell, _records.ExteriorRef, _records.InteriorRef }
             .Single(record => record.EditorID == editedEditorId);
 
-        _index.RenameEditorId(_entry, _index.DocumentOf(FormKeyOf(edited), _entry.KeyOf()), "Renamed");
+        _index.RenameEditorId(_entry, _index.DocumentOf(FormKeyOf(edited), _entry.Key), "Renamed");
 
         Assert.Equal(expected, WorldspaceExteriorInteriorExteriorRefInteriorRefStates());
     }

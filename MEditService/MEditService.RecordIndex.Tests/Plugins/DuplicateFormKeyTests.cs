@@ -23,7 +23,7 @@ public sealed class DuplicateFormKeyTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private PluginAddress Plugin => _fixture.Plugins.Single().KeyOf();
+    private PluginAddress Plugin => _fixture.Plugins.Single().Key;
 
     private const string Diagnosis = $"duplicate FormKey {HeldTwice}, in its Non-Player Character and Weapon groups";
 
@@ -57,7 +57,7 @@ public sealed class DuplicateFormKeyTests : IDisposable
         File.Copy(_fixture.Plugins.Single().Path, lastGood.Plugins.Single().Path, overwrite: true);
         index.NextSnapshotUntil(() => index.Status.Failures.Any(failure => failure.Name == PluginName), "the re-read's failure");
 
-        Assert.Equal(["LastGoodNpc"], index.ListedIn(lastGood.Plugins.Single().KeyOf()).Select(row => row.EditorId));
+        Assert.Equal(["LastGoodNpc"], index.ListedIn(lastGood.Plugins.Single().Key).Select(row => row.EditorId));
     }
 
     [Fact]

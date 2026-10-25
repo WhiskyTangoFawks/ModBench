@@ -6,11 +6,9 @@ import { vscode } from './vscode';
 import { listen, pickFormKey, requestRecordLoad } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../src/wire/messages';
 
-function postedRequestId(): string {
+function postedRequestId(type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER | typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD): string {
   const call = vi.mocked(vscode.postMessage).mock.calls.at(-1)?.[0];
-  if (call === undefined || call.type !== WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER) {
-    throw new Error('Expected an OPEN_FORM_KEY_PICKER post');
-  }
+  if (call?.type !== type) throw new Error(`Expected a ${type} post`);
   return call.requestId;
 }
 
@@ -18,12 +16,12 @@ beforeEach(() => {
   vi.mocked(vscode.postMessage).mockClear();
 });
 
-describe('nativeBridge shared request/reply mechanism (exercised via pickFormKey)', () => {
+describe('a request to the host resolves from its own reply alone', () => {
   it('resolves from the matching reply, correlated by requestId — a concurrent call is untouched', async () => {
     const firstPromise = pickFormKey('', []);
-    const firstRequestId = postedRequestId();
+    const firstRequestId = postedRequestId(WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER);
     const secondPromise = pickFormKey('', []);
-    const secondRequestId = postedRequestId();
+    const secondRequestId = postedRequestId(WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER);
     expect(firstRequestId).not.toBe(secondRequestId);
 
     window.dispatchEvent(new MessageEvent('message', {
@@ -39,7 +37,7 @@ describe('nativeBridge shared request/reply mechanism (exercised via pickFormKey
 
   it('ignores unrelated message types', async () => {
     const resultPromise = pickFormKey('', []);
-    const requestId = postedRequestId();
+    const requestId = postedRequestId(WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER);
 
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'somethingElse' } }));
     window.dispatchEvent(new MessageEvent('message', {
@@ -51,7 +49,7 @@ describe('nativeBridge shared request/reply mechanism (exercised via pickFormKey
 
   it('ignores a reply for the right requestId but the wrong reply type', async () => {
     const resultPromise = pickFormKey('', []);
-    const requestId = postedRequestId();
+    const requestId = postedRequestId(WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER);
 
     window.dispatchEvent(new MessageEvent('message', {
       data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, requestId, formKey: 'wrong-type' },
@@ -64,8 +62,8 @@ describe('nativeBridge shared request/reply mechanism (exercised via pickFormKey
   });
 });
 
-describe('pickFormKey', () => {
-  it('posts OPEN_FORM_KEY_PICKER with the seed and validTypes', () => {
+describe('the FormKey picker, asked of the host', () => {
+  it('is asked with the seed and the valid record types', () => {
     void pickFormKey('000019:Fallout4.esm', ['race']);
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
@@ -75,9 +73,9 @@ describe('pickFormKey', () => {
     }));
   });
 
-  it('resolves null when the reply carries formKey: null (Escape/blur)', async () => {
+  it('resolves no FormKey when it is dismissed', async () => {
     const resultPromise = pickFormKey('', []);
-    const requestId = postedRequestId();
+    const requestId = postedRequestId(WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER);
 
     window.dispatchEvent(new MessageEvent('message', {
       data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId, formKey: null },
@@ -87,16 +85,8 @@ describe('pickFormKey', () => {
   });
 });
 
-describe('requestRecordLoad, whose request shape and reply unwrapping are its own', () => {
-  function postedFormKeyRequestId(): string {
-    const call = vi.mocked(vscode.postMessage).mock.calls.at(-1)?.[0];
-    if (call === undefined || call.type !== WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD) {
-      throw new Error('Expected a REQUEST_RECORD_LOAD post');
-    }
-    return call.requestId;
-  }
-
-  it('posts REQUEST_RECORD_LOAD with the formKey and the columns', () => {
+describe('a record\'s read, asked of the host', () => {
+  it('is asked with the formKey and the columns', () => {
     const columns = [{ formKey: '000002:B.esp', plugin: { name: 'B.esp', origin: 'ModB' } }];
     void requestRecordLoad('000001:A.esp', columns);
 
@@ -105,9 +95,9 @@ describe('requestRecordLoad, whose request shape and reply unwrapping are its ow
     }));
   });
 
-  it('resolves the host\'s answer untransformed', async () => {
+  it('resolves a refused answer as its failure', async () => {
     const resultPromise = requestRecordLoad('000001:A.esp', []);
-    const requestId = postedFormKeyRequestId();
+    const requestId = postedRequestId(WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD);
 
     window.dispatchEvent(new MessageEvent('message', {
       data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, ok: false, failure: { failed: 'refused', refusal: 'No such record.' } },

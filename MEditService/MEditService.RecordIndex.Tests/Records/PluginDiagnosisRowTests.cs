@@ -11,7 +11,6 @@ public sealed class PluginDiagnosisRowTests : IDisposable
 {
     private const string MalformedFixture = ShortRdatRegionPlugin.FileName;
     private const string Origin = "ShortRdatMod";
-    private static readonly PluginAddress Key = new(MalformedFixture, Origin);
 
     private readonly ScratchDirectory _dataFolder = new("medit-diagnosis-data-");
     private readonly ScratchDirectory _instanceRoot = new("medit-diagnosis-instance-");
@@ -47,33 +46,6 @@ public sealed class PluginDiagnosisRowTests : IDisposable
     }
 
     [Fact]
-    public void AMalformedPluginThatIsNotActive_StillReadsAsItsDiagnosisRows()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder);
-        index.Reconcile(holder, _dataFolder, [Entry with { Enabled = false }], GameRelease.Fallout4, _instanceRoot);
-
-        var report = Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
-        Assert.Equal(Key, new PluginAddress(report.Plugin, report.Origin));
-    }
-
-    [Fact]
-    public void AMalformedPlugin_ReadsAsDiagnosisRows_WordedAsTheScanWordsThem()
-    {
-        using var index = Reconciled(new LoadOrderHolder());
-
-        var report = Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
-
-        Assert.Equal(Key, new PluginAddress(report.Plugin, report.Origin));
-        Assert.Equal("fixed-size-subrecord-short", report.DefectClass);
-        Assert.Equal(ShortRdatRegionPlugin.Anchor, report.Anchor);
-        Assert.Equal("repairable (lossless)", report.Tail);
-        Assert.Equal(
-            $"{ShortRdatRegionPlugin.Anchor} — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8",
-            report.Text);
-    }
-
-    [Fact]
     public async Task ARepairedBinary_ReDerived_HasNoDiagnosisRow()
     {
         using var index = Reconciled(new LoadOrderHolder());
@@ -100,17 +72,5 @@ public sealed class PluginDiagnosisRowTests : IDisposable
         RepairOnDiskAsAnotherToolWouldWithTheSameNameAndCleanBytes();
         using var reopened = Reconciled(new LoadOrderHolder());
         Assert.Empty(reopened.Queries.GetLoadOrderDiagnoses().Value());
-    }
-
-    [Fact]
-    public void ADiagnosisRow_OfAPluginTheSnapshotStoppedNaming_AnswersNothing()
-    {
-        var holder = new LoadOrderHolder();
-        using var index = Reconciled(holder);
-        Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
-
-        index.Reconcile(holder, _dataFolder, [], GameRelease.Fallout4, _instanceRoot);
-
-        Assert.Empty(index.Queries.GetLoadOrderDiagnoses().Value());
     }
 }

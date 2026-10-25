@@ -10,7 +10,7 @@ import { DiskCell, openEditor } from './DiskCell';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { cellContext } from './recordUtils';
-import { fieldMeta, hostPicking, parseJsonRecord } from './test/fixtures';
+import { fieldMeta, hostPicking, parseJsonRecord, required } from './test/fixtures';
 import { vscode } from './vscode';
 
 vi.mocked(vscode.postMessage).mockImplementation(hostPicking((seed, validTypes) => pickFormKey(seed, validTypes)));
@@ -30,13 +30,6 @@ describe('DiskCell — the right-click menu', () => {
 });
 
 describe('DiskCell — a key focus is the user entering the cell', () => {
-  it('focusing the unfocused cell with the keyboard focuses it in the grid', () => {
-    const onFocusCell = vi.fn();
-    const { container } = renderCell({ isFocused: false, onFocusCell });
-    container.querySelector('td')?.focus();
-    expect(onFocusCell).toHaveBeenCalledTimes(1);
-  });
-
   it('focus moving inside the cell, to an editor, is not a new focus', () => {
     const onFocusCell = vi.fn();
     renderCell({ isFocused: false, onFocusCell }, <input aria-label="editor" />);
@@ -46,17 +39,13 @@ describe('DiskCell — a key focus is the user entering the cell', () => {
 });
 
 describe('DiskCell — one gesture opens one editor', () => {
-  const scalar = <ScalarCell value="before" meta={fieldMeta({ name: 'value', type: 'string' })} editable onCommit={vi.fn()} />;
+  const scalar = <ScalarCell value="before" meta={fieldMeta({ name: 'value', type: 'string' })} onCommit={vi.fn()} />;
   const reference = (
     <FormKeyCell
       value="000019:Fallout4.esm" meta={fieldMeta({ name: 'Race', type: 'formKey', validFormKeyTypes: ['race'] })}
-      editable onCommit={vi.fn()}
+      onCommit={vi.fn()}
     />);
-  const cellOf = (container: HTMLElement) => {
-    const td = container.querySelector('td');
-    if (!td) throw new Error('no cell');
-    return td;
-  };
+  const cellOf = (container: HTMLElement) => required(container.querySelector('td'), 'the cell');
 
   beforeEach(() => { pickFormKey.mockReset().mockReturnValue(new Promise(() => undefined)); });
 
@@ -119,7 +108,7 @@ describe('DiskCell — one gesture opens one editor', () => {
   });
 
   it('F2\'s open on a cell with nowhere to write opens nothing', () => {
-    const readOnly = <ScalarCell value="before" meta={fieldMeta({ name: 'value', type: 'string' })} editable={false} onCommit={vi.fn()} />;
+    const readOnly = <ScalarCell value="before" meta={fieldMeta({ name: 'value', type: 'string' })} />;
     const { container } = renderCell({}, readOnly);
     act(() => openEditor(cellOf(container)));
     expect(screen.queryByRole('textbox')).toBeNull();

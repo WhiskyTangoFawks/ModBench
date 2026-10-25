@@ -14,7 +14,7 @@ internal static class LoadOrderArrival
         this OpenedIndex index, LoadOrderHolder holder, string dataFolder,
         IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null)
     {
-        index.Receive(holder, Snapshot(dataFolder, instanceRoot, gameRelease, plugins));
+        index.Receive(holder, SnapshotPlugins.Snapshot(dataFolder, instanceRoot, gameRelease, plugins));
         return holder;
     }
 
@@ -28,10 +28,6 @@ internal static class LoadOrderArrival
         index.AwaitVersion(version);
         return version;
     }
-
-    internal static LoadOrderSnapshot Snapshot(
-        string dataFolder, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> plugins) =>
-        SnapshotPlugins.Snapshot(dataFolder, instanceRoot, gameRelease, plugins);
 
     internal static void AwaitVersion(this OpenedIndex index, long version) =>
         Waits.Reached(() => index.Status.Version >= version, $"the status answering version {version}");

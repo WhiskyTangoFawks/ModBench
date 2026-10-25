@@ -40,7 +40,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         (_npc, _race) = (npc.ToString(), race.ToString());
         SourceMods.Init(_compiledPlugin);
         _index = Indexes.Reconciled(_fixture, _fixture.InstanceRoot, notifications: _notifications);
-        _file = _compiledPlugin.SourceFileOf(_index.DocumentOf(_npc, _compiledPlugin.KeyOf()));
+        _file = _compiledPlugin.SourceFileOf(_index.DocumentOf(_npc, _compiledPlugin.Key));
     }
 
     private string InstanceRootNamed(string name) =>
@@ -70,14 +70,14 @@ public sealed class UnsavedDocumentTests : IDisposable
     private IReadOnlyList<SourceProblem>? LaterReadFailureOfCompiledPlugin() => LaterReadFailureOf(_index);
 
     private IReadOnlyList<SourceProblem>? LaterReadFailureOf(OpenedIndex index) =>
-        (index.PluginResponseOf(_compiledPlugin.KeyOf()) ?? throw new InvalidOperationException($"Expected a row for {CompiledPlugin}.")).LaterReadFailure;
+        (index.PluginResponseOf(_compiledPlugin.Key) ?? throw new InvalidOperationException($"Expected a row for {CompiledPlugin}.")).LaterReadFailure;
 
     [Fact]
     public void AHandedDocument_IsReadInPlaceOfItsFile()
     {
         Hand(new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\"")));
 
-        Assert.Equal("TypedUnsaved", _index.DocumentOf(_npc, _compiledPlugin.KeyOf()).EditorId);
+        Assert.Equal("TypedUnsaved", _index.DocumentOf(_npc, _compiledPlugin.Key).EditorId);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class UnsavedDocumentTests : IDisposable
 
         Hand();
 
-        Assert.Equal("CompiledPluginNpc", _index.DocumentOf(_npc, _compiledPlugin.KeyOf()).EditorId);
+        Assert.Equal("CompiledPluginNpc", _index.DocumentOf(_npc, _compiledPlugin.Key).EditorId);
     }
 
     [Fact]
@@ -97,8 +97,8 @@ public sealed class UnsavedDocumentTests : IDisposable
 
         HandUntil(PluginChanged(_compiledPlugin), new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved")));
 
-        Assert.Equal("TypedUnsaved", _index.DocumentOf(_npc, _compiledPlugin.KeyOf()).EditorId);
-        Assert.True(_index.ReadFromItsPluginSource(_compiledPlugin.KeyOf()));
+        Assert.Equal("TypedUnsaved", _index.DocumentOf(_npc, _compiledPlugin.Key).EditorId);
+        Assert.True(_index.ReadFromItsPluginSource(_compiledPlugin.Key));
         var stop = Assert.Single(LaterReadFailureOfCompiledPlugin() ?? []);
         Assert.Equal(Relative(_file), stop.SourceRelativePath);
         Assert.Contains("is no record document", stop.Message, StringComparison.Ordinal);
@@ -133,7 +133,7 @@ public sealed class UnsavedDocumentTests : IDisposable
 
         Hand(new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedAgain\"")));
 
-        Assert.Equal("TypedAgain", _index.DocumentOf(_npc, _compiledPlugin.KeyOf()).EditorId);
+        Assert.Equal("TypedAgain", _index.DocumentOf(_npc, _compiledPlugin.Key).EditorId);
         Assert.Null(ProblemsOfCompiledPlugin().Failure);
         Assert.Null(LaterReadFailureOfCompiledPlugin());
     }
@@ -148,7 +148,7 @@ public sealed class UnsavedDocumentTests : IDisposable
 
         reopened.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
 
-        Assert.True(reopened.ReadFromItsPluginSource(_compiledPlugin.KeyOf()));
+        Assert.True(reopened.ReadFromItsPluginSource(_compiledPlugin.Key));
         Assert.Equal(Relative(_file), Assert.Single(LaterReadFailureOf(reopened) ?? []).SourceRelativePath);
     }
 
@@ -157,7 +157,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     {
         File.WriteAllText(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved"));
 
-        _index.NextSnapshotUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.KeyOf()), "the binary read in the tree's place");
+        _index.NextSnapshotUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.Key), "the binary read in the tree's place");
 
         Assert.Null(LaterReadFailureOfCompiledPlugin());
     }
@@ -169,8 +169,8 @@ public sealed class UnsavedDocumentTests : IDisposable
 
         HandUntil(PluginChanged(_compiledPlugin), new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedUnsaved\"").Replace(_npc, _race, StringComparison.Ordinal)));
 
-        Assert.Equal("TypedUnsaved", _index.DocumentOf(_npc, _compiledPlugin.KeyOf()).EditorId);
-        Assert.True(_index.ReadFromItsPluginSource(_compiledPlugin.KeyOf()));
+        Assert.Equal("TypedUnsaved", _index.DocumentOf(_npc, _compiledPlugin.Key).EditorId);
+        Assert.True(_index.ReadFromItsPluginSource(_compiledPlugin.Key));
         Assert.Contains(LaterReadFailureOfCompiledPlugin() ?? [], stop => stop.SourceRelativePath == Relative(_file) && stop.FormKey == _race);
     }
 
@@ -179,7 +179,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     {
         File.WriteAllText(_file, Typed(_npc, _race));
 
-        _index.NextSnapshotUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.KeyOf()), "the binary read in the tree's place");
+        _index.NextSnapshotUntil(() => _index.ReadFromItsPluginFileForItsUnreadableSource(_compiledPlugin.Key), "the binary read in the tree's place");
 
         Assert.Null(LaterReadFailureOfCompiledPlugin());
     }
@@ -278,7 +278,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedAgain\""))]);
 
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");
-        Assert.Equal("TypedAgain", faulting.DocumentOf(_npc, _compiledPlugin.KeyOf()).EditorId);
+        Assert.Equal("TypedAgain", faulting.DocumentOf(_npc, _compiledPlugin.Key).EditorId);
     }
 
     [Fact]
@@ -296,7 +296,7 @@ public sealed class UnsavedDocumentTests : IDisposable
         faulting.Unsaved.Apply([new DocumentChange(_file, Typed("\"CompiledPluginNpc\"", "\"TypedAgain\""))]);
 
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Ready, "the ready status");
-        Assert.Equal("TypedAgain", faulting.DocumentOf(_npc, _compiledPlugin.KeyOf()).EditorId);
+        Assert.Equal("TypedAgain", faulting.DocumentOf(_npc, _compiledPlugin.Key).EditorId);
     }
 
     [Fact]
@@ -304,7 +304,7 @@ public sealed class UnsavedDocumentTests : IDisposable
     {
         var faults = new InMemoryNotificationPublisher { FaultsOn = IsRowsChanged };
         using var faulting = Indexes.Reconciled(_fixture, InstanceRootNamed("faulting"), notifications: faults);
-        _compiledPlugin.HandEdit(faulting.DocumentOf(_npc, _compiledPlugin.KeyOf()), "\"CompiledPluginNpc\"", "\"EditedOnDisk\"");
+        _compiledPlugin.HandEdit(faulting.DocumentOf(_npc, _compiledPlugin.Key), "\"CompiledPluginNpc\"", "\"EditedOnDisk\"");
         faulting.Holder.Apply(faulting.Holder.Current);
         Waits.Reached(() => faulting.Status.State == LoadOrderState.Failed, "the reconcile's failed status");
 

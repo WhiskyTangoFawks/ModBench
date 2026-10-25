@@ -12,7 +12,6 @@ namespace MEditService.RecordIndex.Tests.Query;
 public sealed class LoadOrderDiagnosesTests : IDisposable
 {
     private const string Malformed = ShortRdatRegionPlugin.FileName;
-    private const string ShortRdat = "fixed-size-subrecord-short";
 
     private readonly ScratchDirectory _instance = new("medit-malformed-query-");
 
@@ -46,8 +45,6 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
         Assert.Equal(Malformed, report.Plugin);
         Assert.Equal("SomeMod", report.Origin);
         Assert.Equal(ShortRdatRegionPlugin.Anchor, report.Anchor);
-        Assert.Equal(ShortRdat, report.DefectClass);
-        Assert.Equal("repairable (lossless)", report.Tail);
         Assert.Equal("RDAT is 6 bytes; a REGN RDAT is always 8", report.Message);
         Assert.Equal(
             $"{ShortRdatRegionPlugin.Anchor} — fixed-size-subrecord-short, repairable (lossless): "
@@ -56,14 +53,14 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_ADiagnosisWithNoAnchorAndNoTail_ReadsBackWithNone()
+    public void GetLoadOrderDiagnoses_ADiagnosisWithNoAnchor_ReadsBackWithNone()
     {
         var adapter = new DiagnosisClaimingAdapter(new PluginDiagnosis(null, "unknown", null, "boom"));
         using var index = Indexes.Reconciled(DataFolder, [Clean("Clean.esp")], adapter: adapter);
 
         var report = Assert.Single(index.Queries.GetLoadOrderDiagnoses().Value());
 
-        Assert.Equal(("unknown", null, null, "boom"), (report.DefectClass, report.Anchor, report.Tail, report.Message));
+        Assert.Equal((null, "boom"), (report.Anchor, report.Message));
     }
 
     [Fact]

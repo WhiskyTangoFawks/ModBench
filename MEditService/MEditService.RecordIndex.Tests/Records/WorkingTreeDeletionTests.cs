@@ -45,8 +45,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
             .CompiledPlugin();
         _base = _fixture.Plugins.Single(p => p.Name == "Base.esm");
         _winner = _fixture.Plugins.Single(p => p.Name == "Winner.esp");
-        _baseKey = _base.KeyOf();
-        _winnerKey = _winner.KeyOf();
+        _baseKey = _base.Key;
+        _winnerKey = _winner.Key;
         (_npc, _raceA, _raceB) = (npc.ToString(), raceA.ToString(), raceB.ToString());
         _loneNpcWhoseOneCopyAnswersTheLink = loneNpc.ToString();
     }

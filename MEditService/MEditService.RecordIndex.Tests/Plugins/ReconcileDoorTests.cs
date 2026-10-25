@@ -39,7 +39,7 @@ public sealed class ReconcileDoorTests
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, notifications: notifications);
 
-        var version = index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        var version = index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
         Assert.Equal(LoadOrderState.HeldElsewhere, index.Status.State);
         Assert.Equal(version, index.Status.Version);
@@ -58,7 +58,7 @@ public sealed class ReconcileDoorTests
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, notifications: notifications);
 
-        var version = index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, data.Plugins));
+        var version = index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, data.Plugins));
 
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
         Assert.Equal(version, index.Status.Version);
@@ -89,7 +89,7 @@ public sealed class ReconcileDoorTests
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, () => throw thrown));
 
-        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.Contains(thrown.Message, Assert.Single(index.Status.Failures, f => f.Name == "B.esp").Reason, StringComparison.Ordinal);
@@ -107,7 +107,7 @@ public sealed class ReconcileDoorTests
             Interlocked.Increment(ref readsOfB);
             throw Faults.Of(typeof(OutOfMemoryException));
         }));
-        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
         var rewrittenA = new Fallout4Mod(ModKey.FromFileName(A.Name), Fallout4Release.Fallout4);
         rewrittenA.Npcs.AddNew("FromARewritten");
@@ -124,7 +124,7 @@ public sealed class ReconcileDoorTests
         using var data = AReadThenB();
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.InTurn(null, typeof(OutOfMemoryException))));
-        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
         PluginBinaries.Touch(data.Plugins.Single(p => p.Name == B.Name).Path);
         index.NextSnapshotUntil(() => index.Status.Failures.Any(f => f.Name == B.Name), "B's failure");
@@ -141,7 +141,7 @@ public sealed class ReconcileDoorTests
         using var data = AReadThenB();
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.InTurn(thrownType)));
-        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
         index.NextSnapshotUntil(() => index.Status.State == LoadOrderState.Ready, "the next snapshot's ready status");
 
@@ -172,7 +172,7 @@ public sealed class ReconcileDoorTests
         var readCAgain = abortCheckpoint;
         using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: 1, Faults.InTurn(readB, readC, null, readCAgain)));
 
-        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
 
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
         Assert.Contains(B, index.Status.IndexedPlugins);
@@ -192,7 +192,7 @@ public sealed class ReconcileDoorTests
         File.WriteAllText(blocker, "not a folder");
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
-        var snapshot = LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
+        var snapshot = SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
         index.Receive(holder, snapshot);
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
 
@@ -208,11 +208,11 @@ public sealed class ReconcileDoorTests
         var notifications = new InMemoryNotificationPublisher { FaultsOn = n => n is LoadOrderStatusNotification };
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, notifications: notifications);
-        var first = holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        var first = holder.Apply(SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
         index.AwaitVersion(first);
         notifications.FaultsOn = null;
 
-        var second = holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, []));
+        var second = holder.Apply(SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, []));
 
         Assert.True(
             Waits.ReachedWithin(() => index.Status.Version >= second && index.Status.State == LoadOrderState.Ready, TimeSpan.FromSeconds(30)),
@@ -229,7 +229,7 @@ public sealed class ReconcileDoorTests
         };
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder, notifications: notifications);
-        var version = holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        var version = holder.Apply(SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
         index.AwaitVersion(version);
         Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the ready state");
         notifications.FaultsOn = null;
@@ -282,12 +282,12 @@ public sealed class ReconcileDoorTests
         var holder = new LoadOrderHolder();
         using var opens = new GatedPluginAdapter();
         using var index = Indexes.Open(holder, opens, notifications: notifications);
-        var snapshot = LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, data.Plugins);
+        var snapshot = SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, data.Plugins);
         index.Receive(holder, snapshot);
         var before = StatusesPublished(notifications).Length;
 
         index.NextSnapshotUnsettledUntil(() => StatusesPublished(notifications).Length > before, "the retried reconcile's failed status");
-        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, []));
+        index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Oblivion, []));
 
         var retried = StatusesPublished(notifications)[before..];
         Assert.Equal(2, retried.Length);
@@ -303,7 +303,7 @@ public sealed class ReconcileDoorTests
         var holder = new LoadOrderHolder();
         using var gate = new GatedPluginAdapter();
         using var index = Indexes.Open(holder, gate, notifications: notifications);
-        index.Receive(holder, LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        index.Receive(holder, SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
         var before = notifications.Notifications.Count;
 
         await ParkedEqualArrivalFinding(holder, gate, notifications, data.Plugins[0]);
@@ -324,9 +324,9 @@ public sealed class ReconcileDoorTests
         using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
         using var index = Indexes.Open(holder, gate, notifications: notifications);
 
-        var first = holder.Apply(LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
+        var first = holder.Apply(SnapshotPlugins.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
         await gate.WaitUntilParkedAsync();
-        var second = holder.Apply(LoadOrderArrival.Snapshot(
+        var second = holder.Apply(SnapshotPlugins.Snapshot(
             fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, [fx.Plugins[0] with { Enabled = false }, .. fx.Plugins.Skip(1)]));
         gate.Release();
         index.AwaitVersion(second);
@@ -348,7 +348,7 @@ public sealed class ReconcileDoorTests
         var notifications = new InMemoryNotificationPublisher();
         using var gate = new GatedPluginAdapter();
         using var index = Indexes.Open(holder, gate, notifications: notifications);
-        var snapshot = LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
+        var snapshot = SnapshotPlugins.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
         var first = index.Receive(holder, snapshot);
         var before = notifications.Notifications.Count;
 
@@ -382,7 +382,7 @@ public sealed class ReconcileDoorTests
 
         try
         {
-            var version = holder.Apply(LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
+            var version = holder.Apply(SnapshotPlugins.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
             Waits.Reached(() => Volatile.Read(ref publishing), "the arrival's status being published");
             var read = Task.Run(() => index.Status.Version);
 
@@ -409,7 +409,7 @@ public sealed class ReconcileDoorTests
         var holder = new LoadOrderHolder();
         using var gate = new GatedPluginAdapter(gateBefore: "A.esp");
         using var index = Indexes.Open(holder, gate, loggerFactory: loggerFactory);
-        holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        holder.Apply(SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
         await gate.WaitUntilParkedAsync();
 
         for (var i = 0; i < 5; i++) holder.Apply(holder.Current);
@@ -427,7 +427,7 @@ public sealed class ReconcileDoorTests
         using var fx = new PluginFixtureBuilder("sync-door").WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA")).Build();
         using var index = Indexes.Open(holder);
 
-        index.Receive(holder, LoadOrderArrival.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
+        index.Receive(holder, SnapshotPlugins.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins));
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.NotEmpty(index.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));

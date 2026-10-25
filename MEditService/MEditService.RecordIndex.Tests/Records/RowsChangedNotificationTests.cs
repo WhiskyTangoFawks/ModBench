@@ -21,12 +21,12 @@ public sealed class RowsChangedNotificationTests
         var notifications = new InMemoryNotificationPublisher();
         using var index = Indexes.Reconciled(fixture, notifications: notifications);
         var formKey = npc.ToString();
-        entry.HandEdit(index.DocumentOf(formKey, entry.KeyOf()), "\"FixtureNpc\"", "\"EditedName\"");
+        entry.HandEdit(index.DocumentOf(formKey, entry.Key), "\"FixtureNpc\"", "\"EditedName\"");
 
         index.NextSnapshot();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
-        Assert.Equal(entry.KeyOf(), notification.Plugin);
+        Assert.Equal(entry.Key, notification.Plugin);
         Assert.Equal([formKey], notification.Keys);
         Assert.Equal(index.Sequence, notification.Sequence);
     }
@@ -43,16 +43,16 @@ public sealed class RowsChangedNotificationTests
         var notifications = new InMemoryNotificationPublisher();
         using var index = Indexes.Reconciled(fixture, notifications: notifications);
         var formKey = npc.ToString();
-        var documentDeletedByHandWhereGitCannotNameTheKey = entry.SourceFileOf(index.DocumentOf(formKey, entry.KeyOf()));
+        var documentDeletedByHandWhereGitCannotNameTheKey = entry.SourceFileOf(index.DocumentOf(formKey, entry.Key));
         File.Delete(documentDeletedByHandWhereGitCannotNameTheKey);
 
         index.NextSnapshot();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
-        Assert.Equal(entry.KeyOf(), notification.Plugin);
+        Assert.Equal(entry.Key, notification.Plugin);
         Assert.Equal([formKey], notification.Keys);
         Assert.Equal(index.Sequence, notification.Sequence);
-        Assert.Null(index.CopyIn(formKey, entry.KeyOf()));
+        Assert.Null(index.CopyIn(formKey, entry.Key));
     }
 
     [Fact]
@@ -62,17 +62,17 @@ public sealed class RowsChangedNotificationTests
         using var _ = fixture;
         using var __ = index;
         var gained = GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, moved.ToString());
-        entry.RenameByHand(index.DocumentOf(moved.ToString(), entry.KeyOf()), "EditedNpc");
+        entry.RenameByHand(index.DocumentOf(moved.ToString(), entry.Key), "EditedNpc");
 
         index.NextSnapshot();
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
-        Assert.Equal(entry.KeyOf(), notification.Plugin);
+        Assert.Equal(entry.Key, notification.Plugin);
         Assert.Equal([moved.ToString(), gained], notification.Keys.Order(StringComparer.Ordinal));
         Assert.DoesNotContain(still.ToString(), notification.Keys);
         Assert.Equal(index.Sequence, notification.Sequence);
         Assert.Empty(notifications.Notifications.OfType<PluginChangedNotification>());
-        Assert.NotNull(index.CopyIn(gained, entry.KeyOf()));
+        Assert.NotNull(index.CopyIn(gained, entry.Key));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class RowsChangedNotificationTests
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
         Assert.Equal([gained], notification.Keys);
         Assert.Empty(notifications.Notifications.OfType<PluginChangedNotification>());
-        Assert.NotNull(index.CopyIn(gained, entry.KeyOf()));
+        Assert.NotNull(index.CopyIn(gained, entry.Key));
     }
 
     private static (ScatteredFixtureData Fixture, LoadOrderEntry Entry, InMemoryNotificationPublisher Notifications,
@@ -111,10 +111,10 @@ public sealed class RowsChangedNotificationTests
     private static string GainACopyOfARecordUnderAFormKeyNeitherRefHolds(LoadOrderEntry entry, OpenedIndex index, string template)
     {
         var gained = $"000F00:{entry.Name}";
-        var document = index.DocumentOf(template, entry.KeyOf());
-        SourceMods.RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(
+        var document = index.DocumentOf(template, entry.Key);
+        SourceMods.RepositoryOf(entry).Put(entry.Key, new SourceDocument(
             gained, document.RecordType, "GainedNpc",
-            index.BodyOf(template, entry.KeyOf()).Replace(template, gained, StringComparison.Ordinal)
+            index.BodyOf(template, entry.Key).Replace(template, gained, StringComparison.Ordinal)
                 .Replace($"\"{document.EditorId}\"", "\"GainedNpc\"", StringComparison.Ordinal))).Wrote();
         return gained;
     }

@@ -16,7 +16,7 @@ public sealed class RecordSummaryContainerChildrenTests
         page.Items.Single(i => i.FormKey == formKey);
 
     [Fact]
-    public void Search_QuestWithChildren_ReportsHasContainerChildrenTrue_QuestWithoutReportsFalse()
+    public void AQuestHoldingATopic_IsListedAsHoldingChildren_AndOneHoldingNoneIsNot()
     {
         FormKey withChildren = default, withoutChildren = default;
         using var fixture = new PluginFixtureBuilder("container-children")

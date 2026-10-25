@@ -38,24 +38,22 @@ public sealed class CompiledPluginDerivationTests : IDisposable
     private void ReconcileTheSnapshotAlreadyHeldSinceOnlyThePluginsFolderMoved() =>
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-    private bool ReadsAsCompiledPlugin() => _index.PluginResponseOf(_mod.KeyOf()) is { IsCompiledPlugin: true, PluginSourceUnreadable: null };
-
     [Fact]
     public void APluginCompiledPluginAfterItWasIndexed_ReadsAsCompiledPlugin_AfterTheNextSnapshot()
     {
-        Assert.False(ReadsAsCompiledPlugin());
+        Assert.False(_index.ReadFromItsPluginSource(_mod.Key));
         SourceMods.Init(_mod);
 
-        _index.NextSnapshotUntil(ReadsAsCompiledPlugin, "the plugin reading as compiled plugin");
+        _index.NextSnapshotUntil(() => _index.ReadFromItsPluginSource(_mod.Key), "the plugin reading as compiled plugin");
     }
 
     [Fact]
     public void ACompiledPluginWhoseRepositoryWentAway_ReadsAsNonCompiledPlugin_AfterTheNextSnapshot()
     {
         SourceMods.Init(_mod);
-        _index.NextSnapshotUntil(ReadsAsCompiledPlugin, "the plugin reading as compiled plugin");
+        _index.NextSnapshotUntil(() => _index.ReadFromItsPluginSource(_mod.Key), "the plugin reading as compiled plugin");
 
         AnotherTool.Delete(Path.Combine(_mod.ModFolderOf(), ".git"));
-        _index.NextSnapshotUntil(() => !ReadsAsCompiledPlugin(), "the plugin reading as non-compiled plugin");
+        _index.NextSnapshotUntil(() => !_index.ReadFromItsPluginSource(_mod.Key), "the plugin reading as non-compiled plugin");
     }
 }
