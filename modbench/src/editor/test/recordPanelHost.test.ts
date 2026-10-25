@@ -31,7 +31,7 @@ describe('a file\'s tab an edit moves the file of', () => {
   const NPC = '000800:A.esp';
   const FILE = '/source/ModA/plugin-source/A.esp/Npcs/Npc.json';
   const MOVED = '/source/ModA/plugin-source/A.esp/Npcs/Renamed.json';
-  const place = { collapsedRows: ['Bounds'], restoredRows: ['Beta'], collapsedColumns: ['A.esp|ModA'], focusedCell: { rowKey: 'Bounds', plugin: null }, scroll: { top: 40, left: 12 } };
+  const place = { collapsedRows: ['Bounds'], restoredRows: ['Beta'], restoredColumns: ['B.esp|ModB'], collapsedColumns: ['A.esp|ModA'], focusedCell: { rowKey: 'Bounds', plugin: null }, scroll: { top: 40, left: 12 } };
 
   async function shownOn(provider: vscode.CustomTextEditorProvider, path: string) {
     const tab = webviewPanel();

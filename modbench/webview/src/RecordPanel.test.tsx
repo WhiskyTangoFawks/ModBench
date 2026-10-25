@@ -1174,7 +1174,7 @@ describe('RecordPanel — the place a tab keeps, carried to the tab a move of it
   afterEach(() => vi.unstubAllGlobals());
 
   const scroller = (container: HTMLElement) => required(container.querySelector<HTMLElement>('div[style*="overflow: auto"]'), 'the grid’s scroller');
-  const place = { collapsedRows: [], restoredRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
+  const place = { collapsedRows: [], restoredRows: [], restoredColumns: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
 
   it('opens with the columns collapsed, the focused cell and the scroll the tab had', async () => {
     vi.stubGlobal('mEditViewState', {
@@ -2203,7 +2203,7 @@ describe('RecordPanel — Collapse No Conflict', () => {
 
   it('opens with the rows a restore showed still shown', async () => {
     vi.stubGlobal('mEditViewState', {
-      collapsedRows: [], restoredRows: ['Beta', 'Gamma'], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 },
+      collapsedRows: [], restoredRows: ['Beta', 'Gamma'], restoredColumns: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 },
     });
     renderPanel(result);
     await screen.findByText('Beta');
@@ -2223,5 +2223,110 @@ describe('RecordPanel — Collapse No Conflict', () => {
     const focused = Array.from(container.querySelectorAll('[data-focused-cell]'));
     expect(focused).toHaveLength(1);
     expect(focused[0]).toHaveTextContent('2 rows');
+  });
+});
+
+describe('RecordPanel — Collapse No Conflict on columns', () => {
+  const copies = [
+    { plugin: 'Fallout4.esm', state: 'Master', text: 'Base text' },
+    { plugin: 'Same.esp', state: 'IdenticalToMaster', text: 'Base text' },
+    { plugin: 'Edit.esp', state: 'Override', text: 'Edited text' },
+  ] as const;
+  const result = compareResultFixture({
+    overrides: copies.map(({ plugin, state, text }, at) => compareOverride({
+      formKey: '000001:Fallout4.esm', plugin, isWinner: at === 2, editorId: 'TestNPC', conflictThis: state,
+      fields: [{ metadata: fieldMeta({ name: 'Name', type: 'string' }), value: text }],
+    })),
+    diffs: [diffNode({
+      fieldName: 'Name', winnerColumn: 'Edit.esp',
+      values: Object.fromEntries(copies.map(({ plugin, text }) => [plugin, text])),
+      cellStates: { 'Same.esp': 'IdenticalToMaster', 'Edit.esp': 'Override' },
+    })],
+  });
+  const collapse = (lens: 'off' | 'on' | 'again') => tellPanel({ type: EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT, lens });
+  const strip = (plugin: string) => required(screen.getByText(plugin).closest('th'), `the ${plugin} header`);
+  const collapseButton = (header: HTMLElement) => within(header).getByRole('button');
+  const sameStrip = () => required(document.querySelector<HTMLElement>('th[title*="Same.esp"]'), 'the strip');
+
+  beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function collapsed() {
+    renderPanel(result);
+    await screen.findByText('Edited text');
+    collapse('again');
+  }
+
+  it('collapses the column identical to the master, and no other', async () => {
+    await collapsed();
+
+    expect(screen.queryByText('Same.esp')).not.toBeInTheDocument();
+    expect(screen.getByText('Edit.esp')).toBeInTheDocument();
+    expect(screen.getByText('Fallout4.esm')).toBeInTheDocument();
+    expect(screen.getAllByText('Base text')).toHaveLength(1);
+  });
+
+  it('shows the column again when told to', async () => {
+    await collapsed();
+
+    collapse('off');
+
+    expect(screen.getByText('Same.esp')).toBeInTheDocument();
+  });
+
+  it('leaves a column collapsed by hand collapsed when told to show', async () => {
+    renderPanel(result);
+    await screen.findByText('Edited text');
+    fireEvent.click(collapseButton(strip('Edit.esp')));
+    collapse('again');
+
+    collapse('off');
+
+    expect(screen.queryByText('Edited text')).not.toBeInTheDocument();
+    expect(screen.getByText('Same.esp')).toBeInTheDocument();
+  });
+
+  it('restores a collapsed column from its header, and a re-read leaves it restored', async () => {
+    await collapsed();
+    fireEvent.click(collapseButton(sameStrip()));
+    expect(screen.getByText('Same.esp')).toBeInTheDocument();
+
+    collapse('on');
+
+    expect(screen.getByText('Same.esp')).toBeInTheDocument();
+  });
+
+  it('collapses a restored column again when the gesture runs again', async () => {
+    await collapsed();
+    fireEvent.click(collapseButton(sameStrip()));
+
+    collapse('again');
+
+    expect(screen.queryByText('Same.esp')).not.toBeInTheDocument();
+  });
+
+  it('tells the host the columns a restore showed, and not the columns the gesture collapsed', async () => {
+    await collapsed();
+    expect(toldPlaces().at(-1)).toMatchObject({ state: { collapsedColumns: [] } });
+
+    fireEvent.click(collapseButton(sameStrip()));
+
+    expect(toldPlaces().at(-1)).toMatchObject({ state: { restoredColumns: ['Same.esp'], collapsedColumns: [] } });
+  });
+
+  it('collapses no column when several records are compared', async () => {
+    const compared = compareResultFixture({
+      overrides: result.overrides.map((o, at) => ({ ...o, column: `Copy ${at}` })),
+      diffs: [diffNode({
+        fieldName: 'Name', values: Object.fromEntries(copies.map(({ text }, at) => [`Copy ${at}`, text])),
+        cellStates: { 'Copy 1': 'IdenticalToMaster', 'Copy 2': 'Override' },
+      })],
+    });
+    renderPanel(compared);
+    await screen.findAllByText('Same.esp');
+
+    collapse('again');
+
+    expect(screen.getAllByText('Same.esp')).toHaveLength(1);
   });
 });

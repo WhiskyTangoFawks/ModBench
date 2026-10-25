@@ -22,14 +22,14 @@ import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
 import { RecordHeaderRow, FormIdRow } from './RecordHeaderRows';
 import { CollapsedRun } from './CollapsedRun';
-import { collapseRuns } from './noConflictRuns';
+import { collapseRuns, quietColumns } from './noConflictRuns';
 import { navigate, type FocusedCell } from './gridNavigation';
 import { recordRows, shownCell, visibleRows, navRows, FORM_ID_PATH, type GridCell, type RecordRow, type RunRow, type ValueCell } from './recordRows';
 import { failureReason } from '../../src/wire/readFailed';
 
 // The place of the tab this one stands in for, which an edit's move of the file closed.
 const placeGiven = (): ViewState => pageGlobals().mEditViewState
-  ?? { collapsedRows: [], restoredRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
+  ?? { collapsedRows: [], restoredRows: [], restoredColumns: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
 
 // One sweep over the response's own overrides, keyed as the backend keys its dictionaries
 // (ADR-0012), so every whole-grid column set is minted the same way.
@@ -87,18 +87,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [editorOpen, setEditorOpen] = useState(false);
   const editorMounted = useCallback((editor: HTMLElement | null) => setEditorOpen(editor !== null), []);
   // Keyed by column identity — two same-filename columns must collapse independently.
-  const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(() => new Set(given.collapsedColumns));
+  const [collapsedByHand, setCollapsedByHand] = useState<Set<ColumnKey>>(() => new Set(given.collapsedColumns));
+  const [restoredColumns, setRestoredColumns] = useState<ReadonlySet<ColumnKey>>(() => new Set(given.restoredColumns));
   const scrolled = useRef(given.scroll);
   const toldPlace = useRef(JSON.stringify(given));
   const tellPlace = useCallback(() => {
     const place: ViewState = {
-      collapsedRows: [...collapsedRows], restoredRows: [...restoredRows], collapsedColumns: [...collapsedColumns], focusedCell: placedFocus, scroll: scrolled.current,
+      collapsedRows: [...collapsedRows], restoredRows: [...restoredRows], restoredColumns: [...restoredColumns], collapsedColumns: [...collapsedByHand], focusedCell: placedFocus, scroll: scrolled.current,
     };
     const told = JSON.stringify(place);
     if (told === toldPlace.current) return;
     toldPlace.current = told;
     keepViewState(place);
-  }, [collapsedRows, restoredRows, collapsedColumns, placedFocus]);
+  }, [collapsedRows, restoredRows, restoredColumns, collapsedByHand, placedFocus]);
   useEffect(tellPlace, [tellPlace]);
   const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | typeof LABEL_COLUMN, number>>(new Map());
   const resizeColumn = (key: ColumnKey | typeof LABEL_COLUMN, width: number) => setColumnWidths(prev => new Map(prev).set(key, width));
@@ -113,6 +114,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const dimmedColumns = useMemo(
     () => new Set<ColumnKey>([...partialFormColumns, ...(fileOverriddenBy !== null && fileColumn !== undefined ? [fileColumn] : [])]),
     [partialFormColumns, fileOverriddenBy, fileColumn]);
+  const columns = useMemo(
+    () => result ? buildColumns(result.overrides) : [],
+    [result],
+  );
+  const severalRecords = result?.overrides.some(o => o.column != null) === true;
+  const collapsedColumns = useMemo(() => {
+    const quiet = collapseNoConflict ? quietColumns(columns, { severalRecords, fileColumn }) : new Set<ColumnKey>();
+    return new Set<ColumnKey>([...collapsedByHand, ...[...quiet].filter(key => !restoredColumns.has(key))]);
+  }, [collapsedByHand, collapseNoConflict, columns, severalRecords, fileColumn, restoredColumns]);
   const columnStyle = useCallback((key: ColumnKey | typeof LABEL_COLUMN): React.CSSProperties => ({
     ...(key !== LABEL_COLUMN && dimmedColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
     ...columnWidthStyle(key !== LABEL_COLUMN && collapsedColumns.has(key) ? undefined : columnWidths.get(key)),
@@ -166,9 +176,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   useEffect(() => { if (latestRead.current === 0) void refresh(formKey); }, [formKey, refresh]);
 
   function toggleColumnCollapse(key: ColumnKey) {
-    setCollapsedColumns(prev => {
+    if (collapsedColumns.has(key)) setRestoredColumns(prev => new Set([...prev, key]));
+    setCollapsedByHand(prev => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
+      if (next.has(key)) next.delete(key); else if (!collapsedColumns.has(key)) next.add(key);
       return next;
     });
   }
@@ -180,10 +191,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   const loadFailureMessage = recordPanelLoadFailureMessage(loadFailures, result?.overrides ?? []);
 
-  const columns = useMemo(
-    () => result ? buildColumns(result.overrides) : [],
-    [result],
-  );
   const rows = useMemo(
     () => result
       ? recordRows({ result, columns, editableColumns, partialFormColumns, recordLabel: copy => recordLabel(result.overrides, copy.formKey) })
@@ -191,7 +198,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result, columns, editableColumns, partialFormColumns],
   );
 
-  const severalRecords = result?.overrides.some(o => o.column != null) === true;
   const shownRows = useMemo(
     () => collapseNoConflict ? collapseRuns(rows, { severalRecords, restored: restoredRows }) : rows,
     [rows, collapseNoConflict, severalRecords, restoredRows],
@@ -208,7 +214,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   }, [shownRows, placedFocus]);
   const restoreRun = (run: RunRow) => {
     setRestoredRows(prev => new Set([...prev, ...run.holds]));
-      };
+  };
   const focused = useMemo<GridCell | ValueCell | undefined>(
     () => focusedCell ? shownCell(shownRows, collapsedRows, collapsedColumns, focusedCell) : undefined,
     [shownRows, collapsedRows, collapsedColumns, focusedCell],
@@ -240,7 +246,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       }
       if (msg.type === EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT) {
         setCollapseNoConflict(msg.lens !== 'off');
-        if (msg.lens === 'again') setRestoredRows(new Set());
+        if (msg.lens === 'again') {
+          setRestoredRows(new Set());
+          setRestoredColumns(new Set());
+        }
       }
       if (msg.type === EXTENSION_TO_WEBVIEW.MODS_CHANGED) setModsByOrigin(msg.modsByOrigin);
       if (msg.type === EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL) pasteIntoFocused(msg.text);

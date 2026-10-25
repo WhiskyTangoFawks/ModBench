@@ -1,6 +1,6 @@
-import { cellContext } from './recordUtils';
+import { cellContext, type Column } from './recordUtils';
 import type { RecordRow, RunRow } from './recordRows';
-import type { ConflictThis } from './types';
+import type { ColumnKey, ConflictThis } from './types';
 
 const TAKES_PART: readonly ConflictThis[] = ['Override', 'ConflictWins', 'ConflictLoses'];
 
@@ -58,4 +58,13 @@ export function collapseRuns(rows: readonly RecordRow[], collapse: Collapse): Re
   return groups.flatMap(({ rows: held, quiet: isRun }) => {
     return isRun && held.length > 1 ? [runRow(held)] : held;
   });
+}
+
+/** editor.md, Columns, story 9: the columns whose copy is identical to the master, but the file's.
+ *  A column's own state is its worst cell, so IdenticalToMaster says every cell is. */
+export function quietColumns(
+  columns: readonly Column[], { severalRecords, fileColumn }: { severalRecords: boolean; fileColumn: ColumnKey | undefined },
+): Set<ColumnKey> {
+  if (severalRecords) return new Set();
+  return new Set(columns.filter(({ key, override }) => override.conflictThis === 'IdenticalToMaster' && key !== fileColumn).map(({ key }) => key));
 }
