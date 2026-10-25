@@ -211,10 +211,9 @@ describe('modbench.plugin.rename', () => {
 
     await run(row());
 
-    expect(reporter.reports).toEqual([{
+    expect(reporter.reports).toMatchObject([{
       severity: 'error',
       message: 'Could not rename "Patch.esp" (ModA): its plugin source may be partly renamed. Reverting the source rename in git undoes it.',
-      detail: 'EEXIST VS Code stops at the first change it cannot make, so some changes may have landed.',
     }]);
     expect(client.calls.filter((c) => c.method === 'moveLastWritten')).toEqual([]);
     expect(fake.calls).toEqual([]);

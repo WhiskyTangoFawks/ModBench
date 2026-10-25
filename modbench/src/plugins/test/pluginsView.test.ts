@@ -254,9 +254,8 @@ describe('the Plugins view follows mEdit\'s pushes', () => {
 
     client.emit({ ...rowsChanged, kind });
 
-    await settle();
+    await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
     expect(refresh).toHaveBeenCalledTimes(1);
-    expect(pluginReads(client)).toBe(1);
   });
 
   it('re-reads once when mEdit holds the load order again after a dropped connection, however many plugins it names', async () => {
@@ -268,10 +267,9 @@ describe('the Plugins view follows mEdit\'s pushes', () => {
 
     client.reconnected();
     await client.latestLoadOrder();
-    await settle();
 
+    await vi.waitFor(() => { expect(pluginReads(client)).toBe(1); });
     expect(refresh).toHaveBeenCalledTimes(1);
-    expect(pluginReads(client)).toBe(1);
   });
 
   it('hears no push once disposed', () => {
@@ -352,12 +350,13 @@ describe('the Plugins view\'s Problems', () => {
       state: 'Ready', conflictsComputed: true,
       failures: [{ name: 'Test.esp', origin: 'ModA', reason: 'Could not read this plugin.', diagnosis: 'duplicate FormKey' }],
     }));
-    await settle();
 
     const published = (name: string) => [...present(h.diagnostics.get(name), name)]
       .map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => [d.message, d.severity])]);
-    expect(published('modbench-failed-to-read')).toEqual([[onDisk, [['duplicate FormKey', DiagnosticSeverity.Error]]]]);
-    expect(published('modbench-diagnosis')).toEqual([[onDisk, [['short', DiagnosticSeverity.Warning]]]]);
+    await vi.waitFor(() => {
+      expect(published('modbench-failed-to-read')).toEqual([[onDisk, [['duplicate FormKey', DiagnosticSeverity.Error]]]]);
+      expect(published('modbench-diagnosis')).toEqual([[onDisk, [['short', DiagnosticSeverity.Warning]]]]);
+    });
   });
 
   it('links a malformed plugin\'s entry to decompile and repair in a mod, and not in the game folder', async () => {
@@ -377,9 +376,8 @@ describe('the Plugins view\'s Problems', () => {
     ]);
 
     client.emit(tick({ state: 'Ready', conflictsComputed: true }));
-    await settle();
 
-    expect([...present(h.diagnostics.get('modbench-diagnosis'), 'the malformed collection')]
+    await vi.waitFor(() => expect([...present(h.diagnostics.get('modbench-diagnosis'), 'the malformed collection')]
       .map(([uri, diagnostics]) => [uri.fsPath, diagnostics.map((d) => d.code)]))
       .toEqual([
         [inAMod, [{
@@ -387,7 +385,7 @@ describe('the Plugins view\'s Problems', () => {
           target: uriParse(`command:modbench.plugin.decompileAndRepair?${encodeURIComponent(JSON.stringify([{ name: 'Test.esp', origin: 'ModA' }]))}`),
         }]],
         [inTheGameFolder, [undefined]],
-      ]);
+      ]));
   });
 });
 
@@ -415,7 +413,7 @@ describe('a record row\'s badge, from mEdit\'s stream', () => {
 
     client.setQueryAnswer('getRecords', { items: [summary('Modified')], total: 1 });
     client.emit({ ...rowsChanged, keys: [FORM_KEY] });
-    await settle();
+    await vi.waitFor(() => { expect(badgeChanges).toEqual([undefined]); });
     await asVsCodeReReadsAnExpandedGroupOnTreeChange(recordBrowser, group);
 
     expect(badgeChanges).toEqual([undefined, [uri]]);
@@ -467,16 +465,16 @@ describe('the record filter, from the commands that set and clear it', () => {
     const reporter = present(reporters.get('recordFilter'), 'the record filter reporter');
     const recordBrowserRefreshes: unknown[] = [];
     recordBrowser.onDidChangeTreeData((changed) => recordBrowserRefreshes.push(changed));
-    const readsBefore = pluginReads(client);
     return {
       client, reporter, recordBrowserRefreshes,
       description: () => treeViews.view().description,
       lensOn: (sql: string) => present(h.lenses[0], 'the code lens provider').provideCodeLenses({ getText: () => sql })[0]?.command?.command,
       filterActive: () => h.contexts.filter(([name]) => name === 'modbench.record.filterActive').map(([, value]) => value),
-      pluginFactsReread: async () => { await settle(); return pluginReads(client) > readsBefore; },
+      pluginReadsAre: (count: number) => vi.waitFor(() => { expect(pluginReads(client)).toBe(count); }),
       filter: (...args: unknown[]) => present(h.commands.get('modbench.record.filter'), 'the modbench.record.filter handler')(...args),
       clearFilter: () => present(h.commands.get('modbench.record.clearFilter'), 'the modbench.record.clearFilter handler')(),
       setCalls: () => client.calls.filter((call) => call.method === 'setFilter'),
+      activeFilterReads: () => client.calls.filter((call) => call.method === 'getActiveFilter').length,
       holds: (source: string) => client.setQueryAnswer('getActiveFilter', { sql: ARMOR_SQL, source }),
     };
   }
@@ -516,7 +514,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       expect(view.lensOn(ARMOR_SQL)).toBe('modbench.record.clearFilter');
       expect(view.filterActive()).toEqual([true]);
       expect(view.recordBrowserRefreshes).toHaveLength(1);
-      expect(await view.pluginFactsReread()).toBe(true);
+      await view.pluginReadsAre(1);
     });
 
     it('opens an untitled SQL document for New filter…, and applies nothing', async () => {
@@ -594,13 +592,12 @@ describe('the record filter, from the commands that set and clear it', () => {
       view.client.setQueryAnswer('getActiveFilter', null);
 
       view.client.emit(cleared('a'));
-      await settle();
 
+      await vi.waitFor(() => { expect(view.reporter.reports).toEqual(warned); });
       expect(view.description()).toBeUndefined();
       expect(view.lensOn(ARMOR_SQL)).toBe('modbench.record.filter');
       expect(view.filterActive()).toEqual([true, false]);
       expect(view.recordBrowserRefreshes).toHaveLength(1);
-      expect(view.reporter.reports).toEqual(warned);
     });
 
     it('keeps a newer filter mEdit holds, and only logs a clearing of an older one', async () => {
@@ -608,13 +605,14 @@ describe('the record filter, from the commands that set and clear it', () => {
       view.client.setQueryAnswer('getActiveFilter', { sql: ARMOR_SQL, source: 'a' });
 
       view.client.emit(cleared('older.sql'));
-      await settle();
 
+      await vi.waitFor(() => {
+        expect(view.reporter.shownFailures).toEqual([
+          { severity: 'warning', message: 'The record filter older.sql was cleared', detail: 'Conversion Error' },
+        ]);
+      });
       expect(view.description()).toBe('records: a');
       expect(view.reporter.reports).toEqual([]);
-      expect(view.reporter.shownFailures).toEqual([
-        { severity: 'warning', message: 'The record filter older.sql was cleared', detail: 'Conversion Error' },
-      ]);
     });
 
     it('warns when the clearing of another source leaves the view without the filter it showed', async () => {
@@ -622,12 +620,13 @@ describe('the record filter, from the commands that set and clear it', () => {
       view.client.setQueryAnswer('getActiveFilter', null);
 
       view.client.emit(cleared('older.sql'));
-      await settle();
 
+      await vi.waitFor(() => {
+        expect(view.reporter.reports).toEqual([
+          { severity: 'warning', message: 'The record filter older.sql was cleared', detail: 'Conversion Error' },
+        ]);
+      });
       expect(view.description()).toBeUndefined();
-      expect(view.reporter.reports).toEqual([
-        { severity: 'warning', message: 'The record filter older.sql was cleared', detail: 'Conversion Error' },
-      ]);
     });
 
     it('shows no filter when the clearing outruns the reply to the set it clears', async () => {
@@ -638,16 +637,14 @@ describe('the record filter, from the commands that set and clear it', () => {
       view.client.setQueryAnswer('getActiveFilter', null);
 
       const applying = view.filter({ scheme: 'untitled', path: 'a' });
-      await settle();
+      await vi.waitFor(() => { expect(view.setCalls()).toHaveLength(1); });
       view.client.emit(cleared('a'));
-      await settle();
+      await vi.waitFor(() => { expect(view.reporter.reports).toEqual(warned); });
       replied(null);
       await applying;
-      await settle();
 
+      await vi.waitFor(() => { expect(view.filterActive()).toEqual([false, false]); });
       expect(view.description()).toBeUndefined();
-      expect(view.filterActive()).toEqual([false, false]);
-      expect(view.reporter.reports).toEqual(warned);
     });
   });
 
@@ -663,13 +660,12 @@ describe('the record filter, from the commands that set and clear it', () => {
       view.client.setQueryAnswerOnce('setFilter', new Promise<string | null>((resolve) => { repliedToA = resolve; }));
       view.holds('b');
       const applyingA = view.filter(documentNamed('a'));
-      await settle();
+      await vi.waitFor(() => { expect(view.setCalls()).toHaveLength(1); });
       view.client.setQueryAnswerOnce('setFilter', null);
       await view.filter(documentNamed('b'));
 
       repliedToA(null);
       await applyingA;
-      await settle();
 
       expect(view.description()).toBe('records: b');
     });
@@ -680,7 +676,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       view.client.setQueryAnswerOnce('getActiveFilter', new Promise((resolve) => { readForA = resolve; }));
       view.holds('b');
       const applyingA = view.filter(documentNamed('a'));
-      await settle();
+      await vi.waitFor(() => { expect(view.activeFilterReads()).toBe(1); });
       await view.filter(documentNamed('b'));
 
       readForA({ sql: ARMOR_SQL, source: 'a' });
@@ -697,13 +693,12 @@ describe('the record filter, from the commands that set and clear it', () => {
       let replied!: (error: string | null) => void;
       view.client.setQueryAnswerOnce('setFilter', new Promise<string | null>((resolve) => { replied = resolve; }));
       const reapplying = view.filter({ scheme: 'untitled', path: 'a' });
-      await settle();
+      await vi.waitFor(() => { expect(view.setCalls()).toHaveLength(2); });
 
       view.client.emit(notificationEventFixture({ kind: 'record-filter-cleared', recordFilterCleared: { source: 'a', reason: 'Conversion Error' } }));
-      await settle();
+      await vi.waitFor(() => { expect(view.activeFilterReads()).toBe(2); });
       replied(null);
       await reapplying;
-      await settle();
 
       expect(view.description()).toBe('records: a');
     });
@@ -735,13 +730,11 @@ describe('the record filter, from the commands that set and clear it', () => {
 
     it('re-reads the matching plugins, as a set does', async () => {
       const view = await applied();
-      await view.pluginFactsReread();
-      const reads = pluginReads(view.client);
+      await view.pluginReadsAre(1);
 
       await view.clearFilter();
-      await settle();
 
-      expect(pluginReads(view.client)).toBeGreaterThan(reads);
+      await view.pluginReadsAre(2);
     });
 
     it('reports a refused clear and keeps showing the filter', async () => {
@@ -761,7 +754,7 @@ describe('the record filter, from the commands that set and clear it', () => {
       let replied!: (error: string | null) => void;
       view.client.setQueryAnswerOnce('clearFilter', new Promise<string | null>((resolve) => { replied = resolve; }));
       const clearing = view.clearFilter();
-      await settle();
+      await vi.waitFor(() => { expect(view.client.calls).toContainEqual({ method: 'clearFilter', args: [] }); });
       view.holds('b');
       await view.filter(source);
       replied(null);
@@ -796,7 +789,6 @@ describe('the Plugins view\'s message line and name filter', () => {
       h.files.set(source, ARMOR_SQL);
       await present(h.commands.get('modbench.record.filter'), 'the modbench.record.filter handler')(workspaceUri(source));
     }
-    await settle();
   }
 
   async function shown(value: InstanceValue, extra: Parameters<typeof pluginsView>[1] = {}) {
@@ -920,7 +912,6 @@ describe('the Plugins view\'s message line and name filter', () => {
       client.setQueryAnswer('getPlugins', [heldPlugin('Other.esp', true), heldPlugin('TestMod.esp', true)]);
       client.setQueryAnswer('clearFilter', null);
       await present(h.commands.get('modbench.record.clearFilter'), 'the modbench.record.clearFilter handler')();
-      await settle();
 
       await messageIs(undefined, 'the message clearing');
     });

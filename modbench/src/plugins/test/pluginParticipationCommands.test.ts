@@ -65,8 +65,8 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
   const beta = new PluginNode({ name: 'Beta.esp', enabled: true }, 'SomeMod');
   const locked = new ImplicitMasterNode('Fallout4.esm', 'Data/');
 
-  it.each([['modbench.plugin.enable', true], ['modbench.plugin.disable', false]] as const)(
-    '%s applies to every selected plugin, whatever its own current state', async (command, enabled) => {
+  it.each([['enables', 'modbench.plugin.enable', true], ['disables', 'modbench.plugin.disable', false]] as const)(
+    '%s every selected plugin, whatever its own current state', async (_verb, command, enabled) => {
       const { adapter } = registered();
       await invoke(command, alpha, [alpha, beta]);
 
@@ -127,8 +127,8 @@ describe('modbench.plugin.enable / modbench.plugin.disable, called by the agent'
   const selected = new PluginNode({ name: 'Alpha.esp', enabled: false }, 'SomeMod');
   const given = (...names: string[]) => new AgentCall(names.map((name) => ({ kind: 'plugin' as const, plugin: { name, origin: 'SomeMod' } })), {});
 
-  it.each([['modbench.plugin.enable', true], ['modbench.plugin.disable', false]])(
-    '%s acts on the plugins given, never on the selection, and answers the outcome by address, reporting nothing', async (command, enabled) => {
+  it.each([['enables', 'modbench.plugin.enable', true], ['disables', 'modbench.plugin.disable', false]] as const)(
+    '%s the plugins given, never the selection, and answers the outcome by address, reporting nothing', async (_verb, command, enabled) => {
       const { reporter, adapter } = registered(fake(), () => [selected]);
 
       const answered = await invoke(command, given('Beta.esp', 'Gone.esp'));

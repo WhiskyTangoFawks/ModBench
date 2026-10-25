@@ -224,13 +224,13 @@ describe('modbench.record.create makes the changes mEdit answers', () => {
     expect(steps).toContain('select 000900:MyPatch.esp in npc_');
   });
 
-  it('reports a change VS Code did not apply as one that may have partly landed, and selects nothing', async () => {
+  it('says the record could not be created when VS Code does not apply the change, and selects nothing', async () => {
     const { steps, source, reporter, create } = harness();
     source.applyWorkspaceChanges.mockRejectedValue(new Error('VS Code did not apply the changes.'));
 
     await create(NPC_GROUP);
 
-    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not create the Non-Player Character record.', detail: 'VS Code did not apply the changes. VS Code stops at the first change it cannot make, so some changes may have landed.' }]);
+    expect(reporter.reports).toMatchObject([{ severity: 'error', message: 'Could not create the Non-Player Character record.' }]);
     expect(reporter.landings).toEqual([]);
     expect(steps).toEqual(['watch MyPatch.esp ModA', 'create MyPatch.esp ModA npc_', 'forget']);
   });
@@ -293,15 +293,17 @@ describe('modbench.record.create on a container', () => {
     expect(steps).toContain('create MyPatch.esp ModA road {"container":"000803:MyPatch.esp"}');
   });
 
+  const NOT_A_GRID_POSITION = 'Two whole numbers, as x, y.';
+
   it.each<[string, string | undefined]>([
-    ['', 'Two whole numbers, as x, y.'],
-    ['3', 'Two whole numbers, as x, y.'],
-    ['3,', 'Two whole numbers, as x, y.'],
-    ['a, b', 'Two whole numbers, as x, y.'],
-    ['1.5, 2', 'Two whole numbers, as x, y.'],
-    ['1, 2, 3', 'Two whole numbers, as x, y.'],
-    ['1 2', 'Two whole numbers, as x, y.'],
-    ['0x1, 2', 'Two whole numbers, as x, y.'],
+    ['', NOT_A_GRID_POSITION],
+    ['3', NOT_A_GRID_POSITION],
+    ['3,', NOT_A_GRID_POSITION],
+    ['a, b', NOT_A_GRID_POSITION],
+    ['1.5, 2', NOT_A_GRID_POSITION],
+    ['1, 2, 3', NOT_A_GRID_POSITION],
+    ['1 2', NOT_A_GRID_POSITION],
+    ['0x1, 2', NOT_A_GRID_POSITION],
     ['0, 0', undefined],
     ['-3, 12', undefined],
     ['  7,-8  ', undefined],

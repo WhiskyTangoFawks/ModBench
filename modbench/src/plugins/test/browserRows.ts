@@ -27,7 +27,6 @@ export interface BrowserAnswers {
   containerChildren?: ContainerChildSummary[];
 }
 
-/** A client answering every read a browsed tree makes, empty unless the test says otherwise. */
 export function browserClient(answers: BrowserAnswers = {}): InMemoryMEditClient {
   const answered: Required<BrowserAnswers> = {
     plugins: [], diagnoses: [], recordTypes: [], records: { items: [], total: 0 }, worldspaces: [],

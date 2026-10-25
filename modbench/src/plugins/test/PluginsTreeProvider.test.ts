@@ -119,7 +119,6 @@ async function reconcile(
 ): Promise<void> {
   h.client.setQueryAnswer('getPlugins', plugins);
   await h.tree.facts.reconciled(failures);
-  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 const STILL_INDEXING = [['indexing', 'Still indexing…']];
@@ -1479,10 +1478,9 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
     const h = makeTree([A_ROW(), B_ROW(), plugin({ name: 'C.esp', line: 2 })]);
     await reconcile(h, [held('A.esp'), held('B.esp'), held('C.esp')]);
 
-    const rows = await h.tree.getChildren();
-    rows.map((row) => h.tree.getTreeItem(row));
+    const rendered = (await h.tree.getChildren()).map((row) => h.tree.getTreeItem(row).label);
 
-    expect(rows).toHaveLength(3);
+    expect(rendered).toEqual(['A.esp', 'B.esp', 'C.esp']);
     expect([callCount(h.client, 'getPlugins'), callCount(h.client, 'getDiagnoses')]).toEqual([1, 1]);
   });
 
@@ -1492,9 +1490,9 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
-    const children = await h.tree.getChildren(row);
-    children.map((child) => h.tree.getTreeItem(child));
+    const rendered = (await h.tree.getChildren(row)).map((child) => h.tree.getTreeItem(child).label);
 
+    expect(rendered).toEqual(['Weapon']);
     expect(callCount(h.client, 'getPlugins')).toBe(1);
   });
 });
