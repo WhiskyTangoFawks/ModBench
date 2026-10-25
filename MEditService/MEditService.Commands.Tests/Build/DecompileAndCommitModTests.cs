@@ -210,31 +210,34 @@ public sealed class DecompileAndCommitModTests
         Assert.False(TestAdapters.Source().IsSourceMod(modFolder));
     }
 
-    private static readonly Dictionary<string, Action<string>> PluginWriters = new()
+    public static TheoryData<string, Action<string>, string> PluginsTheGateRefusesNamingARecord => new()
     {
-        ["deleted record holding fields"] = path => DeletedNpcPlugin.WriteHoldingEveryField(path, new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800)),
-        ["record absent from the rewrite"] = path =>
         {
-            var mod = ModKey.FromFileName("Fixture.esp");
-            UnknownGroupPlugin.Write(path, new FormKey(mod, 0x800), new FormKey(mod, 0x801));
+            "deleted record holding fields",
+            path => DeletedNpcPlugin.WriteHoldingEveryField(path, new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800)),
+            "Fixture.esp does not round-trip through its own source: NPC_ 000800:Fixture.esp is flagged Deleted " +
+            "and still holds fields, which Mutagen does not write for a deleted record."
         },
-        ["null FormID"] = WriteNpcWithTheNullFormId,
+        {
+            "record absent from the rewrite",
+            path => UnknownGroupPlugin.Write(path, new FormKey(ModKey.FromFileName("Fixture.esp"), 0x800), new FormKey(ModKey.FromFileName("Fixture.esp"), 0x801)),
+            "Fixture.esp does not round-trip through its own source: MISC 000801:Fixture.esp is absent from the rewrite, " +
+            "so its records cannot be proven intact."
+        },
+        {
+            "null FormID", WriteNpcWithTheNullFormId,
+            "Fixture.esp cannot become source: NPC_ 00000000 holds the null FormID, so the plugin is malformed."
+        },
     };
 
     [Theory]
-    [InlineData("deleted record holding fields",
-        "Fixture.esp does not round-trip through its own source: NPC_ 000800:Fixture.esp is flagged Deleted " +
-        "and still holds fields, which Mutagen does not write for a deleted record.")]
-    [InlineData("record absent from the rewrite",
-        "Fixture.esp does not round-trip through its own source: MISC 000801:Fixture.esp is absent from the rewrite, " +
-        "so its records cannot be proven intact.")]
-    [InlineData("null FormID", "Fixture.esp cannot become source: NPC_ 00000000 holds the null FormID, so the plugin is malformed.")]
-    public async Task InitMod_OfAPluginTheGateRefusesNamingARecord_RefusesTheModWithThatCause_CommittingNothing(string plugin, string message)
+    [MemberData(nameof(PluginsTheGateRefusesNamingARecord))]
+    public async Task InitMod_OfAPluginTheGateRefusesNamingARecord_RefusesTheModWithThatCause_CommittingNothing(string _, Action<string> writePlugin, string message)
     {
         using var modFolder = new ScratchDirectory("medit-init-gate-refusal-");
         using var dataFolder = new ScratchDirectory("medit-init-gate-refusal-data-");
         var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-        PluginWriters[plugin](pluginPath);
+        writePlugin(pluginPath);
 
         var loadOrder = SnapshotPlugins.Snapshot(dataFolder, null, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true)]);

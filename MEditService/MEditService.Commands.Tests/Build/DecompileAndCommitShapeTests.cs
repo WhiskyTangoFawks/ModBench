@@ -54,21 +54,27 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
                 .LastWrittenBinarySha256s(new PluginAddress("First.esp", ModName)).Value());
     }
 
-    private static readonly Dictionary<string, Func<FakeSourceAdapter, string, FakeSourceAdapter>> Repositories = new()
+    public static TheoryData<string, Func<string, ISourceAdapter>, string> FoldersHoldingARepository => new()
     {
-        ["a source mod"] = (source, folder) => source.WithSourceMod(folder),
-        ["a repository with no main"] = (source, folder) => source.HoldingAnotherRepository(folder),
+        {
+            "a source mod", folder => new FakeSourceAdapter().WithSourceMod(folder),
+            "already holds a repository. To put a plugin's source into its working tree, decompile it."
+        },
+        {
+            "a repository with no main", folder => new FakeSourceAdapter().HoldingAnotherRepository(folder),
+            "already holds a repository with no main branch, made outside Modbench."
+        },
     };
 
     [Theory]
-    [InlineData("a source mod", "already holds a repository. To put a plugin's source into its working tree, decompile it.")]
-    [InlineData("a repository with no main", "already holds a repository with no main branch, made outside Modbench.")]
-    public async Task Init_IntoAFolderThatAlreadyHoldsARepository_RefusesTheMod_AndInitsNothing(string held, string reason)
+    [MemberData(nameof(FoldersHoldingARepository))]
+    public async Task Init_IntoAFolderThatAlreadyHoldsARepository_RefusesTheMod_AndInitsNothing(
+        string _, Func<string, ISourceAdapter> holding, string reason)
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
-        var result = await Init(TestAdapters.Mutagen(), Repositories[held](new FakeSourceAdapter(), _modFolder));
+        var result = await Init(TestAdapters.Mutagen(), holding(_modFolder));
 
         Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
@@ -98,8 +104,8 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
         Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
         Assert.Equal((ModName, DecompileAndCommitRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
-        Assert.All(named, name => Assert.Contains(name, refused.Message, StringComparison.Ordinal));
-        Assert.All(notNamed, name => Assert.DoesNotContain(name, refused.Message, StringComparison.Ordinal));
+        Assert.Equal(named, named.Where(name => refused.Message.Contains(name, StringComparison.Ordinal)));
+        Assert.DoesNotContain(notNamed, name => refused.Message.Contains(name, StringComparison.Ordinal));
         Assert.False(source.IsSourceMod(_modFolder));
     }
 

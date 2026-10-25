@@ -101,7 +101,13 @@ internal sealed class FakeModFolders : IModFolderRepository
 
     public string PathIn(string modFolder, string file) => file[(modFolder.Length + 1)..];
 
-    public Stream OpenInstallationFile(string path) => Open(string.Empty, path);
+    public int InstallationFilesOpened { get; private set; }
+
+    public Stream OpenInstallationFile(string path)
+    {
+        InstallationFilesOpened++;
+        return Open(string.Empty, path);
+    }
 
     /// <summary>A game file is a file of the folder named for the game's Data folder.</summary>
     public Stream OpenGameFile(string dataFolder, string path) => Open(dataFolder, path);

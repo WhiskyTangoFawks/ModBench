@@ -10,6 +10,7 @@ using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Starfield;
 using Noggog;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -84,7 +85,7 @@ public sealed class StarfieldGestureTests : TestInstance
     [Fact]
     public async Task AFieldEdit_OnAnOverrideOfALightMastersRecord_CompilesIntoTheStarfieldPlugin()
     {
-        var result = EditHandler.Set(_compiledPlugin, _weapon.ToString(), "EditorID", JsonDocument.Parse("\"Edited\"").RootElement);
+        var result = EditHandler.Set(_compiledPlugin, _weapon.ToString(), "EditorID", Json("\"Edited\""));
 
         Assert.True(result.Applied, result.Message);
         using var compiled = await CompiledAfterAsync();
@@ -106,7 +107,7 @@ public sealed class StarfieldGestureTests : TestInstance
     [Fact]
     public async Task TheLightFlag_SetOnTheHeader_CompilesAsALightStarfieldPlugin()
     {
-        var result = EditHandler.Set(_compiledPlugin, Header, "IsSmallMaster", JsonDocument.Parse("true").RootElement);
+        var result = EditHandler.Set(_compiledPlugin, Header, "IsSmallMaster", Json("true"));
 
         Assert.True(result.Applied, result.Message);
         using var compiled = await CompiledAfterAsync();
@@ -128,7 +129,7 @@ public sealed class StarfieldGestureTests : TestInstance
     [Fact]
     public async Task ClearingPersistent_MovesTheReferenceIntoTheCellItsPositionFallsIn_AHundredUnitsAGridStep()
     {
-        var cleared = EditHandler.Set(_compiledPlugin, _wanderer.ToString(), "MajorRecordFlagsRaw", JsonDocument.Parse("0").RootElement);
+        var cleared = EditHandler.Set(_compiledPlugin, _wanderer.ToString(), "MajorRecordFlagsRaw", Json("0"));
 
         Assert.True(cleared.Applied, cleared.Message);
         using var compiled = await CompiledAfterAsync();
@@ -183,7 +184,7 @@ public sealed class StarfieldGestureTests : TestInstance
     {
         var wide = CreatedAt(0x10000);
 
-        var flagged = EditHandler.Set(_compiledPlugin, Header, "Flags", JsonDocument.Parse("[\"Medium\"]").RootElement);
+        var flagged = EditHandler.Set(_compiledPlugin, Header, "Flags", Json("[\"Medium\"]"));
 
         Assert.True(flagged.Applied, flagged.Message);
         var refused = Assert.Single((await CompileHandler.CompileAsync([_compiledPlugin])).Value().Refused);
@@ -194,7 +195,7 @@ public sealed class StarfieldGestureTests : TestInstance
     [Fact]
     public void CreateRecord_OnAMediumPluginWithNoFormKeyFreeInItsRange_IsRefusedNamingClearingTheFlag()
     {
-        Assert.True(EditHandler.Set(_compiledPlugin, Header, "Flags", JsonDocument.Parse("[\"Medium\"]").RootElement).Applied);
+        Assert.True(EditHandler.Set(_compiledPlugin, Header, "Flags", Json("[\"Medium\"]")).Applied);
         CreatedAt(0xFFFF);
 
         var result = CreateHandler.CreateRecordSync(_compiledPlugin, "kywd");
@@ -209,7 +210,7 @@ public sealed class StarfieldGestureTests : TestInstance
     [Fact]
     public void AFormKeyEdit_PastAMediumPluginsRange_IsRefused()
     {
-        Assert.True(EditHandler.Set(_compiledPlugin, Header, "Flags", JsonDocument.Parse("[\"Medium\"]").RootElement).Applied);
+        Assert.True(EditHandler.Set(_compiledPlugin, Header, "Flags", Json("[\"Medium\"]")).Applied);
         var created = CreateHandler.CreateRecordSync(_compiledPlugin, "kywd").NewFormKey.Require();
         var wide = $"010000:{CompiledPluginName}";
 

@@ -146,7 +146,7 @@ public sealed class RestoreFromManifestHandlerTests
     }
 
     [Fact]
-    public async Task AModWhoseFilesAllMatch_LandsHavingWrittenNothing()
+    public async Task AModWhoseFilesAllMatch_LandsHavingWrittenNothing_AndOpensNoInstallationFile()
     {
         var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"));
         _folders.WithFile(Mod, "a.nif", "a");
@@ -155,6 +155,7 @@ public sealed class RestoreFromManifestHandlerTests
         var result = await Restore(ModFrom(Mod, downloadedFile));
 
         Assert.Empty(Assert.Single(result.Applied).Written);
+        Assert.Equal(0, _folders.InstallationFilesOpened);
     }
 
     [Fact]
@@ -181,26 +182,34 @@ public sealed class RestoreFromManifestHandlerTests
         Assert.Equal(("a", "a"), (WrittenText(Mod, "a.nif"), WrittenText(Mod, "copy/x.nif")));
     }
 
-    private static readonly Dictionary<string, (ManifestFile[] Lines, Func<InstallationFile, ModToRestore> Handed)> Lacks = new()
+    public static TheoryData<string, ManifestFile[], Func<InstallationFile, ModToRestore>, RestoreRefusal, string> Lacks => new()
     {
-        ["installation file not handed"] = ([], _ => ModFrom(Mod)),
-        ["installation file gone"] = ([], file => ModFrom(Mod, file with { Path = "dl/Gone/Mod.zip" })),
-        ["installation file changed"] = ([], file => ModFrom(Mod, file with { Hash = "#other" })),
-        ["not in the package"] = ([Line("mine.txt", new PackageEntry.NotHeld())], file => ModFrom(Mod, file)),
-        ["entry gone"] = ([Line("gone.nif", new PackageEntry.Held())], file => ModFrom(Mod, file)),
+        { "installation file not handed", [], _ => ModFrom(Mod), RestoreRefusal.NotFound, "installation file 'Mod.zip' is missing" },
+        {
+            "installation file gone", [], file => ModFrom(Mod, file with { Path = "dl/Gone/Mod.zip" }),
+            RestoreRefusal.Lacking, "installation file 'Mod.zip' is not in the downloads folder"
+        },
+        {
+            "installation file changed", [], file => ModFrom(Mod, file with { Hash = "#other" }),
+            RestoreRefusal.Lacking, "installation file 'Mod.zip' has other bytes"
+        },
+        {
+            "not in the package", [Line("mine.txt", new PackageEntry.NotHeld())], file => ModFrom(Mod, file),
+            RestoreRefusal.Lacking, "its package does not hold 'mine.txt'"
+        },
+        {
+            "entry gone", [Line("gone.nif", new PackageEntry.Held())], file => ModFrom(Mod, file),
+            RestoreRefusal.Lacking, "installation file 'Mod.zip' holds no 'gone.nif'"
+        },
     };
 
     [Theory]
-    [InlineData("installation file not handed", RestoreRefusal.NotFound, "installation file 'Mod.zip' is missing")]
-    [InlineData("installation file gone", RestoreRefusal.Lacking, "installation file 'Mod.zip' is not in the downloads folder")]
-    [InlineData("installation file changed", RestoreRefusal.Lacking, "installation file 'Mod.zip' has other bytes")]
-    [InlineData("not in the package", RestoreRefusal.Lacking, "its package does not hold 'mine.txt'")]
-    [InlineData("entry gone", RestoreRefusal.Lacking, "installation file 'Mod.zip' holds no 'gone.nif'")]
-    public async Task AModThatLacksItsPackageOrAFileOfIt_IsSkippedNamingIt_WritesNothing_AndTheOthersLand(string cause, RestoreRefusal refusal, string lack)
+    [MemberData(nameof(Lacks))]
+    public async Task AModThatLacksItsPackageOrAFileOfIt_IsSkippedNamingIt_WritesNothing_AndTheOthersLand(
+        string _, ManifestFile[] lines, Func<InstallationFile, ModToRestore> handed, RestoreRefusal refusal, string lack)
     {
         var downloadedFile = DownloadedFile("dl/Mod.zip", ("a.nif", "a"));
         _folders.WithFile(Mod, "a.nif", "edited").WithFile(Mod, "mine.txt", "changed");
-        var (lines, handed) = Lacks[cause];
         _folders.Manifests[Mod] = new Manifest(PackageOf(downloadedFile), [Line("a.nif", new PackageEntry.Held()), .. lines]);
 
         var result = await Restore(handed(downloadedFile), AnotherModThatLands());

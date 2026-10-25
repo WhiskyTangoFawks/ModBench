@@ -43,26 +43,21 @@ public sealed class QuestChildEditTests : IDisposable
             .Select(child => child.GetProperty("FormKey").GetString().Require())];
     }
 
-    private static readonly Dictionary<string, (Func<ContainerModFixture, FormKey> Child, Func<IQuestGetter, IEnumerable<string>> Siblings)> QuestChildren = new()
+    public static TheoryData<string, Func<ContainerModFixture, FormKey>, string, Func<IQuestGetter, IEnumerable<string>>, string[]> QuestChildKinds => new()
     {
-        ["topic"] = (f => f.DialogTopic2, q => q.DialogTopics.Select(t => t.EditorID.Require())),
-        ["branch"] = (f => f.DialogBranch, q => q.DialogBranches.Select(b => b.EditorID.Require())),
-        ["scene"] = (f => f.Scene, q => q.Scenes.Select(s => s.EditorID.Require())),
-    };
-
-    public static TheoryData<string, string, string[]> QuestChildKinds => new()
-    {
-        { "topic", ContainerModFixture.DialogTopic2EditorId, [ContainerModFixture.DialogTopicEditorId, "Renamed", ContainerModFixture.DialogTopic3EditorId] },
-        { "branch", ContainerModFixture.DialogBranchEditorId, ["Renamed"] },
-        { "scene", ContainerModFixture.SceneEditorId, ["Renamed"] },
+        {
+            "topic", f => f.DialogTopic2, ContainerModFixture.DialogTopic2EditorId, q => q.DialogTopics.Select(t => t.EditorID.Require()),
+            [ContainerModFixture.DialogTopicEditorId, "Renamed", ContainerModFixture.DialogTopic3EditorId]
+        },
+        { "branch", f => f.DialogBranch, ContainerModFixture.DialogBranchEditorId, q => q.DialogBranches.Select(b => b.EditorID.Require()), ["Renamed"] },
+        { "scene", f => f.Scene, ContainerModFixture.SceneEditorId, q => q.Scenes.Select(s => s.EditorID.Require()), ["Renamed"] },
     };
 
     [Theory]
     [MemberData(nameof(QuestChildKinds))]
     public async Task SettingAQuestChildsField_ChangesTheQuestDocumentAtThatPathAndNowhereElse_AndCompilesInOrder(
-        string kind, string editorId, string[] compiled)
+        string _, Func<ContainerModFixture, FormKey> child, string editorId, Func<IQuestGetter, IEnumerable<string>> siblings, string[] compiled)
     {
-        var (child, siblings) = QuestChildren[kind];
         var before = QuestText;
         Assert.Empty(_fixture.ChangedFormKeys());
 

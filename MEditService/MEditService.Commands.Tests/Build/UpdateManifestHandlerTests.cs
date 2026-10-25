@@ -102,13 +102,17 @@ public sealed class UpdateManifestHandlerTests
             _folders.Manifests[Mod].Package);
     }
 
-    [Theory]
-    [InlineData(true, "1.2.3")]
-    [InlineData(false, null)]
-    public async Task TheVersionOfAMod_IsInItsManifestOnlyWhenTheModHasAPackage(bool withPackage, string? version)
+    public static TheoryData<InstallationFile?, string?> VersionsByPackage => new()
     {
-        _folders.WithFile(Mod, "a.txt", "hello");
-        var installationFile = withPackage ? DownloadedFile("dl/Mod.zip", ("a.txt", "hello")) : null;
+        { new InstallationFile("dl/Mod.zip", Page: null, Size: 7, Hash: "#dl/Mod.zip", [new HashedEntry("a.txt", "hello")]), "1.2.3" },
+        { null, null },
+    };
+
+    [Theory]
+    [MemberData(nameof(VersionsByPackage))]
+    public async Task TheVersionOfAMod_IsInItsManifestOnlyWhenTheModHasAPackage(InstallationFile? installationFile, string? version)
+    {
+        _folders.WithFile(Mod, "a.txt", "hello").WithBytes(string.Empty, "dl/Mod.zip", Zip(("a.txt", "hello")));
 
         await Landed(ModFrom("Mod", installationFile) with { Version = "1.2.3" });
 

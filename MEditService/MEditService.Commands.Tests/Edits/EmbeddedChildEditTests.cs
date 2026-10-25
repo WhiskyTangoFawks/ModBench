@@ -22,15 +22,15 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
     private string WorkingTreeCell() => _fixture.Document(_fixture.EmbedCell.ToString()).Require().Body;
 
-    public static TheoryData<Func<ContainerModFixture, FormKey>, string, string, string?, RecordEditRefusal, string> SlotsThatAreStructural => new()
+    public static TheoryData<string, Func<ContainerModFixture, FormKey>, string, string, string?, RecordEditRefusal, string> SlotsThatAreStructural => new()
     {
-        { f => f.EmbedCell, RecordEditEnvelope.Set, "NavigationMeshes", "[]", RecordEditRefusal.FieldNotFound, "has no field" },
-        { f => f.EmbedCell, RecordEditEnvelope.Set, "Landscape", "null", RecordEditRefusal.FieldNotFound, "has no field" },
-        { f => f.Worldspace, RecordEditEnvelope.Set, "TopCell", "null", RecordEditRefusal.FieldNotFound, "has no field" },
-        { f => f.Worldspace, RecordEditEnvelope.Set, "SubCells", "[]", RecordEditRefusal.FieldNotFound, "has no field" },
-        { f => f.EmbedCell, RecordEditEnvelope.Move, "NavigationMeshes[0]", "1", RecordEditRefusal.FieldNotFound, "has no field" },
-        { f => f.EmbedCell, RecordEditEnvelope.Set, "Grid", """{"Point": {"X": 9, "Y": 9}}""", RecordEditRefusal.FieldReadOnly, "structural gesture" },
-        { f => f.EmbedCell, RecordEditEnvelope.Set, "Grid.Point", "\"9, 9\"", RecordEditRefusal.FieldReadOnly, "structural gesture" },
+        { "a cell's navigation meshes set", f => f.EmbedCell, RecordEditEnvelope.Set, "NavigationMeshes", "[]", RecordEditRefusal.FieldNotFound, "has no field" },
+        { "a cell's landscape cleared", f => f.EmbedCell, RecordEditEnvelope.Set, "Landscape", "null", RecordEditRefusal.FieldNotFound, "has no field" },
+        { "a worldspace's top cell cleared", f => f.Worldspace, RecordEditEnvelope.Set, "TopCell", "null", RecordEditRefusal.FieldNotFound, "has no field" },
+        { "a worldspace's sub-cells set", f => f.Worldspace, RecordEditEnvelope.Set, "SubCells", "[]", RecordEditRefusal.FieldNotFound, "has no field" },
+        { "a cell's navigation mesh moved", f => f.EmbedCell, RecordEditEnvelope.Move, "NavigationMeshes[0]", "1", RecordEditRefusal.FieldNotFound, "has no field" },
+        { "a cell's grid set", f => f.EmbedCell, RecordEditEnvelope.Set, "Grid", """{"Point": {"X": 9, "Y": 9}}""", RecordEditRefusal.FieldReadOnly, "structural gesture" },
+        { "a cell's grid point set", f => f.EmbedCell, RecordEditEnvelope.Set, "Grid.Point", "\"9, 9\"", RecordEditRefusal.FieldReadOnly, "structural gesture" },
     };
 
     [Fact]
@@ -50,7 +50,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     [Theory]
     [MemberData(nameof(SlotsThatAreStructural))]
     public void AStructuralSlot_IsRefused_SoContainerChildAndCellLocationCannotGoStale(
-        Func<ContainerModFixture, FormKey> record, string op, string path, string? value, RecordEditRefusal refusal, string reason)
+        string _, Func<ContainerModFixture, FormKey> record, string op, string path, string? value, RecordEditRefusal refusal, string reason)
     {
         var result = EditService().Edit(_fixture.Plugin, record(_fixture).ToString(), Spelled(op, path, value));
 

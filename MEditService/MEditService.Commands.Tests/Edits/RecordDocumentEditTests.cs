@@ -131,7 +131,7 @@ public sealed class RecordDocumentEditTests : IDisposable
     }
 
     [Fact]
-    public void AValueTheCodecCannotHold_IsRefusedAsCodecRejected_NamingTheMember()
+    public void AValueTheCodecCannotHold_IsRefusedAsCodecRejected_NamingTheMember_AndQuotingTheCodecsReason()
     {
         var formKey = _fixture.Seed(new MiscItem(_mod) { EditorID = "Misc", ComponentDisplayIndices = [1] }, "misc");
 
@@ -139,7 +139,7 @@ public sealed class RecordDocumentEditTests : IDisposable
 
         Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
         Assert.Equal("ComponentDisplayIndices", result.Path);
-        Assert.Contains("the codec rejected", result.Message, StringComparison.Ordinal);
+        Assert.Matches("^'ComponentDisplayIndices': the codec rejected the document — \\S", result.Message);
     }
 
     [Fact]

@@ -119,7 +119,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var refused = Assert.Single((await Repair(await Previewed(plugin))).Refused);
 
         Assert.Equal(DecompileAndRepairRefusal.DropsData, refused.Refusal);
-        Assert.Contains(Lossy.Change ?? "", refused.Message, StringComparison.Ordinal);
+        Assert.Contains(Lossy.Change.Require(), refused.Message, StringComparison.Ordinal);
         Assert.Contains("force", refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, Head(_sourceMod));
     }
@@ -145,7 +145,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
         var forced = await Repair([await Previewed(plugin)], force: true);
 
         Assert.Equal(DecompileAndRepairRefusal.DropsData, refused.Refusal);
-        Assert.Contains(Lossy.Change ?? "", refused.Message, StringComparison.Ordinal);
+        Assert.Contains(Lossy.Change.Require(), refused.Message, StringComparison.Ordinal);
         Assert.Contains("Stray.json", refused.Message, StringComparison.Ordinal);
         Assert.Equal([plugin], forced.Applied);
         Assert.False(File.Exists(stray));

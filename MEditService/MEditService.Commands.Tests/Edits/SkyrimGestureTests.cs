@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
@@ -9,6 +8,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Skyrim;
 using Noggog;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -46,7 +46,7 @@ public sealed class SkyrimGestureTests : TestInstance
     [Fact]
     public async Task AFieldEdit_CompilesIntoTheSkyrimPlugin()
     {
-        var result = EditHandler.Set(_compiledPlugin, _npc.ToString(), "Height", JsonDocument.Parse("1.25").RootElement);
+        var result = EditHandler.Set(_compiledPlugin, _npc.ToString(), "Height", Json("1.25"));
 
         Assert.True(result.Applied, result.Message);
         await CompileHandler.CompileLandedAsync(_compiledPlugin);
@@ -59,7 +59,7 @@ public sealed class SkyrimGestureTests : TestInstance
     {
         var header = new FormKey(ModKey.FromFileName(CompiledPluginName), 0).ToString();
 
-        var result = EditHandler.Set(_compiledPlugin, header, "IsSmallMaster", JsonDocument.Parse("true").RootElement);
+        var result = EditHandler.Set(_compiledPlugin, header, "IsSmallMaster", Json("true"));
 
         Assert.True(result.Applied, result.Message);
         await CompileHandler.CompileLandedAsync(_compiledPlugin);

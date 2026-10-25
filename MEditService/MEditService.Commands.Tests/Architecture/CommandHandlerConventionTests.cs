@@ -60,8 +60,7 @@ public sealed class CommandHandlerConventionTests
     private static readonly Type[] Handlers =
     [
         .. typeof(EditRecordChangesHandler).Assembly.GetExportedTypes()
-            .Where(type => (type.Namespace == CommandsNamespace || type.Namespace?.StartsWith(CommandsNamespace + ".", StringComparison.Ordinal) == true)
-                && type.Name.EndsWith("Handler", StringComparison.Ordinal))
+            .Where(type => type.Name.EndsWith("Handler", StringComparison.Ordinal))
             .OrderBy(type => type.FullName, StringComparer.Ordinal),
     ];
 
