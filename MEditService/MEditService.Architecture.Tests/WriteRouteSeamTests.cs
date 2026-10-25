@@ -5,32 +5,6 @@ namespace MEditService.Architecture.Tests;
 
 public sealed class WriteRouteSeamTests
 {
-    private static readonly (string Route, string Method)[] Routes =
-    [
-        ("POST /records/{formKey}/edit-changes", "EditRecordChanges"),
-        ("POST /records/{formKey}/edit", "EditRecord"),
-        ("POST /records/copy", "CopyRecord"),
-        ("POST /records/delete", "DeleteRecord"),
-        ("POST /plugins/{plugin}/create-record", "CreateRecord"),
-        ("POST /records/delete-changes", "DeleteRecordChanges"),
-        ("POST /records/copy-changes", "CopyRecordChanges"),
-        ("POST /plugins/create", "CreatePlugin"),
-        ("POST /plugins/create-in-mod", "CreatePluginInMod"),
-        ("POST /plugins/decompile", "Decompile"),
-        ("POST /plugins/repair-previews", "RepairPreviews"),
-        ("POST /plugins/decompile-and-repair", "DecompileAndRepair"),
-        ("POST /plugins/compile", "Compile"),
-        ("POST /plugins/rename-source-changes", "RenameSourceChanges"),
-        ("POST /plugins/move-last-written", "MoveLastWritten"),
-        ("POST /plugins/{plugin}/create-record-changes", "CreateRecordChanges"),
-        ("PUT /load-order", "PutLoadOrder"),
-        ("POST /build", "Build"),
-        ("POST /decompile-and-commit", "DecompileAndCommit"),
-        ("POST /build-configuration", "ChangeBuildConfiguration"),
-        ("POST /update-manifest", "UpdateManifest"),
-        ("POST /restore-from-manifest", "RestoreFromManifest"),
-    ];
-
     private static readonly string[] EndpointFiles = ["RecordEndpoints.cs", "PluginEndpoints.cs", "LoadOrderEndpoints.cs", "ModEndpoints.cs", "ManifestEndpoints.cs"];
 
     private static readonly Regex CallSite = new(@"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.Compiled);
@@ -44,18 +18,7 @@ public sealed class WriteRouteSeamTests
     private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
 
     public static IEnumerable<object[]> EveryNamedMethodRoute =>
-        Routes.Select(r => new object[] { r.Route, r.Method });
-
-    [Fact]
-    public void TheGate_CoversExactlyTheCanonicalWriteRoutes()
-    {
-        var canonical = WriteRouteHandlerTests.Routes
-            .Select(r => $"{r.Method} {r.Pattern}")
-            .Order(StringComparer.Ordinal);
-        var covered = Routes.Select(r => r.Route).Order(StringComparer.Ordinal);
-
-        Assert.Equal(canonical, covered);
-    }
+        WriteRouteHandlerTests.Routes.Select(r => new object[] { $"{r.Method} {r.Pattern}", r.EndpointMethod });
 
     [Theory]
     [MemberData(nameof(EveryNamedMethodRoute))]

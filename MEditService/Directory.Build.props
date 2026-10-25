@@ -20,25 +20,19 @@
     <MutagenVersion>0.55.0-alpha.67</MutagenVersion>
   </PropertyGroup>
 
-  <!-- ADR-0005: the codec's projects and PluginAdapter are the boxes that hold live Mutagen objects, so
-       they carry no ban; everything else that must never hold one is these seven production boxes.
-       No test project and not TestSupport — fixtures assemble plugins from live objects by design. -->
+  <!-- Every production box, by the same naming rule the architecture gates read the solution
+       with: a test project ends in .Tests, and TestSupport is the shared fixture library. -->
   <PropertyGroup>
-    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Http'">true</MutagenBanIncluded>
-    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Commands'">true</MutagenBanIncluded>
-    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.LoadOrder'">true</MutagenBanIncluded>
-    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Ports'">true</MutagenBanIncluded>
-    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.RecordIndex'">true</MutagenBanIncluded>
-    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.SourceAdapter'">true</MutagenBanIncluded>
-    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.ModFolderAdapter'">true</MutagenBanIncluded>
-    <!-- Every production box, by the same naming rule the architecture gates read the solution
-         with: a test project ends in .Tests, and TestSupport is the shared fixture library. -->
     <SyncOverAsyncBanIncluded Condition="!$(MSBuildProjectName.EndsWith('.Tests')) And '$(MSBuildProjectName)' != 'MEditService.TestSupport'">true</SyncOverAsyncBanIncluded>
+    <!-- ADR-0005: the codec's projects and PluginAdapter are the boxes that hold live Mutagen objects,
+         so every other production box carries the ban. Fixtures assemble plugins from live objects by
+         design, so no test project and not TestSupport. -->
+    <MutagenBanIncluded Condition="'$(SyncOverAsyncBanIncluded)' == 'true' And !$(MSBuildProjectName.StartsWith('MEditService.Codec')) And '$(MSBuildProjectName)' != 'MEditService.PluginAdapter'">true</MutagenBanIncluded>
   </PropertyGroup>
 
   <!-- RS0030 is at error for every project (.editorconfig); no folder carries its own severity.
        BannedSymbols.txt (time, blocking waits) binds unconditionally. BannedSymbols.Mutagen.txt
-       (the live-object namespaces) binds only the projects named above.
+       (the live-object namespaces) binds every production box but the codec and PluginAdapter.
        BannedSymbols.SyncOverAsync.txt binds every production box and no test project. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0">

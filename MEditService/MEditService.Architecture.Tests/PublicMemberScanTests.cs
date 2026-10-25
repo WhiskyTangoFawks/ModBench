@@ -11,10 +11,41 @@ public sealed class PublicMemberScanTests
     [Fact]
     public void EveryPublicMember_HasACallerInAnotherProductionAssemblyOrALanguageOrFrameworkRuleThatHoldsItPublic()
     {
-        var solution = ServiceProjects.SolutionDirectory();
-        var assemblies = ServiceProjects.Production(solution)
-            .Select(project => Assembly.Read(Path.Combine(AppContext.BaseDirectory, project + ".dll")))
-            .ToList();
+        var scan = Scan(ServiceProjects.Production(ServiceProjects.SolutionDirectory())
+            .Select(project => Path.Combine(AppContext.BaseDirectory, project + ".dll")));
+
+        Assert.True(
+            scan.Assemblies > 5 && scan.References > 1000 && scan.Members > 1000,
+            $"The scan read {scan.Assemblies} assemblies, {scan.Members} public members and "
+            + $"{scan.References} cross-assembly references; it is reading the wrong build, so it "
+            + "would pass by finding nothing.");
+        Assert.True(
+            scan.Uncalled.Count == 0,
+            $"{scan.Uncalled.Count} public member(s) have no caller in another production assembly. Make "
+            + "each one internal, or delete it if nothing calls it, and drive its tests through the "
+            + "box's entry. A property System.Text.Json reads stays public on an internal type: made "
+            + "internal, it drops off the wire. Public consts and enum members go unchecked, because "
+            + "the compiler copies them into their readers:\n" + string.Join("\n", scan.Uncalled));
+    }
+
+    [Fact]
+    public void TheScan_NamesAPublicTypeNoOtherAssemblyCalls()
+    {
+        var scan = Scan([typeof(PublicMemberScanTests).Assembly.Location]);
+
+        Assert.Contains($"{typeof(PublicMemberScanTests).FullName}/{nameof(PlantedUncalled)}", scan.Uncalled);
+    }
+
+    public sealed class PlantedUncalled
+    {
+        public static int Probe() => 0;
+    }
+
+    private sealed record ScanResult(int Assemblies, int References, int Members, List<string> Uncalled);
+
+    private static ScanResult Scan(IEnumerable<string> assemblyPaths)
+    {
+        var assemblies = assemblyPaths.Select(Assembly.Read).ToList();
         var world = new World(
             [.. assemblies.SelectMany(a => a.References)],
             [.. assemblies.SelectMany(a => a.Extended)],
@@ -26,19 +57,26 @@ public sealed class PublicMemberScanTests
             .Select(m => m.Name)
             .Order(StringComparer.Ordinal)
             .ToList();
+        return new ScanResult(assemblies.Count, world.Used.Count, members.Count, uncalled);
+    }
 
-        Assert.True(
-            assemblies.Count > 5 && world.Used.Count > 1000 && members.Count > 1000,
-            $"The scan read {assemblies.Count} assemblies, {members.Count} public members and "
-            + $"{world.Used.Count} cross-assembly references; it is reading the wrong build, so it "
-            + "would pass by finding nothing.");
-        Assert.True(
-            uncalled.Count == 0,
-            $"{uncalled.Count} public member(s) have no caller in another production assembly. Make "
-            + "each one internal, or delete it if nothing calls it, and drive its tests through the "
-            + "box's entry. A property System.Text.Json reads stays public on an internal type: made "
-            + "internal, it drops off the wire. Public consts and enum members go unchecked, because "
-            + "the compiler copies them into their readers:\n" + string.Join("\n", uncalled));
+    [Fact]
+    public void TheOnlyForeignPublicTypes_AreTheGeneratedWholeModMixIns_InTheCodecsGameProjects()
+    {
+        var foreign = ServiceProjects.Production(ServiceProjects.SolutionDirectory())
+            .Select(System.Reflection.Assembly.Load)
+            .SelectMany(assembly => assembly.GetExportedTypes())
+            .Where(type => type.Namespace?.StartsWith("MEditService", StringComparison.Ordinal) == false)
+            .Select(type => $"{type.Assembly.GetName().Name}: {type.FullName}")
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(
+            [
+                "MEditService.Codec.Fallout4: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterFallout4ModMixIns",
+                "MEditService.Codec.Skyrim: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterSkyrimModMixIns",
+                "MEditService.Codec.Starfield: Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterStarfieldModMixIns",
+            ],
+            foreign);
     }
 
     private static HashSet<Key> Exposed(List<VisibleMember> members, World world)
