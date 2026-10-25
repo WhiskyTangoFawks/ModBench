@@ -108,12 +108,7 @@ internal static class Wire
         var response = await client.EditChanges(formKey, plugin, origin, member, value);
         if (!response.IsSuccessStatusCode) return response;
 
-        var changes = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        static string Text(JsonElement element, string name) => element.GetProperty(name).GetString().Require();
-        EditSaving.Save(
-            changes.GetProperty("moves").EnumerateArray().Select(move => (Text(move, "from"), Text(move, "to"))),
-            changes.GetProperty("deletions").EnumerateArray().Select(deletion => deletion.GetString().Require()),
-            changes.GetProperty("documents").EnumerateArray().Select(document => (Text(document, "path"), Text(document, "text"))));
+        Save(await Changes(response));
         return response;
     }
 
@@ -128,15 +123,7 @@ internal static class Wire
         });
         if (!response.IsSuccessStatusCode) return response;
 
-        var answer = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        static string Text(JsonElement element, string name) => element.GetProperty(name).GetString().Require();
-        foreach (var changes in answer.GetProperty("applied").EnumerateArray())
-        {
-            EditSaving.Save(
-                changes.GetProperty("moves").EnumerateArray().Select(move => (Text(move, "from"), Text(move, "to"))),
-                changes.GetProperty("deletions").EnumerateArray().Select(deletion => deletion.GetString().Require()),
-                changes.GetProperty("documents").EnumerateArray().Select(document => (Text(document, "path"), Text(document, "text"))));
-        }
+        foreach (var changes in (await Changes(response)).GetProperty("applied").EnumerateArray()) Save(changes);
         return response;
     }
 
@@ -150,13 +137,21 @@ internal static class Wire
             new { origin, recordType, container, position });
         if (!response.IsSuccessStatusCode) return response;
 
-        var changes = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Save(await Changes(response));
+        return response;
+    }
+
+    // Read as text, which the content keeps, so the caller can still read the answer.
+    private static async Task<JsonElement> Changes(HttpResponseMessage response) =>
+        JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+
+    private static void Save(JsonElement changes)
+    {
         static string Text(JsonElement element, string name) => element.GetProperty(name).GetString().Require();
         EditSaving.Save(
             changes.GetProperty("moves").EnumerateArray().Select(move => (Text(move, "from"), Text(move, "to"))),
             changes.GetProperty("deletions").EnumerateArray().Select(deletion => deletion.GetString().Require()),
             changes.GetProperty("documents").EnumerateArray().Select(document => (Text(document, "path"), Text(document, "text"))));
-        return response;
     }
 
     internal static Task<HttpResponseMessage> EditChanges(
@@ -192,15 +187,7 @@ internal static class Wire
         });
         if (!response.IsSuccessStatusCode) return response;
 
-        var answer = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        static string Text(JsonElement element, string name) => element.GetProperty(name).GetString().Require();
-        foreach (var changes in answer.GetProperty("applied").EnumerateArray())
-        {
-            EditSaving.Save(
-                changes.GetProperty("moves").EnumerateArray().Select(move => (Text(move, "from"), Text(move, "to"))),
-                changes.GetProperty("deletions").EnumerateArray().Select(deletion => deletion.GetString().Require()),
-                changes.GetProperty("documents").EnumerateArray().Select(document => (Text(document, "path"), Text(document, "text"))));
-        }
+        foreach (var changes in (await Changes(response)).GetProperty("applied").EnumerateArray()) Save(changes);
         return response;
     }
 
@@ -225,6 +212,45 @@ internal static class Wire
             .Single(r => r.GetProperty("editorId").GetString() == editorId)
             .GetProperty("formKey").GetString()
             ?? throw new InvalidOperationException($"Expected {plugin}'s {type} {editorId} to carry a formKey.");
+    }
+
+    internal static async Task<HttpResponseMessage> PostJson(this HttpClient client, string route, string json)
+    {
+        using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+        return await client.PostAsync(new Uri(route, UriKind.Relative), content);
+    }
+
+    internal static async Task<HttpResponseMessage> PutJson(this HttpClient client, string route, string json)
+    {
+        using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+        return await client.PutAsync(new Uri(route, UriKind.Relative), content);
+    }
+
+    internal static async Task<JsonElement> Answer(HttpResponseMessage response)
+    {
+        response.EnsureSuccessStatusCode();
+        return await response.Body();
+    }
+
+    /// <summary>The HeightMax of <paramref name="formKey"/> as a second service reads it from the plugin at
+    /// <paramref name="written"/>: what was written, not what the first service holds.</summary>
+    internal static async Task<double> HeightMaxInTheBytesAt(string written, string formKey)
+    {
+        using var elsewhere = new PluginFixtureBuilder("trace-written-reader").BuildScattered();
+        using var reader = new MEditHost();
+        using var client = reader.CreateClient();
+        var plugin = Path.GetFileName(written);
+        var copied = Path.Combine(Directory.CreateDirectory(Path.Combine(elsewhere.Root, "ReadingMod")).FullName, plugin);
+        File.Copy(written, copied);
+
+        (await client.PutLoadOrder(
+            elsewhere,
+            [new LoadOrderEntry(plugin, copied, "ReadingMod", Line: 0, Enabled: true, Winning: true)]))
+            .EnsureSuccessStatusCode();
+
+        return (await client.Record(formKey)).GetProperty("fields").EnumerateArray()
+            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax")
+            .GetProperty("value").GetDouble();
     }
 
     internal static async Task<JsonElement> Body(this HttpResponseMessage response) =>
@@ -257,19 +283,6 @@ internal static class Wire
     internal static Task<long> Sequence(this HttpClient client) =>
         client.GetFromJsonAsync<long>("/load-order/sequence");
 
-    /// <summary>The bounded await the extension itself polls, so a read that follows a write is
-    /// taken after the projection landed rather than after a delay.</summary>
-    internal static async Task SequenceReaches(this HttpClient client, long atLeast)
-    {
-        var response = await client.GetAsync(
-            new Uri($"/load-order/sequence/await?atLeast={atLeast}&timeoutMs={(int)Patience.TotalMilliseconds}", UriKind.Relative));
-        response.EnsureSuccessStatusCode();
-        var answer = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(
-            answer.GetProperty("reached").GetBoolean(),
-            $"no projection reached sequence {atLeast}; the service stopped at {answer.GetProperty("sequence").GetInt64()}");
-    }
-
     internal static async Task<StreamReader> NotificationStream(this HttpClient client)
     {
         var response = await client.GetAsync(
@@ -281,27 +294,8 @@ internal static class Wire
     /// <summary>Frames of one kind until one satisfies <paramref name="isTerminal"/>, bounded so a
     /// notification that never arrives fails loudly rather than hanging the run.</summary>
     internal static async Task<IReadOnlyList<JsonElement>> EventsUntil(
-        this StreamReader reader, string kind, Func<JsonElement, bool> isTerminal, TimeSpan? within = null)
-    {
-        using var cts = new CancellationTokenSource(within ?? Patience);
-        var collected = new List<JsonElement>();
-        string? currentKind = null;
-        while (true)
-        {
-            var line = await reader.ReadLineAsync(cts.Token);
-            if (line is null) continue;
-            if (line.StartsWith("event: ", StringComparison.Ordinal))
-            {
-                currentKind = line["event: ".Length..];
-                continue;
-            }
-            if (!line.StartsWith("data: ", StringComparison.Ordinal) || currentKind != kind) continue;
-
-            var data = JsonDocument.Parse(line["data: ".Length..]).RootElement;
-            collected.Add(data);
-            if (isTerminal(data)) return collected;
-        }
-    }
+        this StreamReader reader, string kind, Func<JsonElement, bool> isTerminal) =>
+        [.. (await reader.FramesThrough(kind, isTerminal)).Where(frame => frame.Kind == kind).Select(frame => frame.Data)];
 
     internal static Task<IReadOnlyList<JsonElement>> EventsUntil(this StreamReader reader, string kind) =>
         reader.EventsUntil(kind, _ => true);
@@ -310,9 +304,9 @@ internal static class Wire
     /// that satisfies <paramref name="isTerminal"/>: an absence claim reads off this list, never off
     /// a window where nothing arrived.</summary>
     internal static async Task<IReadOnlyList<(string Kind, JsonElement Data)>> FramesThrough(
-        this StreamReader reader, string anchorKind, Func<JsonElement, bool> isTerminal, TimeSpan? within = null)
+        this StreamReader reader, string anchorKind, Func<JsonElement, bool> isTerminal)
     {
-        using var cts = new CancellationTokenSource(within ?? Patience);
+        using var cts = new CancellationTokenSource(Patience);
         var collected = new List<(string Kind, JsonElement Data)>();
         string? currentKind = null;
         while (true)

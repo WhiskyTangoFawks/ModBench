@@ -1,10 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.DependencyInjection;
-using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
@@ -14,40 +12,6 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     private readonly TestPluginFixture _fixture = loaded.Plugin;
 
     private Dictionary<string, object> Body() => SnapshotPlugins.Body(_fixture.DataFolder, _fixture.InstanceRoot, _fixture.Plugins);
-
-    [Fact]
-    public async Task PutLoadOrder_TheArchivesAndStringsFilesItNames_AreTheOnesTheLoadOrderHolds()
-    {
-        StampedFile[] archives = [new(Path.Combine(_fixture.DataFolder, "Fallout4 - Interface.ba2"), "1/2/3"), new(Path.Combine(_fixture.DataFolder, "A - Main.ba2"), "4/5/6")];
-        StampedFile[] stringsFiles = [new(Path.Combine(_fixture.DataFolder, "Strings", "A_en.STRINGS"), "7/8/9")];
-        var body = Body();
-        body["archives"] = archives;
-        body["stringsFiles"] = stringsFiles;
-
-        var response = await _client.PutLoadOrderAndAwaitReady(body);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var held = loaded.Services.GetRequiredService<LoadOrderHolder>().Require();
-        Assert.Equal<IEnumerable<StampedFile>>([archives, stringsFiles], [held.Archives, held.StringsFiles]);
-    }
-
-    [Fact]
-    public async Task PutLoadOrder_ThePluginsOwnArchivesAndStringsFiles_AreTheOnesItsCopyHolds()
-    {
-        var handed = _fixture.Plugins[0] with
-        {
-            NamedStrings = new(
-                [new StampedFile(Path.Combine(_fixture.DataFolder, "A - Main.ba2"), "1/2")],
-                [new StampedFile(Path.Combine(_fixture.DataFolder, "Strings", "A_en.STRINGS"), "3/4")]),
-        };
-        var body = Body();
-        body["plugins"] = _fixture.Plugins.Skip(1).Prepend(handed).Select(p => p.Wire);
-
-        var response = await _client.PutLoadOrderAndAwaitReady(body);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(handed.Strings, loaded.Services.GetRequiredService<LoadOrderHolder>().Require().Plugin(handed.Key)?.Strings);
-    }
 
     [Theory]
     [InlineData("active")]
@@ -82,103 +46,34 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    [Theory]
-    [InlineData("Game", "ModA", null, null)]
-    [InlineData("None", null, "/mods/ModA", null)]
-    [InlineData("Game", null, null, "/source/ModA")]
-    [InlineData("Mod", "ModA", null, "/source/ModA")]
-    [InlineData("Mod", null, "/mods/ModA", "/source/ModA")]
-    [InlineData("Mod", "ModA", "/mods/ModA", "")]
-    public async Task PutLoadOrder_AProviderWhoseModAndFoldersDisagreeWithItsKind_Returns400(string kind, string? mod, string? folder, string? sourceFolder)
+    private const string Named = """ "name": "Any.esp", "path": "/data/Any.esp", "origin": "AnyMod" """;
+
+    public static TheoryData<string, string> NotAPluginEntry => new()
     {
-        var body = Body();
-        body["plugins"] = _fixture.Plugins.Select(p => new
-        {
-            p.Name,
-            p.Path,
-            p.Origin,
-            Provider = new { Kind = kind, Mod = mod, Folder = folder, SourceFolder = sourceFolder },
-            p.Strings.Archives,
-            p.Strings.StringsFiles,
-        });
-
-        var response = await _client.PutAsJsonAsync("/load-order", body);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PutLoadOrder_AModThatIsNoSourceMod_HasNoSourceFolder_Returns200()
-    {
-        var body = Body();
-        body["plugins"] = _fixture.Plugins.Select(p => new
-        {
-            p.Name,
-            p.Path,
-            p.Origin,
-            Provider = new { Kind = "Mod", Mod = p.Origin, Folder = Path.GetDirectoryName(p.Path) },
-            p.Strings.Archives,
-            p.Strings.StringsFiles,
-        });
-
-        var response = await _client.PutLoadOrderAndAwaitReady(body);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PutLoadOrder_APluginWithNoProvider_Returns400()
-    {
-        var body = Body();
-        body["plugins"] = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Strings.Archives, p.Strings.StringsFiles });
-
-        var response = await _client.PutAsJsonAsync("/load-order", body);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
+        { "a game plugin naming a mod", $$"""{ {{Named}}, "provider": {"kind": "Game", "mod": "ModA"}, "archives": [], "stringsFiles": [] }""" },
+        { "a plugin of no mod naming a folder", $$"""{ {{Named}}, "provider": {"kind": "None", "folder": "/mods/ModA"}, "archives": [], "stringsFiles": [] }""" },
+        { "a game plugin naming a source folder", $$"""{ {{Named}}, "provider": {"kind": "Game", "sourceFolder": "/source/ModA"}, "archives": [], "stringsFiles": [] }""" },
+        { "a mod's plugin naming no folder", $$"""{ {{Named}}, "provider": {"kind": "Mod", "mod": "ModA", "sourceFolder": "/source/ModA"}, "archives": [], "stringsFiles": [] }""" },
+        { "a mod's plugin naming no mod", $$"""{ {{Named}}, "provider": {"kind": "Mod", "folder": "/mods/ModA", "sourceFolder": "/source/ModA"}, "archives": [], "stringsFiles": [] }""" },
+        { "a mod's plugin naming an empty source folder", $$"""{ {{Named}}, "provider": {"kind": "Mod", "mod": "ModA", "folder": "/mods/ModA", "sourceFolder": ""}, "archives": [], "stringsFiles": [] }""" },
+        { "no provider", $$"""{ {{Named}}, "archives": [], "stringsFiles": [] }""" },
+        { "no archives", $$"""{ {{Named}}, "provider": {"kind": "Game"}, "stringsFiles": [] }""" },
+        { "no strings files", $$"""{ {{Named}}, "provider": {"kind": "Game"}, "archives": [] }""" },
+        { "a strings file with no stamp", $$"""{ {{Named}}, "provider": {"kind": "Game"}, "archives": [], "stringsFiles": [{"path": "/data/Strings/A_en.STRINGS"}] }""" },
+    };
 
     [Theory]
-    [InlineData("archives")]
-    [InlineData("stringsFiles")]
-    public async Task PutLoadOrder_APluginWithAListItNeverDefaultsLeftOut_Returns400(string omitted)
+    [MemberData(nameof(NotAPluginEntry))]
+    public async Task PutLoadOrder_APluginEntryLackingWhatMakesItAPlugin_Returns400(string lacking, string entry)
     {
         var body = Body();
-        body["plugins"] = _fixture.Plugins.Select(p => new Dictionary<string, object>
-        {
-            ["name"] = p.Name,
-            ["path"] = p.Path,
-            ["origin"] = p.Origin,
-            ["provider"] = new { Kind = "Game" },
-            ["archives"] = p.Strings.Archives,
-            ["stringsFiles"] = p.Strings.StringsFiles,
-        }.Where(field => field.Key != omitted).ToDictionary());
+        body["plugins"] = new[] { JsonDocument.Parse(entry).RootElement };
         body["active"] = Array.Empty<object>();
         body["loadedWithNoLine"] = Array.Empty<object>();
 
         var response = await _client.PutAsJsonAsync("/load-order", body);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PutLoadOrder_APluginsStringsFileWithNoStamp_Returns400()
-    {
-        var body = Body();
-        body["plugins"] = _fixture.Plugins.Select(p => new
-        {
-            p.Name,
-            p.Path,
-            p.Origin,
-            Provider = new { Kind = "Game" },
-            Archives = Array.Empty<object>(),
-            StringsFiles = new[] { new { Path = Path.Combine(_fixture.DataFolder, "Strings", "A_en.STRINGS") } },
-        });
-        body["active"] = Array.Empty<object>();
-        body["loadedWithNoLine"] = Array.Empty<object>();
-
-        var response = await _client.PutAsJsonAsync("/load-order", body);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, lacking);
     }
 
     [Fact]

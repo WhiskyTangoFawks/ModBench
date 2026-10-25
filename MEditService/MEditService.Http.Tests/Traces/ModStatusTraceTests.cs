@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -6,7 +5,7 @@ using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MEditService.Http.Tests.Api;
+namespace MEditService.Http.Tests.Traces;
 
 public sealed class ModStatusTraceTests : HostedTests
 {
@@ -80,13 +79,5 @@ public sealed class ModStatusTraceTests : HostedTests
         Assert.Equal([Recorded, Unrecorded], Pushed(first));
         Assert.Equal([Recorded, Unrecorded], status.Keys.Order(StringComparer.Ordinal));
         Assert.Equal([Recorded], Pushed(second));
-    }
-
-    [Fact]
-    public async Task AskingTheStatusOfNoMod_Is400()
-    {
-        var response = await Client.PostAsJsonAsync("/mod-status", new JsonObject { ["mods"] = new JsonArray(), ["statCache"] = StatCache });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

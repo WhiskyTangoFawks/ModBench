@@ -45,20 +45,8 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [Fact]
     public async Task PutLoadOrder_AnUnknownGameRelease_Is400()
     {
-        var response = await loaded.Client.PutAsJsonAsync("/load-order", new
-        {
-            plugins = _fixture.Plugins.Select(p => p.Wire),
-            active = SnapshotPlugins.Active(_fixture.Plugins),
-            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
-            archives = Array.Empty<string>(),
-            stringsFiles = Array.Empty<string>(),
-            mods = Array.Empty<object>(),
-            places = Array.Empty<object>(),
-            statCache = "stat-cache",
-            dataFolder = _fixture.DataFolder,
-            instanceRoot = _fixture.InstanceRoot,
-            gameRelease = "NotAGame",
-        });
+        var response = await loaded.Client.PutAsJsonAsync(
+            "/load-order", SnapshotPlugins.Body(_fixture.DataFolder, _fixture.InstanceRoot, _fixture.Plugins, gameRelease: "NotAGame"));
 
         await response.AssertIsProblem(HttpStatusCode.BadRequest);
     }

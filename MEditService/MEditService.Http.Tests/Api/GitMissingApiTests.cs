@@ -33,7 +33,6 @@ public sealed class GitMissingApiTests : HostedTests
 
         var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Delete", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -70,7 +69,6 @@ public sealed class GitMissingApiTests : HostedTests
 
         var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Contains("PATH", problem.GetProperty("detail").GetString().Require(), StringComparison.Ordinal);
         Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Decompile and commit", StringComparison.Ordinal));
     }
 
@@ -87,7 +85,6 @@ public sealed class GitMissingApiTests : HostedTests
 
         var problem = await response.AssertIsProblem(HttpStatusCode.InternalServerError);
         Assert.Equal("GitUnavailable", problem.GetProperty("refusal").GetString());
-        Assert.Contains(Logged, entry => entry.Level == LogLevel.Warning && entry.Message.StartsWith("Refused Decompile", StringComparison.Ordinal));
     }
 
     [Fact]

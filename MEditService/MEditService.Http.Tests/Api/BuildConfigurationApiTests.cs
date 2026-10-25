@@ -25,20 +25,22 @@ public sealed class BuildConfigurationApiTests : HostedTests
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
-    [Fact]
-    public async Task ARequestWithNoSourceFolder_Is400() =>
-        await (await Change(new { output = "New Name" })).AssertIsProblem(HttpStatusCode.BadRequest);
-
-    public static TheoryData<string?, string?[]> BadChanges => new()
+    public static TheoryData<string, string> NotAChange => new()
     {
-        { null, [null] },
-        { null, [] },
+        { "no source folder", """{"output": "New Name"}""" },
+        { "a path that is null", """{"sourceFolder": "/source/Mod", "exclude": [null]}""" },
+        { "nothing to change", """{"sourceFolder": "/source/Mod", "exclude": []}""" },
     };
 
     [Theory]
-    [MemberData(nameof(BadChanges))]
-    public async Task APathThatIsNull_OrNothingToChange_Is400(string? output, string?[] exclude) =>
-        await (await Change(new { sourceFolder = _sourceFolder.Path, output, exclude })).AssertIsProblem(HttpStatusCode.BadRequest);
+    [MemberData(nameof(NotAChange))]
+    public async Task ARequestThatDoesNotSayWhatToChange_Is400(string lacking, string body)
+    {
+        var response = await Client.PostJson("/build-configuration", body);
+
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, lacking);
+        await response.AssertIsProblem(HttpStatusCode.BadRequest);
+    }
 
     [Fact]
     public async Task AnOutputThatIsNoFolderName_Is400_Refused_OutsideTheMod()

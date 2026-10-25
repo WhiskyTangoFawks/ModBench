@@ -6,21 +6,14 @@ using Noggog;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>Three plugins in three mods, each built for one family of questions: one of every kind
-/// of record, rooms holding placed references, and records another record holds.</summary>
+/// <summary>One plugin in one mod, holding one of every kind of record the queries ask about.</summary>
 public sealed class QueriedPluginsFixture : IApiPluginFixture<QueriedPluginsFixture>
 {
     public const string UserPlugin = "UserMod.esp";
     public const string UserMod = "UserModFolder";
-    public const string ListedPlugin = "Listed.esp";
-    public const string ListedMod = "ListedMod";
-    public const string HeldPlugin = "Held.esp";
-    public const string HeldMod = "HeldMod";
 
     public ScatteredFixtureData Data { get; } = new PluginFixtureBuilder("query-record-index")
         .WithPlugin(UserPlugin, OneOfEveryKind, origin: UserMod)
-        .WithPlugin(ListedPlugin, RoomsHoldingReferences, origin: ListedMod)
-        .WithPlugin(HeldPlugin, HeldByAnotherRecord, origin: HeldMod)
         .BuildScattered();
 
     public string DataFolder => Data.DataFolder;
@@ -65,39 +58,5 @@ public sealed class QueriedPluginsFixture : IApiPluginFixture<QueriedPluginsFixt
         var interiorBlock = new CellBlock { BlockNumber = 0 };
         interiorBlock.SubBlocks.Add(interiorSubBlock);
         mod.Cells.Records.Add(interiorBlock);
-    }
-
-    private static void RoomsHoldingReferences(Fallout4Mod mod)
-    {
-        var zuluRoom = new Cell(mod) { EditorID = "ZuluRoom" };
-        zuluRoom.Temporary.Add(new PlacedObject(mod) { EditorID = "ZuluRef" });
-        zuluRoom.Temporary.Add(new PlacedObject(mod) { EditorID = "AlphaRef" });
-        var alphaRoom = new Cell(mod) { EditorID = "AlphaRoom" };
-        var subBlock = new CellSubBlock { BlockNumber = 0 };
-        subBlock.Cells.Add(zuluRoom);
-        subBlock.Cells.Add(alphaRoom);
-        var block = new CellBlock { BlockNumber = 0 };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
-    }
-
-    private static void HeldByAnotherRecord(Fallout4Mod mod)
-    {
-        var topic = new DialogTopic(mod) { EditorID = "HeldTopic" };
-        topic.Responses.Add(new DialogResponses(mod) { EditorID = "HeldResponse" });
-        var quest = new Quest(mod) { EditorID = "HeldQuest" };
-        quest.DialogTopics.Add(topic);
-        quest.DialogBranches.Add(new DialogBranch(mod) { EditorID = "HeldBranch" });
-        quest.Scenes.Add(new Scene(mod) { EditorID = "HeldScene" });
-        mod.Quests.Add(quest);
-
-        var room = new Cell(mod) { EditorID = "HeldRoom" };
-        room.Temporary.Add(new PlacedObject(mod) { EditorID = "HeldRef" });
-        room.Persistent.Add(new PlacedNpc(mod) { EditorID = "HeldActor" });
-        var subBlock = new CellSubBlock { BlockNumber = 0 };
-        subBlock.Cells.Add(room);
-        var block = new CellBlock { BlockNumber = 0 };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
     }
 }

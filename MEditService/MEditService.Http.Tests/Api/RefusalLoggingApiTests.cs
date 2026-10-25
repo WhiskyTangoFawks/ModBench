@@ -128,4 +128,16 @@ public sealed class RefusalLoggingApiTests : HostedTests
 
         AssertLoggedOnce("Refused Restore from manifest of Bare:", "NoManifest");
     }
+
+    [Fact]
+    public async Task ARefusedCreatePlugin_IsLoggedOnce_NamingThePluginAndWhy()
+    {
+        using var scratch = new ScratchDirectory("refusal-logging-create-");
+        await LoadedAndCompiledPlugin();
+        OtherTool.WritesTheFile(Path.Combine(scratch, "Taken.esp"), "another tool's file");
+
+        await Client.PostAsJsonAsync("/plugins/create", new { origin = "TakenMod", name = "Taken.esp", folder = scratch.Path });
+
+        AssertLoggedOnce("Refused Create plugin of PluginAddress { Name = Taken.esp, Origin = TakenMod }:", "FileExists");
+    }
 }
