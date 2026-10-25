@@ -1,36 +1,23 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class InjectedChildTests : IDisposable
+public sealed class InjectedChildTests : TestInstance
 {
-    public static TheoryData<string> Injections =>
-        [TopicUnderQuest, BranchUnderQuest, SceneUnderQuest, ResponseUnderTopic];
+    public static TheoryData<Func<InjectedChildTests, FormKey>, Func<InjectedChildTests, FormKey>> Injections => new()
+    {
+        { t => t._quest, t => t._injectedTopic },
+        { t => t._quest, t => t._injectedBranch },
+        { t => t._quest, t => t._injectedScene },
+        { t => t._baseTopic, t => t._injectedResponse },
+    };
 
-    private const string TopicUnderQuest = "a topic under a quest";
-    private const string BranchUnderQuest = "a dialog branch under a quest";
-    private const string SceneUnderQuest = "a scene under a quest";
-    private const string ResponseUnderTopic = "a response under a dialog topic";
-
-    private const string BasePluginName = "InjectionBase.esm";
-    private const string BaseOrigin = "InjectionBaseMod";
-    private const string InjectorPluginName = "InjectionInjector.esp";
-    private const string InjectorOrigin = "InjectionInjectorMod";
-
-    private readonly ScratchDirectory _instanceRoot = new("medit-injection-instance-");
-    private readonly string _baseModFolder;
-    private readonly string _injectorModFolder;
-    private readonly string _dataFolder;
-    private readonly LoadOrderSnapshot _loadOrder;
-
-    private readonly PluginAddress _base = new(BasePluginName, BaseOrigin);
-    private readonly PluginAddress _injector = new(InjectorPluginName, InjectorOrigin);
+    private readonly PluginAddress _base;
+    private readonly PluginAddress _injector;
 
     private readonly FormKey _quest;
     private readonly FormKey _baseTopic;
@@ -41,12 +28,7 @@ public sealed class InjectedChildTests : IDisposable
 
     public InjectedChildTests()
     {
-        _baseModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", BaseOrigin)).FullName;
-        _injectorModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", InjectorOrigin)).FullName;
-        _dataFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "Data")).FullName;
-
-        var basePath = Path.Combine(_baseModFolder, BasePluginName);
-        var baseMod = new Fallout4Mod(ModKey.FromFileName(BasePluginName), Fallout4Release.Fallout4);
+        var baseMod = new Fallout4Mod(ModKey.FromFileName("InjectionBase.esm"), Fallout4Release.Fallout4);
         var baseQuest = new Quest(baseMod) { EditorID = "BaseQuest" };
         var baseTopic = new DialogTopic(baseMod) { EditorID = "BaseTopic" };
         baseTopic.Responses.Add(new DialogResponses(baseMod) { EditorID = "BaseResponse" });
@@ -54,11 +36,11 @@ public sealed class InjectedChildTests : IDisposable
         baseQuest.DialogBranches.Add(new DialogBranch(baseMod) { EditorID = "BaseBranch" });
         baseQuest.Scenes.Add(new Scene(baseMod) { EditorID = "BaseScene" });
         baseMod.Quests.Add(baseQuest);
-        baseMod.WriteToBinary(basePath);
         (_quest, _baseTopic) = (baseQuest.FormKey, baseTopic.FormKey);
+        _base = Add(baseMod, "InjectionBaseMod");
 
-        var injectorPath = Path.Combine(_injectorModFolder, InjectorPluginName);
-        var injectorMod = new Fallout4Mod(ModKey.FromFileName(InjectorPluginName), Fallout4Release.Fallout4);
+        var injectorMod = new Fallout4Mod(ModKey.FromFileName("InjectionInjector.esp"), Fallout4Release.Fallout4);
+        injectorMod.ModHeader.MasterReferences.Add(new MasterReference { Master = baseMod.ModKey });
         var questOverride = new Quest(_quest, Fallout4Release.Fallout4) { EditorID = "BaseQuest" };
         var topicOverride = new DialogTopic(_baseTopic, Fallout4Release.Fallout4) { EditorID = "BaseTopic" };
         var injectedResponse = new DialogResponses(injectorMod) { EditorID = "InjectedResponse" };
@@ -71,64 +53,34 @@ public sealed class InjectedChildTests : IDisposable
         questOverride.DialogBranches.Add(injectedBranch);
         questOverride.Scenes.Add(injectedScene);
         injectorMod.Quests.Add(questOverride);
-        injectorMod.WriteToBinary(injectorPath);
         (_injectedTopic, _injectedBranch, _injectedScene, _injectedResponse) =
             (injectedTopic.FormKey, injectedBranch.FormKey, injectedScene.FormKey, injectedResponse.FormKey);
-
-        _loadOrder = SnapshotPlugins.Snapshot(_dataFolder, _instanceRoot, GameRelease.Fallout4,
-
-            [
-                new LoadOrderEntry(BasePluginName, basePath, BaseOrigin, Line: 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(InjectorPluginName, injectorPath, InjectorOrigin, Line: 1, Enabled: true, Winning: true),
-            ]);
-        foreach (var origin in new[] { BaseOrigin, InjectorOrigin })
-            DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, origin).GetAwaiter().GetResult();
-    }
-
-    private (FormKey Container, FormKey Child) Case(string injection) => injection switch
-    {
-        TopicUnderQuest => (_quest, _injectedTopic),
-        BranchUnderQuest => (_quest, _injectedBranch),
-        SceneUnderQuest => (_quest, _injectedScene),
-        ResponseUnderTopic => (_baseTopic, _injectedResponse),
-        _ => throw new ArgumentOutOfRangeException(nameof(injection), injection, "No such injection case."),
-    };
-
-    [Theory]
-    [MemberData(nameof(Injections))]
-    public async Task AfterInitAndCompileOfBothPlugins_TheInjectingPluginsBinaryHoldsTheChildUnderItsContainer(string injection)
-    {
-        var (container, child) = Case(injection);
-
-        using var compiled = await CompileAndReimport(_injector, _injectorModFolder);
-
-        Assert.Contains(child, ChildrenOf(compiled, container));
+        _injector = Add(injectorMod, "InjectionInjectorMod");
     }
 
     [Theory]
     [MemberData(nameof(Injections))]
-    public async Task AfterInitAndCompileOfBothPlugins_TheOwningPluginsBinaryKeepsItsOwnChildrenAndNotTheInjected(string injection)
+    public async Task AfterInitAndCompileOfBothPlugins_TheInjectingPluginsBinaryHoldsTheChildUnderItsContainer(
+        Func<InjectedChildTests, FormKey> container, Func<InjectedChildTests, FormKey> child)
     {
-        var (container, child) = Case(injection);
+        using var compiled = await this.CompiledAsync(_injector);
 
-        using var compiled = await CompileAndReimport(_base, _baseModFolder);
+        Assert.Contains(child(this), ChildrenOf(compiled, container(this)));
+    }
 
-        var own = ChildrenOf(compiled, container);
-        Assert.DoesNotContain(child, own);
+    [Theory]
+    [MemberData(nameof(Injections))]
+    public async Task AfterInitAndCompileOfBothPlugins_TheOwningPluginsBinaryKeepsItsOwnChildrenAndNotTheInjected(
+        Func<InjectedChildTests, FormKey> container, Func<InjectedChildTests, FormKey> child)
+    {
+        using var compiled = await this.CompiledAsync(_base);
+
+        var own = ChildrenOf(compiled, container(this));
+        Assert.DoesNotContain(child(this), own);
         Assert.NotEmpty(own);
-    }
-
-    private async Task<IModDisposeGetter> CompileAndReimport(PluginAddress plugin, string modFolder)
-    {
-        await CompileServices.Over(_loadOrder).CompileLandedAsync(plugin);
-
-        return ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(plugin.Name), Path.Combine(modFolder, plugin.Name)), GameRelease.Fallout4);
     }
 
     private static IEnumerable<FormKey> ChildrenOf(IModGetter mod, FormKey container) =>
         mod.EnumerateMajorRecords().Single(r => r.FormKey == container)
             .EnumerateMajorRecords().Select(r => r.FormKey);
-
-    public void Dispose() => _instanceRoot.Dispose();
 }

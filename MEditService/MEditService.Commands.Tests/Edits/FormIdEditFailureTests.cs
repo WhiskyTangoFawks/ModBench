@@ -11,12 +11,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class FormIdEditFailureTests
 {
-    private static readonly FormKey NewNpcFormKey = FormKey.Factory("000F00:Fixture.esp");
-
-    private static RecordIdentity NewNpcIdentity { get; } =
-        new(NewNpcFormKey.ToString(), "npc_", SourceEditFixture.NpcEditorId);
-
-    private const string NewWorldspaceFormKey = "000F00:SourceContainer.esp";
+    private const string NewWorldspaceFormKey = "000F00:ContainerFixture.esp";
 
     [Fact]
     public void AFormIdEditWhoseContainerHasTwoSourceUnits_RefusesAsAmbiguousSourceUnit_NamingBothFiles_AndAnswersNoChanges()
@@ -28,11 +23,7 @@ public sealed class FormIdEditFailureTests
             var cell = new Cell(m) { EditorID = "TwoUnitsCell", WaterHeight = 0f };
             var placedRef = new PlacedObject(m) { EditorID = "TwoUnitsRef", Position = new Noggog.P3Float(0, 0, 0) };
             cell.Temporary.Add(placedRef);
-            var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-            subBlock.Cells.Add(cell);
-            var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-            block.SubBlocks.Add(subBlock);
-            m.Cells.Records.Add(block);
+            m.AddInteriorCells(cell);
             placed = placedRef.FormKey;
         });
         var cell = SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "TwoUnitsRef");
@@ -53,12 +44,12 @@ public sealed class FormIdEditFailureTests
     [Fact]
     public void AFormIdEditThatFaultsUnexpectedly_RethrowsTheFaultAsItself()
     {
-        using var fixture = new SourceContainerFixture();
-        var worldspace = fixture.DocumentCarrying(SourceContainerFixture.WorldspaceEditorId);
+        using var fixture = new ContainerModFixture();
+        var worldspace = fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId);
         fixture.Overwrite(worldspace with
         {
             Body = worldspace.Body.Replace(
-                $"\"{SourceContainerFixture.WorldspaceEditorId}\"", "\"Fixture\\u0000World\"", StringComparison.Ordinal),
+                $"\"{ContainerModPlugin.WorldspaceEditorId}\"", "\"Embed\\u0000World\"", StringComparison.Ordinal),
         });
 
         Assert.Throws<ArgumentException>(() =>
@@ -68,7 +59,7 @@ public sealed class FormIdEditFailureTests
     [Fact]
     public void AContainersFormIdEditOntoAnOccupiedPath_RefusesAsSourceAccessFailed_NamingThatThereIsNowhereToMoveTo()
     {
-        using var fixture = new SourceContainerFixture();
+        using var fixture = new ContainerModFixture();
         Occupy(RelocatedWorldspaceDirectory(fixture, NewWorldspaceFormKey));
 
         var result = fixture.EditHandler.SetFormId(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey);
@@ -83,11 +74,11 @@ public sealed class FormIdEditFailureTests
         File.WriteAllText(Path.Combine(directory, "occupied.txt"), "something else is here");
     }
 
-    private static string RelocatedWorldspaceDirectory(SourceContainerFixture fixture, string newFormKey)
+    private static string RelocatedWorldspaceDirectory(ContainerModFixture fixture, string newFormKey)
     {
         ISourceRepository Repository() => TestAdapters.Source().OverFolder(TestMod.Of(fixture.Plugin, fixture.ModFolder), GameRelease.Fallout4);
-        var identity = new RecordIdentity(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId);
-        Repository().Put(fixture.Plugin, new SourceDocument(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId, "{}")).Wrote();
+        var identity = new RecordIdentity(newFormKey, "wrld", ContainerModPlugin.WorldspaceEditorId);
+        Repository().Put(fixture.Plugin, new SourceDocument(newFormKey, "wrld", ContainerModPlugin.WorldspaceEditorId, "{}")).Wrote();
         var directory = TreeTampering.DirectoryOf(fixture.ModFolder, fixture.Plugin, identity);
         Repository().Remove(fixture.Plugin, identity).Wrote();
         return directory;
