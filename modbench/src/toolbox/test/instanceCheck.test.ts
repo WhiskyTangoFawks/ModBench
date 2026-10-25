@@ -59,9 +59,9 @@ describe('several open folders', () => {
 
   it('names each other instance in the log, never a plain folder', () => {
     open('/repo', '/instanceA', '/instanceB');
-    const log = vi.fn();
+    const log = vi.fn<(message: string) => void>();
     openedFolder(isInstance, log);
-    const lines = log.mock.calls.map(([line]) => line as string);
+    const lines = log.mock.calls.map(([line]) => line);
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain('/instanceB');
     expect(lines[0]).not.toContain('/repo');
@@ -69,7 +69,7 @@ describe('several open folders', () => {
 
   it('says nothing of other instances when there is one', () => {
     open('/repo', '/instanceA');
-    const log = vi.fn();
+    const log = vi.fn<(message: string) => void>();
     openedFolder(isInstance, log);
     expect(log).not.toHaveBeenCalled();
   });
