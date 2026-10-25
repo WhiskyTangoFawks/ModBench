@@ -4,43 +4,53 @@ namespace MEditService.RecordIndex.Queries;
 // between the sites that fold per-plugin values through them.
 internal static class ConflictRules
 {
-    // The field winner (highest load-order plugin taking part) is ConflictWins if contested by
-    // another non-master plugin, else Override; the rest are IdenticalToMaster, ConflictLoses or
-    // Override. A plugin takes part with an absent value too, since a copy that drops a field
-    // changes it (xEdit); a sparse plugin takes part only where it holds a value.
+    // A plugin takes part with an absent value too, since a copy that drops a field changes it
+    // (xEdit); a Partial Form plugin takes part only where it holds a value.
+    private static List<(string Plugin, int LoadOrderIndex)> TakingPart(
+        IReadOnlyDictionary<string, object?> valuesByPlugin,
+        IReadOnlyList<(string Plugin, int LoadOrderIndex)> pluginOrder,
+        IReadOnlySet<string> partialFormPlugins) =>
+        [.. pluginOrder.Where(p => valuesByPlugin.GetValueOrDefault(p.Plugin) != null || !partialFormPlugins.Contains(p.Plugin))];
+
+    // The field winner: the highest load-order plugin taking part.
+    public static string? WinnerOf(
+        IReadOnlyDictionary<string, object?> valuesByPlugin,
+        IReadOnlyList<(string Plugin, int LoadOrderIndex)> pluginOrder,
+        IReadOnlySet<string> partialFormPlugins) =>
+        TakingPart(valuesByPlugin, pluginOrder, partialFormPlugins) is { Count: > 0 } taking
+            ? taking.MaxBy(p => p.LoadOrderIndex).Plugin
+            : null;
+
+    // The winner is ConflictWins if another non-master plugin disagrees with both the master and
+    // the winner, else Override; the rest are IdenticalToMaster, ConflictLoses or Override.
     public static Dictionary<string, ConflictThis> ComputeCellStates(
         IReadOnlyDictionary<string, object?> valuesByPlugin,
         string masterPlugin,
         IReadOnlyList<(string Plugin, int LoadOrderIndex)> pluginOrder,
-        IReadOnlySet<string> sparsePlugins,
+        IReadOnlySet<string> partialFormPlugins,
         Func<object?, object?, bool> valuesEqual)
     {
-        var taking = pluginOrder.Where(p => valuesByPlugin.GetValueOrDefault(p.Plugin) != null || !sparsePlugins.Contains(p.Plugin)).ToList();
-        if (taking.All(p => valuesByPlugin.GetValueOrDefault(p.Plugin) == null)) return [];
-        var winnerPlugin = taking.MaxBy(p => p.LoadOrderIndex).Plugin;
+        var taking = TakingPart(valuesByPlugin, pluginOrder, partialFormPlugins);
+        if (taking.TrueForAll(p => valuesByPlugin.GetValueOrDefault(p.Plugin) == null)) return [];
+
         var ctx = new CellContext(
-            masterPlugin, winnerPlugin,
-            valuesByPlugin.GetValueOrDefault(masterPlugin), valuesByPlugin.GetValueOrDefault(winnerPlugin),
+            masterPlugin, taking.MaxBy(p => p.LoadOrderIndex).Plugin,
+            valuesByPlugin.GetValueOrDefault(masterPlugin),
             taking, valuesByPlugin, valuesEqual);
 
-        var cellStates = new Dictionary<string, ConflictThis>();
-        foreach (var (plugin, _) in taking)
-        {
-            if (plugin == masterPlugin) continue;
-
-            var pluginValue = valuesByPlugin.GetValueOrDefault(plugin);
-
-            cellStates[plugin] = ClassifyCell(plugin, pluginValue, ctx);
-        }
-
-        return cellStates;
+        return taking
+            .Where(p => p.Plugin != masterPlugin)
+            .ToDictionary(p => p.Plugin, p => ClassifyCell(p.Plugin, valuesByPlugin.GetValueOrDefault(p.Plugin), ctx));
     }
 
     private readonly record struct CellContext(
-        string MasterPlugin, string WinnerPlugin, object? MasterValue, object? WinnerValue,
+        string MasterPlugin, string WinnerPlugin, object? MasterValue,
         IReadOnlyList<(string Plugin, int LoadOrderIndex)> PluginOrder,
         IReadOnlyDictionary<string, object?> ValuesByPlugin,
-        Func<object?, object?, bool> ValuesEqual);
+        Func<object?, object?, bool> ValuesEqual)
+    {
+        public object? WinnerValue => ValuesByPlugin.GetValueOrDefault(WinnerPlugin);
+    }
 
     private static ConflictThis ClassifyCell(string plugin, object? pluginValue, CellContext ctx)
     {
@@ -49,8 +59,11 @@ internal static class ConflictRules
         if (plugin == ctx.WinnerPlugin)
         {
             var contested = ctx.PluginOrder.Any(p =>
-                p.Plugin != ctx.MasterPlugin && p.Plugin != plugin &&
-                !ctx.ValuesEqual(ctx.ValuesByPlugin.GetValueOrDefault(p.Plugin), ctx.WinnerValue));
+            {
+                var other = ctx.ValuesByPlugin.GetValueOrDefault(p.Plugin);
+                return p.Plugin != ctx.MasterPlugin && p.Plugin != plugin &&
+                    !ctx.ValuesEqual(other, ctx.MasterValue) && !ctx.ValuesEqual(other, ctx.WinnerValue);
+            });
             return contested ? ConflictThis.ConflictWins : ConflictThis.Override;
         }
 

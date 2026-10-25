@@ -189,12 +189,19 @@ public class ArrayChildDiffTests
     }
 
     [Fact]
-    public void UnsortedArray_RaggedLengths_ChildCountIsMax_ShortPluginGetsNullForMissingIndex_AnOverrideOfTheMastersElement()
+    public void UnsortedArray_RaggedLengths_ChildCountIsMax_ShortPluginGetsNullForMissingIndex()
     {
         var children = RequireChildren(Row(ComparedCopies.Of(List("xyz"), List("xy")), "Items"));
 
         Assert.Equal(["[0]", "[1]", "[2]"], children.Select(c => c.FieldName));
         Assert.Null(children[2].Values["B.esp"]);
+    }
+
+    [Fact]
+    public void UnsortedArray_AnElementTheShortPluginLacks_IsAnOverrideOfTheMastersElement()
+    {
+        var children = RequireChildren(Row(ComparedCopies.Of(List("xyz"), List("xy")), "Items"));
+
         Assert.Equal(ConflictThis.Override, children[2].CellStates["B.esp"]);
     }
 

@@ -46,7 +46,7 @@
                       "Base.esm": "GetIsID",
                       "Top.esp": null
                     },
-                    "WinnerColumn": "Base.esm"
+                    "WinnerColumn": "Top.esp"
                   },
                   {
                     "CellStates": {
@@ -63,7 +63,7 @@
                       "Base.esm": "FunctionConditionData",
                       "Top.esp": null
                     },
-                    "WinnerColumn": "Base.esm"
+                    "WinnerColumn": "Top.esp"
                   }
                 ],
                 "ConflictAll": "Override",
@@ -77,7 +77,7 @@
                   },
                   "Top.esp": null
                 },
-                "WinnerColumn": "Base.esm"
+                "WinnerColumn": "Top.esp"
               },
               {
                 "CellStates": {
@@ -96,7 +96,7 @@
                   ],
                   "Top.esp": null
                 },
-                "WinnerColumn": "Base.esm"
+                "WinnerColumn": "Top.esp"
               },
               {
                 "CellStates": {
@@ -113,7 +113,7 @@
                   "Base.esm": "0x000000",
                   "Top.esp": null
                 },
-                "WinnerColumn": "Base.esm"
+                "WinnerColumn": "Top.esp"
               },
               {
                 "CellStates": {
@@ -130,7 +130,7 @@
                   "Base.esm": 1.0,
                   "Top.esp": null
                 },
-                "WinnerColumn": "Base.esm"
+                "WinnerColumn": "Top.esp"
               },
               {
                 "CellStates": {
@@ -147,7 +147,7 @@
                   "Base.esm": "ConditionFloat",
                   "Top.esp": null
                 },
-                "WinnerColumn": "Base.esm"
+                "WinnerColumn": "Top.esp"
               }
             ],
             "ConflictAll": "Override",
@@ -171,7 +171,7 @@
               },
               "Top.esp": null
             },
-            "WinnerColumn": "Base.esm"
+            "WinnerColumn": "Top.esp"
           },
           {
             "CellStates": {
@@ -492,7 +492,7 @@
       {
         "CellStates": {
           "Mid.esp": "IdenticalToMaster",
-          "Top.esp": "ConflictWins"
+          "Top.esp": "Override"
         },
         "CellStatesByFocus": null,
         "CheckErrors": {
@@ -501,7 +501,7 @@
           "Top.esp": "[000901:Base.esm] \u003CError: Could not be resolved\u003E"
         },
         "Children": null,
-        "ConflictAll": "Conflict",
+        "ConflictAll": "Override",
         "FieldName": "Race",
         "Indexes": null,
         "Resolutions": {

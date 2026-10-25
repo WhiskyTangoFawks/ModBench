@@ -135,6 +135,10 @@ public class ConflictByCompareTests
     [InlineData(new[] { "Alice", "Bob", "Bob" }, ConflictAll.Override, "Master,Override,Override", "-,Override,Override")]
     [InlineData(new[] { "Alice", null, "Charlie" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins", "-,ConflictLoses,ConflictWins")]
     [InlineData(new string?[] { null, "Bob", "Charlie" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins", "-,ConflictLoses,ConflictWins")]
+    [InlineData(new[] { "Alice", null }, ConflictAll.Override, "Master,Override", "-,Override")]
+    [InlineData(new string?[] { null, null, "Bob" }, ConflictAll.Override, "Master,IdenticalToMaster,Override", "-,IdenticalToMaster,Override")]
+    [InlineData(new[] { "Alice", "Alice", null }, ConflictAll.Override, "Master,IdenticalToMaster,Override", "-,IdenticalToMaster,Override")]
+    [InlineData(new[] { "Alice", "Alice", "Bob" }, ConflictAll.Override, "Master,IdenticalToMaster,Override", "-,IdenticalToMaster,Override")]
     public void TheNotesOfEachCopy_ClassifyTheRecordEachColumnAndTheNotesRow(
         string?[] notes, ConflictAll conflictAll, string pluginStates, string notesCellStates)
     {
@@ -207,13 +211,13 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void RecordWideWinnerHasNullField_WinnerColumnFallsThroughToEarlierPlugin()
+    public void RecordWideWinnerDroppingAField_WinsIt_ItsValueAbsent()
     {
         var result = ComparedCopies.Of(Notes("Alice", "1"), Notes("Bob"));
 
         var displayName = Row(result, "DisplayName");
-        Assert.Equal("A.esp", displayName.WinnerColumn);
-        Assert.Equal("1", Text(displayName.Values[displayName.WinnerColumn]));
+        Assert.Equal("B.esp", displayName.WinnerColumn);
+        Assert.Null(displayName.Values[displayName.WinnerColumn]);
     }
 
     [Fact]
