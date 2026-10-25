@@ -12,7 +12,7 @@ const { registerCommand, showQuickPick, createQuickPick, showInputBox } = vi.hoi
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString } from '../../test/vscodeMock';
 import { present } from '../../ports/present';
 import { fakeQuickPick } from '../../drivingLib/test/quickPickDouble';
-import { progressSteps, recordedWithProgress } from '../../test/recordedProgress';
+import { instanceThatReads, progressSteps, recordedWithProgress } from '../../test/recordedProgress';
 
 vi.mock('vscode', () => ({
   commands: { registerCommand },
@@ -40,7 +40,7 @@ const notInPackage: ReadModStatus = (mods) => Promise.resolve(mods.map((mod) => 
 
 const fakeInstance = (rows: readonly LocatedDownloadedFileRow[] = []): Pick<Instance, 'value' | 'refresh'> => ({
   value: instanceValueFixture({ downloadedFiles: { kind: 'listed', rows } }),
-  refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
+  ...instanceThatReads,
 });
 
 interface DownloadedFileInstallDeps {

@@ -26,10 +26,9 @@ import { ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { InstanceValue, PublisherTag } from '../../instanceLoader/instance';
-import { fakeInstanceAdapter, modFoldersOf, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
+import { fakeInstanceAdapter, fileIn, modFoldersOf, readingFixture, refusing, type InstanceAnswers } from '../../test/fakeInstanceAdapter';
 import { modCommands } from '../../modCommands/modCommands';
 import { unreadStatus } from '../../test/unreadStatus';
-import { file, folder } from './indexedValue';
 
 const INCLUDE: PublisherTag = { name: 'Include', badge: 'IN', marksPaths: true };
 const ALWAYS_ENABLED: PublisherTag = { name: 'Always Enabled', badge: 'AE', marksPaths: false };
@@ -37,13 +36,13 @@ const IGNORE: PublisherTag = { name: 'Ignore', badge: 'IG', marksPaths: true };
 const DECLARED = [INCLUDE, IGNORE, ALWAYS_ENABLED];
 
 const LISTED: Record<string, readonly PublisherTag[]> = {
-  '/instance/mods/M': [INCLUDE, ALWAYS_ENABLED],
-  '/instance/mods/M/a.dds': [INCLUDE],
-  '/instance/mods/M/textures': [IGNORE],
+  '/mods/M': [INCLUDE, ALWAYS_ENABLED],
+  '/mods/M/a.dds': [INCLUDE],
+  '/mods/M/textures': [IGNORE],
 };
 const value: InstanceValue = {
   ...instanceValueFixture({
-    paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/instance/mods/M'], ['N', '/instance/mods/N']]), sourceDirs: new Map() },
+    paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map([['M', '/mods/M'], ['N', '/mods/N']]), sourceDirs: new Map() },
   }),
   publisherTags: DECLARED,
   publisherConfiguration: { kind: 'read', covering: () => [], listed: (path) => LISTED[path] ?? [], pathProblems: [] },
@@ -54,10 +53,10 @@ const instance = { ...instanceThatReads, value };
 const origin = { kind: 'mod', name: 'M' } as const;
 const modM = new ModNode({ kind: 'mod', name: 'M', enabled: true });
 const modN = new ModNode({ kind: 'mod', name: 'N', enabled: true });
-const fileA = new FileNode(modM, origin, file('mods/M', 'a.dds'), 'a.dds');
-const fileB = new FileNode(modM, origin, file('mods/M', 'b.dds'), 'b.dds');
-const folderTextures = new FolderNode(modM, origin, folder('mods/M', 'textures'), [], [], 'textures');
-const inOverwrite = new FileNode(new OverwriteNode([], 'MO2'), { kind: 'runtimeOutput' }, file('mods/M', 'a.dds'), 'a.dds');
+const fileA = new FileNode(modM, origin, fileIn('/mods/M', 'a.dds'), 'a.dds');
+const fileB = new FileNode(modM, origin, fileIn('/mods/M', 'b.dds'), 'b.dds');
+const folderTextures = new FolderNode(modM, origin, { relativePath: 'textures', path: '/mods/M/textures', excluded: false }, [], [], 'textures');
+const inOverwrite = new FileNode(new OverwriteNode([], 'MO2'), { kind: 'runtimeOutput' }, fileIn('/mods/M', 'a.dds'), 'a.dds');
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);

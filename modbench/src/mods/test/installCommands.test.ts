@@ -36,7 +36,7 @@ import {
 } from '../../test/fakeInstanceAdapter';
 import { present } from '../../ports/present';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
-import { progressSteps } from '../../test/recordedProgress';
+import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
 import { status } from '../../test/modStatusFixture';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
@@ -360,7 +360,7 @@ describe('an install ends on the Instance loader\'s read, with the Mods progress
     showInputBox.mockResolvedValueOnce('New Mod');
 
     register({
-      instance: { value: instanceValueFixture(), refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); } },
+      instance: { value: instanceValueFixture(), ...instanceThatReads },
     }, { refusals: stepOnInstall });
     await invoke('modbench.mod.install');
 

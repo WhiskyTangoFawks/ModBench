@@ -741,29 +741,19 @@ describe('open folder: one command for a mod, the Overwrite row, a file and a fo
     expect(revealed()).toEqual([path]);
   });
 
-  it('refuses a mod no folder holds, naming it, rather than returning in silence', async () => {
+  it.each<[string, () => typeof instance, ModlistNode, string]>([
+    ['a mod no folder holds, naming it, rather than returning in silence', () => instance,
+      new ModNode({ kind: 'mod', name: 'Folderless Mod', enabled: true }), 'Folderless Mod'],
+    ['the Overwrite row while the value names no folder for it, rather than revealing an empty path',
+      () => ({ value: instanceValueFixture({ paths: { ...instance.value.paths, overwriteDir: undefined } }) }), new OverwriteNode([], 'MO2'), 'Overwrite'],
+  ])('refuses %s', async (_case, holding, clicked, name) => {
     const reporter = recordingReporter();
 
-    registerOpenFolderCommand(instance, reporter, () => []);
-    await invoke('modbench.mod.openFolder', new ModNode({ kind: 'mod', name: 'Folderless Mod', enabled: true }));
+    registerOpenFolderCommand(holding(), reporter, () => []);
+    await invoke('modbench.mod.openFolder', clicked);
 
     expect(revealed()).toEqual([]);
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to open the folder of "Folderless Mod".', detail: 'No folder holds it.' },
-    ]);
-  });
-
-  it('refuses the Overwrite row while the value names no folder for it, rather than revealing an empty path', async () => {
-    const reporter = recordingReporter();
-    const unread = { value: instanceValueFixture({ paths: { ...instance.value.paths, overwriteDir: undefined } }) };
-
-    registerOpenFolderCommand(unread, reporter, () => []);
-    await invoke('modbench.mod.openFolder', new OverwriteNode([], 'MO2'));
-
-    expect(revealed()).toEqual([]);
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to open the folder of "Overwrite".', detail: 'No folder holds it.' },
-    ]);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: `Failed to open the folder of "${name}".`, detail: 'No folder holds it.' }]);
   });
 
   it.each<[string, ModlistNode[]]>([

@@ -37,7 +37,7 @@ vi.mock('vscode', async () => {
 });
 
 import { TreeItem } from 'vscode';
-import { progressSteps } from '../../test/recordedProgress';
+import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
 import { restoredMod } from '../../test/restoredMod';
 import { registerManifestGestures } from '../manifestGestures';
 import { recordingReporter, scriptedDialog, type ScriptedDialog } from '../../test/surfacingDoubles';
@@ -77,7 +77,7 @@ function register(over: Partial<Parameters<typeof registerManifestGestures>[0]> 
   const said: (string | undefined)[] = [];
   registerManifestGestures({
     toolboxView: 'modbench.toolbox', commands: { updateManifest, restoreFromManifest, whatRestoreDestroys }, ask,
-    instance: { value, refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
+    instance: { value, ...instanceThatReads },
     reporter, say: (message) => { said.push(message); },
     focusedView: { id: () => undefined, selection: () => [] }, ...over,
   });

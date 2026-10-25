@@ -531,11 +531,11 @@ describe('a file row\'s context, which the File menu\'s exclude or include reads
   };
 
   it.each([
-    ['a file the game may get', ['a.dds'], 'included'],
-    ['a file excluded by its own name', ['b.dds.mohidden'], 'excluded'],
-    ['a file only its folder excludes, by its own name', ['Textures.mohidden', 'a.dds'], 'included'],
-    ['a file its own name excludes inside an excluded folder', ['Textures.mohidden', 'b.dds.mohidden'], 'excluded'],
-  ])('flags %s as %s', async (_case, path, flag) => {
+    ['a file the game may get', 'included', ['a.dds']],
+    ['a file excluded by its own name', 'excluded', ['b.dds.mohidden']],
+    ['a file only its folder excludes, by its own name', 'included', ['Textures.mohidden', 'a.dds']],
+    ['a file its own name excludes inside an excluded folder', 'excluded', ['Textures.mohidden', 'b.dds.mohidden']],
+  ])('flags %s as %s', async (_case, flag, path) => {
     expect(flags(await rowAt(path))).toEqual(['file', flag]);
   });
 });

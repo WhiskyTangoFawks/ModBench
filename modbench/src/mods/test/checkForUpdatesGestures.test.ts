@@ -20,7 +20,7 @@ vi.mock('vscode', async () => {
   };
 });
 
-import { progressSteps } from '../../test/recordedProgress';
+import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
 import { registerCheckForUpdatesGestures } from '../checkForUpdatesGestures';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -52,7 +52,7 @@ function register() {
   const reporter = recordingReporter();
   registerCheckForUpdatesGestures({
     commands: { checkForUpdates },
-    instance: { value, refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
+    instance: { value, ...instanceThatReads },
     reporter, focusedView: { id: () => undefined, selection: () => [] },
   });
   return { reporter, run: (id: string, ...args: unknown[]) => present(handlers.get(id), `the handler for "${id}"`)(...args) };
@@ -141,11 +141,26 @@ describe('check for updates, on a separator', () => {
 });
 
 describe('check for updates, from an agent', () => {
-  it('asks about every mod when the call names none', async () => {
+  it('asks about every mod when the call names none, and answers the outcome', async () => {
+    checkForUpdates.mockResolvedValue({
+      applied: true,
+      outcome: { landed: [{ name: 'ModA', updateAvailable: true }], refused: [{ item: { name: 'ModB' }, reason: 'it has no Nexus mod ID' }] },
+    });
     const { run } = register();
 
-    await run(CHECK, new AgentCall([], {}));
+    const answer = await run(CHECK, new AgentCall([], {}));
 
     expect(checkForUpdates).toHaveBeenCalledWith(['ModA', 'ModB']);
+    expect(answer).toEqual({
+      applied: true,
+      outcome: { landed: [{ name: 'ModA', updateAvailable: true }], refused: [{ item: { name: 'ModB' }, reason: 'it has no Nexus mod ID' }] },
+    });
+  });
+
+  it('answers a refusal of the whole call as a refusal', async () => {
+    checkForUpdates.mockResolvedValue({ applied: false, refusal: 'You are not logged in to Nexus.' });
+    const { run } = register();
+
+    expect(await run(CHECK, new AgentCall([], {}))).toEqual({ applied: false, refusal: 'You are not logged in to Nexus.' });
   });
 });
