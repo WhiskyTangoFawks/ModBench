@@ -47,12 +47,13 @@ class Fixture(NamedTuple):
     load_order: JsonRecord
 
 
-# mEdit keeps the record index of an instance it reads in this folder; the fixture's mEdit builds its own.
-RECORD_INDEX_FOLDER = 'modbench'
-
-
-def without_the_record_index(folder: str, names: list[str]) -> list[str]:
-    return [RECORD_INDEX_FOLDER] if pathlib.Path(folder) == INSTANCE and RECORD_INDEX_FOLDER in names else []
+def copy_checked_in(source: pathlib.Path, destination: pathlib.Path) -> None:
+    tracked = subprocess.run(
+        ['git', 'ls-files', '-z'], cwd=source, capture_output=True, text=True, check=True).stdout.split('\0')[:-1]
+    for relative in tracked:
+        copy = destination / relative
+        copy.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source / relative, copy)
 
 
 @contextlib.contextmanager
@@ -61,7 +62,7 @@ def fixture_medit() -> Generator[Fixture]:
     with tempfile.TemporaryDirectory() as temporary:
         scratch = pathlib.Path(temporary)
         instance = scratch / 'instance'
-        shutil.copytree(INSTANCE, instance, ignore=without_the_record_index)
+        copy_checked_in(INSTANCE, instance)
         (instance / 'overwrite').mkdir()
         # DevListFallout has no game folder; an empty one stands in, so the game loads no plugin of its own.
         game = scratch / 'game'
@@ -262,4 +263,4 @@ def file_stamps(folder: pathlib.Path) -> list[FileStamp]:
 
 def changed(folder: pathlib.Path) -> list[str]:
     return subprocess.run(
-        ['git', 'status', '--porcelain', '-z'], cwd=folder, capture_output=True, text=True, check=True).stdout.split('\0')[:-1]
+        ['git', 'status', '--porcelain', '-z', '--', '.'], cwd=folder, capture_output=True, text=True, check=True).stdout.split('\0')[:-1]
