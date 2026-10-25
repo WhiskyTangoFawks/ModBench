@@ -163,7 +163,8 @@ public class RegistrationScopingTests
         fx.Reconcile(fx.WithoutBeta);
 
         Assert.Empty(fx.BetaRecordsFound());
-        Assert.Equal(AlphaKey.Name, index.Queries.GetRecord(fx.SharedNpcFk).Value()?.Plugin);
+        var winner = index.Queries.GetRecord(fx.SharedNpcFk).Value().Require();
+        Assert.Equal(AlphaKey, new PluginAddress(winner.Plugin, winner.Origin));
         var cells = index.Queries.GetWorldspaceBlocks(BetaKey, fx.BetaWorldspaceFk).Value();
         Assert.Empty(cells.Blocks);
         Assert.Empty(cells.TopCells);
@@ -279,7 +280,8 @@ public class RegistrationScopingTests
         var stack = index.StackOf(fx.SharedNpcFk);
         Assert.Equal(2, stack.Count);
         Assert.True(stack.Single(e => e.Plugin == BetaKey.Name).IsWinner);
-        Assert.Equal(BetaKey.Name, index.Queries.GetRecord(fx.SharedNpcFk).Value()?.Plugin);
+        var winner = index.Queries.GetRecord(fx.SharedNpcFk).Value().Require();
+        Assert.Equal(BetaKey, new PluginAddress(winner.Plugin, winner.Origin));
         Assert.NotEqual(FormKeyResolutionState.Unresolved, fx.ResolutionOfBetasNpc());
         Assert.NotNull(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
         Assert.NotEmpty(index.Queries.GetContainerChildren(BetaKey, fx.BetaQuestFk).Value());

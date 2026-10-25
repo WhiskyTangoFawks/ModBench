@@ -84,6 +84,7 @@ public sealed class ProjectionSequenceTests : IDisposable
             (formKey1, _index.BodyOf(formKey1, _baseKey).Replace("First", "FirstEdited", StringComparison.Ordinal)),
             (formKey2, _index.BodyOf(formKey2, _baseKey).Replace("Second", "SecondEdited", StringComparison.Ordinal)),
         ]);
+        _index.Settled();
 
         Assert.Equal(before + 1, _index.Sequence);
         Assert.Equal("FirstEdited", _index.DocumentOf(formKey1, _baseKey).EditorId);

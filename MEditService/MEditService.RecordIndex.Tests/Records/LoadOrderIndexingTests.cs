@@ -98,19 +98,31 @@ public sealed class LoadOrderIndexingTests
         Assert.Contains(fx.Plugins.Single(c => c.Name == "A.esm").Key, opened.Keys);
     }
 
+    private static string PathOf(ScatteredFixtureData fx, string plugin) => fx.Plugins.Single(p => p.Name == plugin).Path;
+
+    private static readonly Dictionary<string, Action<ScatteredFixtureData>> ReDerivations = new()
+    {
+        ["the override"] = fx => PluginBinaries.Touch(PathOf(fx, "B.esp")),
+        ["the master and the override"] = fx =>
+        {
+            PluginBinaries.Touch(PathOf(fx, "A.esm"));
+            PluginBinaries.Touch(PathOf(fx, "B.esp"));
+        },
+    };
+
     [Theory]
-    [InlineData("B.esp")]
-    [InlineData("A.esm", "B.esp")]
-    public void AValidationThatReDerivesPlugins_AdvancesTheSequenceExactlyOnce(params string[] touched)
+    [InlineData("the override")]
+    [InlineData("the master and the override")]
+    public void AValidationThatReDerivesPlugins_AdvancesTheSequenceExactlyOnce(string reDerived)
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProvidersOfSharedNpcDefinedInAEsmAndOverriddenInBEsp("indexer-one-advance");
         using var indexer = Indexes.Open(holder);
         Reconcile(indexer, holder, fx);
-        fx.Plugins.Where(p => touched.Contains(p.Name)).ToList().ForEach(p => PluginBinaries.Touch(p.Path));
+        ReDerivations[reDerived](fx);
         var before = indexer.Sequence;
 
-        indexer.NextSnapshot();
+        indexer.NextSnapshotUntil(() => indexer.Sequence > before, "the sequence moving");
 
         Assert.Equal(before + 1, indexer.Sequence);
     }

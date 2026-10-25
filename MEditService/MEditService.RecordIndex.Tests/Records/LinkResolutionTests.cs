@@ -75,52 +75,71 @@ public sealed class LinkResolutionTests
 
     private const string ResolverPlugin = "Fixture.esp";
 
-    private static readonly FormKey Late = FormKey.Factory($"000900:{ResolverPlugin}");
-
-    private static string? LateResolvedFor(string prefix, Action<Fallout4Mod> alsoHolds, Action<OpenedIndex, LoadOrderEntry, string> before)
+    private sealed class Resolving : IDisposable
     {
-        using var fixture = new PluginFixtureBuilder(prefix)
-            .WithPlugin(ResolverPlugin, mod =>
+        private static readonly FormKey Late = FormKey.Factory($"000900:{ResolverPlugin}");
+
+        private readonly ScatteredFixtureData _fixture;
+        private readonly OpenedIndex _index;
+        private readonly LoadOrderEntry _plugin;
+        private readonly string _asker;
+
+        public Resolving(string prefix, Action<Fallout4Mod> alsoHolds)
+        {
+            _fixture = new PluginFixtureBuilder(prefix)
+                .WithPlugin(ResolverPlugin, mod =>
+                {
+                    mod.Npcs.AddNew("Asker");
+                    alsoHolds(mod);
+                }, origin: "FixtureMod")
+                .BuildScattered();
+            _index = Indexes.Reconciled(_fixture);
+            _plugin = _fixture.Plugins.Single();
+            _asker = _index.Queries.GetRecords(["npc_"], _plugin.Key, search: null, limit: 1, offset: 0).Value().Items.Single().FormKey;
+        }
+
+        public static void HoldsTheLateRaceAs(Fallout4Mod mod, string editorId) =>
+            mod.Races.Add(new Race(Late, Fallout4Release.Fallout4) { EditorID = editorId });
+
+        public FormKeyResolution LateLink => _index.ResolutionOf(_asker, _plugin.Key, Late.ToString());
+
+        public void RewriteWithTheLateRaceAs(string editorId)
+        {
+            PluginBinaries.Rewrite(_plugin.Path, mod =>
             {
                 mod.Npcs.AddNew("Asker");
-                alsoHolds(mod);
-            }, origin: "FixtureMod")
-            .BuildScattered();
-        using var index = Indexes.Reconciled(fixture);
-        var plugin = fixture.Plugins.Single();
-        var asker = index.Queries.GetRecords(["npc_"], plugin.Key, search: null, limit: 1, offset: 0).Value().Items.Single().FormKey;
-        before(index, plugin, asker);
+                HoldsTheLateRaceAs(mod, editorId);
+            });
+            _index.NextSnapshot();
+        }
 
-        PluginBinaries.Rewrite(plugin.Path, mod =>
+        public void Dispose()
         {
-            mod.Npcs.AddNew("Asker");
-            mod.Races.Add(new Race(Late, Fallout4Release.Fallout4) { EditorID = "After" });
-        });
-        index.NextSnapshot();
-
-        return index.ResolutionOf(asker, plugin.Key, Late.ToString()).EditorId;
+            _index.Dispose();
+            _fixture.Dispose();
+        }
     }
 
     [Fact]
     public void ALinkThatResolved_ResolvesAgainstTheNewRow_OnceTheIndexMovesOn()
     {
-        var after = LateResolvedFor(
-            "link-resolver-response-found",
-            mod => mod.Races.Add(new Race(Late, Fallout4Release.Fallout4) { EditorID = "Before" }),
-            (index, plugin, asker) => Assert.Equal("Before", index.ResolutionOf(asker, plugin.Key, Late.ToString()).EditorId));
+        using var resolving = new Resolving("link-resolver-response-found", mod => Resolving.HoldsTheLateRaceAs(mod, "Before"));
+        Assert.Equal("Before", resolving.LateLink.EditorId);
 
-        Assert.Equal("After", after);
+        resolving.RewriteWithTheLateRaceAs("After");
+
+        Assert.Equal("After", resolving.LateLink.EditorId);
     }
 
     [Fact]
     public void ADanglingLink_Resolves_OnceItsRowArrives()
     {
-        var after = LateResolvedFor(
-            "link-resolver-response-dangling",
-            _ => { },
-            (index, plugin, asker) => Assert.Equal(FormKeyResolutionState.Unresolved, index.ResolutionOf(asker, plugin.Key, Late.ToString()).State));
+        using var resolving = new Resolving("link-resolver-response-dangling", _ => { });
+        Assert.Equal(FormKeyResolutionState.Unresolved, resolving.LateLink.State);
 
-        Assert.Equal("After", after);
+        resolving.RewriteWithTheLateRaceAs("After");
+
+        Assert.Equal("After", resolving.LateLink.EditorId);
     }
 
     private static string? KeywordErrors(RecordDetail document) =>
