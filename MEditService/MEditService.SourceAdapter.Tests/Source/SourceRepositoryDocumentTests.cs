@@ -1,3 +1,4 @@
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
@@ -164,6 +165,19 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         repository.Remove(Plugin, Npc).Wrote();
 
         Assert.Empty(Directory.EnumerateFiles(NpcGroupFolder));
+    }
+
+    [Theory]
+    [InlineData("weap", "000900:Fixture.esp")]
+    [InlineData(PluginHeader.RecordType, "000000:Fixture.esp")]
+    public void RemovingAFlatRecordOrTheHeaderNoDocumentHolds_IsNotCarried(string recordType, string formKey)
+    {
+        var repository = Opened();
+
+        var refused = Assert.IsType<SourceFailure.NotCarried>(
+            repository.Remove(Plugin, new RecordIdentity(formKey, recordType, "Absent")).Failed());
+
+        Assert.StartsWith($"No document in Fixture.esp's tree holds {formKey}, so there is none to remove.", refused.Reason, StringComparison.Ordinal);
     }
 
     private static string WithEditorId(string editorId) => NpcBody.Replace(NpcEditorId, editorId, StringComparison.Ordinal);

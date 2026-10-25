@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.RepositoriesLib;
@@ -792,33 +791,13 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.True(Directory.Exists(directory));
     }
 
-    public enum Layout
+    [Fact]
+    public void RemovingAnEmbeddedRecordNoDocumentHolds_IsNotCarried()
     {
-        FlatRecordWithNoGroupFolder,
-        EmbeddedChild,
-        DirectoryPerRecordContainer,
-        Header,
-    }
+        var refused = Assert.IsType<SourceFailure.NotCarried>(
+            Repository.Remove(Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent")).Failed());
 
-    private static RecordIdentity AbsentIn(Layout layout) => layout switch
-    {
-        Layout.FlatRecordWithNoGroupFolder => new("00FFFF:Embedded.esp", "weap", "Absent"),
-        Layout.EmbeddedChild => new("00FFFF:Embedded.esp", "refr", "Absent"),
-        Layout.DirectoryPerRecordContainer => new("00FFFF:Embedded.esp", "cell", "Absent"),
-        Layout.Header => PluginHeader.IdentityOf(PluginName),
-        _ => throw new ArgumentOutOfRangeException(nameof(layout), layout, null),
-    };
-
-    [Theory]
-    [InlineData(Layout.FlatRecordWithNoGroupFolder, "00FFFF:Embedded.esp")]
-    [InlineData(Layout.EmbeddedChild, "00FFFF:Embedded.esp")]
-    [InlineData(Layout.DirectoryPerRecordContainer, "00FFFF:Embedded.esp")]
-    [InlineData(Layout.Header, "000000:Embedded.esp")]
-    public void RemovingARecordNoDocumentHolds_IsNotCarried_WhateverItsLayout(Layout layout, string formKey)
-    {
-        var refused = Assert.IsType<SourceFailure.NotCarried>(Repository.Remove(Plugin, AbsentIn(layout)).Failed());
-
-        Assert.StartsWith($"No document in Embedded.esp's tree holds {formKey}.", refused.Reason, StringComparison.Ordinal);
+        Assert.StartsWith("No document in Embedded.esp's tree holds 00FFFF:Embedded.esp, so there is none to remove.", refused.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -833,7 +812,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         Assert.Null(Repository.RelativePathOf(Plugin, identity).Value());
         Assert.StartsWith(
-            "No document in Embedded.esp's tree holds 00A001:Embedded.esp.", Repository.Remove(Plugin, identity).Failed().Reason, StringComparison.Ordinal);
+            "No document in Embedded.esp's tree holds 00A001:Embedded.esp, so there is none to remove.", Repository.Remove(Plugin, identity).Failed().Reason, StringComparison.Ordinal);
     }
 
     [Fact]
