@@ -34,8 +34,9 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { Readable } from 'node:stream';
 import { dirname, join, matchesGlob, sep } from 'node:path';
-import { isMo2Instance } from '../mo2Instance';
-import { programRunning } from '../../processes';
+import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
+import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
+import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 import type { ManagerAdapter } from '../../publisher';
 import type { Mo2Context } from '../mo2Context';
 import type { ReadingSource } from '../../instanceReading';
@@ -311,7 +312,9 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('answers MO2 running while any process runs ModOrganizer.exe, whichever instance it has open', async () => {
-        const onThisMachine = managerOver(root, { mo2Running: () => programRunning('ModOrganizer.exe') });
+        const onThisMachine = mo2InstanceAdapter({
+          instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE,
+        }, undefined);
         const mo2 = await runningProgram('ModOrganizer.exe');
         try {
           expect((await onThisMachine.reading()).managerRunning).toEqual({ kind: 'running' });
