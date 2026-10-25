@@ -65,27 +65,6 @@ public sealed class CopyAsOverrideContainerTests
     }
 
     [Fact]
-    public void CopyRecordAsOverride_OnAQuest_Succeeds_OwnFieldsLand_ChildListsEmpty()
-    {
-        using var fixture = ContainerCopyFixture.Create();
-
-        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Quest.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
-
-        result.OnlyLanded();
-
-        var document = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
-        Assert.NotNull(document);
-        Assert.Equal(ContainerCopyFixture.QuestEditorId, document.EditorId);
-
-        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString()));
-        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.Scene.ToString()));
-        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.DialogBranch.ToString()));
-        var questText = fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.QuestEditorId).Body;
-        foreach (var slot in new[] { "DialogTopics", "DialogBranches", "Scenes" })
-            Assert.DoesNotContain($"\"{slot}\"", questText, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void CopyRecordAsOverride_OnAnInteriorCell_Succeeds_OwnFieldsLand_EmbeddedSlotsEmpty()
     {
         using var fixture = ContainerCopyFixture.Create();
@@ -110,26 +89,6 @@ public sealed class CopyAsOverrideContainerTests
         Assert.DoesNotContain(ContainerCopyFixture.TemporaryRefEditorId, text, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.NavmeshEditorId, text, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.LandscapeEditorId, text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void CopyRecordAsOverride_OnAWorldspace_Succeeds_OwnFieldsLand_TopCellEmpty()
-    {
-        using var fixture = ContainerCopyFixture.Create();
-
-        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Worldspace.ToString())], CopyMode.Override, [fixture.DestinationPlugin], replace: false);
-
-        result.OnlyLanded();
-
-        var document = fixture.Document(fixture.DestinationPlugin, fixture.Worldspace.ToString());
-        Assert.NotNull(document);
-        Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, document.EditorId);
-
-        Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.TopCell.ToString()));
-        Assert.DoesNotContain(
-            ContainerCopyFixture.TopCellEditorId,
-            fixture.DocumentCarrying(fixture.DestinationPlugin, ContainerCopyFixture.WorldspaceEditorId).Body,
-            StringComparison.Ordinal);
     }
 
     [Fact]

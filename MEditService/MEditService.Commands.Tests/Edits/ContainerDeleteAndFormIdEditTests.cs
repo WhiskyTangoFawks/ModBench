@@ -17,12 +17,10 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
 
     private string WorldspaceText() => _fixture.DocumentCarrying(ContainerModPlugin.WorldspaceEditorId).Body;
 
-    private DeleteRecordChangesHandler DeleteHandler() => _fixture.DeleteHandler;
-
     [Fact]
     public void DeletingAContainersOwnRecord_RemovesEveryEmbeddedDescendantWithIt()
     {
-        var result = DeleteHandler().DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.EmbedCell.ToString())]);
+        var result = _fixture.DeleteHandler.DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.EmbedCell.ToString())]);
 
         Assert.Empty(result.Refused);
 
@@ -36,7 +34,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     [Fact]
     public void DeletingAWorldspace_CascadesTwoLevelsDeep_ThroughItsEmbeddedTopCellToTheTopCellsOwnRef()
     {
-        var result = DeleteHandler().DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.Worldspace.ToString())]);
+        var result = _fixture.DeleteHandler.DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.Worldspace.ToString())]);
 
         Assert.Empty(result.Refused);
         Assert.Null(_fixture.Document(_fixture.Worldspace.ToString()));
@@ -50,7 +48,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         var before = EmbedCellText();
         Assert.Contains(ContainerModPlugin.TemporaryRefEditorId, before, StringComparison.Ordinal);
 
-        var result = DeleteHandler().DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.TemporaryRef.ToString())]);
+        var result = _fixture.DeleteHandler.DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.TemporaryRef.ToString())]);
 
         Assert.Empty(result.Refused);
         var after = EmbedCellText();
@@ -69,7 +67,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     [Fact]
     public void DeletingACellsLandscape_NullsTheSlot_LeavingItsNavmeshIntact()
     {
-        var result = DeleteHandler().DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.Landscape.ToString())]);
+        var result = _fixture.DeleteHandler.DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.Landscape.ToString())]);
 
         Assert.Empty(result.Refused);
         var after = EmbedCellText();
@@ -82,7 +80,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     [Fact]
     public void DeletingACellsNavmesh_RemovesItFromTheCellsList_LeavingItsLandscapeIntact()
     {
-        var result = DeleteHandler().DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.Navmesh.ToString())]);
+        var result = _fixture.DeleteHandler.DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.Navmesh.ToString())]);
 
         Assert.Empty(result.Refused);
         var after = EmbedCellText();
@@ -97,7 +95,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     {
         Assert.Contains(ContainerModPlugin.TopCellEditorId, WorldspaceText(), StringComparison.Ordinal);
 
-        var result = DeleteHandler().DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.TopCell.ToString())]);
+        var result = _fixture.DeleteHandler.DeleteRecordsSync([new RecordAt(_fixture.Plugin, _fixture.TopCell.ToString())]);
 
         Assert.Empty(result.Refused);
         var after = WorldspaceText();
@@ -154,11 +152,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
             var placedRef = new PlacedObject(mod) { EditorID = "ReferencerRef", Position = new Noggog.P3Float(0, 0, 0) };
             placedRef.Base.SetTo(npc.FormKey);
             cell.Temporary.Add(placedRef);
-            var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-            subBlock.Cells.Add(cell);
-            var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-            block.SubBlocks.Add(subBlock);
-            mod.Cells.Records.Add(block);
+            mod.AddInteriorCells(cell);
             referenced = npc.FormKey;
         });
 
@@ -188,11 +182,7 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
             };
             cell.Temporary.Add(first);
             cell.Temporary.Add(second);
-            var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-            subBlock.Cells.Add(cell);
-            var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-            block.SubBlocks.Add(subBlock);
-            m.Cells.Records.Add(block);
+            m.AddInteriorCells(cell);
             enabler = first.FormKey;
         });
         var before = SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "EnablerRef").Body;
@@ -211,15 +201,15 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     [Fact]
     public async Task DeletingEveryTopicOfAQuest_LeavesNoEmptyListBehind_AndCompiles()
     {
-        var deletes = DeleteHandler();
-        foreach (var topic in new[] { _fixture.DialogTopic, _fixture.DialogTopic2, _fixture.DialogTopic3 })
-        {
-            var deleted = deletes.DeleteRecordsSync([new RecordAt(_fixture.Plugin, topic.ToString())]);
-            Assert.Empty(deleted.Refused);
-        }
+        var deleted = _fixture.DeleteHandler.DeleteRecordsSync([
+            new RecordAt(_fixture.Plugin, _fixture.DialogTopic.ToString()),
+            new RecordAt(_fixture.Plugin, _fixture.DialogTopic2.ToString()),
+            new RecordAt(_fixture.Plugin, _fixture.DialogTopic3.ToString()),
+        ]);
+        Assert.Empty(deleted.Refused);
 
         Assert.DoesNotContain($"\"{nameof(Quest.DialogTopics)}\"", _fixture.Document(_fixture.Quest.ToString()).Require().Body, StringComparison.Ordinal);
 
-        await CompileServices.Over(_fixture.LoadOrder).CompileLandedAsync(_fixture.Plugin);
+        await _fixture.CompileHandler.CompileLandedAsync(_fixture.Plugin);
     }
 }

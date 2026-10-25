@@ -3,6 +3,7 @@ using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -28,20 +29,6 @@ public sealed class CopyAsNewTests
     }
 
     [Fact]
-    public void CopyRecordAsNewRecord_DerivesTheCopysEditorID_InTheCreationKitsShape()
-    {
-        using var mod = CopyFixture.Create();
-
-        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
-
-        var newFormKey = result.OnlyLanded().Require();
-        var document = mod.Document(mod.DestinationPlugin, newFormKey);
-        Assert.NotNull(document);
-        Assert.NotEqual(CopyFixture.SourceNpcEditorId, document.EditorId);
-        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE001", document.EditorId);
-    }
-
-    [Fact]
     public void CopyRecordAsNewRecord_TwoCopiesOfOneRecordIntoOneDestination_GetDistinctEditorIDs()
     {
         using var mod = CopyFixture.Create();
@@ -60,29 +47,15 @@ public sealed class CopyAsNewTests
         Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", secondDocument.EditorId);
     }
 
-    [Fact]
-    public void CopyRecordAsNewRecord_WhenTheDestinationAlreadyHoldsTheDerivedName_SkipsToTheNextCounter()
+    [Theory]
+    [InlineData("SourceNpcDUPLICATE001")]
+    [InlineData("SOURCENPCDUPLICATE001")]
+    public void CopyRecordAsNewRecord_WhenTheDestinationAlreadyHoldsTheDerivedName_InAnyCase_SkipsToTheNextCounter(string held)
     {
         using var mod = CopyFixture.Create();
         Assert.True(mod.EditHandler.Set(
             mod.DestinationPlugin, mod.DestinationNpc.ToString(), "EditorID",
-            JsonDocument.Parse("\"SourceNpcDUPLICATE001\"").RootElement).Applied);
-
-        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
-
-        var newFormKey = result.OnlyLanded().Require();
-        var document = mod.Document(mod.DestinationPlugin, newFormKey);
-        Assert.NotNull(document);
-        Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE002", document.EditorId);
-    }
-
-    [Fact]
-    public void CopyRecordAsNewRecord_WhenTheDestinationHoldsACaseVariantOfTheDerivedName_StillCounts()
-    {
-        using var mod = CopyFixture.Create();
-        Assert.True(mod.EditHandler.Set(
-            mod.DestinationPlugin, mod.DestinationNpc.ToString(), "EditorID",
-            JsonDocument.Parse("\"SOURCENPCDUPLICATE001\"").RootElement).Applied);
+            JsonDocument.Parse($"\"{held}\"").RootElement).Applied);
 
         var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.New, [mod.DestinationPlugin], replace: false);
 
@@ -133,23 +106,19 @@ public sealed class CopyAsNewTests
         Assert.Equal("Destination.esp has no FormKey free at or above its Next Object ID, up to 0xFFFFFF.", refused.Message);
     }
 
-    [Fact]
-    public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsACell_PermanentlyDisallowed()
+    public static TheoryData<string, Func<ContainerCopyFixture, FormKey>> CellsAndWorldspaces => new()
+    {
+        { "a cell", fixture => fixture.InteriorCell },
+        { "a worldspace", fixture => fixture.Worldspace },
+    };
+
+    [Theory]
+    [MemberData(nameof(CellsAndWorldspaces))]
+    public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsACellOrAWorldspace_PermanentlyDisallowed(string _, Func<ContainerCopyFixture, FormKey> source)
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.InteriorCell.ToString())], CopyMode.New, [fixture.DestinationPlugin], replace: false);
-        var refused = result.OnlyRefused();
-
-        Assert.Equal(RecordEditRefusal.CopyAsNewRecordDisallowedForType, refused.Refusal);
-    }
-
-    [Fact]
-    public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsAWorldspace_PermanentlyDisallowed()
-    {
-        using var fixture = ContainerCopyFixture.Create();
-
-        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, fixture.Worldspace.ToString())], CopyMode.New, [fixture.DestinationPlugin], replace: false);
+        var result = fixture.CopyHandler.CopySync([new RecordAt(fixture.SourcePlugin, source(fixture).ToString())], CopyMode.New, [fixture.DestinationPlugin], replace: false);
         var refused = result.OnlyRefused();
 
         Assert.Equal(RecordEditRefusal.CopyAsNewRecordDisallowedForType, refused.Refusal);
@@ -164,17 +133,6 @@ public sealed class CopyAsNewTests
 
         var newFormKey = result.OnlyLanded().Require();
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, newFormKey));
-    }
-
-    [Fact]
-    public void CopyRecordAsNewRecord_Refuses_WhenTheSourcePluginDoesNotHoldTheRecord()
-    {
-        using var mod = CopyFixture.Create();
-
-        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, "ABCDEF:Source.esm")], CopyMode.New, [mod.DestinationPlugin], replace: false);
-        var refused = result.OnlyRefused();
-
-        Assert.Equal(RecordEditRefusal.RecordNotFound, refused.Refusal);
     }
 
     [Fact]

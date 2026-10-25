@@ -1,6 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -8,75 +7,32 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class CompilePluginLocalizedTests : IDisposable
+public sealed class CompilePluginLocalizedTests : TestInstance
 {
-    private const string PluginName = "Fixture.esp";
-    private const string Origin = "FixtureMod";
-
-    private readonly ScratchDirectory _modFolder = new("medit-compile-localized-");
-    private readonly ScratchDirectory _dataFolder = new("medit-compile-localized-data-");
-    private readonly LoadOrderSnapshot _loadOrder;
+    private readonly PluginAddress _plugin;
 
     public CompilePluginLocalizedTests()
     {
-        var pluginPath = Path.Combine(_modFolder, PluginName);
-        var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-        var door = mod.Doors.AddNew("MainDoor");
-        door.Name = new TranslatedString(Language.English, "The Big Door");
-        mod.UsingLocalization = true;
-        mod.WriteToBinary(pluginPath);
-
-        _loadOrder = SnapshotPlugins.Snapshot(
-            _dataFolder, instanceRoot: null, GameRelease.Fallout4,
-            [new LoadOrderEntry(PluginName, pluginPath, Origin, Line: 0, Enabled: true, Winning: true)]);
-
-        DecompileAndCommitEveryPluginOf.ModAsync(_loadOrder, Origin)
-            .GetAwaiter().GetResult();
+        var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4) { UsingLocalization = true };
+        mod.Doors.AddNew("MainDoor").Name = new TranslatedString(Language.English, "The Big Door");
+        _plugin = Add(mod, "FixtureMod");
     }
 
-    public void Dispose()
-    {
-        _modFolder.Dispose();
-        _dataFolder.Dispose();
-    }
+    private string StringsFolder => Path.Combine(ModFolderOf(_plugin), "Strings");
 
-    private static void RemoveStringsMutagenLeftAtTheTempWritePathSoTheByteCompareCannotPassVacuously(
-        string stringsDir, IEnumerable<string> fileNames)
-    {
-        foreach (var fileName in fileNames)
-            File.Delete(Path.Combine(stringsDir, fileName));
-    }
+    private Dictionary<string, byte[]> StringsFiles() =>
+        Directory.GetFiles(StringsFolder).ToDictionary(file => Path.GetFileName(file), File.ReadAllBytes, StringComparer.Ordinal);
 
     [Fact]
-    public async Task Compile_ALocalizedPlugin_WritesStringsBesideItByteIdenticalToTheInput()
+    public async Task Compile_ALocalizedPlugin_WritesItLocalized_WithStringsBesideItByteIdenticalToTheInput()
     {
-        var pluginPath = Path.Combine(_modFolder, PluginName);
-        var stringsDir = Path.Combine(_modFolder, "Strings");
-        var originalStringsFiles = Directory.GetFiles(stringsDir)
-            .ToDictionary(f => Path.GetFileName(f) ?? throw new InvalidOperationException("Expected a file path to have a file name."), File.ReadAllBytes);
-        Assert.NotEmpty(originalStringsFiles);
+        var input = StringsFiles();
+        Assert.Equal(["Fixture_en.DLSTRINGS", "Fixture_en.ILSTRINGS", "Fixture_en.STRINGS"], input.Keys.Order(StringComparer.Ordinal));
+        Directory.Delete(StringsFolder, recursive: true);
 
-        RemoveStringsMutagenLeftAtTheTempWritePathSoTheByteCompareCannotPassVacuously(stringsDir, originalStringsFiles.Keys);
+        using var compiled = await this.CompiledAsync(_plugin);
 
-        var plugin = new PluginAddress(PluginName, Origin);
-        var compileService = CompileServices.Over(_loadOrder);
-        var answer = (await compileService.CompileAsync([plugin])).Value();
-
-        Assert.Empty(answer.Refused);
-        Assert.Single(answer.Applied);
-
-        using (var recompiled = Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName(PluginName), pluginPath), Fallout4Release.Fallout4))
-        {
-            Assert.True(recompiled.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Localized));
-        }
-
-        foreach (var (fileName, originalBytes) in originalStringsFiles)
-        {
-            var recompiledPath = Path.Combine(stringsDir, fileName);
-            Assert.True(File.Exists(recompiledPath), $"expected {recompiledPath}");
-            Assert.True(originalBytes.AsSpan().SequenceEqual(File.ReadAllBytes(recompiledPath)),
-                $"{fileName} differs after compile.");
-        }
+        Assert.True(compiled.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Localized));
+        Assert.Equal(input, StringsFiles());
     }
 }

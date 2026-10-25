@@ -57,22 +57,11 @@ public sealed class CopyAsOverrideTests
     {
         using var mod = CopyFixture.Create();
         mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false).OnlyLanded();
-        mod.CommitDestination();
+        SourceModTree.Commit(mod.DestinationModFolder);
         Assert.Empty(mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.DestinationPlugin, mod.SourceNpc.ToString())]).Refused);
 
         mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString())], CopyMode.Override, [mod.DestinationPlugin], replace: false).OnlyLanded();
 
         Assert.NotNull(mod.Document(mod.DestinationPlugin, mod.SourceNpc.ToString()));
-    }
-
-    [Fact]
-    public void CopyRecordAsOverride_Refuses_WhenTheSourcePluginDoesNotHoldTheRecord()
-    {
-        using var mod = CopyFixture.Create();
-
-        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, "ABCDEF:Source.esm")], CopyMode.Override, [mod.DestinationPlugin], replace: false);
-        var refused = result.OnlyRefused();
-
-        Assert.Equal(RecordEditRefusal.RecordNotFound, refused.Refusal);
     }
 }

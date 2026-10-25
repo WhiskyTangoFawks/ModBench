@@ -1,4 +1,5 @@
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -9,14 +10,11 @@ public sealed class CompileRecordingTheLastWriteTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private CompilePluginHandler CompileService() =>
-        _mod.CompileService();
-
     [Fact]
     public async Task Compile_WorkingTree_LeavesTheCompiledBinaryAsTheOneModbenchLastWrote()
     {
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
+        var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
         Assert.Empty(answer.Refused);
         Assert.Single(answer.Applied);
 
@@ -28,7 +26,7 @@ public sealed class CompileRecordingTheLastWriteTests : IDisposable
     {
         TreeTampering.Duplicate(_mod.ModFolder, _mod.Plugin, _mod.NpcIdentity);
 
-        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
+        var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
         Assert.Single(answer.Refused);
         Assert.Empty(ExternalChanges.NamedBy(_mod.LoadOrder));
@@ -42,7 +40,7 @@ public sealed class CompileRecordingTheLastWriteTests : IDisposable
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
         LastWriteRecord.RefuseRefUpdatesAfterTheFirst(_mod.ModFolder);
 
-        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
+        var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
         Assert.Empty(answer.Refused);
         var diagnostics = Assert.Single(answer.Applied).Diagnostics;
@@ -56,9 +54,9 @@ public sealed class CompileRecordingTheLastWriteTests : IDisposable
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var before = File.ReadAllBytes(pluginPath);
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        LastWriteRecord.RefuseRefUpdates(_mod.ModFolder);
+        GitHooks.RefuseRefUpdates(_mod.ModFolder);
 
-        var answer = (await CompileService().CompileAsync([_mod.Plugin])).Value();
+        var answer = (await _mod.CompileHandler.CompileAsync([_mod.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Equal(CompileRefusal.WriteFailed, refused.Refusal);

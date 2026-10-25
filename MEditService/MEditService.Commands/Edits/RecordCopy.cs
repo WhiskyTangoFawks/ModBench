@@ -290,9 +290,8 @@ internal sealed class RecordCopy(LoadOrderResolution resolution, SchemaReflector
     private static SourceDocument PartialFormOf(SourceDocument container, RecordTableSchema schema, GameRelease release)
     {
         var body = ContainerDocumentEdits.WithoutChildren(container.Body, release, container.RecordType);
-        return RecordEmptying.AsPartialForm(Document.Parse(body), schema, release) is { } partialForm
-            ? container with { Body = RecordTextCodec.RoundTrip(partialForm.Text, release, container.RecordType) }
-            : container with { Body = body };
+        var partialForm = RecordEmptying.AsPartialForm(Document.Parse(body), schema, release);
+        return container with { Body = RecordTextCodec.RoundTrip(partialForm.Text, release, container.RecordType) };
     }
 
     // The container as xEdit copies it in: the copy the destination can see, its own fields only.

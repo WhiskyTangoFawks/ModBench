@@ -43,7 +43,7 @@ public sealed class CopyContainerPartialFormTests : IDisposable
             var interior = Cell(mod, "InteriorCell", CompressedFlag.Bit);
             var reference = Placed(mod);
             interior.Persistent.Add(reference);
-            mod.Cells.Records.Add(CellBlocks.Interior(interior));
+            mod.AddInteriorCells(interior);
             (cell, placed) = (interior.FormKey, reference.FormKey);
         });
 
@@ -57,55 +57,40 @@ public sealed class CopyContainerPartialFormTests : IDisposable
         Assert.Equal(placed.ToString(), Assert.Single(copied["Persistent"].Require().AsArray()).Require()["FormKey"].Require().GetValue<string>());
     }
 
-    [Fact]
-    public void ATemporaryExteriorCellOfFallout4Esm_CopiedInAroundAChild_IsAFullOverride()
+    private static (Fallout4Mod Source, FormKey Placed, FormKey Document, FormKey Cell) Interior(string plugin, int flags)
+    {
+        FormKey cell = default, placed = default;
+        var source = Plugin(plugin, mod =>
+        {
+            var interior = Cell(mod, "InteriorCell", flags);
+            var reference = Placed(mod);
+            interior.Persistent.Add(reference);
+            mod.AddInteriorCells(interior);
+            (cell, placed) = (interior.FormKey, reference.FormKey);
+        });
+        return (source, placed, cell, cell);
+    }
+
+    private static (Fallout4Mod Source, FormKey Placed, FormKey Document, FormKey Cell) Exterior(int flags, Func<Cell, IList<IPlaced>> slot)
     {
         FormKey cell = default, placed = default;
         var source = Plugin("Fallout4.esm", mod =>
         {
             var worldspace = new Worldspace(mod) { EditorID = "World" };
-            var exterior = Cell(mod, "ExteriorCell");
+            var exterior = Cell(mod, "ExteriorCell", flags);
             exterior.Grid = new CellGrid { Point = new P2Int(2, 3) };
             var reference = Placed(mod);
-            exterior.Temporary.Add(reference);
+            slot(exterior).Add(reference);
             worldspace.SubCells.Add(CellBlocks.Exterior(exterior));
             mod.Worldspaces.Add(worldspace);
             (cell, placed) = (exterior.FormKey, reference.FormKey);
         });
-
-        var copied = CopyIn(source, placed, cell);
-
-        Assert.Equal(WaterHeight, copied["WaterHeight"].Require().GetValue<float>());
-        Assert.False(copied.ContainsKey("MajorRecordFlagsRaw"));
+        return (source, placed, cell, cell);
     }
 
-    [Fact]
-    public void APersistentExteriorCellOfFallout4Esm_CopiedInAroundAChild_IsAPartialForm()
+    private static (Fallout4Mod Source, FormKey Placed, FormKey Document, FormKey Cell) PersistentCellOfAWorldspace()
     {
-        FormKey cell = default, placed = default;
-        var source = Plugin("Fallout4.esm", mod =>
-        {
-            var worldspace = new Worldspace(mod) { EditorID = "World" };
-            var exterior = Cell(mod, "ExteriorCell", PersistentFlag.Bit);
-            exterior.Grid = new CellGrid { Point = new P2Int(2, 3) };
-            var reference = Placed(mod);
-            exterior.Persistent.Add(reference);
-            worldspace.SubCells.Add(CellBlocks.Exterior(exterior));
-            mod.Worldspaces.Add(worldspace);
-            (cell, placed) = (exterior.FormKey, reference.FormKey);
-        });
-
-        var copied = CopyIn(source, placed, cell);
-
-        Assert.False(copied.ContainsKey("WaterHeight"));
-        Assert.NotEqual(0, copied["MajorRecordFlagsRaw"].Require().GetValue<int>() & PartialFormFlag.Bit);
-    }
-
-    [Fact]
-    public void AWorldspacesPersistentCellOfFallout4EsmWithoutThePersistentFlag_CopiedInAroundAChild_IsAPartialForm()
-    {
-        FormKey topCell = default, placed = default;
-        FormKey worldspaceKey = default;
+        FormKey worldspaceKey = default, placed = default, topCell = default;
         var source = Plugin("Fallout4.esm", mod =>
         {
             var worldspace = new Worldspace(mod) { EditorID = "World" };
@@ -114,50 +99,34 @@ public sealed class CopyContainerPartialFormTests : IDisposable
             top.Temporary.Add(reference);
             worldspace.TopCell = top;
             mod.Worldspaces.Add(worldspace);
-            (topCell, placed, worldspaceKey) = (top.FormKey, reference.FormKey, worldspace.FormKey);
+            (worldspaceKey, placed, topCell) = (worldspace.FormKey, reference.FormKey, top.FormKey);
         });
-
-        var copied = CopyIn(source, placed, worldspaceKey)["TopCell"].Require().AsObject();
-
-        Assert.Equal(topCell.ToString(), copied["FormKey"].Require().GetValue<string>());
-        Assert.False(copied.ContainsKey("WaterHeight"));
-        Assert.NotEqual(0, copied["MajorRecordFlagsRaw"].Require().GetValue<int>() & PartialFormFlag.Bit);
+        return (source, placed, worldspaceKey, topCell);
     }
 
-    [Fact]
-    public void APartialFormCellOfFallout4Esm_CopiedInAroundAChild_StaysAPartialForm()
+    public static TheoryData<string, Func<(Fallout4Mod, FormKey, FormKey, FormKey)>, Func<JsonObject, JsonObject>, float?, int?> CopiedInCells => new()
     {
-        FormKey cell = default, placed = default;
-        var source = Plugin("Fallout4.esm", mod =>
+        { "a temporary exterior cell of Fallout4.esm, a full override", () => Exterior(0, cell => cell.Temporary), cell => cell, WaterHeight, null },
+        { "a persistent exterior cell of Fallout4.esm, a partial form", () => Exterior(PersistentFlag.Bit, cell => cell.Persistent), cell => cell, null, PartialFormFlag.Bit },
         {
-            var interior = new Cell(mod) { EditorID = "InteriorCell", MajorRecordFlagsRaw = PartialFormFlag.Bit };
-            var reference = Placed(mod);
-            interior.Persistent.Add(reference);
-            mod.Cells.Records.Add(CellBlocks.Interior(interior));
-            (cell, placed) = (interior.FormKey, reference.FormKey);
-        });
+            "a worldspace's persistent cell of Fallout4.esm without the persistent flag, a partial form",
+            PersistentCellOfAWorldspace, worldspace => worldspace["TopCell"].Require().AsObject(), null, PartialFormFlag.Bit
+        },
+        { "a partial form cell of Fallout4.esm, still a partial form", () => Interior("Fallout4.esm", PartialFormFlag.Bit), cell => cell, null, PartialFormFlag.Bit },
+        { "an interior cell of another plugin, a full override", () => Interior("DLCRobot.esm", 0), cell => cell, WaterHeight, null },
+    };
 
-        var copied = CopyIn(source, placed, cell);
-
-        Assert.NotEqual(0, copied["MajorRecordFlagsRaw"].Require().GetValue<int>() & PartialFormFlag.Bit);
-    }
-
-    [Fact]
-    public void AnInteriorCellOfAnotherPlugin_CopiedInAroundAChild_IsAFullOverride()
+    [Theory]
+    [MemberData(nameof(CopiedInCells))]
+    public void ACellCopiedInAroundAChild_IsAPartialForm_OnlyWhereXEditWouldMakeOne(
+        string _, Func<(Fallout4Mod, FormKey, FormKey, FormKey)> source, Func<JsonObject, JsonObject> cellIn, float? waterHeight, int? partialFormFlag)
     {
-        FormKey cell = default, placed = default;
-        var source = Plugin("DLCRobot.esm", mod =>
-        {
-            var interior = Cell(mod, "DlcCell");
-            var reference = Placed(mod);
-            interior.Persistent.Add(reference);
-            mod.Cells.Records.Add(CellBlocks.Interior(interior));
-            (cell, placed) = (interior.FormKey, reference.FormKey);
-        });
+        var (mod, placed, document, cellKey) = source();
 
-        var copied = CopyIn(source, placed, cell);
+        var cell = cellIn(CopyIn(mod, placed, document));
 
-        Assert.Equal(WaterHeight, copied["WaterHeight"].Require().GetValue<float>());
-        Assert.False(copied.ContainsKey("MajorRecordFlagsRaw"));
+        Assert.Equal(
+            (cellKey.ToString(), waterHeight, partialFormFlag),
+            (cell["FormKey"]?.GetValue<string>(), cell["WaterHeight"]?.GetValue<float>(), cell["MajorRecordFlagsRaw"]?.GetValue<int>() & PartialFormFlag.Bit));
     }
 }

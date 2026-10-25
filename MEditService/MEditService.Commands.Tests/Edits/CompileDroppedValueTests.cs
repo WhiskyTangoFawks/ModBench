@@ -25,7 +25,7 @@ public sealed class CompileDroppedValueTests : IDisposable
         var pluginPath = Path.Combine(_fixture.ModFolderOf(_fixture.Plugin), _fixture.Plugin.Name);
         var before = await File.ReadAllBytesAsync(pluginPath);
 
-        var answer = (await CompileServices.Over(_fixture.LoadOrder).CompileAsync([_fixture.Plugin])).Value();
+        var answer = (await _fixture.CompileHandler.CompileAsync([_fixture.Plugin])).Value();
 
         var refused = Assert.Single(answer.Refused);
         Assert.Equal(CompileRefusal.SourceValueDropped, refused.Refusal);

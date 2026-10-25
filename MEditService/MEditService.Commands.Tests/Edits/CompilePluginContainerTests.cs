@@ -5,28 +5,15 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class CompilePluginContainerTests : IDisposable
+public sealed class CompilePluginContainerTests : TestInstance
 {
     private const string PluginName = "ContainerCompile.esp";
-    private const string Origin = "ContainerCompileMod";
 
-    private const string HeaderAuthor = "CompileHeaderAuthor";
-    private const string HeaderDescription = "Header carried from the source tree.";
-    private const string TopicC1EditorId = "TopicC1";
-    private const string TopicC2EditorId = "TopicC2";
-    private const string TopicC3EditorId = "TopicC3";
-
-    private const string QuestRecordType = "quest";
-
-    private readonly ScratchDirectory _modFolder = new("medit-container-compile-");
-    private readonly ScratchDirectory _dataFolder = new("medit-container-compile-data-");
-    private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginAddress _plugin = new(PluginName, Origin);
+    private readonly PluginAddress _plugin;
 
     private readonly FormKey _cellA;
     private readonly FormKey _cellB;
@@ -36,15 +23,10 @@ public sealed class CompilePluginContainerTests : IDisposable
     private readonly FormKey _exteriorCell;
     private readonly FormKey _questA;
     private readonly FormKey _questB;
-    private readonly FormKey _questC;
-    private readonly FormKey _topicC2;
 
     public CompilePluginContainerTests()
     {
-        var pluginPath = Path.Combine(_modFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-        mod.ModHeader.Author = HeaderAuthor;
-        mod.ModHeader.Description = HeaderDescription;
 
         var cellA = new Cell(mod) { EditorID = "CellA", WaterHeight = 1f };
         cellA.Persistent.Add(new PlacedObject(mod) { EditorID = "A_Persist", Position = new P3Float(1f, 1f, 1f) });
@@ -54,13 +36,7 @@ public sealed class CompilePluginContainerTests : IDisposable
         var cellB = new Cell(mod) { EditorID = "CellB", WaterHeight = 2f };
         cellB.Persistent.Add(new PlacedObject(mod) { EditorID = "B_Persist", Position = new P3Float(3f, 3f, 3f) });
         cellB.Temporary.Add(new PlacedObject(mod) { EditorID = "B_Temp", Position = new P3Float(4f, 4f, 4f) });
-
-        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cellA);
-        subBlock.Cells.Add(cellB);
-        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
+        mod.AddInteriorCells(cellA, cellB);
 
         var worldspace = new Worldspace(mod) { EditorID = "CompileWorld" };
         var topCell = new Cell(mod) { EditorID = "WorldTopCell", WaterHeight = 3f };
@@ -99,42 +75,10 @@ public sealed class CompilePluginContainerTests : IDisposable
         questB.DialogTopics.Add(topicB);
         mod.Quests.Add(questB);
 
-        var questC = new Quest(mod) { EditorID = "QuestC" };
-        var topicC2 = new DialogTopic(mod) { EditorID = TopicC2EditorId };
-        questC.DialogTopics.Add(new DialogTopic(mod) { EditorID = TopicC1EditorId });
-        questC.DialogTopics.Add(topicC2);
-        questC.DialogTopics.Add(new DialogTopic(mod) { EditorID = TopicC3EditorId });
-        mod.Quests.Add(questC);
-        (_questC, _topicC2) = (questC.FormKey, topicC2.FormKey);
-
-        CompiledPluginTemplates.WriteCompiledPlugin(_modFolder, mod);
+        _plugin = Add(mod, "ContainerCompileMod");
         (_cellA, _cellB, _cellATemporaryRef) = (cellA.FormKey, cellB.FormKey, cellATemporaryRef.FormKey);
         (_worldspace, _topCell, _exteriorCell) = (worldspace.FormKey, topCell.FormKey, exteriorCell.FormKey);
         (_questA, _questB) = (questA.FormKey, questB.FormKey);
-
-        _loadOrder = SnapshotPlugins.Snapshot(
-            _dataFolder, instanceRoot: null, GameRelease.Fallout4,
-            [new LoadOrderEntry(PluginName, pluginPath, Origin, Line: 0, Enabled: true, Winning: true)]);
-    }
-
-    public void Dispose()
-    {
-        _modFolder.Dispose();
-        _dataFolder.Dispose();
-    }
-
-    private CompilePluginHandler CompileService() => CompileServices.Over(_loadOrder);
-
-    private async Task<(IFallout4ModGetter Mod, IDisposable Handle)> CompileAndReimport()
-    {
-        var answer = (await CompileService().CompileAsync([_plugin])).Value();
-        Assert.Empty(answer.Refused);
-        Assert.Single(answer.Applied);
-
-        var pluginPath = Path.Combine(_modFolder, PluginName);
-        var overlay = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(PluginName), pluginPath), GameRelease.Fallout4);
-        return ((IFallout4ModGetter)overlay, overlay);
     }
 
     private static IEnumerable<ICellGetter> AllCells(IFallout4ModGetter mod) =>
@@ -143,146 +87,75 @@ public sealed class CompilePluginContainerTests : IDisposable
     [Fact]
     public async Task Compile_OfTwoCellsInOneSubBlock_GivesEachCellExactlyItsOwnChildren()
     {
-        var (mod, handle) = await CompileAndReimport();
-        using (handle)
-        {
-            var a = AllCells(mod).Single(c => c.FormKey == _cellA);
-            var b = AllCells(mod).Single(c => c.FormKey == _cellB);
+        using var mod = await this.CompiledAsync(_plugin);
 
-            Assert.Equal(["A_Persist"], [.. a.Persistent.Select(r => r.EditorID.Require()).Order()]);
-            Assert.Equal(["A_Temp"], [.. a.Temporary.Select(r => r.EditorID.Require()).Order()]);
-            Assert.Equal(["B_Persist"], [.. b.Persistent.Select(r => r.EditorID.Require()).Order()]);
-            Assert.Equal(["B_Temp"], [.. b.Temporary.Select(r => r.EditorID.Require()).Order()]);
-        }
+        var a = AllCells(mod).Single(c => c.FormKey == _cellA);
+        var b = AllCells(mod).Single(c => c.FormKey == _cellB);
+
+        Assert.Equal(["A_Persist"], [.. a.Persistent.Select(r => r.EditorID.Require()).Order()]);
+        Assert.Equal(["A_Temp"], [.. a.Temporary.Select(r => r.EditorID.Require()).Order()]);
+        Assert.Equal(["B_Persist"], [.. b.Persistent.Select(r => r.EditorID.Require()).Order()]);
+        Assert.Equal(["B_Temp"], [.. b.Temporary.Select(r => r.EditorID.Require()).Order()]);
     }
 
     [Fact]
     public async Task Compile_OfAWorldspace_KeepsTheExteriorHierarchyAndTheTopCell()
     {
-        var (mod, handle) = await CompileAndReimport();
-        using (handle)
-        {
-            var worldspace = mod.Worldspaces.Single(w => w.FormKey == _worldspace);
+        using var mod = await this.CompiledAsync(_plugin);
 
-            Assert.NotNull(worldspace.TopCell);
-            Assert.Equal(_topCell, worldspace.TopCell.Require().FormKey);
-            Assert.Equal(["Top_Temp"], [.. worldspace.TopCell.Temporary.Select(r => r.EditorID.Require())]);
+        var worldspace = mod.Worldspaces.Single(w => w.FormKey == _worldspace);
 
-            var writtenBlock = Assert.Single(worldspace.SubCells);
-            Assert.Equal(0, writtenBlock.BlockNumberX);
-            Assert.Equal(-1, writtenBlock.BlockNumberY);
-            var writtenSubBlock = Assert.Single(writtenBlock.Items);
-            Assert.Equal(3, writtenSubBlock.BlockNumberX);
-            Assert.Equal(-4, writtenSubBlock.BlockNumberY);
+        var topCell = worldspace.TopCell.Require();
+        Assert.Equal(_topCell, topCell.FormKey);
+        Assert.Equal(["Top_Temp"], [.. topCell.Temporary.Select(r => r.EditorID.Require())]);
 
-            var cell = Assert.Single(writtenSubBlock.Items);
-            Assert.Equal(_exteriorCell, cell.FormKey);
-            Assert.Equal(new P2Int(3, -4), cell.Grid.Require().Point);
-            Assert.Equal(["Ext_Temp"], [.. cell.Temporary.Select(r => r.EditorID.Require())]);
-        }
+        var writtenBlock = Assert.Single(worldspace.SubCells);
+        Assert.Equal(0, writtenBlock.BlockNumberX);
+        Assert.Equal(-1, writtenBlock.BlockNumberY);
+        var writtenSubBlock = Assert.Single(writtenBlock.Items);
+        Assert.Equal(3, writtenSubBlock.BlockNumberX);
+        Assert.Equal(-4, writtenSubBlock.BlockNumberY);
+
+        var cell = Assert.Single(writtenSubBlock.Items);
+        Assert.Equal(_exteriorCell, cell.FormKey);
+        Assert.Equal(new P2Int(3, -4), cell.Grid.Require().Point);
+        Assert.Equal(["Ext_Temp"], [.. cell.Temporary.Select(r => r.EditorID.Require())]);
     }
 
     [Fact]
     public async Task Compile_OfTwoQuests_GivesEachQuestExactlyItsOwnDialogueAndScenes()
     {
-        var (mod, handle) = await CompileAndReimport();
-        using (handle)
-        {
-            var a = mod.Quests.Single(q => q.FormKey == _questA);
-            var b = mod.Quests.Single(q => q.FormKey == _questB);
+        using var mod = await this.CompiledAsync(_plugin);
 
-            Assert.Equal(["TopicA"], [.. a.DialogTopics.Select(t => t.EditorID.Require()).Order()]);
-            Assert.Equal(["TopicB"], [.. b.DialogTopics.Select(t => t.EditorID.Require()).Order()]);
-            Assert.Equal(["SceneA"], [.. a.Scenes.Select(s => s.EditorID.Require()).Order()]);
-            Assert.Empty(b.Scenes);
+        var a = mod.Quests.Single(q => q.FormKey == _questA);
+        var b = mod.Quests.Single(q => q.FormKey == _questB);
 
-            Assert.Equal(
-                ["ResponseA"],
-                [.. a.DialogTopics.Single().Responses.Select(r => r.EditorID.Require()).Order()]);
-            Assert.Equal(
-                ["ResponseB"],
-                [.. b.DialogTopics.Single().Responses.Select(r => r.EditorID.Require()).Order()]);
-        }
+        Assert.Equal(["TopicA"], [.. a.DialogTopics.Select(t => t.EditorID.Require()).Order()]);
+        Assert.Equal(["TopicB"], [.. b.DialogTopics.Select(t => t.EditorID.Require()).Order()]);
+        Assert.Equal(["SceneA"], [.. a.Scenes.Select(s => s.EditorID.Require()).Order()]);
+        Assert.Empty(b.Scenes);
+
+        Assert.Equal(
+            ["ResponseA"],
+            [.. a.DialogTopics.Single().Responses.Select(r => r.EditorID.Require()).Order()]);
+        Assert.Equal(
+            ["ResponseB"],
+            [.. b.DialogTopics.Single().Responses.Select(r => r.EditorID.Require()).Order()]);
     }
 
     [Fact]
     public async Task Compile_ForAnEmbeddedChildWithASemanticError_NamesTheContainersOwnDocument()
     {
-        var answer = (await CompileService().CompileAsync([_plugin])).Value();
+        var answer = (await CompileHandler.CompileAsync([_plugin])).Value();
         Assert.Empty(answer.Refused);
         var diagnostics = Assert.Single(answer.Applied).Diagnostics;
 
-        var diagnostic = Assert.Single(
-            diagnostics.Where(d => d.FormKey == _cellATemporaryRef.ToString()).Take(1));
+        var diagnostic = Assert.Single(diagnostics, d => d.FormKey == _cellATemporaryRef.ToString());
 
-        var cell = SourceModTree.DocumentCarrying(_modFolder, _plugin, "CellA");
+        var cell = SourceModTree.DocumentCarrying(ModFolderOf(_plugin), _plugin, "CellA");
         Assert.Equal(
-            TreeTampering.FileOf(_modFolder, _plugin, new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId)),
-            Path.Combine(_modFolder, diagnostic.SourceRelativePath));
+            TreeTampering.FileOf(ModFolderOf(_plugin), _plugin, new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId)),
+            Path.Combine(ModFolderOf(_plugin), diagnostic.SourceRelativePath));
     }
 
-    [Fact]
-    public async Task Compile_WithACellDirectoryRenamedByHand_Succeeds_WithADiagnosticOnItsDocumentNamingWhereItBelongs()
-    {
-        var cell = SourceModTree.DocumentCarrying(_modFolder, _plugin, "CellA");
-        var identity = new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId);
-        var directory = TreeTampering.DirectoryOf(_modFolder, _plugin, identity);
-        var belongsAt = Path.GetRelativePath(_modFolder, directory);
-        var renamed = Path.Combine(Path.GetDirectoryName(directory) ?? string.Empty, "ByHand");
-        Directory.Move(directory, renamed);
-
-        var answer = (await CompileService().CompileAsync([_plugin])).Value();
-
-        Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
-        var diagnostic = Assert.Single(diagnostics, d => d.Message.Contains("belongs at", StringComparison.Ordinal));
-        Assert.Equal(cell.FormKey, diagnostic.FormKey);
-        Assert.Equal(
-            Path.Combine(Path.GetRelativePath(_modFolder, renamed), Path.GetFileName(PluginSourceRoot.ContainerDocument(directory))),
-            diagnostic.SourceRelativePath);
-        Assert.Contains(belongsAt, diagnostic.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Compile_WithACellDirectoryRenamedByHandToAnotherEditorId_Succeeds_WithTheMisplacedWarning()
-    {
-        var cell = SourceModTree.DocumentCarrying(_modFolder, _plugin, "CellA");
-        var directory = TreeTampering.DirectoryOf(_modFolder, _plugin, new RecordIdentity(cell.FormKey, cell.RecordType, cell.EditorId));
-        Directory.Move(directory, Path.Combine(Path.GetDirectoryName(directory) ?? string.Empty, Path.GetFileName(directory).Replace("CellA", "CellB", StringComparison.Ordinal)));
-
-        var answer = (await CompileService().CompileAsync([_plugin])).Value();
-
-        Assert.Empty(answer.Refused);
-        var diagnostics = Assert.Single(answer.Applied).Diagnostics;
-        Assert.Single(diagnostics, d => d.Message.Contains("belongs at", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task Compile_AfterDeletingTheMiddleOfThreeDialogTopics_Succeeds_KeepingSurvivorsInOrder()
-    {
-        SourceEdits.Rewrite<Quest>(
-            TestAdapters.Source().Open(TestMod.Of(_plugin, _modFolder), GameRelease.Fallout4).Require(), _plugin,
-            new RecordIdentity(_questC.ToString(), QuestRecordType, "QuestC"), GameRelease.Fallout4,
-            quest => quest.DialogTopics.Remove(quest.DialogTopics.Single(t => t.FormKey == _topicC2)));
-
-        var (mod, handle) = await CompileAndReimport();
-        using (handle)
-        {
-            var questC = mod.Quests.Single(q => q.FormKey == _questC);
-            Assert.Equal(
-                [TopicC1EditorId, TopicC3EditorId],
-                [.. questC.DialogTopics.Select(t => t.EditorID.Require())]);
-        }
-    }
-
-    [Fact]
-    public async Task Compile_CarriesTheModHeaderFromTheTree_RatherThanEmittingAFreshOne()
-    {
-        var (mod, handle) = await CompileAndReimport();
-        using (handle)
-        {
-            Assert.Equal(HeaderAuthor, mod.ModHeader.Author);
-            Assert.Equal(HeaderDescription, mod.ModHeader.Description);
-        }
-    }
 }

@@ -416,6 +416,7 @@ public sealed class DocumentEditTests
     [InlineData("a sound descriptor of standard data", "Data", """{"MutagenObjectType": "SoundDescriptorCompoundData"}""", "MutagenObjectType", "\"SoundDescriptorCompoundData\"")]
     [InlineData("a perk of a quest effect", "Effects", """[{"MutagenObjectType": "PerkAbilityEffect", "Ability": "000903:DocEdit.esp"}]""", "0.Ability", "\"000903:DocEdit.esp\"")]
     [InlineData("a perk of a quest effect", "Effects", """[{"MutagenObjectType": "PerkEntryPointAddRangeToValue", "From": 1.5, "To": 9.5}]""", "0.To", "9.5")]
+    [InlineData("a magic effect of a light archetype", "Archetype", """{"MutagenObjectType": "MagicEffectPeakValueModArchetype", "Association": "000904:DocEdit.esp"}""", "Association", "\"000904:DocEdit.esp\"")]
     [InlineData("a magic effect of a light archetype", "Archetype", """{"MutagenObjectType": "MagicEffectPeakValueModArchetype", "Association": "000904:DocEdit.esp", "ActorValue": "000905:DocEdit.esp"}""", "ActorValue", "\"000905:DocEdit.esp\"")]
     [InlineData("a magic effect of a light archetype", "Archetype", """{"MutagenObjectType": "MagicEffectArchetype", "Type": "ValueModifier", "Association": "000905:DocEdit.esp"}""", "Association", "\"000905:DocEdit.esp\"")]
     [InlineData("an audio effect chain of an overdrive", "Effects", """[{"MutagenObjectType": "StateVariableFilterAudioEffect", "Enabled": true, "CenterFrequency": 440.0, "QValue": 0.75}]""", "0.QValue", "0.75")]
