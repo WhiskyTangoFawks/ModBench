@@ -17,7 +17,7 @@ public sealed class SkyrimGestureTests : IDisposable
     private const string MasterName = "Master.esm";
     private const string CompiledPluginName = "CompiledPlugin.esp";
 
-    private readonly SkyrimInstance _instance = new();
+    private readonly GameInstance _instance = new(GameRelease.SkyrimSE);
     private readonly FormKey _masterInteriorCell;
     private readonly FormKey _masterPlaced;
     private readonly FormKey _npc;
@@ -88,10 +88,5 @@ public sealed class SkyrimGestureTests : IDisposable
         var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
         block.SubBlocks.Add(subBlock);
         return block;
-    }
-
-    private sealed class SkyrimInstance() : TestInstance(GameRelease.SkyrimSE)
-    {
-        public PluginAddress AddPlugin(SkyrimMod mod, string origin, bool compiledPlugin) => Add(mod, origin, compiledPlugin);
     }
 }

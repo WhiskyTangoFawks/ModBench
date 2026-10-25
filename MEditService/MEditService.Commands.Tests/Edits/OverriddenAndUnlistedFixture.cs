@@ -26,12 +26,6 @@ public sealed class OverriddenAndUnlistedFixture : TestInstance, ICompiledPlugin
     public const string CopySourceNpcEditorId = "CopySourceNpc";
     public const string UnlistedNpcEditorId = "UnlistedNpc";
 
-    public string WinningModFolder => FolderOf(WinningOrigin);
-    public string OverriddenModFolder => FolderOf(OverriddenOrigin);
-    public string SourceModFolder => FolderOf(SourceOrigin);
-    public string DestinationModFolder => FolderOf(DestinationOrigin);
-    public string UnlistedModFolder => FolderOf(UnlistedOrigin);
-
     public PluginAddress WinningPlugin { get; }
     public PluginAddress OverriddenPlugin { get; }
     public PluginAddress CopySourcePlugin { get; }
@@ -68,8 +62,4 @@ public sealed class OverriddenAndUnlistedFixture : TestInstance, ICompiledPlugin
     }
 
     public static OverriddenAndUnlistedFixture Create() => new();
-
-    /// <summary>The bytes on disk for a compiled plugin's own binary — what a refused compile's
-    /// "writes nothing" claim is checked against.</summary>
-    public byte[] PluginBytes(PluginAddress plugin) => File.ReadAllBytes(Path.Combine(ModFolderOf(plugin), plugin.Name));
 }

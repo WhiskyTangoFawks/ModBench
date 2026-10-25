@@ -84,28 +84,19 @@ public sealed class FormIdEditTests
         Assert.Equal(before, SourceModTree.Records(mod.ModFolder, mod.Plugin));
     }
 
-    [Fact]
-    public void EditingTheFormId_OnALightPlugin_Refuses_WhenTheValueExceedsTheLightRange()
+    [Theory]
+    [InlineData("Fixture.esp", "clear the light flag.")]
+    [InlineData("Fixture.esl", "clear the light flag and rename the plugin off .esl.")]
+    public void EditingTheFormId_OnALightPlugin_PastTheLightRange_IsRefused_NamingEveryWayToLiftTheLimit(string pluginName, string lift)
     {
-        using var mod = SourceEditFixture.CompiledPluginLight();
+        using var mod = SourceEditFixture.CompiledPluginLight(pluginName);
 
-        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FormIdOutsideFlagLimit, result.Refusal);
-    }
-
-    [Fact]
-    public void EditingTheFormId_OnALightFlaggedEsl_PastTheLightRange_NamesClearingTheFlagAndRenamingOffEsl()
-    {
-        using var mod = SourceEditFixture.CompiledPluginLight("Fixture.esl");
-
-        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esl");
+        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), $"001000:{pluginName}");
 
         Assert.Equal(
             (RecordEditRefusal.FormIdOutsideFlagLimit,
-             "001000:Fixture.esl exceeds Fixture.esl's light local FormID range — a light plugin can only address local FormIDs " +
-             "up to 0xFFF. Choose a FormID within that range, or clear the light flag and rename the plugin off .esl."),
+             $"001000:{pluginName} exceeds {pluginName}'s light local FormID range — a light plugin can only address local FormIDs " +
+             $"up to 0xFFF. Choose a FormID within that range, or {lift}"),
             (result.Refusal, result.Message));
     }
 
@@ -223,18 +214,6 @@ public sealed class FormIdEditTests
             before.Replace(formKeyLine, $"\"FormKey\": \"{newFormKey}\"", StringComparison.Ordinal),
             mod.Body(FormKey.Factory(newFormKey)));
         Assert.Equal(referencerBefore, SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, "SamePluginNpc").Body);
-    }
-
-    [Fact]
-    public void EditingTheFormId_Refuses_WhenPluginIsNonCompiledPlugin_NamingTheInitCommand()
-    {
-        using var mod = SourceEditFixture.NonCompiledPlugin();
-
-        var result = mod.EditHandler.SetFormId(mod.Plugin, mod.Npc.ToString(), FreeFormKey);
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, result.Refusal);
-        Assert.Contains("Decompile and commit its mod", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]

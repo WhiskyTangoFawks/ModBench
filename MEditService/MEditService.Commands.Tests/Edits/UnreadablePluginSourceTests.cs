@@ -14,7 +14,7 @@ public sealed class UnreadablePluginSourceTests
         Directory.Exists(PluginSourceRoot.In(modFolder, pluginFileName));
 
     [Fact]
-    public void CopyingOntoAPlugin_WhoseSourceIsUnreadable_IsRefusedTheSameWay()
+    public void CopyingOntoAPlugin_WhoseSourceIsUnreadable_IsRefusedAsPluginSourceUnreadable_AndWritesNothing()
     {
         using var mod = ContainerCopyFixture.CreateWithCompiledPluginSource();
         DeleteTheSourceOf(mod.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);

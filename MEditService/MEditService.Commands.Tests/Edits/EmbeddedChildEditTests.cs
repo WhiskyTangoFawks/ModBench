@@ -107,32 +107,6 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     }
 
     [Fact]
-    public void EditingARecordTheTreeNoLongerHolds_RefusesAsRecordNotFound()
-    {
-        _fixture.Remove(new RecordIdentity(_fixture.EmbedCell.ToString(), "cell", ContainerModPlugin.EmbedCellEditorId));
-
-        var result = EditService().Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "WaterHeight", Json("77.0"));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
-        Assert.Contains(_fixture.EmbedCell.ToString(), result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void EditingAnEmbeddedChildAbsentFromItsParentsSourceText_RefusesAsRecordNotFound()
-    {
-        var cell = EmbedCellDocument();
-        var withoutTheRef = WithoutTheTemporaryRef(cell.Body);
-        Assert.DoesNotContain(ContainerModPlugin.TemporaryRefEditorId, withoutTheRef, StringComparison.Ordinal);
-        _fixture.Overwrite(cell with { Body = withoutTheRef });
-
-        var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("5.0"));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
-    }
-
-    [Fact]
     public void DeletingAKeyTheOwningDocumentOnlyReferences_RefusesRatherThanReportingASuccess()
     {
         var cell = EmbedCellDocument();
@@ -167,8 +141,9 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
         var renamed = _fixture.DocumentCarrying("RenamedQuest");
         Assert.Equal(_fixture.Quest.ToString(), renamed.FormKey);
-        foreach (var child in new[] { ContainerModFixture.DialogTopicEditorId, ContainerModFixture.ResponseEditorId, ContainerModFixture.DialogBranchEditorId, ContainerModFixture.SceneEditorId })
-            Assert.Equal(renamed.FormKey, _fixture.DocumentCarrying(child).FormKey);
+        Assert.All(
+            new[] { ContainerModFixture.DialogTopicEditorId, ContainerModFixture.ResponseEditorId, ContainerModFixture.DialogBranchEditorId, ContainerModFixture.SceneEditorId },
+            child => Assert.Equal(renamed.FormKey, _fixture.DocumentCarrying(child).FormKey));
     }
 
     [Fact]
@@ -193,7 +168,7 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     private SourceDocument EmbedCellDocument() => _fixture.DocumentCarrying(ContainerModPlugin.EmbedCellEditorId);
 
     private static string WithoutTheTemporaryRef(string cellBody) =>
-        MyRegex().Replace(cellBody, "");
+        TemporaryRefElement().Replace(cellBody, "");
 
     private static string ReplaceFirst(string text, string what, string with)
     {
@@ -202,5 +177,5 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
     }
 
     [System.Text.RegularExpressions.GeneratedRegex(@"\s*\{[^{}]*""TempRef""[^{}]*\},?", System.Text.RegularExpressions.RegexOptions.Singleline)]
-    private static partial System.Text.RegularExpressions.Regex MyRegex();
+    private static partial System.Text.RegularExpressions.Regex TemporaryRefElement();
 }

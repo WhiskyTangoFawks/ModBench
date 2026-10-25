@@ -105,25 +105,20 @@ public sealed class UnreadableCopySourceTests : IDisposable
         Assert.Equal(before, TreeSnapshot.Of(_mod.DestinationModFolder));
     }
 
-    [Fact]
-    public void CopyAsOverride_OfAnExteriorCellWhoseWorldspaceDocumentIsNoJsonDocument_IsRefusedNamingIt_AndWritesNothing()
+    public static TheoryData<Func<ContainerCopyFixture, FormKey>, CopyMode> CopiesReadingTheWorldspace => new()
+    {
+        { f => f.ExteriorCell, CopyMode.Override },
+        { f => f.ExteriorTemporaryRef, CopyMode.New },
+    };
+
+    [Theory]
+    [MemberData(nameof(CopiesReadingTheWorldspace))]
+    public void ACopyReadingAnExteriorCellsWorldspace_WhoseDocumentIsNoJsonDocument_IsRefusedNamingIt_AndWritesNothing(
+        Func<ContainerCopyFixture, FormKey> record, CopyMode mode)
     {
         MakeNoJsonDocument(_mod.Worldspace);
 
-        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.ExteriorCell.ToString())], CopyMode.Override, [_mod.DestinationPlugin], replace: false);
-
-        var refused = result.OnlyRefused();
-        Assert.Equal(RecordEditRefusal.RecordParseFailed, refused.Refusal);
-        Assert.Contains("' is filed as a record", refused.Message, StringComparison.Ordinal);
-        Assert.Empty(_mod.ChangedFormKeys(_mod.DestinationPlugin));
-    }
-
-    [Fact]
-    public void CopyAsNew_OfARecordPlacedInAnExteriorCellWhoseWorldspaceDocumentIsNoJsonDocument_IsRefusedNamingIt_AndWritesNothing()
-    {
-        MakeNoJsonDocument(_mod.Worldspace);
-
-        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, _mod.ExteriorTemporaryRef.ToString())], CopyMode.New, [_mod.DestinationPlugin], replace: false);
+        var result = _mod.CopyHandler.CopySync([new RecordAt(_mod.SourcePlugin, record(_mod).ToString())], mode, [_mod.DestinationPlugin], replace: false);
 
         var refused = result.OnlyRefused();
         Assert.Equal(RecordEditRefusal.RecordParseFailed, refused.Refusal);

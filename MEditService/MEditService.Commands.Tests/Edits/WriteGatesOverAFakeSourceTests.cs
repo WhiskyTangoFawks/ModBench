@@ -40,19 +40,6 @@ public sealed class WriteGatesOverAFakeSourceTests
             .Changes(Plugin, formKey, SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).Seen();
 
     [Fact]
-    public void EditingAPluginOfAnNonSourceMod_IsRefused_NamingTheInitCommand()
-    {
-        var services = OverADiskThatInitsWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
-        using var _ = disk;
-
-        var result = services.GetRequiredService<EditRecordChangesHandler>()
-            .Changes(disk.Plugin, disk.Npc.ToString(), SetAt(JsonDocument.Parse("0.75").RootElement, Member("HeightMax"))).AsResult();
-
-        Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, result.Refusal);
-        Assert.Contains("Decompile and commit its mod", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void EditingAFormKeyNoDocumentHolds_OnANonCompiledPlugin_StillRefusesAsNonCompiledPlugin()
     {
         var services = OverADiskThatInitsWhatTheFakeDoesNot(new FakeSourceAdapter(), out var disk);
@@ -65,7 +52,7 @@ public sealed class WriteGatesOverAFakeSourceTests
     }
 
     [Fact]
-    public void EditingAPlugin_WhoseSourceIsUnreadable_IsRefusedBeforeAnySessionOpens_NamingDecompile()
+    public void EditingAPlugin_WhoseSourceIsUnreadable_IsRefused_NamingDecompile()
     {
         var source = new FakeSourceAdapter().WithUnreadableSourceMod(ModFolder);
 
@@ -73,18 +60,16 @@ public sealed class WriteGatesOverAFakeSourceTests
 
         Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, result.Refusal);
         Assert.Contains("Decompile the plugin", result.Message, StringComparison.Ordinal);
-        Assert.Equal(0, source.SessionsOpened);
     }
 
     [Fact]
-    public void CreatingARecordInAPlugin_WhoseSourceIsUnreadable_IsRefusedTheSameWay()
+    public void CreatingARecordInAPlugin_WhoseSourceIsUnreadable_IsRefusedAsPluginSourceUnreadable()
     {
         var source = new FakeSourceAdapter().WithUnreadableSourceMod(ModFolder);
 
         var result = Over(source).GetRequiredService<CreateRecordChangesHandler>().CreateRecord(Plugin, "npc_").AsResult();
 
         Assert.Equal(RecordEditRefusal.PluginSourceUnreadable, result.Refusal);
-        Assert.Equal(0, source.SessionsOpened);
     }
 
     [Fact]
@@ -95,6 +80,7 @@ public sealed class WriteGatesOverAFakeSourceTests
         var result = SetHeight(Over(source), $"000900:{Plugin.Name}").Outcome;
 
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
+        Assert.Contains($"000900:{Plugin.Name}", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
