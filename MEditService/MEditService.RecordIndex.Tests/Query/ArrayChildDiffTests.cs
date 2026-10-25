@@ -195,7 +195,14 @@ public class ArrayChildDiffTests
 
         Assert.Equal(["[0]", "[1]", "[2]"], children.Select(c => c.FieldName));
         Assert.Null(children[2].Values["B.esp"]);
-        Assert.False(children[2].CellStates.ContainsKey("B.esp"));
+    }
+
+    [Fact]
+    public void UnsortedArray_AnElementTheShortPluginLacks_IsAnOverrideOfTheMastersElement()
+    {
+        var children = RequireChildren(Row(ComparedCopies.Of(List("xyz"), List("xy")), "Items"));
+
+        Assert.Equal(ConflictThis.Override, children[2].CellStates["B.esp"]);
     }
 
     [Fact]
