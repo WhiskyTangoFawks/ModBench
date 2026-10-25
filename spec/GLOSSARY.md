@@ -205,7 +205,7 @@ Where a package is fetched from: a site such as Nexus, a store such as Steam, or
 Avoid: repository (MO2's word for a host), source
 
 # Manifest
-The one file recording how a folder is made: what it is made from, its host when it has one, each of the folder's files, and the steps that build it with the tools they run.
+The one file recording how a folder is made: what it is made from, each package's host when it has one, each of the folder's files, and the steps that build it with the tools they run.
 
 Avoid: record (a plugin's unit of data), recipe, directives
 

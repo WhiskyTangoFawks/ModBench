@@ -37,8 +37,8 @@ A manifest pins each package it names ([ADR-0022](../adr/0022-a-manifest-is-a-de
 16. Each manifest to be `<folder>.manifest.json`, named for the folder it builds, so VS Code opens it as JSON and the ignore list never matches a mod's own files. Cites: Existing tools
 17. Any manifest to hold the steps that build its folder, in the order they run, and a file a step makes to say so. I write the steps, update manifest keeps them, and restore runs them. Cites: ADR-0022
 18. The manifest to name each tool its steps run, with the tool's page, so a diff shows what I install to build the mod. I write these lines, as I write the steps, and update manifest keeps them. Cites: mods.md, Build, story 14
-19. A mod from the game folder to name the game's depot on its store and the depot's version that holds its files, such as a Steam depot and the ID Steam gives that version, so a clone that no game folder serves knows what to fetch. Update manifest writes them when the game folder records that version, as Steam's install does. Otherwise I write them, and update manifest keeps them. Cites: ADR-0022
-20. A manifest to build the folder it sits in, or the folder its target line names, so a folder that is not a mod, such as the stock game folder, is built as a mod is. I write the target line, and update manifest keeps it. Cites: ADR-0022
+19. A mod from the game folder to name the game's depot on its store and the depot's version that holds its files, such as a Steam depot and the ID Steam gives that version, so a clone that no game folder serves knows what to fetch. Update manifest writes them when the game folder records that version, as Steam's install does. Otherwise I write them, and update manifest keeps them.
+20. A manifest to build the folder it sits in, or the output folder it names, so a folder that is not a mod, such as the stock game folder, is built as a mod is. I write the output folder, and update manifest keeps it. Cites: ADR-0022
 21. Update manifest to take a file the mod's installation file does not yield with its bytes from any downloaded file or game folder that does, and to name it as a package, so a folder I merged two downloads into restores with no line from me. Cites: ADR-0022
 
 ## Status
@@ -100,7 +100,7 @@ As a user, I want:
 9. Restore to write each mod's metadata from its manifest, and to keep what the metadata holds that the manifest does not. Notes, colour and category stay on the machine that set them: they are Metadata chrome. Cites: Never break the instance for its owner; commands.md, Metadata chrome
 10. An installation file the downloads folder lacks, whose page on Nexus the manifest names, downloaded from Nexus while I am logged in, refused when it is not the file the manifest names, and its metadata written as MO2 writes it. A clone then restores with no file fetched by hand. Cites: Minimal by default
 11. Source mods built in the order Build gives when it builds more than one. Cites: mods.md, Build, story 12
-12. A package's files taken from wherever this machine already holds them with the bytes the manifest pins, before restore fetches anything: the downloads folder, or a game folder, such as the instance's or the Steam install. This is an exception to story 4: a mod from the game folder that names no depot is not skipped for having no host while a game folder holds its files. Cites: ADR-0022
+12. A package's files taken from wherever this machine already holds them with the bytes the manifest pins, before restore fetches anything: the downloads folder, or a game folder, such as the instance's or the Steam install. This is an exception to story 4: a mod from the game folder that names no depot is not skipped for having no host while a game folder holds its files.
 13. A manifest whose folder is outside the instance folder refused and named. Cites: ADR-0022
 14. Two manifests that build one folder, or one folder inside the other's, both refused and named. Cites: ADR-0022
 
