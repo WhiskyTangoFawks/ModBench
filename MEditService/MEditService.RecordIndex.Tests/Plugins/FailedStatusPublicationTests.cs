@@ -25,22 +25,11 @@ public sealed class FailedStatusPublicationTests : IDisposable
         faults.FaultsOn = n => n is PluginChangedNotification;
         PluginBinaries.Rewrite(_fixture.Plugins[0].Path, mod => mod.Npcs.AddNew("WrittenByAnotherTool"));
         var versionAnswered = index.Status.Version;
-        var stopped = false;
-        var readEarly = false;
-        var reader = Task.Run(() =>
-        {
-            while (!Volatile.Read(ref stopped))
-            {
-                var status = index.Status;
-                if (status.State == LoadOrderState.Failed && status.Version <= versionAnswered) readEarly = true;
-            }
-        });
 
-        var version = holder.Apply(SnapshotPlugins.Snapshot(
-            _fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, [_fixture.Plugins[0]]));
-        Waits.Reached(() => index.Status.Version >= version, "the status answering the arrival");
-        Volatile.Write(ref stopped, true);
-        await reader;
+        var readEarly = await Waits.EverSeenWhile(
+            () => index.Status is { State: LoadOrderState.Failed } status && status.Version <= versionAnswered,
+            () => index.Receive(holder, SnapshotPlugins.Snapshot(
+                _fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, [_fixture.Plugins[0]])));
 
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
         Assert.False(readEarly);

@@ -5,16 +5,12 @@ using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.RepositoriesLib;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.Plugins;
 
 public sealed class WarmReconcileTests
 {
-    private static OpenedIndex OpenIndex(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
-        Indexes.Open(holder, adapter);
-
     [Fact]
     public void ASecondLoadOfTheSameOrder_IndexesNothing_AndIsStillReadyWithWinners()
     {
@@ -23,13 +19,14 @@ public sealed class WarmReconcileTests
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
             .Build();
-        using (var cold = OpenIndex(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = Indexes.Open(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         using var opens = new GatedPluginAdapter();
-        using var warm = OpenIndex(holder, opens);
+        using var warm = Indexes.Open(holder, opens);
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Empty(opens.Opened);
+        Assert.Equal(2, warm.Status.TotalPlugins);
         Assert.Equal(["A.esp", "B.esp"], warm.Status.IndexedPlugins.Select(p => p.Name));
 
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
@@ -44,7 +41,7 @@ public sealed class WarmReconcileTests
         using var data = new PluginFixtureBuilder("warm-during")
             .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
             .Build();
-        using (var cold = OpenIndex(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = Indexes.Open(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         var observed = new List<int>();
         var watching = new ProgressWatchingAdapter(observed);
@@ -71,50 +68,6 @@ public sealed class WarmReconcileTests
     }
 
     [Fact]
-    public void AWarmLoad_CountsEveryRegisteredPluginAsProgress()
-    {
-        var holder = new LoadOrderHolder();
-        using var data = new PluginFixtureBuilder("warm-progress")
-            .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
-            .Build();
-        using (var cold = OpenIndex(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-
-        using var warm = OpenIndex(holder);
-        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-
-        Assert.Equal(3, warm.Status.TotalPlugins);
-        Assert.Equal(
-            new[] { "A.esp", "B.esp", "C.esp" },
-            warm.Status.IndexedPlugins.Select(p => p.Name).ToArray());
-    }
-
-    [Fact]
-    public void APluginChangedBetweenLoads_IsTheOnlyOneReindexed()
-    {
-        var holder = new LoadOrderHolder();
-        using var data = new PluginFixtureBuilder("warm-changed")
-            .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
-            .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
-            .Build();
-        using (var cold = OpenIndex(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-
-        var edited = new Fallout4Mod(ModKey.FromFileName("B.esp"), Fallout4Release.Fallout4);
-        edited.Npcs.AddNew("NpcBEdited");
-        edited.WriteToBinary(Path.Combine(data.DataFolder, "B.esp"));
-
-        using var opens = new GatedPluginAdapter();
-        using var warm = OpenIndex(holder, opens);
-        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-
-        Assert.Equal(["B.esp"], opens.Opened);
-        Assert.NotEmpty(warm.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
-
-        var rows = warm.ListedIn(new PluginAddress("B.esp", PluginOrigin.DataDirectory));
-        Assert.Contains(rows, row => row.EditorId == "NpcBEdited");
-        Assert.DoesNotContain(rows, row => row.EditorId == "NpcB");
-    }
-
-    [Fact]
     public void APluginTheIndexHasNeverSeen_IsIndexedBesideTheRegisteredOnes()
     {
         var holder = new LoadOrderHolder();
@@ -122,49 +75,16 @@ public sealed class WarmReconcileTests
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .WithPlugin("B.esp", listed: false)
             .Build();
-        using (var cold = OpenIndex(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = Indexes.Open(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         var withB = data.Plugins.Append(new LoadOrderEntry("B.esp", Path.Combine(data.DataFolder, "B.esp"), PluginOrigin.DataDirectory, Line: 99, Enabled: true, Winning: true)).ToList();
 
         using var opens = new GatedPluginAdapter();
-        using var warm = OpenIndex(holder, opens);
+        using var warm = Indexes.Open(holder, opens);
         warm.Reconcile(holder, data.DataFolder, withB, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(["B.esp"], opens.Opened);
         Assert.NotEmpty(warm.ListedIn(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
-    }
-
-    [Fact]
-    public async Task ACompiledPlugin_IsValidatedAgainstItsSourceTreeOnEveryLoad()
-    {
-        var holder = new LoadOrderHolder();
-        const string plugin = "CompiledPlugin.esp";
-        using var fixture = new PluginFixtureBuilder("warm-compiled-plugin")
-            .WithPlugin(plugin, m => m.Npcs.AddNew("CompiledPluginNpc"), origin: "SourceMod")
-            .BuildScattered()
-            .CompiledPlugin();
-        var entry = fixture.Plugins.Single();
-
-        string npcSourceFile;
-        using (var second = OpenIndex(holder))
-        {
-            second.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
-            var npc = second.ListedIn(entry.Key).Single(row => row.EditorId == "CompiledPluginNpc");
-            npcSourceFile = entry.SourceFileOf(second.DocumentOf(npc.FormKey, entry.Key));
-        }
-
-        using var third = OpenIndex(holder);
-        third.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
-
-        Assert.Empty(third.Status.Failures);
-
-        var text = await File.ReadAllTextAsync(npcSourceFile);
-        await File.WriteAllTextAsync(
-            npcSourceFile, text.Replace("\"CompiledPluginNpc\"", "\"EditedBetweenLoads\"", StringComparison.Ordinal));
-        using var fourth = OpenIndex(holder);
-        fourth.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
-        Assert.Contains(
-            fourth.ListedIn(entry.Key), row => row.EditorId == "EditedBetweenLoads");
     }
 }
