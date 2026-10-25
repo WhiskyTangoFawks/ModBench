@@ -30,8 +30,10 @@ beforeEach(() => {
   h.isTrusted = true;
 });
 
+const open = (...roots: string[]) => { h.folders = roots.map((fsPath) => ({ uri: { fsPath } })); };
+
 const answerInstanceCheck = (root: string | undefined, isInstance: (root: string) => boolean) => {
-  h.folders = root === undefined ? undefined : [{ uri: { fsPath: root } }];
+  if (root === undefined) h.folders = undefined; else open(root);
   return openedFolder(isInstance, () => undefined).folder;
 };
 
@@ -43,6 +45,40 @@ describe('the instance check', () => {
   ])('answers %s', (_case, root, isInstance, answer) => {
     expect(answerInstanceCheck(root, isInstance)).toBe(answer);
     expect(writesOfTheKey()).toEqual([['setContext', FOLDER_KEY, answer]]);
+  });
+});
+
+describe('several open folders', () => {
+  const instances = new Set(['/instanceA', '/instanceB']);
+  const isInstance = (root: string) => instances.has(root);
+
+  it('opens the first folder that is an instance, whatever its place in the list', () => {
+    open('/repo', '/instanceA', '/instanceB');
+    expect(openedFolder(isInstance, () => undefined)).toEqual({ folder: 'instance', instanceRoot: '/instanceA' });
+  });
+
+  it('names each other instance in the log, never a plain folder', () => {
+    open('/repo', '/instanceA', '/instanceB');
+    const log = vi.fn();
+    openedFolder(isInstance, log);
+    const lines = log.mock.calls.map(([line]) => line as string);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('/instanceB');
+    expect(lines[0]).not.toContain('/repo');
+  });
+
+  it('says nothing of other instances when there is one', () => {
+    open('/repo', '/instanceA');
+    const log = vi.fn();
+    openedFolder(isInstance, log);
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('answers the check before trust for an instance behind another folder', () => {
+    h.isTrusted = false;
+    open('/repo', '/instanceA');
+    afterTrust(isInstance, () => undefined);
+    expect(writesOfTheKey()).toEqual([['setContext', FOLDER_KEY, 'untrustedInstance']]);
   });
 });
 
