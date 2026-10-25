@@ -12,7 +12,7 @@ from tests.fixture_medit import (
     Fixture,
     changed,
     decompile_and_commit_mod,
-    files_and_bytes,
+    file_stamps,
     fixture_medit,
     holding_unsaved,
     source_folder,
@@ -40,11 +40,11 @@ class EditAgainstTheFixtureInstance(unittest.TestCase):
 
     def test_raises_for_a_plugin_with_no_source_and_writes_nothing(self) -> None:
         light = self.fixture.instance / 'mods' / LIGHT.origin
-        before = files_and_bytes(light)
+        before = file_stamps(light)
         with window_of(self.fixture.url), self.assertRaises(medit.MEditError) as raised:
             medit.edit(LIGHT.name, LIGHT_RECORD, 'set', 'EditorID', 'Renamed')
         self.assertIn(f'{LIGHT.name} is not a compiled plugin', str(raised.exception))
-        self.assertEqual(files_and_bytes(light), before)
+        self.assertEqual(file_stamps(light), before)
         self.assertFalse(source_folder(self.fixture.instance, LIGHT.origin).exists())
 
     def test_raises_naming_a_file_held_unsaved_and_writes_nothing(self) -> None:

@@ -47,13 +47,21 @@ class Fixture(NamedTuple):
     load_order: JsonRecord
 
 
+# mEdit keeps the record index of an instance it reads in this folder; the fixture's mEdit builds its own.
+RECORD_INDEX_FOLDER = 'modbench'
+
+
+def without_the_record_index(folder: str, names: list[str]) -> list[str]:
+    return [RECORD_INDEX_FOLDER] if pathlib.Path(folder) == INSTANCE and RECORD_INDEX_FOLDER in names else []
+
+
 @contextlib.contextmanager
 def fixture_medit() -> Generator[Fixture]:
     executable = built_medit()
     with tempfile.TemporaryDirectory() as temporary:
         scratch = pathlib.Path(temporary)
         instance = scratch / 'instance'
-        shutil.copytree(INSTANCE, instance)
+        shutil.copytree(INSTANCE, instance, ignore=without_the_record_index)
         (instance / 'overwrite').mkdir()
         # DevListFallout has no game folder; an empty one stands in, so the game loads no plugin of its own.
         game = scratch / 'game'
@@ -240,8 +248,16 @@ def medit_answering(status: int, body: object, put_delay_s: float = 0) -> Genera
         server.server_close()
 
 
-def files_and_bytes(folder: pathlib.Path) -> list[tuple[str, bytes]]:
-    return sorted((str(path), path.read_bytes()) for path in folder.rglob('*') if path.is_file())
+class FileStamp(NamedTuple):
+    path: str
+    size: int
+    modified_ns: int
+
+
+def file_stamps(folder: pathlib.Path) -> list[FileStamp]:
+    return sorted(
+        FileStamp(str(path), path.stat().st_size, path.stat().st_mtime_ns)
+        for path in folder.rglob('*') if path.is_file())
 
 
 def changed(folder: pathlib.Path) -> list[str]:
