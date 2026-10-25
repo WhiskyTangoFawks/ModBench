@@ -13,6 +13,7 @@ export interface NavRow {
   parent: string | null;
   expandable: boolean;
   expanded: boolean;
+  holdsRun?: boolean;
 }
 
 type Navigation = { focus: FocusedCell } | { toggle: string } | null;
@@ -58,6 +59,7 @@ export function navigate(
       if (row.expandable && row.expanded) return { toggle: row.key };
       return row.parent === null ? null : { focus: { rowKey: row.parent, plugin: null } };
     }
+    case 'Enter': return row.holdsRun ? { toggle: row.key } : null;
     default: return null;
   }
 }

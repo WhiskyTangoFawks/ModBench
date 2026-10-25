@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { RecordTabs } from './recordTabs';
 import { GRID_VIEW, publishFocusedCell, gridCopyValueText } from './focusedCells';
+import { registerNoConflictLens } from './noConflictLens';
 import { registerEditorCommands, type EditorCommandDeps } from './editorCommands';
 import { referencedByCopyValueText } from './referencedByList';
 import { registerReferencedBy, type LocateRecord, type ReferencedByDeps } from './referencedBy';
@@ -39,6 +40,8 @@ export function createEditor(deps: EditorDeps): Editor {
     client: deps.meditClient, reporter: deps.reporterFor('referencedBy'),
     locateRecord: deps.locateRecord, recordInFocus: () => tabs.activeTab()?.formKey,
   }));
+
+  registerNoConflictLens(tabs).forEach(own);
 
   registerEditorCommands({
     ...deps, tabs, selectionOf: (view) => focusedView.selectionOf(view),

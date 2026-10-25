@@ -362,6 +362,18 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.record.collapseNoConflict",
+        "title": "Collapse No Conflict",
+        "icon": "$(fold)",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.record.showNoConflict",
+        "title": "Show No Conflict",
+        "icon": "$(unfold)",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.record.editField",
         "title": "Edit Record Field",
         "category": "Modbench"
@@ -1148,6 +1160,18 @@
           "command": "modbench.mod.restoreFromManifest",
           "when": "scmProvider == git && scmProviderRootUri in modbench.modlist.instanceRoots",
           "group": "modbench@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "modbench.record.collapseNoConflict",
+          "when": "activeCustomEditorId == 'modbench.record' && !modbench.record.noConflictCollapsed",
+          "group": "navigation@1"
+        },
+        {
+          "command": "modbench.record.showNoConflict",
+          "when": "activeCustomEditorId == 'modbench.record' && modbench.record.noConflictCollapsed",
+          "group": "navigation@1"
         }
       ],
       "view/title": [
