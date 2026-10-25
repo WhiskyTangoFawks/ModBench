@@ -741,7 +741,7 @@ describe('open folder: one command for a mod, the Overwrite row, a file and a fo
     expect(revealed()).toEqual([path]);
   });
 
-  it.each<[string, () => typeof instance, ModlistNode, string]>([
+  it.each<[string, () => Pick<typeof instance, 'value'>, ModlistNode, string]>([
     ['a mod no folder holds, naming it, rather than returning in silence', () => instance,
       new ModNode({ kind: 'mod', name: 'Folderless Mod', enabled: true }), 'Folderless Mod'],
     ['the Overwrite row while the value names no folder for it, rather than revealing an empty path',
