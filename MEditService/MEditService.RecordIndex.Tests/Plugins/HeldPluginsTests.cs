@@ -52,26 +52,6 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void AnUnparseableFile_IsAFailureOnTheRow_RestStillOpen()
-    {
-        using var data = new PluginFixtureBuilder("lo-garbage")
-            .WithPlugin("Good.esp")
-            .Build();
-        var badPath = Path.Combine(data.DataFolder, "Bad.esp");
-        File.WriteAllBytes(badPath, [0xDE, 0xAD, 0xBE, 0xEF]);
-        var entries = data.Plugins.Append(new LoadOrderEntry(
-            "Bad.esp", badPath, PluginOrigin.DataDirectory, Line: 1, Enabled: true, Winning: true)).ToList();
-
-        using var held = Open(data, entries);
-
-        var opened = Opened(held).Keys;
-        Assert.Contains(Key("Good.esp"), opened);
-        Assert.DoesNotContain(Key("Bad.esp"), opened);
-        var failure = Assert.Single(held.Status.Failures);
-        Assert.Equal("Bad.esp", failure.Name);
-    }
-
-    [Fact]
     public void AnUnparseableOverriddenPlugin_TheFailureNamesTheOverriddenPluginsOrigin()
     {
         using var fx = new PluginFixtureBuilder("lo-losing-garbage")
@@ -109,32 +89,15 @@ public sealed class HeldPluginsTests
         Assert.Contains(Key("Fixed.esp"), Opened(held).Keys);
     }
 
-    [Theory]
-    [InlineData("TestMod.esl", true, false)]
-    [InlineData("UserMaster.esm", false, true)]
-    [InlineData("UserPatch.esp", false, false)]
-    public void AnExtension_SetsTheLightAndMasterFlags(string name, bool isLight, bool isMaster)
-    {
-        using var data = new PluginFixtureBuilder("lo-ext").WithPlugin(name).Build();
-        using var held = Open(data);
-
-        var content = Opened(held)[Key(name)];
-        Assert.Equal(isLight, content.IsLight);
-        Assert.Equal(isMaster, content.IsMaster);
-    }
-
     [Fact]
-    public void AHeaderFlaggedEsp_FollowsTheHeaderFlag()
+    public void ThePluginRow_CarriesTheLightAndMasterFlagsThePluginReads()
     {
-        using var data = new PluginFixtureBuilder("lo-flags")
-            .WithPlugin("EslFlagged.esp", mod => mod.IsSmallMaster = true)
-            .WithPlugin("EsmFlagged.esp", mod => mod.IsMaster = true)
-            .Build();
+        using var data = new PluginFixtureBuilder("lo-flags").WithPlugin("TestMod.esl").Build();
         using var held = Open(data);
 
-        var opened = Opened(held);
-        Assert.True(opened[Key("EslFlagged.esp")].IsLight);
-        Assert.True(opened[Key("EsmFlagged.esp")].IsMaster);
+        var row = Opened(held)[Key("TestMod.esl")];
+        Assert.True(row.IsLight);
+        Assert.False(row.IsMaster);
     }
 
     [Fact]

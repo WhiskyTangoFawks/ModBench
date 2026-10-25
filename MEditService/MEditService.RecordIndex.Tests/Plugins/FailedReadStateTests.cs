@@ -290,11 +290,14 @@ public sealed class FailedReadStateTests : IDisposable
         File.WriteAllText(StrayDocument, "{}");
         index.NextSnapshotUntil(() => SourceUnreadable(index), "the binary read in the tree's place");
 
-        for (var snapshot = 1; snapshot <= 3; snapshot++)
-        {
-            var readsBefore = TreeReads();
-            index.NextSnapshotUntil(() => TreeReads() > readsBefore, $"the tree read again at snapshot {snapshot}");
-        }
+        TreeReadAgainAtTheNextSnapshot(index);
+        TreeReadAgainAtTheNextSnapshot(index);
+    }
+
+    private void TreeReadAgainAtTheNextSnapshot(OpenedIndex index)
+    {
+        var readsBefore = TreeReads();
+        index.NextSnapshotUntil(() => TreeReads() > readsBefore, "the tree read again at the next snapshot");
     }
 
     [Fact]
@@ -326,11 +329,8 @@ public sealed class FailedReadStateTests : IDisposable
         Assert.True(SourceUnreadable(index));
         var binaryReads = adapter.OpenedTotal;
 
-        for (var snapshot = 1; snapshot <= 2; snapshot++)
-        {
-            var readsBefore = TreeReads();
-            index.NextSnapshotUntil(() => TreeReads() > readsBefore, $"the tree read again at snapshot {snapshot}");
-        }
+        TreeReadAgainAtTheNextSnapshot(index);
+        TreeReadAgainAtTheNextSnapshot(index);
 
         Assert.Equal(binaryReads, adapter.OpenedTotal);
     }

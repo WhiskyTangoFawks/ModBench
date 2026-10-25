@@ -21,15 +21,11 @@ public sealed class AnotherFilesFailedReadTests : IDisposable
     [Fact]
     public void APluginWhoseMasterAnotherProcessHeld_IsReadAgainOnceTheMasterIsFree()
     {
-        var (masterPath, childPath) = LightMasterAndChild.Write(_scratch.Path);
+        var loadOrder = LightMasterAndChild.LoadOrderIn(_scratch.Path);
         using var index = Indexes.Open(_holder);
-        using (File.Open(masterPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        using (File.Open(Path.Combine(_scratch.Path, LightMasterAndChild.Master.FileName), FileMode.Open, FileAccess.Read, FileShare.None))
         {
-            index.Reconcile(_holder, _scratch.Path,
-            [
-                new LoadOrderEntry(LightMasterAndChild.Master.FileName, masterPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
-                new LoadOrderEntry(LightMasterAndChild.Child.FileName, childPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true),
-            ], GameRelease.Starfield);
+            index.Receive(_holder, loadOrder);
             Assert.True(Failed(index, LightMasterAndChild.Child));
         }
 

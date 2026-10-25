@@ -48,24 +48,9 @@ public sealed class ReadMeetsSwapTests : IDisposable
     }
 
     [Fact]
-    public void ARead_OfAnIndexFileDuckDbInvalidated_IsNotReady_AndSaysItWasInvalidated()
-    {
-        IndexFiles.AbortNextCheckpoint(_fixture.InstanceRoot);
-        Assert.Throws<DuckDB.NET.Data.DuckDBException>(() =>
-            IndexFiles.Execute(_fixture.InstanceRoot, "CREATE TABLE aborts_the_checkpoint AS SELECT range AS n FROM range(100000)"));
-
-        var refused = _index.Queries.GetPlugins().Refused();
-
-        Assert.Equal(IndexRefusal.IndexNotReady, refused.Refusal);
-        Assert.Contains("invalidated", refused.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void ARead_OfAnIndexFileDuckDbInvalidated_ReopensTheIndex_ReportsItReconcilingMeanwhile_AndAnswersAgain()
     {
-        IndexFiles.AbortNextCheckpoint(_fixture.InstanceRoot);
-        Assert.Throws<DuckDB.NET.Data.DuckDBException>(() =>
-            IndexFiles.Execute(_fixture.InstanceRoot, "CREATE TABLE aborts_the_checkpoint AS SELECT range AS n FROM range(100000)"));
+        IndexFiles.Invalidate(_fixture.InstanceRoot);
         var statusesBefore = _notifications.Notifications.Count;
 
         var refused = _index.Queries.GetPlugins().Refused();

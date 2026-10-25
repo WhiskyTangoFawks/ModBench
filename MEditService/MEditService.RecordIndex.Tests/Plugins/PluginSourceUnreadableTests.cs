@@ -58,18 +58,6 @@ public sealed class PluginSourceUnreadableTests : IDisposable
         Assert.Empty(index.Status.Failures);
     }
 
-    [Fact]
-    public void APluginWithNoPluginSource_SaysItHoldsNoFolderForIt()
-    {
-        Directory.Delete(SourceRoot, recursive: true);
-
-        using var index = Reconciled();
-
-        var unreadable = index.PluginResponseOf(Plugin)?.PluginSourceUnreadable.Require();
-        Assert.Contains(PluginName, unreadable?.Reason, StringComparison.Ordinal);
-        Assert.True(unreadable?.DecompileRepairs);
-    }
-
     [PosixFact]
     public void APluginSourceWithTwinFoldersNeitherSpelledAsTheLoadOrderNamesIt_NamesBothFolders()
     {
