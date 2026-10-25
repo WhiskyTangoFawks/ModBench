@@ -43,11 +43,19 @@ public sealed class BannedApiScopeTests
 
     private static string[] BanFilesFor(string project) =>
         ServiceProjects.IsTestSide(project) ? [TimeAndBlockingBan]
-        : HoldsLiveMutagenObjects(project) ? [SyncOverAsyncBan, TimeAndBlockingBan]
+        : HoldersOfLiveMutagenObjects.Contains(project) ? [SyncOverAsyncBan, TimeAndBlockingBan]
         : [MutagenBan, SyncOverAsyncBan, TimeAndBlockingBan];
 
-    private static bool HoldsLiveMutagenObjects(string project) =>
-        project.StartsWith("MEditService.Codec", StringComparison.Ordinal) || project == "MEditService.PluginAdapter";
+    private static readonly string[] HoldersOfLiveMutagenObjects =
+    [
+        "MEditService.Codec",
+        "MEditService.Codec.Fallout4",
+        "MEditService.Codec.Skyrim",
+        "MEditService.Codec.Starfield",
+        "MEditService.PluginAdapter",
+    ];
+
+    private static readonly TimeSpan EvaluationTimeout = TimeSpan.FromSeconds(15);
 
     [Theory]
     [MemberData(nameof(EveryProjectAndTheBanFilesItCompilesAgainst))]
@@ -66,11 +74,21 @@ public sealed class BannedApiScopeTests
         var evaluation = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         evaluation.ArgumentList.Add("msbuild");
         evaluation.ArgumentList.Add(ServiceProjects.Csproj(solution, project));
+        evaluation.ArgumentList.Add("-nodeReuse:false");
         foreach (var itemType in itemTypes) evaluation.ArgumentList.Add($"-getItem:{itemType}");
         using var process = Process.Start(evaluation) ?? throw new InvalidOperationException("dotnet did not start.");
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
+        using var deadline = new CancellationTokenSource(EvaluationTimeout);
+        try
+        {
+            await process.WaitForExitAsync(deadline.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            Assert.Fail($"dotnet msbuild did not evaluate {project} within {EvaluationTimeout.TotalSeconds} s.");
+        }
         Assert.True(process.ExitCode == 0, $"dotnet msbuild could not evaluate {project}:\n{await output}\n{await error}");
 
         using var json = JsonDocument.Parse(await output);
@@ -129,6 +147,5 @@ public sealed class BannedApiScopeTests
     }
 
     private static IEnumerable<string> EditorConfigs(string solutionDirectory) =>
-        Directory.EnumerateFiles(solutionDirectory, ".editorconfig", SearchOption.AllDirectories)
-            .Where(file => !SourceTree.Relative(solutionDirectory, file).Split('/').Any(segment => segment is "obj" or "bin"));
+        SourceTree.Files(solutionDirectory, ".editorconfig");
 }

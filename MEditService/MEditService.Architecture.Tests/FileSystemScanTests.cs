@@ -7,8 +7,10 @@ public sealed class FileSystemScanTests
 {
     private static readonly string[] LoadOrderNeedles = [@"File\.", @"Directory\."];
 
+    private const string CreateTempSubdirectorySpelledSoTheScratchFolderScanPassesThisFile = @"\bCreateTempSubdirector[y]";
+
     private static readonly string[] CodecNeedles =
-        [@"\bFile\.", @"\bDirectory\.", @"\bModPath", @"\bRecordLocator", @"\bCreateTempSubdirector[y]"];
+        [@"\bFile\.", @"\bDirectory\.", @"\bModPath", @"\bRecordLocator", CreateTempSubdirectorySpelledSoTheScratchFolderScanPassesThisFile];
 
     private static readonly string[] IndexNeedlesWhoseStaticsAreAnchoredAgainstAMemberOfTheSameName =
     [

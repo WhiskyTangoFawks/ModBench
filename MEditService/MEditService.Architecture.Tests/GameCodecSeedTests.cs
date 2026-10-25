@@ -45,10 +45,6 @@ public class GameCodecSeedTests
         Assert.Empty(offendingFiles);
     }
 
-    private static readonly IReadOnlyList<string> ProductionProjects =
-        ServiceProjects.Production(ServiceProjects.SolutionDirectory());
-
-    private static string[] ProductionSources() =>
-        [.. ProductionProjects.SelectMany(project => SourceTree.CSharpFiles(
-            ServiceProjects.Folder(ServiceProjects.SolutionDirectory(), project)))];
+    private static List<string> ProductionSources() =>
+        ServiceProjects.ProductionFiles(ServiceProjects.SolutionDirectory());
 }

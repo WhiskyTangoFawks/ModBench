@@ -6,8 +6,10 @@ namespace MEditService.Architecture.Tests;
 /// build output is generated, so a needle found there names nobody.</summary>
 public static class SourceTree
 {
-    public static IEnumerable<string> CSharpFiles(string root) =>
-        Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
+    public static IEnumerable<string> CSharpFiles(string root) => Files(root, "*.cs");
+
+    public static IEnumerable<string> Files(string root, string pattern) =>
+        Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories)
             .Where(file => !Path.GetRelativePath(root, file).Split(Path.DirectorySeparatorChar).Any(segment => segment is "obj" or "bin"));
 
     public static string Relative(string root, string file) =>

@@ -20,9 +20,16 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
-    public void ThePluginIdentityScan_NamesARecordCarryingAPluginWithoutItsOrigin()
+    public void ThePluginIdentityScan_NamesAPluginStringOnAnInterface_AndAPluginWithoutItsOriginOnARecord()
     {
-        Assert.Equal(["PlantedRecord(Plugin)"], PluginIdentityOffenders([typeof(PlantedRecord)]));
+        Assert.Equal(
+            ["IPlantedPort.Open(plugin)", "PlantedRecord(Plugin)"],
+            PluginIdentityOffenders([typeof(IPlantedPort), typeof(PlantedRecord)]));
+    }
+
+    public interface IPlantedPort
+    {
+        void Open(string plugin, string origin);
     }
 
     public sealed record PlantedRecord(string Plugin, string FormKey);

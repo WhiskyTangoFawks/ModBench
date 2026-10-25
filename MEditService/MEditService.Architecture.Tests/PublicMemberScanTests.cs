@@ -29,16 +29,24 @@ public sealed class PublicMemberScanTests
     }
 
     [Fact]
-    public void TheScan_NamesAPublicTypeNoOtherAssemblyCalls()
+    public void TheScan_NamesAnUncalledPublicType_AndAnUncalledMemberOfATypeHeldPublic()
     {
         var scan = Scan([typeof(PublicMemberScanTests).Assembly.Location]);
 
         Assert.Contains($"{typeof(PublicMemberScanTests).FullName}/{nameof(PlantedUncalled)}", scan.Uncalled);
+        Assert.Contains($"{typeof(PublicMemberScanTests).FullName}/{nameof(PlantedHeldPublicByItsConstant)}.{nameof(PlantedHeldPublicByItsConstant.Probe)}(0:Int32(Int32))", scan.Uncalled);
     }
 
     public sealed class PlantedUncalled
     {
-        public static int Probe() => 0;
+        public static int Probe(int x) => x;
+    }
+
+    public sealed class PlantedHeldPublicByItsConstant
+    {
+        public const int Held = 1;
+
+        public static int Probe(int x) => x + Held;
     }
 
     private sealed record ScanResult(int Assemblies, int References, int Members, List<string> Uncalled);
