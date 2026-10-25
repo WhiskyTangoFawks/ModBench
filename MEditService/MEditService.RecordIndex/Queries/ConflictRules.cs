@@ -4,31 +4,31 @@ namespace MEditService.RecordIndex.Queries;
 // between the sites that fold per-plugin values through them.
 internal static class ConflictRules
 {
-    // The field winner (highest load-order plugin with a value) is ConflictWins if contested by
+    // The field winner (highest load-order plugin taking part) is ConflictWins if contested by
     // another non-master plugin, else Override; the rest are IdenticalToMaster, ConflictLoses or
-    // Override.
+    // Override. A plugin takes part with an absent value too, since a copy that drops a field
+    // changes it (xEdit); a sparse plugin takes part only where it holds a value.
     public static Dictionary<string, ConflictThis> ComputeCellStates(
         IReadOnlyDictionary<string, object?> valuesByPlugin,
         string masterPlugin,
         IReadOnlyList<(string Plugin, int LoadOrderIndex)> pluginOrder,
+        IReadOnlySet<string> sparsePlugins,
         Func<object?, object?, bool> valuesEqual)
     {
-        var candidates = pluginOrder.Where(p => valuesByPlugin.GetValueOrDefault(p.Plugin) != null).ToList();
-        if (candidates.Count == 0) return [];
-        var winnerPlugin = candidates.MaxBy(p => p.LoadOrderIndex).Plugin;
-
+        var taking = pluginOrder.Where(p => valuesByPlugin.GetValueOrDefault(p.Plugin) != null || !sparsePlugins.Contains(p.Plugin)).ToList();
+        if (taking.All(p => valuesByPlugin.GetValueOrDefault(p.Plugin) == null)) return [];
+        var winnerPlugin = taking.MaxBy(p => p.LoadOrderIndex).Plugin;
         var ctx = new CellContext(
             masterPlugin, winnerPlugin,
             valuesByPlugin.GetValueOrDefault(masterPlugin), valuesByPlugin.GetValueOrDefault(winnerPlugin),
-            pluginOrder, valuesByPlugin, valuesEqual);
+            taking, valuesByPlugin, valuesEqual);
 
         var cellStates = new Dictionary<string, ConflictThis>();
-        foreach (var (plugin, _) in pluginOrder)
+        foreach (var (plugin, _) in taking)
         {
             if (plugin == masterPlugin) continue;
 
             var pluginValue = valuesByPlugin.GetValueOrDefault(plugin);
-            if (pluginValue == null) continue;
 
             cellStates[plugin] = ClassifyCell(plugin, pluginValue, ctx);
         }
@@ -50,8 +50,7 @@ internal static class ConflictRules
         {
             var contested = ctx.PluginOrder.Any(p =>
                 p.Plugin != ctx.MasterPlugin && p.Plugin != plugin &&
-                ctx.ValuesByPlugin.GetValueOrDefault(p.Plugin) is { } otherValue &&
-                !ctx.ValuesEqual(otherValue, ctx.WinnerValue));
+                !ctx.ValuesEqual(ctx.ValuesByPlugin.GetValueOrDefault(p.Plugin), ctx.WinnerValue));
             return contested ? ConflictThis.ConflictWins : ConflictThis.Override;
         }
 

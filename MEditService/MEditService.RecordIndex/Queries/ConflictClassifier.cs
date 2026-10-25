@@ -33,7 +33,7 @@ internal sealed class ConflictClassifier(ILogger logger)
         var ctx = ContextOf(
             shown, shownColumns, winner, release, resolveFormKey, loadOrderFormIds, indexed,
             shadowed: shown.Where(r => r.IsPartialForm).Select(Column).ToHashSet(StringComparer.Ordinal),
-            cellStates: (values, same) => ConflictRules.ComputeCellStates(values, columns[0], OrderOf(conflictingRecords, columns), same),
+            cellStates: (values, same, sparse) => ConflictRules.ComputeCellStates(values, columns[0], OrderOf(conflictingRecords, columns), sparse, same),
             comparedCount: conflictingRecords.Count);
         var diffs = RecordChildren(shown, ctx);
 
@@ -126,7 +126,7 @@ internal sealed class ConflictClassifier(ILogger logger)
     // How a node's cells take their conflict state: ComputeCellStates. A comparison of several
     // records has none, and its cells take theirs by focus.
     private delegate IReadOnlyDictionary<string, ConflictThis> CellStatesOf(
-        Dictionary<string, object?> values, Func<object?, object?, bool> same);
+        Dictionary<string, object?> values, Func<object?, object?, bool> same, IReadOnlySet<string> sparseColumns);
 
     // One node of the diff tree, at whatever depth the walk reached it. absentMeansDefault is false
     // for an array element, which the codec never omits for equalling its default.
@@ -145,7 +145,7 @@ internal sealed class ConflictClassifier(ILogger logger)
 
         var same = (object? a, object? b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault);
         var cellStates = ctx.StatesOf is { } statesOf && !ignoredInConflicts
-            ? statesOf(values, same)
+            ? statesOf(values, same, ctx.PartialFormColumns)
             : new Dictionary<string, ConflictThis>();
 
         List<FieldDiff>? children = null;

@@ -130,10 +130,10 @@ public class ConflictByCompareTests
     [InlineData(new[] { "Alice", "Bob" }, ConflictAll.Override, "Master,Override", "-,Override")]
     [InlineData(new[] { "Alice", "Bob", "Charlie" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins", "-,ConflictLoses,ConflictWins")]
     [InlineData(new[] { "Alice", "Bob", "Alice", "Charlie" }, ConflictAll.Conflict, "Master,ConflictLoses,IdenticalToMaster,ConflictWins", "-,ConflictLoses,IdenticalToMaster,ConflictWins")]
-    [InlineData(new[] { "Alice", null, "Alice" }, ConflictAll.NoConflict, "Master,IdenticalToMaster,IdenticalToMaster", "-,-,IdenticalToMaster")]
-    [InlineData(new[] { "Alice", "Bob", null }, ConflictAll.Override, "Master,Override,IdenticalToMaster", "-,Override,-")]
+    [InlineData(new[] { "Alice", null, "Alice" }, ConflictAll.Conflict, "Master,ConflictLoses,IdenticalToMaster", "-,ConflictLoses,IdenticalToMaster")]
+    [InlineData(new[] { "Alice", "Bob", null }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins", "-,ConflictLoses,ConflictWins")]
     [InlineData(new[] { "Alice", "Bob", "Bob" }, ConflictAll.Override, "Master,Override,Override", "-,Override,Override")]
-    [InlineData(new[] { "Alice", null, "Charlie" }, ConflictAll.Override, "Master,IdenticalToMaster,Override", "-,-,Override")]
+    [InlineData(new[] { "Alice", null, "Charlie" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins", "-,ConflictLoses,ConflictWins")]
     [InlineData(new string?[] { null, "Bob", "Charlie" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins", "-,ConflictLoses,ConflictWins")]
     public void TheNotesOfEachCopy_ClassifyTheRecordEachColumnAndTheNotesRow(
         string?[] notes, ConflictAll conflictAll, string pluginStates, string notesCellStates)
@@ -149,10 +149,10 @@ public class ConflictByCompareTests
 
     [Theory]
     [InlineData(new[] { "Alice", "Bob", "Bob" }, new[] { "1", "5", "10" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins")]
-    [InlineData(new[] { "Alice", "Bob", null, "Dave" }, new[] { "1", "1", "5", "5" }, ConflictAll.Conflict, "Master,ConflictLoses,Override,ConflictWins")]
+    [InlineData(new[] { "Alice", "Bob", null, "Dave" }, new[] { "1", "1", "5", "5" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictLoses,ConflictWins")]
     [InlineData(new[] { "Alice", "Bob", "Alice" }, new[] { "1", "5", "5" }, ConflictAll.Conflict, "Master,ConflictLoses,Override")]
     [InlineData(new[] { "Alice", "Bob", "Charlie" }, new[] { "1", "5", "5" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins")]
-    [InlineData(new[] { "Alice", null, "Charlie" }, new[] { "1", "5", "5" }, ConflictAll.Override, "Master,Override,Override")]
+    [InlineData(new[] { "Alice", null, "Charlie" }, new[] { "1", "5", "5" }, ConflictAll.Conflict, "Master,ConflictLoses,ConflictWins")]
     [InlineData(new[] { "Alice", null }, new[] { "1", "5" }, ConflictAll.Override, "Master,Override")]
     [InlineData(new[] { "Alice", "Bob" }, new[] { "5", "5" }, ConflictAll.Override, "Master,Override")]
     [InlineData(new[] { "Alice", "Bob" }, new[] { "1", "5" }, ConflictAll.Override, "Master,Override")]
@@ -199,11 +199,11 @@ public class ConflictByCompareTests
     }
 
     [Fact]
-    public void ColumnWithNoCellStatesHasNoPluginState()
+    public void ColumnWithAnEmptyDocumentDropsEveryFieldAndIsAnOverride()
     {
         var result = ComparedCopies.Spelled("B.esp", document => document.Clear(), Notes("Alice"), Notes("Alice"));
 
-        Assert.Equal("Master,-", PluginStates(result));
+        Assert.Equal("Master,Override", PluginStates(result));
     }
 
     [Fact]
@@ -265,11 +265,11 @@ public class ConflictByCompareTests
 
     [Theory]
     [MemberData(nameof(ASubFieldAbsentFromTheOverride))]
-    public void StructField_ASubFieldAbsentFromAColumn_LeavesThatColumnOutOfTheChildCellStates(Func<CompareResult> compare)
+    public void StructField_ASubFieldAbsentFromAColumn_IsAnOverrideOfTheMastersValue(Func<CompareResult> compare)
     {
         var muscular = RequireChildren(Row(compare(), "Weight")).Single(c => c.FieldName == "Muscular");
 
-        Assert.Equal("-,-", CellStates(muscular, 2));
+        Assert.Equal("-,Override", CellStates(muscular, 2));
     }
 
     [Fact]
