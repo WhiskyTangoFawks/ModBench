@@ -296,7 +296,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
 
     private async Task<DecompileAndRepairResult> Repair(IReadOnlyList<PluginToRepair> plugins, bool force = false, IPluginAdapter? adapter = null, bool agreedDrops = false) =>
         (await TestEditService.Over(_holder, adapter: adapter).GetRequiredService<DecompileAndRepairPluginHandler>()
-            .DecompileAndRepairAsync(plugins, metadataFiles: [], force, agreedDrops, CancellationToken.None)).Value();
+            .DecompileAndRepairAsync(plugins, metadataFiles: [], force, agreedDrops)).Value();
 
     private static void WriteCleanPlugin(string modFolder, string name)
     {

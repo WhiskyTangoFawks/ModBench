@@ -40,7 +40,7 @@ public sealed class GitMissingRefusalTests : IDisposable
 
     private static readonly Gesture DecompileAndRepair = new("decompile-and-repair", (services, mod, force) =>
         Whole(services.GetRequiredService<DecompileAndRepairPluginHandler>()
-            .DecompileAndRepairAsync([new PluginToRepair(mod.Plugin, "hash", mod.ModFolder)], [], force, agreedDrops: false, CancellationToken.None)));
+            .DecompileAndRepairAsync([new PluginToRepair(mod.Plugin, "hash", mod.ModFolder)], [], force, agreedDrops: false)));
 
     private static readonly Gesture Build = new("build", (services, mod, _) => Whole(services.GetRequiredService<BuildModHandler>().BuildAsync(
         [new ModToBuild(SourceEditFixture.ModFolderOrigin, mod.ModFolder, mod.ModFolder, [], null, IsSubmodule: false)],

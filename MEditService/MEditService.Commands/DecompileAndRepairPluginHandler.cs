@@ -36,7 +36,7 @@ public sealed class DecompileAndRepairPluginHandler
     /// unless <paramref name="force"/> waives both; <paramref name="agreedDrops"/> waives the dropped data alone.</summary>
     public async Task<Answer<DecompileAndRepairResult, SelectionRefusal<DecompileAndRepairRefusal>>> DecompileAndRepairAsync(
         IReadOnlyList<PluginToRepair> plugins, IReadOnlyList<string> metadataFiles, bool force, bool agreedDrops,
-        CancellationToken cancel)
+        CancellationToken cancel = default)
     {
         if (_loadOrder.Held is not { Snapshot: var loadOrder })
             return new SelectionRefusal<DecompileAndRepairRefusal>(DecompileAndRepairRefusal.NoLoadOrder, NoLoadOrderException.DefaultMessage);
