@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readRecordPageGlobals } from '../recordPage';
 
-const place = { collapsedRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
+const place = { collapsedRows: [], restoredRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
 
 describe('the globals a record page is given', () => {
   it('reads each as the host set it', () => {

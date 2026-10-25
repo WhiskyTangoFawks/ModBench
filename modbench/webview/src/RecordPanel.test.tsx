@@ -1173,7 +1173,7 @@ describe('RecordPanel — the place a tab keeps, carried to the tab a move of it
   const scroller = (container: HTMLElement) => required(container.querySelector<HTMLElement>('div[style*="overflow: auto"]'), 'the grid’s scroller');
   const toldPlaces = () => vi.mocked(vscode.postMessage).mock.calls.map(([message]) => message)
     .filter(message => message.type === WEBVIEW_TO_EXTENSION.VIEW_STATE);
-  const place = { collapsedRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
+  const place = { collapsedRows: [], restoredRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
 
   it('opens with the columns collapsed, the focused cell and the scroll the tab had', async () => {
     vi.stubGlobal('mEditViewState', {
@@ -2101,7 +2101,7 @@ describe('RecordPanel — Collapse No Conflict', () => {
       winnerColumn: 'MyMod.esp', cellStates: { 'MyMod.esp': differing.has(name) ? 'Override' : 'IdenticalToMaster' },
     })),
   });
-  const collapse = (on: boolean) => tellPanel({ type: EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT, on });
+  const collapse = (on: boolean) => tellPanel({ type: EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT, on, again: on });
   const labelCell = (text: string) => required(screen.getByText(text).closest('td'), `the ${text} label cell`);
 
   beforeEach(() => { vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'); });
@@ -2164,10 +2164,40 @@ describe('RecordPanel — Collapse No Conflict', () => {
     await collapsed();
     fireEvent.click(required(screen.getAllByText('2 rows')[0], 'the first run'));
 
-    collapse(false);
     collapse(true);
 
     expect(screen.getAllByText('2 rows')).toHaveLength(2);
+  });
+
+  it('keeps a restored run restored when a tab opened later learns the lens is on', async () => {
+    await collapsed();
+    fireEvent.click(required(screen.getAllByText('2 rows')[0], 'the first run'));
+
+    tellPanel({ type: EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT, on: true, again: false });
+
+    expect(screen.getAllByText('2 rows')).toHaveLength(1);
+  });
+
+  it('tells the host the rows a restore showed', async () => {
+    await collapsed();
+
+    fireEvent.click(required(screen.getAllByText('2 rows')[0], 'the first run'));
+
+    expect(vi.mocked(vscode.postMessage).mock.calls.map(([message]) => message).filter(m => m.type === WEBVIEW_TO_EXTENSION.VIEW_STATE).at(-1))
+      .toMatchObject({ state: { restoredRows: ['Beta', 'Gamma'] } });
+  });
+
+  it('opens with the rows a restore showed still shown', async () => {
+    vi.stubGlobal('mEditViewState', {
+      collapsedRows: [], restoredRows: ['Beta', 'Gamma'], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 },
+    });
+    renderPanel(result);
+    await screen.findByText('Beta');
+
+    tellPanel({ type: EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT, on: true, again: false });
+
+    expect(screen.getByText('Gamma')).toBeInTheDocument();
+    expect(screen.queryByText('Epsilon')).not.toBeInTheDocument();
   });
 
   it('moves the focus to the run row when the focused cell is in a run that collapses', async () => {

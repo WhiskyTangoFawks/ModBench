@@ -1547,11 +1547,11 @@ describe('Collapse No Conflict reaches every record panel', () => {
     const { tabs } = twoTabs();
 
     await run('modbench.record.collapseNoConflict');
-    expect(tabs.map(lens)).toEqual([[{ type: 'collapseNoConflict', on: true }], [{ type: 'collapseNoConflict', on: true }]]);
+    expect(tabs.map(lens)).toEqual([[{ type: 'collapseNoConflict', on: true, again: true }], [{ type: 'collapseNoConflict', on: true, again: true }]]);
     expect(contextKeys.get(KEY)).toBe(true);
 
     await run('modbench.record.showNoConflict');
-    expect(tabs.map(lens).map((heard) => heard.at(-1))).toEqual([{ type: 'collapseNoConflict', on: false }, { type: 'collapseNoConflict', on: false }]);
+    expect(tabs.map(lens).map((heard) => heard.at(-1))).toEqual([{ type: 'collapseNoConflict', on: false, again: true }, { type: 'collapseNoConflict', on: false, again: true }]);
     expect(contextKeys.get(KEY)).toBe(false);
   });
 
@@ -1563,7 +1563,7 @@ describe('Collapse No Conflict reaches every record panel', () => {
     expect(lens(later)).toEqual([]);
     pageAsksItsFirstRead(later);
 
-    await vi.waitFor(() => expect(lens(later)).toEqual([{ type: 'collapseNoConflict', on: true }]));
+    await vi.waitFor(() => expect(lens(later)).toEqual([{ type: 'collapseNoConflict', on: true, again: false }]));
   });
 
   it('opens a tab showing every row when it is off, and says nothing to its page', async () => {

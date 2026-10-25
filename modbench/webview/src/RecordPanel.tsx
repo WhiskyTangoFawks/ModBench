@@ -29,7 +29,7 @@ import { failureReason } from '../../src/wire/readFailed';
 
 // The place of the tab this one stands in for, which an edit's move of the file closed.
 const placeGiven = (): ViewState => pageGlobals().mEditViewState
-  ?? { collapsedRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
+  ?? { collapsedRows: [], restoredRows: [], collapsedColumns: [], focusedCell: null, scroll: { top: 0, left: 0 } };
 
 // One sweep over the response's own overrides, keyed as the backend keys its dictionaries
 // (ADR-0012), so every whole-grid column set is minted the same way.
@@ -79,7 +79,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // The one focused cell (editor.md, The focused cell).
   const [placedFocus, setPlacedFocus] = useState<FocusedCell | null>(given.focusedCell);
   const [collapseNoConflict, setCollapseNoConflict] = useState(false);
-  const [restoredRuns, setRestoredRuns] = useState<ReadonlySet<string>>(new Set());
+  const [restoredRows, setRestoredRows] = useState<ReadonlySet<string>>(() => new Set(given.restoredRows));
   const enteredCell = useRef(false);
   const scroller = useRef<HTMLDivElement>(null);
   const headerRow = useRef<HTMLTableRowElement>(null);
@@ -96,13 +96,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const toldPlace = useRef(JSON.stringify(given));
   const tellPlace = useCallback(() => {
     const place: ViewState = {
-      collapsedRows: [...collapsedRows], collapsedColumns: [...collapsedColumns], focusedCell: placedFocus, scroll: scrolled.current,
+      collapsedRows: [...collapsedRows], restoredRows: [...restoredRows], collapsedColumns: [...collapsedColumns], focusedCell: placedFocus, scroll: scrolled.current,
     };
     const told = JSON.stringify(place);
     if (told === toldPlace.current) return;
     toldPlace.current = told;
     keepViewState(place);
-  }, [collapsedRows, collapsedColumns, placedFocus]);
+  }, [collapsedRows, restoredRows, collapsedColumns, placedFocus]);
   useEffect(tellPlace, [tellPlace]);
   const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | typeof LABEL_COLUMN, number>>(new Map());
   const resizeColumn = (key: ColumnKey | typeof LABEL_COLUMN, width: number) => setColumnWidths(prev => new Map(prev).set(key, width));
@@ -197,8 +197,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   const severalRecords = result?.overrides.some(o => o.column != null) === true;
   const shownRows = useMemo(
-    () => collapseNoConflict ? collapseRuns(rows, { severalRecords, restored: restoredRuns }) : rows,
-    [rows, collapseNoConflict, severalRecords, restoredRuns],
+    () => collapseNoConflict ? collapseRuns(rows, { severalRecords, restored: restoredRows }) : rows,
+    [rows, collapseNoConflict, severalRecords, restoredRows],
   );
   // A focused cell in a run that collapses is on the run's row until the run is restored.
   const focusedCell = useMemo<FocusedCell | null>(() => {
@@ -206,7 +206,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return run ? { rowKey: run.key, plugin: null } : placedFocus;
   }, [shownRows, placedFocus]);
   const restoreRun = (run: RunRow) => {
-    setRestoredRuns(prev => new Set(prev).add(run.key));
+    setRestoredRows(prev => new Set([...prev, ...run.holds]));
     setPlacedFocus(prev => (prev?.rowKey === run.key ? { rowKey: run.holds[0] ?? run.key, plugin: null } : prev));
   };
   const focused = useMemo<GridCell | ValueCell | undefined>(
@@ -240,7 +240,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       }
       if (msg.type === EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT) {
         setCollapseNoConflict(msg.on);
-        if (msg.on) setRestoredRuns(new Set());
+        if (msg.on && msg.again) setRestoredRows(new Set());
       }
       if (msg.type === EXTENSION_TO_WEBVIEW.MODS_CHANGED) setModsByOrigin(msg.modsByOrigin);
       if (msg.type === EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL) pasteIntoFocused(msg.text);
