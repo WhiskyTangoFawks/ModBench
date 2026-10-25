@@ -92,3 +92,7 @@ function firstDivergingByte(a: Buffer, b: Buffer): number {
   for (let i = 0; i < len; i++) if (a[i] !== b[i]) return i;
   return len;
 }
+
+/** Each file of a snapshot under `folder`, by path, as text. */
+export const textsUnder = (tree: ReadonlyMap<string, Buffer>, folder: string): Record<string, string> =>
+  Object.fromEntries([...tree].filter(([path]) => path.startsWith(`${folder}/`)).map(([path, bytes]) => [path, bytes.toString()]));

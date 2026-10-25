@@ -48,8 +48,8 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       expect(await folderNames()).toEqual(['Alpha', 'Beta', 'Gamma']);
     });
 
-    it('refuses to create a folder for a name that reaches outside the mods folder', async () => {
-      await expect(adapter.createModFolder('../escape')).rejects.toThrow('Not a valid mod name: "../escape"');
+    it.each(['../escape', 'a/../../escape', '/escape', 'a\\b', '..', '.', ''])('refuses to create a folder for a name that reaches outside the mods folder: %j', async (name) => {
+      await expect(adapter.createModFolder(name)).rejects.toThrow(`Not a valid mod name: "${name}"`);
       expect(await folderNames()).toEqual(['Alpha', 'Beta', 'Gamma']);
     });
 

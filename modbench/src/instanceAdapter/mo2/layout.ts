@@ -10,7 +10,7 @@ import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { PROFILE_SETTINGS_FILE_NAME } from './codecs/profileSettings';
 import { GIT_DIR, ownTempPrefix } from '../files';
 import { PLUGINS_FILE_NAME } from '../../loadOrderFileCodec/pluginsText';
-import { anyCase, SOURCE_MODS_FOLDER, type EntryRef } from '../instanceAdapter';
+import { anyCase, isBareName, SOURCE_MODS_FOLDER, type EntryRef } from '../instanceAdapter';
 import { PLUGIN_EXTENSIONS } from '../../tables/pluginFile';
 import { BUILD_CONFIGURATION_FILE } from '../../wire/sourceMod';
 
@@ -52,8 +52,7 @@ export function mo2FolderName(name: string): string {
 
 // Another tool can write a mod line with a `/`; a name that reaches outside `mods/` builds no path.
 /** The folder a mod's name gives it; `undefined` when it gives none. */
-export const modFolderName = (modName: string): string | undefined =>
-  (modName === '' || modName === '.' || modName === '..' || /[\\/]/.test(modName) ? undefined : modName);
+export const modFolderName = (modName: string): string | undefined => (isBareName(modName) ? modName : undefined);
 
 // Another tool can write a separator name MO2 never gives a folder; such a separator builds no path.
 const separatorFolderName = (separatorName: string): string | undefined =>

@@ -38,9 +38,6 @@ const PUBLISHER: ConfigurationFile = {
 };
 const PUBLISHER_FILE = PUBLISHER.name;
 
-const adapterOver = (root: string, { game, detectors }: { game?: string; detectors?: GameDetectors } = {}) =>
-  managerOver(root, { gameFolderSettingValue: game, detectors }, PUBLISHER);
-
 const steamAt = (game: string): GameDetectors => ({ ...NO_DETECTORS, paths: () => Promise.resolve({ dataFolder: join(game, 'Data') }) });
 
 async function put(root: string, path: string, text: string): Promise<void> {
@@ -62,7 +59,7 @@ async function instanceRepository(lines: readonly string[], game?: string, name 
   await mkdir(join(root, 'mods'));
   git(root, 'init', '--quiet');
   git(root, 'config', 'core.autocrlf', 'false');
-  return { root, adapter: adapterOver(root, { game }) };
+  return { root, adapter: managerOver(root, { gameFolderSettingValue: game }, PUBLISHER) };
 }
 
 const objectsIn = async (root: string): Promise<string[]> => (await readdir(join(root, '.git', 'objects'), { recursive: true })).sort();
@@ -111,7 +108,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     await mkdir(join(root, 'Stock Game', 'Data'), { recursive: true });
     await put(root, 'profiles/Default/Fallout4Custom.INI', `sPath=${onWineDrive(join(root, 'Stock Game'), '\\')}\r\n`);
 
-    await adapterOver(root, { game: join(root, 'Stock Game') }).writePathTokens();
+    await managerOver(root, { gameFolderSettingValue: join(root, 'Stock Game') }, PUBLISHER).writePathTokens();
 
     expect(held(root, 'profiles/Default/Fallout4Custom.INI')).toBe('sPath={instance folder:\\}\\Stock Game\r\n');
   });
@@ -125,7 +122,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     await mkdir(join(root, 'Stock Game', 'Data'), { recursive: true });
     await put(root, 'ModOrganizer.ini', SETTINGS([`gamePath=@ByteArray(${onWineDrive(join(root, 'Stock Game'), '\\\\')})`]));
 
-    await adapterOver(root, { game: join(root, 'Stock Game') }).writePathTokens();
+    await managerOver(root, { gameFolderSettingValue: join(root, 'Stock Game') }, PUBLISHER).writePathTokens();
 
     expect(held(root, 'ModOrganizer.ini')).toBe(SETTINGS(['gamePath=@ByteArray({game folder:\\\\})']));
   });
@@ -144,13 +141,13 @@ describe('the MO2 adapter\'s path tokens', () => {
   it('takes a file committed before the game folder was found as changed once the game folder is found', async () => {
     const game = await gameFolder();
     const { root } = await instanceRepository([`1\\binary=${onWineDrive(game, '/')}/Fallout4.exe`]);
-    await adapterOver(root).writePathTokens();
+    await managerOver(root, {}, PUBLISHER).writePathTokens();
     const anHourAgo = new Date(Date.now() - 3_600_000);
     await utimes(join(root, 'ModOrganizer.ini'), anHourAgo, anHourAgo);
     git(root, 'add', '--', 'ModOrganizer.ini');
     git(root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'paths');
 
-    await adapterOver(root, { game }).writePathTokens();
+    await managerOver(root, { gameFolderSettingValue: game }, PUBLISHER).writePathTokens();
 
     expect(git(root, 'status', '--porcelain', '--', 'ModOrganizer.ini')).toBe(' M ModOrganizer.ini\n');
   });
@@ -254,7 +251,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     git(root, 'worktree', 'add', '--quiet', linked);
     await put(linked, 'ModOrganizer.ini', SETTINGS(['gamePath=C:/Games']));
 
-    await adapterOver(linked).writePathTokens();
+    await managerOver(linked, {}, PUBLISHER).writePathTokens();
     git(root, 'worktree', 'remove', '--force', linked);
     await put(root, 'ModOrganizer.ini', SETTINGS([`path=${onWineDrive(linked, '/')}/x.exe`]));
 
@@ -280,7 +277,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     const clone = join(await folder('clone'), 'modlist');
     git(dirname(clone), 'clone', '--quiet', '--config', 'core.autocrlf=false', root, clone);
     await mkdir(join(clone, 'mods'));
-    return { clone, adapter: adapterOver(clone, { detectors }), game };
+    return { clone, adapter: managerOver(clone, { detectors }, PUBLISHER), game };
   }
 
   describe('in the publisher\'s configuration', () => {
@@ -409,7 +406,7 @@ describe('the MO2 adapter\'s path tokens', () => {
   it('writes nothing in an instance folder that holds no repository, and finds no path in it', async () => {
     const root = await folder('instance');
     await put(root, 'ModOrganizer.ini', SETTINGS(['1\\binary=C:/Modding/x.exe']));
-    const adapter = adapterOver(root);
+    const adapter = managerOver(root, {}, PUBLISHER);
 
     expect([await adapter.writePathTokens(), await adapter.pathsOutsideFolders(), await readFile(join(root, 'ModOrganizer.ini'), 'utf8')])
       .toEqual([undefined, [], SETTINGS(['1\\binary=C:/Modding/x.exe'])]);
@@ -440,7 +437,7 @@ describe('the MO2 adapter\'s path tokens', () => {
     const before = await written();
     await chmod(join(root, 'profiles/Default/Fallout4Prefs.ini'), 0o000);
 
-    await expect(adapterOver(root).writePathTokens()).rejects.toThrow();
+    await expect(managerOver(root, {}, PUBLISHER).writePathTokens()).rejects.toThrow();
 
     expect(await written()).toEqual(before);
   });

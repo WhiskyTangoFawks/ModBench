@@ -6,7 +6,7 @@ import { parsePlugins, pluginKey, renamePluginInText } from '../../loadOrderFile
 import { present } from '../../ports/present';
 import { pluginCompanionRule, type PluginCompanionRule } from '../../tables/gamePaths';
 import { get, ignoreSkippedLink, listEntries, listFolders, readOrAbsent, rename, undoAll, type Undo, withLock, write } from '../files';
-import { fileInFolder, type FileOrigin, InstanceAdapter } from '../instanceAdapter';
+import { fileInFolder, isBareName, type FileOrigin, InstanceAdapter } from '../instanceAdapter';
 import { pluginOrderFiles, profilesDir } from './layout';
 import type { ReadingSource } from '../instanceReading';
 import { originFolder, type Mo2Context } from './mo2Context';
@@ -27,8 +27,6 @@ const sameName = (a: string, b: string): boolean => pluginKey(a) === pluginKey(b
 
 const notAFileOf = (origin: FileOrigin, name: string): Error =>
   new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${name}"`);
-
-const namedFile = (name: string): boolean => name !== '' && name !== '.' && name !== '..' && !/[\\/]/.test(name);
 
 async function entriesIn(folder: string): Promise<Entry[]> {
   const unfollowable: Entry[] = [];
@@ -102,7 +100,7 @@ export function mo2PluginRename(context: Mo2Context, source: ReadingSource): Mo2
   async function plan(orders: readonly string[], origin: FileOrigin, from: string, to: string) {
     const { gameRelease } = await source.settings();
     const rule = present(pluginCompanionRule(gameRelease), `the files named for a plugin of ${gameRelease}`);
-    if (!namedFile(to)) throw new Error(`Not a valid plugin file name: "${to}"`);
+    if (!isBareName(to)) throw new Error(`Not a valid plugin file name: "${to}"`);
     const folder = await originFolder(context, origin, 'list');
     if (folder === undefined) throw notAFileOf(origin, from);
     return { lines: await renamedLines(orders, from, to), files: await moves(origin, folder, from, to, rule) };

@@ -27,7 +27,7 @@ import { listEntries } from '../../files';
 import type { FileOrigin } from '../../instanceAdapter';
 import type { ManagerAdapter } from '../../publisher';
 import { managerOver, readPluginLines } from '../../../test/mo2/adapterOver';
-import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../../test/mo2/corpusFixture';
+import { assertOnlyChanged, cloneCorpusFixture, snapshotTree, textsUnder } from '../../../test/mo2/corpusFixture';
 
 const MOD = 'mods/Patch Mod';
 const ORIGIN: FileOrigin = { kind: 'mod', name: 'Patch Mod' };
@@ -111,8 +111,20 @@ describe('the MO2 Instance adapter renaming a plugin', () => {
 
     const after = await snapshotTree(root);
     assertOnlyChanged(before, after, new Set([...NAMED_FOR_IT.flat(), DEFAULT_PLUGINS, SECONDARY_PLUGINS]));
-    expect(new Map(NAMED_FOR_IT.map(([, to]) => [to, after.get(to)?.toString()]))).toEqual(new Map(NAMED_FOR_IT.map(([from, to]) => [to, before.get(from)?.toString()])));
-    expect(NAMED_FOR_IT.filter(([from]) => after.has(from))).toEqual([]);
+    expect(textsUnder(after, MOD)).toEqual({
+      [`${MOD}/meta.ini`]: '[General]\r\ngameName=Fallout4\r\nmodid=0\r\nversion=1.2.3\r\ncategory="-1,"\r\ninstallationFile=\r\n',
+      [`${MOD}/Renamed Patch.esp`]: 'placeholder plugin bytes: Patch Mod.esp',
+      [`${MOD}/Renamed Patch.ini`]: `${MOD}/Patch Mod.ini`,
+      [`${MOD}/Renamed Patch - Main.ba2`]: `${MOD}/Patch Mod - Main.ba2`,
+      [`${MOD}/Renamed Patch - Textures.ba2`]: `${MOD}/Patch Mod - Textures.ba2`,
+      [`${MOD}/Strings/Renamed Patch_en.STRINGS`]: `${MOD}/Strings/Patch Mod_en.STRINGS`,
+      [`${MOD}/Strings/Renamed Patch_en.DLSTRINGS`]: `${MOD}/Strings/Patch Mod_en.DLSTRINGS`,
+      [`${MOD}/Patch Mod_Extra.esp`]: `${MOD}/Patch Mod_Extra.esp`,
+      [`${MOD}/Strings/Patch Mod_Extra_en.STRINGS`]: `${MOD}/Strings/Patch Mod_Extra_en.STRINGS`,
+      [`${MOD}/Strings/Patch Mod_xx.STRINGS`]: `${MOD}/Strings/Patch Mod_xx.STRINGS`,
+      [`${MOD}/plugin-source/Patch Mod.esp/record.json`]: `${MOD}/plugin-source/Patch Mod.esp/record.json`,
+      [`${MOD}/Other Archive - Main.ba2`]: `${MOD}/Other Archive - Main.ba2`,
+    });
     expect(await readPluginLines(root)).toEqual([
       { name: 'NonAsciiRetexture.esp', enabled: true },
       { name: 'Renamed Patch.esp', enabled: true },

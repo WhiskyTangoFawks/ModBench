@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from '../../../test/mo2/fakeVscodeWatcher';
 import { wabbajackPublisher } from '../wabbajackPublisher';
+import { expectKind } from '../../../test/expectKind';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -36,8 +37,7 @@ const writeSettings = (settings: unknown): Promise<void> =>
   writeFile(join(root, SETTINGS_FILE), typeof settings === 'string' ? settings : JSON.stringify(settings));
 
 async function covering(...segments: string[]): Promise<string[]> {
-  const configuration = await publisherOver().configuration();
-  if (configuration.kind !== 'read') throw new Error(`expected read, got ${JSON.stringify(configuration)}`);
+  const configuration = expectKind(await publisherOver().configuration(), 'read');
   return configuration.covering(join(root, ...segments), segments[0] === 'mods' ? segments[1] : undefined).map(({ name }) => name);
 }
 
@@ -165,10 +165,7 @@ describe('a folder Wabbajack\'s compiler never ships, as the mod manager names i
 });
 
 describe('compiler settings Modbench cannot read (Never silently wrong)', () => {
-  const reason = async (): Promise<string> => {
-    const configuration = await publisherOver().configuration();
-    return configuration.kind === 'unreadable' ? configuration.reason : `not unreadable: ${configuration.kind}`;
-  };
+  const reason = async (): Promise<string> => expectKind(await publisherOver().configuration(), 'unreadable').reason;
 
   it('says so, naming the file, when they are not JSON', async () => {
     await writeSettings('{ "Include": [');
@@ -202,9 +199,7 @@ describe('compiler settings Modbench cannot read (Never silently wrong)', () => 
 
 describe('the publisher tags the configuration lists on a path (publishing.md, Publisher tags, story 2: what remove takes away)', () => {
   const listed = async (...segments: string[]): Promise<string[]> => {
-    const configuration = await publisherOver().configuration();
-    if (configuration.kind !== 'read') throw new Error(`expected read, got ${JSON.stringify(configuration)}`);
-    return configuration.listed(join(root, ...segments)).map(({ name }) => name);
+    return expectKind(await publisherOver().configuration(), 'read').listed(join(root, ...segments)).map(({ name }) => name);
   };
 
   it('are those that name exactly the path, in the order Wabbajack declares them, and not those that name a path above or below it', async () => {

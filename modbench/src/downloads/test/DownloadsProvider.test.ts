@@ -13,7 +13,6 @@ vi.mock('vscode', () => ({
 }));
 
 import { DownloadsProvider, DownloadedFileNode, type DownloadsTreeNode } from '../DownloadsProvider';
-import { downloadedFileNodeFixture } from '../../test/mo2/downloadedFileNodeFixture';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
@@ -37,13 +36,13 @@ const providerOver = (...downloads: LocatedDownloadedFileRow[]): DownloadsProvid
 
 describe('a downloaded file row', () => {
   it('label is the row displayName; id is pinned to the raw filename', () => {
-    const node = downloadedFileNodeFixture(row({ name: 'foo_1_2_3.zip', displayName: 'Sleep or Save' }));
+    const node = new DownloadedFileNode(row({ name: 'foo_1_2_3.zip', displayName: 'Sleep or Save' }));
     expect(node.label).toBe('Sleep or Save');
     expect(node.id).toBe('foo_1_2_3.zip');
   });
 
   it('is a flat leaf row (no children)', () => {
-    const node = downloadedFileNodeFixture(row());
+    const node = new DownloadedFileNode(row());
     expect(node.collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 
@@ -52,7 +51,7 @@ describe('a downloaded file row', () => {
     ['Installed', new ThemeIcon('check')],
     ['Uninstalled', new ThemeIcon('circle-slash', new ThemeColor('charts.yellow'))],
   ])('shows the status of a %s file by its icon and colour', (status, icon) => {
-    expect(downloadedFileNodeFixture(row({ status })).iconPath).toEqual(icon);
+    expect(new DownloadedFileNode(row({ status })).iconPath).toEqual(icon);
   });
 
   it.each<[string, DownloadedFileRow['status'], string | undefined, string]>([
@@ -62,12 +61,12 @@ describe('a downloaded file row', () => {
     ['a Downloaded file with no version shows nothing', 'Downloaded', undefined, ''],
     ['an Installed file with no version shows just the status word', 'Installed', undefined, 'Installed'],
   ])('description: %s', (_case, status, version, description) => {
-    expect(downloadedFileNodeFixture(row({ status, version })).description).toBe(description);
+    expect(new DownloadedFileNode(row({ status, version })).description).toBe(description);
   });
 
   describe('tooltip', () => {
     it('a fully-populated row includes every field', () => {
-      const node = downloadedFileNodeFixture(
+      const node = new DownloadedFileNode(
         row({
           modName: 'Sleep or Save', version: '2.2.1', modID: '12345', size: 4096,
           mtimeMs: Date.parse('2024-01-15T10:00:00Z'), gameName: 'Fallout4', author: 'SomeAuthor',
@@ -84,7 +83,7 @@ describe('a downloaded file row', () => {
     });
 
     it('a minimal row (filename only) omits every optional field without erroring', () => {
-      const node = downloadedFileNodeFixture(row());
+      const node = new DownloadedFileNode(row());
       const tooltip = expectInstanceOf(node.tooltip, MarkdownString);
       expect(tooltip.value).toContain('foo.zip');
       expect(tooltip.value).not.toContain('undefined');
@@ -92,28 +91,28 @@ describe('a downloaded file row', () => {
   });
 
   it('offers the menu entries its metadata, its mod id and its excluded state allow', () => {
-    const node = downloadedFileNodeFixture(row({ hasMeta: true, modID: '1', excluded: true }));
+    const node = new DownloadedFileNode(row({ hasMeta: true, modID: '1', excluded: true }));
     expect(node.contextValue).toBe('downloadedFile hasModID hasMeta excluded');
   });
 
   it('resourceUri is the path the value carries for the row', () => {
-    const node = downloadedFileNodeFixture(row({ name: 'foo.zip' }));
+    const node = new DownloadedFileNode(row({ name: 'foo.zip' }));
     expect(present(node.resourceUri, "the downloaded file node's resourceUri").fsPath).toBe(join('/instance', 'downloads', 'foo.zip'));
   });
 
   it('exposes the source row for command handlers to act on', () => {
     const r = row();
-    expect(downloadedFileNodeFixture(r).argument.row).toBe(r);
+    expect(new DownloadedFileNode(r).argument.row).toBe(r);
   });
 
   it('carries its metadata file\'s modID as the Nexus mod id view on Nexus opens, and none without one', () => {
-    expect(downloadedFileNodeFixture(row({ modID: '123' })).nexusModId).toBe('123');
-    expect(downloadedFileNodeFixture(row()).nexusModId).toBeUndefined();
+    expect(new DownloadedFileNode(row({ modID: '123' })).nexusModId).toBe('123');
+    expect(new DownloadedFileNode(row()).nexusModId).toBeUndefined();
   });
 
   it('carries its metadata file\'s game as the game view on Nexus opens the page of, and none without one', () => {
-    expect(downloadedFileNodeFixture(row({ gameName: 'SkyrimSE' })).gameName).toBe('SkyrimSE');
-    expect(downloadedFileNodeFixture(row()).gameName).toBeUndefined();
+    expect(new DownloadedFileNode(row({ gameName: 'SkyrimSE' })).gameName).toBe('SkyrimSE');
+    expect(new DownloadedFileNode(row()).gameName).toBeUndefined();
   });
 });
 

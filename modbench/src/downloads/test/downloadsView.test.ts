@@ -41,8 +41,8 @@ vi.mock('vscode', () => ({
 
 import type { Instance, InstanceView } from '../../instanceLoader/instance';
 import { createDownloadsView } from '../downloadsView';
-import { downloadedFileNodeFixture } from '../../test/mo2/downloadedFileNodeFixture';
 import { downloadedFileRowFixture } from '../../test/mo2/downloadedFileRowFixture';
+import { DownloadedFileNode } from '../DownloadsProvider';
 import { present } from '../../ports/present';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -155,7 +155,7 @@ describe('the Downloads view tells its palette entries, which are handed no row,
   it('sets each key off the selection as it changes', () => {
     viewOver(instanceOver());
 
-    downloadsTree().selectRows([downloadedFileNodeFixture(downloadedFileRowFixture('a.7z', { hasMeta: true }))]);
+    downloadsTree().selectRows([new DownloadedFileNode(downloadedFileRowFixture('a.7z', { hasMeta: true }))]);
     expect(keys()).toEqual({
       'modbench.downloadedFile.singleFile': true, 'modbench.downloadedFile.singleFileWithMeta': true,
       'modbench.downloadedFile.holdsFile': true, 'modbench.downloadedFile.holdsIncluded': true,
@@ -163,7 +163,7 @@ describe('the Downloads view tells its palette entries, which are handed no row,
     });
 
     downloadsTree().selectRows([
-      downloadedFileNodeFixture(downloadedFileRowFixture('b.7z', { excluded: true })), downloadedFileNodeFixture(downloadedFileRowFixture('c.7z', { excluded: true })),
+      new DownloadedFileNode(downloadedFileRowFixture('b.7z', { excluded: true })), new DownloadedFileNode(downloadedFileRowFixture('c.7z', { excluded: true })),
     ]);
     expect(keys()).toEqual({
       'modbench.downloadedFile.singleFile': false, 'modbench.downloadedFile.singleFileWithMeta': false,

@@ -1,4 +1,3 @@
-import { fixedGameFolderSetting } from '../../../test/gameFolderSetting';
 import { versionInfo, windowsProgram } from '../../../test/windowsProgram';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MoveToTrash } from '../../../ports/trash';
@@ -35,7 +34,8 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { Readable } from 'node:stream';
 import { dirname, join, matchesGlob, sep } from 'node:path';
-import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
+import { isMo2Instance } from '../mo2Instance';
+import { programRunning } from '../../processes';
 import type { ManagerAdapter } from '../../publisher';
 import type { Mo2Context } from '../mo2Context';
 import type { ReadingSource } from '../../instanceReading';
@@ -52,7 +52,6 @@ import { adapterOver, contextOver, managerOver, sourceOver } from '../../../test
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_LOAD_ORDER, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../../test/mo2/corpusFixture';
-import { FOMOD_ENGINE } from '../../../test/fomodEngine';
 
 const INI = 'ModOrganizer.ini';
 const DOWNLOADED_FILE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
@@ -312,9 +311,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it('answers MO2 running while any process runs ModOrganizer.exe, whichever instance it has open', async () => {
-        const onThisMachine = mo2InstanceAdapter({
-          instanceRoot: root, gameFolderSetting: fixedGameFolderSetting(), installationFileReader: fakeInstallationFileReader([]), fomodEngine: FOMOD_ENGINE,
-        }, undefined);
+        const onThisMachine = managerOver(root, { mo2Running: () => programRunning('ModOrganizer.exe') });
         const mo2 = await runningProgram('ModOrganizer.exe');
         try {
           expect((await onThisMachine.reading()).managerRunning).toEqual({ kind: 'running' });
@@ -1951,7 +1948,8 @@ describe('the MO2 Instance adapter', () => {
         const answer = await adapter.installationFile('Unofficial Fallout 4 Patch');
 
         const { reason } = expectKind(answer, 'unreadable');
-        expect([reason.includes('ENOENT'), reason.includes(DOWNLOADED_FILE)]).toEqual([true, true]);
+        expect(reason).toContain('ENOENT');
+        expect(reason).toContain(DOWNLOADED_FILE);
       });
 
       it('answers unreadable, naming the downloaded file and why, when the downloads folder cannot be resolved', async () => {
@@ -1960,7 +1958,8 @@ describe('the MO2 Instance adapter', () => {
         const answer = await adapter.installationFile('Unofficial Fallout 4 Patch');
 
         const { reason } = expectKind(answer, 'unreadable');
-        expect([reason.includes(DOWNLOADED_FILE), reason.includes(INI)]).toEqual([true, true]);
+        expect(reason).toContain(DOWNLOADED_FILE);
+        expect(reason).toContain(INI);
       });
     });
 
@@ -2911,18 +2910,22 @@ describe('a folder is an MO2 instance by what it holds', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  type Part = 'settings' | 'mods' | 'profiles';
-  const lay = (part: Part): Promise<unknown> =>
-    (part === 'settings' ? writeFile(join(root, 'ModOrganizer.ini'), '[General]\ngameName=Fallout4\n') : mkdir(join(root, part)));
+  const settingsIn = (at: string): Promise<void> => writeFile(join(at, 'ModOrganizer.ini'), '[General]\ngameName=Fallout4\n');
+  const folderIn = async (at: string, name: string): Promise<void> => { await mkdir(join(at, name)); };
+  const instanceIn = async (at: string): Promise<void> => {
+    await settingsIn(at);
+    await folderIn(at, 'mods');
+    await folderIn(at, 'profiles');
+  };
 
-  it.each<[string, Part[], boolean]>([
-    ['is one when it holds ModOrganizer.ini, mods/ and profiles/', ['settings', 'mods', 'profiles'], true],
-    ['is none without ModOrganizer.ini', ['mods', 'profiles'], false],
-    ['is none without mods/', ['settings', 'profiles'], false],
-    ['is none without profiles/', ['settings', 'mods'], false],
-    ['is none when empty', [], false],
-  ])('%s', async (_case, parts, instance) => {
-    await Promise.all(parts.map(lay));
+  it.each<[string, (at: string) => Promise<void>, boolean]>([
+    ['is one when it holds ModOrganizer.ini, mods/ and profiles/', instanceIn, true],
+    ['is none without ModOrganizer.ini', async (at) => { await folderIn(at, 'mods'); await folderIn(at, 'profiles'); }, false],
+    ['is none without mods/', async (at) => { await settingsIn(at); await folderIn(at, 'profiles'); }, false],
+    ['is none without profiles/', async (at) => { await settingsIn(at); await folderIn(at, 'mods'); }, false],
+    ['is none when empty', () => Promise.resolve(), false],
+  ])('%s', async (_case, lay, instance) => {
+    await lay(root);
 
     expect(isMo2Instance(root)).toBe(instance);
   });
@@ -2932,7 +2935,7 @@ describe('a folder is an MO2 instance by what it holds', () => {
   });
 
   it('is one with a modlist.txt that is not text, its contents unread', async () => {
-    await Promise.all((['settings', 'mods', 'profiles'] as const).map(lay));
+    await instanceIn(root);
     await mkdir(join(root, 'profiles', 'Default'));
     await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '\x00not valid text\xff');
 

@@ -1,7 +1,7 @@
 import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 import type { NexusFileInfo } from '../ports/nexusFileInfo';
 import {
-  entryNotFound, filesWinningFirst, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type SourceMods, type OriginFile, type InstallKeys, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
+  entryNotFound, filesWinningFirst, isBareName, type DecideModOrder, type DownloadedFile, type DownloadedFileQuery, type DownloadedFiles, type DecidePluginOrder, type DownloadedFileMark, type EntryRef, type FileOrigin, type FileRead, type FileStamp,  type GameFile, type HashedFile, type InstallationFile, type InstallOutcome, type InstallPackage, type InstallTarget, type InstanceAdapter, type InstanceReading, type ModlistEntry, type ModOrderChange, type OriginFiles, type OriginFileMark, type OriginFileMarked, type ModFolder, type ModFolders, type ModMetadata, type NexusModFile, type SourceMods, type OriginFile, type InstallKeys, type FomodAnswer, type PluginOrderChange, type PublisherTag, type PublisherTagChange, type Subscription } from '../instanceAdapter/instanceAdapter';
 import { modOrderAfter, pluginOrderAfter } from './fakeOrderChanges';
 import { groupModOrder } from '../instanceAdapter/modGroups';
 import { parseNexusPage } from '../instanceAdapter/nexusPage';
@@ -186,14 +186,10 @@ export function modFoldersOf(...entries: readonly (string | (EntryRef & { modNam
 const foldersHolding = (all: readonly ModFolder[]): ModFolders =>
   ({ all, holding: (entry) => all.find((folder) => entryKey(folder) === entryKey(entry)) });
 
-const reachesOutsideModsFolder = (name: string): boolean => name === '' || name === '.' || name === '..' || /[\\/]/.test(name);
-
 function folderBeside(folders: ModFolders | undefined, name: string): string {
   const held = folders?.all[0]?.path ?? '/mods/';
   return `${held.slice(0, Math.max(held.lastIndexOf('/'), held.lastIndexOf('\\')))}/${name}`;
 }
-
-const namesNoFolder = (name: string): boolean => name === '' || name === '.' || name === '..' || /[\\/]/.test(name);
 
 const reachesOut = (relativePath: string): boolean => relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
 
@@ -298,7 +294,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       write({ verb: 'changePublisherTag', change, tag, paths }, () => paths.flatMap((path) => (answers.outsideInstance?.has(path) ? [{ path, reason: 'It is outside the instance.' }] : []))),
     publisherConfigurationRefusal: () => Promise.resolve(answers.unreadablePublisher),
     followModFolders: (moves) => (answers.publisherTags === undefined ? Promise.resolve() : write({ verb: 'followModFolders', moves }, () => undefined)),
-    modFolderPath: (mod) => Promise.resolve(namesNoFolder(mod) ? undefined : foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod)),
+    modFolderPath: (mod) => Promise.resolve(isBareName(mod) ? foldersNow().holding({ kind: 'mod', name: mod })?.path ?? folderBeside(current.modFolders, mod) : undefined),
     sourceFolder: (mod) => (answers.unsourcedMods?.has(mod) ? undefined : `/source/${mod}`),
     installationFile: (mod) => Promise.resolve(answers.installations?.get(mod) ?? { kind: 'read', answer: undefined }),
     downloadedFile: (name) => Promise.resolve(answers.downloadedFiles?.get(name) ?? putHashedAsTheirText.get(name) ?? { kind: 'read', answer: undefined }),
@@ -403,7 +399,7 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
       }),
     createModFolder: (mod) =>
       write({ verb: 'createModFolder', mod }, () => {
-        if (reachesOutsideModsFolder(mod)) throw new Error(`Not a valid mod name: "${mod}"`);
+        if (!isBareName(mod)) throw new Error(`Not a valid mod name: "${mod}"`);
         const held = foldersNow().holding({ kind: 'mod', name: mod });
         if (held !== undefined) throw inTheWay(held.path);
         current = { ...current, modFolders: foldersHolding([...foldersNow().all, { kind: 'mod', name: mod, path: folderBeside(current.modFolders, mod), modName: mod }]) };

@@ -8,7 +8,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { modCommands } from '../../modCommands/modCommands';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree, textsUnder,
 } from './corpusFixture';
 import { adapterOver, readDownloadedFile, readModlistEntries } from './adapterOver';
 import { fakeInstallationFileReader } from '../fakeInstallationFileReader';
@@ -62,10 +62,13 @@ describe('mod lifecycle corpus (uninstall)', () => {
     await modCommands(adapterOver(dir), unscriptedMEdit, unreadStatus).renameMod('Harder VATS', 'Harder VATS 2');
     const after = await snapshotTree(dir);
 
-    const moved = [...before.keys()].filter((path) => path.startsWith('mods/Harder VATS/'));
-    expect(moved).toEqual(expect.arrayContaining(['mods/Harder VATS/meta.ini', 'mods/Harder VATS/Scripts/a.pex']));
-    expect(new Map(moved.map((path) => [path, after.get(path.replace('mods/Harder VATS/', 'mods/Harder VATS 2/'))]))).toEqual(new Map(moved.map((path) => [path, before.get(path)])));
-    assertOnlyChanged(before, after, new Set([...moved, ...moved.map((p) => p.replace('/Harder VATS/', '/Harder VATS 2/')), MODLIST, 'profiles/Secondary/modlist.txt']));
+    expect([textsUnder(after, 'mods/Harder VATS'), textsUnder(after, 'mods/Harder VATS 2')]).toEqual([{}, {
+      'mods/Harder VATS 2/meta.ini': '[General]\r\ngameName=Fallout4\r\nmodid=0\r\nversion=\r\ncategory="-1,"\r\ninstallationFile=\r\n',
+      'mods/Harder VATS 2/Scripts/a.pex': 'a\n',
+    }]);
+    assertOnlyChanged(before, after, new Set([
+      'mods/Harder VATS/meta.ini', 'mods/Harder VATS/Scripts/a.pex', 'mods/Harder VATS 2/meta.ini', 'mods/Harder VATS 2/Scripts/a.pex', MODLIST, 'profiles/Secondary/modlist.txt',
+    ]));
     expect((await readModlistEntries(dir)).find((e) => e.name === 'Harder VATS 2')).toEqual({ kind: 'mod', name: 'Harder VATS 2', enabled: false });
   });
 });
