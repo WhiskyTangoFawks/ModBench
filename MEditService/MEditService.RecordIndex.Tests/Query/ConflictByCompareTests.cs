@@ -56,11 +56,11 @@ public class ConflictByCompareTests
     [InlineData("Race", "\"000900:A.esp\"", ConflictThis.Override)]
     [InlineData("ObjectBounds", "{}", ConflictThis.IdenticalToMaster)]
     public void AbsentAgainstAnExplicitValue_IsAConflictOnlyWhenTheValueIsNotTheDefault_ForTheCodecOmitsAMemberEqualToItsDefault(
-        string member, string json, ConflictThis spelled)
+        string member, string json, ConflictThis overridesState)
     {
         var result = ComparedCopies.Spelled<Npc>("B.esp", document => document[member] = JsonNode.Parse(json), _ => { }, _ => { });
 
-        Assert.Equal(spelled, Row(result, member).CellStates["B.esp"]);
+        Assert.Equal(overridesState, Row(result, member).CellStates["B.esp"]);
     }
 
     [Fact]

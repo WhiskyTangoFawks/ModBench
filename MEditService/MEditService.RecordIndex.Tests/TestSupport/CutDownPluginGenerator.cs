@@ -10,8 +10,7 @@ using Noggog;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>Skipped, not passed, without MEDIT_REGEN_TESTDATA=1, so a run reports honestly rather than a
-/// green no-op.</summary>
+/// <summary>Runs only under MEDIT_REGEN_TESTDATA=1, for it rewrites committed test data from a local game install.</summary>
 public sealed class RegenerateFactAttribute : FactAttribute
 {
     public RegenerateFactAttribute()

@@ -436,11 +436,11 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Theory]
-    [InlineData(0)]
-    [InlineData(2)]
-    [InlineData(4)]
-    [InlineData(6)]
-    public void APageOfRecordsSharingOrLackingAnEditorId_IsItsSliceOfTheListing_EveryTimeItIsAsked(int offset)
+    [InlineData(0, new[] { "000800:DupEditorId.esp", "000801:DupEditorId.esp" })]
+    [InlineData(2, new[] { "000802:DupEditorId.esp", "000803:DupEditorId.esp" })]
+    [InlineData(4, new[] { "000804:DupEditorId.esp", "000805:DupEditorId.esp" })]
+    [InlineData(6, new[] { "000806:DupEditorId.esp" })]
+    public void APageOfRecordsSharingOrLackingAnEditorId_HoldsItsOwnRecords_EveryTimeItIsAsked(int offset, string[] formKeys)
     {
         using var fixture = new PluginFixtureBuilder("medit-dup-edid")
             .WithPlugin("DupEditorId.esp", mod =>
@@ -455,14 +455,12 @@ public class RecordReadsTests(TestPluginFixture fixture)
             })
             .Build();
         using var index = Indexes.Reconciled(fixture);
-        IEnumerable<string> Page(int limit, int at) =>
-            index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: limit, offset: at).Value().Items.Select(i => i.FormKey);
-        var listing = Page(100, 0).ToList();
+        IEnumerable<string> Page() =>
+            index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 2, offset: offset).Value().Items.Select(i => i.FormKey);
 
-        var page = Page(2, offset).ToList();
+        var page = Page().ToList();
 
-        Assert.Equal(7, listing.Count);
-        Assert.Equal(listing.Skip(offset).Take(2), page);
-        Assert.Equal(page, Page(2, offset));
+        Assert.Equal(formKeys, page);
+        Assert.Equal(page, Page());
     }
 }

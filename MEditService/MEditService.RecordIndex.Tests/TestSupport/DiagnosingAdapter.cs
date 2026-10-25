@@ -8,12 +8,13 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>Real documents, with <see cref="Unreadable"/>'s record read as ingest reads one it could not
-/// turn into its document, and FailedRecordType as a type whose enumeration failed.</summary>
+/// <summary>Real documents, read as ingest reads a plugin some of whose records it could not read.</summary>
 internal sealed class DiagnosingAdapter() : DelegatingPluginAdapter(TestAdapters.Mutagen())
 {
+    /// <summary>The record read as one ingest could not turn into its document.</summary>
     public string? Unreadable { get; set; }
 
+    /// <summary>The record type whose enumeration failed.</summary>
     public string? FailedRecordType { get; set; }
 
     public override Answer<IPluginDocuments, PluginFailure> OpenDocuments(

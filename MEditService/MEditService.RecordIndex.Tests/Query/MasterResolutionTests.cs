@@ -109,13 +109,13 @@ public class MasterResolutionTests
         ["an inactive master, which is missing rather than late"] = ([Plugin("Patch.esp", "Base.esm"), Disabled("Base.esm")], []),
     };
 
-    public static TheoryData<string> LoadOrders => [.. LateMasterCases.Keys];
+    public static TheoryData<string> LateMasterCaseNames => [.. LateMasterCases.Keys];
 
     [Theory]
-    [MemberData(nameof(LoadOrders))]
-    public void AnActiveMasterLoadingAfterItsDependant_IsLate_ForTheGameCrashesOnTheMasterOnlyWhenItComesSecond(string order)
+    [MemberData(nameof(LateMasterCaseNames))]
+    public void AnActiveMasterLoadingAfterItsDependant_IsLate_ForTheGameCrashesOnTheMasterOnlyWhenItComesSecond(string lateMasterCase)
     {
-        var (plugins, late) = LateMasterCases[order];
+        var (plugins, late) = LateMasterCases[lateMasterCase];
 
         var result = LateMasters(Plugins(plugins));
 

@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -55,9 +56,9 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         return fixture;
     }
 
-    private OpenedIndex Reconciled(ScatteredFixtureData fixture)
+    private OpenedIndex Reconciled(ScatteredFixtureData fixture, IPluginAdapter? adapter = null)
     {
-        var index = Indexes.Reconciled(fixture);
+        var index = Indexes.Reconciled(fixture, adapter: adapter);
         _built.Add(index);
         return index;
     }
@@ -87,16 +88,18 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         Assert.Equal(PluginName, plugin.Name);
     }
 
-    private (bool CompiledPlugin, bool PluginSourceUnreadable) PluginRowOf(ScatteredFixtureData fixture)
+    private sealed record CompiledPluginRow(bool IsCompiledPlugin, bool PluginSourceUnreadable);
+
+    private CompiledPluginRow PluginRowOf(ScatteredFixtureData fixture)
     {
         var plugin = Reconciled(fixture).PluginResponseOf(PluginKey) ?? throw new InvalidOperationException("Expected the plugin's row.");
-        return (plugin.IsCompiledPlugin, plugin.PluginSourceUnreadable is not null);
+        return new(plugin.IsCompiledPlugin, plugin.PluginSourceUnreadable is not null);
     }
 
     [Fact]
     public void APluginNoTreeBacks_IsNoCompiledPlugin()
     {
-        Assert.Equal((false, false), PluginRowOf(Built(TwoNpcsPlugin())));
+        Assert.Equal(new CompiledPluginRow(IsCompiledPlugin: false, PluginSourceUnreadable: false), PluginRowOf(Built(TwoNpcsPlugin())));
     }
 
     [Fact]
@@ -105,7 +108,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         var fixture = Built(TwoNpcsPlugin());
         SourceMods.Init(fixture.Plugins.Single());
 
-        Assert.Equal((true, false), PluginRowOf(fixture));
+        Assert.Equal(new CompiledPluginRow(IsCompiledPlugin: true, PluginSourceUnreadable: false), PluginRowOf(fixture));
     }
 
     [Fact]
@@ -116,7 +119,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         SourceMods.Init(entry);
         Directory.Delete(PluginSourceRoot.In(entry.ModFolderOf(), PluginName), recursive: true);
 
-        Assert.Equal((true, true), PluginRowOf(fixture));
+        Assert.Equal(new CompiledPluginRow(IsCompiledPlugin: true, PluginSourceUnreadable: true), PluginRowOf(fixture));
     }
 
     [Fact]
@@ -599,8 +602,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     [Fact]
     public void APluginsRecordType_IsCreatable_ExactlyWhenTheGameGivesItATopLevelGroup_AHeldTypeWhoseReadFailedIncluded()
     {
-        var index = Indexes.Reconciled(Built(ManyTypesPlugin()), adapter: new DiagnosingAdapter { FailedRecordType = "refr" });
-        _built.Add(index);
+        var index = Reconciled(Built(ManyTypesPlugin()), new DiagnosingAdapter { FailedRecordType = "refr" });
 
         var result = index.Queries.GetPluginRecordTypes(PluginKey).Value();
 
