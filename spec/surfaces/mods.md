@@ -94,7 +94,7 @@ Each publisher tag is an indicator of its own, with the badge its publisher decl
 A source mod's folder is its build's output ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)). As a user, I want:
 
 1. Its row to open into the folder's files as any mod's, since they are what the game gets. The source is in the Explorer and Source Control, and `open source` shows it. Cites: catalog `open source`
-2. Rename and exclude or include to write the build configuration and the folder together, so the folder already equals the next build's output: rename changes the output folder's name (Rename mod, story 3), and exclude or include its exclusions, which build writes with the mod manager's exclusion mark. Cites: ADR-0007
+2. Rename and exclude or include to write the manifest and the folder together, so the folder already equals the next build's output: rename changes the output folder's name (Rename mod, story 3), and exclude or include its exclusions, which build writes with the mod manager's exclusion mark. Cites: ADR-0007
 3. No gesture that changes content the build makes. A record edit goes to plugin source, a plugin created lands in it, and decompile reads the folder into it. Cites: ADR-0006; ADR-0007
 4. A file I change in the folder to show as differing from the manifest, and build to overwrite it and name it. A lock on the folder is mine to add with VS Code's `files.readonlyInclude`. Cites: modlist-repository.md, Status; VS Code's interaction
 5. Uninstall to send the folder and the source to the trash, and the confirmation to say so. Cites: Confirm what destroys
@@ -178,23 +178,27 @@ As a user, I want:
 
 1. A prompt filled with the current name. Esc, an empty name or the same name renames nothing. Cites: MO2
 2. A name another mod has, compared without case, refused in the prompt, so Windows and Linux agree. A name with a path separator refused. Cites: MO2 compares without case; Refuse, do not repair
-3. The mod to keep its place in mod order, its enabled state and its separator in every profile. Its folder keeps its metadata and its manifest, and its plugins keep their `plugins.txt` lines. For a source mod, rename changes the output folder in the build configuration and renames the folder; the repository stays where it is. Cites: MO2; ADR-0007
+3. The mod to keep its place in mod order, its enabled state and its separator in every profile. Its folder keeps its metadata and its manifest, and its plugins keep their `plugins.txt` lines. For a source mod, rename changes the output folder in the manifest and renames the folder; the repository stays where it is. Cites: MO2; ADR-0007
 4. The folder renamed first. A rename that renamed the folder and then failed on a profile's mod order to say so, naming the profile. That profile loses the mod's place, and `mod sync` places it as a new folder when the profile is active. This is an exception to A failed gesture writes nothing.
 
 ### Build
 
 As a user, I want:
 
-1. Build to write the mod folder from its repository alone, without asking: the source's assets copied, each plugin compiled from its plugin source, and the manifest written last. A compiled plugin's source is the truth, and build makes the folder from it. Cites: catalog `build`; ADR-0006; ADR-0007; ADR-0023
-2. The build configuration in the source to name the output folder and, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
+1. Build to write the mod folder from its repository and the installation files its manifest names, without asking: the source's assets copied, each plugin compiled from its plugin source, its steps run in order, and the manifest's file lines written last. A compiled plugin's source is the truth, and build makes the folder from it. Cites: catalog `build`; ADR-0006; ADR-0007; ADR-0023
+2. The manifest to name the output folder and, for each archive to pack, the loose files it takes. A packed file is in the archive and not loose in the output, so the game reads one copy.
 3. A file in the folder the build did not make left where it is, and the mod shown as differing from its manifest. Restore from manifest removes it. Cites: ADR-0022
-4. A build whose configuration names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Cites: ADR-0003
+4. A build whose manifest names an output folder that is not this mod's folder refused, naming both, so a folder renamed outside Modbench is never overwritten. Cites: ADR-0003
 5. Build to save the mod's unsaved plugin source first, without asking, as Run Build Task saves before it builds, so the plugins are built from what I see. A file VS Code does not save refuses build, naming it. Cites: VS Code's save before run; ADR-0001; Never silently wrong
 6. The view's progress bar while it runs, and a notification when it lands, pointing at the Problems panel when it left diagnostics. The diagnostics sit on the plugin source files.
 7. From the palette with no mod, a pick of every source in the source folder, one with no folder included, so a clone builds its mods back. Cites: No dead entries
 8. A plugin whose header flag limits its FormIDs, light or medium, refused when its records fall outside that range, naming the records, what limits the plugin, its flag, its `.esl` extension or both, and what lifts that limit: clear the flag, rename the plugin off `.esl`, or both. Changing the records' FormIDs works in every case. The rest of the mod builds, and the refused plugin is left as it was.
 9. A plugin whose plugin source is unreadable refused the same way, naming it and pointing at decompile. Cites: Never silently wrong
 10. An interrupted build to leave each file old or new, and none to read as changed outside Modbench. A localized plugin can be left with its strings written without its binary. Building again fixes it. This is an exception to A failed gesture writes nothing.
+11. A patcher to be a source mod whose step runs its patching script on my load order, the script from its repository or an installation file. Its output joins the load order, so the next patcher reads it there.
+12. Source mods built in mod order, the winning mod last, when build or restore builds more than one, so a patcher reads every mod before it, the patchers before it included.
+13. No mod to say a patcher's output is stale. I rerun my patchers before I publish: whether a change before a patcher matters is mine to know, and most changes do not matter to a given patcher. This is an exception to Never silently wrong.
+14. A step to run an external tool, such as a texture optimiser, named by its name alone. Each machine says where the tool is and how it runs, under Proton on Linux, so the manifest holds no path from this machine. Cites: modlist-repository.md, The manifest, story 8
 
 ### Delete separator
 

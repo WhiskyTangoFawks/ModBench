@@ -64,7 +64,7 @@ A mod entry that groups other mods in the list and holds no files. A mod belongs
 Avoid: group, category
 
 ## Source mod
-A mod whose folder is a build artifact: the build writes it from the mod's repository in the source folder. With a remote, the repository is a submodule of the instance's repository. It follows one git workflow.
+A mod whose folder is a build artifact: the build writes it from the mod's repository in the source folder and the installation files its manifest names. With a remote, the repository is a submodule of the instance's repository. It follows one git workflow.
 
 Avoid: tracked mod (git's tracked is a file in the index)
 
@@ -205,7 +205,7 @@ Where a package is fetched from: a site such as Nexus, a store such as Steam, or
 Avoid: repository (MO2's word for a host), source
 
 # Manifest
-The one file in a mod folder that names its package, its host when it has one, and each of the mod's files. For a source mod the build writes it.
+The one file recording how a mod folder is made: what it is made from, its host when it has one, each of the mod's files, and the steps that build it.
 
 Avoid: record (a plugin's unit of data), recipe, directives
 

@@ -1,6 +1,6 @@
 # Workflows
 
-Modbench keeps two kinds of git repositories. The modlist repository in the Mod Manager instance folder, and a mod repository, for each decompiled mod. The modlist repository holds the mod manifests, the profiles and Mod Manager Instance configuration. A source mod's repository, in `source/`, holds that mod's plugin source and its assets. Understanding how to use git effectively as part of a standard software development workflow is key to using Modbench.
+Modbench keeps two kinds of git repositories. The modlist repository in the Mod Manager instance folder, and a mod repository, for each decompiled mod. The modlist repository holds the mod manifests, the profiles and Mod Manager Instance configuration. A source mod's repository, in `source/`, holds that mod's plugin source, its assets and its manifest. Understanding how to use git effectively as part of a standard software development workflow is key to using Modbench.
 
 ## The 2 Step Process for Modlists Management in Git
 
@@ -42,7 +42,7 @@ Clone the modlist repository: the clone is the instance folder. Log in to Nexus,
 
 ## Source mods
 
-Decompile and Commit Mod puts a mod under git. It makes a repository in `source/` that holds the mod's plugin source, every other file of the mod, and a build configuration, in one commit. You choose how the repository uses its `main` branch.
+Decompile and Commit Mod puts a mod under git. It makes a repository in `source/` that holds the mod's plugin source, every other file of the mod, and its manifest, in one commit. You choose how the repository uses its `main` branch.
 
 ### Publish a source mod
 
