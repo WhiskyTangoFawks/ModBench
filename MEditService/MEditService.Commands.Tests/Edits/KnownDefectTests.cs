@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -12,8 +11,6 @@ public sealed class KnownDefectTests : IDisposable
     private readonly DocumentEditFixture _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
-
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     private string OneSceneWithAnAction()
     {

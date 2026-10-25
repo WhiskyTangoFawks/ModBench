@@ -99,7 +99,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     public async Task DecompileAndRepair_OfTwoPluginsOfAModWithNoRepository_TheSecondRefused_SaysTheNewRepositoryHoldsNoSourceForIt()
     {
         var first = AddToNewMod(Lossless.Malformed);
-        var second = AddToNewMod(MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction").Malformed with { FileName = "Lossy.esp" });
+        var second = AddToNewMod(Lossy.Malformed with { FileName = "Lossy.esp" });
         Load(Entry(_newMod, Malformed), Entry(_newMod, "Lossy.esp"));
 
         var result = await Repair([.. (await PreviewAll(first, second)).Applied.Select(p => new PluginToRepair(p.Plugin, p.Hash, null))]);
@@ -113,14 +113,13 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     [Fact]
     public async Task DecompileAndRepair_ARepairThatDropsData_IsRefusedNamingTheChange_AndWritesNothing()
     {
-        var fixture = MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction");
-        var plugin = AddToSourceMod(fixture.Malformed);
+        var plugin = AddToSourceMod(Lossy.Malformed);
         var before = Head(_sourceMod);
 
         var refused = Assert.Single((await Repair(await Previewed(plugin))).Refused);
 
         Assert.Equal(DecompileAndRepairRefusal.DropsData, refused.Refusal);
-        Assert.Contains(fixture.Change ?? "", refused.Message, StringComparison.Ordinal);
+        Assert.Contains(Lossy.Change.Require(), refused.Message, StringComparison.Ordinal);
         Assert.Contains("force", refused.Message, StringComparison.Ordinal);
         Assert.Equal(before, Head(_sourceMod));
     }
@@ -128,7 +127,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     [Fact]
     public async Task DecompileAndRepair_ARepairThatDropsData_WritesWhenForced()
     {
-        var plugin = AddToSourceMod(MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction").Malformed);
+        var plugin = AddToSourceMod(Lossy.Malformed);
 
         var forced = await Repair([await Previewed(plugin)], force: true);
 
@@ -139,15 +138,14 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     [Fact]
     public async Task DecompileAndRepair_ARepairThatDropsDataOverWorkingTreeChanges_IsRefusedOnceListingBoth_AndForceWaivesBoth()
     {
-        var fixture = MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction");
-        var plugin = AddToSourceMod(fixture.Malformed);
+        var plugin = AddToSourceMod(Lossy.Malformed);
         var stray = StrayFile();
 
         var refused = Assert.Single((await Repair([await Previewed(plugin)])).Refused);
         var forced = await Repair([await Previewed(plugin)], force: true);
 
         Assert.Equal(DecompileAndRepairRefusal.DropsData, refused.Refusal);
-        Assert.Contains(fixture.Change ?? "", refused.Message, StringComparison.Ordinal);
+        Assert.Contains(Lossy.Change.Require(), refused.Message, StringComparison.Ordinal);
         Assert.Contains("Stray.json", refused.Message, StringComparison.Ordinal);
         Assert.Equal([plugin], forced.Applied);
         Assert.False(File.Exists(stray));
@@ -156,7 +154,7 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     [Fact]
     public async Task DecompileAndRepair_AgreedDrops_WaiveTheDroppedDataAlone()
     {
-        var plugin = AddToSourceMod(MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction").Malformed);
+        var plugin = AddToSourceMod(Lossy.Malformed);
         StrayFile();
 
         var dirty = Assert.Single((await Repair([await Previewed(plugin)], agreedDrops: true)).Refused);
@@ -255,6 +253,8 @@ public sealed class DecompileAndRepairPluginHandlerTests : IDisposable
     }
 
     private static MalformationFixture Lossless => MalformationFixtures.ShortRegion;
+
+    private static MalformationFixture Lossy => MalformationFixtures.All.Single(f => f.Malformation == "EntryPointParametersOnAParameterlessFunction");
 
     private PluginAddress AddToSourceMod(GeneratedPlugin plugin)
     {

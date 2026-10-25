@@ -16,7 +16,7 @@ public sealed record GameFile(string Path, string Hash);
 public sealed record GameFolder(string Name, string DataFolder, IReadOnlyList<GameFile> Files);
 
 /// <summary>The instance's facts beyond its mods: the folder of the stat cache and the game folder, none when it was not found.</summary>
-public sealed record InstanceToUpdate(string StatCache, GameFolder? GameFolder = null);
+public sealed record InstanceToUpdate(string StatCache, GameFolder? GameFolder);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum UpdateManifestRefusal

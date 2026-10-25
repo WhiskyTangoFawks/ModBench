@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
@@ -9,13 +8,12 @@ using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
 public sealed class CreateRecordChangesHandlerTests
 {
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
-
     [Fact]
     public void EditField_OnANeverCommittedRecord_LandsInTheTree()
     {

@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -52,8 +51,6 @@ public sealed class RecordDocumentEditTests : IDisposable
         _cobj.Conditions.Add(new ConditionFloat { CompareOperator = CompareOperator.EqualTo, ComparisonValue = 1f, Data = onReference });
     }
 
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
-
     private string SeedNpc() => _fixture.Seed(_npc, "npc_");
     private string SeedCobj() => _fixture.Seed(_cobj, "cobj");
 
@@ -72,9 +69,9 @@ public sealed class RecordDocumentEditTests : IDisposable
     }
 
     [Theory]
-    [InlineData("MasterReferences", "[]", "content-derived")]
+    [InlineData("MasterReferences", "[]", "'MasterReferences' is read-only: masters are wholly content-derived at compile time.")]
     [InlineData("FormID", "2048", "'FormID' is read-only: a plugin header's FormID names the plugin itself, not a record in it.")]
-    public void AHeaderMemberTheContentDerives_IsRefusedAsReadOnly_WithItsReason(string member, string value, string reason)
+    public void AHeaderMemberTheContentDerives_IsRefusedAsReadOnly_WithItsReason(string member, string value, string message)
     {
         var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
         _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, Encoding.UTF8.GetString(HeaderDocument.Write(_mod)));
@@ -82,8 +79,7 @@ public sealed class RecordDocumentEditTests : IDisposable
         var (result, _) = _fixture.Apply(headerFormKey, SetAt(Json(value), Member(member)));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains(reason, result.Message, StringComparison.Ordinal);
+        Assert.Equal((RecordEditRefusal.FieldReadOnly, message), (result.Refusal, result.Message));
     }
 
     [Fact]
@@ -143,8 +139,7 @@ public sealed class RecordDocumentEditTests : IDisposable
 
         Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
         Assert.Equal("ComponentDisplayIndices", result.Path);
-        Assert.Contains("the codec rejected", result.Message, StringComparison.Ordinal);
-        Assert.Contains("overflow", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Matches("^'ComponentDisplayIndices': the codec rejected the document — \\S", result.Message);
     }
 
     [Fact]

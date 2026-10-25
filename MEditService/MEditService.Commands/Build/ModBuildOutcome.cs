@@ -8,7 +8,7 @@ namespace MEditService.Commands.Build;
 /// <summary>A mod to build, with the source folder whose build configuration names its folder, the folder, its version,
 /// and its metadata files, which no manifest line names.</summary>
 public sealed record ModToBuild(
-    string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule = false);
+    string Name, string SourceFolder, string Folder, IReadOnlyList<string> MetadataFiles, string? Version, bool IsSubmodule);
 
 /// <summary>The instance's facts a build needs: the mod manager's exclusion mark, the game's archive
 /// variants, none when the per-release table names none, and the stat cache's folder.</summary>

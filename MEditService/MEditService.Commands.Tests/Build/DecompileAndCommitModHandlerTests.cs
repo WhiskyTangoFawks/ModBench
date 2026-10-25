@@ -65,7 +65,10 @@ public sealed class DecompileAndCommitModHandlerTests : IDisposable
 
         Assert.Equal([Origin], result.Applied.Select(mod => mod.Mod));
         var refused = Assert.Single(result.Refused);
-        Assert.Equal(("NoSuchMod", DecompileAndCommitRefusal.ModProvidesNoPlugin), (refused.Item, refused.Refusal));
+        Assert.Equal(
+            ("NoSuchMod", DecompileAndCommitRefusal.ModProvidesNoPlugin,
+                "'NoSuchMod' provides no plugin in the load order, so there is nothing to decompile and commit."),
+            (refused.Item, refused.Refusal, refused.Message));
     }
 
     [Fact]
