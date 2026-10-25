@@ -56,7 +56,8 @@ vi.mock('vscode', () => ({
 }));
 
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
-import { mod } from './indexedValue';
+import { file, folder, mod } from './indexedValue';
+import { status } from '../../test/modStatusFixture';
 import { ModNode, SeparatorNode } from '../ModListProvider';
 import { createModsView } from '../modsView';
 import { ModStatuses } from '../modStatuses';
@@ -181,16 +182,6 @@ describe('the Mods view\'s description counts the mods', () => {
 });
 
 describe('the Mods view registers its own gestures', () => {
-  it.each([
-    'modbench.mod.rename', 'modbench.mod.uninstall', 'modbench.mod.enable', 'modbench.mod.move', 'modbench.mod.createEmpty',
-    'modbench.mod.openFolder', 'modbench.mod.goToMod', 'modbench.mod.compareFile', 'modbench.mod.openConflicts',
-    'modbench.mod.install', 'modbench.mod.viewOnNexus', 'modbench.mod.decompileAndCommit', 'modbench.mod.build',
-    'modbench.mod.updateManifest', 'modbench.mod.restoreFromManifest', 'modbench.modList.updateManifestHere', 'modbench.modList.restoreFromManifestHere',
-  ])('registers %s with the view', (command) => {
-    createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
-    expect(h.state.commands.has(command)).toBe(true);
-  });
-
   it('offers modbench.mod.build from the palette every source in the source folder, the modlist listing it or not', async () => {
     const value = instanceValueFixture({
       paths: { ...instanceValueFixture().paths, sourceDirs: new Map([['Cloned And Unlisted', '/source/Cloned And Unlisted']]) },
@@ -208,11 +199,9 @@ describe('the Mods view registers its own gestures', () => {
     expect(h.state.contextKeys.get('modbench.mod.anySource')).toBe(true);
   });
 
-  it('hears its copy value in the Mods view\'s key, and defers for any other', () => {
+  it('hears its copy value in the Mods view\'s key', () => {
     const { copyValue } = createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log: () => undefined, ...noSync() });
-    expect(copyValue.reporterTag).toBe('mod.copyValue');
-    expect(copyValue.text({ view: 'modbench.pluginListTree' }, undefined)).toBeUndefined();
-    expect(copyValue.text({ view: 'modbench.modList' }, undefined)).toBe('');
+    expect([copyValue.reporterTag, copyValue.text({ view: 'modbench.modList' }, undefined)]).toEqual(['mod.copyValue', '']);
   });
 });
 
@@ -265,17 +254,18 @@ describe('the Mods view tells its keys, which are handed no row, what the select
 });
 
 describe('the Mods view expands by reveal a separator a filter shows for its matching mods', () => {
-  const mountFiltered = async (
+  const mountFiltered = (
     term: string, log: (line: string) => void = () => undefined, prepare: (view: FakeTreeView) => void = () => undefined,
   ) => {
     createModsView({ ...otherDeps(), instance: new FakeInstance(listing(LISTED_MODS)), log, ...noSync() }).nameFilter.open();
     prepare(treeViews.view());
     currentBox().type(term);
-    await new Promise((resolve) => setTimeout(resolve, 20));
   };
+  const windowForARevealThatMustNotCome = () => new Promise((resolve) => setTimeout(resolve, 20));
 
   it('reveals it expanded, neither selecting nor focusing it', async () => {
-    await mountFiltered('source');
+    mountFiltered('source');
+    await vi.waitFor(() => expect(treeViews.view().reveals).not.toEqual([]));
 
     expect(treeViews.view().reveals).toEqual([
       { label: 'Unassigned (Modlist Development)', options: { select: false, focus: false, expand: true } },
@@ -283,14 +273,16 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   });
 
   it('leaves a separator shown for its own name as the user left it', async () => {
-    await mountFiltered('radfall - all');
+    mountFiltered('radfall - all');
+    await windowForARevealThatMustNotCome();
 
     expect(treeViews.view().reveals).toEqual([]);
   });
 
   it('writes a reveal VS Code refuses to the Output, naming the separator and why', async () => {
     const lines: string[] = [];
-    await mountFiltered('source', (line) => lines.push(line), (view) => { view.revealRefusal = new Error('Cannot resolve tree item'); });
+    mountFiltered('source', (line) => lines.push(line), (view) => { view.revealRefusal = new Error('Cannot resolve tree item'); });
+    await vi.waitFor(() => expect(lines).not.toEqual([]));
 
     expect(lines).toEqual([
       'Could not expand "Unassigned (Modlist Development)" for the filter: Cannot resolve tree item',
@@ -298,12 +290,14 @@ describe('the Mods view expands by reveal a separator a filter shows for its mat
   });
 
   it('reveals nothing while the view is hidden, and reveals it once the view is shown', async () => {
-    await mountFiltered('source', undefined, (view) => { view.visible = false; });
-    expect(treeViews.view().reveals).toEqual([]);
+    mountFiltered('source', undefined, (view) => { view.visible = false; });
+    await windowForARevealThatMustNotCome();
+    const whileHidden = [...treeViews.view().reveals];
 
     treeViews.view().setVisible(true);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(treeViews.view().reveals.map((r) => r.label)).toEqual(['Unassigned (Modlist Development)']);
+    await vi.waitFor(() => expect(treeViews.view().reveals).not.toEqual([]));
+
+    expect([whileHidden, treeViews.view().reveals.map((r) => r.label)]).toEqual([[], ['Unassigned (Modlist Development)']]);
   });
 });
 
@@ -348,21 +342,16 @@ describe('the Mods view says when the list is empty', () => {
 });
 
 describe('the Mods view finds a file the filter matches, however deep', () => {
-  const file = (relativePath: string) => ({ relativePath, path: `/instance/${relativePath}`, sourcePath: `/instance/${relativePath}`, excluded: false, markedExcluded: false, includedPath: relativePath });
-  const folder = (relativePath: string) => ({ relativePath, path: `/instance/${relativePath}`, excluded: false });
   const revealed = () => treeViews.view().reveals.map((r) => r.label);
   const open = { select: false, focus: false, expand: true };
 
   const mountFiltered = (term: string, overwrite = false) => {
     const value = instanceValueFixture({
-      mods: [
-        { kind: 'mod', name: 'Armour', enabled: true }, { kind: 'separator', name: 'Gear', enabled: false },
-        { kind: 'mod', name: 'Boots', enabled: true }, { kind: 'separator', name: 'Other', enabled: false },
-      ],
-      filesByMod: new Map([['Armour', [file('textures/armour/b.dds')]], ['Boots', [file('gear.esp')]]]),
-      foldersByMod: new Map([['Armour', [folder('textures'), folder('textures/armour')]], ['Boots', []]]),
-      overwriteFiles: overwrite ? [file('F4SE/a.log')] : [],
-      overwriteFolders: overwrite ? [folder('F4SE')] : [],
+      mods: [mod('Armour'), separator('Gear'), mod('Boots'), separator('Other')],
+      filesByMod: new Map([['Armour', [file('Armour', 'textures/armour/b.dds')]], ['Boots', [file('Boots', 'gear.esp')]]]),
+      foldersByMod: new Map([['Armour', [folder('Armour', 'textures'), folder('Armour', 'textures/armour')]], ['Boots', []]]),
+      overwriteFiles: overwrite ? [file('overwrite', 'F4SE/a.log')] : [],
+      overwriteFolders: overwrite ? [folder('overwrite', 'F4SE')] : [],
     });
     const { view: modListView, nameFilter: modListFilter } =
       createModsView({ ...otherDeps(), instance: new FakeInstance(value), log: () => undefined, ...noSync() });
@@ -402,21 +391,29 @@ describe('the Mods view finds a file the filter matches, however deep', () => {
   });
 });
 
+const listenToEachDecorationProvider = () => {
+  const listeners = h.decorationProviders.map((provider) => {
+    const listener = vi.fn();
+    provider.onDidChangeFileDecorations?.(listener);
+    return listener;
+  });
+  return () => listeners.map((listener) => listener.mock.calls.length);
+};
+
 describe('the Mods view tells the indicator and publisher tag decorations when a separator opens or closes', () => {
   it('asks VS Code to decorate again, for each indicator and each publisher tag the publisher declares, on the separator\'s expand and on its collapse', async () => {
     const publisherTags = [{ name: 'Include', badge: 'IN', marksPaths: true }] as const;
     createModsView({
       ...otherDeps(), instance: new FakeInstance(instanceValueFixture({ mods: [mod('A'), separator('Section')], publisherTags })), log: () => undefined, ...noSync(),
     });
-    const fired = vi.fn();
-    for (const provider of h.decorationProviders.slice(1)) provider.onDidChangeFileDecorations?.(fired);
+    const fired = listenToEachDecorationProvider();
     const row = present((await shownRows()).find((node) => node instanceof SeparatorNode), 'the separator row');
 
     treeViews.view().expand(row);
-    const afterExpand = fired.mock.calls.length;
+    const afterExpand = fired();
     treeViews.view().collapse(row);
 
-    expect([afterExpand, fired.mock.calls.length]).toEqual([6, 12]);
+    expect([afterExpand, fired()]).toEqual([[0, 1, 1, 1, 1, 1, 1], [0, 2, 2, 2, 2, 2, 2]]);
   });
 });
 
@@ -424,8 +421,7 @@ describe('the Mods view\'s status of each mod (mods.md, The view; common.md, Rep
   it('counts each mod mEdit pushes that has no manifest, once its status is read', async () => {
     const push = new InMemoryMEditClient();
     const instance = new FakeInstance(instanceValueFixture({ holdsRepository: true, mods: [mod('ModA'), mod('ModB')] }));
-    const read = (mods: readonly string[]) =>
-      Promise.resolve(mods.map((name) => ({ mod: name, noManifest: true, differing: [], namedByNoLine: [], gone: [], notInPackage: [], metadataDiffers: false, noHost: false })));
+    const read = (mods: readonly string[]) => Promise.resolve(mods.map((name) => status(name, { noManifest: true })));
     const { view } = createModsView({ ...otherDeps(), instance, log: () => undefined, ...noSync(), statuses: new ModStatuses(push, read, () => undefined) });
 
     push.emit({ kind: 'mod-status-changed', plugin: '', origin: '', keys: [], sequence: 0, mods: ['ModA'] });

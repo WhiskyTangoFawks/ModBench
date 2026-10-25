@@ -8,7 +8,7 @@ import { BuildProblems } from '../buildProblems';
 import { sourceFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { valueWithSourceDirs } from './sourceDirsFixture';
 
-describe('BuildProblems', () => {
+describe('a build\'s diagnostics in the Problems panel', () => {
   const diagnosticAt = (sourceRelativePath: string) => [{ formKey: '000000:MyPatch.esp', sourceRelativePath, message: 'bad' }];
 
   const publishedPaths = (diagnostics: FakeDiagnosticCollection) => [...diagnostics].map(([uri]) => uri.fsPath);

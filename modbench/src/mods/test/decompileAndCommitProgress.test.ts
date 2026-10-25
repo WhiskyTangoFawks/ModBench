@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { decompileAndCommitProgressMessage } from '../decompileAndCommitProgress';
 
-describe('decompileAndCommitProgressMessage', () => {
+describe('the decompile and commit phase line', () => {
   it.each([
     ['Parsing', 'Decompiling and committing "MyMod" — parsing…'],
     ['Serializing', 'Decompiling and committing "MyMod" — serializing…'],

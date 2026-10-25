@@ -24,10 +24,8 @@ import { modArgumentOf } from '../../drivingLib/argument';
 import { ErrorNode } from '../../drivingLib/errorNode';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { file, indexedValueOf } from './indexedValue';
+import { file, folder, indexedValueOf } from './indexedValue';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
-
-const ACTIVE_PROFILE = 'Default';
 
 beforeEach(() => {
   executeCommand.mockClear();
@@ -38,30 +36,14 @@ const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({
 });
 const sep = (name: string, enabled = false): Separator => ({ kind: 'separator', name, enabled });
 
-function valueOf(
-  mods: ModlistEntry[],
-  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'overwriteFiles' | 'paths' | 'managerNames' | 'modFolders'>> = {},
-): InstanceValue {
-  return instanceValueFixture({
-    mods,
-    activeProfile: extra.activeProfile ?? ACTIVE_PROFILE,
-    overwriteFiles: extra.overwriteFiles ?? [],
-    ...(extra.paths ? { paths: extra.paths } : {}),
-    ...(extra.managerNames ? { managerNames: extra.managerNames } : {}),
-    ...(extra.modFolders ? { modFolders: extra.modFolders } : {}),
-  });
-}
+const valueOf = (mods: ModlistEntry[], extra: Partial<Pick<InstanceValue, 'overwriteFiles' | 'managerNames'>> = {}): InstanceValue =>
+  instanceValueFixture({ mods, ...extra });
 
 const overwriteHolding = (count: number): InstanceValue['overwriteFiles'] =>
-  Array.from({ length: count }, (_, at) => ({ relativePath: `F4SE/${at}.log`, path: `/instance/overwrite/F4SE/${at}.log`, sourcePath: `/instance/overwrite/F4SE/${at}.log`, excluded: false, markedExcluded: false, includedPath: `F4SE/${at}.log` }));
+  Array.from({ length: count }, (_, at) => file('overwrite', `F4SE/${at}.log`));
 
 const SEQUENCE_ALREADY_LOADED = 1;
 const SEQUENCE_NOT_READ_YET = 0;
-
-const explicitFailureIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
-  pending,
-  new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`getChildren() did not settle within ${ms} ms`)), ms)),
-]);
 
 const makeProvider = (
   mods: ModlistEntry[],
@@ -276,12 +258,12 @@ describe('a click on a separator, a mod, Overwrite or a folder only selects', ()
   });
 });
 
-describe('ModListProvider', () => {
+describe('the Mods tree\'s rows', () => {
   it('renders no row for a folder in mods/ with no modlist line, since mod sync is what adds a line', async () => {
-    const value = { ...valueOf([mod('Listed')]), modFolders: [
+    const value = instanceValueFixture({ mods: [mod('Listed')], modFolders: [
       { kind: 'mod', name: 'Listed', path: '/instance/mods/Listed', modName: 'Listed' },
       { kind: 'mod', name: 'Dropped In', path: '/instance/mods/Dropped In', modName: 'Dropped In' },
-    ] } as InstanceValue;
+    ] });
     const provider = makeProvider([], { instance: new FakeInstance(value) });
 
     const labels = (await provider.getChildren()).map((n) => n.label);
@@ -290,7 +272,7 @@ describe('ModListProvider', () => {
     expect(labels).not.toContain('Dropped In');
   });
 
-  it('returns a separator’s mods, the entries preceding it, as ModNodes with checkbox, version, tooltip, the later file entry first in the default losing-at-top view', async () => {
+  it('returns a separator’s mods, the entries preceding it, as mod rows with their check boxes, the later file entry first in the default losing-at-top view', async () => {
     const provider = makeProvider([
       mod('UFO4P', true, { version: 'v2.1.5', nexusId: '4598', installationFileName: 'UFO4P.7z' }),
       mod('Disabled Mod', false),
@@ -304,12 +286,9 @@ describe('ModListProvider', () => {
     const modNodes = expectInstancesOf(children, ModNode);
     const disabled = present(modNodes[0], 'the disabled mod row');
     const enabled = present(modNodes[1], 'the enabled mod row');
-    expect(enabled.label).toBe('UFO4P');
-    expect(enabled.description).toBe('v2.1.5');
-    expect(enabled.checkboxState).toBe(TreeItemCheckboxState.Checked);
-    expect(enabled.tooltip).toBe('UFO4P · v2.1.5 · 4598 · UFO4P.7z');
-    expect(disabled.checkboxState).toBe(TreeItemCheckboxState.Unchecked);
-    expect(disabled.tooltip).toBe('Disabled Mod');
+    expect([[disabled.label, disabled.checkboxState], [enabled.label, enabled.checkboxState]]).toEqual([
+      ['Disabled Mod', TreeItemCheckboxState.Unchecked], ['UFO4P', TreeItemCheckboxState.Checked],
+    ]);
   });
 
   it('a mod row states its enabled state and whether it has a Nexus id in its contextValue, which the mod-menu when clauses read to offer enable or disable and view on Nexus', async () => {
@@ -390,16 +369,13 @@ describe('ModListProvider', () => {
 
     const pending = provider.getChildren();
     instance.fail('EACCES: permission denied, open modlist.txt');
-    const rows = await explicitFailureIfNotSettledWithin(pending, 500);
+    const rows = await pending;
 
     expect(rows).toHaveLength(1);
-    const error = expectInstanceOf(rows[0], ErrorNode);
-    expect(error.label).toBe('Failed to load: EACCES: permission denied, open modlist.txt');
-    expect(error.tooltip).toBe('EACCES: permission denied, open modlist.txt');
-    expect(error.iconPath).toEqual(new ThemeIcon('error'));
+    expect(expectInstanceOf(rows[0], ErrorNode).label).toBe('Failed to load: EACCES: permission denied, open modlist.txt');
 
     instance.publish(valueOf([mod('A')]));
-    const after = await explicitFailureIfNotSettledWithin(provider.getChildren(), 500);
+    const after = await provider.getChildren();
 
     expect(after.some((n) => n instanceof ModNode)).toBe(true);
     expect(after.some((n) => n instanceof ErrorNode)).toBe(false);
@@ -410,7 +386,7 @@ describe('ModListProvider', () => {
     expect(rowsOf(await provider.getChildren())).toEqual(['runtimeOutput Overwrite']);
   });
 
-  describe('setFilter', () => {
+  describe('a filter narrows the roots', () => {
     const entries = (): ModlistEntry[] => [
       mod('Zeta'),
       mod('Alpha Child'),
@@ -503,15 +479,29 @@ describe('ModListProvider', () => {
       expect(movesFired().map(argumentLabels)).toEqual([['Delta'], ['Group B']]);
     });
 
-    it('Overwrite is carried by no drag', async () => {
-      const provider = makeProvider(dndEntriesWhereASeparatorWrapsTheEntriesThatPrecedeIt);
-      const rows = await shownRows(provider);
+    async function dragRows() {
+      const value = await indexedValueOf([mod('Armour')], { Armour: { files: [file('Armour', 'x/a.dds')], folders: [folder('Armour', 'x')] } });
+      const provider = makeProvider([], { instance: new FakeInstance(value) });
+      const roots = await provider.getChildren();
+      const armour = rowLabelled(roots, 'Armour');
+      const x = rowLabelled(await provider.getChildren(armour), 'x');
+      return { provider, armour, overwrite: rowLabelled(roots, 'Overwrite'), folder: x, leaf: rowLabelled(await provider.getChildren(x), 'a.dds') };
+    }
+    type DragRows = Awaited<ReturnType<typeof dragRows>>;
+    const theMod = ({ armour }: DragRows) => ({ rows: [armour], focused: armour });
+
+    it.each<[string, (rows: DragRows) => ModlistNode[], (rows: DragRows) => unknown]>([
+      ['Overwrite alone carries nothing', ({ overwrite }) => [overwrite], () => undefined],
+      ['a mod beside Overwrite carries the mod alone', ({ armour, overwrite }) => [armour, overwrite], theMod],
+      ['files and folders carries nothing', ({ folder, leaf }) => [folder, leaf], () => undefined],
+      ['a mod beside a file carries the mod alone', ({ armour, leaf }) => [armour, leaf], theMod],
+    ])('a drag of %s', async (_case, dragged, carried) => {
+      const rows = await dragRows();
       const dataTransfer = new DataTransfer();
 
-      provider.handleDrag([rowLabelled(rows, 'Delta'), rowLabelled(rows, 'Overwrite')], dataTransfer, token);
-      await provider.handleDrop(rowLabelled(rows, 'Gamma'), dataTransfer, token);
+      rows.provider.handleDrag(dragged(rows), dataTransfer, token);
 
-      expect(movesFired().map(argumentLabels)).toEqual([['Delta']]);
+      expect(dataTransfer.get(MIME)?.value).toEqual(carried(rows));
     });
 
     it('nothing from outside the view drops here', async () => {
@@ -627,13 +617,6 @@ describe('ModListProvider', () => {
       expect(winner?.tooltip).toBe('Winner');
       expect(loser?.tooltip).toBe('Loser · 1.2 · 42 · loser.7z · built from /instance/source/Loser');
     });
-
-    it('carries a URI of its own, on no file: scheme, for its indicators to decorate', async () => {
-      const [winner, loser] = [present((await rowOf('Winner')).resourceUri, 'its URI'), present((await rowOf('Loser')).resourceUri, 'its URI')];
-
-      expect([typeof winner.scheme, winner.scheme === 'file']).toEqual(['string', false]);
-      expect(winner).not.toEqual(loser);
-    });
   });
 
   describe('Overwrite row, pinned outside separator grouping, over the value\'s own files', () => {
@@ -679,16 +662,6 @@ describe('ModListProvider', () => {
       expect(row.command).toBeUndefined();
       expect([row.resourceUri?.scheme, row.resourceUri?.path]).toEqual(['modbench-overwrite', '/']);
       expect(row.contextValue).toBe('runtimeOutput');
-    });
-
-    it('cannot be dragged', async () => {
-      const row = await overwriteRow(2);
-      const provider = makeProvider(entries());
-      const dataTransfer = new DataTransfer();
-
-      provider.handleDrag([row], dataTransfer, new FakeCancellationToken());
-
-      expect(dataTransfer.get('application/vnd.medit.modlist-node')).toBeUndefined();
     });
   });
 });

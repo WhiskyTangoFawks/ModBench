@@ -38,6 +38,7 @@ describe('one view\'s share of the catalog\'s copy value', () => {
     ['copies nothing for the key when the view selects nothing', [], { view: VIEW }, undefined, ''],
     ['copies the selected rows when a row is right-clicked inside a selection', [c], a, [a, b], 'a\nb'],
     ['copies the right-clicked row alone when it is outside the selection', [c], a, undefined, 'a'],
+    ['copies the right-clicked row alone when VS Code passes an empty selection', [c], a, [], 'a'],
     ['defers for another view\'s key', [a], { view: 'modbench.otherView' }, undefined, undefined],
     ['defers for a row of another kind', [a], other, undefined, undefined],
     ['defers for the palette', [a], undefined, undefined, undefined],

@@ -10,17 +10,21 @@ import { ModStatuses } from '../modStatuses';
 import type { ReadModStatus } from '../../client';
 import { status } from '../../test/modStatusFixture';
 
-const settled = () => new Promise((resolve) => { setTimeout(resolve, 0); });
-
 const UNREACHABLE: ReadFailed = { failed: 'unreachable' };
 
 function statusesOver(read: ReadModStatus) {
   const client = new InMemoryMEditClient();
   const logged: string[] = [];
-  const statuses = new ModStatuses(client, read, (line) => { logged.push(line); });
+  const answers: ReturnType<ReadModStatus>[] = [];
+  const reading: ReadModStatus = (mods) => {
+    const answer = read(mods);
+    answers.push(answer);
+    return answer;
+  };
+  const statuses = new ModStatuses(client, reading, (line) => { logged.push(line); });
   const pushed = async (...names: string[]) => {
     client.emit({ kind: 'mod-status-changed', plugin: '', origin: '', keys: [], sequence: 0, mods: names });
-    await settled();
+    await answers.at(-1);
   };
   return { statuses, logged, pushed };
 }
@@ -48,10 +52,10 @@ describe('each mod\'s status (modlist-repository.md, Status)', () => {
       .mockResolvedValueOnce([status('ModA')]);
     const { statuses, pushed } = statusesOver(read);
 
-    void pushed('ModA');
+    const first = pushed('ModA');
     await pushed('ModA');
     answerFirst([status('ModA', { noManifest: true })]);
-    await settled();
+    await first;
 
     expect(statuses.of('ModA')).toEqual(status('ModA'));
   });

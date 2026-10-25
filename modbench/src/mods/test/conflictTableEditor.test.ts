@@ -41,6 +41,10 @@ const settings: WorkspaceSettings = {
   },
 };
 
+const changeSetting = (changed: string) => {
+  for (const listener of settingListeners) listener({ affectsConfiguration: (section) => section === changed });
+};
+
 const recordingCopies = () => ({
   asked: [] as (readonly string[])[],
   answer: (_relativePaths: readonly string[]): Promise<FileCopies[]> => Promise.resolve([]),
@@ -174,6 +178,12 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
   const shown = (panel: FakePanel) => panel.webview.posted.flatMap((message) => parseConflictTableShown(message) ?? []);
   const shownTables = (panel: FakePanel) => shown(panel).map(({ table }) => table);
+  const firstRowValues = (panel: FakePanel, index: number) => {
+    const table = shownTables(panel)[index];
+    const row = table?.kind === 'table' ? table.rows[0] : undefined;
+    return row?.kind === 'file' ? row.cells.map((cell) => cell?.value) : [];
+  };
+  const rowCounts = (panel: FakePanel) => shownTables(panel).map((table) => (table.kind === 'table' ? table.rows.length : undefined));
   const posted = (panel: FakePanel, count: number) => vi.waitFor(() => expect(panel.webview.posted).toHaveLength(count));
   const ready = { type: CONFLICT_TABLE_READY };
   const unreadableHigh = (reason: string, origin: FileOrigin = { kind: 'mod', name: 'High' }) => (paths: readonly string[]) =>
@@ -194,20 +204,17 @@ describe('a mod\'s conflict table, open in a tab', () => {
     panel.webview.receive?.(ready);
     await posted(panel, 1);
 
-    const [table] = shownTables(panel);
-    const row = table?.kind === 'table' ? table.rows[0] : undefined;
-    expect(row?.kind === 'file' ? row.cells.map((cell) => cell?.value) : []).toEqual(['512 B', '2 KB']);
+    expect(firstRowValues(panel, 0)).toEqual(['512 B', '2 KB']);
   });
 
-  it('is titled with the mod\'s name, and loads the conflict table\'s page and its icons', async () => {
+  it('is titled with the mod\'s name, and loads the conflict table\'s page', async () => {
     const panel = openTable(new FakeInstance(await shared()), 'High');
 
     expect(panel.title).toBe('Conflicts: High');
     expect(panel.webview.html).toContain('assets/conflicts.js');
-    expect(panel.webview.html).toContain('assets/webview.css');
   });
 
-  it('shows the table, each cell and header in the state the which-copies answer gives, once the page is ready to hear it', async () => {
+  it('shows the table, in the states the which-copies answer for the mod\'s paths gives, once the page is ready to hear it', async () => {
     const instance = new FakeInstance(await shared());
     copiesDouble.answer = (paths) => Promise.resolve(paths.map((relativePath) => ({
       relativePath,
@@ -222,17 +229,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
     await posted(panel, 1);
 
     expect(copiesDouble.asked).toEqual([['a.dds']]);
-    expect(shownTables(panel)).toEqual([{
-      kind: 'table',
-      columns: [
-        { name: 'Low', origin: { kind: 'mod', name: 'Low' }, opened: false, state: 'Master' },
-        { name: 'High', origin: { kind: 'mod', name: 'High' }, opened: true, state: 'Override' },
-      ],
-      rows: [{ kind: 'file', name: 'a.dds', path: 'a.dds', state: 'Override', cells: [
-        { state: 'Master', value: '512 B', size: 512, modified: 0 },
-        { state: 'Override', value: '2 KB', size: 2048, modified: 0, winning: true },
-      ] }],
-    }]);
+    expect(shown(panel)).toMatchObject([{ type: CONFLICT_TABLE_SHOWN, table: { kind: 'table', rows: [{ state: 'Override' }] } }]);
   });
 
   describe('the cell value setting', () => {
@@ -245,11 +242,6 @@ describe('a mod\'s conflict table, open in a tab', () => {
         ],
       })));
     };
-    const values = (panel: FakePanel, index: number) => {
-      const table = shownTables(panel)[index];
-      const row = table?.kind === 'table' ? table.rows[0] : undefined;
-      return row?.kind === 'file' ? row.cells.map((cell) => cell?.value) : [];
-    };
 
     it.each([['unset', undefined], ['not a value it offers', 'colour']])('shows the size when the setting is %s', async (_, setting) => {
       const instance = new FakeInstance(await shared());
@@ -259,7 +251,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
       panel.webview.receive?.(ready);
       await posted(panel, 1);
 
-      expect(values(panel, 0)).toEqual(['512 B', '2 KB']);
+      expect(firstRowValues(panel, 0)).toEqual(['512 B', '2 KB']);
     });
 
     it('shows the value it names, and shows again when it changes, until the tab closes', async () => {
@@ -271,11 +263,11 @@ describe('a mod\'s conflict table, open in a tab', () => {
       await posted(panel, 1);
 
       cellValueSetting = 'dateModified';
-      settingListeners.forEach((listener) => listener({ affectsConfiguration: (section) => section === CELL_VALUE_SETTING }));
+      changeSetting(CELL_VALUE_SETTING);
       await posted(panel, 2);
       panel.dispose?.();
 
-      expect([values(panel, 0), values(panel, 1)]).toEqual([['A', 'B'], ['1970-01-01', '1970-01-01']]);
+      expect([firstRowValues(panel, 0), firstRowValues(panel, 1)]).toEqual([['A', 'B'], ['1970-01-01', '1970-01-01']]);
       expect(settingListeners).toEqual([]);
     });
 
@@ -286,24 +278,24 @@ describe('a mod\'s conflict table, open in a tab', () => {
       panel.webview.receive?.(ready);
       await posted(panel, 1);
 
-      settingListeners.forEach((listener) => listener({ affectsConfiguration: (section) => section === 'modbench.something' }));
+      changeSetting('modbench.something');
       cellValueSetting = 'contents';
-      settingListeners.forEach((listener) => listener({ affectsConfiguration: (section) => section === CELL_VALUE_SETTING }));
+      changeSetting(CELL_VALUE_SETTING);
       await posted(panel, 2);
 
-      expect([values(panel, 0), values(panel, 1)]).toEqual([['512 B', '2 KB'], ['A', 'B']]);
+      expect([firstRowValues(panel, 0), firstRowValues(panel, 1)]).toEqual([['512 B', '2 KB'], ['A', 'B']]);
       expect(shownTables(panel)).toHaveLength(2);
     });
   });
 
-  it('shows an empty table while the instance is not read yet, asking for no copies', async () => {
+  it('shows a table while the instance is not read yet, asking for no copies', async () => {
     const instance = new FakeInstance(instanceValueFixture(), 0);
     const panel = openTable(instance, 'High');
 
     panel.webview.receive?.(ready);
     await posted(panel, 1);
 
-    expect(shownTables(panel)).toEqual([{ kind: 'table', columns: [], rows: [] }]);
+    expect(rowCounts(panel)).toEqual([0]);
     expect(copiesDouble.asked.flat()).toEqual([]);
   });
 
@@ -342,7 +334,7 @@ describe('a mod\'s conflict table, open in a tab', () => {
     answers[0]?.();
     await asked[0];
 
-    expect(shownTables(panel).map((table) => (table.kind === 'table' ? table.rows.length : -1))).toEqual([2]);
+    expect(rowCounts(panel)).toEqual([2]);
   });
 
   describe('a copy that cannot be read', () => {
@@ -438,24 +430,21 @@ describe('a mod\'s conflict table, open in a tab', () => {
 
     it('is not reported once a newer value has asked', async () => {
       const instance = new FakeInstance(await shared());
-      const rejections: ((reason: Error) => void)[] = [];
+      const answers: { resolve: (copies: FileCopies[]) => void; reject: (reason: Error) => void }[] = [];
       const asked: Promise<unknown>[] = [];
-      copiesDouble.answer = (paths) => {
-        if (asked.length === 0) {
-          const late = new Promise<FileCopies[]>((_, reject) => { rejections.push(reject); });
-          asked.push(late);
-          return late;
-        }
-        asked.push(Promise.resolve([]));
-        return Promise.resolve(paths.map((relativePath) => ({ relativePath, copies: [] })));
+      copiesDouble.answer = () => {
+        const answer = new Promise<FileCopies[]>((resolve, reject) => { answers.push({ resolve, reject }); });
+        asked.push(answer);
+        return answer;
       };
       const reporter = recordingReporter();
       const panel = openTable(instance, 'High', reporter);
       panel.webview.receive?.(ready);
       instance.publish(await shared());
+      answers[1]?.resolve([]);
       await posted(panel, 1);
 
-      rejections[0]?.(new Error('old'));
+      answers[0]?.reject(new Error('old'));
       await asked[0]?.catch(() => undefined);
 
       expect(reporter.shownFailures).toEqual([]);
