@@ -72,12 +72,16 @@ export function PluginHeader({
           onOpen();
         }
       }}
-      title={`${o.plugin}\n${o.origin}\n${status.reason}`}
+      title={[o.plugin, o.origin, ...(collapsed ? [status.label] : []), status.reason].join('\n')}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span onClick={e => e.stopPropagation()}><ExpandArrow expanded={!collapsed} onToggle={onToggleCollapse} /></span>
         {isFile && <span className="codicon codicon-edit" aria-hidden />}
-        <div>{o.loadIndex != null && `[${o.loadIndex}] `}<span>{o.plugin}</span></div>
+        <div>
+          {collapsed
+            ? o.loadIndex != null && `[${o.loadIndex}]`
+            : <>{o.loadIndex != null && `[${o.loadIndex}] `}<span>{o.plugin}</span></>}
+        </div>
       </div>
       {!collapsed && (
         <>

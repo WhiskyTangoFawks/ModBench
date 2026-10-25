@@ -1,5 +1,5 @@
 import React from 'react';
-import { COLLAPSED_COLUMN_WIDTH } from './gridStyles';
+import { MIN_COLUMN_WIDTH } from './gridStyles';
 
 const edgeStyle: React.CSSProperties = {
   position: 'absolute', top: 0, right: 0, bottom: 0, width: 5, cursor: 'col-resize',
@@ -13,7 +13,7 @@ export function ColumnEdge({ onResize }: Readonly<{ onResize: (width: number) =>
     if (e.button !== 0 || !header) return;
     const startX = e.clientX;
     const startWidth = header.getBoundingClientRect().width;
-    const move = (m: MouseEvent) => onResize(Math.max(COLLAPSED_COLUMN_WIDTH, startWidth + m.clientX - startX));
+    const move = (m: MouseEvent) => onResize(Math.max(MIN_COLUMN_WIDTH, startWidth + m.clientX - startX));
     // The click that ends a drag lands on whatever holds both its ends, the header included, and
     // is not a click on the header.
     const swallowClick = (c: MouseEvent) => c.stopPropagation();

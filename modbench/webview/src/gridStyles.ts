@@ -29,9 +29,8 @@ export const labelCell = (column: React.CSSProperties): React.CSSProperties =>
 // the grid's <thead> is not sticky.
 export const DIMMED_OPACITY = 0.55;
 
-// editor.md, Columns, story 3: the narrow strip a collapsed column becomes, and the narrowest a
-// drag leaves one.
-export const COLLAPSED_COLUMN_WIDTH = 48;
+// editor.md, Columns, story 5: the narrowest a drag leaves a column.
+export const MIN_COLUMN_WIDTH = 48;
 
 /** A column's width, held by its header and every cell under it alike. The border box, as the
  *  drag that sets it measures the header. */

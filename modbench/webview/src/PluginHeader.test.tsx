@@ -38,7 +38,7 @@ function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typ
       />
     </tr></thead></table>,
   );
-  const header = required(screen.getByText('MyMod.esp').closest('th'), 'the header cell');
+  const header = required(document.querySelector('th'), 'the header cell');
   return { header, onToggleCollapse, onResize };
 }
 
@@ -129,11 +129,23 @@ describe('PluginHeader', () => {
     expect(within(header).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('shows only its label while collapsed', () => {
-    renderHeader({ isImmutable: true }, { collapsed: true });
-    expect(screen.queryByText('(source)')).not.toBeInTheDocument();
+  it('shows only its load index while collapsed, the rest of the header in its tooltip', () => {
+    const { header } = renderHeader({ isImmutable: true }, { collapsed: true });
     expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
-    expect(screen.getByText('MyMod.esp').parentElement).toHaveTextContent(/^\[01\] MyMod\.esp$/);
+    expect(screen.queryByText('MyMod.esp')).not.toBeInTheDocument();
+    expect(header).toHaveTextContent(/^\[01\]$/);
+    expect(header).toHaveAttribute('title', 'MyMod.esp\nModA\n(read-only)\nThe game’s plugins are not edited.');
+  });
+
+  it('shows a light plugin\u2019s whole load index while collapsed', () => {
+    const { header } = renderHeader({ override: { loadIndex: 'FE:XXX' } }, { collapsed: true });
+    expect(header).toHaveTextContent(/^\[FE:XXX\]$/);
+  });
+
+  it('shows only its arrow while collapsed when it has no load index, the tooltip naming its file', () => {
+    const { header } = renderHeader({ override: { loadIndex: null }, notActive: true }, { collapsed: true });
+    expect(header).toHaveTextContent(/^$/);
+    expect(header).toHaveAttribute('title', expect.stringContaining('MyMod.esp'));
   });
 
   it('resizes its column by the drag of its edge, and neither collapses nor opens it on the click that ends the drag', () => {
