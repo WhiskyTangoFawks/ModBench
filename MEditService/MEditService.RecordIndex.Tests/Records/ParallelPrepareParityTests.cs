@@ -25,11 +25,11 @@ public class ParallelPrepareParityTests
             }, origin: "ModA")
             .BuildScattered();
         var entry = fixture.Plugins.Single();
-        using var index = Indexes.Reconciled(fixture, fixture.InstanceRoot);
+        using var index = Indexes.Reconciled(fixture);
         using var mod = Fallout4Mod.CreateFromBinaryOverlay(entry.Path, Fallout4Release.Fallout4);
 
-        var stored = IndexFiles.Rows(fixture.InstanceRoot, $"SELECT form_key, body FROM records WHERE record_type <> '{PluginHeader.RecordType}'")
-            .ToDictionary(row => row[0], row => row[1]);
+        var stored = index.Queries.SelectRows($"SELECT form_key, body FROM records WHERE record_type <> '{PluginHeader.RecordType}'").Value().Rows
+            .ToDictionary(row => row.GetProperty("form_key").GetString().Require(), row => row.GetProperty("body").GetString());
         var expected = mod.EnumerateMajorRecords().ToDictionary(
             record => record.FormKey.ToString(),
             record => RecordTextCodec.SerializeToText(record, GameRelease.Fallout4));

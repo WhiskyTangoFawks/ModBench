@@ -141,7 +141,7 @@ public sealed class ProgressiveIndexingTests
         using var __ = gate;
         var order = new ConcurrentQueue<string>();
 
-        holder.Apply(LoadOrderArrival.Snapshot(fx.DataFolder, null, GameRelease.Fallout4, fx.Plugins));
+        holder.Apply(SnapshotPlugins.Snapshot(fx.DataFolder, null, GameRelease.Fallout4, fx.Plugins));
         await gate.WaitUntilParkedAsync();
 
         using var unloadAttempting = new ManualResetEventSlim();
@@ -259,7 +259,7 @@ public sealed class ProgressiveIndexingTests
         var load = Task.Run(() => index.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        var patch = fx.Plugins.Single(p => p.Name == "Patch.esp").KeyOf();
+        var patch = fx.Plugins.Single(p => p.Name == "Patch.esp").Key;
         var listed = index.Queries.GetRecords(["acti"], patch, search: null, limit: 10, offset: 0).Value().Items.Select(r => r.EditorId);
 
         Assert.Equal(["CZuluLever", "BBetaLever", "AAlphaLever"], listed);

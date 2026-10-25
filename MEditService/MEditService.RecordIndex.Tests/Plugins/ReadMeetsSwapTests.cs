@@ -36,7 +36,7 @@ public sealed class ReadMeetsSwapTests : IDisposable
     [Fact]
     public async Task ARead_WhoseStoreIsRebuiltBeforeItOpensAConnection_IsNotReady()
     {
-        var copy = new RecordCopy("000800:Swapped.esp", _fixture.Plugins.Single().KeyOf(), DocumentText: "{}");
+        var copy = new RecordCopy("000800:Swapped.esp", _fixture.Plugins.Single().Key, DocumentText: "{}");
         _source.ParkNextTreeLookup();
         var read = Task.Run(() => _index.Queries.GetCompareRecords([copy]));
         await _source.WaitUntilParkedAsync();
@@ -75,6 +75,6 @@ public sealed class ReadMeetsSwapTests : IDisposable
         Waits.Reached(() => _index.Status.State == LoadOrderState.Ready && _index.Queries.GetPlugins().Holds(out _, out _), "the reopened index");
         Assert.Contains(LoadOrderState.Reconciling, _notifications.Notifications.Skip(statusesBefore)
             .OfType<LoadOrderStatusNotification>().Select(n => n.Status.State));
-        Assert.NotEmpty(_index.ListedIn(_fixture.Plugins.Single().KeyOf()));
+        Assert.NotEmpty(_index.ListedIn(_fixture.Plugins.Single().Key));
     }
 }

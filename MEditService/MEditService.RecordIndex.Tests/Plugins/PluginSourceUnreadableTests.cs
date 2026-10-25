@@ -28,7 +28,7 @@ public sealed class PluginSourceUnreadableTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private PluginAddress Plugin => _entry.KeyOf();
+    private PluginAddress Plugin => _entry.Key;
 
     private string SourceRoot => PluginSourceRoot.In(_entry.ModFolderOf(), PluginName);
 

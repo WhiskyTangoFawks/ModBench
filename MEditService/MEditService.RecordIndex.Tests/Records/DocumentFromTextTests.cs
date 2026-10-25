@@ -24,7 +24,7 @@ public sealed class DocumentFromTextTests
             .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
-        var plugin = fixture.Plugins.Single().KeyOf();
+        var plugin = fixture.Plugins.Single().Key;
         var stored = index.DocumentOf(npc.ToString(), plugin);
         var text = index.BodyOf(npc.ToString(), plugin).Replace("FixtureNpc", "EditedNpc", StringComparison.Ordinal);
 
@@ -61,7 +61,7 @@ public sealed class DocumentFromTextTests
             .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
-        var stored = index.DocumentOf(npc.ToString(), fixture.Plugins.Single().KeyOf());
+        var stored = index.DocumentOf(npc.ToString(), fixture.Plugins.Single().Key);
 
         var copy = CopyFromText(index, npc.ToString(), text);
 
@@ -79,7 +79,7 @@ public sealed class DocumentFromTextTests
             .WithPlugin("Fixture.esp", mod => npc = mod.Npcs.AddNew("FixtureNpc").FormKey, origin: "FixtureMod")
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
-        var text = index.BodyOf(npc.ToString(), fixture.Plugins.Single().KeyOf())
+        var text = index.BodyOf(npc.ToString(), fixture.Plugins.Single().Key)
             .Replace("\"FixtureNpc\"", "5", StringComparison.Ordinal);
 
         var copy = CopyFromText(index, npc.ToString(), text);

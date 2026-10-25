@@ -36,7 +36,7 @@ public sealed class FailedStatusPublicationTests : IDisposable
             }
         });
 
-        var version = holder.Apply(LoadOrderArrival.Snapshot(
+        var version = holder.Apply(SnapshotPlugins.Snapshot(
             _fixture.DataFolder, _fixture.InstanceRoot, GameRelease.Fallout4, [_fixture.Plugins[0]]));
         Waits.Reached(() => index.Status.Version >= version, "the status answering the arrival");
         Volatile.Write(ref stopped, true);

@@ -36,9 +36,6 @@ public sealed class CompareGoldenFixture : IDisposable
                 var lonely = mod.Npcs.AddNew("SoleNPC");
                 lonely.CalculatedHealth = 7;
 
-                // A condition list is an ordinary reflected array column, so a record carrying one belongs in this
-                // golden like any other conflicting field: the classifier producing its diff tree is the one
-                // classifier, with no section of its own.
                 var recipe = mod.ConstructibleObjects.AddNew("ConflictedRecipe");
                 recipe.Conditions.Add(new ConditionFloat
                 {
@@ -53,17 +50,14 @@ public sealed class CompareGoldenFixture : IDisposable
                 var basePlugin = built.Single(m => m.ModKey.FileName == "Base.esm");
                 mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") });
 
-                // A real override that changes two fields and leaves the rest alone.
-                var npc = basePlugin.Npcs.First(n => n.FormKey == ConflictedNpc).DeepCopy();
-                npc.Name = "Mid name";
-                npc.CalculatedHealth = 250;
-                mod.Npcs.Set(npc);
+                var changingTwoFields = basePlugin.Npcs.First(n => n.FormKey == ConflictedNpc).DeepCopy();
+                changingTwoFields.Name = "Mid name";
+                changingTwoFields.CalculatedHealth = 250;
+                mod.Npcs.Set(changingTwoFields);
 
-                // An override identical to its master — the ITM shape, which must classify as
-                // no conflict rather than as a difference of zero size.
-                mod.Weapons.Set(basePlugin.Weapons.First(w => w.FormKey == UnchangedWeapon).DeepCopy());
+                var identicalToMaster = basePlugin.Weapons.First(w => w.FormKey == UnchangedWeapon).DeepCopy();
+                mod.Weapons.Set(identicalToMaster);
 
-                // A record injected into a master's FormID space by a plugin that isn't its origin.
                 mod.Npcs.AddNew("InjectedNPC").Name = "Injected";
             })
             .WithPlugin("Top.esp", (mod, built) =>
@@ -71,18 +65,15 @@ public sealed class CompareGoldenFixture : IDisposable
                 var basePlugin = built.Single(m => m.ModKey.FileName == "Base.esm");
                 mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") });
 
-                // The winning override: disagrees with both of the copies below it.
-                var npc = basePlugin.Npcs.First(n => n.FormKey == ConflictedNpc).DeepCopy();
-                npc.Name = "Top name";
-                npc.CalculatedHealth = 999;
-                npc.Race.SetTo(MakeKey("Base.esm", 0x901));
-                mod.Npcs.Set(npc);
+                var disagreeingWithBothBelow = basePlugin.Npcs.First(n => n.FormKey == ConflictedNpc).DeepCopy();
+                disagreeingWithBothBelow.Name = "Top name";
+                disagreeingWithBothBelow.CalculatedHealth = 999;
+                disagreeingWithBothBelow.Race.SetTo(MakeKey("Base.esm", 0x901));
+                mod.Npcs.Set(disagreeingWithBothBelow);
 
-                // The condition list disagrees with its master on one member of one condition —
-                // the compare tree has to reach the member, not stop at the array.
-                var recipe = basePlugin.ConstructibleObjects.First(c => c.FormKey == ConflictedRecipe).DeepCopy();
-                recipe.Conditions[0].Data.RunOnType = Condition.RunOnType.Target;
-                mod.ConstructibleObjects.Set(recipe);
+                var oneConditionMemberChanged = basePlugin.ConstructibleObjects.First(c => c.FormKey == ConflictedRecipe).DeepCopy();
+                oneConditionMemberChanged.Conditions[0].Data.RunOnType = Condition.RunOnType.Target;
+                mod.ConstructibleObjects.Set(oneConditionMemberChanged);
             })
             .Build();
         Index = Indexes.Reconciled(Fixture);

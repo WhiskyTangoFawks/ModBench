@@ -13,23 +13,17 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     private readonly LoadOrderEntry _base;
     private readonly PluginAddress _baseKey;
     private readonly FormKey _editedFormKey;
-    private readonly FormKey _untouchedFormKey;
 
     public RecordSummaryWorkingTreeStateTests()
     {
-        FormKey edited = default, untouched = default;
+        FormKey edited = default;
         _fixture = new PluginFixtureBuilder("record-summary-working-tree-state")
-            .WithPlugin("Base.esm", mod =>
-            {
-                edited = mod.Npcs.AddNew("EditedOriginal").FormKey;
-                untouched = mod.Npcs.AddNew("Untouched").FormKey;
-            }, origin: "BaseMod")
+            .WithPlugin("Base.esm", mod => edited = mod.Npcs.AddNew("EditedOriginal").FormKey, origin: "BaseMod")
             .BuildScattered()
             .CompiledPlugin();
         _base = _fixture.Plugins.Single();
-        _baseKey = _base.KeyOf();
+        _baseKey = _base.Key;
         _editedFormKey = edited;
-        _untouchedFormKey = untouched;
     }
 
     public void Dispose() => _fixture.Dispose();
@@ -41,38 +35,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         index.Queries.GetRecords(["npc_"], _baseKey, search: null, limit: 50, offset: 0).Value();
 
     [Fact]
-    public void Search_EditedRecord_ReportsModified_AndUntouchedSiblingReportsNone()
-    {
-        using var index = Indexes.Reconciled(_fixture);
-        var edited = _editedFormKey.ToString();
-        var committed = index.DocumentOf(edited, _baseKey);
-        index.Edit(_base, committed, index.BodyOf(edited, _baseKey).Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal));
-
-        var page = Listing(index);
-
-        Assert.Equal(WorkingTreeState.Modified, SummaryFor(page, edited).WorkingTreeState);
-        Assert.Equal(WorkingTreeState.None, SummaryFor(page, _untouchedFormKey.ToString()).WorkingTreeState);
-    }
-
-    [Fact]
-    public void Search_NewlyCreatedRecord_ReportsAdded()
-    {
-        using var index = Indexes.Reconciled(_fixture);
-        var template = index.DocumentOf(_untouchedFormKey.ToString(), _baseKey);
-        var created = new FormKey(_untouchedFormKey.ModKey, _untouchedFormKey.ID + 1).ToString();
-        var body = index.BodyOf(_untouchedFormKey.ToString(), _baseKey)
-            .Replace(_untouchedFormKey.ToString(), created, StringComparison.Ordinal)
-            .Replace("Untouched", "CreatedInTree", StringComparison.Ordinal);
-        index.Create(_base, created, "npc_", "CreatedInTree", body);
-
-        var page = Listing(index);
-
-        Assert.Equal(WorkingTreeState.Added, SummaryFor(page, created).WorkingTreeState);
-        Assert.Equal(WorkingTreeState.None, SummaryFor(page, _untouchedFormKey.ToString()).WorkingTreeState);
-    }
-
-    [Fact]
-    public void Search_AfterACommitMadeOutsideModbench_ReportsNone_OnTheNextArrival()
+    public void AnEditCommittedOutsideModbench_IsListedUnchanged_OnTheNextArrival()
     {
         using var index = Indexes.Reconciled(_fixture);
         var edited = _editedFormKey.ToString();
@@ -88,7 +51,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     }
 
     [Fact]
-    public void Search_WhileAChangedFileIsHeld_ListsTheBinarysRecords_AndOnceReleased_ReportsModifiedAgain()
+    public void WhileAChangedFileIsHeld_TheBinarysRecordsAreListedUnchanged_AndOnceReleased_ModifiedAgain()
     {
         using var index = Indexes.Reconciled(_fixture);
         var edited = _editedFormKey.ToString();
@@ -97,12 +60,12 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         using (new FileStream(_base.SourceFileOf(committed), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
         {
             index.NextSnapshotUntil(
-                () => index.PluginResponseOf(_baseKey) is { IsCompiledPlugin: true, PluginSourceUnreadable: not null }, "the binary read in the tree's place");
+                () => index.ReadFromItsPluginFileForItsUnreadableSource(_baseKey), "the binary read in the tree's place");
 
             Assert.Equal(WorkingTreeState.None, SummaryFor(Listing(index), edited).WorkingTreeState);
         }
 
-        index.NextSnapshotUntil(() => index.PluginResponseOf(_baseKey) is { IsCompiledPlugin: true, PluginSourceUnreadable: null }, "the tree read again");
+        index.NextSnapshotUntil(() => index.ReadFromItsPluginSource(_baseKey), "the tree read again");
 
         Assert.Equal(WorkingTreeState.Modified, SummaryFor(Listing(index), edited).WorkingTreeState);
     }

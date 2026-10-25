@@ -44,7 +44,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     [Fact]
     public void APluginRow_IsInTheLoadOrderExactlyWhenItIsActive()
     {
-        PluginResponse Row() => Assert.IsType<PluginResponse>(_index.PluginResponseOf(_mod.KeyOf()));
+        PluginResponse Row() => Assert.IsType<PluginResponse>(_index.PluginResponseOf(_mod.Key));
         Assert.True(Row().InLoadOrder);
         Assert.NotNull(Row().LoadOrderIndex);
 
@@ -57,20 +57,20 @@ public sealed class InactivePluginProjectionTests : IDisposable
     [Fact]
     public void AHandEditWhileNotActive_IsTheRecordTheReadsSeeOnceActive()
     {
-        var document = _index.DocumentOf(_npc, _mod.KeyOf());
+        var document = _index.DocumentOf(_npc, _mod.Key);
         Reconcile(active: false);
 
         _mod.HandEdit(document, "\"FixtureNpc\"", "\"RenamedByHand\"");
         _index.NextSnapshot();
         Reconcile(active: true);
 
-        Assert.Equal("RenamedByHand", _index.CopyIn(_npc, _mod.KeyOf())?.EditorId);
+        Assert.Equal("RenamedByHand", _index.CopyIn(_npc, _mod.Key)?.EditorId);
     }
 
     [Fact]
     public void AHandEditWhileNotActive_IsProjectedOnce()
     {
-        var document = _index.DocumentOf(_npc, _mod.KeyOf());
+        var document = _index.DocumentOf(_npc, _mod.Key);
         Reconcile(active: false);
         _mod.HandEdit(document, "\"FixtureNpc\"", "\"RenamedByHand\"");
         _index.NextSnapshot();
@@ -83,11 +83,11 @@ public sealed class InactivePluginProjectionTests : IDisposable
     [Fact]
     public void ACopyGivenAsText_ReadsWhenOnlyAPluginThatIsNotActiveHoldsItsRecord()
     {
-        var text = _index.BodyOf(_npc, _mod.KeyOf());
+        var text = _index.BodyOf(_npc, _mod.Key);
         Reconcile(active: false);
 
-        Assert.Null(_index.CopyIn(_npc, _mod.KeyOf()));
-        Assert.NotNull(_index.Queries.GetCompare(_npc, new CopyText(_mod.KeyOf(), text)).Value());
+        Assert.Null(_index.CopyIn(_npc, _mod.Key));
+        Assert.NotNull(_index.Queries.GetCompare(_npc, new CopyText(_mod.Key, text)).Value());
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     {
         Reconcile(active: false);
 
-        var found = _index.Queries.GetRecords(types: null, _mod.KeyOf(), search: "FixtureNpc", limit: 100, offset: 0).Value();
+        var found = _index.Queries.GetRecords(types: null, _mod.Key, search: "FixtureNpc", limit: 100, offset: 0).Value();
 
         Assert.Equal(_npc, Assert.Single(found.Items).FormKey);
     }
@@ -115,9 +115,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
     {
         Reconcile(active: false);
 
-        var row = _index.PluginResponseOf(_mod.KeyOf()) ?? throw new InvalidOperationException("Expected the plugin's row.");
-        Assert.True(row.IsCompiledPlugin);
-        Assert.Null(row.PluginSourceUnreadable);
+        Assert.True(_index.ReadFromItsPluginSource(_mod.Key));
     }
 
     [Fact]

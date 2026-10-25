@@ -369,7 +369,7 @@ describe('the Plugins view\'s Problems', () => {
     }));
     client.setQueryAnswer('getPlugins', []);
     client.setQueryAnswer('getDiagnoses', [
-      { plugin: 'Test.esp', origin: 'ModA', defectClass: 'fixed-size-subrecord-short', message: 'short', text: 'short' },
+      { plugin: 'Test.esp', origin: 'ModA', message: 'short', text: 'short' },
     ]);
 
     client.emit(tick({
@@ -396,8 +396,8 @@ describe('the Plugins view\'s Problems', () => {
     }));
     client.setQueryAnswer('getPlugins', []);
     client.setQueryAnswer('getDiagnoses', [
-      { plugin: 'Test.esp', origin: 'ModA', defectClass: 'fixed-size-subrecord-short', message: 'short', text: 'short' },
-      { plugin: 'Vanilla.esm', origin: 'Data/', defectClass: 'fixed-size-subrecord-short', message: 'short', text: 'short' },
+      { plugin: 'Test.esp', origin: 'ModA', message: 'short', text: 'short' },
+      { plugin: 'Vanilla.esm', origin: 'Data/', message: 'short', text: 'short' },
     ]);
 
     client.emit(tick({ state: 'Ready', conflictsComputed: true }));
@@ -821,7 +821,7 @@ describe('the Plugins view\'s message line and name filter', () => {
   const GAME_FOLDER_MESSAGE =
     "Game folder not found: set modbench.mods.gameFolder. The Toolbox's Game row names each place Modbench looked.";
   const heldPlugin = (name: string, hasMatchingRecords: boolean): PluginMetadata => ({
-    name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0,
+    name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false, masters: [],
     isImmutable: false, origin: 'SomeMod', missingMasters: [], inLoadOrder: true, hasMatchingRecords, isCompiledPlugin: false,
     hasParseFailure: false, pluginSourceUnreadable: null,
   });

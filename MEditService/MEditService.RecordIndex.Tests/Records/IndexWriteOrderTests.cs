@@ -52,7 +52,7 @@ public sealed class IndexWriteOrderTests : IDisposable
     {
         var revalidation = await ARevalidationParkedMidWrite();
 
-        var listing = Task.Run(() => _index.ListedIn(Plugin.KeyOf()));
+        var listing = Task.Run(() => _index.ListedIn(Plugin.Key));
 
         Assert.NotEmpty(await listing.WaitAsync(Waits.Patience));
         _adapter.Release();

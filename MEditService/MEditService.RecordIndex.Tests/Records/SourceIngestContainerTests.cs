@@ -19,9 +19,6 @@ public sealed class SourceIngestContainerTests : IDisposable
         return Assert.Single(Assert.Single(problems, p => PluginAddress.Comparer.Equals(p.Plugin, _fixture.Plugin)).Problems);
     }
 
-    private bool ReadFromItsBinaryInPlaceOfItsSource(OpenedIndex index) =>
-        index.PluginResponseOf(_fixture.Plugin) is { IsCompiledPlugin: true, PluginSourceUnreadable: not null };
-
     [Fact]
     public void AnExternallyEditedContainer_ServesItsEdit_ThroughStructuralDiff()
     {
@@ -120,7 +117,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.NotNull(reloaded.CopyIn(child, _fixture.Plugin));
         Assert.NotNull(reloaded.RowOf(child, _fixture.Plugin));
         Assert.NotNull(reloaded.PlacementGroupIn(_fixture.Plugin, _fixture.EmbedCell.ToString(), child));
-        Assert.True(ReadFromItsBinaryInPlaceOfItsSource(reloaded));
+        Assert.True(reloaded.ReadFromItsPluginFileForItsUnreadableSource(_fixture.Plugin));
         Assert.Empty(reloaded.Status.Failures);
         var failure = TheOneSourceProblemOf(reloaded);
         Assert.Equal(Path.GetRelativePath(_fixture.Entry.ModFolderOf(), file), failure.SourceRelativePath);
@@ -136,7 +133,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         File.WriteAllText(file, WithTemporaryRefMisspelt(File.ReadAllText(file)));
 
         index.NextSnapshotUntil(
-            () => ReadFromItsBinaryInPlaceOfItsSource(index),
+            () => index.ReadFromItsPluginFileForItsUnreadableSource(_fixture.Plugin),
             "the plugin file read in place of its source");
 
         Assert.Empty(index.Status.Failures);

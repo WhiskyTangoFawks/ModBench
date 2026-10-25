@@ -51,7 +51,7 @@ internal sealed class RecordQueries(
             var content = opened[plugin.Key];
             var loadOrderIndex = snapshot.LoadOrderIndex(plugin.Key);
             return new(plugin.Name, plugin.Path, loadOrderIndex, content.IsLight, content.IsMaster, content.IsBlueprint,
-                content.Masters, content.RecordCount, IsImmutable: snapshot.ProviderOf(plugin.Key) == PluginProvider.Game, plugin.Origin,
+                content.Masters, IsImmutable: snapshot.ProviderOf(plugin.Key) == PluginProvider.Game, plugin.Origin,
                 problems?.Missing, problems?.Late, InLoadOrder: loadOrderIndex is not null, hasMatchingRecords,
                 IsCompiledPlugin: derivedFrom?.IsSourceMod() ?? false,
                 HasParseFailure: parseFailures.Contains(plugin.Key),

@@ -36,8 +36,8 @@ public sealed class WorkingTreeChangeMarkingTests : IDisposable
             .BuildScattered()
             .CompiledPlugin();
         _base = _fixture.Plugins.Single(p => p.Name == "Base.esm");
-        _baseKey = _base.KeyOf();
-        _winnerKey = _fixture.Plugins.Single(p => p.Name == "Winner.esp").KeyOf();
+        _baseKey = _base.Key;
+        _winnerKey = _fixture.Plugins.Single(p => p.Name == "Winner.esp").Key;
         _keptNpc = keptFk.ToString();
         _soleSourcedNpcWhoseOneEntryIsItsOwnWinner = droppedFk.ToString();
     }

@@ -208,7 +208,7 @@ public sealed class SwaggerSchemaTests
         "PluginResponse",
         new[]
         {
-            "name", "path", "isLight", "isMaster", "isBlueprint", "masters", "recordCount", "isImmutable",
+            "name", "path", "isLight", "isMaster", "isBlueprint", "masters", "isImmutable",
             "origin", "inLoadOrder",
             "hasMatchingRecords", "isCompiledPlugin", "hasParseFailure",
         })]

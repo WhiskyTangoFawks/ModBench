@@ -4,8 +4,7 @@ using MEditService.TestSupport;
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
 /// <summary>An index over the committed cut-down Fallout 4 plugin: real game data without the
-/// 316 MB master, so the fixture is hermetic. `CutDownPluginGenerator` in
-/// MEditService.TestSupport regenerates the file when the schema or curation changes.</summary>
+/// 316 MB master, so the fixture is hermetic.</summary>
 public sealed class CutDownPluginFixture : IDisposable
 {
     public static readonly PluginAddress Plugin = new(RealDataPlugin.PluginFileName, PluginOrigin.DataDirectory);
@@ -25,8 +24,6 @@ public sealed class CutDownPluginFixture : IDisposable
                 RealDataPlugin.PluginFileName, RealDataPlugin.PluginPath, PluginOrigin.DataDirectory,
                 Line: 0, Enabled: true, Winning: true)],
             InstanceRoot);
-        // The per-type views are made by the first filter, and a test reads them.
-        Index.Accepts("SELECT form_key FROM records");
     }
 
     public void Dispose()

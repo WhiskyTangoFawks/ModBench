@@ -78,7 +78,7 @@ async function holdPluginsTxt(text: string): Promise<void> {
 type MockPlugin = PluginMetadata;
 function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' | 'path' | 'origin' | 'inLoadOrder'>): MockPlugin {
   return {
-    isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0, isImmutable: false,
+    isLight: false, isMaster: false, isBlueprint: false, masters: [], isImmutable: false,
     missingMasters: [], hasMatchingRecords: true,
     isCompiledPlugin: false,
     hasParseFailure: false,

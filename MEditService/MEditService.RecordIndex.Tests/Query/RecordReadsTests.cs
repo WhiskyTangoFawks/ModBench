@@ -139,11 +139,11 @@ public class RecordReadsTests(TestPluginFixture fixture)
             .CompiledPlugin();
         using var index = Indexes.Reconciled(fixture);
         var later = fixture.Plugins.Single(p => p.Name == "Later.esp");
-        var overridden = index.DocumentOf(index.ListedIn(later.KeyOf()).Single(d => d.EditorId == "Mastered").FormKey, later.KeyOf());
+        var overridden = index.DocumentOf(index.ListedIn(later.Key).Single(d => d.EditorId == "Mastered").FormKey, later.Key);
 
         index.Edit(later, overridden, later.SourceTextOf(overridden).Replace("000800:Master.esm", "000800_Master.esm", StringComparison.Ordinal));
 
-        Assert.Equal(["Mastered", "Own"], index.ListedIn(later.KeyOf()).Select(r => r.EditorId));
+        Assert.Equal(["Mastered", "Own"], index.ListedIn(later.Key).Select(r => r.EditorId));
     }
 
     [Fact]

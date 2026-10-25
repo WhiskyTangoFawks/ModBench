@@ -75,32 +75,52 @@ public sealed class LinkResolutionTests
 
     private const string ResolverPlugin = "Fixture.esp";
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ACompareAfterTheIndexMovesOn_ResolvesALinkAgainstTheNewRows(bool found)
+    private static readonly FormKey Late = FormKey.Factory($"000900:{ResolverPlugin}");
+
+    private static string? LateResolvedFor(string prefix, Action<Fallout4Mod> alsoHolds, Action<OpenedIndex, LoadOrderEntry, string> before)
     {
-        var late = FormKey.Factory($"000900:{ResolverPlugin}");
-        using var fixture = new PluginFixtureBuilder($"link-resolver-response-{found}")
+        using var fixture = new PluginFixtureBuilder(prefix)
             .WithPlugin(ResolverPlugin, mod =>
             {
                 mod.Npcs.AddNew("Asker");
-                if (found) mod.Races.Add(new Race(late, Fallout4Release.Fallout4) { EditorID = "Before" });
+                alsoHolds(mod);
             }, origin: "FixtureMod")
             .BuildScattered();
         using var index = Indexes.Reconciled(fixture);
         var plugin = fixture.Plugins.Single();
-        var asker = index.Queries.GetRecords(["npc_"], plugin.KeyOf(), search: null, limit: 1, offset: 0).Value().Items.Single().FormKey;
-        Assert.Equal(found ? "Before" : null, index.ResolutionOf(asker, plugin.KeyOf(), late.ToString()).EditorId);
+        var asker = index.Queries.GetRecords(["npc_"], plugin.Key, search: null, limit: 1, offset: 0).Value().Items.Single().FormKey;
+        before(index, plugin, asker);
 
         PluginBinaries.Rewrite(plugin.Path, mod =>
         {
             mod.Npcs.AddNew("Asker");
-            mod.Races.Add(new Race(late, Fallout4Release.Fallout4) { EditorID = "After" });
+            mod.Races.Add(new Race(Late, Fallout4Release.Fallout4) { EditorID = "After" });
         });
         index.NextSnapshot();
 
-        Assert.Equal("After", index.ResolutionOf(asker, plugin.KeyOf(), late.ToString()).EditorId);
+        return index.ResolutionOf(asker, plugin.Key, Late.ToString()).EditorId;
+    }
+
+    [Fact]
+    public void ALinkThatResolved_ResolvesAgainstTheNewRow_OnceTheIndexMovesOn()
+    {
+        var after = LateResolvedFor(
+            "link-resolver-response-found",
+            mod => mod.Races.Add(new Race(Late, Fallout4Release.Fallout4) { EditorID = "Before" }),
+            (index, plugin, asker) => Assert.Equal("Before", index.ResolutionOf(asker, plugin.Key, Late.ToString()).EditorId));
+
+        Assert.Equal("After", after);
+    }
+
+    [Fact]
+    public void ADanglingLink_Resolves_OnceItsRowArrives()
+    {
+        var after = LateResolvedFor(
+            "link-resolver-response-dangling",
+            _ => { },
+            (index, plugin, asker) => Assert.Equal(FormKeyResolutionState.Unresolved, index.ResolutionOf(asker, plugin.Key, Late.ToString()).State));
+
+        Assert.Equal("After", after);
     }
 
     private static string? KeywordErrors(RecordDetail document) =>

@@ -162,7 +162,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         private readonly ScatteredFixtureData _fixture;
 
         public LoadOrderEntry Entry { get; }
-        public PluginAddress Plugin => Entry.KeyOf();
+        public PluginAddress Plugin => Entry.Key;
         public OpenedIndex Index { get; }
         public string Worldspace { get; }
         public string ExteriorCell { get; }

@@ -19,9 +19,9 @@ public sealed class RecordIndexRegistrationTests
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .Build();
         await using var provider = Indexes.Container(holder);
-        foreach (var hosted in provider.GetServices<IHostedService>()) await hosted.StartAsync(CancellationToken.None);
+        await Assert.Single(provider.GetServices<IHostedService>()).StartAsync(CancellationToken.None);
 
-        var version = holder.Apply(LoadOrderArrival.Snapshot(fixture.DataFolder, null, GameRelease.Fallout4, fixture.Plugins));
+        var version = holder.Apply(SnapshotPlugins.Snapshot(fixture.DataFolder, null, GameRelease.Fallout4, fixture.Plugins));
 
         var records = provider.GetRequiredService<IQueries>();
         Waits.Reached(() => records.GetStatus().Version >= version, "the status answering the arrival");

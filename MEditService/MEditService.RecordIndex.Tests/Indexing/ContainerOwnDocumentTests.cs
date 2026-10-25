@@ -104,11 +104,10 @@ public sealed class ContainerOwnDocumentTests
                 .Select(formKey => fixture.Stored(formKey).GetProperty("EditorID").GetString()));
         Assert.Equal([fixture.Topic], fixture.Children(fixture.Quest));
         Assert.Equal([fixture.Response], fixture.Children(fixture.Topic));
+        var held = fixture.Index.Queries.GetCellChildRecords(Plugin, keys.EmbedCell.ToString()).Value();
         Assert.Equal(
             new[] { keys.PersistentRef, keys.TemporaryRef, keys.Navmesh, keys.Landscape }.Select(formKey => formKey.ToString()),
-            fixture.Index.Queries.GetCellChildRecords(Plugin, keys.EmbedCell.ToString()).Value() is var held
-                ? held.Persistent.Concat(held.Temporary).Select(c => c.FormKey)
-                : []);
+            held.Persistent.Concat(held.Temporary).Select(c => c.FormKey));
     }
 
     [Fact]

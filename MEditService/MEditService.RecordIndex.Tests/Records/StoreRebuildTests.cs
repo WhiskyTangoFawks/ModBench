@@ -27,7 +27,7 @@ public sealed class StoreRebuildTests : IDisposable
         _fixture.Dispose();
     }
 
-    private PluginAddress Key => _fixture.Plugins.Single().KeyOf();
+    private PluginAddress Key => _fixture.Plugins.Single().Key;
 
     private void Reconcile(string? instanceRoot) =>
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, instanceRoot);
@@ -71,7 +71,7 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public void Rebuild_OfAnInstanceRootThatIsNotThere_FailsNamingIt_CreatesNothing_AndReopensOnceItReturns()
+    public void ARebuildOfAnInstanceRootThatIsNotThere_FailsNamingIt_CreatesNothing_AndReopensOnceItReturns()
     {
         Reconcile(_fixture.InstanceRoot);
         var gone = Path.Combine(_fixture.InstanceRoot, "no-such-instance");
@@ -87,7 +87,7 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public void Rebuild_ReadsThePluginAgain_AgainstTheLoadOrderHeld()
+    public void ARebuild_ReadsThePluginAgain_AgainstTheLoadOrderHeld()
     {
         Reconcile(_fixture.InstanceRoot);
         Assert.Equal(1, _opens.OpenedTotal);
@@ -122,7 +122,7 @@ public sealed class StoreRebuildTests : IDisposable
         [.. index.Queries.GetRecords(["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value().Items.Select(i => i.EditorId ?? "")];
 
     [Fact]
-    public void Rebuild_KeepsTheRecordFilter_AndTheRefilledRowsAnswerThroughIt()
+    public void ARebuild_KeepsTheRecordFilter_AndTheRefilledRowsAnswerThroughIt()
     {
         using var data = NpcAAndNpcOtherInAespAndNpcBInBespFixture("store-rebuild-filter-kept");
         var holder = new LoadOrderHolder();
@@ -240,7 +240,7 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public void Rebuild_WithNoLoadOrderHeld_LeavesTheStoreEmpty_AndReportsNothing()
+    public void ARebuildWithNoLoadOrderHeld_LeavesTheStoreEmpty_AndReportsNothing()
     {
         Assert.Null(_index.Queries.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot));
 
@@ -260,14 +260,14 @@ public sealed class StoreRebuildTests : IDisposable
         index.Reconcile(holder, data.DataFolder, [data.Plugins[0]], GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, data.InstanceRoot));
-        var version = holder.Apply(LoadOrderArrival.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
+        var version = holder.Apply(SnapshotPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins));
         await gate.WaitUntilParkedAsync();
         gate.Release();
         index.AwaitVersion(version);
         AwaitRefill(index);
 
         Assert.Equal(version, index.Status.Version);
-        Assert.NotNull(index.PluginResponseOf(data.Plugins[1].KeyOf()));
+        Assert.NotNull(index.PluginResponseOf(data.Plugins[1].Key));
     }
 
     [Fact]
@@ -306,7 +306,7 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public void Rebuild_SeedsTheSequence_AtLeastTheValueAlreadyHandedOut()
+    public void ARebuild_SeedsTheSequence_AtLeastTheValueAlreadyHandedOut()
     {
         Reconcile(_fixture.InstanceRoot);
         var priorSequence = _index.Sequence;
@@ -319,7 +319,7 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [ForeignIndexHolderFact]
-    public void Rebuild_RefusesAndLeavesTheFileInPlace_WhenAnotherProcessHoldsIt()
+    public void ARebuildWhileAnotherProcessHoldsTheFile_IsRefused_AndLeavesTheFileInPlace()
     {
         var earlierHolder = new LoadOrderHolder();
         using (var earlier = Indexes.Open(earlierHolder, _opens))
@@ -339,7 +339,7 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [ForeignIndexHolderFact]
-    public void Rebuild_RefusedBecauseAnotherProcessHoldsIt_LeavesTheStatusHeldElsewhere_NamingTheFile()
+    public void ARebuildRefusedBecauseAnotherProcessHoldsIt_LeavesTheStatusHeldElsewhere_NamingTheFile()
     {
         var earlierHolder = new LoadOrderHolder();
         using (var earlier = Indexes.Open(earlierHolder, _opens))

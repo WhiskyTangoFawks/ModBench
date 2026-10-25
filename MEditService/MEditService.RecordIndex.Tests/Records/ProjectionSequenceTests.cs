@@ -33,7 +33,7 @@ public sealed class ProjectionSequenceTests : IDisposable
             .CompiledPlugin();
         _base = _fixture.Plugins.Single(p => p.Name == "Base.esm");
         _partner = _fixture.Plugins.Single(p => p.Name == "Partner.esp");
-        _baseKey = _base.KeyOf();
+        _baseKey = _base.Key;
         _npc1 = fk1;
         _npc2 = fk2;
         _index = Indexes.Open(_holder, notifications: _notifications);
@@ -51,37 +51,25 @@ public sealed class ProjectionSequenceTests : IDisposable
     [Fact]
     public void FreshIndex_SequenceIsZero() => Assert.Equal(0, _index.Sequence);
 
-    [Fact]
-    public void Reconcile_Ingest_AdvancesTheSequence()
+    private IReadOnlyList<LoadOrderEntry> LoadOrderOf(string plugins) => new Dictionary<string, IReadOnlyList<LoadOrderEntry>>
     {
-        Reconcile([]);
-        var before = _index.Sequence;
+        ["none"] = [],
+        ["every plugin"] = _fixture.Plugins,
+        ["every plugin disabled"] = [.. _fixture.Plugins.Select(p => p with { Enabled = false })],
+    }[plugins];
 
-        Reconcile(_fixture.Plugins);
-
-        Assert.True(_index.Sequence > before);
-    }
-
-    [Fact]
-    public void Reconcile_ARegistrationMove_AdvancesTheSequence()
+    [Theory]
+    [InlineData("none", "every plugin")]
+    [InlineData("every plugin", "every plugin disabled")]
+    [InlineData("every plugin", "none")]
+    public void ALoadOrderThatMovesRows_AdvancesTheSequence(string before, string after)
     {
-        Reconcile(_fixture.Plugins);
-        var before = _index.Sequence;
+        Reconcile(LoadOrderOf(before));
+        var sequence = _index.Sequence;
 
-        Reconcile([.. _fixture.Plugins.Select(p => p with { Enabled = false })]);
+        Reconcile(LoadOrderOf(after));
 
-        Assert.True(_index.Sequence > before);
-    }
-
-    [Fact]
-    public void Reconcile_APluginLeaving_AdvancesTheSequence()
-    {
-        Reconcile(_fixture.Plugins);
-        var before = _index.Sequence;
-
-        Reconcile([]);
-
-        Assert.True(_index.Sequence > before);
+        Assert.True(_index.Sequence > sequence);
     }
 
     [Fact]
@@ -90,16 +78,12 @@ public sealed class ProjectionSequenceTests : IDisposable
         Reconcile(_fixture.Plugins);
         var formKey1 = _npc1.ToString();
         var formKey2 = _npc2.ToString();
-        var document1 = _index.DocumentOf(formKey1, _baseKey);
-        var document2 = _index.DocumentOf(formKey2, _baseKey);
-        var repository = SourceMods.RepositoryOf(_base);
-        repository.Put(_baseKey, new SourceAdapter.SourceDocument(
-            formKey1, document1.RecordType, document1.EditorId, _index.BodyOf(formKey1, _baseKey).Replace("First", "FirstEdited", StringComparison.Ordinal))).Wrote();
-        repository.Put(_baseKey, new SourceAdapter.SourceDocument(
-            formKey2, document2.RecordType, document2.EditorId, _index.BodyOf(formKey2, _baseKey).Replace("Second", "SecondEdited", StringComparison.Ordinal))).Wrote();
-
         var before = _index.Sequence;
-        _index.NextSnapshot();
+
+        _index.Project(_base, [
+            (formKey1, _index.BodyOf(formKey1, _baseKey).Replace("First", "FirstEdited", StringComparison.Ordinal)),
+            (formKey2, _index.BodyOf(formKey2, _baseKey).Replace("Second", "SecondEdited", StringComparison.Ordinal)),
+        ]);
 
         Assert.Equal(before + 1, _index.Sequence);
         Assert.Equal("FirstEdited", _index.DocumentOf(formKey1, _baseKey).EditorId);

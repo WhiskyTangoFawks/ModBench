@@ -21,7 +21,7 @@ public sealed class IncompleteBinaryReadTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private PluginAddress Plugin => _fixture.Plugins.Single().KeyOf();
+    private PluginAddress Plugin => _fixture.Plugins.Single().Key;
 
     private static readonly AdapterReadingWithoutTables EveryRecordTable = new(table => table != PluginHeader.RecordType);
 

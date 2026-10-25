@@ -18,7 +18,7 @@ const STAND_FILE = '/source/ModB/plugin-source/B.esp/Stand.json';
 
 const plugin = (address: typeof modA, over: Partial<PluginMetadata> = {}): PluginMetadata => ({
   ...address, path: `/mods/${address.origin}/${address.name}`, isLight: false, isMaster: false, isBlueprint: false, masters: [],
-  recordCount: 0, isImmutable: false, inLoadOrder: true, hasMatchingRecords: true, isCompiledPlugin: true, hasParseFailure: false, pluginSourceUnreadable: null, ...over,
+  isImmutable: false, inLoadOrder: true, hasMatchingRecords: true, isCompiledPlugin: true, hasParseFailure: false, pluginSourceUnreadable: null, ...over,
 });
 
 const summary = (formKey: string, address: typeof modA, editorId?: string): RecordSummary => ({

@@ -87,7 +87,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         var plugin = Assert.Single(_svc.GetPlugins().Value());
 
         Assert.Equal(PluginName, plugin.Name);
-        Assert.Equal(2, plugin.RecordCount);
     }
 
     [Theory]

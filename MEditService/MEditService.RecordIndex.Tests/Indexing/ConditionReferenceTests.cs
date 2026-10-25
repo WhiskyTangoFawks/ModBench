@@ -69,11 +69,16 @@ public class ConditionReferenceTests
         Assert.Null(conditions.CheckError);
     }
 
+    public static TheoryData<Condition.RunOnType, string[]> RunOns => new()
+    {
+        { Condition.RunOnType.Reference, ["Conditions[0].Data.Reference"] },
+        { Condition.RunOnType.Subject, [] },
+    };
+
     [Theory]
-    [InlineData(Condition.RunOnType.Reference, "Conditions[0].Data.Reference")]
-    [InlineData(Condition.RunOnType.Subject, null)]
+    [MemberData(nameof(RunOns))]
     public void TheRunOnReferenceIsAReferenceOnlyUnderTheReferenceRunOn(
-        Condition.RunOnType runOn, string? expected)
+        Condition.RunOnType runOn, string[] expected)
     {
         FormKey cobj = default, quest = default;
         using var fixture = new PluginFixtureBuilder($"cond-refs-runon-{runOn}")
@@ -89,8 +94,6 @@ public class ConditionReferenceTests
             })
             .Build();
 
-        Assert.Equal(
-            expected == null ? [] : new[] { expected },
-            ConditionRefPaths(fixture, cobj, quest));
+        Assert.Equal(expected, ConditionRefPaths(fixture, cobj, quest));
     }
 }

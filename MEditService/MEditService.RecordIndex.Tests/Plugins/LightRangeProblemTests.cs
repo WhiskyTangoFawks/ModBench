@@ -44,7 +44,7 @@ public sealed class LightRangeProblemTests : IDisposable
     private static IReadOnlyList<RecordIndex.Queries.SourceProblem> Problems(OpenedIndex index) => index.Queries.GetProblems().Value().Single().Problems;
 
     private string OutsideFile(OpenedIndex index) =>
-        Path.GetRelativePath(_light.ModFolderOf(), _light.SourceFileOf(index.DocumentOf(_outside, _light.KeyOf())));
+        Path.GetRelativePath(_light.ModFolderOf(), _light.SourceFileOf(index.DocumentOf(_outside, _light.Key)));
 
     [Fact]
     public void AHeaderTypedLight_IsAProblemOnTheRecordsFile_UntilItIsTypedOut_AndThePluginStaysItsSource()
@@ -57,7 +57,7 @@ public sealed class LightRangeProblemTests : IDisposable
         Waits.Reached(() => _notifications.Since(before).Any(n => PluginChanged(_light)(n)), "the problem announced");
 
         Assert.Equal(OutsideFile(index), Assert.Single(Problems(index)).SourceRelativePath);
-        Assert.True(index.ReadFromItsPluginSource(_light.KeyOf()));
+        Assert.True(index.ReadFromItsPluginSource(_light.Key));
 
         before = _notifications.Notifications.Count;
         index.Unsaved.Apply([]);

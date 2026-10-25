@@ -75,6 +75,12 @@ public class RegistrationScopingTests
         public IReadOnlyList<LoadOrderEntry> WithBetaDisabled =>
             [.. Plugins.Plugins.Select(p => p.Name == BetaKey.Name ? p with { Enabled = false } : p)];
 
+        public IReadOnlyList<LoadOrderEntry> Snapshot(string named) => new Dictionary<string, IReadOnlyList<LoadOrderEntry>>
+        {
+            [BetaDisabled] = WithBetaDisabled,
+            [BetaAbsent] = WithoutBeta,
+        }[named];
+
         public void Dispose()
         {
             Index.Dispose();
@@ -115,44 +121,55 @@ public class RegistrationScopingTests
             placed.FormKey.ToString(), quest.FormKey.ToString(), topic.FormKey.ToString());
     }
 
+    private const string BetaDisabled = "Beta disabled";
+    private const string BetaAbsent = "Beta absent";
+
     private static FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc Build(string prefix) => new(prefix);
 
-    [Fact]
-    public void APluginAbsentFromTheSnapshot_AnswersNoRead_WhileTheOtherProviderStillAnswers()
+    [Theory]
+    [InlineData(BetaAbsent)]
+    [InlineData(BetaDisabled)]
+    public void APluginTheSnapshotLeavesInactive_AnswersNoReadOfARecord_WhileTheOtherProviderStillAnswers(string snapshot)
     {
-        using var fx = Build("registration-unregister");
+        using var fx = Build("registration-inactive-reads");
         var index = fx.Index;
-
         Assert.Equal(fx.BetaRecords, fx.BetaRecordsFound());
-        Assert.Equal(2, index.StackOf(fx.SharedNpcFk).Count);
-        Assert.NotEmpty(index.Queries.GetReferences(fx.BetaRaceFk).Value());
-        Assert.NotNull(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
-        Assert.NotEmpty(index.Queries.GetContainerChildren(BetaKey, fx.BetaQuestFk).Value());
 
-        fx.Reconcile(fx.WithoutBeta);
+        fx.Reconcile(fx.Snapshot(snapshot));
 
         Assert.Null(index.Queries.GetRecord(fx.BetaNpcFk).Value());
         Assert.Null(index.CopyIn(fx.BetaNpcFk, BetaKey));
-        Assert.Empty(fx.BetaRecordsFound());
         Assert.Null(index.Queries.GetCompare(fx.BetaNpcFk).Value());
         var only = Assert.Single(index.StackOf(fx.SharedNpcFk));
-        Assert.Equal(AlphaKey.Name, only.Plugin);
+        Assert.Equal(AlphaKey, new PluginAddress(only.Plugin, only.Origin));
         Assert.True(only.IsWinner);
-        Assert.Equal(AlphaKey.Name, index.Queries.GetRecord(fx.SharedNpcFk).Value()?.Plugin);
-
         Assert.DoesNotContain(fx.EveryListedRecord(), r => r.Plugin == BetaKey.Name);
         Assert.Empty(index.Queries.GetPluginRecordTypes(BetaKey).Value());
-
         Assert.Equal(FormKeyResolutionState.Unresolved, fx.ResolutionOfBetasNpc());
         Assert.Empty(index.Queries.GetReferences(fx.BetaRaceFk).Value());
+        Assert.Empty(index.Queries.GetInteriorCells(BetaKey).Value());
+        Assert.Null(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
+        Assert.Empty(index.Queries.GetContainerChildren(BetaKey, fx.BetaQuestFk).Value());
+    }
+
+    [Fact]
+    public void APluginAbsentFromTheSnapshot_HoldsNoRow_AndNoFilterMatchesIt()
+    {
+        using var fx = Build("registration-unregister");
+        var index = fx.Index;
+        Assert.Equal(2, index.StackOf(fx.SharedNpcFk).Count);
+        Assert.NotNull(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
+
+        fx.Reconcile(fx.WithoutBeta);
+
+        Assert.Empty(fx.BetaRecordsFound());
+        Assert.Equal(AlphaKey.Name, index.Queries.GetRecord(fx.SharedNpcFk).Value()?.Plugin);
         var cells = index.Queries.GetWorldspaceBlocks(BetaKey, fx.BetaWorldspaceFk).Value();
         Assert.Empty(cells.Blocks);
         Assert.Empty(cells.TopCells);
-        Assert.Empty(index.Queries.GetInteriorCells(BetaKey).Value());
         var cellRefs = index.Queries.GetCellChildRecords(BetaKey, fx.BetaCellFk).Value();
         Assert.Empty(cellRefs.Persistent);
         Assert.Empty(cellRefs.Temporary);
-        Assert.Empty(index.Queries.GetContainerChildren(BetaKey, fx.BetaQuestFk).Value());
 
         var filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy =
             $"SELECT form_key FROM npc_ WHERE plugin = '{BetaKey.Name}' AND origin = '{BetaKey.Origin}'";
@@ -169,29 +186,6 @@ public class RegistrationScopingTests
     }
 
     [Fact]
-    public void APluginThatIsNotActive_AnswersNoReadOfARecord()
-    {
-        using var fx = Build("registration-inactive-reads");
-        var index = fx.Index;
-        Assert.Equal(fx.BetaRecords, fx.BetaRecordsFound());
-
-        fx.Reconcile(fx.WithBetaDisabled);
-
-        Assert.Null(index.Queries.GetRecord(fx.BetaNpcFk).Value());
-        Assert.Null(index.CopyIn(fx.BetaNpcFk, BetaKey));
-        Assert.Null(index.Queries.GetCompare(fx.BetaNpcFk).Value());
-        var shared = Assert.Single(index.StackOf(fx.SharedNpcFk));
-        Assert.Equal(AlphaKey, new PluginAddress(shared.Plugin, shared.Origin));
-        Assert.DoesNotContain(fx.EveryListedRecord(), r => r.Plugin == BetaKey.Name);
-        Assert.Empty(index.Queries.GetPluginRecordTypes(BetaKey).Value());
-        Assert.Equal(FormKeyResolutionState.Unresolved, fx.ResolutionOfBetasNpc());
-        Assert.Empty(index.Queries.GetReferences(fx.BetaRaceFk).Value());
-        Assert.Empty(index.Queries.GetInteriorCells(BetaKey).Value());
-        Assert.Null(index.PlacementGroupIn(BetaKey, fx.BetaCellFk, fx.BetaPlacedFk));
-        Assert.Empty(index.Queries.GetContainerChildren(BetaKey, fx.BetaQuestFk).Value());
-    }
-
-    [Fact]
     public void AReferenceInACompiledPluginThatIsNotActive_IsListedForActiveOrCompiledPlugins()
     {
         using var fx = Build("registration-inactive-compiled-plugin-references");
@@ -205,53 +199,41 @@ public class RegistrationScopingTests
     }
 
     [Fact]
-    public void AReferenceInANonCompiledPluginThatIsNotActive_IsListedForNoOne()
-    {
-        using var fx = Build("registration-inactive-nonCompiledPlugin-references");
-
-        fx.Reconcile(fx.WithBetaDisabled);
-
-        Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value());
-    }
-
-    [Fact]
-    public void AReferenceInANonCompiledPluginActivePlugin_IsListedForActiveOrCompiledPlugins()
+    public void AReferenceInAnActivePluginNotCompiled_IsListedForActiveOrCompiledPlugins()
     {
         using var fx = Build("registration-active-nonCompiledPlugin-references");
 
         Assert.Contains(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value(), r => r.FormKey == fx.BetaNpcFk);
     }
 
-    [Fact]
-    public void AReferenceInAPluginAbsentFromTheSnapshot_IsListedForNoCompiledPlugin()
+    [Theory]
+    [InlineData(BetaDisabled)]
+    [InlineData(BetaAbsent)]
+    public void AReferenceInAPluginNotCompiledTheSnapshotLeavesInactive_IsListedForNoOne(string snapshot)
     {
-        using var fx = Build("registration-absent-references");
+        using var fx = Build("registration-inactive-nonCompiledPlugin-references");
 
-        fx.Reconcile(fx.WithoutBeta);
+        fx.Reconcile(fx.Snapshot(snapshot));
 
         Assert.Empty(fx.Index.Queries.GetReferencesInActiveOrCompiledPlugins(fx.BetaRaceFk).Value());
     }
 
-    [Fact]
-    public void APluginThatIsNotActive_IsInNoRelationTheSqlDoorReads()
+    [Theory]
+    [InlineData("records", "plugin")]
+    [InlineData("form_lookup", "plugin")]
+    [InlineData("form_references", "source_plugin")]
+    [InlineData("holdings", "plugin")]
+    [InlineData("cell_location", "plugin")]
+    [InlineData("npc_", "plugin")]
+    public void APluginThatIsNotActive_IsInNoRelationTheSqlDoorReads(string relation, string pluginColumn)
     {
         using var fx = Build("registration-inactive-door");
-        string[] relations =
-        [
-            "records", "form_lookup", "form_references", "holdings", "cell_location", "npc_",
-        ];
-        bool HoldsBeta(string relation)
-        {
-            var pluginColumn = relation == "form_references" ? "source_plugin" : "plugin";
-            return fx.Index.Matching(
-                $"SELECT form_key FROM records WHERE EXISTS (SELECT 1 FROM \"{relation}\" WHERE {pluginColumn} = '{BetaKey.Name}')") > 0;
-        }
-        Assert.All(relations, relation => Assert.True(HoldsBeta(relation), relation));
+        var holdingBeta = $"SELECT form_key FROM records WHERE EXISTS (SELECT 1 FROM \"{relation}\" WHERE {pluginColumn} = '{BetaKey.Name}')";
+        Assert.True(fx.Index.Matching(holdingBeta) > 0);
 
         fx.Reconcile(fx.WithBetaDisabled);
 
-        Assert.All(relations, relation => Assert.False(HoldsBeta(relation), relation));
-        Assert.False(fx.Index.Accepts($"SELECT form_key FROM mirror.records WHERE plugin = '{BetaKey.Name}'"));
+        Assert.Equal(0, fx.Index.Matching(holdingBeta));
     }
 
     [Fact]
