@@ -156,8 +156,6 @@ export class InMemoryMEditClient implements MEditClient {
     this.commandResults[method] = boxed;
   }
 
-  /** Answers `method` from the call's own arguments, taking precedence over the fixed result
-   *  above — for a test that holds a command in flight or answers differently per call. */
   setCommandHandler<K extends CommandMethod>(method: K, handler: Handlers[K]): void {
     this.commandHandlers[method] = handler;
   }

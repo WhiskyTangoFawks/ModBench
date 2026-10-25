@@ -769,7 +769,7 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
-  it('stays stopped after a crash: a snapshot answers backendFailed', async () => {
+  it('stays stopped after a crash, telling its exit once: a snapshot answers backendFailed', async () => {
     const children: EventEmitter[] = [];
     const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
@@ -784,10 +784,13 @@ describe('HttpMEditClient — sendLoadOrder', () => {
       backendLog: fakeLogChannel(), fetch: routedFetch([['/notifications/stream', () => Promise.resolve(openStreamResponse())]]),
     });
     await client.start();
+    const exits: string[] = [];
+    client.onExit(() => exits.push('exit'));
 
     children[0]?.emit('exit', 1);
     await vi.waitFor(() => expect(client.status).toBe('stopped'));
 
+    expect(exits).toEqual(['exit']);
     await expect(client.sendLoadOrder(snapshot)).resolves.toEqual({ outcome: 'backendFailed' });
   });
 
@@ -954,11 +957,11 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     let answerHandOver!: () => void;
     const answered = new Promise<void>((resolve) => { answerHandOver = resolve; });
     const handedOver = vi.fn();
-    const requests: string[] = [];
+    const happened: string[] = [];
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
       ['/unsaved-documents', () => { handedOver(); return answered.then(() => new Response(null, { status: 204 })); }],
-      [route, (req) => { requests.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, { applied: [], refused: [] })); }],
+      [route, (req) => { happened.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, { applied: [], refused: [] })); }],
     ]);
     const client = makeClient(fetch);
     await client.start();
@@ -966,22 +969,21 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await vi.waitFor(() => expect(handedOver).toHaveBeenCalled());
 
     const gesturing = gesture(client);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(requests).toEqual([]);
-
+    happened.push('hand-over answered');
     answerHandOver();
     await gesturing;
-    expect(requests).toHaveLength(1);
+
+    expect(happened).toEqual(['hand-over answered', expect.stringContaining(route)]);
   });
 
   it.each(gestures)('sends the %s request only once the load order sent before it has settled', async (_name, gesture, route) => {
     const { response, push } = pushableStreamResponse();
     let putLoadOrder = false;
-    const requests: string[] = [];
+    const happened: string[] = [];
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(response)],
       ['/load-order', () => { putLoadOrder = true; return Promise.resolve(jsonResponse(200, { applied: true, version: 1 })); }],
-      [route, (req) => { requests.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, { applied: [], refused: [] })); }],
+      [route, (req) => { happened.push(new URL(req.url).pathname); return Promise.resolve(jsonResponse(200, { applied: [], refused: [] })); }],
     ]);
     const client = makeClient(fetch);
     await client.start();
@@ -989,12 +991,11 @@ describe('HttpMEditClient — a changes request reads the documents mEdit holds'
     await vi.waitFor(() => expect(putLoadOrder).toBe(true));
 
     const gesturing = gesture(client);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(requests).toEqual([]);
-
+    happened.push('load order settled');
     push(readyTickThatSettlesPutLoadOrder());
     await gesturing;
-    expect(requests).toHaveLength(1);
+
+    expect(happened).toEqual(['load order settled', expect.stringContaining(route)]);
   });
 
   it('fails a refused hand-over with mEdit\'s reason alone', async () => {

@@ -853,12 +853,12 @@ describe('what a record tab\'s webview posts', () => {
       const { openDocument, outputChannel } = makeEditor(mEdit);
       const tab = await openDocument(cell);
       tab.receive(loadRequest);
-      await aMacrotask();
       return { tab, outputChannel, mEdit };
     }
 
     it('answers nothing and writes no line in the Output, while a load order is on its way and the tab has read nothing', async () => {
       const { tab, outputChannel } = await refusedTab();
+      await aMacrotask();
 
       expect(loadAnswered(tab)).toEqual([]);
       expect(outputChannel.warn).not.toHaveBeenCalled();
@@ -868,6 +868,7 @@ describe('what a record tab\'s webview posts', () => {
       loadOrder.coming = false;
 
       const { tab, outputChannel } = await refusedTab();
+      await readAnswered(tab);
 
       expect(lastLoadAnswer(tab)).toEqual({ type: 'recordLoadAnswered', requestId: 'r1', ok: false, failure: refusal });
       expect(outputChannel.warn).not.toHaveBeenCalled();
@@ -1324,14 +1325,18 @@ describe('several records opened at once', () => {
     const { vsCodeOpensTabs } = makeEditor(severalClient());
     const tabOn = vsCodeOpensTabs();
     await commandHandlers.get('modbench.record.open')?.({ argument: { kind: 'record', formKey: GUN, plugin: COPY_PLUGIN } });
-    const tab = tabOn(gunDocument);
+    const tab = present(tabOn(gunDocument), 'the first record\'s tab');
+    const page: string[] = [];
+    tab.webview.postMessage.mockImplementation((message: unknown) => {
+      if (isShowColumns(message)) page.push('columns shown');
+      return Promise.resolve(true);
+    });
 
     await openSeveral();
-    await aMacrotask();
-    expect(columnsPosted(tab)).toEqual([]);
+    page.push('read asked');
+    tab.receive(firstRead);
 
-    tab?.receive(firstRead);
-    await vi.waitFor(() => expect(columnsPosted(tab)).toHaveLength(1));
+    await vi.waitFor(() => expect(page).toEqual(['read asked', 'columns shown']));
   });
 
   it('show their columns on a file\'s tab already open, once mEdit says which record its file holds', async () => {

@@ -261,8 +261,6 @@ describe('a record tab going with the record to its new FormKey and reading it t
 
       client.emit(PLUGIN_CHANGED);
       await vi.waitFor(() => expect(client.calls.some(c => c.method === 'getRecordOwner')).toBe(true));
-      await Promise.resolve();
-      expect(loadsOf(panel)).toEqual([]);
       client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp']));
 
       expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000900:Mod.esp' }]);

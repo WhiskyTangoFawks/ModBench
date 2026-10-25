@@ -289,11 +289,19 @@ describe('the extended-field documents', () => {
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not open the extended editor.', detail: 'no window' }]);
   });
 
+  it.each([
+    ['can be edited', false, 'modbench-field'],
+    ['cannot be edited', true, 'modbench-field-readonly'],
+  ])('opens a field of a column that %s under its scheme', async (_, readOnly, scheme) => {
+    await documents.open({ ...deacon, readOnly });
+
+    expect(shownUri().scheme).toBe(scheme);
+  });
+
   describe('in a column that cannot be edited', () => {
-    it('opens under the read-only scheme, registered read-only, and the editable one is not', async () => {
+    it('registers the read-only scheme read-only, and the editable one not', async () => {
       await documents.open({ ...deacon, readOnly: true });
 
-      expect(shownUri().scheme).toBe('modbench-field-readonly');
       expect(registration('modbench-field-readonly').options).toEqual({ isReadonly: true });
       expect(registration('modbench-field').options).toBeUndefined();
     });

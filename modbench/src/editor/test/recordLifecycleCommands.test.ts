@@ -106,7 +106,6 @@ function editInFlight(source: { oneAtATime: OneAtATime }): () => void {
   return () => { settle(); };
 }
 
-const asked = (client: InMemoryMEditClient, method: string) => client.calls.filter((c) => c.method === method);
 
 describe('registerRecordLifecycleCommands', () => {
   const invoke = invoking(registerRecordLifecycleCommands);
@@ -357,17 +356,17 @@ describe('registerRecordLifecycleCommands', () => {
 
     it('runs the whole delete after the edits in flight settle', async () => {
       const client = new InMemoryMEditClient();
-      client.setCommandResult('getDeleteChanges', { applied: [], refused: [] });
       const { source, writing } = invoke(client, 'Delete');
+      client.setCommandHandler('getDeleteChanges', () => { writing.push('delete asked'); return Promise.resolve({ applied: [], refused: [] }); });
       const settle = editInFlight(source);
 
       const deleting = deleteRecords(SECOND_NODE);
-      await vi.waitFor(() => expect(writing).toEqual(['opens']));
-      expect(asked(client, 'getDeleteChanges')).toEqual([]);
+      await vi.waitFor(() => expect(writing).toContain('opens'));
+      writing.push('edit settled');
       settle();
       await deleting;
 
-      expect(asked(client, 'getDeleteChanges')).toHaveLength(1);
+      expect(writing).toEqual(['opens', 'edit settled', 'delete asked', 'ends']);
     });
 
     it('runs the delete inside the write, which ends when the call is answered', async () => {
@@ -745,18 +744,18 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     it('runs the whole copy after the edits in flight settle', async () => {
       const client = new InMemoryMEditClient();
       destinations(client);
-      client.setCommandResult('getCopyChanges', { applied: [], refused: [] });
       pick('New', [PATCH, OTHER]);
       const { source, writing } = invoke(client);
+      client.setCommandHandler('getCopyChanges', () => { writing.push('copy asked'); return Promise.resolve({ applied: [], refused: [] }); });
       const settle = editInFlight(source);
 
       const copying = copy(RECORD_NODE);
-      await vi.waitFor(() => expect(writing).toEqual(['opens']));
-      expect(asked(client, 'getCopyChanges')).toEqual([]);
+      await vi.waitFor(() => expect(writing).toContain('opens'));
+      writing.push('edit settled');
       settle();
       await copying;
 
-      expect(asked(client, 'getCopyChanges')).toHaveLength(1);
+      expect(writing).toEqual(['opens', 'edit settled', 'copy asked', 'ends']);
     });
 
     it('reports a workspace edit VS Code did not make as one that may have partly landed, lands none, refreshes Source Control, and counts the copies asked', async () => {

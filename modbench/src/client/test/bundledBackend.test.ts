@@ -7,7 +7,7 @@ describe('bundledBackendPath', () => {
   it.each([
     ['win32', 'MEditService.Http.exe'],
     ['linux', 'MEditService.Http'],
-  ] as const)('names the backend on %s %s', (platform, file) => {
+  ] as const)('on %s, names the backend %s', (platform, file) => {
     expect(bundledBackendPath(platform, join('x', 'out'))).toBe(join('x', 'backend', file));
   });
 });

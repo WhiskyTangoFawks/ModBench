@@ -204,9 +204,8 @@ describe('a reconnect', () => {
     await client.sendLoadOrder(snapshot('A.esp'));
 
     client.reconnected();
-    await vi.waitFor(() => { expect(resent).not.toEqual([]); });
 
-    expect(resent).toEqual([{ name: 'A.esp', outcome: APPLIED }]);
+    await vi.waitFor(() => { expect(resent).toEqual([{ name: 'A.esp', outcome: APPLIED }]); });
     expect(sentNames(client)).toEqual(['A.esp', 'A.esp']);
   });
 
@@ -220,8 +219,8 @@ describe('a reconnect', () => {
     client.reconnected();
     client.answerPuts(() => Promise.resolve(APPLIED));
     released.resolve(APPLIED);
-    await vi.waitFor(() => { expect(resent).not.toEqual([]); });
 
+    await vi.waitFor(() => { expect(resent).toEqual([{ name: 'A.esp', outcome: APPLIED }]); });
     expect(await sent).toEqual(APPLIED);
     expect(sentNames(client)).toEqual(['A.esp', 'A.esp']);
   });
@@ -235,12 +234,11 @@ describe('a reconnect', () => {
     client.answerPuts(() => Promise.resolve({ outcome: 'failed', message: 'no' }));
 
     client.reconnected();
-    await vi.waitFor(() => { expect(resent).not.toEqual([]); });
+    await vi.waitFor(() => { expect(resent).toEqual([{ name: 'A.esp', outcome: { outcome: 'failed', message: 'no' } }]); });
     client.answerPuts(() => Promise.resolve(APPLIED));
     await client.sendLoadOrder(snapshot('B.esp'));
 
-    await vi.waitFor(() => { expect(heard).not.toEqual([]); });
-    expect(heard).toEqual(['B.esp']);
+    await vi.waitFor(() => { expect(heard).toEqual(['B.esp']); });
   });
 
   it('tells a snapshot that was waiting at the reopen to its sender alone, never as a resend', async () => {

@@ -95,7 +95,6 @@ export function notificationEventFixture(
   };
 }
 
-/** A `load-order-status` event of a settled, empty Ready load order at version 1. */
 export function loadOrderStatusEventFixture(
   overrides: Partial<NonNullable<NotificationEvent['loadOrderStatus']>> = {},
 ): NotificationEvent {

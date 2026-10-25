@@ -313,7 +313,7 @@ describe('SseNotificationSubscriber — typed listeners', () => {
 
   function listenToEveryKind(subscriber: SseNotificationSubscriber): unknown[] {
     const heard: unknown[] = [];
-    for (const [kind] of cases) subscriber.onNotification(kind, (p) => heard.push([kind, p]));
+    cases.map(([kind]) => subscriber.onNotification(kind, (p) => heard.push([kind, p])));
     return heard;
   }
 
