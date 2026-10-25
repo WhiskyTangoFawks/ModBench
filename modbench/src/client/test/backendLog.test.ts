@@ -7,30 +7,19 @@ function fakeChannel() {
 }
 
 describe('makeBackendLogForwarder', () => {
-  it('routes each Serilog level tag to the matching leveled call, stripping the tag', () => {
+  it.each([
+    ['DBG', 'debug'],
+    ['INF', 'info'],
+    ['WRN', 'warn'],
+    ['ERR', 'error'],
+    ['VRB', 'debug'],
+    ['FTL', 'error'],
+  ] as const)('routes a %s line to %s, stripping the tag', (tag, level) => {
     const channel = fakeChannel();
-    const forward = makeBackendLogForwarder(channel);
 
-    forward('[08:30:45 DBG] Extracted column Name', 'stdout');
-    forward('[08:30:45 INF] Indexed 500 records for Fallout4.esm', 'stdout');
-    forward('[08:30:46 WRN] Skipped plugin Broken.esp', 'stdout');
-    forward('[08:30:47 ERR] Reconcile failed', 'stdout');
+    makeBackendLogForwarder(channel)(`[08:30:45 ${tag}] Indexed 500 records for Fallout4.esm`, 'stdout');
 
-    expect(channel.debug).toHaveBeenCalledWith('[backend] Extracted column Name');
-    expect(channel.info).toHaveBeenCalledWith('[backend] Indexed 500 records for Fallout4.esm');
-    expect(channel.warn).toHaveBeenCalledWith('[backend] Skipped plugin Broken.esp');
-    expect(channel.error).toHaveBeenCalledWith('[backend] Reconcile failed');
-  });
-
-  it('treats VRB as debug and FTL as error', () => {
-    const channel = fakeChannel();
-    const forward = makeBackendLogForwarder(channel);
-
-    forward('[08:30:45 VRB] chatty', 'stdout');
-    forward('[08:30:45 FTL] unrecoverable', 'stdout');
-
-    expect(channel.debug).toHaveBeenCalledWith('[backend] chatty');
-    expect(channel.error).toHaveBeenCalledWith('[backend] unrecoverable');
+    expect(channel[level].mock.calls).toEqual([['[backend] Indexed 500 records for Fallout4.esm']]);
   });
 
   it('forwards an untagged first line at info, unchanged apart from the prefix', () => {
@@ -92,20 +81,14 @@ describe('makeBackendLogForwarder', () => {
 
 describe('backendLogLevelArgs, mapping the Output channel\'s vscode.LogLevel ordinal (Off=0, Trace=1, Debug=2, Info=3, Warning=4, Error=5) to a Serilog minimum-level override for the spawn argv', () => {
   it.each([
-    [1, 'Verbose'],
-    [2, 'Debug'],
-    [3, 'Information'],
-    [4, 'Warning'],
-    [5, 'Error'],
-  ])('maps channel level %i to Serilog level %s', (level, serilogLevel) => {
-    expect(backendLogLevelArgs(level)).toEqual(['--Serilog:MinimumLevel:Default', serilogLevel]);
-  });
-
-  it('omits the override for Off (0) — no Serilog level means "no override"', () => {
-    expect(backendLogLevelArgs(0)).toEqual([]);
-  });
-
-  it('omits the override for an unrecognized level — total fallback, never throws', () => {
-    expect(backendLogLevelArgs(99)).toEqual([]);
+    [0, []],
+    [1, ['--Serilog:MinimumLevel:Default', 'Verbose']],
+    [2, ['--Serilog:MinimumLevel:Default', 'Debug']],
+    [3, ['--Serilog:MinimumLevel:Default', 'Information']],
+    [4, ['--Serilog:MinimumLevel:Default', 'Warning']],
+    [5, ['--Serilog:MinimumLevel:Default', 'Error']],
+    [99, []],
+  ])('maps channel level %i to %j', (level, args) => {
+    expect(backendLogLevelArgs(level)).toEqual(args);
   });
 });

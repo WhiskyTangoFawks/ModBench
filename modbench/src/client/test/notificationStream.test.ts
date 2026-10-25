@@ -1,14 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SseNotificationSubscriber } from '../notificationStream';
-import { toLoadOrderStatus } from '../apiClient';
 import type { NotificationKind } from '../MEditClient';
 import type { NotificationEvent } from '../apiClient';
-import { IGNORED_THROWS, recordedThrows } from './fixtures';
+import { IGNORED_THROWS, notificationEventFixture, recordedThrows } from './fixtures';
 import { leveledLog } from '../../test/leveledLog';
 import { present } from '../../ports/present';
 
 function rowsChanged(keys: string[], overrides: Partial<NotificationEvent> = {}): NotificationEvent {
-  return { kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys, sequence: 1, ...overrides };
+  return notificationEventFixture({ kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys, ...overrides });
 }
 
 function sseFrame(event: NotificationEvent): Uint8Array {
@@ -36,10 +35,7 @@ function streamResponse(chunks: Uint8Array[]): Response {
   return new Response(scriptedStream(chunks), { status: 200 });
 }
 
-class TestableSubscriber extends SseNotificationSubscriber {
-  constructor() { super({ openStream: () => Promise.reject(new Error('never opened')), listenerThrows: IGNORED_THROWS }); }
-  receive(event: NotificationEvent): void { this.dispatch(event); }
-}
+const unopened = () => new SseNotificationSubscriber({ openStream: () => Promise.reject(new Error('never opened')), listenerThrows: IGNORED_THROWS });
 
 describe('SseNotificationSubscriber', () => {
   beforeEach(() => vi.useFakeTimers());
@@ -72,11 +68,14 @@ describe('SseNotificationSubscriber', () => {
     subscriber.stop();
   });
 
-  it('reconnects after the stream ends, without a live backend, as a one-shot adapter would be silently killed by a hiccup for the rest of the session', async () => {
-    const secondEvent = rowsChanged(['000002:Other.esp']);
+  it.each([
+    ['the stream ends', () => Promise.resolve(streamResponse([]))],
+    ['a malformed frame, without dispatching it', () => Promise.resolve(streamResponse([frameOfValidJsonMissingTheFieldsAnEventRequires()]))],
+    ['openStream itself rejects', () => Promise.reject(new Error('ECONNREFUSED'))],
+  ])('reconnects after %s, without a live backend, as a one-shot adapter would be silently killed by a hiccup for the rest of the session', async (_, firstAttempt) => {
     const openStream = vi.fn()
-      .mockResolvedValueOnce(streamResponse([]))
-      .mockResolvedValueOnce(streamResponse([sseFrame(secondEvent)]));
+      .mockImplementationOnce(firstAttempt)
+      .mockResolvedValueOnce(streamResponse([sseFrame(rowsChanged(['000002:Other.esp']))]));
     const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
     const received: unknown[] = [];
     subscriber.onNotification('rows-changed', (p) => received.push(p));
@@ -87,26 +86,7 @@ describe('SseNotificationSubscriber', () => {
     await vi.waitFor(() => expect(received).toHaveLength(1));
 
     expect(openStream).toHaveBeenCalledTimes(2);
-    expect(received[0]).toEqual({ plugin: { name: secondEvent.plugin, origin: secondEvent.origin }, keys: secondEvent.keys });
-    subscriber.stop();
-  });
-
-  it('reconnects after a malformed frame, without dispatching it', async () => {
-    const goodEvent = rowsChanged(['000002:Other.esp']);
-    const openStream = vi.fn()
-      .mockResolvedValueOnce(streamResponse([frameOfValidJsonMissingTheFieldsAnEventRequires()]))
-      .mockResolvedValueOnce(streamResponse([sseFrame(goodEvent)]));
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 1000 });
-    const received: unknown[] = [];
-    subscriber.onNotification('rows-changed', (p) => received.push(p));
-
-    subscriber.start();
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
-    await vi.advanceTimersByTimeAsync(1000);
-    await vi.waitFor(() => expect(received).toHaveLength(1));
-
-    expect(openStream).toHaveBeenCalledTimes(2);
-    expect(received[0]).toEqual({ plugin: { name: goodEvent.plugin, origin: goodEvent.origin }, keys: goodEvent.keys });
+    expect(received).toEqual([{ plugin: { name: 'Test.esp', origin: 'ModA' }, keys: ['000002:Other.esp'] }]);
     subscriber.stop();
   });
 
@@ -178,23 +158,6 @@ describe('SseNotificationSubscriber', () => {
     await vi.waitFor(() => expect(log.lines.warn.join('\n')).toContain('stream dropped'));
 
     expect(signals[0]?.aborted).toBe(true);
-    subscriber.stop();
-  });
-
-  it('reconnects after openStream itself rejects', async () => {
-    const event = rowsChanged(['000001:Test.esp']);
-    const openStream = vi.fn()
-      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
-      .mockResolvedValueOnce(streamResponse([sseFrame(event)]));
-    const subscriber = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream, reconnectDelayMs: 500 });
-    const received: unknown[] = [];
-    subscriber.onNotification('rows-changed', (p) => received.push(p));
-
-    subscriber.start();
-    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
-    await vi.advanceTimersByTimeAsync(500);
-    await vi.waitFor(() => expect(received).toHaveLength(1));
-
     subscriber.stop();
   });
 
@@ -333,7 +296,9 @@ describe('SseNotificationSubscriber — typed listeners', () => {
   const changedPlugins = [{ name: 'A.esp', bytesSha256: 'abc' }];
 
   const cases: [NotificationKind, NotificationEvent, unknown][] = [
-    ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), toLoadOrderStatus(loadOrderStatus)],
+    ['load-order-status', rowsChanged([], { kind: 'load-order-status', loadOrderStatus }), {
+      totalPlugins: 3, activePlugins: 2, version: 4, indexedPlugins: [{ name: 'A.esp', origin: 'ModA' }], conflictsComputed: true, failures: [], holdsNone: false,
+    }],
     ['decompile-and-commit-progress', rowsChanged([], { kind: 'decompile-and-commit-progress', modlistProgress, decompileAndCommitPhase: 'Parsing' }), { ...modlistProgress, phase: 'Parsing' }],
     ['update-manifest-progress', rowsChanged([], { kind: 'update-manifest-progress', modlistProgress }), modlistProgress],
     ['restore-from-manifest-progress', rowsChanged([], { kind: 'restore-from-manifest-progress', modlistProgress }), modlistProgress],
@@ -346,44 +311,59 @@ describe('SseNotificationSubscriber — typed listeners', () => {
     ['mod-status-changed', rowsChanged([], { kind: 'mod-status-changed', mods: ['ModA', 'ModB'] }), { mods: ['ModA', 'ModB'] }],
   ];
 
-  it.each(cases)('hands a %s listener its kind\'s payload', (kind, event, payload) => {
-    const subscriber = new TestableSubscriber();
+  function listenToEveryKind(subscriber: SseNotificationSubscriber): unknown[] {
     const heard: unknown[] = [];
-    subscriber.onNotification(kind, (p) => heard.push(p));
+    const hear = (kind: NotificationKind) => (payload: unknown) => { heard.push([kind, payload]); };
+    subscriber.onNotification('load-order-status', hear('load-order-status'));
+    subscriber.onNotification('decompile-and-commit-progress', hear('decompile-and-commit-progress'));
+    subscriber.onNotification('update-manifest-progress', hear('update-manifest-progress'));
+    subscriber.onNotification('restore-from-manifest-progress', hear('restore-from-manifest-progress'));
+    subscriber.onNotification('external-change', hear('external-change'));
+    subscriber.onNotification('plugin-source-unreadable', hear('plugin-source-unreadable'));
+    subscriber.onNotification('record-filter-cleared', hear('record-filter-cleared'));
+    subscriber.onNotification('rows-changed', hear('rows-changed'));
+    subscriber.onNotification('plugin-changed', hear('plugin-changed'));
+    subscriber.onNotification('mod-status-changed', hear('mod-status-changed'));
+    return heard;
+  }
 
-    subscriber.receive(event);
+  it.each(cases)('hands a %s listener its kind\'s payload, and no listener of another kind anything', (kind, event, payload) => {
+    const subscriber = unopened();
+    const heard = listenToEveryKind(subscriber);
 
-    expect(heard).toEqual([payload]);
+    subscriber.dispatch(event);
+
+    expect(heard).toEqual([[kind, payload]]);
   });
 
   it('gives an external-change frame without changedPlugins an empty list', () => {
-    const subscriber = new TestableSubscriber();
+    const subscriber = unopened();
     const heard: unknown[] = [];
     subscriber.onNotification('external-change', (p) => heard.push(p));
 
-    subscriber.receive(rowsChanged([], { kind: 'external-change' }));
+    subscriber.dispatch(rowsChanged([], { kind: 'external-change' }));
 
     expect(heard).toEqual([{ origin: 'ModA', changedPlugins: [] }]);
   });
 
   it.each(['load-order-status', 'decompile-and-commit-progress', 'update-manifest-progress', 'restore-from-manifest-progress'] as const)('skips a %s frame missing its payload', (kind) => {
-    const subscriber = new TestableSubscriber();
+    const subscriber = unopened();
     const heard: unknown[] = [];
     subscriber.onNotification(kind, (p) => heard.push(p));
 
-    subscriber.receive(rowsChanged([], { kind }));
+    subscriber.dispatch(rowsChanged([], { kind }));
 
     expect(heard).toEqual([]);
   });
 
   it('unsubscribe stops a typed listener', () => {
-    const subscriber = new TestableSubscriber();
+    const subscriber = unopened();
     const typed: unknown[] = [];
     const off = subscriber.onNotification('plugin-changed', (p) => typed.push(p));
 
-    subscriber.receive(rowsChanged([], { kind: 'plugin-changed' }));
+    subscriber.dispatch(rowsChanged([], { kind: 'plugin-changed' }));
     off();
-    subscriber.receive(rowsChanged([], { kind: 'plugin-changed' }));
+    subscriber.dispatch(rowsChanged([], { kind: 'plugin-changed' }));
 
     expect(typed).toHaveLength(1);
   });

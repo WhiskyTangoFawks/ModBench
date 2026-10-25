@@ -63,18 +63,6 @@ describe('the record grid\'s key entry points', () => {
     ]);
   });
 
-  it('Delete on a field the plugin does not hold changes nothing', async () => {
-    const { run } = registered(editableCell(false));
-    await run('modbench.recordGrid.clearHere');
-    expect(executeCommand).not.toHaveBeenCalled();
-  });
-
-  it('Delete on a cell that cannot be edited changes nothing', async () => {
-    const { run } = registered({ webviewSection: 'cell', copyText: '7' });
-    await run('modbench.recordGrid.clearHere');
-    expect(executeCommand).not.toHaveBeenCalled();
-  });
-
   it('Ctrl+X copies the focused cell\'s value and then clears it', async () => {
     const { run } = registered(editableCell(true));
     await run('modbench.recordGrid.cutHere');
@@ -93,11 +81,15 @@ describe('the record grid\'s key entry points', () => {
     ]);
   });
 
-  it('Ctrl+X on a cell with nothing to delete copies nothing and changes nothing', async () => {
-    for (const cell of [editableCell(false), { webviewSection: 'cell', copyText: '7' }, undefined]) {
-      const { run } = registered(cell);
-      await run('modbench.recordGrid.cutHere');
-    }
+  it.each([
+    ['Delete', 'a field the plugin does not hold', 'clearHere', editableCell(false)],
+    ['Delete', 'a cell that cannot be edited', 'clearHere', { webviewSection: 'cell', copyText: '7' }],
+    ['Ctrl+X', 'a field the plugin does not hold', 'cutHere', editableCell(false)],
+    ['Ctrl+X', 'a cell that cannot be edited', 'cutHere', { webviewSection: 'cell', copyText: '7' }],
+    ['Ctrl+X', 'no focused cell', 'cutHere', undefined],
+  ])('%s on %s copies nothing and changes nothing', async (_key, _what, command, cell) => {
+    const { run } = registered(cell);
+    await run(`modbench.recordGrid.${command}`);
     expect(executeCommand).not.toHaveBeenCalled();
   });
 });

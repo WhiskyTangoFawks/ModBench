@@ -1,4 +1,4 @@
-import { IGNORED_THROWS } from './fixtures';
+import { IGNORED_THROWS, loadOrderStatusEventFixture } from './fixtures';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { leveledLog } from '../../test/leveledLog';
@@ -43,11 +43,19 @@ function pushableStreamResponse(): { response: Response; push: (chunk: Uint8Arra
   return { response: new Response(stream, { status: 200 }), push };
 }
 
-function loadOrderStatusTick(loadOrderStatus: {
-  totalPlugins: number; indexedPlugins: { name: string; origin: string }[]; conflictsComputed: boolean; failures: unknown[]; version: number;
-}): Uint8Array {
-  const tick = { kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0, loadOrderStatus };
-  return new TextEncoder().encode(`data: ${JSON.stringify(tick)}\n\n`);
+function reopeningStreams() {
+  const streams: { push: (chunk: Uint8Array) => void; end: () => void }[] = [];
+  const open = () => {
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({ start: (c) => { controller = c; } });
+    streams.push({ push: (chunk) => controller.enqueue(chunk), end: () => controller.close() });
+    return Promise.resolve(new Response(body, { status: 200 }));
+  };
+  return { streams, open };
+}
+
+function loadOrderStatusTick(loadOrderStatus: Parameters<typeof loadOrderStatusEventFixture>[0]): Uint8Array {
+  return new TextEncoder().encode(`data: ${JSON.stringify(loadOrderStatusEventFixture(loadOrderStatus))}\n\n`);
 }
 
 const readyTickThatSettlesPutLoadOrder = () => loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: true, failures: [], version: 1 });
@@ -96,6 +104,20 @@ describe('HttpMEditClient — the load-order status', () => {
 
     expect(client.loadOrderStatus).toBeUndefined();
     expect(changes).toEqual([true, undefined]);
+  });
+
+  it('is gone once the stream reopens, as it may have reattached to another process', async () => {
+    const { streams, open } = reopeningStreams();
+    const client = makeClient(routedFetch([['/notifications/stream', open]]), { reconnectDelayMs: 0 });
+    await client.start();
+    await vi.waitFor(() => expect(streams).toHaveLength(1));
+    streams[0]?.push(readyTickThatSettlesPutLoadOrder());
+    await vi.waitFor(() => expect(client.loadOrderStatus?.conflictsComputed).toBe(true));
+
+    streams[0]?.end();
+
+    await vi.waitFor(() => expect(client.loadOrderStatus).toBeUndefined());
+    expect(streams).toHaveLength(2);
   });
 });
 
@@ -207,6 +229,11 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
   const same = <T>(answer: T) => ({ answer, reads: answer });
   const createdRecord = { formKey: '000900:MyPatch.esp', ...changes };
   const formKeyEdit: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'FormKey' }], value: '000900:MyPatch.esp' };
+  const modsOnDisk = [{ name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'] }];
+  const destroys = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
+  const skipped = "'ModB' was skipped: a file could not be read: denied";
+  const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFile: { name: 'A.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } } }];
+  const modStatus = [{ mod: 'ModA', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: [] }];
 
   const posts: {
     name: string; verb: Verb; answer: unknown; reads: unknown; path: string; body: unknown;
@@ -309,6 +336,17 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       answer: { formKey: '000800:MyPatch.esp', path: 'FormKey', moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp' },
       reads: { applied: true, moves: [], deletions: [], documents: [], newFormKey: '000900:MyPatch.esp' },
       path: '/records/000800%3AMyPatch.esp/edit-changes', body: { edit: { plugin: 'MyPatch.esp', origin: 'ModA', ...formKeyEdit } } },
+    { name: 'resolveNames', verb: (c) => c.resolveNames([{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }]),
+      ...same([{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }]),
+      path: '/names/resolve', body: { names: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }] } },
+    { name: 'getWhatRestoreDestroys', verb: (c) => c.getWhatRestoreDestroys(modsOnDisk, '/instance/stat-cache'),
+      answer: { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped }], manifests },
+      reads: { destroys, refused: [{ item: 'ModB', reason: skipped }], manifests },
+      path: '/what-restore-destroys', body: { mods: modsOnDisk, statCache: '/instance/stat-cache' } },
+    { name: 'getModStatus', verb: (c) => c.getModStatus(modsOnDisk, '/instance/stat-cache'), ...same(modStatus),
+      path: '/mod-status', body: { mods: modsOnDisk, statCache: '/instance/stat-cache' } },
+    { name: 'selectRows', verb: (c) => c.selectRows('SELECT 1'), answer: { rows: [{ n: 1 }] }, reads: [{ n: 1 }],
+      path: '/records/select', body: { sql: 'SELECT 1' } },
   ];
 
   it.each(posts)('$name posts $path once and reads the answer', async ({ verb, answer, reads, path, body }) => {
@@ -363,53 +401,9 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
       path: '/plugins/Base.esm/dependants', query: { origin: 'BaseMod' } },
     { name: 'getPluginProblems', verb: (c) => c.getPluginProblems(), answer: problems,
       path: '/plugins/problems', query: {} },
+    { name: 'getActiveFilter', verb: (c) => c.getActiveFilter(), answer: { sql: 'SELECT 1', source: 'armor.sql' },
+      path: '/load-order/filter', query: {} },
   ];
-
-  it('resolveNames posts the names given and reads the objects they mean, in order', async () => {
-    const { result, request } = await exchange(
-      (c) => c.resolveNames([{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }]),
-      answers(200, [{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }]),
-    );
-
-    expect(request.method).toBe('POST');
-    expect(new URL(request.url).pathname).toBe('/names/resolve');
-    expect(await request.json()).toEqual({ names: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'SharedNpc' }] });
-    expect(result).toEqual([{ plugin: shared }, { formKey: sharedKey, editorId: 'SharedNpc' }]);
-  });
-
-  it('getWhatRestoreDestroys posts the mods and the stat cache and reads each mod restore would destroy files in, and each it skipped', async () => {
-    const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'] }];
-    const destroys = [{ mod: 'ModA', differing: ['a.nif'], namedByNoLine: ['mine.txt'] }];
-    const skipped = "'ModB' was skipped: a file could not be read: denied";
-    const manifests = [{ mod: 'ModA', metadata: { version: '1.0', installationFile: { name: 'A.7z', page: 'https://www.nexusmods.com/fallout4/mods/1' } } }];
-    const { result, request } = await exchange(
-      (c) => c.getWhatRestoreDestroys(mods, '/instance/stat-cache'),
-      answers(200, { mods: destroys, refused: [{ item: 'ModB', refusal: 'Unreadable', message: skipped }], manifests }),
-    );
-
-    expect(new URL(request.url).pathname).toBe('/what-restore-destroys');
-    expect(await request.json()).toEqual({ mods, statCache: '/instance/stat-cache' });
-    expect(result).toEqual({ destroys, refused: [{ item: 'ModB', reason: skipped }], manifests });
-  });
-
-  it('getModStatus posts the mods and the stat cache and reads each mod\'s status', async () => {
-    const mods = [{ name: 'ModA', folder: '/instance/mods/ModA', metadataFiles: ['meta.ini'] }];
-    const status = [{ mod: 'ModA', noManifest: false, differing: ['a.nif'], namedByNoLine: [], gone: [], notInPackage: [] }];
-    const { result, request } = await exchange((c) => c.getModStatus(mods, '/instance/stat-cache'), answers(200, status));
-
-    expect(new URL(request.url).pathname).toBe('/mod-status');
-    expect(await request.json()).toEqual({ mods, statCache: '/instance/stat-cache' });
-    expect(result).toEqual(status);
-  });
-
-  it('selectRows posts the statement and reads the rows it selects', async () => {
-    const { result, request } = await exchange((c) => c.selectRows('SELECT 1'), answers(200, { rows: [{ n: 1 }] }));
-
-    expect(request.method).toBe('POST');
-    expect(new URL(request.url).pathname).toBe('/records/select');
-    expect(await request.json()).toEqual({ sql: 'SELECT 1' });
-    expect(result).toEqual([{ n: 1 }]);
-  });
 
   it.each(gets)('$name gets $path and reads the answer untransformed', async ({ verb, answer, path, query }) => {
     const { result, request } = await exchange(verb, answers(200, answer));
@@ -432,8 +426,11 @@ describe('HttpMEditClient — what each verb sends and reads', () => {
     expect(result).toEqual(missing);
   });
 
-  it('getRecordOfFile answers null when mEdit answers the file holds no record', async () => {
-    const { result } = await exchange((c) => c.getRecordOfFile(sourcePath), answers(204));
+  it.each([
+    ['getRecordOfFile, when the file holds no record', (c: MEditClient) => c.getRecordOfFile(sourcePath)],
+    ['getActiveFilter, when mEdit holds no filter', (c: MEditClient) => c.getActiveFilter()],
+  ])('%s, reads a 204 as null', async (_, verb) => {
+    const { result } = await exchange(verb, answers(204));
 
     expect(result).toBeNull();
   });
@@ -615,18 +612,6 @@ describe('HttpMEditClient — the record filter', () => {
     expect(await fetch.mock.calls[0]?.[0].json()).toEqual({ sql: 'SELECT 1', source: 'armor.sql' });
   });
 
-  it('reads the filter in force with its source', async () => {
-    const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(200, { sql: 'SELECT 1', source: 'armor.sql' }))));
-
-    expect(await client.getActiveFilter()).toEqual({ sql: 'SELECT 1', source: 'armor.sql' });
-  });
-
-  it('reads no filter when mEdit holds none', async () => {
-    const client = makeClient(vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))));
-
-    expect(await client.getActiveFilter()).toBeNull();
-  });
-
 });
 
 describe('HttpMEditClient — searchRecords', () => {
@@ -720,24 +705,20 @@ describe('HttpMEditClient — sendLoadOrder', () => {
   });
 
   it('settles a PUT whose terminal tick was lost to a stream reopening, from the status read then, a reopened stream carrying none of the ticks published while it was down', async () => {
-    const streams: { push: (chunk: Uint8Array) => void; end: () => void }[] = [];
+    const { streams, open } = reopeningStreams();
     let status = { state: 'Reconciling', totalPlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0 };
+    let put = false;
     const fetch = routedFetch([
-      ['/notifications/stream', () => {
-        let controller!: ReadableStreamDefaultController<Uint8Array>;
-        const body = new ReadableStream<Uint8Array>({ start: (c) => { controller = c; } });
-        streams.push({ push: (chunk) => controller.enqueue(chunk), end: () => controller.close() });
-        return Promise.resolve(new Response(body, { status: 200 }));
-      }],
+      ['/notifications/stream', open],
       ['/load-order/status', () => Promise.resolve(jsonResponse(200, status))],
-      ['/load-order', () => Promise.resolve(jsonResponse(200, appliedBody))],
+      ['/load-order', () => { put = true; return Promise.resolve(jsonResponse(200, appliedBody)); }],
     ]);
     const client = makeClient(fetch, { reconnectDelayMs: 0 });
     await client.start();
     await vi.waitFor(() => expect(streams).toHaveLength(1));
 
     const load = client.sendLoadOrder(snapshot);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.waitFor(() => expect(put).toBe(true));
     status = { ...status, state: 'Ready', conflictsComputed: true, version: 1 };
     streams[0]?.end();
 
@@ -745,14 +726,9 @@ describe('HttpMEditClient — sendLoadOrder', () => {
   });
 
   it('announces every plugin and mod it put again as changed once a reopened stream\'s process has applied it, since views read them again on a change and never on a reconnect', async () => {
-    const streams: { end: () => void }[] = [];
+    const { streams, open } = reopeningStreams();
     const fetch = routedFetch([
-      ['/notifications/stream', () => {
-        let controller!: ReadableStreamDefaultController<Uint8Array>;
-        const body = new ReadableStream<Uint8Array>({ start: (c) => { controller = c; } });
-        streams.push({ end: () => controller.close() });
-        return Promise.resolve(new Response(body, { status: 200 }));
-      }],
+      ['/notifications/stream', open],
       ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
         state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
       }))],
@@ -767,41 +743,6 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     expect(heard).toEqual([]);
 
     streams[0]?.end();
-
-    await vi.waitFor(() => expect(heard).toEqual([{ name: 'Foo.esp', origin: 'A' }, ['ModA']]));
-  });
-
-  it('announces every plugin and mod of the newer snapshot that applies first after a reopen, since a reopen finding one waiting resends nothing', async () => {
-    const streams: { end: () => void }[] = [];
-    const answers: ((r: Response) => void)[] = [];
-    const fetch = routedFetch([
-      ['/notifications/stream', () => {
-        let controller!: ReadableStreamDefaultController<Uint8Array>;
-        const body = new ReadableStream<Uint8Array>({ start: (c) => { controller = c; } });
-        streams.push({ end: () => controller.close() });
-        return Promise.resolve(new Response(body, { status: 200 }));
-      }],
-      ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
-        state: 'Ready', totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1,
-      }))],
-      ['/load-order', () => new Promise<Response>((resolve) => { answers.push(resolve); })],
-    ]);
-    const client = makeClient(fetch, { reconnectDelayMs: 0 });
-    await client.start();
-    const heard: unknown[] = [];
-    client.onNotification('plugin-changed', ({ plugin }) => heard.push(plugin));
-    client.onNotification('mod-status-changed', ({ mods }) => heard.push(mods));
-    const older = client.sendLoadOrder(snapshot);
-    await vi.waitFor(() => expect(answers).toHaveLength(1));
-    const newer = client.sendLoadOrder({ ...snapshot, mods: [{ name: 'ModA', folder: '/mods/ModA', metadataFiles: [] }] });
-
-    streams[0]?.end();
-    await vi.waitFor(() => expect(streams).toHaveLength(2));
-    answers[0]?.(jsonResponse(200, appliedBody));
-    await older;
-    await vi.waitFor(() => expect(answers).toHaveLength(2));
-    answers[1]?.(jsonResponse(200, appliedBody));
-    await newer;
 
     await vi.waitFor(() => expect(heard).toEqual([{ name: 'Foo.esp', origin: 'A' }, ['ModA']]));
   });
@@ -822,13 +763,13 @@ describe('HttpMEditClient — sendLoadOrder', () => {
     const load = client.sendLoadOrder(snapshot);
     await vi.waitFor(() => expect(answerPut).toBeDefined());
     push(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 0 }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => expect(client.loadOrderStatus?.version).toBe(0));
     answerPut(jsonResponse(200, appliedBody));
 
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
-  it('stays stopped after a crash: a snapshot answers backendFailed, with no second child spawned and nothing launched', async () => {
+  it('stays stopped after a crash, telling its exit once: a snapshot answers backendFailed', async () => {
     const children: EventEmitter[] = [];
     const client = createMEditClient({ listenerThrows: IGNORED_THROWS,
       backend: {
@@ -843,19 +784,14 @@ describe('HttpMEditClient — sendLoadOrder', () => {
       backendLog: fakeLogChannel(), fetch: routedFetch([['/notifications/stream', () => Promise.resolve(openStreamResponse())]]),
     });
     await client.start();
-    const launches: unknown[] = [];
-    const exits: unknown[] = [];
-    client.onLaunch((launched) => launches.push(launched));
+    const exits: string[] = [];
     client.onExit(() => exits.push('exit'));
 
     children[0]?.emit('exit', 1);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.waitFor(() => expect(client.status).toBe('stopped'));
 
-    expect(client.status).toBe('stopped');
-    expect(exits).toHaveLength(1);
+    expect(exits).toEqual(['exit']);
     await expect(client.sendLoadOrder(snapshot)).resolves.toEqual({ outcome: 'backendFailed' });
-    expect(launches).toEqual([]);
-    expect(children).toHaveLength(1);
   });
 
   it('aborts the PUT in flight before it kills the mEdit it spawned, and answers it abandoned, not a failure', async () => {

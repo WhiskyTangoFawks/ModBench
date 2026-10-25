@@ -33,7 +33,7 @@ type Handlers = {
   ) => Promise<Answer<K>>;
 };
 
-export interface RecordedCall {
+interface RecordedCall {
   method: string;
   args: unknown[];
 }
@@ -64,7 +64,6 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly queryFailures = new Map<QueryMethod, ReadFailed>();
   private queryQueues: { [K in QueryMethod]?: QueryQueues[K] } = {};
   private readonly commandResults: { [K in CommandMethod]?: ScriptedResults[K] } = {};
-  private readonly commandFailures = new Map<CommandMethod, Error>();
   private readonly commandHandlers: { [K in CommandMethod]?: Handlers[K] } = {};
   private readonly notifications = new SseNotificationSubscriber({ listenerThrows: IGNORED_THROWS, openStream: () => Promise.reject(new Error('never started')) });
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
@@ -157,14 +156,6 @@ export class InMemoryMEditClient implements MEditClient {
     this.commandResults[method] = boxed;
   }
 
-  /** Every call to `method` rejects with `error` until re-scripted — the failure-shaped sibling
-   *  of {@link setCommandResult}. */
-  setCommandFailure(method: CommandMethod, error: Error): void {
-    this.commandFailures.set(method, error);
-  }
-
-  /** Answers `method` from the call's own arguments, taking precedence over the fixed result and
-   *  failure above — for a test that holds a command in flight or answers differently per call. */
   setCommandHandler<K extends CommandMethod>(method: K, handler: Handlers[K]): void {
     this.commandHandlers[method] = handler;
   }
@@ -290,8 +281,6 @@ export class InMemoryMEditClient implements MEditClient {
     this.record(method, args);
     const handler = this.commandHandlers[method];
     if (handler) return handler(...args);
-    const failure = this.commandFailures.get(method);
-    if (failure) return Promise.reject(failure);
     const scripted = this.commandResults[method]?.[0];
     if (!scripted) {
       return Promise.reject(new Error(`InMemoryMEditClient: no scripted result for command "${method}"`));

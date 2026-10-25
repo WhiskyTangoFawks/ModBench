@@ -95,6 +95,17 @@ export function notificationEventFixture(
   };
 }
 
+export function loadOrderStatusEventFixture(
+  overrides: Partial<NonNullable<NotificationEvent['loadOrderStatus']>> = {},
+): NotificationEvent {
+  return notificationEventFixture({
+    kind: 'load-order-status',
+    loadOrderStatus: {
+      state: 'Ready', totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed: true, failures: [], version: 1, ...overrides,
+    },
+  });
+}
+
 export const IGNORED_THROWS: ListenerThrows = { threw: () => {}, recovered: () => {} };
 
 export function recordedThrows() {

@@ -6,6 +6,7 @@ vi.mock('vscode', () => editorVscode);
 
 import * as vscode from 'vscode';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { loadOrderStatusEventFixture, notificationEventFixture } from '../../client/test/fixtures';
 
 function isPanel(candidate: unknown): candidate is vscode.WebviewPanel {
   return typeof candidate === 'object' && candidate !== null && 'webview' in candidate;
@@ -86,8 +87,7 @@ describe('a file mEdit answers holds no record', () => {
   const inStead = { viewColumn: 1, preview: true, preserveFocus: true, background: true };
 
   async function opened(meditClient: InMemoryMEditClient, inAGroup = true) {
-    const warn = vi.fn();
-    register({ meditClient, outputChannel: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() } });
+    const { outputChannel } = register({ meditClient });
     const provider = editorProviders.get('modbench.record');
     const document = { uri, getText: () => '{}', isDirty: false };
     const { panel } = webviewPanel();
@@ -97,7 +97,7 @@ describe('a file mEdit answers holds no record', () => {
     if (!isProvider(provider) || !isDocument(document)) throw new Error('no record grid registered');
 
     await provider.resolveCustomTextEditor(document, panel, { isCancellationRequested: false, onCancellationRequested: vi.fn() });
-    return { panel, warn };
+    return { panel, warn: outputChannel.warn };
   }
 
   function answeringNone(): InMemoryMEditClient {
@@ -118,10 +118,7 @@ describe('a file mEdit answers holds no record', () => {
     meditClient.setQueryFailureOnce('getRecordOfFile', { failed: 'unreachable' });
     await opened(meditClient);
 
-    meditClient.emit({
-      kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-      loadOrderStatus: { state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1 },
-    });
+    meditClient.emit(loadOrderStatusEventFixture({ totalPlugins: 1, activePlugins: 1, conflictsComputed: false }));
 
     await vi.waitFor(() => expect(reopened()).toEqual([['vscode.openWith', uri, 'default', inStead]]));
   });
@@ -141,7 +138,7 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
   const OTHER_CELL_FILE = '/source/ModA/plugin-source/A.esp/Cells/Other.json';
   const query = `formKey=${encodeURIComponent(PLACED)}&name=${plugin.name}&origin=${plugin.origin}`;
   const childUri = { scheme: 'modbench-child-record', path: CELL_FILE, query, toString: () => `modbench-child-record:${CELL_FILE}?${query}` };
-  const changed = { kind: 'rows-changed' as const, plugin: plugin.name, origin: plugin.origin, keys: [PLACED], sequence: 1 };
+  const changed = notificationEventFixture({ kind: 'rows-changed', plugin: plugin.name, origin: plugin.origin, keys: [PLACED], sequence: 1 });
   const opened = () => executed().filter(([id]) => id === 'vscode.openWith').map(([, uri]) => String(uri));
 
   function isUri(candidate: unknown): candidate is vscode.Uri {
@@ -152,31 +149,21 @@ describe('a child record\'s tab, on mEdit\'s report of its record', () => {
     const childQuery = `formKey=${encodeURIComponent(formKey)}&name=${plugin.name}&origin=${plugin.origin}`;
     const uri = { scheme: 'modbench-child-record', path: CELL_FILE, query: childQuery, toString: () => `modbench-child-record:${CELL_FILE}?${childQuery}` };
     const document = { uri, getText: () => '{}', isDirty: false };
-    const disposed: (() => void)[] = [];
-    const panel = {
-      title: '', active: true, viewColumn: 1,
-      webview: {
-        html: '', options: {}, cspSource: '', asWebviewUri: () => ({ toString: () => '' }), postMessage: () => Promise.resolve(true),
-        onDidReceiveMessage: () => ({ dispose: () => undefined }),
-      },
-      onDidDispose: (listener: () => void) => { disposed.push(listener); return { dispose: () => undefined }; },
-      onDidChangeViewState: () => ({ dispose: () => undefined }),
-    };
-    if (!isDocument(document) || !isPanel(panel)) throw new Error('not a child record\'s tab');
+    const { panel } = webviewPanel();
+    if (!isDocument(document)) throw new Error('not a child record\'s tab');
     await provider.resolveCustomTextEditor(document, panel, { isCancellationRequested: false, onCancellationRequested: vi.fn() });
-    return { close: () => { disposed.forEach((listener) => { listener(); }); } };
+    return panel;
   }
 
   async function childTabShown(meditClient: InMemoryMEditClient, inAGroup = true) {
-    const warn = vi.fn();
-    register({ meditClient, outputChannel: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() } });
+    const { outputChannel } = register({ meditClient });
     const provider = editorProviders.get('modbench.record');
     if (!isProvider(provider) || !isUri(childUri)) throw new Error('no record grid registered');
     await showChild(provider, PLACED);
     const group = { viewColumn: 1, tabs: [] as unknown[] };
     group.tabs.push({ group, input: new vscode.TabInputCustom(childUri, 'modbench.record'), isActive: true, isPreview: false });
     tabGroups.splice(0, tabGroups.length, ...(inAGroup ? [group] : []));
-    return { warn, provider };
+    return { warn: outputChannel.warn, provider };
   }
 
   it('follows it again for a report that arrives while it follows the one before', async () => {

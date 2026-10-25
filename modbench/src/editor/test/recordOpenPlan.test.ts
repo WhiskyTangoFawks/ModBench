@@ -8,53 +8,24 @@ const ofRecord = (record: { formKey: string }, plugin?: { name: string; origin: 
 const COPY = { name: 'A.esp', origin: 'ModA' };
 
 describe('recordOpenPlan', () => {
-  it('a click on one record opens it as a preview', () => {
-    expect(recordOpenPlan(ofRecord(A), [])).toEqual({ addresses: [{ ...A }], pinned: false });
-  });
-
-  it('pinned: true opens pinned', () => {
-    expect(recordOpenPlan({ ...ofRecord(A), pinned: true }, []))
-      .toEqual({ addresses: [A], pinned: true });
-  });
-
-  it('records that each ask pinned open pinned, as one grid', () => {
-    expect(recordOpenPlan([{ ...ofRecord(A), pinned: true }, { ...ofRecord(B), pinned: true }], []))
-      .toEqual({ addresses: [A, B], pinned: true });
-  });
-
-  it('several records without pinned open one grid as a preview', () => {
-    expect(recordOpenPlan([ofRecord(A), ofRecord(B)], [])).toEqual({ addresses: [A, B], pinned: false });
-  });
-
-  it('reads a row as its own copy: the plugin and origin its Argument names', () => {
-    expect(recordOpenPlan({ label: 'Gun', ...ofRecord(A, COPY) }, []).addresses).toEqual([{ ...A, plugin: COPY }]);
-  });
-
-  it('reads a record that names no plugin as its winning copy', () => {
-    expect(recordOpenPlan(ofRecord(A), []).addresses).toEqual([A]);
-  });
-
-  it('skips a row that carries no record Argument', () => {
-    expect(recordOpenPlan({ label: 'Types' }, []).addresses).toEqual([]);
-    expect(recordOpenPlan({ argument: { kind: 'mod', name: 'ModA' } }, []).addresses).toEqual([]);
-  });
-
-  it('with no Argument, opens the records selected in the focused view, as one grid, a preview', () => {
-    expect(recordOpenPlan(undefined, [ofRecord(A, COPY), ofRecord(B)]))
-      .toEqual({ addresses: [{ ...A, plugin: COPY }, B], pinned: false });
-  });
-
-  it('an Argument that carries only pinned opens the focused view\'s selection, pinned', () => {
-    expect(recordOpenPlan({ pinned: true }, [ofRecord(A, COPY), ofRecord(B)]))
-      .toEqual({ addresses: [{ ...A, plugin: COPY }, B], pinned: true });
-  });
-
-  it('with no Argument and no record selected, opens nothing', () => {
-    expect(recordOpenPlan(undefined, [{ label: 'Types' }]).addresses).toEqual([]);
-  });
-
-  it('an Argument wins over the focused view\'s selection', () => {
-    expect(recordOpenPlan(ofRecord(A), [ofRecord(B)]).addresses).toEqual([A]);
+  it.each([
+    ['a click on one record opens its winning copy as a preview', ofRecord(A), [], { addresses: [A], pinned: false }],
+    ['pinned: true opens pinned', { ...ofRecord(A), pinned: true }, [], { addresses: [A], pinned: true }],
+    ['records that each ask pinned open pinned, as one grid', [{ ...ofRecord(A), pinned: true }, { ...ofRecord(B), pinned: true }], [],
+      { addresses: [A, B], pinned: true }],
+    ['several records without pinned open one grid as a preview', [ofRecord(A), ofRecord(B)], [], { addresses: [A, B], pinned: false }],
+    ['a row opens its own copy: the plugin and origin its Argument names', { label: 'Gun', ...ofRecord(A, COPY) }, [],
+      { addresses: [{ ...A, plugin: COPY }], pinned: false }],
+    ['a row that carries no Argument opens nothing', { label: 'Types' }, [], { addresses: [], pinned: false }],
+    ['a row whose Argument is not a record opens nothing', { argument: { kind: 'mod', name: 'ModA' } }, [], { addresses: [], pinned: false }],
+    ['with no Argument, the records selected in the focused view open as one grid, a preview', undefined, [ofRecord(A, COPY), ofRecord(B)],
+      { addresses: [{ ...A, plugin: COPY }, B], pinned: false }],
+    ['an Argument that carries only pinned opens the focused view\'s selection, pinned', { pinned: true }, [ofRecord(A, COPY), ofRecord(B)],
+      { addresses: [{ ...A, plugin: COPY }, B], pinned: true }],
+    ['with no Argument and no record selected, nothing opens', undefined, [{ label: 'Types' }], { addresses: [], pinned: false }],
+    ['an Argument wins over the focused view\'s selection', ofRecord(A), [ofRecord(B)], { addresses: [A], pinned: false }],
+  ])('%s', (_, argument, selection, plan) => {
+    expect(recordOpenPlan(argument, selection)).toEqual(plan);
   });
 });
 

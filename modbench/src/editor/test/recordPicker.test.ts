@@ -10,18 +10,12 @@ import type * as vscode from 'vscode';
 import { pickRecord, type RecordPickerDeps } from '../recordPicker';
 import type { RecordSummary } from '../../client';
 import { DATA_DIRECTORY_ORIGIN } from '../../wire/pluginAddress';
+import { recordSummaryFixture } from '../../client/test/fixtures';
 
 beforeEach(() => { createQuickPick.mockReset(); });
 
-function makeRecord(i: number, editorId: string | null = `Record${i}`): RecordSummary {
-  return {
-    formKey: `Fallout4.esm:${String(i).padStart(6, '0')}`, plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId,
-    origin: DATA_DIRECTORY_ORIGIN,
-    workingTreeState: 'None',
-    hasContainerChildren: false,
-  hasParseFailure: false,
-  };
-}
+const makeRecord = (i: number, editorId: string | null = `Record${i}`): RecordSummary =>
+  recordSummaryFixture({ formKey: `${String(i).padStart(6, '0')}:Fallout4.esm`, plugin: 'Fallout4.esm', origin: DATA_DIRECTORY_ORIGIN, editorId });
 
 function makeFakeQuickPick() {
   const changeValueListeners: Array<(v: string) => void> = [];
@@ -55,10 +49,6 @@ function makeFakeQuickPick() {
 }
 
 describe('pickRecord', () => {
-  function openPicker(seed: string, validTypes: string[], deps: RecordPickerDeps): Promise<string | null> {
-    return pickRecord(deps, seed, validTypes);
-  }
-
   function fakeDeps(searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 })) {
     const shownOnSurface = vi.fn();
     const deps: RecordPickerDeps = { meditClient: { searchRecords }, reporter: { shownOnSurface } };
@@ -73,7 +63,7 @@ describe('pickRecord', () => {
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const dispatchPromise = openPicker(record.formKey, ['npc_'], deps);
+    const dispatchPromise = pickRecord(deps, record.formKey, ['npc_']);
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
 
     expect(qp.value).toBe(record.formKey);
@@ -100,7 +90,7 @@ describe('pickRecord', () => {
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const dispatchPromise = openPicker(seed, [], deps);
+    const dispatchPromise = pickRecord(deps, seed, []);
     await vi.waitFor(() => expect(searchRecords).toHaveBeenCalledWith(searched, []));
 
     qp.hide();
@@ -109,14 +99,14 @@ describe('pickRecord', () => {
 
   it.each([
     ['a typed FormID', '0001F4AB', 'X'],
-    ['a pasted label whose EditorID has gone stale', 'OldName [Fallout4.esm:000001]', 'NewName'],
+    ['a pasted label whose EditorID has gone stale', 'OldName [000001:Fallout4.esm]', 'NewName'],
   ])('shows the record found by %s, though its label does not contain the typed text', async (_n, typed, editorId) => {
     const record = makeRecord(1, editorId);
     const { deps } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const dispatchPromise = openPicker(typed, [], deps);
+    const dispatchPromise = pickRecord(deps, typed, []);
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
 
     expect(qp.visibleItems).toHaveLength(1);
@@ -131,7 +121,7 @@ describe('pickRecord', () => {
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const dispatchPromise = openPicker('Record', [], deps);
+    const dispatchPromise = pickRecord(deps, 'Record', []);
     await vi.waitFor(() => expect(qp.items).toHaveLength(20));
 
     expect(qp.title).toBeUndefined();
@@ -147,7 +137,7 @@ describe('pickRecord', () => {
     createQuickPick.mockReturnValue(qp);
 
     const composite = `Seeded [${record.formKey}]`;
-    const dispatchPromise = openPicker(composite, ['npc_'], deps);
+    const dispatchPromise = pickRecord(deps, composite, ['npc_']);
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
 
     expect(qp.value).toBe(composite);
@@ -163,7 +153,7 @@ describe('pickRecord', () => {
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const dispatchPromise = openPicker('', [], deps);
+    const dispatchPromise = pickRecord(deps, '', []);
     await Promise.resolve();
 
     expect(searchRecords).not.toHaveBeenCalled();
@@ -179,7 +169,7 @@ describe('pickRecord', () => {
     const { qp, typeValue } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const dispatchPromise = openPicker('', [], deps);
+    const dispatchPromise = pickRecord(deps, '', []);
     searchRecords.mockClear();
 
     typeValue('DogmeatRace [000019:Fallout4.esm]');
@@ -197,7 +187,7 @@ describe('pickRecord', () => {
     const { qp, typeValue } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const dispatchPromise = openPicker('', [], deps);
+    const dispatchPromise = pickRecord(deps, '', []);
     searchRecords.mockClear();
 
     typeValue('sw');
@@ -220,7 +210,7 @@ describe('pickRecord', () => {
     const { qp, typeValue } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const dispatchPromise = openPicker('', [], deps);
+    const dispatchPromise = pickRecord(deps, '', []);
     typeValue('sw');
     qp.items = [{ label: 'stale', formKey: 'x' }];
     typeValue('');
@@ -241,7 +231,7 @@ describe('pickRecord', () => {
     const { qp, typeValue } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const dispatchPromise = openPicker('first', [], deps);
+    const dispatchPromise = pickRecord(deps, 'first', []);
     vi.useFakeTimers();
     typeValue('second');
     await vi.advanceTimersByTimeAsync(200);
@@ -264,7 +254,7 @@ describe('pickRecord', () => {
     const { qp, accept } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const dispatchPromise = openPicker('', ['npc_'], deps);
+    const dispatchPromise = pickRecord(deps, '', ['npc_']);
     qp.selectedItems = [{ label: 'Picked [X]', formKey: 'X' }];
     accept();
 
@@ -280,7 +270,7 @@ describe('pickRecord', () => {
     const { qp, typeValue, accept } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const dispatchPromise = openPicker('old', [], deps);
+    const dispatchPromise = pickRecord(deps, 'old', []);
     await vi.advanceTimersByTimeAsync(0);
     typeValue('new');
     qp.selectedItems = qp.items;
@@ -297,7 +287,7 @@ describe('pickRecord', () => {
     const { qp, hideWithoutAccept } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const dispatchPromise = openPicker('', [], deps);
+    const dispatchPromise = pickRecord(deps, '', []);
     hideWithoutAccept();
 
     await expect(dispatchPromise).resolves.toBeNull();
@@ -309,7 +299,7 @@ describe('pickRecord', () => {
     const { qp } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const result = openPicker('sword', [], deps);
+    const result = pickRecord(deps, 'sword', []);
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
 
     expect(qp.items).toEqual([expect.objectContaining({ label: '$(error) The search failed', detail: 'connection refused' })]);
@@ -325,7 +315,7 @@ describe('pickRecord', () => {
     const { qp, accept } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const result = openPicker('sword', [], deps);
+    const result = pickRecord(deps, 'sword', []);
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
     qp.selectedItems = qp.items;
     accept();
@@ -345,7 +335,7 @@ describe('pickRecord', () => {
     const { qp, typeValue } = makeFakeQuickPick();
     createQuickPick.mockReturnValue(qp);
 
-    const result = openPicker('sw', [], deps);
+    const result = pickRecord(deps, 'sw', []);
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
     vi.useFakeTimers();
     typeValue('swo');

@@ -6,15 +6,11 @@ describe('columnKey agrees with the backend\'s ColumnKey.Of for the same plugin'
     expect(columnKey({ name: 'Shared.esp', origin: 'ModA' })).not.toBe(columnKey({ name: 'Shared.esp', origin: 'ModB' }));
   });
 
-  it('elides the reserved Data origin to the plain filename, not `filename|Data`, in its own original casing, matching the backend exactly', () => {
-    expect(columnKey({ name: 'Shared.esp', origin: 'Data/' })).toBe('Shared.esp');
-  });
-
-  it('case-folds the Data-origin check itself, however the origin is cased', () => {
-    expect(columnKey({ name: 'Shared.esp', origin: 'DATA/' })).toBe('Shared.esp');
-  });
-
-  it('a non-Data origin appends after the delimiter, preserving both halves\' own casing', () => {
-    expect(columnKey({ name: 'Shared.esp', origin: 'ModA' })).toBe('Shared.esp|ModA');
+  it.each([
+    ['the Data origin elides to the filename in its own casing', 'Data/', 'Shared.esp'],
+    ['the Data origin elides however it is cased', 'DATA/', 'Shared.esp'],
+    ['any other origin follows the delimiter, both halves in their own casing', 'ModA', 'Shared.esp|ModA'],
+  ])('%s', (_, origin, key) => {
+    expect(columnKey({ name: 'Shared.esp', origin })).toBe(key);
   });
 });

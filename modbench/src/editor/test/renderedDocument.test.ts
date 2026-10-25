@@ -21,6 +21,7 @@ vi.mock('vscode', () => ({
 
 import { RenderedDocuments } from '../renderedDocument';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
+import { notificationEventFixture } from '../../client/test/fixtures';
 
 interface ContentProvider {
   provideTextDocumentContent(uri: unknown): Promise<string>;
@@ -60,18 +61,18 @@ describe('a rendered document\'s text', () => {
     expect(client.calls).toContainEqual({ method: 'getRenderedDocument', args: [modA, GUN] });
   });
 
-  it('refuses when mEdit renders no copy', async () => {
+  it('refuses, naming the copy, when mEdit renders none', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getRenderedDocument', null);
     const { provider } = rendered(client);
 
-    await expect(provider.provideTextDocumentContent(GUN_URI)).rejects.toThrow();
+    await expect(provider.provideTextDocumentContent(GUN_URI)).rejects.toThrow('A.esp (ModA) holds no 000801:A.esp.');
   });
 });
 
 describe('an open rendered document, when mEdit reports a change', () => {
   const rowsChanged = (plugin: { name: string; origin: string }, keys: string[]) =>
-    ({ kind: 'rows-changed', plugin: plugin.name, origin: plugin.origin, keys, sequence: 1 });
+    notificationEventFixture({ kind: 'rows-changed', plugin: plugin.name, origin: plugin.origin, keys });
 
   it('changes when its plugin\'s rows that changed hold its record', () => {
     const client = new InMemoryMEditClient();
@@ -100,7 +101,7 @@ describe('an open rendered document, when mEdit reports a change', () => {
     const uri = GUN_URI;
     h.textDocuments.push({ uri }, { uri: { scheme: 'file', path: uri.path, query: uri.query } });
 
-    client.emit({ kind: 'plugin-changed', plugin: 'A.esp', origin: 'ModA', keys: [], sequence: 1 });
+    client.emit(notificationEventFixture({ kind: 'plugin-changed', plugin: 'A.esp', origin: 'ModA' }));
 
     expect(changed).toEqual([uri]);
   });

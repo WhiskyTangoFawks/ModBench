@@ -36,7 +36,6 @@ export function forgetEditor(): void {
 interface Registered {
   selection?: () => readonly unknown[];
   meditClient?: InMemoryMEditClient;
-  outputChannel?: ReturnType<typeof outputChannelDouble>;
   recordViewIds?: readonly string[];
   modFacts?: ModFacts;
   locateRecord?: Parameters<typeof createEditor>[0]['locateRecord'];
@@ -46,11 +45,11 @@ interface Registered {
 /** Creates the Editor with the view `test.view` selecting `selection`. */
 export function register({
   selection = () => [], meditClient = new InMemoryMEditClient(),
-  outputChannel = outputChannelDouble(),
   recordViewIds = ['test.view'], modFacts = NO_MODS, locateRecord = () => Promise.resolve(undefined),
   loadOrder = { now: () => true, onChanged: () => ({ dispose: () => undefined }) },
 }: Registered = {}) {
   const focusedView = createFocusedView();
+  const outputChannel = outputChannelDouble();
   const editor = createEditor({
     context: { extensionUri: fakeUri('/ext') },
     meditClient,
