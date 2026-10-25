@@ -70,20 +70,16 @@ public sealed class PartialFormCompareTests : IDisposable
     private CompareResult Compare(FormKey record) =>
         _index.Queries.GetCompare(record.ToString()).Value() ?? throw new InvalidOperationException($"Expected {record} to compare.");
 
-    [Fact]
-    public void GetCompare_MasterOverride_IsPartialFormFalse()
+    [Theory]
+    [InlineData("Base.esm", false)]
+    [InlineData("Partial.esp", true)]
+    public void AColumn_IsPartialForm_ExactlyWhenItsCopyCarriesThePartialFormFlag(string plugin, bool partialForm)
     {
-        Assert.False(Compare(_cellKey).Overrides.Single(o => o.Plugin == "Base.esm").IsPartialForm);
+        Assert.Equal(partialForm, Compare(_cellKey).Overrides.Single(o => o.Plugin == plugin).IsPartialForm);
     }
 
     [Fact]
-    public void GetCompare_PartialFormOverride_IsPartialFormTrue()
-    {
-        Assert.True(Compare(_cellKey).Overrides.Single(o => o.Plugin == "Partial.esp").IsPartialForm);
-    }
-
-    [Fact]
-    public void GetCompare_CellWithPartialFormOverride_WaterHeightDiffCarriesNoCellStateForTheOverride()
+    public void APartialFormCopysOwnField_HasNoCellStateInItsColumn_AndNoConflict()
     {
         var waterHeight = Compare(_cellKey).Diffs.Single(d => d.FieldName == "WaterHeight");
 
@@ -92,7 +88,7 @@ public sealed class PartialFormCompareTests : IDisposable
     }
 
     [Fact]
-    public void GetCompare_CellWithPartialFormOverride_WaterHeightWinnerFallsThroughToMaster_NotTheExcludedRecordWideWinnerPartialEsp()
+    public void APartialFormCopysOwnField_IsWonByTheMaster_NotByTheRecordWideWinnerTheCopyIs()
     {
         var waterHeight = Compare(_cellKey).Diffs.Single(d => d.FieldName == "WaterHeight");
 
@@ -137,7 +133,7 @@ public sealed class PartialFormCompareTests : IDisposable
     }
 
     [Fact]
-    public void GetRecord_RefIntroducedByPartialFormOverride_ShowsNormally()
+    public void ARefAPartialFormCopyIntroduces_IsItsOnlyCopy()
     {
         var compare = Compare(_refKey);
 

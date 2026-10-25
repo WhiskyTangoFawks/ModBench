@@ -47,7 +47,7 @@ public sealed class DependantsTests
     }
 
     [Fact]
-    public void GetDependants_APluginListingTheNameAsAMaster_IsADependant()
+    public void APluginListingTheNameAsAMaster_IsADependant_AndNoOtherIs()
     {
         var child = new Plugin("Child.esp", Masters: "Base.esm");
 
@@ -57,30 +57,25 @@ public sealed class DependantsTests
         Assert.Empty(answer.Unreadable);
     }
 
-    [Fact]
-    public void GetDependants_TheMasterNameInAnotherCase_StillMatches_ForAFileNameIsComparedWithoutCase()
+    [Theory]
+    [InlineData("BASE.ESM", true)]
+    [InlineData("Base.esm", false)]
+    public void APluginListingTheNameAsAMaster_InAnyCase_ActiveOrNot_IsADependant_ForAFileNameIsComparedWithoutCaseAndTheIndexHoldsEveryPlugin(
+        string master, bool enabled)
     {
-        var child = new Plugin("Child.esp", Masters: "BASE.ESM");
+        var child = new Plugin("Child.esp", Enabled: enabled, Masters: master);
 
         Assert.Equal([child.Key], Ready(Base, child).Dependants);
     }
 
     [Fact]
-    public void GetDependants_AnInactivePlugin_IsADependant_ForTheIndexHoldsEveryPluginOfTheInstance()
-    {
-        var child = new Plugin("Child.esp", Enabled: false, Masters: "Base.esm");
-
-        Assert.Equal([child.Key], Ready(Base, child).Dependants);
-    }
-
-    [Fact]
-    public void GetDependants_ThePluginItself_IsNeverItsOwnDependant()
+    public void ThePluginItself_IsNeverItsOwnDependant()
     {
         Assert.Empty(Ready(Base with { Masters = ["Base.esm"] }).Dependants);
     }
 
     [Fact]
-    public void GetDependants_APluginWhoseMastersWereNotRead_IsUnreadable_ForItMayListTheName()
+    public void APluginWhoseMastersWereNotRead_IsUnreadable_ForItMayListTheName()
     {
         var unread = new Plugin("Unread.esp", Masters: "Base.esm");
         using var fixture = Fixture(Base, unread);

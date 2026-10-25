@@ -20,19 +20,13 @@ public sealed class PluginRowImmutabilityTests
         return index.Queries.GetPlugins().Value().Single().IsImmutable;
     }
 
-    [Fact]
-    public void GetPlugins_APluginTheGameProvides_IsImmutable() =>
-        Assert.True(IsImmutable("ModA", enabled: true, gameProvided: true));
-
-    [Fact]
-    public void GetPlugins_APluginAModProvides_IsEditable() =>
-        Assert.False(IsImmutable("ModA", enabled: true, gameProvided: false));
-
-    [Fact]
-    public void GetPlugins_ADisabledPluginAModProvides_IsEditable() =>
-        Assert.False(IsImmutable("ModA", enabled: false, gameProvided: false));
-
-    [Fact]
-    public void GetPlugins_APluginNoModProvides_IsEditable() =>
-        Assert.False(IsImmutable(LoadOrderEntry.OverwriteOrigin, enabled: true, gameProvided: false));
+    [Theory]
+    [InlineData("ModA", true, true, true)]
+    [InlineData("ModA", true, false, false)]
+    [InlineData("ModA", false, false, false)]
+    [InlineData(LoadOrderEntry.OverwriteOrigin, true, false, false)]
+    public void OnlyAPluginTheGameProvides_IsImmutable(string origin, bool enabled, bool gameProvided, bool immutable)
+    {
+        Assert.Equal(immutable, IsImmutable(origin, enabled, gameProvided));
+    }
 }

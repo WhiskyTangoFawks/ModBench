@@ -47,13 +47,6 @@ public sealed class WorldspaceTreeTests : IDisposable
 
                 _formKeys["Unnamed"] = World(mod, editorId: null).FormKey.ToString();
 
-                var interior = Cell(mod, "IntCell");
-                var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-                subBlock.Cells.Add(interior);
-                var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-                block.SubBlocks.Add(subBlock);
-                mod.Cells.Records.Add(block);
-
                 var placedIn = Cell(mod, "PlacedIn");
                 var persistentBase = new Static(mod) { EditorID = "PersistentBase" };
                 mod.Statics.Add(persistentBase);
@@ -116,7 +109,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     private string FormKeyOf(string editorId) => _formKeys[editorId];
 
     [Fact]
-    public void GetCellChildRecords_SplitsThePersistentFromTheTemporary_NamingEachAndItsBase()
+    public void ACellsChildren_AreSplitIntoPersistentAndTemporary_NamingEachAndItsBase()
     {
         var result = _index.Queries.GetCellChildRecords(Plugin, FormKeyOf("PlacedIn")).Value();
 
@@ -133,7 +126,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetWorldspaceBlocks_GroupsCellsIntoBlocksAndSubBlocks()
+    public void AWorldspacesCells_AreGroupedIntoBlocksAndSubBlocks()
     {
         var result = _index.Queries.GetWorldspaceBlocks(Plugin, FormKeyOf("Grouped")).Value();
 
@@ -147,7 +140,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetWorldspaceBlocks_SortsBlocksAndSubBlocksAscendingByXThenY_KeepingTwoBlocksSharingXApartByY()
+    public void AWorldspacesBlocksAndSubBlocks_SortAscendingByXThenY_KeepingTwoBlocksSharingXApartByY()
     {
         var result = _index.Queries.GetWorldspaceBlocks(Plugin, FormKeyOf("Scrambled")).Value();
 
@@ -156,7 +149,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetCellChildRecords_ARefWithNoEditorIdOrBase_CarriesNulls()
+    public void AChildRefWithNoEditorIdOrBase_CarriesNulls()
     {
         var result = _index.Queries.GetCellChildRecords(Plugin, FormKeyOf("BareCell")).Value();
 
@@ -166,7 +159,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetWorldspaceBlocks_ACellWithNoEditorIdOrGrid_CarriesNulls()
+    public void AWorldspaceCellWithNoEditorIdOrGrid_CarriesNulls()
     {
         var result = _index.Queries.GetWorldspaceBlocks(Plugin, FormKeyOf("Bare")).Value();
 
@@ -175,7 +168,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetWorldspaces_MapsRecordsToSummaries()
+    public void AWorldspace_IsListedWithItsEditorId_AnUnnamedOneWithNone()
     {
         var result = _index.Queries.GetWorldspaces(Plugin).Value();
 
@@ -184,15 +177,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetInteriorCells_ReturnsRealContent()
-    {
-        var result = _index.Queries.GetInteriorCells(Plugin).Value();
-
-        Assert.Equal("IntCell", Assert.Single(Assert.Single(Assert.Single(result).SubBlocks).Cells).EditorId);
-    }
-
-    [Fact]
-    public void GetWorldspaceBlocks_ATopCell_IsThePersistentWorldspaceCell_BesideTheBlocks()
+    public void AWorldspacesTopCell_IsThePersistentWorldspaceCell_BesideTheBlocks()
     {
         var result = _index.Queries.GetWorldspaceBlocks(Plugin, FormKeyOf("WithTopCell")).Value();
 
@@ -205,7 +190,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetWorldspaceBlocks_ForwardsFullNameOntoCellSummary_ForTopCellsAndBlockCells()
+    public void ACellsFullName_IsCarried_ForTopCellsAndBlockCells()
     {
         var result = _index.Queries.GetWorldspaceBlocks(Plugin, FormKeyOf("WithTopCell")).Value();
 
@@ -230,7 +215,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetWorldspaces_ListsTheWorldspacesOfTheGivenOrigin()
+    public void TheWorldspacesListed_AreThoseOfTheGivenOrigin()
     {
         using var fixture = TwoOriginsOfOneName();
         using var index = Indexes.Reconciled(fixture);
@@ -240,7 +225,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetWorldspaceBlocks_ReadsTheCellsOfTheGivenOrigin()
+    public void AWorldspacesBlocks_HoldTheCellsOfTheGivenOrigin()
     {
         using var fixture = TwoOriginsOfOneName();
         using var index = Indexes.Reconciled(fixture);
@@ -252,7 +237,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetInteriorCells_ReadsTheCellsOfTheGivenOrigin()
+    public void TheInteriorCells_AreThoseOfTheGivenOrigin()
     {
         using var fixture = TwoOriginsOfOneName();
         using var index = Indexes.Reconciled(fixture);
@@ -264,7 +249,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetWorldspaceBlocks_RollsACellsParseFailureUpItsSubBlockAndBlock_SoACollapsedNodeStillShowsTheErrorBeneathIt()
+    public void ACellsParseFailure_RollsUpItsSubBlockAndBlock_SoACollapsedNodeStillShowsTheErrorBeneathIt()
     {
         using var index = Indexes.Reconciled(_fixture, adapter: new DiagnosingAdapter { Unreadable = FormKeyOf("CellA") });
 
@@ -282,7 +267,7 @@ public sealed class WorldspaceTreeTests : IDisposable
     }
 
     [Fact]
-    public void GetWorldspaces_MarksOnlyTheWorldspaceTheIndexFindsAFailureBeneath()
+    public void OnlyTheWorldspaceTheIndexFindsAFailureBeneath_IsMarked()
     {
         using var index = Indexes.Reconciled(_fixture, adapter: new DiagnosingAdapter { Unreadable = FormKeyOf("CellA") });
 

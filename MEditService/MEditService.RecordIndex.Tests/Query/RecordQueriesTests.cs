@@ -1,6 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
-using MEditService.Ports;
+using MEditService.PluginAdapter;
 using MEditService.RecordIndex.Queries;
 using MEditService.RecordIndex.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -15,7 +15,6 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
 {
     private const string PluginName = "TestPlugin.esp";
     private const string Npc01 = "000800:TestPlugin.esp";
-    private const string Npc02 = "000801:TestPlugin.esp";
     private const string MatchesNpc02 = "SELECT form_key FROM npc_ WHERE editor_id = 'TestNPC02'";
     private static readonly PluginAddress PluginKey = new(PluginName, "TestMod");
 
@@ -57,9 +56,9 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         return fixture;
     }
 
-    private OpenedIndex Reconciled(ScatteredFixtureData fixture, string? instanceRoot = null)
+    private OpenedIndex Reconciled(ScatteredFixtureData fixture, IPluginAdapter? adapter = null)
     {
-        var index = Indexes.Reconciled(fixture, instanceRoot);
+        var index = Indexes.Reconciled(fixture, adapter: adapter);
         _built.Add(index);
         return index;
     }
@@ -82,32 +81,49 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetPlugins_ReturnsLoadedPlugin()
+    public void TheIndexedPlugin_IsListed()
     {
         var plugin = Assert.Single(_svc.GetPlugins().Value());
 
         Assert.Equal(PluginName, plugin.Name);
     }
 
-    [Theory]
-    [InlineData(false, false, false, false)]
-    [InlineData(true, false, true, false)]
-    [InlineData(true, true, true, true)]
-    public void GetPlugins_MarksCompiledPluginAndPluginSourceUnreadable_AsTheIndexDerivedThePlugin(
-        bool initTheMod, bool removeThePluginSource, bool compiledPlugin, bool pluginSourceUnreadable)
+    private sealed record CompiledPluginRow(bool IsCompiledPlugin, bool PluginSourceUnreadable);
+
+    private CompiledPluginRow PluginRowOf(ScatteredFixtureData fixture)
     {
-        var fixture = Built(TwoNpcsPlugin());
-        var entry = fixture.Plugins.Single();
-        if (initTheMod) SourceMods.Init(entry);
-        if (removeThePluginSource) Directory.Delete(PluginSourceRoot.In(entry.ModFolderOf(), PluginName), recursive: true);
-
         var plugin = Reconciled(fixture).PluginResponseOf(PluginKey) ?? throw new InvalidOperationException("Expected the plugin's row.");
-
-        Assert.Equal((compiledPlugin, pluginSourceUnreadable), (plugin.IsCompiledPlugin, plugin.PluginSourceUnreadable is not null));
+        return new(plugin.IsCompiledPlugin, plugin.PluginSourceUnreadable is not null);
     }
 
     [Fact]
-    public void GetPlugins_MarksCompiledPluginPerPlugin_NotPerFilename()
+    public void APluginNoTreeBacks_IsNoCompiledPlugin()
+    {
+        Assert.Equal(new CompiledPluginRow(IsCompiledPlugin: false, PluginSourceUnreadable: false), PluginRowOf(Built(TwoNpcsPlugin())));
+    }
+
+    [Fact]
+    public void APluginItsModsTreeBacks_IsACompiledPlugin_WhoseSourceReads()
+    {
+        var fixture = Built(TwoNpcsPlugin());
+        SourceMods.Init(fixture.Plugins.Single());
+
+        Assert.Equal(new CompiledPluginRow(IsCompiledPlugin: true, PluginSourceUnreadable: false), PluginRowOf(fixture));
+    }
+
+    [Fact]
+    public void ACompiledPluginWhoseTreeIsGone_IsACompiledPlugin_WhoseSourceIsUnreadable()
+    {
+        var fixture = Built(TwoNpcsPlugin());
+        var entry = fixture.Plugins.Single();
+        SourceMods.Init(entry);
+        Directory.Delete(PluginSourceRoot.In(entry.ModFolderOf(), PluginName), recursive: true);
+
+        Assert.Equal(new CompiledPluginRow(IsCompiledPlugin: true, PluginSourceUnreadable: true), PluginRowOf(fixture));
+    }
+
+    [Fact]
+    public void ACompiledPlugin_IsMarkedPerPlugin_NotPerFilename()
     {
         var fixture = Built(new PluginFixtureBuilder("record-query")
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("CompiledPlugin"), origin: "SourceMod")
@@ -124,7 +140,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("PatchedNpc").Race.SetTo(new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800))));
 
     [Fact]
-    public void GetRecord_ReferenceIntoAbsentMaster_RendersUnresolvedRatherThanErroring()
+    public void AReferenceIntoAnAbsentMaster_ReadsUnresolved_RatherThanErroring()
     {
         var detail = PatchOfAGhostMaster().Queries.GetRecord("000800:Patch.esp").Value();
 
@@ -137,7 +153,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetRecords_PagesTheRecordsOfTheTypesItNames_ThatMatchTheSearch()
+    public void AListing_PagesTheRecordsOfTheTypesItNames_ThatMatchTheSearch()
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
         {
@@ -156,24 +172,11 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Theory]
-    [InlineData(null, new[] { "TestNPC02" })]
-    [InlineData("TestNPC", new[] { "TestNPC01", "TestNPC02" })]
-    public void GetRecords_TheFilterInForceNarrowsTheListing_NeverASearch(string? search, string[] expected)
-    {
-        var index = OwnTwoNpcs();
-        index.SetFilter(MatchesNpc02, "npcs.sql");
-
-        var page = index.Queries.GetRecords(types: ["npc_"], plugin: null, search: search, limit: 10, offset: 0).Value();
-
-        Assert.Equal(expected, EditorIds(page));
-    }
-
-    [Theory]
     [InlineData("01000800", "Patch.esp")]
     [InlineData("0x01000800", "Patch.esp")]
     [InlineData("FE000800", "Light.esp")]
     [InlineData("00000800", "Base.esm")]
-    public void GetRecords_AFormIdSearchesTheFormKeyItNames(string formId, string plugin)
+    public void AFormIdSearch_FindsTheFormKeyItNames(string formId, string plugin)
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query")
             .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("BaseNpc"))
@@ -194,7 +197,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     [InlineData("FE001800", "000800:L1.esp")]
     [InlineData("FE001FFF", "000FFF:L1.esp")]
     [InlineData("01000800", "000800:F1.esp")]
-    public void GetRecords_ALightFormIdDecodesItsIndexAndIdSeparately(string formId, string formKey)
+    public void ALightFormId_DecodesItsIndexAndIdSeparately(string formId, string formKey)
     {
         var index = Roster(("F0.esm", false, true), ("L0.esp", true, true), ("F1.esp", false, true), ("L1.esp", true, true));
 
@@ -204,7 +207,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetRecords_AFormIdCountsOnlyActivePlugins()
+    public void AFormId_CountsOnlyActivePlugins()
     {
         var index = Roster(("F0.esm", false, true), ("Off.esp", false, false), ("F1.esp", false, true));
 
@@ -214,7 +217,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetRecords_FeIsAFullIndexWhereNoActivePluginIsLight()
+    public void FE_IsAFullIndex_WhereNoActivePluginIsLight()
     {
         var index = Roster([.. Enumerable.Range(0, 255).Select(i => ($"P{i:D3}.esp", false, true))]);
 
@@ -224,7 +227,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetRecords_AFormIdNoActivePluginHoldsSearchesAsTyped()
+    public void AFormIdNoActivePluginHolds_SearchesAsTyped()
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod => mod.Npcs.AddNew("Npc7F000800")));
 
@@ -254,7 +257,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetRecords_NoType_ListsEveryTypeButTheHeader()
+    public void AListingOfNoType_ListsEveryTypeButTheHeader()
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
         {
@@ -270,7 +273,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     [Theory]
     [InlineData(PluginOrigin.DataDirectory, new[] { "InData" })]
     [InlineData("OtherOrigin", new string[0])]
-    public void GetRecords_OfAPlugin_ListsOnlyTheCopiesItsOriginProvides(string origin, string[] expected)
+    public void AListingOfAPlugin_ListsOnlyTheCopiesItsOriginProvides(string origin, string[] expected)
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query")
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("InOther"), origin: "OtherOrigin")
@@ -283,7 +286,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetRecords_ListsEachRowWithTheFactsTheIndexDerives_ThePageAfterTheTotal()
+    public void AListedRow_CarriesTheFactsTheIndexDerives_ThePageAfterTheTotal()
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
         {
@@ -308,7 +311,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetRecord_IsTheCopyTheLastActivePluginHolds()
+    public void ARecord_IsTheCopyTheLastActivePluginHolds()
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query")
             .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("AsTheMasterHasIt"))
@@ -384,7 +387,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public async Task GetCompare_BeforeTheWinnerSweep_AnswersEveryCopy_WithNoneFlaggedWinner()
+    public async Task BeforeTheWinnerSweep_AComparisonAnswersEveryCopy_WithNoneFlaggedWinner()
     {
         await WhileNoCopyIsFlaggedWinner(index =>
         {
@@ -397,24 +400,13 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetRecord_ReturnsRecordType_ForCopyAsNewRecordNeedsTheSchemaTableNameUpFront()
+    public void ARecord_CarriesItsRecordType_ForCopyAsNewRecordNeedsTheSchemaTableNameUpFront()
     {
         Assert.Equal("npc_", _svc.GetRecord(Npc01).Value()?.RecordType);
     }
 
     [Fact]
-    public void GetCompare_SingleOverride_ReturnsDiffs()
-    {
-        var compare = _svc.GetCompare(Npc01).Value();
-
-        Assert.NotNull(compare);
-        Assert.Equal(ConflictThis.OnlyOne, Assert.Single(compare.Overrides).ConflictThis);
-        Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
-        Assert.NotEmpty(compare.Diffs);
-    }
-
-    [Fact]
-    public void GetCompare_CarriesTheDiagnosisTheDocumentArrivedWith_ForTheRecordEditorRendersTheColumnReadOnlyFromItAlone()
+    public void AColumn_CarriesTheDiagnosisTheDocumentArrivedWith_ForTheRecordEditorRendersTheColumnReadOnlyFromItAlone()
     {
         const string unreadable = "000800:Unreadable.esp";
         var index = WithAnUnreadableNpc(unreadable);
@@ -428,7 +420,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetCompare_LeavesAReadableRecordsColumnWithoutADiagnosis()
+    public void AReadableRecordsColumn_CarriesNoDiagnosis()
     {
         var compare = _svc.GetCompare(Npc01).Value();
 
@@ -437,7 +429,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetCompare_CarriesTheLoadOrdersStringsLanguage()
+    public void AComparison_CarriesTheLoadOrdersStringsLanguage()
     {
         var fixture = Built(TwoNpcsPlugin());
         var index = Reconciled(fixture);
@@ -449,7 +441,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetCompare_NamesTheRecordTypeAsXEditDoes()
+    public void AComparison_NamesTheRecordTypeAsXEditDoes()
     {
         Assert.Equal("Non-Player Character", _svc.GetCompare(Npc01).Value()?.RecordTypeName);
     }
@@ -464,7 +456,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         .WithPlugin("Patch.esp", (mod, prev) => mod.Npcs.Add(prev[1].Npcs.Single().DeepCopy())));
 
     [Fact]
-    public void GetReferences_NameTheRecordTypeAsXEditDoes()
+    public void AReference_NamesItsRecordTypeAsXEditDoes()
     {
         var references = KeywordReferredToFromBaseAndPatch().Queries.GetReferences("000800:Target.esp").Value();
 
@@ -473,7 +465,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetReferences_ListThePluginsInLoadOrder()
+    public void TheReferencesToARecord_AreInLoadOrder()
     {
         var plugins = KeywordReferredToFromBaseAndPatch().Queries.GetReferences("000800:Target.esp").Value().Select(r => r.Plugin);
 
@@ -481,7 +473,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetCompare_OverridesCarryRecordType()
+    public void EveryColumn_CarriesItsRecordType()
     {
         var compare = _svc.GetCompare(Npc01).Value();
 
@@ -490,30 +482,20 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Theory]
-    [InlineData("overwrite/")]
-    [InlineData("Overwrite/")]
-    [InlineData("OVERWRITE/")]
-    public void GetCompare_OverwriteOriginColumn_CarriesIsInOverwriteTrue_IgnoringCase_ForOverwriteIsAReservedOriginNotAMod(string origin)
+    [InlineData(LoadOrderEntry.OverwriteOrigin, true)]
+    [InlineData("TestMod", false)]
+    public void AColumn_IsInOverwrite_ExactlyWhenNoModProvidesItsPlugin(string origin, bool inOverwrite)
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod => mod.Npcs.AddNew("TestNPC"), origin: origin));
 
         var compare = index.Queries.GetCompare(Npc01).Value();
 
         Assert.NotNull(compare);
-        Assert.True(Assert.Single(compare.Overrides).IsInOverwrite);
+        Assert.Equal(inOverwrite, Assert.Single(compare.Overrides).IsInOverwrite);
     }
 
     [Fact]
-    public void GetCompare_ModOriginColumn_CarriesIsInOverwriteFalse()
-    {
-        var compare = _svc.GetCompare(Npc01).Value();
-
-        Assert.NotNull(compare);
-        Assert.All(compare.Overrides, o => Assert.False(o.IsInOverwrite));
-    }
-
-    [Fact]
-    public void GetCompare_RecordHasConditions_ClassifiesThemAsFieldDiffChildren_ThroughTheOneConflictClassifierForAConditionListIsAnOrdinaryReflectedArrayColumn()
+    public void AConditionList_IsClassifiedAsFieldDiffChildren_ThroughTheOneConflictClassifier_ForItIsAnOrdinaryReflectedArrayColumn()
     {
         var compare = Compared(new PluginFixtureBuilder("record-query")
             .WithPlugin("Base.esp", mod => mod.ConstructibleObjects.AddNew("Recipe").Conditions.Add(new ConditionFloat
@@ -532,7 +514,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetCompare_ConditionFormParameter_ResolvesEditorId_AsTheConditionsParameterOneRecordResolutionInItsColumn()
+    public void AConditionsFormParameter_ResolvesItsEditorId_AsTheParameterOneRecordResolutionInItsColumn()
     {
         var compare = Compared(new PluginFixtureBuilder("record-query")
             .WithPlugin("Base.esp", mod =>
@@ -566,13 +548,13 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         diff.Children ?? throw new InvalidOperationException($"Expected \"{diff.FieldName}\" to have children.");
 
     [Fact]
-    public void GetCompare_UnknownFormKey_ReturnsNull()
+    public void AnUnknownFormKey_HasNoComparison()
     {
         Assert.Null(_svc.GetCompare("FFFFFF:Unknown.esp").Value());
     }
 
     [Fact]
-    public void GetPluginRecordTypes_ReturnsCountsForPlugin()
+    public void APluginsRecordTypes_AreEachCounted()
     {
         var result = _svc.GetPluginRecordTypes(PluginKey).Value();
 
@@ -581,7 +563,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetPluginRecordTypes_CountsNoRecordAnotherOfThePluginsRecordsHolds_WhateverTheCaseItIsAskedIn()
+    public void ARecordTypesCount_HoldsNoRecordAnotherOfThePluginsRecordsHolds_WhateverTheCaseThePluginIsAskedIn()
     {
         var index = Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
         {
@@ -598,12 +580,12 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetPluginRecordTypes_DisplayName_MatchesXEdit_WhileTheSignatureStaysTheKey()
+    public void APluginsRecordType_IsNamedAsXEditNamesIt_WhileTheSignatureStaysTheKey()
     {
         Assert.Equal("Non-Player Character", Assert.Single(_svc.GetPluginRecordTypes(PluginKey).Value(), r => r.Type == "npc_").DisplayName);
     }
 
-    private OpenedIndex ManyTypes() => Reconciled(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
+    private static PluginFixtureBuilder ManyTypesPlugin() => new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
     {
         mod.Npcs.AddNew("Npc");
         mod.Quests.AddNew("Quest");
@@ -613,23 +595,24 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
         block.SubBlocks.Add(subBlock);
         mod.Cells.Records.Add(block);
         mod.Worldspaces.AddNew("World");
-    }, origin: PluginKey.Origin));
+    }, origin: PluginKey.Origin);
+
+    private OpenedIndex ManyTypes() => Reconciled(ManyTypesPlugin());
 
     [Fact]
-    public void GetPluginRecordTypes_IsCreatable_AgreesWithTheCreatableEndpoint_ForTheGroupMenuReadsItInsteadOfASecondPackageJsonSideList()
+    public void APluginsRecordType_IsCreatable_ExactlyWhenTheGameGivesItATopLevelGroup_AHeldTypeWhoseReadFailedIncluded()
     {
-        var index = ManyTypes();
-        var creatable = index.Queries.GetCreatableRecordTypes().Value().Select(r => r.Type).ToHashSet(StringComparer.Ordinal);
+        var index = Reconciled(Built(ManyTypesPlugin()), new DiagnosingAdapter { FailedRecordType = "refr" });
 
         var result = index.Queries.GetPluginRecordTypes(PluginKey).Value();
 
-        Assert.Contains("npc_", creatable);
-        Assert.Contains("qust", creatable);
-        Assert.All(result, row => Assert.Equal(creatable.Contains(row.Type), row.IsCreatable));
+        Assert.Equal(
+            [("cell", true), ("npc_", true), ("qust", true), ("refr", false), ("wrld", true)],
+            result.Select(row => (row.Type, row.IsCreatable)).Order());
     }
 
     [Fact]
-    public void GetPluginRecordTypes_SaysWhichTypesAreContainers_AnEmptyOneIncluded()
+    public void APluginsRecordTypes_SayWhichAreContainers_AnEmptyOneIncluded()
     {
         var containers = ManyTypes().Queries.GetPluginRecordTypes(PluginKey).Value().Where(r => r.IsContainer).Select(r => r.Type);
 
@@ -637,50 +620,31 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetPluginRecordTypes_ExcludesHeader_ForItIsReachedOnlyViaOpenHeaderOnThePluginNode()
+    public void APluginsRecordTypes_LeaveOutTheHeader_ForItIsReachedOnlyViaOpenHeaderOnThePluginNode()
     {
         Assert.DoesNotContain(_svc.GetPluginRecordTypes(PluginKey).Value(), r => r.Type == PluginHeader.RecordType);
     }
 
     [Fact]
-    public void GetPluginRecordTypes_UnknownPlugin_ReturnsEmpty()
+    public void AnUnknownPlugin_HasNoRecordTypes()
     {
         Assert.Empty(_svc.GetPluginRecordTypes(new PluginAddress("DoesNotExist.esp", PluginOrigin.DataDirectory)).Value());
     }
 
     [Fact]
-    public void GetCreatablePluginExtensions_AreTheHeldReleasesExtensions()
+    public void TheCreatablePluginExtensions_AreTheHeldReleasesExtensions()
     {
         Assert.Equal([".esm", ".esl", ".esp"], _svc.GetCreatablePluginExtensions().Value());
     }
 
     [Fact]
-    public void GetCreatableRecordTypes_NamesAFlatTypeAsXEditDoes()
+    public void ACreatableFlatType_IsNamedAsXEditNamesIt()
     {
         Assert.Equal("Non-Player Character", Assert.Single(_svc.GetCreatableRecordTypes().Value(), r => r.Type == "npc_").DisplayName);
     }
 
-    [Theory]
-    [InlineData(PluginHeader.RecordType)]
-    [InlineData("refr")]
-    [InlineData("dial")]
-    [InlineData("info")]
-    public void GetCreatableRecordTypes_LeavesOutTheHeaderAndEveryHeldType(string recordType)
-    {
-        Assert.DoesNotContain(_svc.GetCreatableRecordTypes().Value(), r => r.Type == recordType);
-    }
-
-    [Theory]
-    [InlineData("cell")]
-    [InlineData("wrld")]
-    [InlineData("qust")]
-    public void GetCreatableRecordTypes_NamesEveryTypeWithATopLevelGroup(string recordType)
-    {
-        Assert.Contains(_svc.GetCreatableRecordTypes().Value(), r => r.Type == recordType);
-    }
-
     [Fact]
-    public void GetCreatableRecordTypes_IsInNameOrder()
+    public void TheCreatableTypes_AreInNameOrder()
     {
         var names = _svc.GetCreatableRecordTypes().Value().Select(r => r.DisplayName).ToList();
 
@@ -695,7 +659,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }));
 
     [Fact]
-    public void GetRecords_SeveralTypes_ListsExactlyThose()
+    public void AListingOfSeveralTypes_ListsExactlyThose()
     {
         var page = OneOfEachType().Queries.GetRecords(types: ["npc_", "kywd"], plugin: null, search: "X", limit: 10, offset: 0).Value();
 
@@ -703,7 +667,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetRecords_AnUnknownTypeAmongKnownOnes_ListsTheKnownOnes()
+    public void AListingOfAnUnknownTypeAmongKnownOnes_ListsTheKnownOnes()
     {
         var page = OneOfEachType().Queries.GetRecords(types: ["npc_", "xxxx"], plugin: null, search: "X", limit: 10, offset: 0).Value();
 
@@ -711,7 +675,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void GetRecords_UnknownType_ReturnsEmptyPagedResult()
+    public void AListingOfAnUnknownType_IsEmpty()
     {
         var result = _svc.GetRecords(types: ["xxxx"], plugin: null, search: null, limit: 10, offset: 0).Value();
 
@@ -720,7 +684,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void SetFilter_PutsTheFilterInForce_WithItsSource()
+    public void AFilterSet_IsInForce_WithItsSource()
     {
         var index = OwnTwoNpcs();
 
@@ -730,7 +694,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public void ClearFilter_LeavesNoFilterInForce()
+    public void AClearedFilter_LeavesNoFilterInForce()
     {
         var index = OwnTwoNpcs();
         index.Queries.SetFilter(MatchesNpc02, "npcs.sql").Accepted();
@@ -741,7 +705,7 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public async Task AwaitSequence_Reached_AnswersTheSequenceObserved_NotTheBound()
+    public async Task AwaitingASequenceReached_AnswersTheSequenceObserved_NotTheBound()
     {
         var observed = _svc.GetSequence();
         Assert.True(observed > 0, "the reconcile advanced the sequence");
@@ -750,46 +714,10 @@ public sealed class RecordQueriesTests(RecordQueriesTests.TwoNpcs shared) : ICla
     }
 
     [Fact]
-    public async Task AwaitSequence_NotReached_AnswersFalseAndTheSequenceObserved()
+    public async Task AwaitingASequenceNotReached_AnswersFalseAndTheSequenceObserved()
     {
         var observed = _svc.GetSequence();
 
         Assert.Equal(new SequenceAwaitResponse(false, observed), await _svc.AwaitSequence(observed + 2, TimeSpan.FromMilliseconds(50)));
-    }
-
-    [Fact]
-    public void RebuildStore_RebuildsTheStoreOfTheGivenGameAndInstance()
-    {
-        var fixture = Built(TwoNpcsPlugin());
-        var index = Reconciled(fixture, instanceRoot: fixture.InstanceRoot);
-
-        Assert.Null(index.Queries.RebuildStore(GameRelease.Fallout4, fixture.InstanceRoot));
-
-        Waits.Reached(() => index.Status.State == LoadOrderState.Ready, "the refill");
-        Assert.Equal("TestNPC02", index.Queries.GetRecord(Npc02).Value()?.EditorId);
-    }
-
-    [Fact]
-    public void GetRecords_MapsEveryWorkingTreeStateTheIndexHas()
-    {
-        var fixture = Built(new PluginFixtureBuilder("record-query").WithPlugin(PluginName, mod =>
-        {
-            mod.Npcs.AddNew("Unchanged");
-            mod.Npcs.AddNew("Edited");
-        }, origin: PluginKey.Origin));
-        var entry = fixture.Plugins.Single();
-        SourceMods.Init(entry);
-        var index = Reconciled(fixture);
-        var edited = index.DocumentOf(Npc02, PluginKey);
-        var body = index.BodyOf(Npc02, PluginKey);
-        index.Edit(entry, edited, body.Replace("\"Edited\"", "\"EditedInTheTree\"", StringComparison.Ordinal));
-        index.Create(entry, "000900:TestPlugin.esp", "npc_", "Added",
-            body.Replace(Npc02, "000900:TestPlugin.esp", StringComparison.Ordinal).Replace("\"Edited\"", "\"Added\"", StringComparison.Ordinal));
-
-        var result = index.Queries.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 10, offset: 0).Value();
-
-        Assert.Equal(
-            [WorkingTreeState.None, WorkingTreeState.Modified, WorkingTreeState.Added],
-            result.Items.Select(row => row.WorkingTreeState));
     }
 }

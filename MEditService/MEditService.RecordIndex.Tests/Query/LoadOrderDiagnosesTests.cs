@@ -38,7 +38,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_AMalformedHeldPlugin_IsReportedWithTheRefusalWording()
+    public void AMalformedHeldPlugin_IsReportedWithTheRefusalWording()
     {
         var report = Assert.Single(Diagnose(Plugin(Malformed)));
 
@@ -53,7 +53,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_ADiagnosisWithNoAnchor_ReadsBackWithNone()
+    public void ADiagnosisWithNoAnchor_ReadsBackWithNone()
     {
         var adapter = new DiagnosisClaimingAdapter(new PluginDiagnosis(null, "unknown", null, "boom"));
         using var index = Indexes.Reconciled(DataFolder, [Clean("Clean.esp")], adapter: adapter);
@@ -64,7 +64,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_APluginLoadedWithNoLine_IsNeverReported_ForThoseAreTheProofSetTheTablesWereBuiltFrom()
+    public void APluginLoadedWithNoLine_IsNeverReported_ForThoseAreTheProofSetTheTablesWereBuiltFrom()
     {
         var loadedWithNoLine = Plugin(Malformed, origin: "CleanedMasters") with { LoadedWithNoLine = true };
 
@@ -72,7 +72,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_APluginLoadedWithNoLine_IsMatchedIgnoringCase_ForACaseSensitiveFilesystemCanHoldASecondFileDifferingOnlyInCase()
+    public void APluginLoadedWithNoLine_IsMatchedIgnoringCase_ForACaseSensitiveFilesystemCanHoldASecondFileDifferingOnlyInCase()
     {
         var master = Plugin(Malformed, origin: "CleanedMasters") with { LoadedWithNoLine = true };
         var upper = master with { Name = Malformed.ToUpperInvariant(), LoadedWithNoLine = false, Enabled = false };
@@ -84,7 +84,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_AUserPluginInTheGameFolder_IsReported_ForWhereTheFileSitsDecidesNothing()
+    public void AUserPluginInTheGameFolder_IsReported_ForWhereTheFileSitsDecidesNothing()
     {
         var placed = Plugin(Malformed, origin: PluginOrigin.DataDirectory);
 
@@ -94,7 +94,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
     [Theory]
     [InlineData(null, true)]
     [InlineData(0, false)]
-    public void GetLoadOrderDiagnoses_APluginThatIsNotActive_IsReported_ForMalformedMeansBytesDepartingFromWhatTheCreationKitWritesActiveOrNot(int? line, bool enabled)
+    public void APluginThatIsNotActive_IsReported_ForMalformedMeansBytesDepartingFromWhatTheCreationKitWritesActiveOrNot(int? line, bool enabled)
     {
         var inactive = Plugin(Malformed, line: line, enabled: enabled);
 
@@ -102,13 +102,13 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_ACleanPlugin_IsNotReported()
+    public void ACleanPlugin_IsNotReported()
     {
         Assert.Empty(Diagnose(Clean("Clean.esp")));
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_APluginTheLoadOrderNoLongerHolds_IsNotReported()
+    public void APluginTheLoadOrderNoLongerHolds_IsNotReported()
     {
         var held = Clean("Held.esp");
         var gone = Plugin(Malformed, origin: "RemovedMod");
@@ -123,7 +123,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_TwoPluginsOfOneName_ReportAgainstTheirOwnOrigins_ForAFilenameIsNotAnIdentity()
+    public void TwoPluginsOfOneName_ReportAgainstTheirOwnOrigins_ForAFilenameIsNotAnIdentity()
     {
         var winner = Plugin(Malformed, origin: "WinningMod", malformed: false);
         var overridden = Plugin(Malformed, origin: "LosingMod", winning: false);
@@ -132,7 +132,7 @@ public sealed class LoadOrderDiagnosesTests : IDisposable
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_AreOrderedByTheLoadOrder_InactiveAfterEveryActiveOne_ThenByTheRecordOrderTheBinaryProvedThem()
+    public void TheDiagnoses_AreOrderedByTheLoadOrder_InactiveAfterEveryActiveOne_ThenByTheRecordOrderTheBinaryProvedThem()
     {
         var disabled = Plugin("Disabled.esp", origin: "DisabledMod", line: 0, enabled: false);
         var second = Plugin("Second.esp", origin: "SecondMod", line: 2);
