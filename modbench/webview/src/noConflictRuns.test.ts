@@ -112,19 +112,15 @@ describe('collapseRuns', () => {
 
 describe('quietColumns', () => {
   const keyOf = (plugin: string) => columnKey({ name: plugin, origin: 'Data/' });
-  const columnOf = (plugin: string, conflictThis: 'Master' | 'IdenticalToMaster' | 'Override' | 'OnlyOne') =>
+  const columnOf = (plugin: string, conflictThis: 'Master' | 'IdenticalToMaster' | 'Override' | undefined) =>
     ({ key: keyOf(plugin), override: compareOverride({ formKey: '000001:Fallout4.esm', plugin, fields: [], conflictThis }) });
   const columns = [columnOf('Fallout4.esm', 'Master'), columnOf('Same.esp', 'IdenticalToMaster'), columnOf('Edit.esp', 'Override'), columnOf('File.esp', 'IdenticalToMaster')];
 
-  it('holds the columns whose copy is identical to the master, but the master\'s and the file\'s', () => {
-    expect(quietColumns(columns, { severalRecords: false, fileColumn: keyOf('File.esp') })).toEqual(new Set([keyOf('Same.esp')]));
-  });
-
-  it('holds no column when several records are compared', () => {
-    expect(quietColumns(columns, { severalRecords: true, fileColumn: undefined })).toEqual(new Set());
-  });
-
-  it('holds no column with no cell of its own', () => {
-    expect(quietColumns([columnOf('Fallout4.esm', 'Master'), columnOf('Empty.esp', 'OnlyOne')], { severalRecords: false, fileColumn: undefined })).toEqual(new Set());
+  it.each([
+    ['the columns identical to the master, but the master\'s and the file\'s', columns, false, keyOf('File.esp'), ['Same.esp']],
+    ['no column when several records are compared', columns, true, undefined, []],
+    ['no column with no cell of its own', [columnOf('Fallout4.esm', 'Master'), columnOf('Empty.esp', undefined)], false, undefined, []],
+  ] as const)('holds %s', (_name, given, severalRecords, fileColumn, held) => {
+    expect(quietColumns(given, { severalRecords, fileColumn })).toEqual(new Set(held.map(keyOf)));
   });
 });

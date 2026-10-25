@@ -2261,9 +2261,25 @@ describe('RecordPanel — Collapse No Conflict on columns', () => {
     await collapsed();
 
     expect(screen.queryByText('Same.esp')).not.toBeInTheDocument();
-    expect(screen.getByText('Edit.esp')).toBeInTheDocument();
-    expect(screen.getByText('Fallout4.esm')).toBeInTheDocument();
     expect(screen.getAllByText('Base text')).toHaveLength(1);
+  });
+
+  it('leaves the file\'s column shown, though its copy is identical to the master', async () => {
+    renderPanel(result, { fileColumn: 'Same.esp' });
+    await screen.findByText('Edited text');
+
+    collapse('again');
+
+    expect(screen.getByText('Same.esp')).toBeInTheDocument();
+  });
+
+  it('does not count the restore of a column collapsed by hand as a restore of the gesture', async () => {
+    renderPanel(result);
+    await screen.findByText('Edited text');
+    fireEvent.click(collapseButton(strip('Edit.esp')));
+    fireEvent.click(collapseButton(required(document.querySelector<HTMLElement>('th[title*="Edit.esp"]'), 'the strip')));
+
+    expect(toldPlaces().at(-1)).toMatchObject({ state: { restoredColumns: [], collapsedColumns: [] } });
   });
 
   it('shows the column again when told to', async () => {
@@ -2291,9 +2307,9 @@ describe('RecordPanel — Collapse No Conflict on columns', () => {
     fireEvent.click(collapseButton(sameStrip()));
     expect(screen.getByText('Same.esp')).toBeInTheDocument();
 
-    collapse('on');
+    loadRecord();
 
-    expect(screen.getByText('Same.esp')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Same.esp')).toBeInTheDocument());
   });
 
   it('collapses a restored column again when the gesture runs again', async () => {

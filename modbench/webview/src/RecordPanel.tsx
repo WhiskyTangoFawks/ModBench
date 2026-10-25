@@ -119,10 +119,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result],
   );
   const severalRecords = result?.overrides.some(o => o.column != null) === true;
-  const collapsedColumns = useMemo(() => {
+  const collapsedByLens = useMemo(() => {
     const quiet = collapseNoConflict ? quietColumns(columns, { severalRecords, fileColumn }) : new Set<ColumnKey>();
-    return new Set<ColumnKey>([...collapsedByHand, ...[...quiet].filter(key => !restoredColumns.has(key))]);
-  }, [collapsedByHand, collapseNoConflict, columns, severalRecords, fileColumn, restoredColumns]);
+    return new Set([...quiet].filter(key => !restoredColumns.has(key)));
+  }, [collapseNoConflict, columns, severalRecords, fileColumn, restoredColumns]);
+  const collapsedColumns = useMemo(() => new Set([...collapsedByHand, ...collapsedByLens]), [collapsedByHand, collapsedByLens]);
   const columnStyle = useCallback((key: ColumnKey | typeof LABEL_COLUMN): React.CSSProperties => ({
     ...(key !== LABEL_COLUMN && dimmedColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
     ...columnWidthStyle(key !== LABEL_COLUMN && collapsedColumns.has(key) ? undefined : columnWidths.get(key)),
@@ -176,12 +177,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   useEffect(() => { if (latestRead.current === 0) void refresh(formKey); }, [formKey, refresh]);
 
   function toggleColumnCollapse(key: ColumnKey) {
-    if (collapsedColumns.has(key)) setRestoredColumns(prev => new Set([...prev, key]));
-    setCollapsedByHand(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else if (!collapsedColumns.has(key)) next.add(key);
-      return next;
-    });
+    const without = (set: ReadonlySet<ColumnKey>) => new Set([...set].filter(held => held !== key));
+    if (collapsedByLens.has(key)) setRestoredColumns(prev => new Set([...prev, key]));
+    if (collapsedByHand.has(key)) setCollapsedByHand(without);
+    else if (!collapsedByLens.has(key)) setCollapsedByHand(prev => new Set([...prev, key]));
   }
 
   // One leaf, one set (ADR-0005).
