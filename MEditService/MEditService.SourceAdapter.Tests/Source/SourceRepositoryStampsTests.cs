@@ -60,13 +60,19 @@ public sealed class SourceRepositoryStampsTests : IDisposable
 
     private void PastTheSettleWindow() => _clock.SetUtcNow(TimeProvider.System.GetUtcNow().AddSeconds(3));
 
+    private async Task TheFileSystemsOwnClockPassesTheSettleWindow()
+    {
+        await Task.Delay(TimeSpan.FromSeconds(2.2));
+        _clock.SetUtcNow(TimeProvider.System.GetUtcNow());
+    }
+
     [Fact]
-    public void AHandEditOfASettledFile_OfTheSameLengthKeepingTheModificationTime_IsStampedAsItsNewBytes()
+    public async Task AHandEditOfASettledFile_OfTheSameLengthKeepingTheModificationTime_IsStampedAsItsNewBytes()
     {
         var file = NpcFile;
         var modified = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         File.SetLastWriteTimeUtc(file, modified);
-        PastTheSettleWindow();
+        await TheFileSystemsOwnClockPassesTheSettleWindow();
         _repository.StampsOf(Plugin);
         var edited = NpcBody.Replace("FixtureNpc", "FixtureNpX", StringComparison.Ordinal);
         File.WriteAllText(file, edited);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { normalize } from 'node:path';
+import { join } from 'node:path';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, Uri } from '../../test/vscodeMock';
 
 const { registerCommand, createQuickPick } = vi.hoisted(() => ({
@@ -71,7 +71,8 @@ const register = (selection: readonly ModlistNode[] = [], answers: InstanceAnswe
   return { fake, reporter };
 };
 
-const tagChange = (change: 'add' | 'remove', tag: string, ...paths: string[]) => ({ verb: 'changePublisherTag', change, tag, paths: paths.map(normalize) });
+const tagChange = (change: 'add' | 'remove', tag: string, ...paths: string[]) => ({ verb: 'changePublisherTag', change, tag, paths });
+const inModM = (relativePath: string) => join('/mods/M', relativePath);
 
 let offered: string[];
 const pickByLabel = (label: string) => createQuickPick.mockImplementationOnce(() => quickPickChoosing<{ label: string }>((items) => {
@@ -129,7 +130,7 @@ describe('add publisher tag (publishing.md, Publisher tags, story 2)', () => {
     await invoke('modbench.mod.addPublisherTag', fileA, [fileA, folderTextures, modM]);
 
     expect(offered).toEqual(['Include', 'Ignore']);
-    expect(fake.calls).toEqual([tagChange('add', 'Ignore', '/mods/M/a.dds', '/mods/M/textures')]);
+    expect(fake.calls).toEqual([tagChange('add', 'Ignore', inModM('a.dds'), inModM('textures'))]);
   });
 
   it('takes the view\'s selection from the palette', async () => {
@@ -138,7 +139,7 @@ describe('add publisher tag (publishing.md, Publisher tags, story 2)', () => {
 
     await invoke('modbench.mod.addPublisherTag');
 
-    expect(fake.calls).toEqual([tagChange('add', 'Include', '/mods/M/b.dds')]);
+    expect(fake.calls).toEqual([tagChange('add', 'Include', inModM('b.dds'))]);
   });
 
   it('changes nothing on Esc', async () => {
@@ -152,7 +153,7 @@ describe('add publisher tag (publishing.md, Publisher tags, story 2)', () => {
 
   it('names each refused row and why, and nothing for those that landed', async () => {
     pickByLabel('Include');
-    const { reporter } = register([], { outsideInstance: new Set([normalize('/mods/M/a.dds')]) });
+    const { reporter } = register([], { outsideInstance: new Set([inModM('a.dds')]) });
 
     await invoke('modbench.mod.addPublisherTag', fileA, [fileA, fileB]);
 
@@ -177,7 +178,7 @@ describe('add publisher tag (publishing.md, Publisher tags, story 2)', () => {
       [{ kind: 'mod', name: 'M' }, { kind: 'file', origin, relativePath: 'textures' }], { tag: 'Include' }));
 
     expect(createQuickPick).not.toHaveBeenCalled();
-    expect(fake.calls).toEqual([tagChange('add', 'Include', '/mods/M', '/mods/M/textures')]);
+    expect(fake.calls).toEqual([tagChange('add', 'Include', '/mods/M', inModM('textures'))]);
   });
 });
 
@@ -189,7 +190,7 @@ describe('remove publisher tag (publishing.md, Publisher tags, story 2)', () => 
     await invoke('modbench.mod.removePublisherTag', folderTextures, [folderTextures, fileA, fileB]);
 
     expect(offered).toEqual(['Include', 'Ignore']);
-    expect(fake.calls).toEqual([tagChange('remove', 'Include', '/mods/M/textures', '/mods/M/a.dds', '/mods/M/b.dds')]);
+    expect(fake.calls).toEqual([tagChange('remove', 'Include', inModM('textures'), inModM('a.dds'), inModM('b.dds'))]);
   });
 
   it('offers nothing, and changes nothing, over rows that hold no tag', async () => {
