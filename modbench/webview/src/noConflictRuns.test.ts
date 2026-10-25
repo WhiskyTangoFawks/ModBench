@@ -91,22 +91,12 @@ describe('collapseRuns', () => {
     expect(collapsed(rows)).toEqual(['A', 'B', 'C']);
   });
 
-  it('shows the rows a restore showed and leaves the other rows collapsed', () => {
-    const rows = rowsOf(metas, [agree('A'), agree('B'), differ('C'), agree('D'), agree('E')]);
-
-    expect(collapsed(rows, ['A', 'B'])).toEqual(['A', 'B', 'C', '2 rows']);
-  });
-
-  it('keeps a restored row shown when a re-read moves the start of its run', () => {
-    const rows = rowsOf(metas, [agree('A'), agree('B'), agree('C'), differ('D'), agree('E')]);
-
-    expect(collapsed(rows, ['B', 'C'])).toEqual(['A', 'B', 'C', 'D', 'E']);
-  });
-
-  it('collapses a row that was not restored once it stops conflicting, and shows one that comes to conflict', () => {
-    const rows = rowsOf(metas, [agree('A'), agree('B'), agree('C'), differ('D'), agree('E')]);
-
-    expect(collapsed(rows, ['A'])).toEqual(['A', '2 rows', 'D', 'E']);
+  it.each([
+    ['shows the rows a restore showed and leaves the other runs collapsed', [agree('A'), agree('B'), differ('C'), agree('D'), agree('E')], ['A', 'B'], ['A', 'B', 'C', '2 rows']],
+    ['keeps a restored row shown when a re-read moves the start of its run', [agree('A'), agree('B'), agree('C'), differ('D'), agree('E')], ['B', 'C'], ['A', 'B', 'C', 'D', 'E']],
+    ['collapses the rows no restore showed, around a differing row', [agree('A'), agree('B'), agree('C'), differ('D'), agree('E')], ['A'], ['A', '2 rows', 'D', 'E']],
+  ])('%s', (_name, fields, restored, expected) => {
+    expect(collapsed(rowsOf(metas, fields), restored)).toEqual(expected);
   });
 
   it('opened on several records, collapses a row unless the records disagree on it', () => {

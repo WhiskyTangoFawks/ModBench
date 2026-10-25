@@ -20,6 +20,7 @@ describe('the globals a record page is given', () => {
     ['mEditFormKey', 7],
     ['mEditColumns', [{ formKey: '000001:A.esp', plugin: 'A.esp' }]],
     ['mEditViewState', { collapsedRows: [] }],
+    ['mEditViewState', { ...place, restoredRows: undefined }],
     ['mEditViewState', { ...place, focusedCell: { plugin: null } }],
     ['mEditLoadError', { failed: 'exploded' }],
   ])('throws on %s of another shape', (name, value) => {

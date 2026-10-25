@@ -83,10 +83,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const enteredCell = useRef(false);
   const scroller = useRef<HTMLDivElement>(null);
   const headerRow = useRef<HTMLTableRowElement>(null);
-  function handleFocusCell(rowKey: string, plugin: ColumnKey | null) {
-    enteredCell.current = true;
-    setPlacedFocus({ rowKey, plugin });
-  }
   // editor.md, The focused cell, story 7: the grid's keys wait while an editor is open.
   const [editorOpen, setEditorOpen] = useState(false);
   const editorMounted = useCallback((editor: HTMLElement | null) => setEditorOpen(editor !== null), []);
@@ -200,6 +196,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     () => collapseNoConflict ? collapseRuns(rows, { severalRecords, restored: restoredRows }) : rows,
     [rows, collapseNoConflict, severalRecords, restoredRows],
   );
+  function handleFocusCell(rowKey: string, plugin: ColumnKey | null) {
+    enteredCell.current = true;
+    const run = shownRows.find((row): row is RunRow => row.kind === 'run' && row.key === rowKey);
+    setPlacedFocus({ rowKey: run?.holds[0] ?? rowKey, plugin });
+  }
   // A focused cell in a run that collapses is on the run's row until the run is restored.
   const focusedCell = useMemo<FocusedCell | null>(() => {
     const run = shownRows.find((row): row is RunRow => row.kind === 'run' && row.holds.includes(placedFocus?.rowKey ?? ''));
@@ -207,8 +208,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   }, [shownRows, placedFocus]);
   const restoreRun = (run: RunRow) => {
     setRestoredRows(prev => new Set([...prev, ...run.holds]));
-    setPlacedFocus(prev => (prev?.rowKey === run.key ? { rowKey: run.holds[0] ?? run.key, plugin: null } : prev));
-  };
+      };
   const focused = useMemo<GridCell | ValueCell | undefined>(
     () => focusedCell ? shownCell(shownRows, collapsedRows, collapsedColumns, focusedCell) : undefined,
     [shownRows, collapsedRows, collapsedColumns, focusedCell],
@@ -239,8 +239,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         void refresh(formKey);
       }
       if (msg.type === EXTENSION_TO_WEBVIEW.COLLAPSE_NO_CONFLICT) {
-        setCollapseNoConflict(msg.on);
-        if (msg.on && msg.again) setRestoredRows(new Set());
+        setCollapseNoConflict(msg.lens !== 'off');
+        if (msg.lens === 'again') setRestoredRows(new Set());
       }
       if (msg.type === EXTENSION_TO_WEBVIEW.MODS_CHANGED) setModsByOrigin(msg.modsByOrigin);
       if (msg.type === EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL) pasteIntoFocused(msg.text);
