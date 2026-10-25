@@ -26,6 +26,7 @@ class FixtureMEdit(unittest.TestCase):
         checked_in = changed(INSTANCE)
         with fixture_medit() as fixture:
             plugins = call('GET', fixture.url + '/plugins')
+        self.assertFalse(pathlib.Path(fixture.load_order['instanceRoot']).is_relative_to(INSTANCE))
         self.assertEqual([(plugin['name'], plugin['origin']) for plugin in plugins], [
             ('MBDevFixes.esm', 'MB-DEV Fixes'),
             ('MBDevFixesAddon.esp', 'MB-DEV Fixes Addon'),

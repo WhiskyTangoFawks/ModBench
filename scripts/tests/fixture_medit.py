@@ -49,7 +49,7 @@ class Fixture(NamedTuple):
 
 def copy_checked_in(source: pathlib.Path, destination: pathlib.Path) -> None:
     tracked = subprocess.run(
-        ['git', 'ls-files', '-z'], cwd=source, capture_output=True, text=True, check=True).stdout.split('\0')[:-1]
+        ['git', 'ls-files', '-z'], cwd=source, capture_output=True, encoding='utf-8', check=True).stdout.split('\0')[:-1]
     for relative in tracked:
         copy = destination / relative
         copy.parent.mkdir(parents=True, exist_ok=True)
@@ -263,4 +263,5 @@ def file_stamps(folder: pathlib.Path) -> list[FileStamp]:
 
 def changed(folder: pathlib.Path) -> list[str]:
     return subprocess.run(
-        ['git', 'status', '--porcelain', '-z', '--', '.'], cwd=folder, capture_output=True, text=True, check=True).stdout.split('\0')[:-1]
+        ['git', 'status', '--porcelain', '-z', '--', '.'],
+        cwd=folder, capture_output=True, encoding='utf-8', check=True).stdout.split('\0')[:-1]
