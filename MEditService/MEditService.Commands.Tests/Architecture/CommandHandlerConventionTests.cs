@@ -1,5 +1,4 @@
 using System.Reflection;
-using MEditService.Commands.Build;
 using MEditService.Commands.Composition;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -7,41 +6,6 @@ namespace MEditService.Commands.Tests.Architecture;
 
 public sealed class CommandHandlerConventionTests
 {
-    private static readonly Type[] SingleWriteHandlers =
-    [
-        typeof(CreateRecordChangesHandler),
-        typeof(EditRecordHandler),
-        typeof(CopyRecordHandler),
-        typeof(CreateRecordHandler),
-        typeof(DeleteRecordHandler),
-        typeof(CreatePluginHandler),
-        typeof(CreatePluginInModHandler),
-        typeof(PutLoadOrderHandler),
-        typeof(RenameSourceChangesHandler),
-        typeof(MoveLastWrittenHandler),
-    ];
-
-    private static readonly Type[] SelectionHandlers =
-    [
-        typeof(DeleteRecordChangesHandler),
-        typeof(CompilePluginHandler),
-        typeof(DecompilePluginHandler),
-        typeof(CopyRecordChangesHandler),
-        typeof(BuildModHandler),
-        typeof(DecompileAndCommitModHandler),
-        typeof(DecompileAndRepairPluginHandler),
-        typeof(UpdateManifestHandler),
-        typeof(RestoreFromManifestHandler),
-    ];
-
-    private static readonly Type[] HandlersThatWriteNothing =
-    [
-        typeof(EditRecordChangesHandler),
-        typeof(RepairPreviewsHandler),
-    ];
-
-    private static readonly Type[] Handlers = [.. SingleWriteHandlers, .. SelectionHandlers, .. HandlersThatWriteNothing];
-
     private static readonly Type[] Carriers =
     [
         typeof(ArchiveRefused),
@@ -86,16 +50,22 @@ public sealed class CommandHandlerConventionTests
         typeof(RenameSourceResult),
         typeof(RepairPreviewsResult),
         typeof(RestoreFromManifestResult),
-        typeof(RestoreRefusal),
         typeof(RestoreRefused),
-        typeof(UpdateManifestRefusal),
         typeof(UpdateManifestRefused),
         typeof(UpdateManifestResult),
     ];
 
     private const string CommandsNamespace = "MEditService.Commands";
 
-    public static IEnumerable<object[]> EveryHandler => Handlers.Select(handler => new object[] { handler });
+    private static readonly Type[] Handlers =
+    [
+        .. typeof(EditRecordChangesHandler).Assembly.GetExportedTypes()
+            .Where(type => (type.Namespace == CommandsNamespace || type.Namespace?.StartsWith(CommandsNamespace + ".", StringComparison.Ordinal) == true)
+                && type.Name.EndsWith("Handler", StringComparison.Ordinal))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal),
+    ];
+
+    public static TheoryData<Type> EveryHandler => [.. Handlers];
 
     [Theory]
     [MemberData(nameof(EveryHandler))]

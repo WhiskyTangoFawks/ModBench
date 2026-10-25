@@ -18,8 +18,6 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
     private TestEditor EditService() => _fixture.EditHandler;
 
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
-
     private string ChildBody() => _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body;
 
     private string WorkingTreeCell() => _fixture.Document(_fixture.EmbedCell.ToString()).Require().Body;
@@ -141,9 +139,10 @@ public sealed partial class EmbeddedChildEditTests : IDisposable
 
         var renamed = _fixture.DocumentCarrying("RenamedQuest");
         Assert.Equal(_fixture.Quest.ToString(), renamed.FormKey);
-        Assert.All(
-            new[] { ContainerModFixture.DialogTopicEditorId, ContainerModFixture.ResponseEditorId, ContainerModFixture.DialogBranchEditorId, ContainerModFixture.SceneEditorId },
-            child => Assert.Equal(renamed.FormKey, _fixture.DocumentCarrying(child).FormKey));
+        Assert.Equal(
+            [renamed.FormKey, renamed.FormKey, renamed.FormKey, renamed.FormKey],
+            new[] { ContainerModFixture.DialogTopicEditorId, ContainerModFixture.ResponseEditorId, ContainerModFixture.DialogBranchEditorId, ContainerModFixture.SceneEditorId }
+                .Select(child => _fixture.DocumentCarrying(child).FormKey));
     }
 
     [Fact]

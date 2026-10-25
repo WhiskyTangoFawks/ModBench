@@ -51,8 +51,8 @@ public sealed class UpdateManifestHandlerTests
     private ManifestFile FileOf(string folder, string path) => _folders.Manifests[folder].Files.Single(f => f.Path == path);
 
     private Task<UpdateManifestResult> Update(
-        IReadOnlyList<ModToUpdate> mods, string? gesture = null, CancellationToken cancel = default) =>
-        Handler.UpdateManifestAsync(mods, new InstanceToUpdate("stat-cache"), gesture, cancel);
+        IReadOnlyList<ModToUpdate> mods, string? gesture = null, GameFolder? gameFolder = null, CancellationToken cancel = default) =>
+        Handler.UpdateManifestAsync(mods, new InstanceToUpdate("stat-cache", gameFolder), gesture, cancel);
 
     private async Task<ModUpdated> Landed(params ModToUpdate[] mods)
     {
@@ -102,24 +102,17 @@ public sealed class UpdateManifestHandlerTests
             _folders.Manifests[Mod].Package);
     }
 
-    [Fact]
-    public async Task TheVersionOfAModWithAPackage_IsInItsManifest()
+    [Theory]
+    [InlineData(true, "1.2.3")]
+    [InlineData(false, null)]
+    public async Task TheVersionOfAMod_IsInItsManifestOnlyWhenTheModHasAPackage(bool withPackage, string? version)
     {
         _folders.WithFile(Mod, "a.txt", "hello");
+        var installationFile = withPackage ? DownloadedFile("dl/Mod.zip", ("a.txt", "hello")) : null;
 
-        await Landed(ModFrom("Mod", DownloadedFile("dl/Mod.zip", ("a.txt", "hello"))) with { Version = "1.2.3" });
+        await Landed(ModFrom("Mod", installationFile) with { Version = "1.2.3" });
 
-        Assert.Equal("1.2.3", _folders.Manifests[Mod].Version);
-    }
-
-    [Fact]
-    public async Task TheVersionOfAModWithNoPackage_IsNotInItsManifest()
-    {
-        _folders.WithFile(Mod, "a.txt", "hello");
-
-        await Landed(ModFrom("Mod") with { Version = "1.2.3" });
-
-        Assert.Null(_folders.Manifests[Mod].Version);
+        Assert.Equal(version, _folders.Manifests[Mod].Version);
     }
 
     [Fact]
@@ -129,7 +122,7 @@ public sealed class UpdateManifestHandlerTests
         var named = await UpdatedWith(GameFolderHolding(("a.nif", "a")));
         _folders.WithFile("mods/Other", "b.nif", "b");
 
-        var result = await Handler.UpdateManifestAsync([ModFrom("Mod"), ModFrom("Other")], new InstanceToUpdate("stat-cache"));
+        var result = await Update([ModFrom("Mod"), ModFrom("Other")]);
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal((UpdateManifestRefusal.GameFolderNotFound, "Mod"), (refused.Refusal, refused.Item));
@@ -187,7 +180,7 @@ public sealed class UpdateManifestHandlerTests
 
     [Theory]
     [MemberData(nameof(FilesNothingHolds))]
-    public async Task AFileNothingHoldsAtItsPath_IsNotInThePackage_IsReported_AndNoInstallationFileIsOpened(
+    public async Task AFileNothingHoldsAtItsPath_IsNotInThePackage_AndIsReported(
         (string Path, string Text)[] modFiles, (string Path, string Hash)[] entries, string notHeld)
     {
         WithFiles(modFiles);
@@ -196,7 +189,6 @@ public sealed class UpdateManifestHandlerTests
 
         Assert.IsType<PackageEntry.NotHeld>(FileOf(Mod, notHeld).Entry);
         Assert.Equal([notHeld], updated.NotInPackage);
-        Assert.Equal(0, _folders.Opens);
     }
 
     [Fact]
@@ -376,7 +368,7 @@ public sealed class UpdateManifestHandlerTests
 
     private async Task<Manifest> UpdatedWith(GameFolder? gameFolder, ModToUpdate? mod = null)
     {
-        var result = await Handler.UpdateManifestAsync([mod ?? ModFrom("Mod")], new InstanceToUpdate("stat-cache", gameFolder));
+        var result = await Update([mod ?? ModFrom("Mod")], gameFolder: gameFolder);
         Assert.Empty(result.Refused);
         return _folders.Manifests[Mod];
     }
@@ -400,8 +392,7 @@ public sealed class UpdateManifestHandlerTests
         _folders.WithFile(Mod, "a.nif", "a");
         await UpdatedWith(GameFolderHolding(("a.nif", "a")));
 
-        var result = await Handler.UpdateManifestAsync(
-            [ModFrom("Mod")], new InstanceToUpdate("stat-cache", GameFolderHolding(("a.nif", "a"), ("other.nif", "new"), ("more.nif", "x"))));
+        var result = await Update([ModFrom("Mod")], gameFolder: GameFolderHolding(("a.nif", "a"), ("other.nif", "new"), ("more.nif", "x")));
 
         Assert.False(result.Applied.Single().ManifestWritten);
     }

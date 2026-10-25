@@ -42,48 +42,39 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
     }
 
     [Fact]
-    public async Task Init_HandsTheAdapterTheHashOfTheBytesEachPluginsSourceWasReadFrom()
+    public async Task Init_ParksTheHashOfTheBytesEachPluginsSourceWasReadFrom()
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
-        var source = new FakeSourceAdapter();
 
-        await Init(new ReadingAs("READ-FROM"), source);
+        await Init(new ReadingAs("READ-FROM"));
 
-        var (_, handedOver, _) = Assert.Single(source.InitCalls);
-        Assert.Equal([("First.esp", "READ-FROM")], handedOver.Select(handed => (handed.Plugin.Address.Name, handed.Plugin.BinarySha256)));
+        Assert.Equal(
+            ["READ-FROM"],
+            TestAdapters.Source().OverFolder(new PluginProvider.FromMod(ModName, _modFolder, _modFolder), GameRelease.Fallout4)
+                .LastWrittenBinarySha256s(new PluginAddress("First.esp", ModName)).Value());
     }
 
-    [Fact]
-    public async Task Init_OfAPluginInAModThatAlreadyHasARepository_RefusesTheMod_PointingAtDecompile_AndCommitsNothing()
+    private static readonly Dictionary<string, Func<FakeSourceAdapter, string, FakeSourceAdapter>> Repositories = new()
     {
-        var source = new FakeSourceAdapter().WithSourceMod(_modFolder);
+        ["a source mod"] = (source, folder) => source.WithSourceMod(folder),
+        ["a repository with no main"] = (source, folder) => source.HoldingAnotherRepository(folder),
+    };
 
-        var message = await RefusedByARepositoryHeldIn(source);
-
-        Assert.Contains("decompile", message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Init_IntoAModWhoseRepositoryHasHistoryButNoMain_RefusesTheMod_AndChangesNothingOfTheRepository()
-    {
-        var source = new FakeSourceAdapter().HoldingAnotherRepository(_modFolder);
-
-        await RefusedByARepositoryHeldIn(source);
-    }
-
-    private async Task<string> RefusedByARepositoryHeldIn(FakeSourceAdapter source)
+    [Theory]
+    [InlineData("a source mod", "already holds a repository. To put a plugin's source into its working tree, decompile it.")]
+    [InlineData("a repository with no main", "already holds a repository with no main branch, made outside Modbench.")]
+    public async Task Init_IntoAFolderThatAlreadyHoldsARepository_RefusesTheMod_AndInitsNothing(string held, string reason)
     {
         WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
-        var result = await Init(TestAdapters.Mutagen(), source);
+        var result = await Init(TestAdapters.Mutagen(), Repositories[held](new FakeSourceAdapter(), _modFolder));
 
         Assert.Empty(result.Applied);
         var refused = Assert.Single(result.Refused);
-        Assert.Equal((ModName, DecompileAndCommitRefusal.AlreadyInitialized), (refused.Item, refused.Refusal));
-        Assert.Contains(_modFolder, refused.Message, StringComparison.Ordinal);
-        Assert.Empty(source.InitCalls);
-        return refused.Message;
+        Assert.Equal(
+            (ModName, DecompileAndCommitRefusal.AlreadyInitialized, $"'{_modFolder}' {reason}"),
+            (refused.Item, refused.Refusal, refused.Message));
     }
 
     public static TheoryData<string[], string[], string[], string[]> PluginsFailingTheRoundTripGate() => new()
@@ -109,7 +100,7 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
         Assert.Equal((ModName, DecompileAndCommitRefusal.RoundTripFailed), (refused.Item, refused.Refusal));
         Assert.All(named, name => Assert.Contains(name, refused.Message, StringComparison.Ordinal));
         Assert.All(notNamed, name => Assert.DoesNotContain(name, refused.Message, StringComparison.Ordinal));
-        Assert.Empty(source.InitCalls);
+        Assert.False(source.IsSourceMod(_modFolder));
     }
 
     [Fact]
@@ -126,7 +117,7 @@ public sealed class DecompileAndCommitShapeTests : IDisposable
         Assert.Equal((ModName, DecompileAndCommitRefusal.PluginsRefused), (refused.Item, refused.Refusal));
         Assert.Contains("FirstNpc", refused.Message, StringComparison.Ordinal);
         Assert.Contains("Second_en.STRINGS", refused.Message, StringComparison.Ordinal);
-        Assert.Empty(source.InitCalls);
+        Assert.False(source.IsSourceMod(_modFolder));
     }
 
     private sealed class RoundTripFailsForEvery(params string[] plugins) : DelegatingPluginAdapter(TestAdapters.Mutagen())

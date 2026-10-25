@@ -49,7 +49,6 @@ public abstract class TestInstance : IDisposable
 
     public LoadOrderSnapshot LoadOrder => Seal();
 
-    /// <summary>The same snapshot as a list, for a test reconciling an index over these trees.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries
     {
         get

@@ -112,13 +112,13 @@ public sealed class RestoreASourceModTests : IDisposable
         var changed = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         changed.Doors.AddNew("ChangedOutsideModbench");
         changed.WriteToBinary(plugin);
-        var changedBytes = File.ReadAllBytes(plugin);
         _holder.Apply(SnapshotPlugins.Snapshot(_root, _root, GameRelease.Fallout4,
             [new LoadOrderEntry("Fixture.esp", plugin, ModName, 0, Enabled: true, Winning: true, NamedProvider: new PluginProvider.FromMod(ModName, ModFolder, null))]));
 
         Assert.Single((await Restore(pin)).Applied);
 
-        Assert.NotEqual(changedBytes, File.ReadAllBytes(plugin));
+        using var restored = Fallout4Mod.CreateFromBinaryOverlay(new ModPath(ModKey.FromFileName("Fixture.esp"), plugin), Fallout4Release.Fallout4);
+        Assert.Equal(["FixtureDoor"], restored.Doors.Select(door => door.EditorID));
     }
 
     private async Task<(string Plugin, string Pin)> ManifestedPluginSource()
@@ -262,8 +262,8 @@ public sealed class RestoreASourceModTests : IDisposable
     {
         if (pin is not null) _submodule.Pin(pin);
         return TestEditService.RestoreHandler(_holder, notifications, source ?? TestAdapters.Source(), _folders).RestoreAsync(
-            [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch))],
-            new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".excluded", Archives: null), cancel: cancel);
+            [new ModToRestore(ModName, ModFolder, null, ["meta.ini"], pin is null ? null : new Submodule(SourceFolder, pin, branch), UnreadableGameFiles: null, UnreadableInstallationFile: null)],
+            new InstanceToRestore(Path.Combine(_root, "stat-cache"), ".excluded", Archives: null, GameFolder: null), "restore", cancel);
     }
 
     private string Commit(string configuration, string mesh) =>

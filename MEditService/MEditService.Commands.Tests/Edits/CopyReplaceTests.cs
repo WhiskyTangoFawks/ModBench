@@ -1,9 +1,9 @@
-using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Plugins;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -12,8 +12,6 @@ public sealed class CopyReplaceTests : IDisposable
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
 
     public void Dispose() => _fixture.Dispose();
-
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     private CopyRecordResult CopyAsOverride(bool replace, params FormKey[] records) =>
         _fixture.CopyHandler.CopySync(

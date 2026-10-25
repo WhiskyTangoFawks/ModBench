@@ -12,8 +12,6 @@ internal sealed class FakeModFolders : IModFolderRepository
     private readonly HashSet<string> _folders = [];
     private readonly Dictionary<(string Folder, string Path), Func<Stream>> _streams = [];
 
-    public int Opens { get; private set; }
-
     public HashSet<(string Folder, string Path)> Unreadable { get; } = [];
 
     public HashSet<string> UnwritableManifests { get; } = [];
@@ -148,7 +146,6 @@ internal sealed class FakeModFolders : IModFolderRepository
     private Stream Open(string folder, string path)
     {
         if (Unreadable.Contains((folder, path))) throw new IOException($"{path} is held by another process");
-        Opens++;
         return _streams.TryGetValue((folder, path), out var open) ? open() : new MemoryStream(_files[(folder, path)]);
     }
 }

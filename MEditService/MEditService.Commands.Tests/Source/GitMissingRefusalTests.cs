@@ -32,15 +32,18 @@ public sealed class GitMissingRefusalTests : IDisposable
     private static readonly Gesture Decompile = new("decompile", (services, mod, force) => Whole(services.GetRequiredService<DecompilePluginHandler>()
         .DecompileAsync([mod.Plugin], force)));
 
+    private static readonly Gesture DecompileAndCommit = new("decompile-and-commit", (services, mod, _) =>
+        Whole(services.GetRequiredService<DecompileAndCommitModHandler>().DecompileAndCommitAsync(ToDecompileAndCommit.In(null, SourceEditFixture.ModFolderOrigin))));
+
     private static readonly Gesture Compile = new("compile", (services, mod, _) => Whole(services.GetRequiredService<CompilePluginHandler>()
         .CompileAsync([mod.Plugin])));
 
     private static readonly Gesture DecompileAndRepair = new("decompile-and-repair", (services, mod, force) =>
         Whole(services.GetRequiredService<DecompileAndRepairPluginHandler>()
-            .DecompileAndRepairAsync([new PluginToRepair(mod.Plugin, "hash", mod.ModFolder)], [], force)));
+            .DecompileAndRepairAsync([new PluginToRepair(mod.Plugin, "hash", mod.ModFolder)], [], force, agreedDrops: false, CancellationToken.None)));
 
     private static readonly Gesture Build = new("build", (services, mod, _) => Whole(services.GetRequiredService<BuildModHandler>().BuildAsync(
-        [new ModToBuild(SourceEditFixture.ModFolderOrigin, mod.ModFolder, mod.ModFolder, [], null)],
+        [new ModToBuild(SourceEditFixture.ModFolderOrigin, mod.ModFolder, mod.ModFolder, [], null, IsSubmodule: false)],
         new InstanceToBuild("", null, Path.Combine(mod.DataFolder, "stat-cache")))));
 
     private static readonly Gesture Edit = new("edit", (services, mod, _) => Task.FromResult(Single(
@@ -54,7 +57,7 @@ public sealed class GitMissingRefusalTests : IDisposable
         services.GetRequiredService<RenameSourceChangesHandler>().RenameSource(mod.Plugin, "Renamed.esp")
             .Match(_ => ("Landed", ""), (refusal, message) => (refusal.ToString(), message))));
 
-    public static TheoryData<Gesture> Every { get; } = [Delete, Copy, Decompile, Compile, DecompileAndRepair, Build, Edit, Create, RenameSource];
+    public static TheoryData<Gesture> Every { get; } = [Delete, Copy, Decompile, DecompileAndCommit, Compile, DecompileAndRepair, Build, Edit, Create, RenameSource];
 
     public static TheoryData<Gesture> ThatWriteWhenTheSourceHoldsChanges { get; } = [Decompile, Compile];
 

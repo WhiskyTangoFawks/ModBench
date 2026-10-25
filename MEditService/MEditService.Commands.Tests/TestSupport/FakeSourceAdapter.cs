@@ -15,9 +15,6 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     private readonly Dictionary<string, FakeMod> _mods = new(StringComparer.Ordinal);
     private readonly HashSet<string> _foreignRepositories = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SourceToBuild> _builds = new(StringComparer.Ordinal);
-    private readonly List<(string SourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins, IReadOnlyList<Asset> Assets)> _inits = [];
-
-    internal IReadOnlyList<(string SourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins, IReadOnlyList<Asset> Assets)> InitCalls => _inits;
 
     internal FakeSourceAdapter Building(string sourceFolder, SourceToBuild source)
     {
@@ -73,14 +70,15 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public bool HoldsAnotherRepository(string modFolder) => _foreignRepositories.Contains(modFolder);
 
-
     public string ContentStamp(string text) => throw Unreached();
 
     public SourceFailure? Init(
         string sourceFolder, string output, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> plugins,
         IReadOnlyList<Asset> assets, (PluginAddress Plugin, TreeCommit Commit)? repair = null)
     {
-        _inits.Add((sourceFolder, [.. plugins.Select(held => repair is var (name, commit) && held.Plugin.Address == name ? (commit.Tree, held.Plugin) : held)], assets));
+        if (IsSourceMod(sourceFolder) || HoldsAnotherRepository(sourceFolder))
+            throw new InvalidOperationException($"'{sourceFolder}' already holds a repository.");
+        _mods[sourceFolder] = new FakeMod(sourceFolder, []);
         return null;
     }
 

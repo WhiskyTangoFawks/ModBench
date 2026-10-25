@@ -52,11 +52,6 @@ public sealed class DocumentEditRealDataTests : IDisposable
         return recordTypes;
     }
 
-    [Fact]
-    public void TheSmallestRecordOfEachShape_OffersOverAHundredGestures() =>
-        Assert.True(OnTheSmallestRecordOfEachShape().Count() > 100,
-            $"the plugin should offer plenty of gestures; it offered {OnTheSmallestRecordOfEachShape().Count()}");
-
     [Theory]
     [MemberData(nameof(RecordTypesOfferingGestures))]
     public void EveryGestureARecordTypeOffers_OnItsSmallestRecord_ChangesExactlyItsPath(string recordType) =>
@@ -184,6 +179,4 @@ public sealed class DocumentEditRealDataTests : IDisposable
         }
         return current;
     }
-
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 }

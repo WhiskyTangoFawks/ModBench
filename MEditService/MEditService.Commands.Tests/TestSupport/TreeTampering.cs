@@ -20,13 +20,6 @@ internal static class TreeTampering
     internal static string DirectoryOf(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
         FolderOf(FileOf(modFolder, plugin, identity));
 
-    /// <summary>The block directory holding an exterior cell's sub-block, cell directory and document.</summary>
-    internal static string BlockDirectoryOf(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
-        FolderOf(FolderOf(DirectoryOf(modFolder, plugin, identity)));
-
-    internal static DateTime LastWrittenAt(string modFolder, PluginAddress plugin, RecordIdentity identity) =>
-        File.GetLastWriteTimeUtc(FileOf(modFolder, plugin, identity));
-
     /// <summary>Every file under <paramref name="directory"/> with its text, by path within it.</summary>
     internal static SortedDictionary<string, string> FilesUnder(string directory) =>
         Directory.Exists(directory)

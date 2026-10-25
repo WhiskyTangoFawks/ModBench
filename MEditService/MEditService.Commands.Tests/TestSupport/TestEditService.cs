@@ -61,9 +61,8 @@ internal static class TestEditService
         ISourceAdapter? source = null) =>
         Over(holder, adapter: adapter, notifications: notifications, source: source).GetRequiredService<DecompileAndCommitModHandler>();
 
-    internal static BuildModHandler BuildModHandler(
-        LoadOrderHolder holder, INotificationPublisher? notifications = null, ISourceAdapter? source = null, IModFolderRepository? modFolders = null) =>
-        Over(holder, notifications: notifications, source: source, modFolders: modFolders).GetRequiredService<BuildModHandler>();
+    internal static BuildModHandler BuildModHandler(LoadOrderHolder holder, ISourceAdapter? source = null, IModFolderRepository? modFolders = null) =>
+        Over(holder, source: source, modFolders: modFolders).GetRequiredService<BuildModHandler>();
 
     internal static UpdateManifestHandler UpdateManifestHandler(IModFolderRepository modFolders, INotificationPublisher notifications) =>
         Over(new LoadOrderHolder(), notifications: notifications, modFolders: modFolders).GetRequiredService<UpdateManifestHandler>();
