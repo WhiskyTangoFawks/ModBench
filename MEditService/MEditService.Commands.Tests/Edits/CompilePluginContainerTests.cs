@@ -105,9 +105,9 @@ public sealed class CompilePluginContainerTests : TestInstance
 
         var worldspace = mod.Worldspaces.Single(w => w.FormKey == _worldspace);
 
-        Assert.NotNull(worldspace.TopCell);
-        Assert.Equal(_topCell, worldspace.TopCell.Require().FormKey);
-        Assert.Equal(["Top_Temp"], [.. worldspace.TopCell.Temporary.Select(r => r.EditorID.Require())]);
+        var topCell = worldspace.TopCell.Require();
+        Assert.Equal(_topCell, topCell.FormKey);
+        Assert.Equal(["Top_Temp"], [.. topCell.Temporary.Select(r => r.EditorID.Require())]);
 
         var writtenBlock = Assert.Single(worldspace.SubCells);
         Assert.Equal(0, writtenBlock.BlockNumberX);

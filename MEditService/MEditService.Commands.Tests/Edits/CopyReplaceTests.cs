@@ -36,7 +36,7 @@ public sealed class CopyReplaceTests : IDisposable
 
     public static TheoryData<string, Func<ContainerCopyFixture, FormKey[]>, string, string, string> HeldRecords => new()
     {
-        { "a flat record", f => [f.FlatNpc], "SourceFlatNpc", "HeightMax", "0.75" },
+        { "a flat record", f => [f.FlatNpc], ContainerCopyFixture.FlatNpcEditorId, "HeightMax", "0.75" },
         { "an interior cell, holding a reference copied in", f => [f.InteriorCell, f.PersistentRef], ContainerCopyFixture.InteriorCellEditorId, "WaterHeight", "7.0" },
         { "a placed reference", f => [f.PersistentRef], ContainerCopyFixture.PersistentRefEditorId, "Scale", "2.5" },
         { "a topic in its quest's document, holding a response copied in", f => [f.DialogTopic, f.Response1], ContainerCopyFixture.QuestEditorId, "Priority", "7.0" },

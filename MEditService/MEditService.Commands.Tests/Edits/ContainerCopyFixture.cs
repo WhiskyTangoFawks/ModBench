@@ -27,6 +27,7 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
     public const string QuestEditorId = "SourceQuest";
     public FormKey Quest { get; }
 
+    public const string FlatNpcEditorId = "SourceFlatNpc";
     public FormKey FlatNpc { get; }
 
     public const string DialogTopicEditorId = "SourceTopic";
@@ -109,7 +110,7 @@ public sealed class ContainerCopyFixture : TestInstance, ICompiledPlugins
     {
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
 
-        var flatNpc = sourceMod.Npcs.AddNew("SourceFlatNpc");
+        var flatNpc = sourceMod.Npcs.AddNew(FlatNpcEditorId);
 
         var quest = new Quest(sourceMod) { EditorID = QuestEditorId };
         var dialogTopic = new DialogTopic(sourceMod) { EditorID = DialogTopicEditorId };

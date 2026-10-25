@@ -35,7 +35,7 @@ public sealed class CopyRecordChangesHandlerTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, "ABCDEF:Source.esm")], mode, [mod.DestinationPlugin], replace: false);
+        var result = mod.CopyHandler.CopySync([new RecordAt(mod.SourcePlugin, $"ABCDEF:{CopyFixture.SourcePluginName}")], mode, [mod.DestinationPlugin], replace: false);
 
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.OnlyRefused().Refusal);
     }

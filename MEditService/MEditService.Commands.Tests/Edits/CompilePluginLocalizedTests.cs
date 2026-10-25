@@ -27,7 +27,7 @@ public sealed class CompilePluginLocalizedTests : TestInstance
     public async Task Compile_ALocalizedPlugin_WritesItLocalized_WithStringsBesideItByteIdenticalToTheInput()
     {
         var input = StringsFiles();
-        Assert.NotEmpty(input);
+        Assert.Equal(["Fixture_en.DLSTRINGS", "Fixture_en.ILSTRINGS", "Fixture_en.STRINGS"], input.Keys.Order(StringComparer.Ordinal));
         Directory.Delete(StringsFolder, recursive: true);
 
         using var compiled = await this.CompiledAsync(_plugin);
