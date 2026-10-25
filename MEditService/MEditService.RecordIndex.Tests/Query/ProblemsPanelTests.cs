@@ -84,7 +84,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_AFileThePluginsReadStoppedAt_IsAProblemOnThatFile_SayingWhy()
+    public void AFileThePluginsReadStoppedAt_IsAProblemOnThatFile_SayingWhy()
     {
         var plugin = new Plugin("Strayed.esp", RefersTo: null);
         Build(plugin);
@@ -102,10 +102,12 @@ public sealed class ProblemsPanelTests : IDisposable
         Assert.Null(answer.Failure);
     }
 
-    [Fact]
-    public void GetProblems_FilesThatClaimOneFormKey_AreAProblemOnEach_NamingIt()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FilesThatClaimOneFormKey_AreAProblemOnEach_NamingIt_ActiveOrNot(bool enabled)
     {
-        var plugin = new Plugin("Twice.esp", RefersTo: null);
+        var plugin = new Plugin("Twice.esp", RefersTo: null, Enabled: enabled);
         Build(plugin);
         var (document, backup) = BackupClaimingTheFormKeyOf(plugin, "Referrer");
         using var index = Indexes.Reconciled(Fixture);
@@ -118,7 +120,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_APluginWhoseReadStopsAtAFile_IsAnsweredWithThatFile_AndTheLinksItsLastGoodReadLeft()
+    public void APluginWhoseReadStopsAtAFile_IsAnsweredWithThatFile_AndTheLinksItsLastGoodReadLeft()
     {
         var (index, document, backup) = BrokenReadFromItsTree_ThenStoppedByAClaimedFormKey();
         using var _ = index;
@@ -134,7 +136,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_APluginWhoseReadStopsAtAFile_AndWhoseLinksTheTreeCannotPlace_IsAnsweredWithThatFile_AndTheFailure()
+    public void APluginWhoseReadStopsAtAFile_AndWhoseLinksTheTreeCannotPlace_IsAnsweredWithThatFile_AndTheFailure()
     {
         var (index, document, backup) = BrokenReadFromItsTree_ThenStoppedByAClaimedFormKey();
         using var _ = index;
@@ -148,7 +150,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_APluginWhosePluginSourceIsUnreadable_IsAnsweredWithTheFilesItsReadStoppedAt_AndNoLinkOfItsPluginFile()
+    public void APluginWhosePluginSourceIsUnreadable_IsAnsweredWithTheFilesItsReadStoppedAt_AndNoLinkOfItsPluginFile()
     {
         var plugin = new Plugin("FellBack.esp");
         Build(plugin);
@@ -165,7 +167,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_APluginWhosePluginSourceIsMissing_IsAnsweredWithNoProblems()
+    public void APluginWhosePluginSourceIsMissing_IsAnsweredWithNoProblems()
     {
         var plugin = new Plugin("NoSource.esp");
         Build(plugin);
@@ -179,7 +181,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_AMissingReferenceOfACompiledPlugin_IsAProblemOnTheReferrersFile_NamingItsTarget_WordedAsTheGridWordsIt()
+    public void AMissingReferenceOfACompiledPlugin_IsAProblemOnTheReferrersFile_NamingItsTarget_WordedAsTheGridWordsIt()
     {
         var plugin = new Plugin("Refers.esp");
         using var index = Reconciled(plugin);
@@ -196,7 +198,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_APluginWhoseReferrerTheTreeCannotPlace_IsAFailureOfThatPluginAlone_NotOfTheAnswer()
+    public void APluginWhoseReferrerTheTreeCannotPlace_IsAFailureOfThatPluginAlone_NotOfTheAnswer()
     {
         var gone = new Plugin("Gone.esp");
         var intact = new Plugin("Intact.esp");
@@ -213,7 +215,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_AskedBeforeASnapshotNoModProvidesACompiledPluginIn_IsReconciled_AnswersThatPluginWithAFailure()
+    public void AskedBeforeASnapshotNoModProvidesACompiledPluginIn_IsReconciled_TheProblemsAnswerThatPluginWithAFailure()
     {
         var plugin = new Plugin("Unprovided.esp");
         Build(plugin);
@@ -240,7 +242,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_AnActiveCompiledPluginWithNoMissingReference_IsAnsweredWithNoProblems()
+    public void AnActiveCompiledPluginWithNoMissingReference_IsAnsweredWithNoProblems()
     {
         var plugin = new Plugin("Clean.esp", RefersTo: null);
         using var index = Reconciled(plugin);
@@ -253,7 +255,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_AnActivePluginNoTreeBacks_IsNotAnswered_ForItHasNoSourceFile()
+    public void AnActivePluginNoTreeBacks_IsNotAnswered_ForItHasNoSourceFile()
     {
         using var index = Reconciled(new Plugin("Binary.esp", CompiledPlugin: false));
 
@@ -261,7 +263,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_AMissingReferenceOfACompiledPluginThatIsNotActive_IsAProblemOnItsFile()
+    public void AMissingReferenceOfACompiledPluginThatIsNotActive_IsAProblemOnItsFile()
     {
         var dormant = new Plugin("Dormant.esp", Enabled: false);
         using var index = Reconciled(dormant);
@@ -276,7 +278,7 @@ public sealed class ProblemsPanelTests : IDisposable
     }
 
     [Fact]
-    public void GetProblems_AReferenceOfAPluginThatIsNotActive_ToARecordItsOwnHolds_OrAnActivePluginHolds_IsNoProblem()
+    public void AReferenceOfAPluginThatIsNotActive_ToARecordItsOwnHolds_OrAnActivePluginHolds_IsNoProblem()
     {
         var active = new Plugin("Active.esp", RefersTo: null);
         var ownRecord = new Plugin("OwnRecord.esp", Enabled: false, RefersTo: "000801:OwnRecord.esp");
@@ -284,25 +286,14 @@ public sealed class ProblemsPanelTests : IDisposable
         using var index = Reconciled(active, ownRecord, activeRecord);
 
         var answers = Ready(index);
-        foreach (var plugin in new[] { active, ownRecord, activeRecord })
-            Assert.Empty(Assert.Single(answers, answer => answer.Plugin == Entry(plugin).Key).Problems);
+
+        Assert.Equal(
+            [(Entry(active).Key, 0), (Entry(activeRecord).Key, 0), (Entry(ownRecord).Key, 0)],
+            answers.Select(answer => (answer.Plugin, answer.Problems.Count)).OrderBy(answer => answer.Plugin.Name, StringComparer.Ordinal));
     }
 
     [Fact]
-    public void GetProblems_AFileThePluginsReadStoppedAt_OfAPluginThatIsNotActive_IsAProblemOnThatFile()
-    {
-        var dormant = new Plugin("DormantTwice.esp", RefersTo: null, Enabled: false);
-        Build(dormant);
-        var (document, backup) = BackupClaimingTheFormKeyOf(dormant, "Referrer");
-        using var index = Indexes.Reconciled(Fixture);
-
-        var answer = Assert.Single(Ready(index));
-
-        Assert.Equivalent(new[] { document, backup }, answer.Problems.Select(p => p.SourceRelativePath), strict: true);
-    }
-
-    [Fact]
-    public void GetProblems_AReferenceOfAPluginThatIsNotActive_ToARecordOnlyAnotherInactivePluginHolds_IsAProblem()
+    public void AReferenceOfAPluginThatIsNotActive_ToARecordOnlyAnotherInactivePluginHolds_IsAProblem()
     {
         var holder = new Plugin("Holder.esp", RefersTo: null, Enabled: false);
         var referrer = new Plugin("Referrer.esp", Enabled: false, RefersTo: "000801:Holder.esp");

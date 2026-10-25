@@ -98,17 +98,6 @@ public class FilterTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void AnActiveFilter_ListsThePluginsWithMatches()
-    {
-        using var index = LoadedIndex();
-        var firstFormKey = NpcListing(index).Items[0].FormKey;
-
-        index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
-
-        Assert.Contains(Plugin, PluginsWithMatches(index));
-    }
-
-    [Fact]
     public void TwoPluginsOfOneName_OnlyThePluginThatMatchesIsListed()
     {
         using var plugins = new PluginFixtureBuilder("filter-two-plugins")

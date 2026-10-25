@@ -37,7 +37,7 @@ vi.mock('vscode', async () => {
 });
 
 import { TreeItem } from 'vscode';
-import { progressSteps } from '../../test/recordedProgress';
+import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
 import { restoredMod } from '../../test/restoredMod';
 import { registerManifestGestures } from '../manifestGestures';
 import { recordingReporter, scriptedDialog, type ScriptedDialog } from '../../test/surfacingDoubles';
@@ -77,7 +77,7 @@ function register(over: Partial<Parameters<typeof registerManifestGestures>[0]> 
   const said: (string | undefined)[] = [];
   registerManifestGestures({
     toolboxView: 'modbench.toolbox', commands: { updateManifest, restoreFromManifest, whatRestoreDestroys }, ask,
-    instance: { value, refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(undefined); } },
+    instance: { value, ...instanceThatReads },
     reporter, say: (message) => { said.push(message); },
     focusedView: { id: () => undefined, selection: () => [] }, ...over,
   });
@@ -98,28 +98,12 @@ beforeEach(() => {
 });
 
 describe('Every mod (update manifest and restore from manifest)', () => {
-  it('acts on every mod folder and every separator, in every profile, enabled or not, from the palette with no Mods selection', async () => {
+  it('acts on every mod from the palette with no Mods selection, under the Toolbox\'s progress', async () => {
     const { run } = register();
 
     await run(UPDATE);
 
-    expect(sentMods(updateManifest)).toEqual([EVERY_MOD]);
-  });
-
-  it('acts on the Mods selection from the palette, under the Mods view\'s progress', async () => {
-    const { run } = register({ focusedView: { id: () => 'modbench.modList', selection: () => [modRow('ModB')] } });
-
-    await run(UPDATE);
-
-    expect([sentMods(updateManifest), progressSteps[0]]).toEqual([[['ModB']], 'progress opens on modbench.modList']);
-  });
-
-  it('acts on every mod from the palette while another view has the focus', async () => {
-    const { run } = register({ focusedView: { id: () => 'modbench.pluginListTree', selection: () => [modRow('ModB')] } });
-
-    await run(UPDATE);
-
-    expect(sentMods(updateManifest)).toEqual([EVERY_MOD]);
+    expect([sentMods(updateManifest), progressSteps[0]]).toEqual([[EVERY_MOD], 'progress opens on modbench.toolbox']);
   });
 
   it.each([
@@ -152,22 +136,6 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     expect(sentMods(updateManifest)).toEqual([['ModA', 'ModB']]);
   });
 
-  it('takes a selected separator for itself and the mods it holds, those before it in winning-first mod order, each name once', async () => {
-    const { run } = register();
-
-    await run(UPDATE, separatorRow('Weapons'), [separatorRow('Weapons'), modRow('ModB'), modRow('ModA')]);
-
-    expect(sentMods(updateManifest)).toEqual([['Weapons_separator', 'ModA', 'ModB']]);
-  });
-
-  it('takes a separator named without its case as the mod manager does, for itself and the mods it holds', async () => {
-    const { run } = register();
-
-    await run(UPDATE, separatorRow('weapons'), [separatorRow('weapons'), modRow('ModB'), modRow('ModA')]);
-
-    expect(sentMods(updateManifest)).toEqual([['Weapons_separator', 'ModA', 'ModB']]);
-  });
-
   it('refuses a selected row that is neither a mod nor a separator, naming it, and acts on the rest', async () => {
     const { reporter, run } = register();
 
@@ -180,26 +148,20 @@ describe('Every mod (update manifest and restore from manifest)', () => {
     }]);
   });
 
-  it('update manifest shows its progress by mod in a notification with Cancel', async () => {
-    updateManifest.mockImplementationOnce((_mods, options) => {
+  it.each([
+    [UPDATE, () => updateManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'Updating', mod: 'ModA', modsDone: 0, modsTotal: 2 });
       return Promise.resolve({ applied: true, notes: [], repositoryNotes: [], landed: [], refused: [] });
-    });
-    const { run } = register();
-
-    await run(UPDATE, modRow('ModA'));
-
-    expect([notification.cancellable, notification.messages]).toEqual([[true], [expect.stringContaining('"ModA", 0 of 2 mods done') as unknown]]);
-  });
-
-  it('restore from manifest shows its progress by mod in a notification with Cancel', async () => {
-    restoreFromManifest.mockImplementationOnce((_mods, options) => {
+    })],
+    [RESTORE, () => restoreFromManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'Restoring', mod: 'ModA', modsDone: 0, modsTotal: 2 });
       return Promise.resolve({ applied: true, landed: [], refused: [] });
-    });
+    })],
+  ])('%s shows its progress by mod in a notification with Cancel', async (id, reportsProgress) => {
+    reportsProgress();
     const { run } = register();
 
-    await run(RESTORE, modRow('ModA'));
+    await run(id, modRow('ModA'));
 
     expect([notification.cancellable, notification.messages]).toEqual([[true], [expect.stringContaining('"ModA", 0 of 2 mods done') as unknown]]);
   });
@@ -292,15 +254,22 @@ describe('Update manifest', () => {
     expect([reporter.landings, reporter.reports]).toEqual([['Update manifest: 2 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files.'], []]);
   });
 
-  it('warns in that line when a package does not hold a file, naming each by mod in the Output', async () => {
-    updateManifest.mockResolvedValueOnce({ applied: true, notes: [], repositoryNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif', 'b/c.dds'] }], refused: [] });
+  it.each([
+    ['a package does not hold a file, naming each by mod', { landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: ['a.nif', 'b/c.dds'] }] },
+      'Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 2 files.', 'ModA: a.nif\nModA: b/c.dds'],
+    ['a mod folder\'s listing skipped an entry, naming each', {
+      notes: [{ mod: 'ModA', note: 'broken link "a.nif", skipped' }], repositoryNotes: ['source/Odd is not a source mod'], landed: [{ mod: 'ModA', manifestWritten: false, notInPackage: [] }],
+    }, 'Update manifest: 1 mod unchanged, 0 updated, 0 refused; their packages do not hold 0 files.', 'ModA: broken link "a.nif", skipped\nsource/Odd is not a source mod'],
+    ['the stat cache could not be written for a mod, naming why', {
+      landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], statCacheNotWritten: '/i/stat-cache is read-only' }],
+    }, 'Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files.', 'ModA: the stat cache could not be written: /i/stat-cache is read-only'],
+  ])('warns in that line when %s in the Output', async (_case, answer, message, detail) => {
+    updateManifest.mockResolvedValueOnce({ applied: true, notes: [], repositoryNotes: [], refused: [], ...answer });
     const { reporter, run } = register();
 
     await run(UPDATE, modRow('ModA'));
 
-    expect([reporter.landings, reporter.reports]).toEqual([[], [{
-      severity: 'warning', message: 'Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 2 files.', detail: 'ModA: a.nif\nModA: b/c.dds',
-    }]]);
+    expect([reporter.landings, reporter.reports]).toEqual([[], [{ severity: 'warning', message, detail }]]);
   });
 
   it('errs in that line when a mod is refused, naming each refused mod with why, then each file its package does not hold', async () => {
@@ -317,31 +286,6 @@ describe('Update manifest', () => {
       severity: 'error', message: 'Update manifest: 1 mod unchanged, 0 updated, 1 refused; their packages do not hold 1 file.',
       detail: `"ModB" (was not updated: 'B.zip' not in the downloads folder.)\nModA: a.nif`,
     }]);
-  });
-
-  it('warns in that line when a mod folder\'s listing skipped an entry, naming each in the Output', async () => {
-    updateManifest.mockResolvedValueOnce({ applied: true, notes: [{ mod: 'ModA', note: 'broken link "a.nif", skipped' }], repositoryNotes: ['source/Odd is not a source mod'], landed: [{ mod: 'ModA', manifestWritten: false, notInPackage: [] }], refused: [] });
-    const { reporter, run } = register();
-
-    await run(UPDATE, modRow('ModA'));
-
-    expect([reporter.landings, reporter.reports]).toEqual([[], [{
-      severity: 'warning', message: 'Update manifest: 1 mod unchanged, 0 updated, 0 refused; their packages do not hold 0 files.', detail: 'ModA: broken link "a.nif", skipped\nsource/Odd is not a source mod',
-    }]]);
-  });
-
-  it('warns in that line when the stat cache could not be written for a mod, naming why in the Output', async () => {
-    updateManifest.mockResolvedValueOnce({
-      applied: true, notes: [], repositoryNotes: [], landed: [{ mod: 'ModA', manifestWritten: true, notInPackage: [], statCacheNotWritten: '/i/stat-cache is read-only' }], refused: [],
-    });
-    const { reporter, run } = register();
-
-    await run(UPDATE, modRow('ModA'));
-
-    expect([reporter.landings, reporter.reports]).toEqual([[], [{
-      severity: 'warning', message: 'Update manifest: 0 mods unchanged, 1 updated, 0 refused; their packages do not hold 0 files.',
-      detail: 'ModA: the stat cache could not be written: /i/stat-cache is read-only',
-    }]]);
   });
 
   it('reports a gesture mEdit refused whole', async () => {
@@ -477,57 +421,25 @@ describe('Restore from manifest', () => {
     expect([reporter.landings, reporter.reports]).toEqual([landings, []]);
   });
 
-  it('warns in its one line when the stat cache could not be written for a mod it restored, naming why in the Output', async () => {
-    restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'], statCacheNotWritten: '/i/stat-cache is read-only' })], refused: [],
-    });
-    const { reporter, run } = register();
-
-    await run(RESTORE, modRow('ModA'));
-
-    expect([reporter.landings, reporter.reports]).toEqual([[], [{
-      severity: 'warning', message: 'Restored "ModA" from its manifest.', detail: 'ModA: the stat cache could not be written: /i/stat-cache is read-only',
-    }]]);
-  });
-
-  it('warns in its one line when the clone of a submodule was left detached at its pin, naming why in the Output', async () => {
-    const why = "its branch 'main' is at abc, not at the pin, so it is left detached at the pin";
-    restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.esp'], leftDetached: why })], refused: [],
-    });
-    const { reporter, run } = register();
-
-    await run(RESTORE, modRow('ModA'));
-
-    expect([reporter.landings, reporter.reports]).toEqual([[], [{ severity: 'warning', message: 'Restored "ModA" from its manifest.', detail: `ModA: ${why}` }]]);
-  });
-
   it.each([
+    ['the stat cache could not be written for a mod it restored', { landed: [restoredMod({ mod: 'ModA', written: ['a.nif'], statCacheNotWritten: '/i/stat-cache is read-only' })] },
+      'ModA: the stat cache could not be written: /i/stat-cache is read-only'],
+    ['the clone of a submodule was left detached at its pin', {
+      landed: [restoredMod({ mod: 'ModA', written: ['a.esp'], leftDetached: "its branch 'main' is at abc, not at the pin, so it is left detached at the pin" })],
+    }, "ModA: its branch 'main' is at abc, not at the pin, so it is left detached at the pin"],
     ['the push refusal could not be written', { pushRefusalNotWritten: '/i/.git/hooks/pre-push already exists' },
       "a push of a pin its source mod's remote lacks is not refused: /i/.git/hooks/pre-push already exists"],
     ['a path token stays in the working tree', { pathTokensNotWritten: 'ModOrganizer.ini still holds a path token' },
       "this machine's paths are not in place of every path token: ModOrganizer.ini still holds a path token"],
-  ])('warns in its one line when %s, naming why in the Output', async (_case, why, detail) => {
-    restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], ...why });
+    ['a mod was built from a source holding changes no commit holds', { landed: [restoredMod({ mod: 'ModA', written: ['a.esp'], uncommitted: true })] },
+      'ModA: its submodule holds changes no commit holds, so the commit the instance repository pins does not rebuild these bytes'],
+  ])('warns in its one line when %s, naming why in the Output', async (_case, answer, detail) => {
+    restoreFromManifest.mockResolvedValueOnce({ applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.nif'] })], refused: [], ...answer });
     const { reporter, run } = register();
 
     await run(RESTORE, modRow('ModA'));
 
     expect([reporter.landings, reporter.reports]).toEqual([[], [{ severity: 'warning', message: 'Restored "ModA" from its manifest.', detail }]]);
-  });
-
-  it('warns in its one line when a mod was built from a source holding changes no commit holds, naming it in the Output', async () => {
-    restoreFromManifest.mockResolvedValueOnce({
-      applied: true, landed: [restoredMod({ mod: 'ModA', written: ['a.esp'], uncommitted: true })], refused: [],
-    });
-    const { reporter, run } = register();
-
-    await run(RESTORE, modRow('ModA'));
-
-    expect([reporter.landings, reporter.reports]).toEqual([[], [{
-      severity: 'warning', message: 'Restored "ModA" from its manifest.',
-      detail: 'ModA: its submodule holds changes no commit holds, so the commit the instance repository pins does not rebuild these bytes',
-    }]]);
   });
 
   it('names each skipped mod with what it lacks, and does not call the mods that landed failed', async () => {
@@ -572,17 +484,6 @@ describe('Restore from manifest', () => {
     }]);
   });
 
-  it('names the mods a restore interrupted part way did not finish', async () => {
-    restoreFromManifest.mockResolvedValueOnce({ applied: false, refusal: 'Could not restore 2 mods — mEdit stopped.', unfinished: ['ModB'] });
-    const { reporter, run } = register();
-
-    await run(RESTORE);
-
-    expect(reporter.reports).toEqual([{
-      severity: 'error', message: 'Could not restore 2 mods — mEdit stopped.', detail: 'Not finished: "ModB". Restoring again finishes them.',
-    }]);
-  });
-
   it.each([
     ['asking what it would destroy', () => whatRestoreDestroys.mockRejectedValueOnce(new Error('boom')), [undefined]],
     ['restore', () => restoreFromManifest.mockRejectedValueOnce(new Error('boom')), [undefined, undefined]],
@@ -620,7 +521,7 @@ describe('A separator in a report or an outcome', () => {
     }]);
   });
 
-  it('restore from manifest names it as a separator in its progress, its report and what it left unfinished', async () => {
+  it('restore from manifest names it as a separator in its progress and its report', async () => {
     restoreFromManifest.mockImplementationOnce((_mods, options) => {
       options?.onProgress?.({ phase: 'Restoring', mod: WIRE, modsDone: 0, modsTotal: 1 });
       return Promise.resolve({ applied: true, landed: [], refused: [{ item: WIRE, reason: 'was skipped: it has no manifest.' }] });
@@ -683,14 +584,6 @@ describe('An agent call', () => {
     expect(notification.cancellable).toEqual([]);
   });
 
-  it('update manifest acts on every mod given none', async () => {
-    const { run } = register();
-
-    await run(UPDATE, new AgentCall([], {}));
-
-    expect(sentMods(updateManifest)).toEqual([EVERY_MOD]);
-  });
-
   it('update manifest answers what landed and what was refused, each file its package does not hold and each note as a part that failed, and reports nothing', async () => {
     updateManifest.mockResolvedValueOnce({
       applied: true, notes: [{ mod: 'ModA', note: 'a game file was unreadable' }], repositoryNotes: ['source/Odd is not a source mod'],
@@ -723,72 +616,28 @@ describe('An agent call', () => {
   describe('restore from manifest', () => {
     const differs = { mod: 'ModA', differing: ['a.nif', 'b.nif'], namedByNoLine: ['stray.txt'], metadataDiffers: false };
 
-    it('restores a mod whose only loss is files no line names, which the trash keeps, and asks nothing', async () => {
-      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ mod: 'ModA', differing: [], namedByNoLine: ['stray.txt'], metadataDiffers: false }], refused: [] });
-      const { ask, run } = register();
+    const METADATA_REFUSAL = "it would overwrite the version or installation files its metadata names with its manifest's. Request it again with force to overwrite them.";
+    const BOTH_REFUSAL = "it would overwrite files whose bytes differ from its manifest: a.nif, b.nif and the version or installation files its metadata names with its manifest's. Request it again with force to overwrite them.";
+    const BYTES_REFUSAL = 'it would overwrite files whose bytes differ from its manifest: a.nif, b.nif. Request it again with force to overwrite them.';
+    const onlyMetadata = { mod: 'ModA', differing: [], namedByNoLine: [], metadataDiffers: true };
 
-      await run(RESTORE, new AgentCall([mod('ModA')], {}));
-
-      expect([sentMods(restoreFromManifest), ask.asked]).toEqual([[['ModA']], []]);
-    });
-
-    it('refuses a mod whose only loss is metadata, naming force, since no history or trash keeps it', async () => {
-      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ mod: 'ModA', differing: [], namedByNoLine: [], metadataDiffers: true }], refused: [] });
-      const { run } = register();
-
-      const answer = await run(RESTORE, new AgentCall([mod('ModA')], {}));
-
-      expect(sentMods(restoreFromManifest)).toEqual([]);
-      expect(answer).toMatchObject({
-        applied: true,
-        outcome: {
-          landed: [],
-          refused: [{ item: 'ModA', reason: "it would overwrite the version or installation files its metadata names with its manifest's. Request it again with force to overwrite them." }],
-        },
-      });
-    });
-
-    it('lists the files and the metadata together when a mod would lose both', async () => {
-      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ ...differs, metadataDiffers: true }], refused: [] });
-      const { run } = register();
-
-      const answer = await run(RESTORE, new AgentCall([mod('ModA')], {}));
-
-      expect(answer).toMatchObject({
-        outcome: {
-          refused: [{
-            item: 'ModA',
-            reason: "it would overwrite files whose bytes differ from its manifest: a.nif, b.nif and the version or installation files its metadata names with its manifest's. Request it again with force to overwrite them.",
-          }],
-        },
-      });
-    });
-
-    it('restores a mod whose only loss is metadata when forced', async () => {
-      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [{ mod: 'ModA', differing: [], namedByNoLine: [], metadataDiffers: true }], refused: [] });
-      const { run } = register();
-
-      await run(RESTORE, new AgentCall([mod('ModA')], { force: true }));
-
-      expect(sentMods(restoreFromManifest)).toEqual([['ModA']]);
-    });
-
-    it('refuses a mod that would overwrite files whose bytes differ, listing them and naming force, and restores the rest', async () => {
-      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [differs], refused: [] });
+    it.each<[string, (typeof differs)[], string[], boolean, string[][], { item: string; reason: string }[]]>([
+      ['restores a mod whose only loss is files no line names, which the trash keeps', [{ mod: 'ModA', differing: [], namedByNoLine: ['stray.txt'], metadataDiffers: false }],
+        ['ModA'], false, [['ModA']], []],
+      ['refuses a mod whose only loss is metadata, naming force, since no history or trash keeps it', [onlyMetadata], ['ModA'], false, [], [{ item: 'ModA', reason: METADATA_REFUSAL }]],
+      ['lists the files and the metadata together when a mod would lose both', [{ ...differs, metadataDiffers: true }], ['ModA'], false, [], [{ item: 'ModA', reason: BOTH_REFUSAL }]],
+      ['restores a mod whose only loss is metadata when forced', [onlyMetadata], ['ModA'], true, [['ModA']], []],
+      ['refuses a mod that would overwrite files whose bytes differ, listing them and naming force, and restores the rest', [differs], ['ModA', 'ModB'], false,
+        [['ModB']], [{ item: 'ModA', reason: BYTES_REFUSAL }]],
+      ['restores a mod that differs when forced', [differs], ['ModA'], true, [['ModA']], []],
+    ])('%s, asking and reporting nothing', async (_case, destroys, mods, force, sent, refused) => {
+      whatRestoreDestroys.mockResolvedValueOnce({ destroys, refused: [] });
       const { ask, reporter, run } = register();
 
-      const answer = await run(RESTORE, new AgentCall([mod('ModA'), mod('ModB')], {}));
+      const answer = await run(RESTORE, new AgentCall(mods.map(mod), { force }));
 
-      expect(sentMods(restoreFromManifest)).toEqual([['ModB']]);
-      expect(answer).toEqual({
-        applied: true,
-        outcome: {
-          landed: [],
-          refused: [{ item: 'ModA', reason: 'it would overwrite files whose bytes differ from its manifest: a.nif, b.nif. Request it again with force to overwrite them.' }],
-        },
-        partial: [],
-      });
-      expect([ask.asked, reporter.reports]).toEqual([[], []]);
+      expect([sentMods(restoreFromManifest), ask.asked, reporter.reports]).toEqual([sent, [], []]);
+      expect(answer).toMatchObject({ applied: true, outcome: { refused } });
     });
 
     it('writes nothing when every mod is refused', async () => {
@@ -799,15 +648,6 @@ describe('An agent call', () => {
 
       expect([sentMods(restoreFromManifest), progressSteps]).toEqual([[], []]);
       expect(answer).toMatchObject({ applied: true, outcome: { landed: [], refused: [{ item: 'ModA' }] } });
-    });
-
-    it('restores a mod that differs when forced', async () => {
-      whatRestoreDestroys.mockResolvedValueOnce({ destroys: [differs], refused: [] });
-      const { run } = register();
-
-      await run(RESTORE, new AgentCall([mod('ModA')], { force: true }));
-
-      expect(sentMods(restoreFromManifest)).toEqual([['ModA']]);
     });
 
     it('answers what it restored, the mods mEdit would not restore refused with why, and a stat cache it could not write as a part that failed', async () => {

@@ -43,20 +43,28 @@ public class MasterResolutionTests
             .Where(row => row.Issues.Count > 0)
             .ToDictionary(row => row.Name, row => row.Issues, StringComparer.OrdinalIgnoreCase);
 
-    [Fact]
-    public void MasterAbsentFromTheLoadOrder_IsAMasterIssue_AsMO2sTestMastersFlagsIt()
+    private static readonly Dictionary<string, (Declared[] Plugins, string[] Issues)> MasterIssueCases = new()
     {
-        var result = Classify(Plugins(Plugin("Patch.esp", "Ghost.esm")));
+        ["a master absent from the load order is an issue, as MO2's testMasters flags it"] = ([Plugin("Patch.esp", "Ghost.esm")], ["Patch.esp: Ghost.esm"]),
+        ["a master present but disabled is an issue, for MO2's testMasters counts a master only while it is enabled itself"] = ([Disabled("Base.esm"), Plugin("Patch.esp", "Base.esm")], ["Patch.esp: Base.esm"]),
+        ["a disabled plugin with a master absent is no issue, for MO2's testMasters flags no plugin the game does not load"] = ([Disabled("Patch.esp", "Ghost.esm")], []),
+        ["an active master is no issue"] = ([Plugin("Base.esm"), Plugin("Patch.esp", "Base.esm")], []),
+        ["a master's name matches ignoring case"] = ([Plugin("Base.ESM"), Plugin("Patch.esp", "base.esm")], []),
+        ["a missing master's master is not reported against the dependant"] = ([Plugin("A.esm", "C.esm"), Plugin("B.esp", "A.esm")], ["A.esm: C.esm"]),
+        ["a plugin with no masters has no issue"] = ([Plugin("Base.esm")], []),
+    };
 
-        Assert.Equal(["Ghost.esm"], result["Patch.esp"]);
-    }
+    public static TheoryData<string> MasterIssueRules => [.. MasterIssueCases.Keys];
 
-    [Fact]
-    public void MasterPresentButDisabled_IsAMasterIssue_ForMO2sTestMastersCountsAMasterOnlyWhileItIsEnabledItself()
+    [Theory]
+    [MemberData(nameof(MasterIssueRules))]
+    public void APluginsMasterIssues_AreTheMastersTheGameWouldNotFindEnabled(string rule)
     {
-        var result = Classify(Plugins(Disabled("Base.esm"), Plugin("Patch.esp", "Base.esm")));
+        var (plugins, issues) = MasterIssueCases[rule];
 
-        Assert.Equal(["Base.esm"], result["Patch.esp"]);
+        var result = Classify(Plugins(plugins));
+
+        Assert.Equal(issues, result.SelectMany(row => row.Value.Select(master => $"{row.Key}: {master}")).Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -73,15 +81,7 @@ public class MasterResolutionTests
     }
 
     [Fact]
-    public void DisabledPluginWithAMasterAbsent_IsNoIssue_ForMO2sTestMastersFlagsNoPluginTheGameDoesNotLoad()
-    {
-        var result = Classify(Plugins(Disabled("Patch.esp", "Ghost.esm")));
-
-        Assert.Empty(result);
-    }
-
-    [Fact]
-    public void GetPlugins_TwoPluginsOfOneName_EachCarriesItsOwnMasterIssues_ForAFilenameIsNotAnIdentity()
+    public void TwoPluginsOfOneName_EachCarriesItsOwnMasterIssues_ForAFilenameIsNotAnIdentity()
     {
         using var fixture = Plugins()
             .WithPlugin("Patch.esp", Mastering(), writeParams: AsDeclared, origin: "LosingMod")
@@ -101,45 +101,41 @@ public class MasterResolutionTests
             .Where(row => row.Late.Count > 0)
             .ToDictionary(row => row.Name, row => row.Late, StringComparer.OrdinalIgnoreCase);
 
+    private static readonly Dictionary<string, (Declared[] Plugins, string[] Late)> LateMasterCases = new()
+    {
+        ["a master loading after its dependant"] = ([Plugin("Patch.esp", "Base.esm"), Plugin("Base.esm")], ["Base.esm"]),
+        ["a master loading before its dependant"] = ([Plugin("Base.esm"), Plugin("Patch.esp", "Base.esm")], []),
+        ["a master named in another case, loading after its dependant"] = ([Plugin("Patch.esp", "base.esm"), Plugin("Base.ESM")], ["base.esm"]),
+        ["an inactive master, which is missing rather than late"] = ([Plugin("Patch.esp", "Base.esm"), Disabled("Base.esm")], []),
+    };
+
+    public static TheoryData<string> LateMasterCaseNames => [.. LateMasterCases.Keys];
+
     [Theory]
-    [InlineData(false, "Base.esm", "Base.esm", true)]
-    [InlineData(true, "Base.esm", "Base.esm", false)]
-    [InlineData(false, "base.esm", "Base.ESM", true)]
-    public void MasterLoadingAfterItsDependant_IsLate_ForTheGameCrashesOnTheMasterOnlyWhenItComesSecond(
-        bool masterFirst, string declared, string fileName, bool late)
+    [MemberData(nameof(LateMasterCaseNames))]
+    public void AnActiveMasterLoadingAfterItsDependant_IsLate_ForTheGameCrashesOnTheMasterOnlyWhenItComesSecond(string lateMasterCase)
     {
-        var master = Plugin(fileName);
-        var dependant = Plugin("Patch.esp", declared);
+        var (plugins, late) = LateMasterCases[lateMasterCase];
 
-        var result = LateMasters(Plugins(masterFirst ? [master, dependant] : [dependant, master]));
+        var result = LateMasters(Plugins(plugins));
 
-        Assert.Equal(late ? [declared] : [], result.GetValueOrDefault("Patch.esp", []));
-    }
-
-    [Fact]
-    public void InactiveMaster_IsNotAlsoALateMaster()
-    {
-        var result = LateMasters(Plugins(Plugin("Patch.esp", "Base.esm"), Disabled("Base.esm")));
-
-        Assert.Empty(result);
+        Assert.Equal(late, result.GetValueOrDefault("Patch.esp", []));
     }
 
     [Theory]
-    [InlineData(false, true, false)]
-    [InlineData(true, false, false)]
-    [InlineData(true, true, true)]
-    [InlineData(false, false, true)]
+    [InlineData(new[] { "Base.esm" }, new string[0])]
+    [InlineData(new[] { "Patch.esp" }, new string[0])]
+    [InlineData(new[] { "Patch.esp", "Base.esm" }, new[] { "Base.esm" })]
+    [InlineData(new string[0], new[] { "Base.esm" })]
     public void MasterLoadingAfterItsDependant_IsLateOnlyWithinOneBlueprintClass_ForBlueprintLastDecidesAcrossTheTwo(
-        bool dependantIsBlueprint, bool masterIsBlueprint, bool late)
+        string[] blueprints, string[] late)
     {
         using var fixture = Plugins(Plugin("Patch.esp", "Base.esm"), Plugin("Base.esm")).Build();
-        var blueprints = new[] { ("Patch.esp", dependantIsBlueprint), ("Base.esm", masterIsBlueprint) }
-            .Where(plugin => plugin.Item2).Select(plugin => plugin.Item1).ToHashSet();
-        using var index = Indexes.Reconciled(fixture, adapter: new BlueprintPluginAdapter(blueprints));
+        using var index = Indexes.Reconciled(fixture, adapter: new BlueprintPluginAdapter(blueprints.ToHashSet()));
 
         var row = index.Queries.GetPlugins().Value().Single(r => r.Name == "Patch.esp");
 
-        Assert.Equal(late ? ["Base.esm"] : [], row.LateMasters);
+        Assert.Equal(late, row.LateMasters);
     }
 
     private sealed class BlueprintPluginAdapter(IReadOnlySet<string> blueprints) : DelegatingPluginAdapter(TestAdapters.Mutagen())
@@ -149,39 +145,6 @@ public class MasterResolutionTests
             base.ReadContent(modPath, loadOrder, strings).Then(read =>
                 (Answer<(PluginContent Content, PluginFailure? Unreachable), PluginFailure>)
                 (read.Content with { IsBlueprint = blueprints.Contains(modPath.ModKey.FileName.ToString()) }, read.Unreachable));
-    }
-
-    [Fact]
-    public void MasterActive_IsNoIssue()
-    {
-        var result = Classify(Plugins(Plugin("Base.esm"), Plugin("Patch.esp", "Base.esm")));
-
-        Assert.False(result.ContainsKey("Patch.esp"));
-    }
-
-    [Fact]
-    public void MasterNamesMatchIgnoringCase()
-    {
-        var result = Classify(Plugins(Plugin("Base.ESM"), Plugin("Patch.esp", "base.esm")));
-
-        Assert.False(result.ContainsKey("Patch.esp"));
-    }
-
-    [Fact]
-    public void AMissingMastersMasterIsNotReportedAgainstTheDependent()
-    {
-        var result = Classify(Plugins(Plugin("A.esm", "C.esm"), Plugin("B.esp", "A.esm")));
-
-        Assert.True(result.ContainsKey("A.esm"));
-        Assert.False(result.ContainsKey("B.esp"));
-    }
-
-    [Fact]
-    public void PluginWithNoMastersHasNoMasterIssues()
-    {
-        var result = Classify(Plugins(Plugin("Base.esm")));
-
-        Assert.Empty(result);
     }
 
     [Fact]

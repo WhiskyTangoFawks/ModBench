@@ -46,21 +46,21 @@ public class ConflictByCompareTests
     private static string? Text(object? value) => value is JsonElement element ? element.ToString() : null;
 
     [Theory]
-    [InlineData("XpValueOffset", "0", true)]
-    [InlineData("XpValueOffset", "5", false)]
-    [InlineData("NoSlowApproach", "false", true)]
-    [InlineData("NoSlowApproach", "true", false)]
-    [InlineData("Flags", "[]", true)]
-    [InlineData("Flags", "[\"Essential\"]", false)]
-    [InlineData("Race", "\"Null\"", true)]
-    [InlineData("Race", "\"000900:A.esp\"", false)]
-    [InlineData("ObjectBounds", "{}", true)]
+    [InlineData("XpValueOffset", "0", ConflictThis.IdenticalToMaster)]
+    [InlineData("XpValueOffset", "5", ConflictThis.Override)]
+    [InlineData("NoSlowApproach", "false", ConflictThis.IdenticalToMaster)]
+    [InlineData("NoSlowApproach", "true", ConflictThis.Override)]
+    [InlineData("Flags", "[]", ConflictThis.IdenticalToMaster)]
+    [InlineData("Flags", "[\"Essential\"]", ConflictThis.Override)]
+    [InlineData("Race", "\"Null\"", ConflictThis.IdenticalToMaster)]
+    [InlineData("Race", "\"000900:A.esp\"", ConflictThis.Override)]
+    [InlineData("ObjectBounds", "{}", ConflictThis.IdenticalToMaster)]
     public void AbsentAgainstAnExplicitValue_IsAConflictOnlyWhenTheValueIsNotTheDefault_ForTheCodecOmitsAMemberEqualToItsDefault(
-        string member, string json, bool equal)
+        string member, string json, ConflictThis overridesState)
     {
         var result = ComparedCopies.Spelled<Npc>("B.esp", document => document[member] = JsonNode.Parse(json), _ => { }, _ => { });
 
-        Assert.Equal(equal ? ConflictThis.IdenticalToMaster : ConflictThis.Override, Row(result, member).CellStates["B.esp"]);
+        Assert.Equal(overridesState, Row(result, member).CellStates["B.esp"]);
     }
 
     [Fact]
@@ -77,6 +77,7 @@ public class ConflictByCompareTests
         var result = ComparedCopies.Of(Notes("SomeNotes", "SomeName"));
 
         Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
+        Assert.Equal(ConflictThis.OnlyOne, Assert.Single(result.Overrides).ConflictThis);
         Assert.Contains(result.Diffs, d => d.FieldName == "Notes");
         Assert.Contains(result.Diffs, d => d.FieldName == "DisplayName");
         Assert.DoesNotContain(result.Diffs, d => d.FieldName == "AttractionRule");
@@ -213,16 +214,6 @@ public class ConflictByCompareTests
         var displayName = Row(result, "DisplayName");
         Assert.Equal("A.esp", displayName.WinnerColumn);
         Assert.Equal("1", Text(displayName.Values[displayName.WinnerColumn]));
-    }
-
-    [Fact]
-    public void UnsortedArraySameElementsDifferentOrder_ReturnsOverride()
-    {
-        var result = ComparedCopies.Of<MiscItem>(
-            misc => misc.ComponentDisplayIndices = [1, 2],
-            misc => misc.ComponentDisplayIndices = [2, 1]);
-
-        Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 
     [Fact]

@@ -10,35 +10,37 @@ using Noggog;
 
 namespace MEditService.RecordIndex.Tests.TestSupport;
 
-/// <summary>Regenerates the committed cut-down plugin from a locally installed Fallout 4. A tool,
-/// not an assertion: without <c>MEDIT_REGEN_TESTDATA=1</c> and a game install it does nothing.
-/// Commit the updated <c>TestData/mEditTestSubset.esm</c>.</summary>
+/// <summary>Runs only under MEDIT_REGEN_TESTDATA=1, for it rewrites committed test data from a local game install.</summary>
+public sealed class RegenerateFactAttribute : FactAttribute
+{
+    public RegenerateFactAttribute()
+    {
+        if (Environment.GetEnvironmentVariable("MEDIT_REGEN_TESTDATA") != "1")
+            Skip = "A tool, not an assertion: run MEDIT_REGEN_TESTDATA=1 dotnet test --filter FullyQualifiedName~CutDownPluginGenerator "
+                + "with Fallout 4 installed to regenerate TestData/mEditTestSubset.esm, then commit it.";
+    }
+}
+
+/// <summary>Regenerates the committed cut-down plugin from a locally installed Fallout 4.</summary>
 public sealed class CutDownPluginGenerator
 {
+    // Indexing reconstructs FormKeys from the header without Fallout4.esm present.
+    private static readonly BinaryWriteParameters ListingFallout4EsmAsTheMasterOfTheOverridesKept = new()
+    {
+        MastersListContent = MastersListContentOption.Iterate,
+    };
+
     private const int RecordsPerType = 4;
     private const int CellsPerSubBlock = 3;
     private const int RefsPerCell = 10;
 
-    [Fact]
+    [RegenerateFact]
     public void RegenerateCutDownPlugin()
     {
-        // Tool, not an assertion: no-op unless explicitly invoked with an install present, so it
-        // costs nothing in normal runs. Run with
-        //   MEDIT_REGEN_TESTDATA=1 dotnet test --filter FullyQualifiedName~CutDownPluginGenerator
-        if (Environment.GetEnvironmentVariable("MEDIT_REGEN_TESTDATA") != "1")
-            return;
-
-        if (!new GameLocator().TryGetDataDirectory(GameRelease.Fallout4, out var dataDir))
-            return;
-
+        Assert.True(new GameLocator().TryGetDataDirectory(GameRelease.Fallout4, out var dataDir), "Fallout 4 is not installed.");
         var sourcePath = Path.Combine(dataDir.Path, "Fallout4.esm");
         Assert.True(File.Exists(sourcePath), $"Fallout4.esm not found at {sourcePath}");
-
-        // Fallout4.esm is localized (strings packed in BA2s). DeepCopy enumerates every language
-        // source; on Linux that path resolves a plugin-listings path that needs the (case-sensitive)
-        // "LocalAppData" env var.
-        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LocalAppData")))
-            Environment.SetEnvironmentVariable("LocalAppData", Path.GetTempPath());
+        GiveMutagenTheLocalAppDataItsLanguageSourcesReadOnLinux();
 
         using var source = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Fallout4.esm"), sourcePath), Fallout4Release.Fallout4,
@@ -64,15 +66,19 @@ public sealed class CutDownPluginGenerator
 
         var outPath = Path.Combine(SourceTestDataDir(), RealDataPlugin.PluginFileName);
         Directory.CreateDirectory(Path.GetDirectoryName(outPath) ?? throw new InvalidOperationException($"Expected '{outPath}' to have a parent directory."));
-        target.WriteToBinary(outPath, new BinaryWriteParameters
-        {
-            // Override records keep their Fallout4.esm FormKeys; iterate so the header lists the
-            // correct master (indexing reconstructs FormKeys from the header without the file present).
-            MastersListContent = MastersListContentOption.Iterate,
-        });
+        target.WriteToBinary(outPath, ListingFallout4EsmAsTheMasterOfTheOverridesKept);
 
         var size = new FileInfo(outPath).Length;
         Assert.True(size is > 0 and < 5 * 1024 * 1024, $"Unexpected cut-down plugin size: {size} bytes");
+    }
+
+    // Fallout4.esm is localized (strings packed in BA2s). DeepCopy enumerates every language
+    // source; on Linux that path resolves a plugin-listings path that needs the (case-sensitive)
+    // "LocalAppData" env var.
+    private static void GiveMutagenTheLocalAppDataItsLanguageSourcesReadOnLinux()
+    {
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LocalAppData")))
+            Environment.SetEnvironmentVariable("LocalAppData", Path.GetTempPath());
     }
 
     // A spread of common major-record types so SchemaReflector's per-type extraction runs on real data.

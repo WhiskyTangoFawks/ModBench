@@ -3,15 +3,19 @@ import { promptRefusal, refuseAgentName } from '../nameRefusals';
 import { Refusal } from '../../drivingLib/refusal';
 
 describe('a name refusal that could not be read', () => {
-  it('shows a prompt why, rather than calling the name free', async () => {
-    expect(await promptRefusal(Promise.reject(new Error('modlist.txt is locked')))).toBe('modlist.txt is locked');
-    expect(await promptRefusal(Promise.resolve('taken'))).toBe('taken');
-    expect(await promptRefusal(Promise.resolve(undefined))).toBeUndefined();
+  it.each<[string, () => Promise<string | undefined>, string | undefined]>([
+    ['shows why it could not be read, rather than calling the name free', () => Promise.reject(new Error('modlist.txt is locked')), 'modlist.txt is locked'],
+    ['shows the refusal read', () => Promise.resolve('taken'), 'taken'],
+    ['shows nothing for a free name', () => Promise.resolve(undefined), undefined],
+  ])('a prompt %s', async (_case, refusal, expected) => {
+    expect(await promptRefusal(refusal())).toBe(expected);
   });
 
-  it('refuses an agent call with the refusal, or with why it could not be read', async () => {
-    await expect(refuseAgentName(Promise.resolve('taken'))).rejects.toEqual(new Refusal('taken'));
-    await expect(refuseAgentName(Promise.reject(new Error('modlist.txt is locked')))).rejects.toEqual(new Refusal('modlist.txt is locked'));
-    await expect(refuseAgentName(Promise.resolve(undefined))).resolves.toBeUndefined();
+  it.each<[string, () => Promise<string | undefined>, Refusal | undefined]>([
+    ['is refused with the refusal read', () => Promise.resolve('taken'), new Refusal('taken')],
+    ['is refused with why the refusal could not be read', () => Promise.reject(new Error('modlist.txt is locked')), new Refusal('modlist.txt is locked')],
+    ['goes on for a free name', () => Promise.resolve(undefined), undefined],
+  ])('an agent call %s', async (_case, refusal, expected) => {
+    expect(await refuseAgentName(refusal()).then(() => undefined, (error: unknown) => error)).toEqual(expected);
   });
 });

@@ -10,6 +10,7 @@ public class ElementKeyTextTests
     [InlineData("""{"Stage":10,"StageIndex":0}""", "Stage,StageIndex", "10 / 0")]
     [InlineData("""{"Property":{"Name":"","Alias":3}}""", "Property.Alias", "3")]
     [InlineData("""{"on":true}""", "on", "true")]
+    [InlineData("""{"Conditions":[{"Value":1},{"Value":2}]}""", "Conditions", """[{"Value":1},{"Value":2}]""")]
     [InlineData("""{"MutagenObjectType":"ScriptIntProperty"}""", "Name", "")]
     [InlineData("""{"Name":null}""", "Name", "")]
     public void AnElementsKey_ReadsAsItsMembersJoinedInTheOrderTheAnnotationListsThem_AnAbsentOrNullOneEmpty(string element, string keyMembers, string text)

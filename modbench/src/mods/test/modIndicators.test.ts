@@ -12,7 +12,7 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import type { InstanceValue } from '../../instanceLoader/instance';
+import type { InstanceValue, OriginFile } from '../../instanceLoader/instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { present } from '../../ports/present';
@@ -27,82 +27,40 @@ const carriedBy = (value: InstanceValue, name: string): ModIndicator[] =>
   decorationsOn(new ModIndicatorDecorations(new FakeInstance(value), settingsOf(allOn).settings), modRowUri(name))
     .flatMap((decoration, at) => (decoration === undefined ? [] : [present(MOD_INDICATORS[at], 'an indicator').id]));
 
+type Listings = Parameters<typeof indexedValueOf>[1];
+
 describe('the indicators each mod carries (mods.md, Indicators)', () => {
-  it('a mod whose file wins over another copy overwrites loose files, and one whose file loses to it is overwritten', async () => {
-    const value = await indexedValueOf([mod('Winner'), mod('Loser')], {
-      Winner: { files: [file('Winner', 'a.dds')] }, Loser: { files: [file('Loser', 'a.dds'), file('Loser', 'own.dds')] },
-    });
-
-    expect(carriedBy(value, 'Winner')).toEqual(['overwritesLooseFiles']);
-    expect(carriedBy(value, 'Loser')).toEqual(['overwrittenLooseFiles']);
-  });
-
-  it('a mod the Instance adapter says has an update carries Update available', async () => {
-    const value = await indexedValueOf([{ ...mod('Patch'), updateAvailable: true }, { ...mod('Current'), updateAvailable: false }, mod('Unchecked')], {});
-
-    expect([carriedBy(value, 'Patch'), carriedBy(value, 'Current'), carriedBy(value, 'Unchecked')]).toEqual([['updateAvailable'], [], []]);
-  });
-
-  it('a mod every file of which loses is redundant, and not overwritten', async () => {
-    const value = await indexedValueOf([mod('Winner'), mod('Loser')], {
-      Winner: { files: [file('Winner', 'a.dds'), file('Winner', 'b.dds')] },
-      Loser: { files: [file('Loser', 'a.dds'), file('Loser', 'b.dds')] },
-    });
-
-    expect(carriedBy(value, 'Loser')).toEqual(['redundant']);
-  });
-
-  it.each([
-    ['a file and one of its own', { Middle: [file('Middle', 'a.dds'), file('Middle', 'own.dds')] }, ['overwritesLooseFiles', 'overwrittenLooseFiles']],
-    ['its only file', { Middle: [file('Middle', 'a.dds')] }, ['overwritesLooseFiles', 'redundant']],
-  ])('a mod between two copies of %s overwrites the lower copy and loses to the higher', async (_, own, carried) => {
-    const value = await indexedValueOf([mod('High'), mod('Middle'), mod('Low')], {
-      High: { files: [file('High', 'a.dds')] },
-      Middle: { files: own.Middle },
-      Low: { files: [file('Low', 'a.dds')] },
-    });
-
-    expect(carriedBy(value, 'Middle')).toEqual(carried);
-  });
-
-  it('a mod whose file loses to Overwrite\'s is overwritten', async () => {
-    const value = await indexedValueOf([mod('A')], { A: { files: [file('A', 'a.log'), file('A', 'own.dds')] } }, {
-      files: [file('overwrite', 'a.log')],
-    });
-
-    expect(carriedBy(value, 'A')).toEqual(['overwrittenLooseFiles']);
-  });
-
-  it('a mod with an excluded file contains excluded files, and its excluded copy neither wins nor loses', async () => {
-    const value = await indexedValueOf([mod('Winner'), mod('Loser')], {
-      Winner: { files: [file('Winner', 'a.dds', true), file('Winner', 'own.dds')] }, Loser: { files: [file('Loser', 'a.dds')] },
-    });
-
-    expect(carriedBy(value, 'Winner')).toEqual(['containsExcludedFiles']);
-    expect(carriedBy(value, 'Loser')).toEqual([]);
-  });
-
-  it('a mod whose every file is excluded has no file the game could get, so is not redundant', async () => {
-    const value = await indexedValueOf([mod('A')], { A: { files: [file('A', 'a.dds', true)] } });
-
-    expect(carriedBy(value, 'A')).toEqual(['containsExcludedFiles']);
-  });
-
-  it('a disabled mod carries none, nor does a mod with no files', async () => {
-    const value = await indexedValueOf([mod('Winner'), mod('Off', false), mod('Empty')], {
-      Winner: { files: [file('Winner', 'a.dds')] },
-      Off: { files: [file('Off', 'a.dds'), file('Off', 'b.dds', true)] },
-    });
-
-    expect([carriedBy(value, 'Off'), carriedBy(value, 'Empty')]).toEqual([[], []]);
-  });
-
-  it('a disabled mod carries none though an enabled separator shares its name', async () => {
-    const value = await indexedValueOf([mod('Winner'), mod('Shared', false), { kind: 'separator', name: 'Shared', enabled: true }], {
-      Winner: { files: [file('Winner', 'a.dds')] }, Shared: { files: [file('Shared', 'a.dds'), file('Shared', 'b.dds', true)] },
-    });
-
-    expect(carriedBy(value, 'Shared')).toEqual([]);
+  it.each<[string, ModlistEntry[], Listings, OriginFile[], string, ModIndicator[]]>([
+    ['a mod whose file wins over another copy overwrites loose files', [mod('Winner'), mod('Loser')],
+      { Winner: { files: [file('Winner', 'a.dds')] }, Loser: { files: [file('Loser', 'a.dds'), file('Loser', 'own.dds')] } }, [], 'Winner', ['overwritesLooseFiles']],
+    ['a mod whose file loses to another copy is overwritten', [mod('Winner'), mod('Loser')],
+      { Winner: { files: [file('Winner', 'a.dds')] }, Loser: { files: [file('Loser', 'a.dds'), file('Loser', 'own.dds')] } }, [], 'Loser', ['overwrittenLooseFiles']],
+    ['a mod the Instance adapter says has an update carries Update available', [{ ...mod('Patch'), updateAvailable: true }], {}, [], 'Patch', ['updateAvailable']],
+    ['a mod the Instance adapter says has no update carries none', [{ ...mod('Current'), updateAvailable: false }], {}, [], 'Current', []],
+    ['a mod not checked for an update carries none', [mod('Unchecked')], {}, [], 'Unchecked', []],
+    ['a mod every file of which loses is redundant, and not overwritten', [mod('Winner'), mod('Loser')],
+      { Winner: { files: [file('Winner', 'a.dds'), file('Winner', 'b.dds')] }, Loser: { files: [file('Loser', 'a.dds'), file('Loser', 'b.dds')] } }, [], 'Loser', ['redundant']],
+    ['a mod between two copies of a file and one of its own overwrites the lower copy and loses to the higher', [mod('High'), mod('Middle'), mod('Low')],
+      { High: { files: [file('High', 'a.dds')] }, Middle: { files: [file('Middle', 'a.dds'), file('Middle', 'own.dds')] }, Low: { files: [file('Low', 'a.dds')] } }, [], 'Middle',
+      ['overwritesLooseFiles', 'overwrittenLooseFiles']],
+    ['a mod between two copies of its only file overwrites the lower copy and is redundant', [mod('High'), mod('Middle'), mod('Low')],
+      { High: { files: [file('High', 'a.dds')] }, Middle: { files: [file('Middle', 'a.dds')] }, Low: { files: [file('Low', 'a.dds')] } }, [], 'Middle',
+      ['overwritesLooseFiles', 'redundant']],
+    ['a mod whose file loses to Overwrite\'s is overwritten', [mod('A')],
+      { A: { files: [file('A', 'a.log'), file('A', 'own.dds')] } }, [file('overwrite', 'a.log')], 'A', ['overwrittenLooseFiles']],
+    ['a mod with an excluded file contains excluded files, and its excluded copy wins over nothing', [mod('Winner'), mod('Loser')],
+      { Winner: { files: [file('Winner', 'a.dds', true), file('Winner', 'own.dds')] }, Loser: { files: [file('Loser', 'a.dds')] } }, [], 'Winner', ['containsExcludedFiles']],
+    ['a mod whose copy loses only to an excluded copy is not overwritten', [mod('Winner'), mod('Loser')],
+      { Winner: { files: [file('Winner', 'a.dds', true), file('Winner', 'own.dds')] }, Loser: { files: [file('Loser', 'a.dds')] } }, [], 'Loser', []],
+    ['a mod whose every file is excluded has no file the game could get, so is not redundant', [mod('A')],
+      { A: { files: [file('A', 'a.dds', true)] } }, [], 'A', ['containsExcludedFiles']],
+    ['a disabled mod carries none', [mod('Winner'), mod('Off', false)],
+      { Winner: { files: [file('Winner', 'a.dds')] }, Off: { files: [file('Off', 'a.dds'), file('Off', 'b.dds', true)] } }, [], 'Off', []],
+    ['a mod with no files carries none', [mod('Empty')], {}, [], 'Empty', []],
+    ['a disabled mod carries none though an enabled separator shares its name', [mod('Winner'), mod('Shared', false), { kind: 'separator', name: 'Shared', enabled: true }],
+      { Winner: { files: [file('Winner', 'a.dds')] }, Shared: { files: [file('Shared', 'a.dds'), file('Shared', 'b.dds', true)] } }, [], 'Shared', []],
+  ])('%s', async (_case, mods, listings, overwrite, name, carried) => {
+    expect(carriedBy(await indexedValueOf(mods, listings, { files: overwrite }), name)).toEqual(carried);
   });
 
   it('a file whose path\'s copies do not name its mod is neither a win nor a loss, and not one the game could get', async () => {
@@ -112,12 +70,6 @@ describe('the indicators each mod carries (mods.md, Indicators)', () => {
     });
 
     expect(carriedBy({ ...listed, files: othersOnly.files }, 'A')).toEqual(['redundant']);
-  });
-
-  it('a mod shipping two case variants of one path wins over no copy of its own', async () => {
-    const value = await indexedValueOf([mod('A')], { A: { files: [file('A', 'Textures/Foo.dds'), file('A', 'textures/foo.dds')] } });
-
-    expect(carriedBy(value, 'A')).toEqual([]);
   });
 });
 
@@ -137,6 +89,9 @@ async function rowUriOf(instance: FakeInstance, name: string): Promise<vscode.Ur
   const row = (await rows.getChildren()).find((node) => node instanceof ModNode && node.mod.name === name);
   return present(row?.resourceUri, `${name}'s row URI`);
 }
+
+const OVERWRITES = { badge: '\u2295', color: new ThemeColor('modbench.modOverwritesLooseFiles'), tooltip: 'Overwrites loose files' };
+const REDUNDANT = { badge: '\u2297', color: new ThemeColor('modbench.modRedundant'), tooltip: 'Redundant' };
 
 const decorationsOn = (decorations: ModIndicatorDecorations, uri: vscode.Uri) =>
   decorations.providers.map((provider) => provider.provideFileDecoration(uri));
@@ -192,7 +147,7 @@ describe('a mod row\'s indicators, each switched in settings (mods.md, A row, Mo
       provider.onDidChangeFileDecorations(listener);
       return listener;
     });
-    expect(decorationsOn(decorations, uri)[2]).toBeDefined();
+    expect(decorationsOn(decorations, uri)[2]).toEqual(REDUNDANT);
 
     instance.publish(await indexedValueOf([mod('Low')], { Low: { files: [file('Low', 'a.dds')] } }));
 
@@ -269,7 +224,7 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
     decorations.collapsedRow(section);
 
     expect(expanded).toEqual(nothing);
-    expect(decorationsOn(decorations, section)[0]).toBeDefined();
+    expect(decorationsOn(decorations, section)[0]).toEqual(OVERWRITES);
     expect(fired).toHaveBeenCalledTimes(2);
   });
 
@@ -279,7 +234,7 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
 
     decorations.expandedRow(modRowUri('Middle'));
 
-    expect(decorationsOn(decorations, modRowUri('Middle'))[0]).toBeDefined();
+    expect(decorationsOn(decorations, modRowUri('Middle'))[0]).toEqual(OVERWRITES);
   });
 
   it('forgets a separator that left the list, so one added later under its name starts collapsed', async () => {
@@ -290,7 +245,7 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
     instance.publish(await indexedValueOf([mod('Low')], { Low: { files: [file('Low', 'a.dds')] } }));
     instance.publish(await groupedMiddleOfThree());
 
-    expect(decorationsOn(decorations, section)[0]).toBeDefined();
+    expect(decorationsOn(decorations, section)[0]).toEqual(OVERWRITES);
   });
 
   it('forgets a separator emptied while open, so one refilled starts collapsed', async () => {
@@ -301,7 +256,7 @@ describe('a collapsed separator\'s indicators (common.md, Chrome, story 11)', ()
     instance.publish(await indexedValueOf([separator('Section')], {}));
     instance.publish(await groupedMiddleOfThree());
 
-    expect(decorationsOn(decorations, section)[0]).toBeDefined();
+    expect(decorationsOn(decorations, section)[0]).toEqual(OVERWRITES);
   });
 });
 

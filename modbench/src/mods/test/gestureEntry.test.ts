@@ -6,56 +6,11 @@ vi.mock('vscode', () => ({
 }));
 
 import { modsKeyContext } from '../gestureEntry';
-import { pluralArgument, selectionArgument } from '../../drivingLib/gestureEntry';
+import { file, folder } from './indexedValue';
 import { ModNode, OverwriteNode, SeparatorNode } from '../ModListProvider';
 import { FileNode, FolderNode } from '../modFiles';
 
-const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 const separatorRow = (name: string) => new SeparatorNode({ kind: 'separator', name, enabled: true }, []);
-
-describe('a selection mixing mods and separators', () => {
-  const alpha = modRow('Alpha');
-  const groupA = separatorRow('Group A');
-  const beta = modRow('Beta');
-  const groupB = separatorRow('Group B');
-  const mixed = [alpha, groupA, beta, groupB];
-
-  it('gives the rows of the right-clicked row\'s kind', () => {
-    expect(pluralArgument({ clicked: beta, selection: mixed }, 'mod', 'separator')).toEqual([alpha, beta]);
-    expect(pluralArgument({ clicked: groupB, selection: mixed }, 'mod', 'separator')).toEqual([groupA, groupB]);
-  });
-
-  it('gives the rows of the focused row\'s kind for a key', () => {
-    expect(pluralArgument({ focused: groupA, selection: mixed }, 'mod', 'separator')).toEqual([groupA, groupB]);
-    expect(pluralArgument({ focused: alpha, selection: mixed }, 'mod', 'separator')).toEqual([alpha, beta]);
-  });
-
-  it('gives nothing to a gesture that does not take the right-clicked row\'s kind', () => {
-    expect(pluralArgument({ clicked: groupA, selection: mixed }, 'mod')).toEqual([]);
-  });
-});
-
-describe('selectionArgument over a selection mixing mods and separators', () => {
-  const alpha = modRow('Alpha');
-  const groupA = separatorRow('Group A');
-  const beta = modRow('Beta');
-  const groupB = separatorRow('Group B');
-  const mixed = [alpha, groupA, beta, groupB];
-
-  it('keeps every selected row of the kinds given, regardless of the right-clicked row\'s kind', () => {
-    expect(selectionArgument({ clicked: beta, selection: mixed }, 'mod', 'separator')).toEqual(mixed);
-    expect(selectionArgument({ clicked: groupB, selection: mixed }, 'mod', 'separator')).toEqual(mixed);
-  });
-
-  it('keeps every selected row of the kinds given for a key or the palette too', () => {
-    expect(selectionArgument({ focused: groupA, selection: mixed }, 'mod', 'separator')).toEqual(mixed);
-    expect(selectionArgument({ selection: mixed }, 'mod', 'separator')).toEqual(mixed);
-  });
-
-  it('still excludes a kind not requested', () => {
-    expect(selectionArgument({ clicked: beta, selection: mixed }, 'mod')).toEqual([alpha, beta]);
-  });
-});
 
 describe('what the Mods keys read off the selection', () => {
   const enabledMod = new ModNode({ kind: 'mod', name: 'On', enabled: true });
@@ -101,14 +56,15 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([], byRow).selectionKind).toBeUndefined();
   });
 
-  it('Space, Delete and F2 do nothing over a selection that holds a file or a folder, which may be the focused row', () => {
-    const file = { relativePath: 'textures/a.dds', path: '/instance/mods/On/textures/a.dds', sourcePath: '/instance/mods/On/textures/a.dds', excluded: false, markedExcluded: false, includedPath: 'textures/a.dds' };
-    const folder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, { relativePath: 'textures', path: '/instance/mods/On/textures', excluded: false }, [file], [], 'textures');
-    const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
+  const texturesFolder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, folder('mods/On', 'textures'), [file('mods/On', 'textures/a.dds')], [], 'textures');
+  const texturesLeaf = new FileNode(texturesFolder, texturesFolder.origin, file('mods/On', 'textures/a.dds'), 'a.dds');
 
-    for (const selection of [[enabledMod, leaf], [disabledMod, folder], [group, leaf]]) {
-      expect(modsKeyContext(selection, byRow)).toMatchObject({ selectionToggle: undefined, selectionKind: undefined });
-    }
+  it.each([
+    ['an enabled mod and a file', [enabledMod, texturesLeaf]],
+    ['a disabled mod and a folder', [disabledMod, texturesFolder]],
+    ['a separator and a file', [group, texturesLeaf]],
+  ])('Space, Delete and F2 do nothing over %s, either of which may be the focused row', (_case, selection) => {
+    expect(modsKeyContext(selection, byRow)).toMatchObject({ selectionToggle: undefined, selectionKind: undefined });
   });
 
   it('F2 and a singular gesture see whether exactly one row is selected', () => {
@@ -118,7 +74,7 @@ describe('what the Mods keys read off the selection', () => {
   });
 
   it('go to mod sees exactly one selected file that is in a file order conflict', () => {
-    const copy = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false, markedExcluded: false, includedPath: 'x/a.dds' };
+    const copy = file('mods/On', 'x/a.dds');
     const conflicting = new FileNode(enabledMod, { kind: 'mod', name: 'On' }, copy, 'a.dds', 'wins');
     const alone = new FileNode(enabledMod, { kind: 'mod', name: 'On' }, copy, 'a.dds');
     expect(modsKeyContext([conflicting], byRow).singleGoToModRow).toBe(true);
@@ -129,7 +85,7 @@ describe('what the Mods keys read off the selection', () => {
   });
 
   it('compare file sees exactly one selected file row that loses its file order conflict', () => {
-    const copy = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false, markedExcluded: false, includedPath: 'x/a.dds' };
+    const copy = file('mods/On', 'x/a.dds');
     const origin = { kind: 'mod' as const, name: 'On' };
     const losing = new FileNode(enabledMod, origin, copy, 'a.dds', 'loses');
     const winning = new FileNode(enabledMod, origin, copy, 'a.dds', 'wins');
@@ -150,15 +106,12 @@ describe('what the Mods keys read off the selection', () => {
   });
 
   it('open folder sees exactly one selected row it takes: a mod, Overwrite, a file or a folder', () => {
-    const file = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds', excluded: false, markedExcluded: false, includedPath: 'x/a.dds' };
-    const folder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, { relativePath: 'x', path: '/instance/mods/On/x', excluded: false }, [file], [], 'x');
-    const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
-    expect(modsKeyContext([folder], byRow).singleOpenFolderRow).toBe(true);
+    expect(modsKeyContext([texturesFolder], byRow).singleOpenFolderRow).toBe(true);
     expect(modsKeyContext([enabledMod], byRow).singleOpenFolderRow).toBe(true);
     expect(modsKeyContext([new OverwriteNode([], 'MO2')], byRow).singleOpenFolderRow).toBe(true);
-    expect(modsKeyContext([leaf], byRow).singleOpenFolderRow).toBe(true);
+    expect(modsKeyContext([texturesLeaf], byRow).singleOpenFolderRow).toBe(true);
     expect(modsKeyContext([group], byRow).singleOpenFolderRow).toBe(false);
-    expect(modsKeyContext([enabledMod, leaf], byRow).singleOpenFolderRow).toBe(false);
+    expect(modsKeyContext([enabledMod, texturesLeaf], byRow).singleOpenFolderRow).toBe(false);
     expect(modsKeyContext([], byRow).singleOpenFolderRow).toBe(false);
   });
 
