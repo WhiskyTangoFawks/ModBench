@@ -1142,15 +1142,21 @@ describe('RecordPanel — column collapse', () => {
   });
 
   it('collapsed state survives a read of the record under the FormKey it moved to', async () => {
-    const { client } = renderPanel(compareResult);
+    const [master, winner] = compareResult.overrides;
+    const reloaded: CompareResult = {
+      ...compareResult,
+      overrides: [{ ...master, fields: [{ metadata: strMeta, value: 'Reloaded Name' }] }, winner],
+      diffs: [{ ...compareResult.diffs[0], values: { 'Fallout4.esm': 'Reloaded Name', 'MyMod.esp': 'Override Name' } }],
+    };
+    const load = vi.fn().mockResolvedValueOnce(loaded(compareResult)).mockResolvedValue(loaded(reloaded));
+    renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText('Override Name'));
     fireEvent.click(collapseButton(modHeader()));
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
 
     loadRecord('000002:Fallout4.esm');
 
-    await waitFor(() => expect(client.load).toHaveBeenCalledTimes(2));
-    await act(async () => { await Promise.resolve(); });
+    await screen.findByText('Reloaded Name');
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
   });
 });
@@ -1229,10 +1235,9 @@ describe('RecordPanel — column widths: a column\'s header and every cell under
     expect(new Set(widthsOfColumn(2))).toEqual(new Set(['']));
   });
 
-  it.each([['a plugin column', 'MyMod.esp'], ['the label column', 'Field']])('leaves %s no narrower than the floor when its edge is dragged past it', async (_name, label) => {
+  it.each([['a plugin column', 'MyMod.esp', 2], ['the label column', 'Field', 0]])('leaves %s no narrower than the floor when its edge is dragged past it', async (_name, label, index) => {
     renderPanel(compareResult);
     await screen.findByText('Override Name');
-    const index = label === 'Field' ? 0 : 2;
 
     dragEdge(required(screen.getByText(label).closest('th'), 'the header'), 200, -190);
 

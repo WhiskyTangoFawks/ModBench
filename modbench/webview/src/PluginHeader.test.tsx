@@ -83,7 +83,7 @@ describe('PluginHeader', () => {
   ])('for %s, shows its status, and a tooltip of the file name, the origin and the reason', (_case, facts, status, reason) => {
     const { header } = renderHeader(facts);
     expect(header).toHaveTextContent(status);
-    expect(header).toHaveAttribute('title', `MyMod.esp\nModA\n${status}\n${reason}`);
+    expect(header).toHaveAttribute('title', `MyMod.esp\nModA\n${reason}`);
   });
 
   it.each<[string, Facts, string, string]>([

@@ -72,7 +72,7 @@ export function PluginHeader({
           onOpen();
         }
       }}
-      title={`${o.plugin}\n${o.origin}\n${status.label}\n${status.reason}`}
+      title={[o.plugin, o.origin, ...(collapsed ? [status.label] : []), status.reason].join('\n')}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span onClick={e => e.stopPropagation()}><ExpandArrow expanded={!collapsed} onToggle={onToggleCollapse} /></span>
