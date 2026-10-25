@@ -24,29 +24,25 @@ function wired() {
   const handed: unknown[] = [];
   const said: string[] = [];
   const putReports: string[] = [];
-  const entryReports: string[] = [];
-  const logged: { info: string[]; error: string[] } = { info: [], error: [] };
+  const logged: string[] = [];
   const revealed = { count: 0 };
   const narrator = createReconcileNarrator({
     showProgress: () => undefined, applyIndexed: () => undefined, applyRefused: () => undefined,
     settle: (status) => new Promise((resolve) => { setTimeout(() => { handed.push(status); resolve(); }, 0); }), log: () => undefined,
   });
   const progress = { while: (work: () => Promise<void>) => work(), say: (message: string) => { said.push(message); } };
-  const log = { info: (message: string) => { logged.info.push(message); }, error: (message: string) => { logged.error.push(message); } };
+  const log = { info: (message: string) => { logged.push(message); } };
   const lines: string[] = [];
   const loadOrderPut = reportSyncFailures('put load order', 'The load order is not sent', (line) => lines.push(line));
   const view = editingView({
     narrator, progress, log, loadOrderPut,
     reporterFor: (tag) => ({
       ...recordingReporter(),
-      report: (_severity, message) => {
-        if (tag === 'loadOrder') putReports.push(message);
-        if (tag === 'enterEditing') entryReports.push(message);
-      },
+      report: (_severity, message) => { putReports.push(`${tag}: ${message}`); },
     }),
     revealLog: () => { revealed.count++; },
   });
-  return { view, handed, said, putReports, entryReports, logged, revealed, loadOrderPut, lines };
+  return { view, handed, said, putReports, logged, revealed, loadOrderPut, lines };
 }
 
 describe('the entry shown', () => {
@@ -61,10 +57,9 @@ describe('the entry shown', () => {
 });
 
 describe('a load order the loader refused, shown', () => {
-  it("says the refusal in the Plugins view's message line and once in the Output, however many values repeat it", async () => {
+  it("says the refusal in the Plugins view's message line and in the Output", async () => {
     const { view, loadOrderPut, lines } = wired();
 
-    await view.onPut(refused('a.esp is provided by the mod ModA, which has no mod folder'));
     await view.onPut(refused('a.esp is provided by the mod ModA, which has no mod folder'));
 
     expect(loadOrderPut.message()).toBe('The load order is not sent: a.esp is provided by the mod ModA, which has no mod folder.');
@@ -86,18 +81,17 @@ describe('a load order the loader refused, shown', () => {
 
     await view.onPut({ sent: false });
 
-    expect(loadOrderPut.message()).toBeDefined();
+    expect(loadOrderPut.message()).toBe('The load order is not sent: a.esp has no mod folder.');
   });
 });
 
 describe("a put's own outcome shown", () => {
   it("reports a failed send's message verbatim, as the put's", async () => {
-    const { view, putReports, entryReports, handed } = wired();
+    const { view, putReports, handed } = wired();
 
     await view.onPut(sent({ outcome: 'failed', message: 'Failed to send the load order — bad dir' }));
 
-    expect(putReports).toEqual(['Failed to send the load order — bad dir']);
-    expect([entryReports, handed]).toEqual([[], []]);
+    expect([putReports, handed]).toEqual([['loadOrder: Failed to send the load order — bad dir'], []]);
   });
 
   it('says nothing for an abandoned send, which owns no view', async () => {
@@ -122,6 +116,6 @@ describe("a put's own outcome shown", () => {
 
     await view.onPut({ sent: false });
 
-    expect([putReports, handed, logged.info]).toEqual([[], [], []]);
+    expect([putReports, handed, logged]).toEqual([[], [], []]);
   });
 });

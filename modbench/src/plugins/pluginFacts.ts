@@ -234,12 +234,6 @@ export class PluginFacts {
     return { kind: 'indexing' };
   }
 
-  /** Each plugin an unsaved document holds at its last good rows, by plugin key, with the
-   *  reason in words (common.md, States, story 6). */
-  laterReadFailures(): ReadonlyMap<string, string> {
-    return this.laterFailures;
-  }
-
   /** The message line's part for every read that failed, the instance's own among them
    *  (common.md, States, stories 2 and 6). */
   readFailureMessage(instanceReadFailure?: string): string | undefined {

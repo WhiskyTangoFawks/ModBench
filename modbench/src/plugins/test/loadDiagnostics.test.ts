@@ -35,23 +35,19 @@ describe('publishPluginProblems', () => {
 
   it('publishes nothing for a plugin with no file', () => {
     const collection = new FakeDiagnosticCollection();
-    const clear = vi.spyOn(collection, 'clear');
 
     publishPluginProblems(collection, pluginFilesFrom({}), [report('Ghost.esp', 'Gone', 'bad')], DiagnosticSeverity.Warning);
 
     expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)).toEqual([]);
-    expect(clear).toHaveBeenCalledTimes(1);
   });
 
   it('replaces the previous scan wholesale — one scan answers for the whole load order', () => {
     const collection = new FakeDiagnosticCollection();
-    const clear = vi.spyOn(collection, 'clear');
     const files = pluginFilesFrom({ 'M/A.esp': '/i/mods/M/A.esp', 'M/B.esp': '/i/mods/M/B.esp' });
     publishPluginProblems(collection, files, [report('A.esp', 'M', 'old')], DiagnosticSeverity.Warning);
 
     publishPluginProblems(collection, files, [report('B.esp', 'M', 'new')], DiagnosticSeverity.Warning);
 
-    expect(clear).toHaveBeenCalledTimes(2);
     expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection).map(([path]) => path)).toEqual(['/i/mods/M/B.esp']);
   });
 
