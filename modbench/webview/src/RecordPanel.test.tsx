@@ -1125,7 +1125,7 @@ describe('RecordPanel — column collapse', () => {
 
     fireEvent.click(collapseButton('MyMod.esp'));
     const row = required(screen.getByText('Name').closest('tr'), 'the Name row');
-    expect(row.cells[2].style.backgroundColor).toBe(colour);
+    expect(required(row.cells[2], 'the collapsed column\u2019s cell').style.backgroundColor).toBe(colour);
   });
 
   it('the button of a collapsed column expands it again', async () => {
