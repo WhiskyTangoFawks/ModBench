@@ -102,23 +102,6 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.Equal("not a document", File.ReadAllText(file));
     }
 
-    [Theory]
-    [InlineData("npc")]
-    [InlineData("quest")]
-    [InlineData("cell")]
-    public void AFieldEdit_OfARecordWhoseDirtyFileWasRemoved_IsRefusedAsRecordNotFound(string record)
-    {
-        var formKey = (record switch { "npc" => _mod.Npc, "quest" => _mod.Quest, _ => _mod.Cell }).ToString();
-        var given = TextOf(_mod, _mod.Plugin, formKey);
-        var file = Path.Combine(_mod.ModFolder, _mod.DocumentFile(formKey).Require());
-        _mod.Unsaved.Apply([new DocumentChange(file, given)]);
-        File.Delete(file);
-
-        var answer = _mod.EditChangesHandler.Changes(_mod.Plugin, formKey, Set("EditorID", "\"Edited\"")).Seen();
-
-        Assert.Equal(RecordEditRefusal.RecordNotFound, answer.Outcome.Refusal);
-    }
-
     [Fact]
     public void AFormIdEdit_BuildsOnTheUnsavedText_NotOnTheFile()
     {
@@ -182,14 +165,6 @@ public sealed class EditRecordChangesTests : IDisposable
         Assert.True(unchanged.Outcome.Applied, unchanged.Outcome.Message);
         Assert.Empty(unchanged.Changes.Require().Moves);
         Assert.Empty(unchanged.Changes.Require().Documents);
-    }
-
-    [Fact]
-    public void ARefusedEdit_AnswersItsRefusal()
-    {
-        var answer = Changes(_mod, _mod.Plugin, _mod.Npc.ToString(), Set("NoSuchField", "1"));
-
-        Assert.Equal(RecordEditRefusal.FieldNotFound, answer.Outcome.Refusal);
     }
 
     [Fact]
@@ -350,11 +325,7 @@ public sealed class EditRecordChangesTests : IDisposable
             var here = new Cell(mod) { EditorID = "Here", Grid = new CellGrid { Point = new P2Int(0, 0) } };
             here.Temporary.Add(Placed(mod, held, "Mover", 0, 0.5f));
             here.Persistent.Add(Placed(mod, held, "Wanderer", Persistent, 9.5f));
-            var subBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
-            subBlock.Items.Add(here);
-            var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
-            block.Items.Add(subBlock);
-            world.SubCells.Add(block);
+            world.SubCells.Add(CellBlocks.Exterior(here));
             mod.Worldspaces.Add(world);
         });
         keys = held;

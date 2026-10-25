@@ -33,7 +33,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     }
 
     [Fact]
-    public void Put_WithASupportedRelease_AppliesTheSnapshotToLoadOrderState()
+    public void ALoadOrderOfASupportedRelease_IsHeldAsState()
     {
         var a = Plugin("A.esp");
         var b = Plugin("B.esp");
@@ -50,7 +50,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     }
 
     [Fact]
-    public void Put_TwoActivePluginsOfOneFilename_RefusesWithoutApplying()
+    public void ALoadOrderWithTwoActivePluginsOfOneFilename_IsRefused_AndNothingIsHeld()
     {
         var a = Plugin("A.esp");
         var other = a with { Origin = "ModB" };
@@ -62,7 +62,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     }
 
     [Fact]
-    public void Put_UnsupportedGameRelease_RefusesWithoutApplying()
+    public void ALoadOrderOfAnUnsupportedRelease_IsRefused_AndNothingIsHeld()
     {
         var result = Refused(Put(GameRelease.Oblivion, [Plugin("A.esp")]));
 
@@ -72,7 +72,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     }
 
     [Fact]
-    public void Put_ADataFolderThatIsNotThere_RefusesWithoutApplying()
+    public void ALoadOrderWhoseDataFolderIsNotThere_IsRefused_AndNothingIsHeld()
     {
         var gone = Path.Combine(_dataFolder, "no-such-data");
 
@@ -84,7 +84,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     }
 
     [Fact]
-    public void Put_AFolderThatIsNotThereAndAnUnsupportedRelease_RefusesTheFolderFirst()
+    public void ALoadOrderWithAMissingFolderAndAnUnsupportedRelease_IsRefusedForTheFolder()
     {
         var gone = Path.Combine(_dataFolder, "no-such-data");
 

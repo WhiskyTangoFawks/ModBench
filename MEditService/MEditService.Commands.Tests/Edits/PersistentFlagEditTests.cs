@@ -33,13 +33,7 @@ public sealed class PersistentFlagEditTests : IDisposable
             var ruin = NewCell(plugin, "Ruin", Cell.Flag.IsInteriorCell);
             ruin.Temporary.Add(Placed(plugin, "RuinDeleted", Deleted, 1f, 2f));
             ruin.Persistent.Add(Placed(plugin, "RuinDeletedPersistent", Deleted | Persistent, 1f, 2f));
-            var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-            subBlock.Cells.Add(inside);
-            subBlock.Cells.Add(ruin);
-            subBlock.Cells.Add(unmarked);
-            var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-            block.SubBlocks.Add(subBlock);
-            plugin.Cells.Records.Add(block);
+            plugin.AddInteriorCells(inside, ruin, unmarked);
 
             var world = new Worldspace(plugin) { EditorID = "World" };
             _keys["World"] = world.FormKey;
@@ -219,31 +213,18 @@ public sealed class PersistentFlagEditTests : IDisposable
         AssertRefusedUnchanged(SetFlags("UnmarkedTemp", Persistent), RecordEditRefusal.PersistentMoveDestinationUnknown, "Unmarked", before);
     }
 
-    [Fact]
-    public void SettingPersistent_OnADeletedPlacedRecord_IsRefused_NamingDeleted()
+    [Theory]
+    [InlineData("RuinDeleted", Deleted | Persistent, "Ruin")]
+    [InlineData("RuinDeletedPersistent", Deleted, "Ruin")]
+    [InlineData("InsideTemp", Deleted | Persistent, "Inside")]
+    public void ChangingPersistent_OnAPlacedRecordDeletedBeforeOrByTheWrite_IsRefused_NamingDeleted(string placed, int written, string cell)
     {
-        var before = Document("Ruin");
+        var before = Document(cell);
 
-        var result = SetFlags("RuinDeleted", Deleted | Persistent);
+        var result = SetFlags(placed, written);
 
-        AssertRefusedUnchanged(result, RecordEditRefusal.PersistentOnDeletedRecord, "Ruin", before);
+        AssertRefusedUnchanged(result, RecordEditRefusal.PersistentOnDeletedRecord, cell, before);
         Assert.Contains("Deleted", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ClearingPersistent_OnADeletedPlacedRecord_IsRefused()
-    {
-        var before = Document("Ruin");
-
-        AssertRefusedUnchanged(SetFlags("RuinDeletedPersistent", Deleted), RecordEditRefusal.PersistentOnDeletedRecord, "Ruin", before);
-    }
-
-    [Fact]
-    public void SettingPersistentAndDeleted_InOneWrite_IsRefused()
-    {
-        var before = Document("Inside");
-
-        AssertRefusedUnchanged(SetFlags("InsideTemp", Deleted | Persistent), RecordEditRefusal.PersistentOnDeletedRecord, "Inside", before);
     }
 
     [Fact]

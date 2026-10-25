@@ -17,8 +17,6 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
     private readonly Dictionary<string, SourceToBuild> _builds = new(StringComparer.Ordinal);
     private readonly List<(string SourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins, IReadOnlyList<Asset> Assets)> _inits = [];
 
-    internal int SessionsOpened { get; private set; }
-
     internal IReadOnlyList<(string SourceFolder, IReadOnlyList<(IReadOnlyList<TreeFile> Tree, DecompiledPlugin Plugin)> Plugins, IReadOnlyList<Asset> Assets)> InitCalls => _inits;
 
     internal FakeSourceAdapter Building(string sourceFolder, SourceToBuild source)
@@ -56,11 +54,8 @@ internal sealed class FakeSourceAdapter : ISourceAdapter
 
     public SourceFailure? WhyGitCannotRun() => null;
 
-    public IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held)
-    {
-        SessionsOpened++;
-        return new FakeWriteSession(new FakeRepository(_mods[provider.SourceFolder ?? throw Unreached()]));
-    }
+    public IWriteSession WriteSessionOver(PluginProvider.FromMod provider, GameRelease release, IReadOnlyList<DocumentChange> held) =>
+        new FakeWriteSession(new FakeRepository(_mods[provider.SourceFolder ?? throw Unreached()]));
 
     public ISourceRepositoryReads? Over(RegisteredPlugin plugin, GameRelease release) => throw Unreached();
 

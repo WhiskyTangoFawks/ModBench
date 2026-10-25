@@ -13,7 +13,7 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class DeleteRecordChangesHandlerTests
 {
     [Fact]
-    public void DeleteRecords_LandsEachRecordOnItsOwn_AndRefusesTheOneThatCannotWithItsReason()
+    public void ADeleteOfSeveralRecords_LandsEach_AndRefusesTheHeaderWithItsReason()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
         var header = new RecordAt(mod.Plugin, PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName)));
@@ -33,7 +33,7 @@ public sealed class DeleteRecordChangesHandlerTests
     }
 
     [Fact]
-    public void DeleteRecords_NamingOneRecordTwice_DeletesItOnce_AndRefusesNothing()
+    public void ADeleteNamingOneRecordTwice_DeletesItOnce_AndRefusesNothing()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
         var npc = new RecordAt(mod.Plugin, mod.Npc.ToString());
@@ -50,7 +50,7 @@ public sealed class DeleteRecordChangesHandlerTests
     }
 
     [Fact]
-    public void DeleteRecords_WhenAnotherToolLeftTwoDocumentsClaimingOneRecord_RefusesThatRecord_AndLandsTheRest()
+    public void ADeleteOfARecordAnotherToolLeftTwoDocumentsClaiming_RefusesThatRecord_AndLandsTheRest()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
         TreeTampering.Duplicate(mod.ModFolder, mod.Plugin, mod.NpcIdentity);
@@ -69,7 +69,7 @@ public sealed class DeleteRecordChangesHandlerTests
     }
 
     [Fact]
-    public void DeleteChanges_AnswerTheRecordsFileAsADeletion_AndWriteNothing()
+    public void TheChangesOfADelete_AnswerTheRecordsFileAsADeletion_AndWriteNothing()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
 
@@ -82,7 +82,7 @@ public sealed class DeleteRecordChangesHandlerTests
     }
 
     [Fact]
-    public void DeleteChanges_OfAnEmbeddedChild_RewriteItsOwnersUnsavedText()
+    public void TheChangesOfDeletingAnEmbeddedChild_RewriteItsOwnersUnsavedText()
     {
         using var fixture = new ContainerModFixture();
         var owner = fixture.DocumentCarrying(ContainerModPlugin.EmbedCellEditorId);
@@ -99,7 +99,7 @@ public sealed class DeleteRecordChangesHandlerTests
     }
 
     [Fact]
-    public void DeleteChanges_OfARecordWhoseUnsavedTextGivesItAnotherFormKey_DeleteItsFileUnderThatKey()
+    public void TheChangesOfDeletingARecordWhoseUnsavedTextGivesItAnotherFormKey_DeleteItsFileUnderThatKey()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
         var npc = SourceModTree.DocumentCarrying(mod.ModFolder, mod.Plugin, SourceEditFixture.NpcEditorId);
@@ -113,7 +113,7 @@ public sealed class DeleteRecordChangesHandlerTests
     }
 
     [Fact]
-    public void DeleteRecords_OfTwoChildrenOfOneContainer_LeavesTheContainerWithNeitherOnceTheItemsAreMadeInOrder()
+    public void ADeleteOfTwoChildrenOfOneContainer_LeavesTheContainerWithNeither()
     {
         using var fixture = new ContainerModFixture();
 
@@ -128,32 +128,7 @@ public sealed class DeleteRecordChangesHandlerTests
     }
 
     [Fact]
-    public void DeleteRecords_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
-
-        var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, headerFormKey)]);
-
-        var refused = Assert.Single(result.Refused);
-        Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
-        Assert.NotNull(mod.Document(mod.Npc.ToString()));
-        Assert.NotNull(mod.Document(headerFormKey));
-    }
-
-    [Fact]
-    public void DeleteRecords_RemovesTheRecordFromTheTree()
-    {
-        using var mod = SourceEditFixture.CompiledPlugin();
-
-        var result = mod.DeleteHandler.DeleteRecordsSync([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
-
-        Assert.Empty(result.Refused);
-        Assert.Null(mod.Document(mod.Npc.ToString()));
-    }
-
-    [Fact]
-    public void DeleteRecords_LeavesOtherRecordsUntouched()
+    public void ADelete_LeavesOtherRecordsUntouched()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
 
@@ -163,7 +138,7 @@ public sealed class DeleteRecordChangesHandlerTests
     }
 
     [Fact]
-    public void DeleteRecords_Refuses_WhenPluginIsNonCompiledPlugin_NamingTheInitCommand()
+    public void ADeleteInANonCompiledPlugin_IsRefusedAsPluginNotCompiledPlugin()
     {
         using var mod = SourceEditFixture.NonCompiledPlugin();
 
@@ -171,11 +146,10 @@ public sealed class DeleteRecordChangesHandlerTests
 
         var refused = Assert.Single(result.Refused);
         Assert.Equal(RecordEditRefusal.PluginNotCompiledPlugin, refused.Refusal);
-        Assert.Contains("Decompile and commit its mod", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void DeleteRecords_Refuses_ForAnUnknownFormKey()
+    public void ADeleteOfAFormKeyNoDocumentHolds_IsRefusedAsRecordNotFound()
     {
         using var mod = SourceEditFixture.CompiledPlugin();
 

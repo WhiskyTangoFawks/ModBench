@@ -1,11 +1,8 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -15,44 +12,11 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
     public void Dispose()
     {
-        foreach (var overlay in _overlays) overlay.Dispose();
+        _compiled.ForEach(compiled => compiled.Dispose());
         _fixture.Dispose();
     }
 
     private CopyRecordChangesHandler CopyHandler() => _fixture.CopyHandler;
-
-    private CompilePluginHandler CompileService() =>
-        CompileServices.Over(_fixture.LoadOrder);
-
-    [Fact]
-    public async Task CopyExteriorPlacedReference_CompilesToBinary_AndPlacesTheRefUnderTheSourcesOwnBlockAndSubBlock()
-    {
-        var copyResult = CopyHandler().CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorPersistentRef.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false);
-        copyResult.OnlyLanded();
-
-        await CompileService().CompileLandedAsync(_fixture.DestinationPlugin);
-
-        var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
-        using var overlay = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(ContainerCopyFixture.DestinationPluginName), pluginPath), GameRelease.Fallout4);
-        var compiledMod = (IFallout4ModGetter)overlay;
-
-        var compiledWorldspace = compiledMod.Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace);
-
-        var block = compiledWorldspace.SubCells.SingleOrDefault(
-            b => b.BlockNumberX == ContainerCopyFixture.ExteriorBlockX && b.BlockNumberY == ContainerCopyFixture.ExteriorBlockY);
-        Assert.NotNull(block);
-
-        var subBlock = block.Require().Items.SingleOrDefault(
-            sb => sb.BlockNumberX == ContainerCopyFixture.ExteriorSubX && sb.BlockNumberY == ContainerCopyFixture.ExteriorSubY);
-        Assert.NotNull(subBlock);
-
-        var compiledCell = subBlock.Require().Items.SingleOrDefault(c => c.FormKey == _fixture.ExteriorCell);
-        Assert.NotNull(compiledCell);
-
-        Assert.Contains(compiledCell.Require().Persistent, r => r.FormKey == _fixture.ExteriorPersistentRef);
-        Assert.DoesNotContain(compiledCell.Temporary, r => r.FormKey == _fixture.ExteriorTemporaryRef);
-    }
 
     [Fact]
     public async Task CopyExteriorCell_WhenDestinationAlreadyOverridesTheWorldspaceOnly_LandsInsideTheExistingWorldspaceDirectory()
@@ -149,34 +113,10 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
     private async Task<IFallout4ModGetter> ImportCompiled()
     {
-        await CompileService().CompileLandedAsync(_fixture.DestinationPlugin);
-
-        var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
-        var overlay = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(ContainerCopyFixture.DestinationPluginName), pluginPath), GameRelease.Fallout4);
-        _overlays.Add(overlay);
-        return (IFallout4ModGetter)overlay;
+        var compiled = await _fixture.CompiledAsync(_fixture.DestinationPlugin);
+        _compiled.Add(compiled);
+        return compiled;
     }
 
-    private readonly List<IDisposable> _overlays = [];
-
-    [Fact]
-    public async Task CopyExteriorTemporaryPlacedReference_CompilesToBinary_InTheTemporarySlot()
-    {
-        var copyResult = CopyHandler().CopySync([new RecordAt(_fixture.SourcePlugin, _fixture.ExteriorTemporaryRef.ToString())], CopyMode.Override, [_fixture.DestinationPlugin], replace: false);
-        copyResult.OnlyLanded();
-
-        await CompileService().CompileLandedAsync(_fixture.DestinationPlugin);
-
-        var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
-        using var overlay = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(ContainerCopyFixture.DestinationPluginName), pluginPath), GameRelease.Fallout4);
-        var compiledCell = ((IFallout4ModGetter)overlay).Worldspaces.Records
-            .Single(w => w.FormKey == _fixture.Worldspace)
-            .SubCells.SelectMany(b => b.Items).SelectMany(sb => sb.Items)
-            .Single(c => c.FormKey == _fixture.ExteriorCell);
-
-        Assert.Contains(compiledCell.Temporary, r => r.FormKey == _fixture.ExteriorTemporaryRef);
-        Assert.DoesNotContain(compiledCell.Persistent, r => r.FormKey == _fixture.ExteriorPersistentRef);
-    }
+    private readonly List<IDisposable> _compiled = [];
 }

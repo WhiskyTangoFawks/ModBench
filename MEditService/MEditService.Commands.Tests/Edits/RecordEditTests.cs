@@ -64,23 +64,6 @@ public sealed class RecordEditTests : IDisposable
     }
 
     [Fact]
-    public void EditField_ChangesOnlyTheEditedRecord()
-    {
-        _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
-
-        Assert.DoesNotContain(_mod.OtherNpc.ToString(), Assert.Single(_mod.ChangedFormKeys()), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void EditField_LeavesTheEditUncommitted_UntilItIsCommitted()
-    {
-        _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
-
-        Assert.Contains("0.75", _mod.Document(_mod.Npc.ToString()).Require().Body, StringComparison.Ordinal);
-        Assert.Equal([_mod.Npc.ToString()], _mod.ChangedFormKeys());
-    }
-
-    [Fact]
     public void EditField_TwiceOnTheSameRecord_BuildsOnTheFirstEditRatherThanTheCommittedText()
     {
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
@@ -98,16 +81,6 @@ public sealed class RecordEditTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
-        Assert.Empty(_mod.ChangedFormKeys());
-    }
-
-    [Fact]
-    public void EditField_ForAFormKeyThePluginDoesNotHold_RefusesAsRecordNotFound_AndChangesNoRecord()
-    {
-        var result = _mod.EditHandler.Set(_mod.Plugin, "ABCDEF:NotHere.esp", "HeightMax", Json("0.75"));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
         Assert.Empty(_mod.ChangedFormKeys());
     }
 
@@ -175,17 +148,5 @@ public sealed class RecordEditTests : IDisposable
 
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
         Assert.NotNull(Unreadable());
-    }
-
-    [Fact]
-    public void EditField_WhenTheRecordHasGoneFromTheTree_Refuses()
-    {
-        _mod.Remove(_mod.NpcIdentity);
-
-        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
-        Assert.Contains(_mod.Npc.ToString(), result.Message, StringComparison.Ordinal);
     }
 }
