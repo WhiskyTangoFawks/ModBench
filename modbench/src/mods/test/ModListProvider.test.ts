@@ -4,8 +4,7 @@ import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  uriFile, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, DataTransferItem, DataTransfer, FakeCancellationToken, Uri,
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
@@ -15,7 +14,7 @@ vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   commands: { executeCommand },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
+  Uri, DataTransferItem, DataTransfer,
 }));
 
 import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';

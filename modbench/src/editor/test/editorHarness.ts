@@ -3,7 +3,7 @@ import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { createEditor } from '..';
 import type { ModFacts } from '../modsByOrigin';
 import { createFocusedView } from '../../drivingLib/focusedView';
-import { fakeUri } from '../../test/vscodeMock';
+import { Uri } from '../../test/vscodeMock';
 import { forgetVscode } from './editorVscode';
 
 export const pickRecord = vi.fn<(...args: unknown[]) => Promise<string | null>>();
@@ -51,7 +51,7 @@ export function register({
   const focusedView = createFocusedView();
   const outputChannel = outputChannelDouble();
   const editor = createEditor({
-    context: { extensionUri: fakeUri('/ext') },
+    context: { extensionUri: Uri.file('/ext') },
     meditClient,
     loadOrderComing: loadOrder,
     outputChannel,

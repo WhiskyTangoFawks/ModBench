@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordTypeCountFixture } from '../../client/test/fixtures';
-import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri: { from: uriFrom },
+  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri,
 }));
 
 import { soleChild, soleGroup } from './browserRows';

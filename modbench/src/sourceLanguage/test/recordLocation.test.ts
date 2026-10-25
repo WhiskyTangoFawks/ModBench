@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { UriWith } from '../../test/vscodeMock';
+import { Uri } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ Uri: UriWith }));
+vi.mock('vscode', () => ({ Uri }));
 
 import { locateRecord } from '../recordLocation';
 import { formKeyValue } from '../sourceText';

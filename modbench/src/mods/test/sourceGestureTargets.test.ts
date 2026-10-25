@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, uriFrom } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, Uri } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, Uri: { from: uriFrom } }));
+vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, Uri }));
 
 import { targetsOf, viewOf, type ModTargets } from '../sourceGestureTargets';
 import { ModNode } from '../ModListProvider';

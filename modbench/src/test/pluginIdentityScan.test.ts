@@ -1,10 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
-import { productionFiles, SRC } from './scanSource';
+import { plantedTree, productionFiles, SRC } from './scanSource';
 
 const WIRE_BOX = 'wire';
 const CLIENT_BOX = 'client';
@@ -59,15 +57,6 @@ function findOffenders(src: string = SRC): Record<string, string[]> {
   return offenders;
 }
 
-async function plantedSeams(files: Record<string, string>): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'medit-plugin-identity-scan-'));
-  for (const [path, text] of Object.entries(files)) {
-    await mkdir(join(dir, path, '..'), { recursive: true });
-    await writeFile(join(dir, path), text);
-  }
-  return dir;
-}
-
 describe('a plugin crosses a Modbench seam as an address (ADR-0012)', () => {
   it('scans the webview protocol and the mEdit client port', () => {
     expect(seamFiles()).toEqual(expect.arrayContaining([join(SRC, 'wire', 'messages.ts'), join(SRC, 'client', 'MEditClient.ts')]));
@@ -77,8 +66,8 @@ describe('a plugin crosses a Modbench seam as an address (ADR-0012)', () => {
     expect(findOffenders()).toEqual({});
   });
 
-  it('flags in the webview protocol a string plugin or filename with no origin of its own prefix beside it', async () => {
-    const dir = await plantedSeams({
+  it('flags in the webview protocol a string plugin or filename with no origin of its own prefix beside it', () => {
+    const dir = plantedTree({
       [join('wire', 'newMessage.ts')]: [
         'export interface Bare { plugin: string; formKey: string }',
         'export type Paired = { plugin: string; origin: string };',
@@ -91,17 +80,13 @@ describe('a plugin crosses a Modbench seam as an address (ADR-0012)', () => {
       ].join('\n'),
       [join('client', 'empty.ts')]: 'export {};\n',
     });
-    try {
-      expect(findOffenders(dir)).toEqual({
-        [join('wire', 'newMessage.ts')]: ['plugin', 'destinationPlugin', 'pluginName', 'plugin', 'plugins'],
-      });
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    expect(findOffenders(dir)).toEqual({
+      [join('wire', 'newMessage.ts')]: ['plugin', 'destinationPlugin', 'pluginName', 'plugin', 'plugins'],
+    });
   });
 
-  it('flags in the client any string plugin or filename, and only in the seams', async () => {
-    const dir = await plantedSeams({
+  it('flags in the client any string plugin or filename, and only in the seams', () => {
+    const dir = plantedTree({
       [join('client', 'port.ts')]: [
         'export interface Port {',
         '  read(fileName: string, origin: string): void;',
@@ -116,10 +101,6 @@ describe('a plugin crosses a Modbench seam as an address (ADR-0012)', () => {
       [join('client', 'test', 'fixture.ts')]: 'export const bare = (plugin: string) => plugin;\n',
       [join('plugins', 'outsideTheSeams.ts')]: 'export const bare = (plugin: string) => plugin;\n',
     });
-    try {
-      expect(findOffenders(dir)).toEqual({ [join('client', 'port.ts')]: ['fileName', 'fileName', 'plugin', 'plugin'] });
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+    expect(findOffenders(dir)).toEqual({ [join('client', 'port.ts')]: ['fileName', 'fileName', 'plugin', 'plugin'] });
   });
 });

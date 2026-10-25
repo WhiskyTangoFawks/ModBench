@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter, UriWith, uriWith, type SchemedUri } from '../../test/vscodeMock';
+import { EventEmitter, type FakeUri, Uri } from '../../test/vscodeMock';
 
-interface TestDocument { uri: SchemedUri; getText?(): string; isDirty?: boolean }
-interface Replacement { uri: SchemedUri; range: { start: number; end: number }; text: string }
+interface TestDocument { uri: FakeUri; getText?(): string; isDirty?: boolean }
+interface Replacement { uri: FakeUri; range: { start: number; end: number }; text: string }
 
 const h = vi.hoisted(() => ({
   providers: new Map<string, unknown>(),
@@ -16,14 +16,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock('vscode', () => ({
   EventEmitter,
-  Uri: UriWith,
+  Uri,
   Disposable: class { constructor(public dispose: () => void) {} },
   FileChangeType: { Changed: 1 },
   FileSystemError: { NoPermissions: (uri: unknown) => new Error(`no permissions on ${String(uri)}`) },
   Range: class { constructor(public start: number, public end: number) {} },
   WorkspaceEdit: class {
     replacements: Replacement[] = [];
-    replace(uri: SchemedUri, range: Replacement['range'], text: string) { this.replacements.push({ uri, range, text }); }
+    replace(uri: FakeUri, range: Replacement['range'], text: string) { this.replacements.push({ uri, range, text }); }
   },
   workspace: {
     registerFileSystemProvider: (scheme: string, provider: unknown) => {
@@ -36,8 +36,8 @@ vi.mock('vscode', () => ({
     onDidCloseTextDocument: (listener: (document: TestDocument) => void) => { h.closed.push(listener); return { dispose: () => undefined }; },
     fs: {
       stat: () => Promise.resolve({ type: 1, ctime: 1, ...h.disk }),
-      readFile: (uri: SchemedUri) => Promise.resolve(h.files.get(`${uri.scheme}:${uri.path}?${uri.query}`)),
-      writeFile: (uri: SchemedUri, content: Uint8Array) => {
+      readFile: (uri: FakeUri) => Promise.resolve(h.files.get(`${uri.scheme}:${uri.path}?${uri.query}`)),
+      writeFile: (uri: FakeUri, content: Uint8Array) => {
         h.files.set(`${uri.scheme}:${uri.path}?${uri.query}`, content);
         return Promise.resolve();
       },
@@ -61,7 +61,7 @@ const CELL_FILE = '/source/ModA/plugin-source/A.esp/Cells/Cell.json';
 const saved = (document: TestDocument): void => { h.saved.forEach((listener) => { listener(document); }); };
 const closed = (document: TestDocument): void => { h.closed.forEach((listener) => { listener(document); }); };
 
-const childUri = (path: string, query: string) => uriWith('modbench-child-record', path, query);
+const childUri = (path: string, query: string) => Uri.from({ scheme: 'modbench-child-record', path, query });
 const PLACED_URI = childUri(CELL_FILE, 'formKey=000803%3AA.esp&name=A.esp&origin=ModA');
 
 function childDocuments() {
@@ -120,7 +120,7 @@ describe('a child record\'s document', () => {
     let text = '{ "EditorID": "Typed" }';
     let isDirty = false;
     const save = vi.fn(() => Promise.resolve(true));
-    const container = { uri: uriWith('file', CELL_FILE), getText: () => text, get isDirty() { return isDirty; }, positionAt: (offset: number) => offset, save };
+    const container = { uri: Uri.from({ scheme: 'file', path: CELL_FILE }), getText: () => text, get isDirty() { return isDirty; }, positionAt: (offset: number) => offset, save };
     h.textDocuments.push(container);
     h.applyEdit = ({ replacements }) => {
       for (const { range, text: replacement } of replacements) text = text.slice(0, range.start) + replacement + text.slice(range.end);
@@ -149,7 +149,7 @@ describe('a child record\'s document', () => {
     await files.writeFile(PLACED_URI, WRITTEN, { create: true, overwrite: true });
     const afterOwnWrite = await sizeStated();
     h.disk = { mtime: 6, size: 12 };
-    saved({ uri: uriWith('file', CELL_FILE), getText: () => 'x'.repeat(12) });
+    saved({ uri: Uri.from({ scheme: 'file', path: CELL_FILE }), getText: () => 'x'.repeat(12) });
     const afterOwnSave = await sizeStated();
     h.disk = { mtime: 7, size: 20 };
 
@@ -165,7 +165,7 @@ describe('a child record\'s document', () => {
     await files.writeFile(PLACED_URI, WRITTEN, { create: true, overwrite: true });
     const afterWrite = await sizeStated();
     h.disk = { mtime: 6, size: 13 };
-    saved({ uri: uriWith('file', CELL_FILE), getText: () => 'x'.repeat(12) });
+    saved({ uri: Uri.from({ scheme: 'file', path: CELL_FILE }), getText: () => 'x'.repeat(12) });
 
     expect([afterWrite, await sizeStated()]).toEqual([9, 13]);
   });
@@ -181,7 +181,7 @@ describe('a child record\'s document', () => {
     h.disk = { mtime: 5, size: 0 };
     const midWrite = await sizeStated();
     h.disk = { mtime: 6, size: 12 };
-    saved({ uri: uriWith('file', CELL_FILE), getText: () => 'x'.repeat(12) });
+    saved({ uri: Uri.from({ scheme: 'file', path: CELL_FILE }), getText: () => 'x'.repeat(12) });
 
     expect([midWrite, await sizeStated()]).toEqual([0, 3]);
   });
@@ -201,12 +201,12 @@ describe('a child record\'s document', () => {
 });
 
 describe('an open child record\'s document, when copies change', () => {
-  const open = (...uris: SchemedUri[]) => { h.textDocuments.push(...uris.map((uri) => ({ uri }))); };
+  const open = (...uris: FakeUri[]) => { h.textDocuments.push(...uris.map((uri) => ({ uri }))); };
   const inModA = (copy: { plugin: { origin: string } }) => copy.plugin.origin === 'ModA';
 
   it('changes when its copy is one that changed, as a sibling\'s change changes its container\'s file', () => {
     const { documents, changed } = childDocuments();
-    open(PLACED_URI, uriWith('file', CELL_FILE));
+    open(PLACED_URI, Uri.from({ scheme: 'file', path: CELL_FILE }));
 
     documents.changedWhere(inModA);
 

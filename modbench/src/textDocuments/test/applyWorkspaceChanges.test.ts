@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fakeUri, Range } from '../../test/vscodeMock';
+import { Range, Uri } from '../../test/vscodeMock';
 
 const h = vi.hoisted(() => ({
   applied: [] as unknown[][],
@@ -62,7 +62,7 @@ describe('applying workspace changes', () => {
   });
 
   it('changes a document through the Uri of the one the changes read', async () => {
-    const read = fakeUri(OWNER);
+    const read = Uri.file(OWNER);
 
     await applyWorkspaceChanges([{ ...none, documents: [{ path: OWNER, text: 'x' }] }], { read });
 

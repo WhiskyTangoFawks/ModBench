@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, uriFile, uriFrom } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri } from '../../test/vscodeMock';
 
 const { registerCommand, executeCommand } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
@@ -9,7 +9,7 @@ const { registerCommand, executeCommand } = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   commands: { registerCommand, executeCommand },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFile, from: uriFrom },
+  Uri,
 }));
 
 import { registerCompareFileCommand } from '../compareFile';

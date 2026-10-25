@@ -1,11 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join, basename, sep } from 'node:path';
 import ts from 'typescript';
-import { pathSegments, productionFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
-import { tsFiles } from './tsFiles';
+import { pathSegments, plantedTree, productionFiles, sourceFiles, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
 
 interface Codec {
   file: string;
@@ -86,12 +83,9 @@ function allowedTokens(path: string): ReadonlySet<string> {
   return new Set(FORMATS.filter((format) => format.codecs.some((codec) => isCodecOrItsTest(path, codec))).flatMap((f) => f.tokens));
 }
 
-const allFiles = (roots: readonly string[]): string[] =>
-  roots.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
-
 function findLeaks(roots: readonly string[]): Record<string, string[]> {
   const leaks: Record<string, string[]> = {};
-  for (const path of allFiles(roots)) {
+  for (const path of sourceFiles(roots)) {
     const allowed = allowedTokens(path);
     const found = tokenLeaks(readFileSync(path, 'utf8'), path).filter((token) => !allowed.has(token));
     if (found.length > 0) leaks[path] = found;
@@ -101,11 +95,11 @@ function findLeaks(roots: readonly string[]): Record<string, string[]> {
 
 describe('format literals, scanned over the extension and webview trees against each format\'s codec allowlist', () => {
   it('covers the whole extension source tree', () => {
-    expect(allFiles(SOURCE_ROOTS).length).toBeGreaterThan(100);
+    expect(sourceFiles(SOURCE_ROOTS).length).toBeGreaterThan(100);
   });
 
   it('reaches the webview tree too, not only the extension host’s, as it is built and shipped from its own tsconfig and a walk stopping at src/ would let it spell anything', () => {
-    expect(allFiles(SOURCE_ROOTS)).toContain(join(WEBVIEW_SRC, 'RecordPanel.tsx'));
+    expect(sourceFiles(SOURCE_ROOTS)).toContain(join(WEBVIEW_SRC, 'RecordPanel.tsx'));
   });
 
   it('every codec file exists and names at least one token of its own format, so the list is load-bearing rather than decorative', () => {
@@ -123,85 +117,39 @@ describe('format literals, scanned over the extension and webview trees against 
     expect(findLeaks(SOURCE_ROOTS)).toEqual({});
   });
 
-  it('the tree walk itself catches a literal planted in a nested non-kernel production file, a handler re-deriving a format marker by hand instead of calling the kernel module that owns it', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-format-literal-scan-'));
-    try {
-      await mkdir(join(dir, 'nested'));
-      await writeFile(join(dir, 'topLevel.ts'), "export const label = 'unrelated';\n");
-      const planted = join(dir, 'nested', 'notKernel.ts');
-      await writeFile(planted, "export const marker = '_separator';\n");
-      expect(findLeaks([dir])).toEqual({ [planted]: ['_separator'] });
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+  it.each(['ts', 'tsx'])('the tree walk itself catches a literal planted in a nested .%s production file, a handler re-deriving a format marker by hand instead of calling the kernel module that owns it', (extension) => {
+    const dir = plantedTree({ 'topLevel.ts': "export const label = 'unrelated';\n", [`nested/notKernel.${extension}`]: "export const marker = '_separator';\n" });
+    expect(findLeaks([dir])).toEqual({ [join(dir, 'nested', `notKernel.${extension}`)]: ['_separator'] });
   });
 
-  it('the tree walk itself catches a literal planted in a nested .tsx file', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-format-literal-scan-'));
-    try {
-      await mkdir(join(dir, 'nested'));
-      const planted = join(dir, 'nested', 'notKernel.tsx');
-      await writeFile(planted, "export const marker = '_separator';\n");
-      expect(findLeaks([dir])).toEqual({ [planted]: ['_separator'] });
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+  it.each([
+    ['catches a token a test file other than the codec\'s own spells', "const line = (enabled: boolean) => enabled ? '+' : '-';\n", 'someOtherComponent.test.ts', ['+', '-']],
+    ['collects a template head as well as a no-substitution template', 'const a = `_separator${suffix}`;\nconst b = `+`;\n', 'x.ts', ['+', '_separator']],
+    ['does not flag the same token embedded inside a larger fixture string', "const ini = '[General]\\nselected_profile=@ByteArray(Default)\\n';\n", 'x.ts', []],
+    ['does not flag a token that appears only inside a comment or a prose test title',
+      "// MO2's own `gamePath` key, read elsewhere\nit('the `*` prefix means enabled');\n", 'x.test.ts', []],
+  ])('%s', (_, text, fileName, leaked) => {
+    expect(tokenLeaks(text, fileName)).toEqual(leaked);
   });
 
-  it('flags a literal planted in a non-kernel test file, the codec\'s own test being allowed and not every test in the suite', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-format-literal-scan-'));
-    try {
-      const planted = join(dir, 'someOtherComponent.test.ts');
-      await writeFile(planted, "const line = (enabled: boolean) => enabled ? '+' : '-';\n");
-      expect(tokenLeaks(readFileSync(planted, 'utf8'), planted)).toEqual(expect.arrayContaining(['+', '-']));
-      expect(allowedTokens(planted)).toEqual(new Set());
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+  it.each([
+    ['a manager codec\'s own test its format\'s tokens', join('src', 'instanceAdapter', 'mo2', 'test', 'codecs', 'modlistText.test.ts'), MANAGER_FORMATS.tokens],
+    ['the game codec\'s own test its format\'s tokens', join('src', 'loadOrderFileCodec', 'test', 'pluginsText.test.ts'), GAME_FORMAT.tokens],
+    ['no token to a test in a codec box that is not a codec\'s', join('src', 'instanceAdapter', 'mo2', 'test', 'layout.test.ts'), []],
+    ['no token to a module in a codec box that is not a codec', join('src', 'instanceAdapter', 'mo2', 'mo2Instance.ts'), []],
+    ['no token to a test of no codec', 'someOtherComponent.test.ts', []],
+    ['no token to a plugins.txt codec inside the Instance adapter, which would put the game\'s format inside one mod manager\'s implementation',
+      join('src', 'instanceAdapter', 'mo2', 'codecs', 'pluginsText.ts'), []],
+  ])('allows %s', (_, path, tokens) => {
+    expect(allowedTokens(path)).toEqual(new Set(tokens));
   });
 
-  it('does not flag the same token embedded inside a larger fixture string', () => {
-    const src = "const ini = '[General]\\nselected_profile=@ByteArray(Default)\\n';\n";
-    expect(tokenLeaks(src, 'x.ts')).toEqual([]);
-  });
-
-  it('does not flag a token that appears only inside a comment or a prose test title', () => {
-    const src = "// MO2's own `gamePath` key, read elsewhere\nit('the `*` prefix means enabled');\n";
-    expect(tokenLeaks(src, 'x.test.ts')).toEqual([]);
-  });
-
-  it('collects a template head as well as a no-substitution template', () => {
-    const src = 'const a = `_separator${suffix}`;\nconst b = `+`;\n';
-    expect(tokenLeaks(src, 'x.ts')).toEqual(expect.arrayContaining(['_separator', '+']));
-  });
-
-  it('allows a codec module’s own test file its own format\'s tokens', () => {
-    expect(allowedTokens(join('src', 'instanceAdapter', 'mo2', 'test', 'codecs', 'modlistText.test.ts'))).toEqual(new Set(MANAGER_FORMATS.tokens));
-    expect(allowedTokens(join('src', 'loadOrderFileCodec', 'test', 'pluginsText.test.ts'))).toEqual(new Set(GAME_FORMAT.tokens));
-  });
-
-  it('allows no token to a file in a codec box that is not a codec module or its test', () => {
-    expect(allowedTokens(join('src', 'instanceAdapter', 'mo2', 'test', 'layout.test.ts'))).toEqual(new Set());
-    expect(allowedTokens(join('src', 'instanceAdapter', 'mo2', 'mo2Instance.ts'))).toEqual(new Set());
-  });
-
-  it('the Instance adapter holds no plugins.txt codec of its own, which would put the game\'s format inside one mod manager\'s implementation', () => {
-    expect(allowedTokens(join('src', 'instanceAdapter', 'mo2', 'codecs', 'pluginsText.ts'))).toEqual(new Set());
-  });
-
-  it('catches MO2\'s markers planted in the game\'s codec', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-format-literal-scan-'));
-    try {
-      await mkdir(join(dir, 'instanceAdapter', 'mo2', 'codecs'), { recursive: true });
-      await mkdir(join(dir, 'loadOrderFileCodec'));
-      const managerCodec = join(dir, 'instanceAdapter', 'mo2', 'codecs', 'modlistText.ts');
-      const gameCodec = join(dir, 'loadOrderFileCodec', 'pluginsText.ts');
-      await writeFile(managerCodec, "export const marks = ['+'];\n");
-      await writeFile(gameCodec, "export const marks = ['*', '+', '_separator'];\n");
-      expect(findLeaks([dir])).toEqual({ [gameCodec]: ['+', '_separator'] });
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+  it('catches MO2\'s markers planted in the game\'s codec', () => {
+    const dir = plantedTree({
+      'instanceAdapter/mo2/codecs/modlistText.ts': "export const marks = ['+'];\n",
+      'loadOrderFileCodec/pluginsText.ts': "export const marks = ['*', '+', '_separator'];\n",
+    });
+    expect(findLeaks([dir])).toEqual({ [join(dir, 'loadOrderFileCodec', 'pluginsText.ts')]: ['+', '_separator'] });
   });
 });
 
@@ -243,72 +191,40 @@ describe('layout names', () => {
     expect(findLayoutLeaks(SOURCE_ROOTS)).toEqual({});
   });
 
-  it('the walk catches a name planted in a nested production file that owns none of them, a mod folder guessed as the mods directory joined with an origin', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-layout-scan-'));
-    try {
-      await mkdir(join(dir, 'nested'));
-      await writeFile(join(dir, 'topLevel.ts'), "export const label = 'unrelated';\n");
-      const planted = join(dir, 'nested', 'guess.ts');
-      await writeFile(planted, "export const modFolder = (root: string, origin: string) => join(root, 'mods', origin);\n");
-      expect(findLayoutLeaks([dir])).toEqual({ [planted]: ['mods'] });
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+  it('the walk catches a name planted in a nested production file that owns none of them, a mod folder guessed as the mods directory joined with an origin', () => {
+    const dir = plantedTree({
+      'topLevel.ts': "export const label = 'unrelated';\n",
+      'nested/guess.ts': "export const modFolder = (root: string, origin: string) => join(root, 'mods', origin);\n",
+    });
+    expect(findLayoutLeaks([dir])).toEqual({ [join(dir, 'nested', 'guess.ts')]: ['mods'] });
   });
 
-  it('catches a name spelled as one segment of a watcher glob', () => {
-    expect(layoutLeaks("watch(root, 'profiles/*/plugins.txt');\n", 'x.ts')).toEqual(['profiles', 'plugins.txt']);
+  it.each([
+    ['catches a name spelled as one segment of a watcher glob', "watch(root, 'profiles/*/plugins.txt');\n", ['profiles', 'plugins.txt']],
+    ['catches a file of the manager\'s named in a message', "export const tooltip = 'Mod files tools wrote, in ModOrganizer.ini';\n", ['ModOrganizer.ini']],
+    ['catches a file of the manager\'s named in a template\'s tail',
+      'export const say = (mod: string) => `"${mod}" was created, but its modlist.txt line could not be written.`;\n', ['modlist.txt']],
+    ['catches a file extension of the manager\'s named in a template\'s tail', 'export const say = (name: string) => `${name}.meta was left behind.`;\n', ['.meta']],
+    ['catches a directory name as a path segment', "join(base, 'profiles', 'overwrite');\n", ['profiles', 'overwrite']],
+    ['does not flag a directory name in prose', "export const say = 'the mods and profiles are fine';\n", []],
+    ['does not flag a file of the manager\'s named in a comment', '// reads modlist.txt\n', []],
+    ['does not flag a longer name one begins', "export const say = 'its .metadata';\n", []],
+    ['does not flag a substitution beside the words of a file\'s line', 'export const say = (file: string) => `its ${file} line could not be written.`;\n', []],
+    ['does not flag a name inside a longer path segment', "const msg = 'Cannot deploy: mods/ and the game folder differ';\n", []],
+    ['does not flag a name inside a setting key', "const key = 'modbench.mods.gameFolder';\n", []],
+    ['does not flag a module specifier', "import { parseDownloadedFileMeta } from './codecs/downloads';\n", []],
+    ['does not flag a literal type, which can never be a path', "type V = Pick<InstanceValue, 'mods' | 'downloads'>;\n", []],
+    ['does not flag a Nexus URL’s own path segments, a template\'s middle and tail not being visited so a name spliced after a substitution escapes the scan',
+      'const url = `https://www.nexusmods.com/${slug}/mods/${id}`;\n', []],
+  ])('%s', (_, text, leaked) => {
+    expect(layoutLeaks(text, 'x.ts')).toEqual(leaked);
   });
 
-  it('catches a file of the manager\'s named in a message, in a template\'s tail too', () => {
-    expect(layoutLeaks('export const say = (mod: string) => `"${mod}" was created, but its modlist.txt line could not be written.`;\n', 'x.ts'))
-      .toEqual(['modlist.txt']);
-    expect(layoutLeaks('export const say = (name: string) => `${name}.meta was left behind.`;\n', 'x.ts')).toEqual(['.meta']);
-    expect(layoutLeaks("export const tooltip = 'Mod files tools wrote, in ModOrganizer.ini';\n", 'x.ts')).toEqual(['ModOrganizer.ini']);
-  });
-
-  it('catches a directory name only as a path segment, not in prose', () => {
-    expect(layoutLeaks("join(base, 'profiles', 'overwrite');\n", 'x.ts')).toEqual(['profiles', 'overwrite']);
-    expect(layoutLeaks("export const say = 'the mods and profiles are fine';\n", 'x.ts')).toEqual([]);
-  });
-
-  it('does not flag a file of the manager\'s named in a comment, or a longer name one begins', () => {
-    expect(layoutLeaks('// reads modlist.txt\n', 'x.ts')).toEqual([]);
-    expect(layoutLeaks("export const say = 'its .metadata';\n", 'x.ts')).toEqual([]);
-    expect(layoutLeaks('export const say = (file: string) => `its ${file} line could not be written.`;\n', 'x.ts')).toEqual([]);
-  });
-
-  it('does not flag a name inside a longer path segment, or one only in prose', () => {
-    expect(layoutLeaks("const msg = 'Cannot deploy: mods/ and the game folder differ';\n", 'x.ts')).toEqual([]);
-    expect(layoutLeaks("const key = 'modbench.mods.gameFolder';\n", 'x.ts')).toEqual([]);
-  });
-
-  it('does not flag a module specifier', () => {
-    expect(layoutLeaks("import { parseDownloadedFileMeta } from './codecs/downloads';\n", 'x.ts')).toEqual([]);
-  });
-
-  it('does not flag a literal type, which can never be a path', () => {
-    expect(layoutLeaks("type V = Pick<InstanceValue, 'mods' | 'downloads'>;\n", 'x.ts')).toEqual([]);
-  });
-
-  it('does not flag a Nexus URL’s own path segments, a template\'s middle and tail not being visited so a name spliced after a substitution escapes the scan', () => {
-    expect(layoutLeaks('const url = `https://www.nexusmods.com/${slug}/mods/${id}`;\n', 'x.ts')).toEqual([]);
-  });
-
-  it('leaves test files to spell their own fixtures, their literal paths keeping them independent of the layout module under test', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-layout-scan-'));
-    try {
-      await mkdir(join(dir, 'box', 'test'), { recursive: true });
-      await writeFile(join(dir, 'box', 'test', 'fixture.ts'), "export const root = join(base, 'mods');\n");
-      await writeFile(join(dir, 'box', 'guess.test.ts'), "export const root = join(base, 'mods');\n");
-      expect(findLayoutLeaks([dir])).toEqual({});
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('the Instance adapter spells the directory names and no file name of a codec’s, a codec\'s file name spelled in the layout too being how one name gets two spellers without either scan noticing', () => {
-    const path = join(SRC, 'instanceAdapter', 'mo2', 'layout.ts');
-    expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toEqual(['profiles', 'mods', 'downloads', '.mohidden']);
+  it('leaves test files to spell their own fixtures, their literal paths keeping them independent of the layout module under test', () => {
+    const dir = plantedTree({
+      'box/test/fixture.ts': "export const root = join(base, 'mods');\n",
+      'box/guess.test.ts': "export const root = join(base, 'mods');\n",
+    });
+    expect(findLayoutLeaks([dir])).toEqual({});
   });
 });

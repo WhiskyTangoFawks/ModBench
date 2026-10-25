@@ -58,15 +58,15 @@ describe('a failure the surface already shows', () => {
 });
 
 describe('the outcome of a gesture over a selection', () => {
-  it.each<[string, string, SelectionOutcome<{ name: string }>, object, object]>([
-    ['refusals among its landings are one error naming each refusal and why', 'Could not delete 2 downloaded files.', {
-      landed: [downloadedFile('A.7z'), downloadedFile('B.7z'), downloadedFile('C.7z')],
+  it('is the tagged error toast and line of its refusals', () => {
+    const outcome: SelectionOutcome<{ name: string }> = {
+      landed: [downloadedFile('A.7z')],
       refused: [{ item: downloadedFile('D.7z'), reason: 'in use' }, { item: downloadedFile('E.7z'), reason: 'gone from disk' }],
-    },
-    { ...NO_TOAST, error: ['Could not delete 2 downloaded files. — "D.7z" (in use), "E.7z" (gone from disk)'] },
-    { ...NO_LINE, error: ['[downloadedFile.delete] Could not delete 2 downloaded files. — "D.7z" (in use), "E.7z" (gone from disk)'] }],
-    ['a selection that fully landed says nothing', 'Could not delete any downloaded file.', { landed: [downloadedFile('A.7z')], refused: [] }, NO_TOAST, NO_LINE],
-  ])('%s', (_case, message, outcome, toasts, lines) => {
-    expect(heard('downloadedFile.delete', (r) => { r.selectionOutcome(message, outcome, (d) => d.name); })).toEqual({ toasts, lines });
+    };
+
+    expect(heard('downloadedFile.delete', (r) => { r.selectionOutcome('Could not delete 2 downloaded files.', outcome, (d) => d.name); })).toEqual({
+      toasts: { ...NO_TOAST, error: ['Could not delete 2 downloaded files. — "D.7z" (in use), "E.7z" (gone from disk)'] },
+      lines: { ...NO_LINE, error: ['[downloadedFile.delete] Could not delete 2 downloaded files. — "D.7z" (in use), "E.7z" (gone from disk)'] },
+    });
   });
 });

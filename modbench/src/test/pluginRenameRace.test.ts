@@ -6,7 +6,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule } from './mo2/fakeVscodeWatcher';
 import { NO_PUBLISHER } from './fakeInstanceAdapter';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom } from './vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, Uri } from './vscodeMock';
 import { adapterOver, readPluginLines, sourceOver } from './mo2/adapterOver';
 import { pluginCommandsWith } from './pluginCommandsWith';
 import { STEADY_WINDOW } from './steadyWindow';
@@ -21,7 +21,7 @@ const { handlers, showInputBox } = vi.hoisted(() => ({
 vi.mock('vscode', async () => {
   const { recordedWithProgress } = await import('./recordedProgress');
   return {
-    ...fakeVscodeModule(), Uri: { ...fakeVscodeModule().Uri, from: uriFrom }, TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter,
+    ...fakeVscodeModule(), Uri, TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter,
     commands: { registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => { handlers.set(id, handler); return { dispose: () => undefined }; } },
     window: { showInputBox, withProgress: recordedWithProgress },
   };

@@ -9,8 +9,7 @@ import {
 } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  uriFile, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, DataTransferItem, DataTransfer, FakeCancellationToken, Uri,
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
@@ -21,7 +20,7 @@ vi.mock('vscode', async () => {
   return {
     ...fakeVscodeModule(),
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-    Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
+    Uri, DataTransferItem, DataTransfer,
     window: { withProgress: recordedWithProgress },
     commands: {
       executeCommand: (id: string, _clicked: unknown, rows: { plugin: { name: string }; origin: string }[], drop: PluginsDrop) => {

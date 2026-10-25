@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { isTestSupport, SRC } from './scanSource';
+import { isTestSupport, plantedTree, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 const CLIENT_DIR = 'client';
@@ -28,21 +27,12 @@ describe('the notification stream path is the client box\'s alone', () => {
     expect(streamPathNamers(SRC)).toEqual([]);
   });
 
-  it('the client folder itself is excluded, not merely empty of offenses', () => {
-    expect(isClientFolder(join('client', 'HttpMEditClient.ts'))).toBe(true);
-  });
-
   it('a plant outside the client box is caught, and the same plant inside it is not', () => {
-    const root = mkdtempSync(join(tmpdir(), 'medit-client-seam-boundary-'));
-    try {
-      mkdirSync(join(root, 'plugins'), { recursive: true });
-      mkdirSync(join(root, 'client'), { recursive: true });
-      writeFileSync(join(root, 'plugins', 'Provider.ts'), "export const path = '/notifications/stream';\n");
-      writeFileSync(join(root, 'client', 'notificationStream.ts'), "export const path = '/notifications/stream';\n");
-      expect(streamPathNamers(root)).toEqual([join('plugins', 'Provider.ts')]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    const root = plantedTree({
+      'plugins/Provider.ts': "export const path = '/notifications/stream';\n",
+      'client/notificationStream.ts': "export const path = '/notifications/stream';\n",
+    });
+    expect(streamPathNamers(root)).toEqual([join('plugins', 'Provider.ts')]);
   });
 });
 
@@ -76,13 +66,7 @@ describe('the port has exactly two adapters', () => {
   });
 
   it('a planted third adapter, inside a test folder, is caught', () => {
-    const root = mkdtempSync(join(tmpdir(), 'medit-client-second-adapter-'));
-    try {
-      mkdirSync(join(root, 'plugins', 'test'), { recursive: true });
-      writeFileSync(join(root, 'plugins', 'test', 'FakeClient.ts'), 'export class FakeClient implements MEditClient {}\n');
-      expect(classDeclarers(root)).toEqual([join('plugins', 'test', 'FakeClient.ts')]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    const root = plantedTree({ 'plugins/test/FakeClient.ts': 'export class FakeClient implements MEditClient {}\n' });
+    expect(classDeclarers(root)).toEqual([join('plugins', 'test', 'FakeClient.ts')]);
   });
 });

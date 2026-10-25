@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Diagnostic, DiagnosticSeverity, Range, uriFile, fakeUri, FakeDiagnosticCollection } from '../../test/vscodeMock';
+import { Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection, Uri } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri: { file: uriFile } }));
+vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri }));
 
 import type { PublisherConfiguration, PublisherTag } from '../../instanceAdapter/instanceAdapter';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
@@ -22,7 +22,7 @@ const instanceHolding = (publisherConfiguration: PublisherConfiguration) =>
 const lineRange = (line: number) => new Range(line, 0, line, Number.MAX_SAFE_INTEGER);
 
 const problemsOf = (collection: FakeDiagnosticCollection) =>
-  (collection.get(fakeUri(FILE)) ?? []).map(({ range, message, severity }) => [range, message, severity]);
+  (collection.get(Uri.file(FILE)) ?? []).map(({ range, message, severity }) => [range, message, severity]);
 
 describe('a publisher tag that names no path (publishing.md, Publisher tags, story 4)', () => {
   it('shows a warning on its line in the publisher\'s configuration, zero-based for the panel', () => {
@@ -57,7 +57,7 @@ describe('a publisher tag that names no path (publishing.md, Publisher tags, sto
     const afterChange = problemsOf(collection).map(([range]) => range);
     instance.publish({ ...instance.value, publisherConfiguration: { kind: 'none' } });
 
-    expect({ afterChange, afterNone: collection.has(fakeUri(FILE)) }).toEqual({ afterChange: [lineRange(4)], afterNone: false });
+    expect({ afterChange, afterNone: collection.has(Uri.file(FILE)) }).toEqual({ afterChange: [lineRange(4)], afterNone: false });
   });
 
   it('stops following the instance when disposed', () => {
@@ -67,6 +67,6 @@ describe('a publisher tag that names no path (publishing.md, Publisher tags, sto
 
     instance.publish({ ...instance.value, publisherConfiguration: naming(1) });
 
-    expect(collection.has(fakeUri(FILE))).toBe(false);
+    expect(collection.has(Uri.file(FILE))).toBe(false);
   });
 });

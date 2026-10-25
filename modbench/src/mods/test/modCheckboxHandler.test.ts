@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn((_id: string, ..._args: unknown[]) => Promise.resolve()) }));
 
-import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, uriFrom } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, Uri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
   commands: { executeCommand },
   TreeItemCheckboxState: { Unchecked: 0, Checked: 1 },
   TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor,
-  Uri: { from: uriFrom },
+  Uri,
 }));
 
 import { onModCheckboxChanged } from '../modCheckboxHandler';

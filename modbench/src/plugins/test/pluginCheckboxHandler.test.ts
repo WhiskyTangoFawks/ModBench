@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, uriFile, uriFrom,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, Uri,
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
@@ -9,7 +9,7 @@ vi.mock('vscode', async () => {
   return {
     ...fakeVscodeModule(),
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-    Uri: { file: uriFile, from: uriFrom },
+    Uri,
     window: { withProgress: recordedWithProgress },
   };
 });

@@ -2,8 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { FileOrigin, OriginFile, OriginFolder } from '../../instanceLoader/instance';
 import type { ModlistEntry } from '../../instanceAdapter/instanceAdapter';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  uriFile, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, DataTransferItem, DataTransfer, FakeCancellationToken, Uri,
 } from '../../test/vscodeMock';
 
 const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn((_id: string, ..._args: unknown[]) => Promise.resolve()) }));
@@ -11,7 +10,7 @@ const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn((_id: strin
 vi.mock('vscode', () => ({
   commands: { executeCommand },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
+  Uri, DataTransferItem, DataTransfer,
 }));
 
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, fakeUri, uriParse } from '../../test/vscodeMock';
+import { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, uriParse, Uri } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ Diagnostic, Range, DiagnosticSeverity, Uri: { file: fakeUri, parse: uriParse } }));
+vi.mock('vscode', () => ({ Diagnostic, Range, DiagnosticSeverity, Uri: { ...Uri, parse: uriParse } }));
 
 import { decompileAndRepairLink, publishPluginProblems } from '../loadDiagnostics';
 import type { PluginAddress, PluginDiagnosisReport } from '../../client';

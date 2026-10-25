@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { type FakeUri, Uri } from '../../test/vscodeMock';
 
-interface FakeUri { scheme: string; path: string; query: string; toString(): string }
 interface ChangeEvent { type: number; uri: FakeUri }
 interface Provider {
   stat(uri: FakeUri): Promise<{ mtime: number; size: number }>;
@@ -27,11 +27,7 @@ vi.mock('vscode', () => ({
     openTextDocument: (uri: FakeUri) => Promise.resolve({ uri }),
   },
   window: { showTextDocument: (doc: { uri: FakeUri }, opts?: unknown) => showTextDocument(doc, opts) },
-  Uri: {
-    from: (parts: { scheme: string; path: string; query: string }): FakeUri => ({
-      ...parts, toString: () => `${parts.scheme}://${parts.path}?${parts.query}`,
-    }),
-  },
+  Uri,
   EventEmitter: class {
     private readonly listeners: Array<(e: unknown) => void> = [];
     event = (listener: (e: unknown) => void) => { this.listeners.push(listener); return { dispose: () => undefined }; };

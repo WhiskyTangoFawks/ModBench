@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
-import { importSpecifiers, isTestSupport, SRC } from './scanSource';
+import { importSpecifiers, isTestSupport, plantedTree, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'utf8');
@@ -72,86 +71,34 @@ describe('Mods, Downloads and Toolbox never see a record (target-architecture.md
   });
 
   describe('a plant in each box that never sees a record is caught, and the same plant in another box is not', () => {
-    function withPlantedTree(run: (root: string) => void): void {
-      const root = mkdtempSync(join(tmpdir(), 'medit-context-boundary-'));
-      try {
-        run(root);
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
-    }
+    const FORMKEY_IMPORT = "import type { FormKey } from '../wire/ApiClient';\n";
 
     it.each(NEVER_SEE_A_RECORD)('a FormKey import planted in a file of %s is caught', (box) => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, box), { recursive: true });
-        writeFileSync(join(root, box, 'planted.ts'), "import type { FormKey } from '../wire/ApiClient';\n");
-        expect(findOffenders(root)).toEqual([join(box, 'planted.ts')]);
-      });
+      expect(findOffenders(plantedTree({ [`${box}/planted.ts`]: FORMKEY_IMPORT }))).toEqual([join(box, 'planted.ts')]);
     });
 
     it('a test file or test folder is not caught, its names and fixtures being prose and corpus data', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'mods', 'test'), { recursive: true });
-        writeFileSync(join(root, 'mods', 'modList.test.ts'), 'const formKey = 1;\n');
-        writeFileSync(join(root, 'mods', 'test', 'fixture.ts'), 'const formKey = 1;\n');
-        expect(findOffenders(root)).toEqual([]);
-      });
+      expect(findOffenders(plantedTree({ 'mods/modList.test.ts': 'const formKey = 1;\n', 'mods/test/fixture.ts': 'const formKey = 1;\n' }))).toEqual([]);
+    });
+
+    it('the same FormKey import inside the Plugins view is not caught', () => {
+      expect(findOffenders(plantedTree({ 'mods/ModListProvider.ts': FORMKEY_IMPORT, 'plugins/RecordBrowser.ts': FORMKEY_IMPORT })))
+        .toEqual([join('mods', 'ModListProvider.ts')]);
     });
 
     const LIB_FILE = join('drivingLib', 'recordArgument.ts');
     const importingTheLibFile = "import { recordArgumentOf } from '../drivingLib/recordArgument';\n";
-    const plantLibFileImportedFrom = (root: string, ...dirs: string[]) => {
-      mkdirSync(join(root, 'drivingLib'), { recursive: true });
-      writeFileSync(join(root, LIB_FILE), 'export const formKey = 1;\n');
-      for (const dir of dirs) {
-        mkdirSync(join(root, dir), { recursive: true });
-        writeFileSync(join(root, dir, 'importer.ts'), importingTheLibFile);
-      }
-    };
+    const importingThroughAnother = "import { recordArgumentOf } from '../drivingLib/between';\n";
+    const anotherLibFile = { 'drivingLib/between.ts': "export { recordArgumentOf } from './recordArgument';\n" };
 
-    it('FormKey vocabulary in a driving lib file the Editing views alone import is not caught', () => {
-      withPlantedTree((root) => {
-        plantLibFileImportedFrom(root, 'editor', 'sourceLanguage');
-        expect(findOffenders(root)).toEqual([]);
-      });
-    });
-
-    it('FormKey vocabulary in a driving lib file a Mods-shaped file imports too is caught', () => {
-      withPlantedTree((root) => {
-        plantLibFileImportedFrom(root, 'editor', 'mods');
-        expect(findOffenders(root)).toEqual([LIB_FILE]);
-      });
-    });
-
-    it('FormKey vocabulary in a driving lib file a Mods-shaped file reaches through another lib file is caught', () => {
-      withPlantedTree((root) => {
-        plantLibFileImportedFrom(root, 'editor');
-        writeFileSync(join(root, 'drivingLib', 'between.ts'), "export { recordArgumentOf } from './recordArgument';\n");
-        mkdirSync(join(root, 'mods'), { recursive: true });
-        writeFileSync(join(root, 'mods', 'importer.ts'), "import { recordArgumentOf } from '../drivingLib/between';\n");
-        expect(findOffenders(root)).toEqual([LIB_FILE]);
-      });
-    });
-
-    it('FormKey vocabulary in a driving lib file the Editing views alone reach through another lib file is not caught', () => {
-      withPlantedTree((root) => {
-        plantLibFileImportedFrom(root);
-        writeFileSync(join(root, 'drivingLib', 'between.ts'), "export { recordArgumentOf } from './recordArgument';\n");
-        mkdirSync(join(root, 'editor'), { recursive: true });
-        writeFileSync(join(root, 'editor', 'importer.ts'), "import { recordArgumentOf } from '../drivingLib/between';\n");
-        expect(findOffenders(root)).toEqual([]);
-      });
-    });
-
-    it('the same FormKey import inside the Plugins view is not caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'mods'), { recursive: true });
-        mkdirSync(join(root, 'plugins'), { recursive: true });
-        const planted = "import type { FormKey } from '../wire/ApiClient';\n";
-        writeFileSync(join(root, 'mods', 'ModListProvider.ts'), planted);
-        writeFileSync(join(root, 'plugins', 'RecordBrowser.ts'), planted);
-        expect(findOffenders(root)).toEqual([join('mods', 'ModListProvider.ts')]);
-      });
+    it.each<[string, Record<string, string>, string[]]>([
+      ['the Editing views alone import is not caught', { 'editor/importer.ts': importingTheLibFile, 'sourceLanguage/importer.ts': importingTheLibFile }, []],
+      ['a Mods-shaped file imports too is caught', { 'editor/importer.ts': importingTheLibFile, 'mods/importer.ts': importingTheLibFile }, [LIB_FILE]],
+      ['a Mods-shaped file reaches through another lib file is caught',
+        { 'editor/importer.ts': importingTheLibFile, ...anotherLibFile, 'mods/importer.ts': importingThroughAnother }, [LIB_FILE]],
+      ['the Editing views alone reach through another lib file is not caught', { ...anotherLibFile, 'editor/importer.ts': importingThroughAnother }, []],
+    ])('FormKey vocabulary in a driving lib file %s', (_, importers, offenders) => {
+      expect(findOffenders(plantedTree({ 'drivingLib/recordArgument.ts': 'export const formKey = 1;\n', ...importers }))).toEqual(offenders);
     });
   });
 

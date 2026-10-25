@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { normalize } from 'node:path';
-import { Diagnostic, DiagnosticSeverity, Range, uriFile, FakeDiagnosticCollection } from '../../test/vscodeMock';
+import { Diagnostic, DiagnosticSeverity, Range, FakeDiagnosticCollection, Uri } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri: { file: uriFile } }));
+vi.mock('vscode', () => ({ Diagnostic, DiagnosticSeverity, Range, Uri }));
 
 import { BuildProblems } from '../buildProblems';
 import { sourceFiles } from '../../instanceLoader/loadOrderSnapshot';

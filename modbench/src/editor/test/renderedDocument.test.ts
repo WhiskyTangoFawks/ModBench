@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter, uriFrom } from '../../test/vscodeMock';
+import { EventEmitter, Uri } from '../../test/vscodeMock';
 
 const h = vi.hoisted(() => ({
   providers: new Map<string, unknown>(),
@@ -8,7 +8,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock('vscode', () => ({
   EventEmitter,
-  Uri: { from: uriFrom },
+  Uri,
   Disposable: class { constructor(public dispose: () => void) {} },
   workspace: {
     registerTextDocumentContentProvider: (scheme: string, provider: unknown) => {
@@ -34,7 +34,7 @@ const isContentProvider = (value: unknown): value is ContentProvider =>
 const GUN = '000801:A.esp';
 const modA = { name: 'A.esp', origin: 'ModA' };
 const NAME = 'Gun - 000801_A.esp.json';
-const renderedUri = (path: string, query: string) => uriFrom({ scheme: 'modbench-rendered', path, query });
+const renderedUri = (path: string, query: string) => Uri.from({ scheme: 'modbench-rendered', path, query });
 const GUN_URI = renderedUri(`/ModA/A.esp/${NAME}`, 'formKey=000801%3AA.esp&name=A.esp&origin=ModA');
 
 function rendered(client = new InMemoryMEditClient()) {

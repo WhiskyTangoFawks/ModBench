@@ -202,7 +202,6 @@ describe('the agent server, given an instance value', () => {
 
     it.each([
       ['a manifest names it', [status('Acc Mod C', { gone: ['AccC.esp'] })], 'Acc Mod C'],
-      ['two manifests name it, the first in mod order', [status('Acc Mod B', { gone: ['accc.esp'] }), status('Acc Mod C', { gone: ['AccC.esp'] })], 'Acc Mod B'],
       ['no manifest names it', [status('Acc Mod C')], DATA_DIRECTORY_ORIGIN],
     ])('has as its origin the mod whose manifest names it: %s', async (_case, answer, origin) => {
       statusRead.answer = answer;

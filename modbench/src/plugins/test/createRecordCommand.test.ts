@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFrom } from '../../test/vscodeMock';
+import { TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, Uri } from '../../test/vscodeMock';
 
 interface PickItem { label: string; description?: string }
 type ShowQuickPick = (items: readonly PickItem[]) => Promise<unknown>;
@@ -21,7 +21,7 @@ vi.mock('vscode', () => ({
   },
   window: { showQuickPick, showInputBox },
   TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
-  Uri: { from: uriFrom },
+  Uri,
 }));
 
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';

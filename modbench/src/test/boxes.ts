@@ -1,45 +1,7 @@
-// The Modbench column of the zoom-out, spec/architecture/target-architecture.d2, and each band's
-// lib, which it does not draw, joined to the box folders on disk; a box's references are its tsconfig's.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import ts from 'typescript';
 import { SRC } from './scanSource';
-
-const ZOOM_OUT = join(SRC, '..', '..', 'spec', 'architecture', 'target-architecture.d2');
-
-function boxIdsByBand(): Record<string, string[]> {
-  const bands: Record<string, string[]> = {};
-  let current: string[] | undefined;
-  for (const line of readFileSync(ZOOM_OUT, 'utf8').split('\n')) {
-    const container = /^modbench_(\w+): "/.exec(line)?.[1];
-    if (container !== undefined) {
-      current = [`${container}lib`];
-      bands[container] = current;
-      continue;
-    }
-    if (/^\w/.test(line)) current = undefined;
-    const member = /^ {2}(\w+): "/.exec(line)?.[1];
-    if (member !== undefined && current !== undefined) current.push(member);
-  }
-  return bands;
-}
-
-const PROJECT_FOLDERS: string[] = readdirSync(SRC, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory() && entry.name !== 'test' && existsSync(join(SRC, entry.name, 'tsconfig.json')))
-  .map((entry) => entry.name)
-  .sort();
-
-const folderOf = (id: string): string | undefined => PROJECT_FOLDERS.find((folder) => folder.toLowerCase() === id);
-
-export const BOXES_BY_BAND: Record<string, string[]> = Object.fromEntries(
-  Object.entries(boxIdsByBand()).map(([band, ids]) => [band, ids.map(folderOf).filter((f): f is string => f !== undefined)]),
-);
-
-export const KERNEL_BOXES: string[] = BOXES_BY_BAND.kernel ?? [];
-export const DRIVING_BOXES: string[] = BOXES_BY_BAND.driving ?? [];
-export const CORE_BOXES: string[] = BOXES_BY_BAND.core ?? [];
-export const READ_MODEL_AND_REPOSITORY_BOXES: string[] = [...(BOXES_BY_BAND.readmodel ?? []), ...(BOXES_BY_BAND.repositories ?? [])];
-export const BOXES: string[] = [...KERNEL_BOXES, ...DRIVING_BOXES, ...CORE_BOXES, ...READ_MODEL_AND_REPOSITORY_BOXES];
 
 export function parseProject(path: string): ts.ParsedCommandLine {
   const result = ts.getParsedCommandLineOfConfigFile(path, undefined, {

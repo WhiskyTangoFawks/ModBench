@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EventEmitter, fakeUri } from '../../test/vscodeMock';
+import { EventEmitter, Uri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({ EventEmitter }));
 
@@ -32,7 +32,7 @@ function heard(client: InMemoryMEditClient) {
 
 function showing(tabs: RecordTabs, formKey: string, title = 'MovedNpc') {
   const panel = fakePanel({ title, active: false, viewColumn: 1 });
-  const tab = tabs.open(panel, fakeUri(`/${formKey}.json`));
+  const tab = tabs.open(panel, Uri.file(`/${formKey}.json`));
   tab.show({ formKey, plugin: EDITED_MOD_ESP_FROM_MODA.plugin });
   return { panel, tab };
 }

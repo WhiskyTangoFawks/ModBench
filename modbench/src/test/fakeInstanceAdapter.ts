@@ -458,18 +458,23 @@ export function fakeInstanceAdapter(reading: InstanceReading = readingFixture(),
         if (files !== undefined) withOriginFiles(origin, { ...files, files: files.files.map((file) => (file === own ? fileIn(files.folder ?? '', to) : file)) });
         current = { ...current, pluginOrder: current.pluginOrder.map((plugin) => (sameAsFrom(plugin.name) ? { ...plugin, name: to } : plugin)) };
       }),
-    trashEntryFolder: (entry) =>
-      write({ verb: 'trashEntryFolder', entry }, () => {
-        const held = foldersNow().holding(entry);
-        if (held === undefined) return false;
-        current = { ...current, modFolders: foldersHolding(foldersNow().all.filter((folder) => folder !== held)) };
-        return true;
-      }),
+    trashEntryFolder: async (entry, trash) => {
+      const held = await write({ verb: 'trashEntryFolder', entry }, () => foldersNow().holding(entry));
+      if (held === undefined) return false;
+      await trash(held.path);
+      current = { ...current, modFolders: foldersHolding(foldersNow().all.filter((folder) => folder !== held)) };
+      return true;
+    },
     trashModFile: (mod, relativePath) =>
       write({ verb: 'trashModFile', mod, relativePath }, () => {
         if (reachesOut(relativePath)) throw notAFileOf({ kind: 'mod', name: mod }, relativePath);
       }),
-    trashSourceFolder: (mod) => record({ verb: 'trashSourceFolder', mod }, true),
+    trashSourceFolder: async (mod, trash) => {
+      const source = await write({ verb: 'trashSourceFolder', mod }, () => current.sourceMods.folderOf(mod));
+      if (source === undefined) return false;
+      await trash(source);
+      return true;
+    },
     install: (installed, target, keys, fomod) =>
       record<InstallOutcome>({ verb: 'install', package: installed, target, keys, ...(fomod && { fomod }) }, answers.installed ?? { landed: true }),
     subscribe: (listener): Subscription => {

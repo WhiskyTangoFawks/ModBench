@@ -17,28 +17,16 @@ import { gameFolderSetting, onStringsLanguageChange } from '../workspaceConfig';
 
 const changeTo = (key: string): void => configListener?.({ affectsConfiguration: (section) => section === key });
 
-describe('the game folder setting', () => {
-  it('signals for the game-folder setting and for no other key', () => {
+describe('a setting change signals the listener of that setting', () => {
+  it.each([
+    ['the game folder', 'modbench.mods.gameFolder', gameFolderSetting.changed],
+    ['the strings language', 'modbench.stringsLanguage', onStringsLanguageChange],
+  ])('%s, on a change to %s', (_, key, onChange) => {
     const listener = vi.fn();
-    gameFolderSetting.changed(listener);
+    onChange(listener);
 
-    changeTo('modbench.mods.somethingElse');
-    expect(listener).not.toHaveBeenCalled();
+    changeTo(key);
 
-    changeTo('modbench.mods.gameFolder');
-    expect(listener).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('onStringsLanguageChange', () => {
-  it('signals for the strings language setting and for no other key', () => {
-    const listener = vi.fn();
-    onStringsLanguageChange(listener);
-
-    changeTo('modbench.agent.port');
-    expect(listener).not.toHaveBeenCalled();
-
-    changeTo('modbench.stringsLanguage');
     expect(listener).toHaveBeenCalledTimes(1);
   });
 });

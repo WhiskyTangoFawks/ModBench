@@ -1,7 +1,7 @@
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import {
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, uriFrom,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter, Uri,
 } from '../../test/vscodeMock';
 
 const {
@@ -25,7 +25,7 @@ vi.mock('vscode', async () => {
   return {
     commands: { registerCommand, executeCommand },
     window: { showInputBox, showQuickPick, withProgress: recordedWithProgress },
-    Uri: { file: (p: string) => ({ fsPath: p }), from: uriFrom },
+    Uri,
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter,
   };
 });
@@ -341,7 +341,7 @@ describe('registerRevealInExplorerCommand', () => {
 
     await run(clicked);
 
-    expect(executeCommand).toHaveBeenCalledWith('revealFileInOS', { fsPath });
+    expect(executeCommand).toHaveBeenCalledWith('revealFileInOS', Uri.file(fsPath));
     expect([reporter.reports, reporter.landings]).toEqual([[], []]);
   });
 

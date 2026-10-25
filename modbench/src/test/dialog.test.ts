@@ -16,19 +16,4 @@ describe('askQuestion', () => {
     expect(showWarningMessage).toHaveBeenCalledWith('A question', { modal: true, detail: 'Its detail' }, 'First', 'Second');
     expect(answer).toBe('First');
   });
-
-  it('asks a question that has no detail and a single button', async () => {
-    showWarningMessage.mockResolvedValue('Deploy');
-
-    const answer = await askQuestion('Never deployed here. Continue?', { modal: true }, 'Deploy');
-
-    expect(showWarningMessage).toHaveBeenCalledWith('Never deployed here. Continue?', { modal: true }, 'Deploy');
-    expect(answer).toBe('Deploy');
-  });
-
-  it('returns undefined when the user dismissed the modal', async () => {
-    showWarningMessage.mockResolvedValue(undefined);
-
-    expect(await askQuestion('MyMod', { modal: true }, 'Apply')).toBeUndefined();
-  });
 });

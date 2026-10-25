@@ -78,6 +78,22 @@ describe.each(implementationsOver('holdings-instance'))('$name holds the contrac
       expect(await adapter.trashEntryFolder({ kind: 'mod', name: 'Alpha' }, trash)).toBe(false);
     });
 
+    it('hands the trash the folder that holds an entry, and keeps the folder when the trash refuses it', async () => {
+      const handed: string[] = [];
+      const refusing = (path: string): Promise<void> => { handed.push(path); return Promise.reject(new Error('the trash is full')); };
+
+      await expect(adapter.trashEntryFolder({ kind: 'mod', name: 'Alpha' }, refusing)).rejects.toThrow('the trash is full');
+
+      expect({ handed, folders: await folderNames() }).toEqual({ handed: [await adapter.modFolderPath('Alpha')], folders: ['Alpha', 'Beta', 'Gamma'] });
+    });
+
+    it('trashes no source folder for a mod that none builds', async () => {
+      const handed: string[] = [];
+
+      expect(await adapter.trashSourceFolder('Alpha', (path) => { handed.push(path); return Promise.resolve(); })).toBe(false);
+      expect(handed).toEqual([]);
+    });
+
   });
 
   describe('downloaded files', () => {

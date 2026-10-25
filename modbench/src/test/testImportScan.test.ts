@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { type Box, boxesIn } from './boxes';
-import { importSpecifiers, SRC } from './scanSource';
+import { importSpecifiers, plantedTree, SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 const SHARED_TEST_SUPPORT = 'test';
@@ -53,15 +52,6 @@ function assertEveryFileStaysInItsBox(offenders: readonly string[]): void {
   ).toEqual([]);
 }
 
-function plantedTree(files: Record<string, string>): string {
-  const src = mkdtempSync(join(tmpdir(), 'medit-test-import-scan-'));
-  for (const [path, text] of Object.entries(files)) {
-    mkdirSync(dirname(join(src, path)), { recursive: true });
-    writeFileSync(join(src, path), text);
-  }
-  return src;
-}
-
 describe('a file reaches only its own box and the boxes that box references', () => {
   it('scans a real body of files across every box', () => {
     expect(boxFiles(SRC, boxesIn(SRC)).length).toBeGreaterThan(100);
@@ -93,18 +83,14 @@ describe('a file reaches only its own box and the boxes that box references', ()
         "const outside = '../../kernel/codec';",
       ].join('\n'),
     });
-    try {
-      expect(unreferencedImports(src)).toEqual([
-        'view/production.ts: ../kernel/codec (kernel)',
-        'view/test/view.test.ts: ../../kernel/codec (kernel)',
-        'view/test/view.test.ts: ../../kernel/codec (kernel)',
-        'view/test/view.test.ts: ../../kernel/codec (kernel)',
-        'view/test/view.test.ts: ../../kernel/codec (kernel)',
-        `view/test/view.test.ts: ../../wiring (${ROOT_BOX})`,
-      ]);
-      expect(() => assertEveryFileStaysInItsBox(unreferencedImports(src))).toThrow(/never add a reference/i);
-    } finally {
-      rmSync(src, { recursive: true, force: true });
-    }
+    expect(unreferencedImports(src)).toEqual([
+      'view/production.ts: ../kernel/codec (kernel)',
+      'view/test/view.test.ts: ../../kernel/codec (kernel)',
+      'view/test/view.test.ts: ../../kernel/codec (kernel)',
+      'view/test/view.test.ts: ../../kernel/codec (kernel)',
+      'view/test/view.test.ts: ../../kernel/codec (kernel)',
+      `view/test/view.test.ts: ../../wiring (${ROOT_BOX})`,
+    ]);
+    expect(() => assertEveryFileStaysInItsBox(unreferencedImports(src))).toThrow(/never add a reference/i);
   });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import {
-  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom,
+  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, Uri,
 } from '../../test/vscodeMock';
 import {
   filterBoxWindowMock, filterBoxCommandsMock, commandInvoker, currentBoxOf, FakeTreeViews,
@@ -20,7 +20,7 @@ const h = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  Uri: { file: uriFile, from: uriFrom },
+  Uri,
   Disposable: { from: (...all: { dispose(): unknown }[]) => ({ dispose: () => { for (const d of all) d.dispose(); } }) },
   window: {
     ...filterBoxWindowMock(h.state),
@@ -73,6 +73,15 @@ beforeEach(() => {
   treeViews.clear();
   h.state.contextKeys.clear();
   h.decorationProviders.length = 0;
+});
+
+describe('the Downloads view is a flat list whose rows select several at once (common.md, story 6; downloads.md)', () => {
+  it('selects several rows and has no Collapse All', () => {
+    viewOver(instanceOver(downloadedFileRowFixture('other.7z')));
+
+    const { canSelectMany, showCollapseAll } = downloadsTree().options;
+    expect({ canSelectMany, showCollapseAll }).toEqual({ canSelectMany: true, showCollapseAll: undefined });
+  });
 });
 
 describe('the Downloads filter follows a row change with no keystroke', () => {

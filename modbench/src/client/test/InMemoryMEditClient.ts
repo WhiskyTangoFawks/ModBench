@@ -8,7 +8,6 @@ import { announceAfterReopen, createLoadOrderSender, type LoadOrderWire } from '
 import type { ReadFailed } from '../../wire/readFailed';
 import { keepLoadOrderStatus } from '../loadOrderStatusKeeper';
 
-export type { NotificationEvent };
 
 type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getPluginDependants' | 'getPluginProblems' | 'getRecordTypes' | 'getWorkingTreeStatesBeneath' | 'getCreatableRecordTypes' | 'getChildRecordTypes' | 'getCreatablePluginExtensions'

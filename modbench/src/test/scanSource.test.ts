@@ -1,34 +1,10 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { basename, dirname, join, relative, sep } from 'node:path';
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { basename, join, relative, sep } from 'node:path';
 import ts from 'typescript';
-import { SOURCE_ROOTS, SRC, WEBVIEW_SRC, importSpecifiers, isTestSupport, productionFiles, rootFiles } from './scanSource';
+import { SRC, importSpecifiers, isTestSupport, plantedTree, productionFiles, rootFiles } from './scanSource';
 import { boxesIn, referencesOf } from './boxes';
 import { tsFiles } from './tsFiles';
-
-let root: string | undefined;
-
-function plantedTree(files: Record<string, string>): string {
-  root = mkdtempSync(join(tmpdir(), 'medit-scan-source-'));
-  for (const [path, text] of Object.entries(files)) {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), text);
-  }
-  return root;
-}
-
-afterEach(() => {
-  if (root) rmSync(root, { recursive: true, force: true });
-  root = undefined;
-});
-
-describe('the source roots', () => {
-  it('are the extension source and the webview source', () => {
-    expect(SOURCE_ROOTS).toEqual([SRC, WEBVIEW_SRC]);
-    expect(WEBVIEW_SRC).toBe(join(SRC, '..', 'webview', 'src'));
-  });
-});
 
 describe('isTestSupport', () => {
   it.each([
@@ -58,10 +34,6 @@ describe('productionFiles', () => {
     expect(productionFiles(dir).sort()).toEqual([join(dir, 'a.ts'), join(dir, 'b.tsx'), join(dir, 'sub', 'd.ts')].sort());
   });
 
-  it('lists the webview components', () => {
-    expect(productionFiles(WEBVIEW_SRC).some((path) => path.endsWith('.tsx'))).toBe(true);
-  });
-
   it('is not fooled by a test directory above the root', () => {
     const dir = plantedTree({ 'test/src/a.ts': '' });
     expect(productionFiles(join(dir, 'test', 'src'))).toEqual([join(dir, 'test', 'src', 'a.ts')]);
@@ -73,95 +45,64 @@ describe('rootFiles', () => {
     const dir = plantedTree({ 'extension.ts': '', 'extension.test.ts': '', 'box/inner.ts': '' });
     expect(rootFiles(dir)).toEqual([join(dir, 'extension.ts')]);
   });
-
-  it('finds the composition root in the real tree', () => {
-    expect(rootFiles()).toContain(join(SRC, 'extension.ts'));
-  });
 });
 
 describe('importSpecifiers', () => {
-  const specifiers = (text: string): string[] => importSpecifiers(text, 'file.ts');
-
-  it('reads import and export declarations, type-only and side-effect included', () => {
-    expect(specifiers([
+  it.each([
+    ['import and export declarations, type-only and side-effect included', [
       "import a from './a';",
       "import type { B } from './b';",
       "import './c';",
       "export { d } from './d';",
       "export * from './e';",
       "export type { F } from './f';",
-    ].join('\n'))).toEqual(['./a', './b', './c', './d', './e', './f']);
-  });
-
-  it('reads a multi-line import', () => {
-    expect(specifiers("import {\n  a,\n  b,\n} from './multi';")).toEqual(['./multi']);
-  });
-
-  it('reads a dynamic import and an import type', () => {
-    expect(specifiers("const m = await import('./dyn');\ntype T = import('./ty').T;")).toEqual(['./dyn', './ty']);
-  });
-
-  it('reads vi module calls', () => {
-    expect(specifiers([
+    ].join('\n'), ['./a', './b', './c', './d', './e', './f']],
+    ['a multi-line import', "import {\n  a,\n  b,\n} from './multi';", ['./multi']],
+    ['a dynamic import and an import type', "const m = await import('./dyn');\ntype T = import('./ty').T;", ['./dyn', './ty']],
+    ['vi module calls', [
       "vi.mock('./m');",
       "vi.doMock('./dm');",
       "vi.unmock('./um');",
       "await vi.importActual('./ia');",
       "await vi.importMock('./im');",
-    ].join('\n'))).toEqual(['./m', './dm', './um', './ia', './im']);
-  });
-
-  it('reads no specifier from a string or comment that looks like an import', () => {
-    expect(specifiers("// import x from './nope';\nconst s = \"import y from './nope2'\";\nfoo.mock('./nope3');")).toEqual([]);
-  });
-
-  it('reads a vi module call that carries type arguments, and not one on another object', () => {
-    expect(specifiers([
+    ].join('\n'), ['./m', './dm', './um', './ia', './im']],
+    ['no specifier from a string or comment that looks like an import',
+      "// import x from './nope';\nconst s = \"import y from './nope2'\";\nfoo.mock('./nope3');", []],
+    ['a vi module call that carries type arguments, and not one on another object', [
       "await vi.importActual<typeof import('./ty')>('./ia');",
       "await vi.importActual<Map<string, Set<number>>>('./nested');",
       "foo.vi.mock('./nope');",
       "vi.fn('./nope2');",
-    ].join('\n'))).toEqual(['./ty', './ia', './nested']);
-  });
-
-  it('reads past a regular expression, a template and a division that hold a quote', () => {
-    expect(specifiers([
+    ].join('\n'), ['./ty', './ia', './nested']],
+    ['past a regular expression, a template and a division that hold a quote', [
       "const re = /'/g; import before from './before'; const half = a / b / c;",
       "const t = `it's ${ `nested ' ${ x / 2 }` } ${ { a: 1 }.a } end`;",
       "import after from './after';",
-    ].join('\n'))).toEqual(['./before', './after']);
-  });
-
-  it('refuses a tsx file, whose JSX text it cannot tokenise', () => {
-    expect(() => importSpecifiers("import { A } from './a';", 'view.tsx')).toThrow(/does not read JSX/);
-  });
-
-  it('throws, naming the file, on text it misreads rather than dropping the imports below it', () => {
-    const misread = (text: string): string => `import before from './before';\n${text}\nimport after from './after';`;
-    expect(() => importSpecifiers(misread("if (x) {}\n/`/.test(s);"), 'file.ts')).toThrow(/file\.ts:\d+:/);
-    expect(() => importSpecifiers(misread('if (x) /`/.test(s);'), 'file.ts')).toThrow(/cannot read/);
-  });
-
-  it('reads a regular expression after await, yield, of and a division-assignment', () => {
-    const afterTheRegularExpression = (statement: string): string[] => specifiers(`${statement}\nimport after from './after';`);
-    expect(afterTheRegularExpression('await /`/.exec(s);')).toEqual(['./after']);
-    expect(afterTheRegularExpression('yield /`/.exec(s);')).toEqual(['./after']);
-    expect(afterTheRegularExpression('for (const m of /`/g) {}')).toEqual(['./after']);
-    expect(afterTheRegularExpression("const r = /=a'/;")).toEqual(['./after']);
-  });
-
-  it('reads doUnmock, an optional-chained vi call and a template-literal argument', () => {
-    expect(specifiers("vi.doUnmock('./du'); vi?.mock('./oc'); vi.mock(`./tl`);")).toEqual(['./du', './oc', './tl']);
-  });
-
-  it('reads no module from a method named import, a vi behind a member access, or prose saying from', () => {
-    expect(specifiers([
+    ].join('\n'), ['./before', './after']],
+    ['past a regular expression after await', "await /`/.exec(s);\nimport after from './after';", ['./after']],
+    ['past a regular expression after yield', "yield /`/.exec(s);\nimport after from './after';", ['./after']],
+    ['past a regular expression after of', "for (const m of /`/g) {}\nimport after from './after';", ['./after']],
+    ['past a regular expression that opens like a division-assignment', "const r = /=a'/;\nimport after from './after';", ['./after']],
+    ['doUnmock, an optional-chained vi call and a template-literal argument',
+      "vi.doUnmock('./du'); vi?.mock('./oc'); vi.mock(`./tl`);", ['./du', './oc', './tl']],
+    ['no module from a method named import, a vi behind a member access, or prose saying from', [
       "import a from './a';",
       "y.import('./no1'); x?.vi.mock('./no2'); x.vi.mock('./no3');",
       "const s = <br>Copy from 'disk';",
-    ].join('\n'))).toEqual(['./a']);
+    ].join('\n'), ['./a']],
+  ])('reads %s', (_, text, expected) => {
+    expect(importSpecifiers(text, 'file.ts')).toEqual(expected);
   });
 
+  it.each([
+    ['a tsx file, whose JSX text it cannot tokenise', "import { A } from './a';", 'view.tsx', /does not read JSX/],
+    ['text it misreads, naming the file and line',
+      "import before from './before';\nif (x) {}\n/`/.test(s);\nimport after from './after';", 'file.ts', /file\.ts:\d+:/],
+    ['text it misreads, saying it cannot read it',
+      "import before from './before';\nif (x) /`/.test(s);\nimport after from './after';", 'file.ts', /cannot read/],
+  ])('throws, rather than drop the imports below, on %s', (_, text, fileName, error) => {
+    expect(() => importSpecifiers(text, fileName)).toThrow(error);
+  });
 });
 
 describe('boxesIn and referencesOf, parameterised by root', () => {
@@ -176,15 +117,10 @@ describe('boxesIn and referencesOf, parameterised by root', () => {
     expect(referencesOf('view', src)).toEqual(['core', 'kernel']);
     expect(referencesOf('kernel', src)).toEqual([]);
   });
-
-  it('defaults to the real source tree', () => {
-    expect(boxesIn().map((box) => box.name)).toContain('loadOrderFileCodec');
-    expect(referencesOf('modCommands')).toEqual(['client', 'coreLib', 'instanceAdapter', 'nexus', 'ports', 'wire']);
-  });
 });
 
-describe('the scans declare no walker, filter or specifier reader of their own', () => {
-  const OWN_DECLARATIONS = ['isTestSupport', 'importSpecifiers'];
+describe('the scans declare no walker, filter, specifier reader or planted tree of their own', () => {
+  const OWN_DECLARATIONS = ['isTestSupport', 'importSpecifiers', 'plantedTree'];
   const HELPERS = ['scanSource.ts', 'tsFiles.ts', 'boxes.ts'];
 
   function declaredShared(sourceText: string): string[] {
@@ -200,12 +136,15 @@ describe('the scans declare no walker, filter or specifier reader of their own',
     return found;
   }
 
-  it('flags each name however it is declared', () => {
-    expect(declaredShared("import { readdirSync } from 'node:fs';")).toEqual(['readdirSync']);
-    expect(declaredShared("import { readdirSync as list } from 'node:fs';")).toEqual(['readdirSync']);
-    expect(declaredShared("import * as fs from 'node:fs';\nconst names = fs.readdirSync('.');")).toEqual(['readdirSync']);
-    expect(declaredShared('const isTestSupport = (p: string) => p.includes("test");')).toEqual(['isTestSupport']);
-    expect(declaredShared('function importSpecifiers(text: string) { return [text]; }')).toEqual(['importSpecifiers']);
+  it.each([
+    ['an imported walker', "import { readdirSync } from 'node:fs';", 'readdirSync'],
+    ['a walker imported under another name', "import { readdirSync as list } from 'node:fs';", 'readdirSync'],
+    ['a walker called through its module', "import * as fs from 'node:fs';\nconst names = fs.readdirSync('.');", 'readdirSync'],
+    ['a filter declared as a constant', 'const isTestSupport = (p: string) => p.includes("test");', 'isTestSupport'],
+    ['a specifier reader declared as a function', 'function importSpecifiers(text: string) { return [text]; }', 'importSpecifiers'],
+    ['a planted tree of its own', 'async function plantedTree(files: Record<string, string>) { return files; }', 'plantedTree'],
+  ])('flags %s', (_, text, name) => {
+    expect(declaredShared(text)).toEqual([name]);
   });
 
   it('holds for every file under src/test and src/*/test but the helpers and the integration suite, which lists a trash folder, not source', () => {

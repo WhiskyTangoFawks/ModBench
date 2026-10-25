@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFrom } from '../../test/vscodeMock';
+import { TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, Uri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
   TreeItem, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
-  Uri: { from: uriFrom },
+  Uri,
 }));
 
 import { pluginsKeyContext, type PluginsKeyContext } from '../gestureEntry';

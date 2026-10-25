@@ -2,10 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import type { WorkingTreeStatesBeneath } from '../../client';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';
 import { recordTypeCountFixture } from '../../client/test/fixtures';
-import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom, fakeUri } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
-  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri: { from: uriFrom },
+  TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri,
 }));
 
 import * as vscode from 'vscode';
@@ -292,7 +292,7 @@ describe('the states beneath a row', () => {
     const client = new InMemoryMEditClient();
     const browser = new RecordBrowser(client);
 
-    expect(browser.statesBeneathOf(fakeUri('/tmp/x'))).toEqual([]);
+    expect(browser.statesBeneathOf(Uri.file('/tmp/x'))).toEqual([]);
     expect(beneathCalls(client)).toHaveLength(0);
   });
 });

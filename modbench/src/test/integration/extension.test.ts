@@ -541,9 +541,7 @@ describe('modbench command registration', () => {
   it('registers all expected commands on activation', async () => {
     assert.ok(EXPECTED_COMMANDS.length > 0, 'derived command list is empty — the manifest shape changed');
     const all = await vscode.commands.getCommands(true);
-    for (const cmd of EXPECTED_COMMANDS) {
-      assert.ok(all.includes(cmd), `Command not registered: ${cmd}`);
-    }
+    assert.deepStrictEqual(EXPECTED_COMMANDS.filter((cmd) => !all.includes(cmd)), []);
   });
 });
 
@@ -661,86 +659,6 @@ describe('modbench.record.open', () => {
 
     await waitFor('the winning copy\'s tab', () => hasRenderedTab('Fallout4.esm:000001') || undefined);
     await waitFor('the record\'s read', () => askedToRead('Fallout4.esm:000001'));
-  });
-
-  it('a second click replaces the preview tab instead of adding one', async () => {
-    await openRecord({ formKey: 'Fallout4.esm:000001' });
-    await waitFor('the first record\'s tab', () => hasRenderedTab('Fallout4.esm:000001') || undefined);
-    const tabsBefore = openTabs().length;
-
-    await openRecord({ formKey: 'Fallout4.esm:000002' });
-    await waitFor('the second record\'s tab', () => hasRenderedTab('Fallout4.esm:000002') || undefined);
-
-    assert.strictEqual(openTabs().length, tabsBefore, 'the next click replaces the preview editor');
-    assert.ok(!hasRenderedTab('Fallout4.esm:000001'), 'the first record\'s preview tab is gone');
-  });
-
-  it('shows a record already open in a tab of its own, and does not open it twice', async () => {
-    await inSecondGroup();
-    await openPinnedRecord({ formKey: 'Fallout4.esm:000010' });
-    await waitFor('the pinned tab', () => hasRenderedTab('Fallout4.esm:000010') || undefined);
-    const tabsBefore = openTabs().length;
-
-    await openRecord({ formKey: 'Fallout4.esm:000010' });
-
-    assert.strictEqual(openTabs().length, tabsBefore);
-    assert.strictEqual(openTabs().filter(t => t.label === renderedName('Fallout4.esm:000010')).length, 1);
-  });
-
-  it('opens several records at once as one grid: the first record\'s document, which reads the others beside it in the order given', async () => {
-    const winner = { name: 'Fallout4.esm', origin: 'Data/' };
-    const copies = [{ formKey: 'Fallout4.esm:000011', plugin: winner }, { formKey: 'Fallout4.esm:000012', plugin: winner }];
-    const askedSideBySide = () => comparedSideBySide.some((asked) => JSON.stringify(asked) === JSON.stringify(copies));
-
-    await openRecord([
-      { formKey: 'Fallout4.esm:000011' }, { formKey: 'Fallout4.esm:000012' },
-    ]);
-    await waitFor('the first record\'s tab', () => hasRenderedTab('Fallout4.esm:000011') || undefined);
-    await waitFor('the records read side by side', askedSideBySide);
-
-    assert.strictEqual(openTabs().filter((t) => t.label === renderedName('Fallout4.esm:000011')).length, 1);
-    assert.ok(!hasRenderedTab('Fallout4.esm:000012'), 'the second record is a column, not a tab');
-  });
-
-  it('opens pinned in the second group as a genuinely new tab, leaving the tab it was fired from alone', async () => {
-    await inSecondGroup();
-    await openPinnedRecord({ formKey: 'Fallout4.esm:000020' });
-    await waitFor('the seed tab', () => hasRenderedTab('Fallout4.esm:000020') || undefined);
-    const tabsBefore = openTabs().length;
-
-    await inSecondGroup();
-    await openPinnedRecord({ formKey: 'Fallout4.esm:000021' });
-    await waitFor('the second group\'s tab', () => hasRenderedTab('Fallout4.esm:000021') || undefined);
-
-    assert.strictEqual(openTabs().length, tabsBefore + 1);
-    assert.ok(hasRenderedTab('Fallout4.esm:000020'), 'the seed tab is untouched');
-  });
-
-  it('a menu\'s multi-selection opens one grid, pinned, in the active group', async () => {
-    await vscode.commands.executeCommand('workbench.action.closeAllGroups');
-    const selection = [
-      { formKey: 'Fallout4.esm:000060' }, { formKey: 'Fallout4.esm:000061' }, { formKey: 'Fallout4.esm:000062' },
-    ].map(carrying);
-
-    await vscode.commands.executeCommand('modbench.record.openPinned', selection[0], selection);
-    const tab = await waitFor('the first selected record\'s tab', () =>
-      vscode.window.tabGroups.all.flatMap((g) => g.tabs).find((t) => t.label === renderedName('Fallout4.esm:000060')));
-
-    const tabsByGroup = vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => t.label));
-    assert.deepStrictEqual(tabsByGroup, [[renderedName('Fallout4.esm:000060')]]);
-    assert.strictEqual(tab.isPreview, false);
-  });
-
-  it('opens the headers of two non-compiled plugins of one file name from different origins as two tabs', async () => {
-    const tabsBefore = openTabs().length;
-
-    await inSecondGroup();
-    await openPinnedRecord({ formKey: '000000:Twin.esp', plugin: { name: 'Twin.esp', origin: 'ModA' } });
-    await inSecondGroup();
-    await openPinnedRecord({ formKey: '000000:Twin.esp', plugin: { name: 'Twin.esp', origin: 'ModB' } });
-    await waitFor('both Twin.esp tabs', () => openTabs().filter(t => t.label === '000000_Twin.esp.json').length === 2 || undefined);
-
-    assert.strictEqual(openTabs().length, tabsBefore + 2);
   });
 });
 

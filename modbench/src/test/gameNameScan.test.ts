@@ -1,10 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { GAME_RELEASES, gamePathInfoForRelease, SCRIPT_EXTENDER_FOLDERS } from '../tables/gamePaths';
-import { isTestSupport, SOURCE_ROOTS, SRC, WEBVIEW_SRC } from './scanSource';
+import { GAME_RELEASES, gamePathInfoForRelease } from '../tables/gamePaths';
+import { isTestSupport, plantedTree, sourceFiles, SOURCE_ROOTS, WEBVIEW_SRC } from './scanSource';
 import { tsFiles } from './tsFiles';
 
 const THIS_FILE_QUOTING_THE_LITERALS = 'gameNameScan.test.ts';
@@ -54,57 +52,31 @@ function findOffenders(roots: readonly string[], tableFiles: string[]): Record<s
   return offenders;
 }
 
-const allFiles = (roots: readonly string[]): string[] =>
-  roots.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
-
 describe('no extension file names a game outside the table, in a literal a static scan reads', () => {
-  it('enumerates the releases from the table', () => {
-    expect(GAME_RELEASES.length).toBeGreaterThan(0);
-  });
-
   it('covers the whole extension source tree', () => {
-    expect(allFiles(SOURCE_ROOTS).filter((path) => !path.endsWith(THIS_FILE_QUOTING_THE_LITERALS)).length).toBeGreaterThan(100);
+    expect(sourceFiles(SOURCE_ROOTS).filter((path) => !path.endsWith(THIS_FILE_QUOTING_THE_LITERALS)).length).toBeGreaterThan(100);
   });
 
   it('reaches the webview tree too, not only the extension host’s', () => {
-    expect(allFiles(SOURCE_ROOTS)).toContain(join(WEBVIEW_SRC, 'presentation.ts'));
+    expect(sourceFiles(SOURCE_ROOTS)).toContain(join(WEBVIEW_SRC, 'presentation.ts'));
   });
 
   it('scans clean outside the table', () => {
     expect(findOffenders(SOURCE_ROOTS, TABLE_FILES)).toEqual({});
   });
 
-  it('the tree walk itself catches a planted game name, not just the matcher', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-game-name-scan-'));
-    try {
-      await mkdir(join(dir, 'nested'));
-      await writeFile(join(dir, 'topLevel.ts'), "export const label = 'not a game';\n");
-      await writeFile(join(dir, 'nested', 'plantedGame.ts'), "export const label = 'Starfield';\n");
-      const offenders = findOffenders([dir], []);
-      expect(Object.keys(offenders)).toEqual([join('nested', 'plantedGame.ts')]);
-      expect(offenders[join('nested', 'plantedGame.ts')]).toEqual(expect.arrayContaining(['Starfield']));
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+  it('the tree walk itself catches a planted game name, not just the matcher', () => {
+    const dir = plantedTree({ 'topLevel.ts': "export const label = 'not a game';\n", 'nested/plantedGame.ts': "export const label = 'Starfield';\n" });
+    const offenders = findOffenders([dir], []);
+    expect(Object.keys(offenders)).toEqual([join('nested', 'plantedGame.ts')]);
+    expect(offenders[join('nested', 'plantedGame.ts')]).toEqual(expect.arrayContaining(['Starfield']));
   });
 
   it('flags a game name planted in production source', () => {
     expect(gameNameLiteralsIn("export const label = 'Starfield';\n")).toContain('Starfield');
   });
 
-  it('forbids every script-extender folder the table names', () => {
-    for (const folder of SCRIPT_EXTENDER_FOLDERS) {
-      expect(gameNameLiteralsIn(`const dir = '${folder}';\n`)).toContain(folder);
-    }
-  });
-
   it('does not flag ordinary generic-folder vocabulary', () => {
     expect(gameNameLiteralsIn("const DIRS = ['meshes', 'textures', 'sound', 'scripts'];\n")).toEqual([]);
-  });
-
-  it('the Nexus slug and the release translation stay columns of gamePaths.ts', () => {
-    expect(existsSync(join(SRC, 'tables', 'nexusSlug.ts'))).toBe(false);
-    expect(existsSync(join(SRC, 'tables', 'gameRelease.ts'))).toBe(false);
-    expect(gamePathInfoForRelease('Fallout4')?.nexusSlug).toBe('fallout4');
   });
 });

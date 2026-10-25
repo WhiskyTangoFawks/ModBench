@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, Uri } from '../../test/vscodeMock';
 
 const { registerCommand, executeCommand, showOpenDialog, showInputBox, createQuickPick, openExternal } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
@@ -18,7 +18,7 @@ vi.mock('vscode', async () => {
     window: { showOpenDialog, showInputBox, createQuickPick, withProgress: recordedWithProgress },
     env: { openExternal },
     TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-    Uri: { file: uriFile, from: uriFrom, parse: (s: string) => ({ toString: () => s }) },
+    Uri: { ...Uri, parse: (s: string) => ({ toString: () => s }) },
   };
 });
 
@@ -257,12 +257,13 @@ describe('uninstall over the selection', () => {
     expect(ask.asked).toEqual([{ message, detail: undefined, buttons: ['Uninstall'] }]);
   });
 
-  it('uninstalls the selection once confirmed: each folder, then each line', async () => {
+  it('uninstalls the selection once confirmed: each folder into the trash it was given, then each line', async () => {
     const { fake, commands } = commandsOver(mods);
 
     register(commands);
     await invoke('modbench.mod.uninstall', modA, [modA, modB]);
 
+    expect(trash.mock.calls).toEqual([['/mods/Mod A'], ['/mods/Mod B']]);
     expect(fake.calls).toEqual([
       trashed('mod', 'Mod A'), { verb: 'trashSourceFolder', mod: 'Mod A' }, trashed('mod', 'Mod B'), { verb: 'trashSourceFolder', mod: 'Mod B' },
       modOrderChange({ kind: 'dropMod', mod: 'Mod A' }, { kind: 'dropMod', mod: 'Mod B' }),
@@ -327,13 +328,14 @@ describe('delete separator: the whole selection of separators, asked once', () =
   const groupB = new SeparatorNode({ kind: 'separator', name: 'Group B', enabled: true }, []);
   const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: true });
 
-  it('deletes every selected separator in one write, its folder first, and says nothing when all land', async () => {
+  it('deletes every selected separator in one write, its folder first into the trash it was given, and says nothing when all land', async () => {
     const { fake, commands } = commandsOver(mods);
     const reporter = recordingReporter();
 
     registerSeparatorCommands(commands, instance, reporter, scriptedDialog('Delete'), trash, () => []);
     await invoke('modbench.separator.delete', groupB, [groupA, groupB]);
 
+    expect(trash.mock.calls).toEqual([['/mods/Group A'], ['/mods/Group B']]);
     expect(fake.calls).toEqual([
       trashed('separator', 'Group A'), trashed('separator', 'Group B'),
       modOrderChange({ kind: 'dropSeparator', separator: 'Group A' }, { kind: 'dropSeparator', separator: 'Group B' }),
@@ -1326,12 +1328,10 @@ describe('a Mods selection gesture reports a refusal through the shared reporter
   const modRow = new ModNode({ kind: 'mod', name: 'M', enabled: true });
   const included = new FileNode(modRow, { kind: 'mod', name: 'M' }, file('mods/M', 'a.dds'), 'a.dds');
   const gone = new FileNode(modRow, { kind: 'mod', name: 'M' }, file('mods/M', 'c.dds'), 'c.dds');
-  const trash = vi.fn(() => Promise.resolve());
+  const trash = (path: string): Promise<void> =>
+    (['/mods/Mod C', '/mods/Group B'].includes(path) ? Promise.reject(new Error('trash unavailable')) : Promise.resolve());
   const pickPlace = (label: string) => createQuickPick.mockImplementationOnce(() => quickPickChoosing<{ label: string }>((items) => items.find((i) => i.label === label)));
   const over = (answers: InstanceAnswers) => commandsOver(mods, answers, filesOfM([included.file])).commands;
-  const trashRefusing = (name: string): InstanceAnswers => ({
-    refusals: (call) => (call.verb === 'trashEntryFolder' && call.entry.name === name ? 'trash unavailable' : undefined),
-  });
 
   const gestures = {
     uninstall: (answers: InstanceAnswers, reporter: ReturnType<typeof recordingReporter>) => {
@@ -1362,8 +1362,8 @@ describe('a Mods selection gesture reports a refusal through the shared reporter
   };
 
   it.each<[keyof typeof gestures, InstanceAnswers, string, string]>([
-    ['uninstall', trashRefusing('Mod C'), 'Could not uninstall 1 of 2 mods.', '"Mod C" (trash unavailable)'],
-    ['separator delete', trashRefusing('Group B'), 'Could not delete 1 of 2 separators.', '"Group B" (trash unavailable)'],
+    ['uninstall', {}, 'Could not uninstall 1 of 2 mods.', '"Mod C" (trash unavailable)'],
+    ['separator delete', {}, 'Could not delete 1 of 2 separators.', '"Group B" (trash unavailable)'],
     ['enable', {}, 'Could not enable 1 of 2 mods.', '"Mod B" (Mod not found in modlist: Mod B)'],
     ['move', {}, 'Could not move 1 of 2 mods.', '"Mod B" (Mod not found in modlist: Mod B)'],
     ['exclude file', {}, 'Could not exclude 1 of 2 files.', '"M/c.dds" ("c.dds" is gone from disk.)'],

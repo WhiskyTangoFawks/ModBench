@@ -20,8 +20,7 @@ const {
 });
 
 import {
-  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
-  Diagnostic, DiagnosticSeverity, Range, uriFile, uriFrom,
+  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState, Diagnostic, DiagnosticSeverity, Range, Uri,
 } from '../../test/vscodeMock';
 
 vi.mock('vscode', async () => {
@@ -31,15 +30,11 @@ vi.mock('vscode', async () => {
     window: { showQuickPick, createQuickPick, withProgress: recordedWithProgress },
     TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
     Diagnostic, DiagnosticSeverity, Range,
-    Uri: { file: uriFile, from: uriFrom },
+    Uri,
   };
 });
 
-import { progressSteps } from '../../test/recordedProgress';
-
-const instanceThatReads = {
-  refresh: () => { progressSteps.push('Instance loader: read every file again'); return Promise.resolve(); },
-};
+import { instanceThatReads, progressSteps } from '../../test/recordedProgress';
 
 import { registerDecompileAndRepairCommand, registerDecompileCommand } from '../pluginRowCommands';
 import { InMemoryMEditClient } from '../../client/test/InMemoryMEditClient';

@@ -3,7 +3,7 @@ import { DATA_DIRECTORY_ORIGIN } from '../wire/pluginAddress';
 
 type Override = CompareResult['overrides'][number];
 export type Field = Override['fields'][number];
-export type FieldMetadata = Field['metadata'];
+type FieldMetadata = Field['metadata'];
 
 export interface Copy { plugin: string; origin?: string; isWinner: boolean; editorId?: string | null; fields?: Field[] }
 
